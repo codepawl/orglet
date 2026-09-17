@@ -38,6 +38,7 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   if (!key) throw new Error(`Chưa kết nối ${provider}. Mở Cài đặt để nhập API key.`);
   return provider === 'anthropic' ? new AnthropicAdapter(key) : new OpenAIAdapter(key);
 }, profile);
+core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
 port.on('message', async ({ data }) => {
   const envelope = z.object({ id: z.string(), command: z.string(), args: z.unknown() }).safeParse(data);
   if (!envelope.success) return;

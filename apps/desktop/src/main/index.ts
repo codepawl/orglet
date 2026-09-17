@@ -46,6 +46,10 @@ async function start() {
     core.on('message', async message => {
       if (message.type === 'ready') { ready = true; clearTimeout(timer); resolve(); return; }
       if (message.type === 'changed') { if (window && !window.isDestroyed()) window.webContents.send('orglet:changed'); return; }
+      if (message.type === 'progress') {
+        if (window && !window.isDestroyed()) window.webContents.send('orglet:progress', message.update);
+        return;
+      }
       if (message.type === 'key') {
         const provider = z.enum(['openai', 'anthropic']).safeParse(message.provider);
         core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await credentials.read(provider.data) : null }); return;
