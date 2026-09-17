@@ -1,0 +1,58 @@
+# Capability catalog
+
+| Path | Enabled | Limits |
+|---|---|---|
+| Demo | Yes | Deterministic sample report; no model or source analysis |
+| OpenAI native | Implemented; live acceptance pending | GPT-4.1 mini snapshot, trusted text reader and validated report only |
+| Anthropic native | Implemented; live acceptance pending | Claude Haiku 4.5 snapshot, provider-scoped consent, trusted tools |
+| Teams | Yes | Up to four members, parallel concurrency two, sequential upstream reports, partial retry and synthesis |
+| Provider request concurrency | Yes | Workspace-wide per provider, 1–4 (default 2); queued steps hold no budget reservation |
+| Local dataset checker | Yes | CSV/JSONL/Parquet; schema, counts, ID checks, column-name/row-count/ID-set comparison for two files; fixed SQL, process deadline, retained provenance |
+| Reviewed knowledge | Yes | Workspace/team/worker scope, immutable revisions, FTS5 keyword search, pins; model proposals and template imports wait for review |
+| Context compiler | Yes | Platform → team → worker → skill → approved knowledge; duplicate removal, 12 items / 16 KB knowledge budget, frozen per-run manifest |
+| Folder intake | Yes | 20 files, 64 MB total, 8 levels, 1,000 entries; excluded-item list |
+| Local Claude Code harness | Yes, when installed and logged in; live review verified | Headless `-p` with restricted/safe mode, Read/Grep/Glob only, JSON schema output; one step per run; no Orglet reservation |
+| Local Codex harness (`codex exec`) | Yes, when installed and logged in; live review verified | Sources inlined in the prompt; shell tools, apps, browser and computer use disabled; user config ignored |
+| Codex app-server | No | `codex exec` covers review runs; app-server is not used. See below |
+| Subscription quota display / internal allocation | No | Neither CLI exposes quota windows in headless mode; no screen is shown |
+| Shell, imported scripts, external writes | No | Not exposed through IPC or tool schemas |
+
+## Local harness capability matrix
+
+Decision (user, 2026-09-16): connect the agent harnesses already installed on the machine first, detected per machine so it works for other users too. The native OpenAI and Anthropic paths do not depend on them.
+
+| Capability Orglet needs | Claude Code 2.1.x | Codex CLI 0.154 |
+|---|---|---|
+| Read only the selected sources | Copies in a temp folder; `--restricted` confines file tools to it | Text inlined in the prompt; no file access (its shell-based reads are rejected by the Windows read-only sandbox, and shell tools are disabled) |
+| No shell, network, MCP, user plugins | `--restricted --safe-mode --strict-mcp-config --tools Read,Grep,Glob` | `--sandbox read-only --ignore-user-config`, `shell_tool`, `unified_exec`, apps, browser and computer use disabled |
+| Structured report | `--json-schema`, validated again by core | `--output-schema`, last message validated again by core |
+| Auth state | `claude auth status` JSON | `codex login status` text; an expired token only shows at run time |
+| Cost and quota | `total_cost_usd` reported, shown in activity; `--max-budget-usd` = remaining task budget | Not reported |
+| Cancellation | Process tree killed | Process tree killed |
+
+Verified locally: detection on this Windows machine (both found), argument contract, output parsing of real failure shapes, a `.cmd` shim round trip, runner validation and cancellation with an injected executor, packaged UI smoke. Live acceptance 2026-09-16: a Codex review through `CoreService` with real detection and execution completed. It found the contradiction in a three-line note, cited line 3 (re-validated by core), recommended `revision_required` and made no Orglet reservation. The first live attempt failed Orglet's gate because the model recommended ready with no checks; the report rules are now included in the harness prompt and the tool description. A Claude Code review (2.1.270, claude.ai Max login) through the same path also completed: it read the copied source with its restricted Read tool, cited line 3, recommended `revision_required`, reported an estimated $0.1191 against its plan, and made no Orglet reservation. The desktop-bundled CLI is not on PATH, so the login hint now shows the detected executable's full path.
+
+## Pinned technical choices
+
+- Electron 44.3.0, Forge 7.11.2, Vite 8.3.0, React 19.3.0; exact transitive resolution in `pnpm-lock.yaml`.
+- Native desktop smoke reports the actual bundled SQLite engine, independently of the host Node engine. Startup rejects SQLite older than 3.51.3.
+- OpenAI SDK 7.15.0. `gpt-4.1-mini-2025-04-14`, standard text input $0.40 and output $1.60 per million tokens. Cached input is deliberately estimated at the ordinary rate. No server tools with additional fees are enabled.
+- The request upper bound uses serialized context/tool UTF-8 bytes plus framing allowance and the output cap. Reservation and settlement use integer micro-USD. Unknown requests keep their reservation across restarts and month boundaries.
+- Forge's rebuild dependency references Electron node-gyp by Git URL; `pnpm-workspace.yaml` overrides it with the registry release `10.2.0-electron.2`. Exotic-subdependency blocking remains enabled.
+- Forge needs hoisted node_modules. Lifecycle builds are explicitly allowed only for Electron, esbuild and electron-winstaller.
+- DuckDB Node Neo 1.5.5-r.5, native engine 1.5.5. Packager explicitly includes its API, bindings, Windows x64 addon and detect-libc; native binaries are unpacked from ASAR. A packaged smoke verifies execution, not just file presence.
+
+## Primary references
+
+- [Electron releases](https://releases.electronjs.org/)
+- [Electron security](https://www.electronjs.org/docs/latest/tutorial/security)
+- [Electron utility process](https://www.electronjs.org/docs/latest/api/utility-process)
+- [Electron safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage)
+- [SQLite WAL and the reset fix](https://sqlite.org/wal.html)
+- [Node SQLite API](https://nodejs.org/api/sqlite.html)
+- [OpenAI GPT-4.1 mini pricing and snapshot](https://developers.openai.com/api/docs/models/gpt-4.1-mini)
+- [Anthropic model overview](https://platform.claude.com/docs/en/models/overview)
+- [DuckDB Node Neo](https://duckdb.org/docs/current/clients/node_neo/overview)
+- [DuckDB security configuration](https://duckdb.org/docs/current/operations_manual/securing_duckdb/overview)
+
+Revalidate prices and supported model snapshots before a release. Registry versions and local tests alone do not establish provider compatibility.

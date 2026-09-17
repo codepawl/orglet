@@ -1,0 +1,18 @@
+nodeLinker: hoisted
+allowBuilds:
+  electron: true
+  esbuild: true
+  electron-winstaller: true
+overrides:
+  '@electron/node-gyp': '10.2.0-electron.2'
+minimumReleaseAgeExclude:
+  - '@duckdb/node-api@1.5.5-r.5'
+  - '@duckdb/node-bindings-darwin-arm64@1.5.5-r.5'
+  - '@duckdb/node-bindings-darwin-x64@1.5.5-r.5'
+  - '@duckdb/node-bindings-linux-arm64-musl@1.5.5-r.5'
+  - '@duckdb/node-bindings-linux-arm64@1.5.5-r.5'
+  - '@duckdb/node-bindings-linux-x64-musl@1.5.5-r.5'
+  - '@duckdb/node-bindings-linux-x64@1.5.5-r.5'
+  - '@duckdb/node-bindings-win32-arm64@1.5.5-r.5'
+  - '@duckdb/node-bindings-win32-x64@1.5.5-r.5'
+  - '@duckdb/node-bindings@1.5.5-r.5'

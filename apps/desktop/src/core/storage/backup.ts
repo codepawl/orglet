@@ -1,0 +1,266 @@
+import { z } from 'zod';
+import { createHash } from 'node:crypto';
+import { Store, now, id } from './database';
+import { Id, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput } from '../../shared/contracts';
+import { DatasetProfile, DataFormat } from '../../shared/profiles';
+import { PreflightRecord } from '../../shared/preflight';
+import { SkillPackage } from '../../shared/skill-package';
+import { applyReviewPolicy, validateReview } from '../review';
+import { EvidenceRequest } from '../../shared/review';
+import { preflightScope } from '../orchestration/preflight';
+import { Knowledge, RunContext } from '../../shared/knowledge';
+import { KnowledgeBase } from '../context/knowledge';
+
+const Hash = z.string().regex(/^[a-f0-9]{64}$/);
+const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const Revision = z.number().int().positive();
+const Worker = WorkerInput.extend({ id: Id, revision: Revision }).strict();
+const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPackage.optional() }).strict();
+const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
+const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
+const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
+const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
+const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime() }).strict();
+const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime() }).strict();
+const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional() }).strict();
+const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: z.iso.datetime(), sourceHashes: z.record(Id, Hash), result: DatasetProfile }).strict();
+const Reservation = z.object({ id: Id, run_id: Id, task_id: Id, provider: z.enum(['openai', 'anthropic']), month: z.string().regex(/^\d{4}-\d{2}$/), amount: Integer, state: z.enum(['held', 'unknown', 'settled']) }).strict();
+const Ledger = z.object({ id: Id, reservation_id: Id, amount: Integer, input_tokens: Integer, output_tokens: Integer, pricing_version: z.string() }).strict();
+const RevisionRow = z.object({ entity_id: Id, revision: Revision, data: z.union([Worker, Skill, Team]) }).strict();
+const Settings = z.object({ theme: z.enum(['system', 'light', 'dark']), connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000) }).strict();
+const KnowledgeRevision = z.object({ id: Id, revision: Revision, data: Knowledge }).strict();
+const Payload = z.object({
+  routines: z.array(Routine).max(100).optional(),
+  knowledge: z.array(Knowledge).max(10_000).optional(), knowledgeRevisions: z.array(KnowledgeRevision).max(100_000).optional(),
+  workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), settings: Settings,
+}).strict();
+type Payload = z.infer<typeof Payload>;
+const Envelope = z.object({ format: z.literal('orglet-backup'), version: z.literal(1), createdAt: z.iso.datetime(), checksum: Hash, payload: Payload }).strict();
+export type BackupSummary = { token: string; workers: number; teams: number; tasks: number; reports: number; createdAt: string };
+const digest = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
+const fail = (message: string): never => { throw new Error(`Bản sao lưu không hợp lệ: ${message}`); };
+
+function validateRelations(data: Payload) {
+  const map = <T extends { id: string }>(rows: T[]) => { const result = new Map(rows.map(row => [row.id, row])); if (result.size !== rows.length) fail('ID bị trùng.'); return result; };
+  const workers = map(data.workers); const skills = map(data.skills); const teams = map(data.teams);
+  const tasks = map(data.tasks); const runs = map(data.runs); const sources = map(data.sources); const artifacts = map(data.artifacts);
+  const routines = map(data.routines ?? []);
+  for (const routine of routines.values()) if (!workers.has(routine.task.workerId) || (routine.task.teamId && !teams.has(routine.task.teamId)) || routine.task.sourceIds.some(id => !sources.has(id)) || (routine.lastTaskId && tasks.get(routine.lastTaskId)?.routineId !== routine.id)) fail('Lịch thiếu nhân viên, nhóm, nguồn hoặc task.');
+  for (const task of tasks.values()) {
+    if (task.currentInput?.sourceIds.some(id => !task.sourceIds.includes(id))) fail('Đầu vào hiện tại tham chiếu nguồn ngoài task.');
+    const requests = task.evidenceRequests ?? [];
+    if (new Set(requests.map(request => request.id)).size !== requests.length) fail('Yêu cầu bằng chứng bị trùng.');
+    for (const request of requests) {
+      const artifact = artifacts.get(request.artifactId);
+      if (!artifact || runs.get(artifact.runId)?.taskId !== task.id) fail('Yêu cầu bằng chứng tham chiếu báo cáo ngoài task.');
+      const missing = artifact!.report.review?.checks.filter(check => check.status === 'not_assessed').map(check => check.name) ?? [];
+      if (JSON.stringify(missing) !== JSON.stringify(request.checks)) fail('Yêu cầu bằng chứng không khớp mục chưa đánh giá.');
+    }
+    if (task.routineId && !routines.has(task.routineId)) fail('Task thiếu lịch.');
+    if (task.handoff?.artifactIds.some(id => runs.get(artifacts.get(id)?.runId ?? '')?.taskId !== task.id)) fail('Handoff tham chiếu báo cáo ngoài task.');
+  }
+  map(data.events); map(data.profiles); const reservations = map(data.reservations); map(data.ledger);
+  const preflights = map(data.preflights ?? []);
+  const preflightScopes = new Set<string>();
+  for (const record of preflights.values()) {
+    const task = tasks.get(record.taskId);
+    const scope = `${record.taskId}:${preflightScope(record)}`;
+    if (!task || preflightScopes.has(scope) || record.profileIds.some(profileId => !data.profiles.some(profile => profile.id === profileId && profile.taskId === record.taskId)) || Object.entries(record.sourceHashes).some(([id, hash]) => !task.sourceIds.includes(id) || sources.get(id)?.hash !== hash)) fail('Preflight không khớp task/checker/nguồn.');
+    preflightScopes.add(scope);
+  }
+  for (const run of runs.values()) if (run.snapshot.preflightId && preflights.get(run.snapshot.preflightId)?.taskId !== run.taskId) fail('Run thiếu preflight.');
+  for (const worker of workers.values()) if (!skills.has(worker.skillId)) fail('Nhân viên thiếu skill.');
+  for (const team of teams.values()) if ([...team.memberIds, team.synthesizerId].some(id => !workers.has(id))) fail('Nhóm thiếu nhân viên.');
+  for (const task of tasks.values()) if (!workers.has(task.workerId) || task.sourceIds.some(id => !sources.has(id)) || (task.teamId && (!teams.has(task.teamId) || task.teamSnapshot?.id !== task.teamId))) fail('Task thiếu nhân viên, nhóm hoặc nguồn.');
+  for (const run of runs.values()) if (!tasks.has(run.taskId) || run.snapshot.worker.skillId !== run.snapshot.skill.id || run.snapshot.upstreamArtifactIds?.some(id => !artifacts.has(id))) fail('Snapshot hoặc task của run không hợp lệ.');
+  // Validate the whole join graph, including runs that never committed an artifact.
+  // Kahn's traversal avoids recursive stack growth on a large imported history.
+  const dependencies = new Map<string, number>();
+  const dependents = new Map<string, string[]>();
+  for (const run of runs.values()) {
+    const ids = run.snapshot.upstreamArtifactIds ?? [];
+    if (new Set(ids).size !== ids.length) fail('Join có tham chiếu trùng.');
+    dependencies.set(run.id, ids.length);
+    for (const id of ids) {
+      const parent = runs.get(artifacts.get(id)!.runId);
+      if (!parent || parent.taskId !== run.taskId) return fail('Join tham chiếu artifact ngoài task.');
+      const children = dependents.get(parent.id) ?? [];
+      children.push(run.id); dependents.set(parent.id, children);
+    }
+  }
+  const ready = [...dependencies].filter(([, count]) => count === 0).map(([id]) => id);
+  for (let index = 0; index < ready.length; index++) {
+    for (const child of dependents.get(ready[index]) ?? []) {
+      const remaining = dependencies.get(child)! - 1;
+      dependencies.set(child, remaining);
+      if (remaining === 0) ready.push(child);
+    }
+  }
+  if (ready.length !== runs.size) fail('Join có vòng lặp giữa các báo cáo.');
+  for (const run of runs.values()) if (run.snapshot.input?.sourceIds.some(id => !tasks.get(run.taskId)!.sourceIds.includes(id))) fail('Snapshot tham chiếu nguồn ngoài task.');
+  for (const event of data.events) if (!runs.has(event.runId)) fail('Event thiếu run.');
+  const artifactRuns = new Set<string>();
+  const findingIds = new Set<string>();
+  for (const artifact of artifacts.values()) {
+    if (!runs.has(artifact.runId) || artifactRuns.has(artifact.runId) || digest(artifact.report) !== artifact.hash) fail('Artifact bị trùng hoặc checksum sai.');
+    const task = tasks.get(runs.get(artifact.runId)!.taskId)!;
+    const owner = runs.get(artifact.runId)!;
+    const artifactSourceIds = owner.snapshot.input?.sourceIds ?? task.sourceIds;
+    const upstream = (owner.snapshot.upstreamArtifactIds ?? []).map(id => artifacts.get(id)!);
+    if (owner.stage === 'synthesis' && owner.snapshot.team?.reviewPolicy) {
+      const profiles = data.profiles.filter(profile => profile.taskId === task.id && (profile.runId === owner.id || (owner.snapshot.preflightId && preflights.get(owner.snapshot.preflightId)?.profileIds.includes(profile.id))));
+      if (JSON.stringify(applyReviewPolicy(artifact.report, owner.snapshot.team.reviewPolicy, profiles, upstream)) !== JSON.stringify(artifact.report)) fail('Review bỏ qua checklist bắt buộc của snapshot.');
+    }
+    if (upstream.some(item => item.runId === owner.id || runs.get(item.runId)?.taskId !== task.id)) fail('Join tham chiếu artifact ngoài task hoặc chính nó.');
+    validateReview(artifact.report, upstream, new Set(artifactSourceIds), (id, sourceIds) => {
+      const profile = data.profiles.find(item => item.id === id);
+      if (!profile || profile.taskId !== task.id || (profile.runId !== owner.id && !(owner.snapshot.preflightId && preflights.get(owner.snapshot.preflightId)?.profileIds.includes(id))) || !sourceIds.some(sourceId => Object.hasOwn(profile.sourceHashes, sourceId))) fail('Review tham chiếu checker ngoài phạm vi.');
+    });
+    if (artifact.report.findings.some(finding => finding.sourceIds.some(id => !artifactSourceIds.includes(id)))) fail('Artifact trích nguồn ngoài task.');
+    for (const finding of artifact.report.findings) {
+      if (finding.locations?.some(location => !finding.sourceIds.includes(location.sourceId))) fail('Vị trí dòng tham chiếu nguồn ngoài finding.');
+      const provenance = finding.provenance;
+      if (provenance) {
+        if (provenance.runId !== artifact.runId || provenance.writerId !== runs.get(artifact.runId)!.snapshot.worker.id || findingIds.has(provenance.findingId)) fail('Nguồn gốc finding không khớp writer/run hoặc ID bị trùng.');
+        findingIds.add(provenance.findingId);
+      }
+      for (const checkerId of finding.checkerIds ?? []) {
+        const profile = data.profiles.find(item => item.id === checkerId);
+        const preflightId = runs.get(artifact.runId)!.snapshot.preflightId;
+        if (!profile || profile.taskId !== task.id || (profile.runId !== artifact.runId && !(preflightId && preflights.get(preflightId)?.profileIds.includes(checkerId))) || !finding.sourceIds.some(id => Object.hasOwn(profile.sourceHashes, id))) fail('Finding tham chiếu checker ngoài phạm vi.');
+      }
+    }
+    artifactRuns.add(artifact.runId);
+  }
+  for (const profile of data.profiles) {
+    const task = tasks.get(profile.taskId);
+    if (!task || (profile.runId && runs.get(profile.runId)?.taskId !== profile.taskId) || Object.entries(profile.sourceHashes).some(([id, hash]) => sources.get(id)?.hash !== hash || !task.sourceIds.includes(id))) fail('Checker thiếu nguồn hoặc checksum sai.');
+    const ids = profile.result.datasets.map(dataset => dataset.sourceId);
+    if (new Set(ids).size !== ids.length || ids.length !== Object.keys(profile.sourceHashes).length || ids.some(id => !Object.hasOwn(profile.sourceHashes, id))) fail('Checker không khớp nguồn đã kiểm tra.');
+  }
+  const settled = new Set<string>();
+  for (const entry of data.ledger) { if (!reservations.has(entry.reservation_id) || settled.has(entry.reservation_id)) fail('Ledger thiếu reservation hoặc bị trùng.'); settled.add(entry.reservation_id); }
+  for (const reservation of reservations.values()) if (runs.get(reservation.run_id)?.taskId !== reservation.task_id || (reservation.state === 'settled') !== settled.has(reservation.id)) fail('Reservation không khớp run/ledger.');
+  const revisions = new Set<string>();
+  for (const row of data.revisions) { const key = `${row.entity_id}:${row.revision}`; if (row.entity_id !== row.data.id || row.revision !== row.data.revision || revisions.has(key)) fail('Revision không hợp lệ.'); revisions.add(key); }
+  const knowledgeRevisions = new Map<string, z.infer<typeof Knowledge>>();
+  for (const row of data.knowledgeRevisions ?? []) {
+    const key = `${row.id}:${row.revision}`;
+    if (row.id !== row.data.id || row.revision !== row.data.revision || knowledgeRevisions.has(key)) fail('Revision knowledge không hợp lệ.');
+    knowledgeRevisions.set(key, row.data);
+  }
+  for (const item of [...map(data.knowledge ?? []).values(), ...knowledgeRevisions.values()]) {
+    if ((item.scope.type === 'team' && !teams.has(item.scope.id)) || (item.scope.type === 'worker' && !workers.has(item.scope.id))) fail('Knowledge tham chiếu nhóm/nhân viên không tồn tại.');
+    const origin = item.provenance.kind === 'run' ? item.provenance : undefined;
+    if (origin && (runs.get(origin.runId)?.taskId !== origin.taskId || artifacts.get(origin.artifactId)?.runId !== origin.runId)) fail('Knowledge tham chiếu lần chạy ngoài lịch sử.');
+  }
+  for (const item of data.knowledge ?? []) if (digest(knowledgeRevisions.get(`${item.id}:${item.revision}`)) !== digest(item)) fail('Knowledge hiện tại thiếu revision tương ứng.');
+}
+
+function snapshot(store: Store): Payload {
+  return Payload.parse({
+    routines: store.all('routines'),
+    knowledge: store.all('knowledge'),
+    knowledgeRevisions: store.db.prepare('SELECT * FROM knowledge_revisions ORDER BY rowid').all().map(row => ({ id: row.id, revision: row.revision, data: JSON.parse(String(row.data)) })),
+    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs: store.all('runs'), events: store.all('events'), artifacts: store.all('artifacts'), sources: store.all('sources'), profiles: store.all('profiles'), preflights: store.all('preflights'),
+    revisions: store.db.prepare('SELECT * FROM revisions ORDER BY rowid').all().map(row => ({ ...row, data: JSON.parse(String(row.data)) })),
+    reservations: store.db.prepare('SELECT * FROM reservations ORDER BY rowid').all(), ledger: store.db.prepare('SELECT * FROM ledger ORDER BY rowid').all(),
+    settings: { theme: store.setting('theme', 'system'), connectionLimitMicros: store.setting('connectionLimitMicros', 5_000_000) },
+  });
+}
+
+export class Backups {
+  private pending?: { token: string; expires: number; payload: Payload };
+  constructor(private store: Store, private busy: () => boolean, private notify: () => void) {}
+  export(): string {
+    return this.store.transaction(() => {
+      const payload = snapshot(this.store); validateRelations(payload);
+      const text = JSON.stringify({ format: 'orglet-backup', version: 1, createdAt: now(), checksum: digest(payload), payload });
+      if (Buffer.byteLength(text) > 50 * 1024 * 1024) throw new Error('Bản sao lưu vượt 50 MB.');
+      return text;
+    });
+  }
+  preview(text: string): BackupSummary {
+    if (Buffer.byteLength(text) > 50 * 1024 * 1024) throw new Error('Bản sao lưu vượt 50 MB.');
+    let parsed: unknown;
+    try { parsed = JSON.parse(text); } catch { return fail('Tệp JSON bị hỏng.'); }
+    const envelope = Envelope.parse(parsed);
+    if (digest(envelope.payload) !== envelope.checksum) fail('Checksum không khớp.');
+    validateRelations(envelope.payload);
+    const token = id(); this.pending = { token, expires: Date.now() + 300_000, payload: envelope.payload };
+    return { token, workers: envelope.payload.workers.length, teams: envelope.payload.teams.length, tasks: envelope.payload.tasks.length, reports: envelope.payload.artifacts.length, createdAt: envelope.createdAt };
+  }
+  restore(token: string) {
+    const pending = this.pending;
+    if (!pending || pending.token !== token || pending.expires < Date.now()) throw new Error('Phiên khôi phục đã hết hạn. Chọn lại bản sao lưu.');
+    if (this.busy()) throw new Error('Chờ hoặc hủy các task/checker đang chạy trước khi khôi phục.');
+    const incoming = pending.payload;
+    this.store.transaction(() => {
+      const current = snapshot(this.store);
+      // Older runs derive their original input from their own backup's task.
+      // Compare that scope with the later backfill, never with the merged task's source history.
+      const comparableSnapshot = (run: Payload['runs'][number], payload: Payload) => {
+        const task = payload.tasks.find(task => task.id === run.taskId)!;
+        const { input, inputRevision, ...rest } = run.snapshot;
+        return { ...rest, inputRevision: inputRevision ?? 0, input: RunInput.parse(input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources }) };
+      };
+      for (const run of incoming.runs) {
+        const existing = current.runs.find(item => item.id === run.id);
+        if (existing && (existing.taskId !== run.taskId || digest(comparableSnapshot(existing, current)) !== digest(comparableSnapshot(run, incoming)))) fail('Snapshot của run xung đột.');
+      }
+      const merge = <T extends { id: string }>(existing: T[], added: T[], immutable = false): T[] => {
+        const rows = new Map(added.map(row => [row.id, row]));
+        for (const row of existing) { if (immutable && rows.has(row.id) && digest(row) !== digest(rows.get(row.id))) fail('Dữ liệu bất biến xung đột với workspace.'); rows.set(row.id, row); }
+        return [...rows.values()];
+      };
+      const restoredSources = incoming.sources.map(source => ({ ...source, revoked: true }));
+      const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, task: { ...routine.task, consent: false, providerScopes: [] } }));
+      const restoredTasks = incoming.tasks.map(task => ({ ...task, consent: false, providerScopes: [], status: ['running', 'queued', 'pausing', 'paused'].includes(task.status) ? 'interrupted' as const : task.status }));
+      const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: comparableSnapshot(run, incoming), status: ['running', 'queued', 'pausing', 'paused'].includes(run.status) ? 'interrupted' as const : run.status }));
+      const merged: Payload = { ...current,
+        routines: merge(current.routines ?? [], restoredRoutines),
+        workers: merge(current.workers, incoming.workers), skills: merge(current.skills, incoming.skills), teams: merge(current.teams, incoming.teams),
+        tasks: merge(current.tasks, restoredTasks), runs: merge(current.runs, restoredRuns), sources: merge(current.sources, restoredSources),
+        events: merge(current.events, incoming.events, true), artifacts: merge(current.artifacts, incoming.artifacts, true), profiles: merge(current.profiles, incoming.profiles, true),
+        preflights: merge(current.preflights ?? [], incoming.preflights ?? []),
+        ledger: merge(current.ledger, incoming.ledger, true), reservations: merge(current.reservations, incoming.reservations),
+      };
+      // Financial facts cannot be rolled back by importing an older snapshot.
+      for (const row of incoming.reservations) {
+        const existing = current.reservations.find(item => item.id === row.id);
+        if (existing && digest({ ...existing, state: '' }) !== digest({ ...row, state: '' })) fail('Reservation xung đột.');
+      }
+      for (const row of merged.reservations) row.state = merged.ledger.some(entry => entry.reservation_id === row.id) ? 'settled' : 'unknown';
+      const revisions = new Map(incoming.revisions.map(row => [`${row.entity_id}:${row.revision}`, row]));
+      for (const row of current.revisions) { const key = `${row.entity_id}:${row.revision}`; if (revisions.has(key) && digest(revisions.get(key)) !== digest(row)) fail('Revision xung đột.'); revisions.set(key, row); }
+      merged.revisions = [...revisions.values()];
+      merged.knowledge = merge(current.knowledge ?? [], incoming.knowledge ?? []);
+      const knowledgeRevisions = new Map((incoming.knowledgeRevisions ?? []).map(row => [`${row.id}:${row.revision}`, row]));
+      for (const row of current.knowledgeRevisions ?? []) { const key = `${row.id}:${row.revision}`; if (knowledgeRevisions.has(key) && digest(knowledgeRevisions.get(key)) !== digest(row)) fail('Revision knowledge xung đột.'); knowledgeRevisions.set(key, row); }
+      merged.knowledgeRevisions = [...knowledgeRevisions.values()];
+      validateRelations(merged);
+      if ((merged.routines?.length ?? 0) > 100) fail('Tổng số lịch sau khôi phục vượt 100.');
+      for (const routine of merged.routines ?? []) this.store.put('routines', routine);
+      for (const table of ['skills', 'workers', 'teams', 'tasks'] as const) for (const row of merged[table]) this.store.put(table, row);
+      for (const source of merged.sources) {
+        const path = this.store.db.prepare('SELECT path FROM sources WHERE id=?').get(source.id)?.path;
+        this.store.put('sources', source, { column: 'path', value: typeof path === 'string' ? path : '' });
+      }
+      for (const run of merged.runs) this.store.put('runs', run, { column: 'task_id', value: run.taskId });
+      for (const event of merged.events) this.store.put('events', event, { column: 'run_id', value: event.runId });
+      for (const artifact of merged.artifacts) this.store.put('artifacts', artifact, { column: 'run_id', value: artifact.runId });
+      for (const profile of merged.profiles) this.store.put('profiles', profile, { column: 'task_id', value: profile.taskId });
+      for (const record of merged.preflights ?? []) this.store.put('preflights', record, { column: 'task_id', value: record.taskId });
+      for (const row of merged.revisions) this.store.db.prepare('INSERT OR IGNORE INTO revisions VALUES(?,?,?)').run(row.entity_id, row.revision, JSON.stringify(row.data));
+      for (const row of merged.reservations) this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state').run(row.id, row.run_id, row.task_id, row.provider, row.month, row.amount, row.state);
+      for (const row of merged.ledger) this.store.db.prepare('INSERT OR IGNORE INTO ledger VALUES(?,?,?,?,?,?)').run(row.id, row.reservation_id, row.amount, row.input_tokens, row.output_tokens, row.pricing_version);
+      for (const row of merged.knowledgeRevisions ?? []) this.store.db.prepare('INSERT OR IGNORE INTO knowledge_revisions VALUES(?,?,?)').run(row.id, row.revision, JSON.stringify(row.data));
+      const knowledge = new KnowledgeBase(this.store);
+      for (const item of merged.knowledge ?? []) { this.store.put('knowledge', item); knowledge.index(item); }
+      this.store.db.exec('DELETE FROM task_search');
+      for (const task of merged.tasks) this.store.db.prepare('INSERT INTO task_search VALUES(?,?)').run(task.id, task.brief);
+    });
+    this.pending = undefined; this.notify();
+  }
+}
+

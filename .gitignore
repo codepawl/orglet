@@ -1,0 +1,10 @@
+node_modules/
+.vite/
+out/
+dist/
+test-results/
+playwright-report/
+*.log
+.env*
+!.env.example
+.dev-data/

@@ -1,0 +1,73 @@
+import { _electron as electron } from 'playwright';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import assert from 'node:assert/strict';
+
+// Language setting: switch to English, check UI text, a translated core error and persistence, then switch back.
+const directory = await mkdtemp(join(tmpdir(), 'orglet-i18n-'));
+const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+const launch = () => electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${directory}`], env });
+const errors = [];
+// Records the title of the next native open dialog without showing it.
+const dialogTitle = async (app, page) => {
+  await app.evaluate(({ dialog }) => { globalThis.lastTitle = null; dialog.showOpenDialog = async (_window, options) => { globalThis.lastTitle = options.title; return { canceled: true, filePaths: [] }; }; });
+  await page.evaluate(() => window.orglet.pickSources());
+  return app.evaluate(() => globalThis.lastTitle);
+};
+let app = await launch();
+try {
+  let page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
+  page.on('pageerror', error => errors.push(error.message));
+  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.lang), 'vi');
+
+  await page.getByRole('button', { name: /^Cài đặt/ }).click();
+  await page.getByRole('combobox', { name: 'Ngôn ngữ', exact: true }).click();
+  await page.getByRole('option', { name: 'English (US)', exact: true }).click();
+  // The dialog re-renders in English once the dictionary chunk has loaded.
+  await page.getByRole('combobox', { name: 'Language', exact: true }).waitFor();
+  await page.getByRole('tab', { name: 'API connections', exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.lang), 'en');
+  await page.screenshot({ path: 'test-results/i18n-settings-en.png' });
+  // Native dialogs follow the saved language straight away.
+  assert.equal(await dialogTitle(app, page), 'Choose sources: text up to 256 KB; CSV, JSONL, Parquet up to 32 MB each');
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('heading', { name: 'What should we work on?' }).waitFor();
+  await page.getByRole('button', { name: 'Summarize documents', exact: true }).waitFor();
+  for (const name of ['New team', 'New worker', 'New task']) await page.getByRole('button', { name, exact: true }).first().waitFor();
+  await page.getByRole('button', { name: /^Schedules/ }).click();
+  await page.getByText('No schedules yet.', { exact: true }).waitFor();
+  await page.keyboard.press('Escape');
+
+  // Validation text in dialogs follows the language too.
+  await page.getByRole('button', { name: 'New team', exact: true }).click();
+  await page.getByRole('button', { name: 'Save team', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Enter a team name.' }).waitFor();
+  await page.keyboard.press('Escape');
+  await page.screenshot({ path: 'test-results/i18n-home-en.png' });
+
+  // Persists across restarts.
+  await app.close(); app = await launch(); page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
+  await page.getByRole('heading', { name: 'What should we work on?' }).waitFor();
+  assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).language, 'en');
+  assert.equal(await dialogTitle(app, page), 'Choose sources: text up to 256 KB; CSV, JSONL, Parquet up to 32 MB each', 'language is read at startup');
+  // British English: same text with UK spellings.
+  await page.getByRole('button', { name: /^Settings/ }).click();
+  await page.getByRole('combobox', { name: 'Language', exact: true }).click();
+  await page.getByRole('option', { name: 'English (UK)', exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.lang === 'en-GB');
+  await page.screenshot({ path: 'test-results/i18n-settings-gb.png' });
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Summarise documents', exact: true }).waitFor();
+
+  await page.getByRole('button', { name: /^Settings/ }).click();
+  await page.getByRole('combobox', { name: 'Language', exact: true }).click();
+  await page.getByRole('option', { name: 'Tiếng Việt', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Ngôn ngữ', exact: true }).waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ directory, result: 'passed' }));
+} finally { await app.close(); }

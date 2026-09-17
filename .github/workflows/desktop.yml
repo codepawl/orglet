@@ -1,0 +1,29 @@
+name: Windows desktop
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24.19.0'
+      - uses: pnpm/action-setup@v6
+        with:
+          version: '11.19.0'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm make
+      - run: pnpm test:desktop
+      - run: pnpm test:packaged
+      - run: pnpm test:routines
+      - run: pnpm test:skills
+      - run: pnpm test:run-audit
+      - run: pnpm test:findings
+      - run: pnpm test:revisions
+      - run: pnpm test:knowledge
+      - run: pnpm test:harness

@@ -1,0 +1,103 @@
+import { _electron as electron } from 'playwright';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import assert from 'node:assert/strict';
+
+const directory = await mkdtemp(join(tmpdir(), 'orglet-routine-ui-'));
+const output = resolve('test-results'); await mkdir(output, { recursive: true });
+const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+let closed = false;
+const launch = async () => {
+  const instance = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${directory}`], env });
+  closed = false; instance.once('close', () => { closed = true; }); return instance;
+};
+let app = await launch();
+try {
+  let page = await app.firstWindow(); await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await page.getByRole('textbox', { name: 'Nội dung công việc' }).fill('Routine smoke: scheduled demo');
+  await page.getByRole('button', { name: 'Lên lịch cho công việc này', exact: true }).click();
+  await page.getByLabel('Tên lịch', { exact: true }).fill('Morning routine');
+  await page.getByLabel('Timezone', { exact: true }).fill('Invalid/Zone');
+  await page.getByRole('button', { name: 'Lưu lịch', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Timezone không hợp lệ. Dùng tên như' }).waitFor();
+  assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).routines.length, 0);
+  await page.getByLabel('Timezone', { exact: true }).fill('UTC');
+  const due = new Date(Date.now() + 20_000); due.setUTCMinutes(due.getUTCMinutes() + 1, 0, 0);
+  await page.getByLabel('Giờ chạy', { exact: true }).fill(due.toISOString().slice(11, 16));
+  await page.getByRole('button', { name: 'Lưu lịch', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Cần xác nhận quyền tự chạy' }).waitFor();
+  await page.getByRole('checkbox', { name: /^Cho phép tự chạy brief/ }).check();
+  await page.getByRole('button', { name: 'Lưu lịch', exact: true }).click();
+  const region = page.getByRole('region', { name: 'Lịch Morning routine', exact: true }); await region.waitFor();
+  const routine = (await page.evaluate(() => window.orglet.call('workspace', {}))).routines[0];
+  assert.equal(routine.nextDueAt, due.toISOString());
+  console.log(JSON.stringify({ waitingForScheduledDemo: routine.nextDueAt, directory }));
+  await region.getByRole('button', { name: 'Mở lần chạy gần nhất', exact: true }).waitFor({ timeout: 100_000 });
+  await region.getByRole('button', { name: 'Mở lần chạy gần nhất', exact: true }).click();
+  await page.locator('.chat-reply, .report').first().waitFor();
+  const completed = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks;
+  assert.equal(completed.length, 1); assert.equal(completed[0].routineId, routine.id);
+  await page.getByRole('button', { name: /Lịch chạy/ }).click();
+  await region.getByRole('button', { name: 'Tắt lịch', exact: true }).click();
+  await region.getByText(/Đã tắt/).waitFor();
+  await page.screenshot({ path: join(output, 'routine-completed.png') });
+  await app.close();
+  // Only modify isolated fixture state while the app/core are closed. No production test hook.
+  const db = new DatabaseSync(join(directory, 'orglet.sqlite'));
+  const saved = JSON.parse(db.prepare('SELECT data FROM routines WHERE id=?').get(routine.id).data);
+  db.prepare('UPDATE routines SET data=? WHERE id=?').run(JSON.stringify({ ...saved, enabled: true, nextDueAt: new Date(Date.now() - 7 * 86_400_000).toISOString() }), routine.id); db.close();
+  app = await launch(); page = await app.firstWindow(); await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await page.getByRole('button', { name: /Lịch chạy/ }).click();
+  await page.getByText(/Đã bỏ qua lịch khi app không hoạt động/).waitFor();
+  assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).tasks.length, 1);
+  await page.screenshot({ path: join(output, 'routine-missed.png') });
+  await page.getByRole('button', { name: 'Chạy bù một lần', exact: true }).click();
+  await page.locator('.chat-reply, .report').first().waitFor();
+  const state = await page.evaluate(() => window.orglet.call('workspace', {}));
+  assert.equal(state.tasks.length, 2); assert.equal(state.routines[0].pending, null);
+  assert.deepEqual(await page.evaluate(() => window.orglet.connections()), { openai: false, anthropic: false });
+  // Work-hour configuration uses ordinary native form controls.
+  await page.getByRole('button', { name: 'Tạo nhóm', exact: true }).click(); await page.getByRole('button', { name: 'Research Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Tùy chọn nhóm Research Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
+  await page.getByRole('tab', { name: 'Giới hạn & ca', exact: true }).click();
+  await page.getByLabel('Số công việc chạy đồng thời', { exact: true }).fill('1');
+  await page.getByLabel('Giới hạn khung giờ làm việc', { exact: true }).check();
+  await page.getByLabel('Timezone của ca', { exact: true }).fill('UTC');
+  await page.getByLabel('Bắt đầu ca', { exact: true }).fill('09:00'); await page.getByLabel('Kết thúc ca', { exact: true }).fill('17:00');
+  await page.getByRole('button', { name: 'Lưu nhóm', exact: true }).click();
+  const team = (await page.evaluate(() => window.orglet.call('workspace', {}))).teams[0];
+  assert.equal(team.maxConcurrentTasks, 1); assert.deepEqual(team.workHours, { timeZone: 'UTC', start: '09:00', end: '17:00', days: [1, 2, 3, 4, 5] });
+  const handoffTaskId = await page.evaluate(async team => {
+    const { workHours: _hours, ...unrestricted } = team;
+    const saved = await window.orglet.call('saveTeam', unrestricted);
+    const taskId = await window.orglet.call('createTask', { workerId: saved.synthesizerId, teamId: saved.id, brief: 'Routine smoke: shift handoff', sourceIds: [], consent: false, budgetMicros: 1000 });
+    const start = new Date(Date.now() + 3_600_000).toISOString().slice(11, 16);
+    const end = new Date(Date.now() + 7_200_000).toISOString().slice(11, 16);
+    await window.orglet.call('saveTeam', { ...saved, workHours: { timeZone: 'UTC', start, end, days: [0, 1, 2, 3, 4, 5, 6] } });
+    return taskId;
+  }, team);
+  await page.getByRole('button', { name: /^Routine smoke: shift handoff/ }).click();
+  await page.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).waitFor();
+  await page.locator('summary').filter({ hasText: 'Bàn giao cuối ca' }).click();
+  await page.getByRole('heading', { name: 'Bước tiếp theo', exact: true }).waitFor();
+  const handoff = await page.evaluate(id => window.orglet.call('task', { id }), handoffTaskId);
+  assert.equal(handoff.task.pauseReason, 'shift'); assert.ok(handoff.task.handoff);
+  await page.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Nhóm đang ngoài khung giờ' }).waitFor();
+  await page.screenshot({ path: join(output, 'shift-handoff.png') });
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(780, 640));
+  await page.getByRole('button', { name: 'Mở sidebar', exact: true }).click(); await page.getByRole('button', { name: /Lịch chạy/ }).click();
+  await page.getByRole('button', { name: 'Sửa lịch Morning routine', exact: true }).click();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await page.screenshot({ path: join(output, 'routine-narrow.png') });
+  await page.keyboard.press('Escape');
+  const result = { scheduled: 'passed', missedCatchUp: 'passed', shiftConfiguration: 'passed', handoff: 'passed', directory, tasks: state.tasks.length };
+  await writeFile(join(output, 'routine-smoke.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
+  if (process.argv.includes('--inspect-ui')) {
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 820));
+    console.log('Routine fixture ready for computer use; close the window when finished.');
+    await new Promise(resolve => app.once('close', resolve));
+  }
+} finally { if (!closed) await app.close(); }

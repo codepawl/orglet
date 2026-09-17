@@ -1,0 +1,150 @@
+import { useEffect, useRef, useState } from 'react';
+import { FileText, Check, RotateCcw, Square } from 'lucide-react';
+import type { Artifact, Run, TaskDetail, TaskStatus } from '../../shared/contracts';
+import { Button } from './ui';
+import { formatMoney } from './money';
+import type { SourceTarget } from './SourcePanel';
+import { ReviewSummary } from './ReviewSummary';
+import type { Knowledge } from '../../shared/knowledge';
+import { ProviderMark } from './ProviderMark';
+import { Avatar } from './Avatar';
+import { toast } from './toast';
+import { t } from '../i18n';
+import { DocumentCard, DocumentViewer } from './DocumentViewer';
+import { FormatAction } from './FormatAction';
+import { currentLocale, translated, tMessage } from '../i18n';
+import { orglet } from '../api';
+
+export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
+
+type Turn = { revision: number; runs: Run[]; brief: string; sourceCount: number; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
+
+/**
+ * A task shown as one chat (user decision 2026-09-17): every message the user sent, oldest first, each followed by the
+ * worker's answer. Answers are normal messages; a structured report is shown only when one was asked for or a team
+ * checklist requires it. Run controls, errors and cost belong to the latest turn only.
+ */
+export function TaskThread({ detail, action, showSources, proposals, openKnowledge }: { detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void }) {
+  const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
+  const current = detail.task.inputRevision ?? 0;
+  const turns: Turn[] = [...new Set([0, current, ...detail.runs.map(run => run.snapshot.inputRevision ?? 0)])].sort((a, b) => a - b).map(revision => {
+    const runs = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
+    const input = revision === current ? detail.task.currentInput ?? detail.task : runs.find(run => run.snapshot.input)?.snapshot.input ?? detail.task;
+    const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis')));
+    // Group chat: each worker's latest answered run for this message, in the order they answered.
+    const replies = runs.filter(run => run.stage === 'group').flatMap(run => { const reply = detail.artifacts.find(item => item.runId === run.id); return reply ? [{ run, artifact: reply }] : []; });
+    return { revision, runs, brief: input.brief, sourceCount: input.sourceIds.length, artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
+  });
+  const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
+  useEffect(() => { if (atBottom.current && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; }, [detail.events.length, detail.artifacts.length, turns.length]);
+
+  const byline = (author?: Run) => <div className="message-byline">{/* Agent marks sit left of the name. */}{author ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} /> : <span className="orglet-mark small">o</span>}<strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author?.snapshot.worker.provider === 'demo' && <span className="badge">Demo</span>}</div>;
+
+  return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
+    <div className="thread-content">
+      {turns.map(turn => {
+        const latest = turn.revision === current;
+        const run = turn.runs.at(-1);
+        return <div className="chat-turn" key={turn.revision}>
+          <div className="user-message"><p>{turn.brief}</p>{turn.sourceCount > 0 && <Button onClick={() => showSources()}><FileText size={16} />{t('{0} nguồn', [turn.sourceCount])}</Button>}</div>
+          {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
+            {byline(reply.run)}
+            {reply.artifact.report.format === 'chat' ? <ChatReply artifact={reply.artifact} action={action} /> : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
+          </section>)}
+          {(!turn.replies.length || (latest && (busy || run?.error || detail.task.status !== 'completed'))) && <section className="assistant-message" aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
+            {!(latest && busy) && !turn.replies.length && byline(turn.author)}
+            {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
+            {latest && detail.task.status === 'waiting_input' && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
+            {latest && busy && run && <Thinking provider={run.snapshot.worker.provider} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />}
+            {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
+            {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
+            {latest && detail.task.status === 'partial' && <p className="run-error">{t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
+            {!turn.artifact && !turn.replies.length && !(latest && busy) && !(latest && run?.error) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
+            {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
+              ? <ChatReply artifact={turn.artifact} action={action} />
+              : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
+            {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
+            {latest && run?.error && detail.task.status !== 'paused' && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{tMessage(run.error)}</p></div>}
+            {latest && <div className="actions">
+              {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
+              {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}
+            </div>}
+          </section>}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+/**
+ * Work in progress, kept visual (user decision 2026-09-17): the provider's mark inside a spinning ring, one short phrase
+ * for what is happening, and a quiet stop button. Details (versions, paths, costs) stay in Chi tiết.
+ */
+function Thinking({ provider, message, pausing, onStop }: { provider: Run['snapshot']['worker']['provider']; message?: string; pausing: boolean; onStop: () => void }) {
+  const read = message?.match(/^Đã đọc (.+)$/);
+  const label = pausing ? t('Đang dừng sau bước này…') : read ? t('Đang đọc {0}', [read[1]]) : message?.startsWith('Đang chờ lượt') ? t('Đang chờ lượt…') : message === 'Model đang trả kết quả…' ? t('Đang viết câu trả lời…') : t('Đang suy nghĩ…');
+  return <div role="status" className="thinking">
+    <span className="thinking-mark" aria-hidden="true">{provider === 'demo' ? <span className="orglet-mark small">o</span> : <ProviderMark provider={provider} size="small" decorative />}</span>
+    <span className="thinking-text">{label}</span>
+    <Button size="icon" className="thinking-stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}><Square size={11} fill="currentColor" /></Button>
+  </div>;
+}
+
+/** A normal chat answer: the message, with copy and export tucked into a quiet row. */
+function ChatReply({ artifact, action }: { artifact: Artifact; action: (fn: () => Promise<unknown>) => void }) {
+  return <div className="chat-reply">
+    <p className="prose">{tMessage(artifact.report.summary)}</p>
+    <div className="message-actions"><ArtifactActions artifactId={artifact.id} action={action} /></div>
+  </div>;
+}
+
+/** Copy and download for an answer or document, in the format the user picks or saved as default. */
+function ArtifactActions({ artifactId, action }: { artifactId: string; action: (fn: () => Promise<unknown>) => void }) {
+  return <>
+    <FormatAction kind="copy" onPick={format => action(async () => { await orglet.copyArtifact(artifactId, format); toast(format === 'text' ? t('Đã sao chép văn bản.') : t('Đã sao chép Markdown.')); })} />
+    <FormatAction kind="download" onPick={format => action(() => orglet.exportArtifact(artifactId, format))} />
+  </>;
+}
+
+/**
+ * A structured report is sent like a file a colleague attaches (user decision 2026-09-17): a quiet file card in the chat
+ * that opens in a macOS-style document viewer. The Demo sample has no summary worth showing, only its limits.
+ */
+function ReportView({ artifact, author, latest, busy, detail, action, showSources }: { artifact: Artifact; author?: Run; latest: boolean; busy: boolean; detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void }) {
+  const [open, setOpen] = useState(false);
+  const report = artifact.report;
+  const sample = author?.snapshot.worker.provider === 'demo';
+  const name = tMessage(report.title);
+  const when = new Date(artifact.createdAt).toLocaleString(currentLocale(), { dateStyle: 'medium', timeStyle: 'short' });
+  const meta = [t('Báo cáo'), report.findings.length ? t('{0} phát hiện', [report.findings.length]) : '', latest && detail.task.accepted ? t('Đã chấp nhận') : '', when].filter(Boolean).join(' · ');
+  // Evidence links leave the document for the sources panel.
+  const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
+  return <>
+    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+    <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
+      {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}
+      <ArtifactActions artifactId={artifact.id} action={action} />
+    </>}>
+      <h1>{name}</h1>
+      <p className="doc-meta">{[author?.snapshot.worker.name, when].filter(Boolean).join(' · ')}</p>
+      {!sample && <p className="prose">{tMessage(report.summary)}</p>}
+      {detail.task.evidenceRequests?.filter(request => request.artifactId === artifact.id).map(request => <section key={request.id}>
+        <h2>{t('Bằng chứng còn thiếu')}</h2><ul>{request.checks.map(item => <li key={item}>{item}</li>)}</ul>
+        <p className="muted">{t('Các phần đã làm được giữ lại. Ghi nhận giới hạn không chuyển các mục này thành đạt.')}</p>
+        {request.state === 'pending' ? <Button variant="outline" disabled={busy} onClick={() => action(() => orglet.call('acknowledgeEvidence', { taskId: detail.task.id, requestId: request.id }))}>{t('Ghi nhận giới hạn')}</Button> : <p role="status">{t('Đã ghi nhận giới hạn bằng chứng.')}</p>}
+      </section>)}
+      <ReviewSummary key={artifact.id} artifactId={artifact.id} report={report} detail={detail} showSources={openSource} />
+      {report.findings.length > 0 && <section><h2>{t('Phát hiện')}</h2>
+        {report.findings.map((finding, index) => <section className="finding" key={finding.provenance?.findingId ?? index}>
+          <h3>{finding.title} <span className="doc-note">· {finding.severity === 'critical' ? t('Nghiêm trọng') : finding.severity === 'warning' ? t('Cần xem lại') : t('Thông tin')}</span></h3>
+          <p className="prose">{finding.detail}</p><p className="muted">{t('Phạm vi: {0}', [finding.coverage])}</p>
+          {finding.category && <p className="muted">{t('Nhóm: {0}', [({ challenge: 'Challenge', data: t('Dữ liệu'), scoring: 'Scoring', runs: t('Lần chạy'), other: t('Khác') } as const)[finding.category]])}</p>}
+          {finding.recommendation && <p className="prose"><strong>{t('Khuyến nghị:')}</strong> {finding.recommendation}</p>}
+          <div className="source-links">{finding.sourceIds.map(id => <Button key={id} onClick={() => openSource({ type: 'source', id })}><FileText size={14} />{detail.sources.find(source => source.id === id)?.name ?? id}</Button>)}{finding.checkerIds?.map((id, position) => <Button key={id} onClick={() => openSource({ type: 'checker', id })}><FileText size={14} />Xem checker {position + 1}</Button>)}{finding.locations?.map((location, position) => <Button key={`line-${position}`} onClick={() => openSource({ type: 'source', id: location.sourceId, lines: [location.startLine, location.endLine] })}><FileText size={14} />{detail.sources.find(source => source.id === location.sourceId)?.name ?? location.sourceId} · {location.startLine === location.endLine ? t('dòng {0}', [location.startLine]) : t('dòng {0}–{1}', [location.startLine, location.endLine])}</Button>)}</div>
+          {finding.provenance && <details><summary>{t('Nguồn gốc finding')}</summary><p>{t('{0} · nhân viên v{1}', [author?.snapshot.worker.name, author?.snapshot.worker.revision])}</p><code className="hash">Finding: {finding.provenance.findingId}<br />Worker: {finding.provenance.writerId}<br />Run: {finding.provenance.runId}</code></details>}
+        </section>)}
+      </section>}
+      {report.limitations.length > 0 && <section className="limitations"><h2>{t('Giới hạn của báo cáo')}</h2><ul>{report.limitations.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></section>}
+    </DocumentViewer>
+  </>;
+}

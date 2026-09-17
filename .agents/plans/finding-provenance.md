@@ -1,0 +1,5 @@
+# Finding provenance and evidence navigation
+
+Extend stored findings with optional backward-compatible category, recommendation, checker references and core-owned provenance. New commits assign unique finding IDs and the actual snapshot writer/run. Model schema excludes provenance and asks for classification, recommendation and checker IDs; absent legacy fields remain explicitly unprovided. Validate references against the current run's checker results or its frozen preflight and the finding's cited sources.
+
+Return the created profile ID to the model after a checker call. Keep metadata through immutable reports, backup validation and Markdown export. Retain support for the previously exported Agent Skills report schema. Add exact source/checker navigation in the report UI and show provenance on demand. Verify forged identity, unknown/cross-run checker references, roundtrip integrity and legacy reports. Use a labelled isolated fixture for packaged evidence-navigation E2E and native computer use; never call a live provider for UI testing.
