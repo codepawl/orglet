@@ -12,6 +12,7 @@ import { ProviderMark } from './ProviderMark';
 import { toast } from './toast';
 import { Switch } from './Switch';
 import { t } from '../i18n';
+import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
 
 export type SettingsTab = 'general' | 'chat' | 'connections' | 'harness' | 'usage' | 'data';
@@ -57,7 +58,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   };
   // Settings apply as soon as they change; the command always carries the full current set.
   const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[] }>) => act(async () => {
-    await orglet.call('settings', { language: workspace.language ?? 'vi', theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], ...patch });
+    await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], ...patch });
     return t('Đã lưu.');
   });
   const commitLimit = () => {
@@ -88,7 +89,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
 
             {tab === 'general' && <>
               <Row title={t('Ngôn ngữ')} description={t('Áp dụng cho toàn bộ giao diện và thông báo.')}>
-                <Select ariaLabel={t('Ngôn ngữ')} className="setting-select" value={workspace.language ?? 'vi'} disabled={busy} onChange={value => void save({ language: value as Workspace['language'] })} options={[{ value: 'vi', label: 'Tiếng Việt', icon: <CurrencyFlag code="VND" /> }, { value: 'en', label: 'English (US)', icon: <CurrencyFlag code="USD" /> }, { value: 'en-GB', label: 'English (UK)', icon: <CurrencyFlag code="GBP" /> }]} />
+                <Select ariaLabel={t('Ngôn ngữ')} className="setting-select" value={workspace.language ?? DEFAULT_LANGUAGE} disabled={busy} onChange={value => void save({ language: value as Workspace['language'] })} options={[{ value: 'en', label: 'English (US)', icon: <CurrencyFlag code="USD" /> }, { value: 'en-GB', label: 'English (UK)', icon: <CurrencyFlag code="GBP" /> }, { value: 'vi', label: 'Tiếng Việt', icon: <CurrencyFlag code="VND" /> }]} />
               </Row>
               <Row title={t('Giao diện')} description={t('Theo hệ thống dùng chế độ sáng/tối của Windows.')}>
                 <Select ariaLabel={t('Giao diện')} className="setting-select" value={workspace.theme} disabled={busy} onChange={value => void save({ theme: value as Workspace['theme'] })} options={[{ value: 'system', label: t('Theo hệ thống'), icon: <Monitor size={16} /> }, { value: 'light', label: t('Sáng'), icon: <Sun size={16} /> }, { value: 'dark', label: t('Tối'), icon: <Moon size={16} /> }]} />

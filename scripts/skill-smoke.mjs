@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { useVietnamese } from './smoke-language.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-skill-ui-'));
 const skillPath = join(directory, 'review-kit'); const exportPath = join(directory, 'exports');
@@ -14,7 +15,7 @@ const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${join(directory, 'data')}`], env });
 let closed = false; app.once('close', () => { closed = true; });
 try {
-  const page = await app.firstWindow(); await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  const page = await app.firstWindow(); await useVietnamese(page);
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await app.evaluate(({ dialog }, path) => { globalThis.skillOriginalOpen = dialog.showOpenDialog; dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, skillPath);
   await page.getByRole('button', { name: 'Thư viện', exact: true }).click();

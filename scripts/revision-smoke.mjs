@@ -3,13 +3,14 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { useVietnamese } from './smoke-language.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-revision-'));
 const env = { ...process.env, APPDATA: directory }; delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${directory}`], env });
 let closed = false; app.once('close', () => { closed = true; });
 try {
   const page = await app.firstWindow();
-  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await useVietnamese(page);
   const original = join(directory, 'original.csv'), added = join(directory, 'supplement.csv');
   await writeFile(original, 'id,label\n1,old\n'); await writeFile(added, 'id,label\n2,new\n3,new\n');
   await app.evaluate(({ dialog }, path) => { globalThis.originalOpen = dialog.showOpenDialog; dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, original);

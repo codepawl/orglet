@@ -3,6 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { useVietnamese } from './smoke-language.mjs';
 
 // Language setting: switch to English, check UI text, a translated core error and persistence, then switch back.
 const directory = await mkdtemp(join(tmpdir(), 'orglet-i18n-'));
@@ -19,7 +20,7 @@ let app = await launch();
 try {
   let page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
   page.on('pageerror', error => errors.push(error.message));
-  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  assert.equal(await useVietnamese(page), 'en', 'a new install starts in US English');
   assert.equal(await page.evaluate(() => document.documentElement.lang), 'vi');
 
   await page.getByRole('button', { name: /^Cài đặt/ }).click();

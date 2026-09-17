@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 /** `en` is US English (kept as the stored value from before the split); `en-GB` is British English. */
 export const Language = z.enum(['vi', 'en', 'en-GB']);
+/** New installs speak US English; Vietnamese and UK English are a setting away. */
+export const DEFAULT_LANGUAGE: z.infer<typeof Language> = 'en';
 export type Language = z.infer<typeof Language>;
 /** Vietnamese source text → translation. Vietnamese is the key language, so it needs no dictionary. */
 export type Dictionary = Record<string, string>;

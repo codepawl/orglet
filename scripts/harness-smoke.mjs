@@ -3,6 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { useVietnamese } from './smoke-language.mjs';
 
 // Machine-independent: compares the UI with whatever the packaged core detects here. Never starts a harness run.
 const directory = await mkdtemp(join(tmpdir(), 'orglet-harness-ui-'));
@@ -11,7 +12,7 @@ const app = await electron.launch({ executablePath: resolve('out/Orglet-win32-x6
 let closed = false; app.once('close', () => { closed = true; });
 try {
   const page = await app.firstWindow(); const errors = []; page.on('pageerror', error => errors.push(error.message));
-  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await useVietnamese(page);
   const detected = await page.evaluate(() => window.orglet.call('harnesses', { refresh: true }));
   for (const item of detected) assert.ok(['claude-code', 'codex'].includes(item.id) && /\d+\.\d+/.test(item.version), JSON.stringify(item));
 

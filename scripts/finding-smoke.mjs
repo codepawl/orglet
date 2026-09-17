@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
+import { useVietnamese } from './smoke-language.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-finding-ui-')); const data = join(directory, 'data');
 const text = join(directory, 'evidence.txt'); const csv = join(directory, 'data.csv');
@@ -14,7 +15,7 @@ let closed = true;
 const launch = async () => { const instance = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${data}`], env }); closed = false; instance.once('close', () => { closed = true; }); return instance; };
 let app = await launch();
 try {
-  let page = await app.firstWindow(); await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  let page = await app.firstWindow(); await useVietnamese(page);
   const userData = await app.evaluate(({ app }) => app.getPath('userData'));
   const within = relative(directory, userData); assert.ok(within && !within.startsWith('..') && !isAbsolute(within));
   await app.evaluate(({ dialog }, paths) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths }); }, [text, csv]);

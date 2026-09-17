@@ -1,24 +1,24 @@
 import { useSyncExternalStore } from 'react';
-import { localeOf, translate, translateMessage, type Dictionary, type Language } from '../shared/i18n';
+import { DEFAULT_LANGUAGE, localeOf, translate, translateMessage, type Dictionary, type Language } from '../shared/i18n';
+import { en, enGB } from '../shared/locales/en';
 
 // Module-level language, like the display currency: App sets it and every component re-renders under App.
-// The English dictionary is a separate chunk, loaded the first time English is chosen.
-let language: Language = 'vi';
-let dictionaries: { en: Dictionary; enGB: Dictionary } | null = null;
+// Source strings are Vietnamese; English is the default, so its dictionary ships with the renderer.
+let language: Language = DEFAULT_LANGUAGE;
+const dictionaries: { en: Dictionary; enGB: Dictionary } = { en, enGB };
 let version = 0;
 const listeners = new Set<() => void>();
 const emit = () => { version++; for (const listener of listeners) listener(); };
 
 export function setLanguage(next: Language | undefined) {
-  const value = next ?? 'vi';
+  const value = next ?? DEFAULT_LANGUAGE;
   if (value === language) return;
   language = value;
   document.documentElement.lang = value;
-  if (value === 'vi' || dictionaries) { emit(); return; }
-  void import('../shared/locales/en').then(module => { dictionaries = { en: module.en, enGB: module.enGB }; emit(); });
+  emit();
 }
 
-const active = () => language === 'vi' || !dictionaries ? null : language === 'en-GB' ? dictionaries.enGB : dictionaries.en;
+const active = () => language === 'vi' ? null : language === 'en-GB' ? dictionaries.enGB : dictionaries.en;
 const warned = new Set<string>();
 /** Translates Vietnamese source text; `{0}` placeholders take `params` in order. */
 export const t = (key: string, params?: readonly unknown[]) => {

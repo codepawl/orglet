@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import electronPath from 'electron';
+import { useVietnamese } from './smoke-language.mjs';
 
 const data = await mkdtemp(join(tmpdir(), 'orglet-desktop-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
@@ -15,7 +16,7 @@ const errors = [];
 try {
   app = await launch();
   const page = await app.firstWindow(); page.on('pageerror', error => errors.push(error.message));
-  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await useVietnamese(page);
   const native = await app.evaluate(({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows()[0]; const prefs = window.webContents.getLastWebPreferences();
     return { title: window.getTitle(), visible: window.isVisible(), sandbox: prefs.sandbox, contextIsolation: prefs.contextIsolation, nodeIntegration: prefs.nodeIntegration, bounds: window.getBounds() };
@@ -153,7 +154,7 @@ try {
   await writeFile(join(output, 'desktop-zoom-200.png'), Buffer.from(zoomCapture, 'base64'));
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await app.close(); app = await launch();
-  const reopened = await app.firstWindow(); await reopened.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  const reopened = await app.firstWindow(); await useVietnamese(reopened);
   if (await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).count()) await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).click();
   await reopened.getByRole('button', { name: /^Desktop smoke: persistent task/ }).click();
   await reopened.locator('.chat-reply, .report').first().waitFor();

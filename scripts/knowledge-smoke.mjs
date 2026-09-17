@@ -3,6 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { useVietnamese } from './smoke-language.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-knowledge-'));
 const env = { ...process.env, APPDATA: directory }; delete env.ELECTRON_RUN_AS_NODE;
@@ -11,7 +12,7 @@ let closed = false; app.once('close', () => { closed = true; });
 const workspace = page => page.evaluate(() => window.orglet.call('workspace', {}));
 try {
   const page = await app.firstWindow();
-  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await useVietnamese(page);
   await page.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
   await page.getByRole('button', { name: 'Research Review', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });

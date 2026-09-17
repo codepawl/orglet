@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { useVietnamese } from './smoke-language.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-run-audit-ui-'));
 const csv = join(directory, 'runs.csv'); const invalid = join(directory, 'invalid.csv');
@@ -18,7 +19,7 @@ const app = await electron.launch({ executablePath: resolve('out/Orglet-win32-x6
 let closed = false; app.once('close', () => { closed = true; });
 try {
   const page = await app.firstWindow(); const errors = []; page.on('pageerror', error => errors.push(error.message));
-  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await useVietnamese(page);
   await app.evaluate(({ dialog }, paths) => { globalThis.originalRunAuditDialog = dialog.showOpenDialog; dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths }); }, [csv, invalid]);
   await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).click(); await page.getByRole('menuitem', { name: /^Tệp/ }).click();
   await page.getByRole('textbox', { name: 'Nội dung công việc', exact: true }).fill('Run audit fixture: fixture-score higher is better.');

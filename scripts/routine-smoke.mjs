@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
+import { useVietnamese } from './smoke-language.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-routine-ui-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
@@ -15,7 +16,7 @@ const launch = async () => {
 };
 let app = await launch();
 try {
-  let page = await app.firstWindow(); await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  let page = await app.firstWindow(); await useVietnamese(page);
   await page.getByRole('textbox', { name: 'Nội dung công việc' }).fill('Routine smoke: scheduled demo');
   await page.getByRole('button', { name: 'Lên lịch cho công việc này', exact: true }).click();
   await page.getByLabel('Tên lịch', { exact: true }).fill('Morning routine');
@@ -48,7 +49,7 @@ try {
   const db = new DatabaseSync(join(directory, 'orglet.sqlite'));
   const saved = JSON.parse(db.prepare('SELECT data FROM routines WHERE id=?').get(routine.id).data);
   db.prepare('UPDATE routines SET data=? WHERE id=?').run(JSON.stringify({ ...saved, enabled: true, nextDueAt: new Date(Date.now() - 7 * 86_400_000).toISOString() }), routine.id); db.close();
-  app = await launch(); page = await app.firstWindow(); await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  app = await launch(); page = await app.firstWindow(); await useVietnamese(page);
   await page.getByRole('button', { name: /Lịch chạy/ }).click();
   await page.getByText(/Đã bỏ qua lịch khi app không hoạt động/).waitFor();
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).tasks.length, 1);

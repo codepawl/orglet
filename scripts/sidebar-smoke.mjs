@@ -3,6 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { useVietnamese } from './smoke-language.mjs';
 
 // Sidebar editing: double-click rename, press-and-hold reorder, keyboard reorder, and persistence across restarts.
 const directory = await mkdtemp(join(tmpdir(), 'orglet-sidebar-'));
@@ -13,7 +14,7 @@ const waitFor = async (check, label) => { for (let i = 0; i < 50; i++) { if (awa
 let app = await launch();
 try {
   let page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
-  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await useVietnamese(page);
   await page.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
   await page.getByRole('button', { name: 'Research Review', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
@@ -96,7 +97,7 @@ try {
 
   const saved = await workspace(page);
   await app.close(); app = await launch(); page = await app.firstWindow();
-  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await useVietnamese(page);
   const reopened = await workspace(page);
   assert.deepEqual(reopened.workers.map(worker => worker.id), saved.workers.map(worker => worker.id));
   assert.deepEqual(reopened.teams.map(team => team.id), saved.teams.map(team => team.id));

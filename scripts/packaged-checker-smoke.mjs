@@ -3,6 +3,7 @@ import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { useVietnamese } from './smoke-language.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-package-'));
 const env = { ...process.env, APPDATA: directory }; delete env.ELECTRON_RUN_AS_NODE;
 let closed = false;
@@ -14,7 +15,7 @@ let app = await launch(directory);
 try {
   const userData = await app.evaluate(({ app }) => app.getPath('userData'));
   assert.ok(userData.toLowerCase().startsWith(directory.toLowerCase()), 'Packaged smoke requires isolated APPDATA');
-  let page = await app.firstWindow(); await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  let page = await app.firstWindow(); await useVietnamese(page);
   const csv = join(directory, 'sample.csv'); await writeFile(csv, 'id,label\n1,alpha\n2,beta\n2,gamma\n');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, csv);
   const result = await page.evaluate(async () => {
@@ -95,7 +96,7 @@ try {
   await app.close();
   const restoreDirectory = await mkdtemp(join(tmpdir(), 'orglet-restored-'));
   app = await launch(restoreDirectory); page = await app.firstWindow();
-  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await useVietnamese(page);
   await app.evaluate(({ dialog }, path) => {
     globalThis.orgletTestDialogs = { open: dialog.showOpenDialog, message: dialog.showMessageBox };
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });

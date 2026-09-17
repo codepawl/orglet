@@ -4,7 +4,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { mkdir, open } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { translate, type Language } from '../shared/i18n';
+import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
 import { en, enGB } from '../shared/locales/en';
 import { commands, Id, type Reply, type Command, TextFormat } from '../shared/contracts';
 import { markdownToPlain } from '../shared/plainText';
@@ -34,7 +34,7 @@ function request(command: string, args: unknown): Promise<unknown> {
   });
 }
 // Workspace language for native dialogs: read once when the core is ready, then updated whenever settings are saved.
-let language: Language = 'vi';
+let language: Language = DEFAULT_LANGUAGE;
 const tr = (key: string, params?: readonly unknown[]) => translate(language === 'en' ? en : language === 'en-GB' ? enGB : null, key, params);
 async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
@@ -65,7 +65,7 @@ async function start() {
       pending.clear(); if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
     });
   });
-  language = await request('workspace', {}).then(workspace => (workspace as { language?: Language }).language ?? 'vi').catch(() => 'vi');
+  language = await request('workspace', {}).then(workspace => (workspace as { language?: Language }).language ?? DEFAULT_LANGUAGE).catch(() => DEFAULT_LANGUAGE);
   const rendererRoot = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
   const url = MAIN_WINDOW_VITE_DEV_SERVER_URL || pathToFileURL(join(rendererRoot, 'index.html')).href;
   window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
