@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping with Orglet.
+Thanks for helping with Orglet. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). Security problems go through [SECURITY.md](SECURITY.md), not public issues.
 
 ## Before you start
 

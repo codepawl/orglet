@@ -1,0 +1,46 @@
+name: Bug report
+description: Something in Orglet does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the steps to make it happen again.
+      placeholder: |
+        1. Open a task with the Writer worker
+        2. Send a message
+        3. The reply never appears
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: How does the worker run?
+      options:
+        - Demo
+        - Claude Code on this computer
+        - Codex on this computer
+        - OpenAI API
+        - Anthropic API
+        - Not related to a worker
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system and Orglet version or commit
+      placeholder: Windows 11, commit 49105da
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error messages or screenshots
+      description: Remove API keys, file contents and anything private before you paste.
