@@ -95,7 +95,9 @@ Orglet has no account and no server of its own. Requests go only to the provider
 
 ## Contributing
 
-Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. Contributions need the [Contributor License Agreement](CLA.md).
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. Contributions need the [Contributor License Agreement](CLA.md), and everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
+
+Questions and ideas go to [Discussions](https://github.com/codepawl/orglet/discussions).
 
 ## License
 
