@@ -22,9 +22,28 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { harnessNames, isHarness, type HarnessId, type HarnessInfo } from '../../shared/harness';
 import type { HarnessExecutor } from '../harness/exec';
+import { ProgressSender } from './progress';
+import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
+import { detectUsageLimit, usageLimitMessage } from '../usageLimits';
 
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = { detect(): Promise<HarnessInfo[]>; execute: HarnessExecutor };
+
+const providerNames: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', ...harnessNames };
+
+/** The error shown for a failed run; provider refusals over plan, credit or rate limits say so plainly. */
+function failureMessage(run: Run, error: Error) {
+  const limit = detectUsageLimit(error.message);
+  const providerName = providerNames[run.snapshot.worker.provider];
+  if (limit && providerName) return usageLimitMessage(providerName, limit);
+  return error.message;
+}
+
+/** The original name of a source whose copy the harness read, given the copy's name without its number prefix. */
+function sourceNameForCopy(files: { name: string; file: string }[], copyName: string) {
+  const copy = files.find(item => item.file.replace(/^sources\/\d{2}-/, '') === copyName);
+  return copy ? copy.name : copyName;
+}
 
 function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[]) {
   return [
@@ -91,6 +110,8 @@ export class Runner {
   private active = new Map<string, { taskId: string; controller: AbortController; paused: boolean }>();
   private get checkpoints() { return new Checkpoints(this.store); }
   private slots = new ProviderSlots(() => this.store.setting('providerConcurrency', DEFAULT_PROVIDER_CONCURRENCY));
+  /** Receives live progress from streaming harnesses; the core process forwards it to the window. */
+  onProgress: (update: RunProgressUpdate) => void = () => {};
   constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }) {}
   isActive(taskId: string) { return [...this.active.values()].some(item => item.taskId === taskId); }
   cancel(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.controller.abort(); }
@@ -107,6 +128,19 @@ export class Runner {
   }
   async shutdown() { for (const item of this.active.values()) item.controller.abort(); }
   private event(runId: string, message: string) { this.store.event(runId, message); this.notify(); }
+  /**
+   * Saves the reads and searches a streaming harness made as run activity, so the answer keeps its folded
+   * "Read 2 files" line after the live view ends. Native tool calls already record "Đã đọc" the same way.
+   */
+  private recordSteps(runId: string, progress: HarnessProgress | null) {
+    if (!progress) return;
+    for (const step of progress.activity) {
+      if (!step.target) continue;
+      if (step.kind === 'read') this.store.event(runId, `Đã đọc ${step.target}`);
+      if (step.kind === 'search') this.store.event(runId, `Đã tìm ${step.target}`);
+      if (step.kind === 'list') this.store.event(runId, `Đã liệt kê tệp ${step.target}`);
+    }
+  }
   async run(task: Task, run: Run, options: { keepTaskOpen?: boolean; upstream?: Artifact[]; limitations?: string[] } = {}) {
     if (this.active.has(run.id)) throw new Error('Lần chạy đang hoạt động.');
     const controller = new AbortController();
@@ -257,7 +291,7 @@ export class Runner {
       }
       throw new Error('Đã chạm giới hạn 6 bước mà chưa có báo cáo hợp lệ.');
     } catch (error) {
-      const message = signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? error.message : 'Lần chạy gặp lỗi.';
+      const message = signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error) : 'Lần chạy gặp lỗi.';
       const status = signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError ? 'waiting_budget' : 'failed';
       if (options.keepTaskOpen) this.store.update('runs', { ...run, status, error: message });
       else this.store.status(task.id, run.id, status, message);
@@ -330,7 +364,28 @@ export class Runner {
       const usage = this.store.usage(task.id);
       const remainingUsd = Math.max(0, task.budgetMicros - usage.chargedMicros - usage.reservedMicros) / 1_000_000;
       this.event(run.id, `Đang chạy ${tool.name} ${tool.version} trên máy · chỉ đọc bản sao nguồn của task`);
-      const result = await this.harness.execute({ harness: provider, executable: tool.executable, cwd: directory, prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined), schema: z.toJSONSchema(needsReport(run) ? ModelReportSchema : HarnessAnswerSchema, { target: 'draft-7' }), signal, maxBudgetUsd: remainingUsd });
+      const progress = new ProgressSender(task.id, run.id, update => this.onProgress(update));
+      const showSourceNames = (update: HarnessProgress): HarnessProgress => ({
+        ...update,
+        activity: update.activity.map(step => step.kind === 'read' ? { ...step, target: sourceNameForCopy(files, step.target) } : step),
+      });
+      let result: Awaited<ReturnType<HarnessRuntime['execute']>>;
+      try {
+        result = await this.harness.execute({
+          harness: provider,
+          executable: tool.executable,
+          cwd: directory,
+          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined),
+          schema: z.toJSONSchema(needsReport(run) ? ModelReportSchema : HarnessAnswerSchema, { target: 'draft-7' }),
+          signal,
+          maxBudgetUsd: remainingUsd,
+          onProgress: update => progress.update(showSourceNames(update)),
+        });
+      } finally {
+        progress.close();
+        this.recordSteps(run.id, progress.lastProgress);
+      }
+      if (result.notice) this.event(run.id, result.notice);
       signal.throwIfAborted();
       this.event(run.id, result.costUsd === null ? `${tool.name} đã trả lời; không báo chi phí.` : `${tool.name} đã trả lời; harness ước tính $${result.costUsd.toFixed(4)} theo gói hoặc tài khoản của nó, không trừ vào ngân sách Orglet.`);
       const readIds = new Set([...(provider === 'codex' ? inline : files).map(item => item.sourceId), ...scope.checkedSourceIds]);

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Bridge, Reply } from '../shared/contracts';
+import type { RunProgressUpdate } from '../shared/progress';
 
 async function invoke<T>(channel: string, args?: unknown): Promise<T> {
   const reply: Reply<T> = await ipcRenderer.invoke(channel, args);
@@ -24,5 +25,10 @@ const bridge: Bridge = {
   backup: () => invoke('orglet:backup'),
   restore: () => invoke('orglet:restore'),
   onChange: callback => { const listener = () => callback(); ipcRenderer.on('orglet:changed', listener); return () => ipcRenderer.removeListener('orglet:changed', listener); },
+  onProgress: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, update: RunProgressUpdate) => callback(update);
+    ipcRenderer.on('orglet:progress', listener);
+    return () => ipcRenderer.removeListener('orglet:progress', listener);
+  },
 };
 contextBridge.exposeInMainWorld('orglet', bridge);

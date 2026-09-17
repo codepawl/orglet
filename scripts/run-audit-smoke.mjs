@@ -22,6 +22,9 @@ try {
   await useVietnamese(page);
   await app.evaluate(({ dialog }, paths) => { globalThis.originalRunAuditDialog = dialog.showOpenDialog; dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths }); }, [csv, invalid]);
   await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).click(); await page.getByRole('menuitem', { name: /^Tệp/ }).click();
+  // Importing runs in the core; sending before both files appear would create a task without sources.
+  await page.getByText('runs.csv', { exact: true }).waitFor();
+  await page.getByText('invalid.csv', { exact: true }).waitFor();
   await page.getByRole('textbox', { name: 'Nội dung công việc', exact: true }).fill('Run audit fixture: fixture-score higher is better.');
   await page.getByRole('button', { name: 'Gửi công việc', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();

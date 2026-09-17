@@ -1,19 +1,28 @@
 name: Windows desktop
-on: [push, pull_request]
+# Pull requests are checked once; pushes to other branches wait for their pull request.
+on:
+  push:
+    branches: [main]
+  pull_request:
 permissions:
   contents: read
+concurrency:
+  # A newer push to the same pull request or branch cancels the run it replaces.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.0.0
-        with:
-          node-version: '24.19.0'
       - uses: pnpm/action-setup@v6
         with:
           version: '11.19.0'
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24.19.0'
+          cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
@@ -27,3 +36,5 @@ jobs:
       - run: pnpm test:revisions
       - run: pnpm test:knowledge
       - run: pnpm test:harness
+      - run: pnpm test:sidebar
+      - run: pnpm test:i18n

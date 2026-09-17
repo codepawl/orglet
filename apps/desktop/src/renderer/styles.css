@@ -120,6 +120,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .thread-composer { width:100%; max-width:780px; margin:0 auto; padding:8px 24px 0; }
 .source-picker { position:relative; }
 .source-menu { position:absolute; left:0; bottom:calc(100% + 6px); z-index:4; min-width:230px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001a; display:flex; flex-direction:column; gap:2px; }
+.source-menu.below { top:calc(100% + 6px); bottom:auto; }
 .source-menu button { display:flex; align-items:flex-start; gap:10px; width:100%; padding:9px 10px; border:0; border-radius:8px; background:transparent; text-align:left; }
 .source-menu button:hover,.source-menu button:focus-visible { background:var(--surface); }
 .source-menu button svg { margin-top:2px; color:var(--muted); }
@@ -570,6 +571,25 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .chat-turn + .chat-turn { margin-top:36px; }
 .chat-reply { padding-left:35px; }
 .chat-reply .prose { line-height:1.65; }
+/* Markdown in worker replies. Spacing and soft backgrounds separate blocks; no rules or side borders. */
+.markdown { white-space:normal; }
+.markdown>* { margin:0; }
+.markdown>*+* { margin-top:10px; }
+.markdown h3 { margin-top:18px; font-size:15px; font-weight:600; }
+.markdown h4 { margin-top:14px; font-size:15px; font-weight:600; }
+.markdown ul,.markdown ol { padding-left:1.4em; }
+.markdown ul { list-style:disc outside; }
+.markdown ol { list-style:decimal outside; }
+.markdown li { padding-left:2px; }
+.markdown li+li { margin-top:6px; }
+.markdown li::marker { color:var(--muted); }
+.markdown code { padding:1px 5px; border-radius:5px; background:var(--surface); font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size:.88em; }
+.markdown pre { padding:12px 14px; border-radius:10px; background:var(--surface); overflow-x:auto; white-space:pre; }
+.markdown pre code { padding:0; background:none; }
+.markdown blockquote { padding:10px 14px; border-radius:10px; background:var(--surface); color:var(--muted); }
+.markdown .markdown-break { height:6px; }
+.markdown-link { text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:2px; }
+.markdown-link-address { color:var(--muted); font-size:.9em; }
 .message-actions { display:flex; gap:2px; margin:6px 0 0 -8px; color:var(--muted); }
 .message-actions .button { width:30px; height:30px; min-height:30px; color:var(--muted); }
 .message-actions .button:hover:not(:disabled) { color:var(--text); }
@@ -653,7 +673,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .message-actions .format-action:hover:not(:disabled),.message-actions .format-action[aria-expanded=true] { color:var(--text); }
 
 /* New task row under the brand; the shortcut appears on hover. */
-.new-task-row { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; min-height:38px; margin:0 0 10px; padding:6px 12px; border-radius:10px; font-size:14px; font-weight:500; }
+.new-task-row { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; min-height:38px; margin:0 0 10px; padding:6px 12px 6px 2px; border-radius:10px; font-size:14px; font-weight:500; }
 .new-task-row:hover:not(:disabled) { background:var(--row-hover); }
 .new-task-row .shortcut { margin-left:auto; padding:1px 7px; border-radius:6px; background:var(--surface); color:var(--muted); font:500 11px/18px 'Segoe UI', system-ui, sans-serif; opacity:0; transition:opacity .12s; }
 .new-task-row:hover .shortcut,.new-task-row:focus-visible .shortcut { opacity:1; }
@@ -666,6 +686,27 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .thinking-mark .provider-mark,.thinking-mark .orglet-mark { border:0; background:transparent; }
 .thinking-text { font-size:14px; color:var(--muted); background:linear-gradient(90deg, var(--muted) 30%, var(--text) 50%, var(--muted) 70%); background-size:200% 100%; -webkit-background-clip:text; background-clip:text; color:transparent; animation:thinking-shimmer 1.8s linear infinite; }
 .thinking-stop { width:28px; height:28px; min-height:28px; margin-left:4px; border-radius:50%; background:var(--surface); color:var(--text); }
+.thinking-seconds { font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.thinking-toggle { padding:0; border:0; cursor:pointer; }
+.thinking-notes { margin:4px 0 0 46px; max-height:220px; overflow-y:auto; font-size:13px; line-height:1.6; color:var(--muted); white-space:pre-wrap; }
+/* Live run: preamble, activity steps and the answer as it streams. Groups are separated by space only. */
+.live-run { display:flex; flex-direction:column; gap:12px; padding-left:35px; }
+.live-run .prose { line-height:1.65; }
+.live-working { margin-left:-6px; }
+.activity-group { font-size:13px; color:var(--muted); }
+.finished-activity { margin:0 0 6px 29px; }
+@media(max-width:1000px) { .finished-activity { margin-left:-6px; } }
+.activity-summary { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:2px 8px 2px 4px; border:0; border-radius:8px; background:none; color:var(--muted); }
+.activity-summary:hover { background:var(--row-hover); color:var(--text); }
+.activity-chevron { transition:transform .15s; }
+.activity-summary[aria-expanded=true] .activity-chevron { transform:rotate(90deg); }
+.activity-steps { display:flex; flex-direction:column; gap:4px; margin:4px 0 0; padding:0 0 0 24px; list-style:none; }
+.activity-step { display:flex; align-items:center; gap:8px; min-height:26px; min-width:0; }
+.activity-verb { flex-shrink:0; }
+.activity-target { min-width:0; padding:1px 8px; border-radius:6px; background:var(--surface); color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.activity-step.running .activity-verb { animation:thinking-pulse 1.4s ease-in-out infinite; }
+@keyframes thinking-pulse { 50% { opacity:.45; } }
+@media(max-width:1000px) { .live-run { padding-left:0; } }
 @keyframes thinking-spin { to { transform:rotate(360deg); } }
 @keyframes thinking-shimmer { from { background-position:100% 0; } to { background-position:-100% 0; } }
-@media (prefers-reduced-motion: reduce) { .thinking-mark::before { animation-duration:3s; } .thinking-text { animation:none; color:var(--muted); background:none; } }
+@media (prefers-reduced-motion: reduce) { .thinking-mark::before { animation-duration:3s; } .thinking-text { animation:none; color:var(--muted); background:none; } .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }

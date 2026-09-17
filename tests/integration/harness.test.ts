@@ -53,6 +53,9 @@ describe('command contract', () => {
     const claude = harnessArgs({ harness: 'claude-code', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 0.25 });
     expect(claude).toEqual(expect.arrayContaining(['-p', '--restricted', '--safe-mode', '--strict-mcp-config', '--no-session-persistence', '--disable-slash-commands']));
     expect(claude[claude.indexOf('--tools') + 1]).toBe('Read,Grep,Glob');
+    // Streamed events let the window show reads and the answer as they happen.
+    expect(claude[claude.indexOf('--output-format') + 1]).toBe('stream-json');
+    expect(claude).toEqual(expect.arrayContaining(['--verbose', '--include-partial-messages']));
     expect(claude[claude.indexOf('--max-budget-usd') + 1]).toBe('0.2500');
     expect(claude).not.toContain('--dangerously-skip-permissions');
     const codex = harnessArgs({ harness: 'codex', cwd: directory, schema: {}, maxBudgetUsd: 1 });

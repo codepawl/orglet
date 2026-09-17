@@ -14,6 +14,8 @@ import { DocumentCard, DocumentViewer } from './DocumentViewer';
 import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
+import { Markdown } from './Markdown';
+import { ActivityGroup, LiveRun, savedSteps, useRunProgress } from './LiveRun';
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
 
@@ -36,7 +38,10 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
     return { revision, runs, brief: input.brief, sourceCount: input.sourceIds.length, artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
   });
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
-  useEffect(() => { if (atBottom.current && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; }, [detail.events.length, detail.artifacts.length, turns.length]);
+  const liveRuns = useRunProgress(detail.task.id);
+  // Changes whenever streamed text or steps grow, so the view keeps following the newest output.
+  const liveLength = Object.values(liveRuns).reduce((total, update) => total + (update.progress ? update.progress.preamble.length + update.progress.answer.length + update.progress.activity.length : 0), 0);
+  useEffect(() => { if (atBottom.current && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; }, [detail.events.length, detail.artifacts.length, turns.length, liveLength]);
 
   const byline = (author?: Run) => <div className="message-byline">{/* Agent marks sit left of the name. */}{author ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} /> : <span className="orglet-mark small">o</span>}<strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author?.snapshot.worker.provider === 'demo' && <span className="badge">Demo</span>}</div>;
 
@@ -45,21 +50,26 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
       {turns.map(turn => {
         const latest = turn.revision === current;
         const run = turn.runs.at(-1);
+        const liveUpdate = latest && busy && run ? liveRuns[run.id] : undefined;
         return <div className="chat-turn" key={turn.revision}>
           <div className="user-message"><p>{turn.brief}</p>{turn.sourceCount > 0 && <Button onClick={() => showSources()}><FileText size={16} />{t('{0} nguồn', [turn.sourceCount])}</Button>}</div>
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
+            <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />
             {reply.artifact.report.format === 'chat' ? <ChatReply artifact={reply.artifact} action={action} /> : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
           </section>)}
           {(!turn.replies.length || (latest && (busy || run?.error || detail.task.status !== 'completed'))) && <section className="assistant-message" aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
-            {!(latest && busy) && !turn.replies.length && byline(turn.author)}
+            {liveUpdate ? byline(run) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
-            {latest && busy && run && <Thinking provider={run.snapshot.worker.provider} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />}
+            {latest && busy && run && (liveUpdate
+              ? <LiveRun update={liveUpdate} provider={run.snapshot.worker.provider} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />
+              : <Thinking provider={run.snapshot.worker.provider} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />)}
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
             {!turn.artifact && !turn.replies.length && !(latest && busy) && !(latest && run?.error) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
+            {turn.artifact && !turn.replies.length && <FinishedActivity steps={savedSteps(detail.events, turn.artifact.runId)} />}
             {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
               ? <ChatReply artifact={turn.artifact} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
@@ -91,9 +101,15 @@ function Thinking({ provider, message, pausing, onStop }: { provider: Run['snaps
 }
 
 /** A normal chat answer: the message, with copy and export tucked into a quiet row. */
+/** The folded "Read 2 files" line above a finished answer; nothing when the worker read and searched nothing. */
+function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
+  if (steps.length === 0) return null;
+  return <div className="finished-activity"><ActivityGroup steps={steps} folded /></div>;
+}
+
 function ChatReply({ artifact, action }: { artifact: Artifact; action: (fn: () => Promise<unknown>) => void }) {
   return <div className="chat-reply">
-    <p className="prose">{tMessage(artifact.report.summary)}</p>
+    <Markdown className="prose" text={tMessage(artifact.report.summary)} />
     <div className="message-actions"><ArtifactActions artifactId={artifact.id} action={action} /></div>
   </div>;
 }

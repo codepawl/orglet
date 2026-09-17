@@ -172,6 +172,8 @@ export interface Bridge {
   backup(): Promise<boolean>;
   restore(): Promise<boolean>;
   onChange(callback: () => void): () => void;
+  /** Live progress of streaming workers. The callback gets a null progress when a run stops streaming. */
+  onProgress(callback: (update: import('./progress').RunProgressUpdate) => void): () => void;
 }
 declare global { interface Window { orglet: Bridge } }
 
