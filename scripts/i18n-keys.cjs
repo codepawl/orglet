@@ -3,7 +3,28 @@
 // core, main process and shared code (template literals become {0}, {1} patterns).
 // node scripts/i18n-keys.cjs            → prints missing keys as JSON
 // node scripts/i18n-keys.cjs --unused   → also prints English entries no longer used
-const ts = require(require('path').join(__dirname, '..', 'node_modules', '.pnpm', 'typescript@5.4.5', 'node_modules', 'typescript'));
+const ts = loadTypeScriptCompilerApi();
+
+// The project compiles with TypeScript 7, which has no JavaScript compiler API. The 5.x copy that Electron Forge
+// installs has one; where it lives depends on the pnpm node-linker (hoisted in CI and fresh clones, isolated in older
+// local installs).
+function loadTypeScriptCompilerApi() {
+  const root = require('path').join(__dirname, '..', 'node_modules');
+  const candidates = [
+    require('path').join(root, '@electron-forge', 'template-webpack-typescript', 'node_modules', 'typescript'),
+    require('path').join(root, '.pnpm', 'typescript@5.4.5', 'node_modules', 'typescript'),
+    'typescript',
+  ];
+  for (const candidate of candidates) {
+    try {
+      const compiler = require(candidate);
+      if (typeof compiler.createSourceFile === 'function') return compiler;
+    } catch {
+      // Not installed at this location; try the next one.
+    }
+  }
+  throw new Error('No TypeScript 5.x compiler API found. Run pnpm install.');
+}
 const fs = require('fs'), path = require('path');
 
 const src = path.join(__dirname, '..', 'apps', 'desktop', 'src');

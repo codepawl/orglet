@@ -1,5 +1,5 @@
 import { open, realpath, lstat, opendir } from 'node:fs/promises';
-import { basename, resolve, extname, join, relative } from 'node:path';
+import { basename, dirname, resolve, extname, join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Store, id, now } from '../storage/database';
 import type { Source, FolderIntake } from '../../shared/contracts';
@@ -7,13 +7,29 @@ import { DataFormat, type ProfileExecutor, type DatasetProfile, type ProfileInpu
 
 const MAX_BYTES = 256 * 1024;
 export const fingerprint = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
+
+/**
+ * True when the path, or any folder above it, is a symlink or junction. This checks each part of the path instead of
+ * comparing it with realpath(), because realpath() also expands Windows short names such as C:UsersRUNNER~1, which
+ * made ordinary files look like links.
+ */
+export async function hasLinkInPath(path: string): Promise<boolean> {
+  let current = resolve(path);
+  while (true) {
+    const status = await lstat(current);
+    if (status.isSymbolicLink()) return true;
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
 export class Sources {
   private checks = new Map<string, Set<AbortController>>();
   constructor(private store: Store, private executor?: ProfileExecutor) {}
   private async bytes(path: string, dataset = false): Promise<Buffer> {
     const limit = dataset ? 32 * 1024 * 1024 : MAX_BYTES;
+    if (await hasLinkInPath(path)) throw new Error('Không hỗ trợ symlink hoặc junction. Chọn tệp gốc.');
     const canonical = await realpath(path);
-    if (resolve(path).toLowerCase() !== canonical.toLowerCase() || (await lstat(path)).isSymbolicLink()) throw new Error('Không hỗ trợ symlink hoặc junction. Chọn tệp gốc.');
     const before = await lstat(path);
     const file = await open(path, 'r');
     try {
@@ -46,14 +62,15 @@ export class Sources {
     return imported.map(row => row.source);
   }
   async importFolder(root: string): Promise<FolderIntake> {
-    const canonical = await realpath(root);
-    if (resolve(root).toLowerCase() !== canonical.toLowerCase() || (await lstat(root)).isSymbolicLink()) throw new Error('Không hỗ trợ thư mục symlink hoặc junction.');
+    if (await hasLinkInPath(root)) throw new Error('Không hỗ trợ thư mục symlink hoặc junction.');
     const result: FolderIntake = { sources: [], skipped: [] };
     const supported = new Set(['.md', '.txt', '.json', '.jsonl', '.csv', '.parquet', '.ts', '.js', '.py', '.yaml', '.yml', '.log']);
     let entriesSeen = 0; let totalBytes = 0;
     const scan = async (directory: string, depth: number) => {
       if (depth > 8 || entriesSeen >= 1000) { result.skipped.push({ name: relative(root, directory) || '.', reason: 'Vượt giới hạn duyệt 8 cấp / 1.000 mục.' }); return; }
-      if ((await realpath(directory)).toLowerCase() !== resolve(directory).toLowerCase()) { result.skipped.push({ name: relative(root, directory), reason: 'Symlink/junction không được đọc.' }); return; }
+      // The folder above was already checked; this catches a folder swapped for a link after it was listed.
+      const directoryStatus = await lstat(directory);
+      if (directoryStatus.isSymbolicLink()) { result.skipped.push({ name: relative(root, directory), reason: 'Symlink/junction không được đọc.' }); return; }
       const entries = [];
       for await (const entry of await opendir(directory)) { entries.push(entry); if (entries.length > 1000 - entriesSeen) break; }
       entries.sort((a, b) => a.name.localeCompare(b.name));
