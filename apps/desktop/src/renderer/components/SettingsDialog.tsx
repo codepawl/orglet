@@ -146,7 +146,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                   </div>
                   <div className="setting-control"><span className={`status-pill ${item.auth}`}>{item.auth === 'logged_in' ? t('Đã đăng nhập') : item.auth === 'logged_out' ? t('Chưa đăng nhập') : t('Chưa rõ')}</span></div>
                 </div>)}
-                {!harnesses.length && <Row title={t('Chưa tìm thấy Claude Code hoặc Codex trên máy này.')} description={t('Cài một harness rồi bấm Dò lại.')} />}
+                {!harnesses.length && <Row title={t('Chưa tìm thấy Claude Code, Codex hoặc Cursor Agent trên máy này.')} description={t('Cài một harness rồi bấm Dò lại.')} />}
               </div>
 
             </>}

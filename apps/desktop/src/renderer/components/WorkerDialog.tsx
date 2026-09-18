@@ -63,12 +63,12 @@ export function WorkerDialog({ open, worker, workspace, harnesses, onClose }: { 
         { value: 'openai', label: 'OpenAI', detail: 'GPT-4.1 mini', group: t('API trả phí'), icon: <ProviderMark provider="openai" size="small" decorative /> },
         { value: 'anthropic', label: 'Anthropic', detail: 'Claude Haiku 4.5', group: t('API trả phí'), icon: <ProviderMark provider="anthropic" size="small" decorative /> },
         { value: 'xai', label: 'Grok', detail: 'grok-3-mini', group: t('API trả phí'), icon: <ProviderMark provider="xai" size="small" decorative /> },
-        ...(['claude-code', 'codex'] as const).filter(id => provider === id || harnesses.some(item => item.id === id)).map(id => {
+        ...(['claude-code', 'codex', 'cursor'] as const).filter(id => provider === id || harnesses.some(item => item.id === id)).map(id => {
           const found = harnesses.find(item => item.id === id);
           return { value: id, label: harnessNames[id], group: t('Harness trên máy'), detail: [found ? found.version : t('chưa tìm thấy'), found?.auth === 'logged_out' ? t('chưa đăng nhập') : ''].filter(Boolean).join(' · '), icon: <ProviderMark provider={id} size="small" decorative /> };
         }),
       ]} />
-      {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. {1} Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider], provider === 'codex' ? t('Codex nhận nội dung nguồn văn bản trong prompt và không có tool đọc tệp hay chạy lệnh.') : t('Claude Code chỉ đọc bản sao nguồn của task, không chạy lệnh.')])}</p>}
+      {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. {1} Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider], provider === 'codex' ? t('Codex nhận nội dung nguồn văn bản trong prompt và không có tool đọc tệp hay chạy lệnh.') : provider === 'cursor' ? t('Cursor Agent chạy ở chế độ ask với sandbox; chỉ đọc bản sao nguồn của task, không dùng --force.') : t('Claude Code chỉ đọc bản sao nguồn của task, không chạy lệnh.')])}</p>}
       {paid && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} /></label>}
     </>}
     {tab === 'instructions' && <>

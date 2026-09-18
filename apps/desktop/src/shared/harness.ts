@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 /** Agent CLIs installed on the user's machine that Orglet can drive as a read-only review worker. */
-export const HarnessId = z.enum(['claude-code', 'codex']);
+export const HarnessId = z.enum(['claude-code', 'codex', 'cursor']);
 export type HarnessId = z.infer<typeof HarnessId>;
-export const harnessNames: Record<HarnessId, string> = { 'claude-code': 'Claude Code', codex: 'Codex' };
+export const harnessNames: Record<HarnessId, string> = { 'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor Agent' };
 export const isHarness = (provider: string): provider is HarnessId => HarnessId.safeParse(provider).success;
 
 export type HarnessInfo = {

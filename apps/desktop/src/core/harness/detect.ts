@@ -15,13 +15,15 @@ const byVersionDesc = (a: string, b: string) => {
   return 0;
 };
 
+const commandName = (id: HarnessId) => id === 'claude-code' ? 'claude' : id === 'codex' ? 'codex' : 'agent';
+
 /** Ordered, de-duplicated install locations for one harness on this OS. Only existing files are returned. */
 export async function candidates(id: HarnessId, env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): Promise<string[]> {
   const windows = platform === 'win32';
   const home = env.USERPROFILE ?? env.HOME ?? '';
   const local = env.LOCALAPPDATA ?? join(home, 'AppData', 'Local');
   const roaming = env.APPDATA ?? join(home, 'AppData', 'Roaming');
-  const command = id === 'claude-code' ? 'claude' : 'codex';
+  const command = commandName(id);
   const names = windows ? [`${command}.exe`, `${command}.cmd`] : [command];
   const paths: string[] = [];
   for (const directory of (env.PATH ?? env.Path ?? '').split(delimiter).filter(Boolean)) for (const name of names) paths.push(join(directory, name));
@@ -33,11 +35,15 @@ export async function candidates(id: HarnessId, env: NodeJS.ProcessEnv = process
     for (const entry of await children(join(local, 'Packages'))) if (entry.startsWith('Claude_')) bundles.push(join(local, 'Packages', entry, 'LocalCache', 'Roaming', 'Claude', 'claude-code'));
     if (platform === 'darwin') bundles.push(join(home, 'Library', 'Application Support', 'Claude', 'claude-code'));
     for (const bundle of bundles) for (const version of (await children(bundle)).sort(byVersionDesc)) paths.push(join(bundle, version, windows ? 'claude.exe' : 'claude'));
-  } else {
+  } else if (id === 'codex') {
     // The Codex desktop app installs its CLI under a content-hashed folder.
     const bin = join(local, 'OpenAI', 'Codex', 'bin');
     for (const entry of await children(bin)) paths.push(join(bin, entry, 'codex.exe'));
     if (platform === 'darwin') paths.push('/Applications/Codex.app/Contents/Resources/codex');
+  } else {
+    // Cursor Agent CLI install script puts `agent` under ~/.cursor/bin.
+    paths.push(join(home, '.cursor', 'bin', windows ? 'agent.exe' : 'agent'));
+    if (platform === 'darwin') paths.push('/usr/local/bin/agent', join(home, '.local', 'bin', 'agent'));
   }
   const found: string[] = [];
   for (const path of [...new Set(paths)]) if (await isFile(path)) found.push(path);
@@ -81,12 +87,27 @@ async function inspect(id: HarnessId, executable: string, run: Probe): Promise<H
       auth = parsed.loggedIn ? 'logged_in' : 'logged_out';
       authDetail = parsed.loggedIn ? `Đăng nhập qua ${parsed.authMethod ?? 'Claude Code'}` : `Chưa đăng nhập. Chạy trong PowerShell: & "${executable}" auth login`;
     } catch { authDetail = 'Không đọc được trạng thái đăng nhập.'; }
-  } else {
+  } else if (id === 'codex') {
     const status = await run(executable, ['login', 'status']);
     const text = `${status.stdout}${status.stderr}`.trim();
     if (/logged in/i.test(text) && status.code === 0) { auth = 'logged_in'; authDetail = text.split(/\r?\n/)[0].slice(0, 200); }
     else if (/not logged in/i.test(text)) { auth = 'logged_out'; authDetail = `Chưa đăng nhập. Chạy trong PowerShell: & "${executable}" login`; }
     else authDetail = 'Không đọc được trạng thái đăng nhập.';
+  } else {
+    const status = await run(executable, ['status', '--format', 'json']);
+    const text = `${status.stdout}${status.stderr}`.trim();
+    try {
+      const parsed = JSON.parse(status.stdout || '{}') as { loggedIn?: boolean; authenticated?: boolean; email?: string; user?: string };
+      const loggedIn = parsed.loggedIn === true || parsed.authenticated === true || Boolean(parsed.email ?? parsed.user);
+      const loggedOut = parsed.loggedIn === false || parsed.authenticated === false;
+      if (loggedIn) { auth = 'logged_in'; authDetail = `Đăng nhập Cursor${parsed.email || parsed.user ? ` · ${parsed.email ?? parsed.user}` : ''}`; }
+      else if (loggedOut) { auth = 'logged_out'; authDetail = `Chưa đăng nhập. Chạy trong PowerShell: & "${executable}" login`; }
+      else authDetail = 'Không đọc được trạng thái đăng nhập.';
+    } catch {
+      if (/logged in|authenticated|email/i.test(text) && status.code === 0) { auth = 'logged_in'; authDetail = text.split(/\r?\n/)[0].slice(0, 200); }
+      else if (/not logged|log in|unauthenticated/i.test(text)) { auth = 'logged_out'; authDetail = `Chưa đăng nhập. Chạy trong PowerShell: & "${executable}" login`; }
+      else authDetail = 'Không đọc được trạng thái đăng nhập.';
+    }
   }
   return { id, name: harnessNames[id], executable, version, auth, authDetail };
 }
@@ -94,7 +115,7 @@ async function inspect(id: HarnessId, executable: string, run: Probe): Promise<H
 /** First working install of each harness. Probing runs only `--version` and the CLI's own login status command. */
 export async function detectHarnesses(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, run: Probe = probe): Promise<HarnessInfo[]> {
   const result: HarnessInfo[] = [];
-  for (const id of ['claude-code', 'codex'] as const) {
+  for (const id of ['claude-code', 'codex', 'cursor'] as const) {
     for (const executable of await candidates(id, env, platform)) {
       const info = await inspect(id, executable, run);
       if (info) { result.push(info); break; }

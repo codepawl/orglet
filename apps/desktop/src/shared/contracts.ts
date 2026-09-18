@@ -11,7 +11,7 @@ import { CurrencyCode, type CurrencyState } from './currency';
 import { Language } from './i18n';
 
 export const Id = z.string().uuid();
-export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'claude-code', 'codex']);
+export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'claude-code', 'codex', 'cursor']);
 export type ProviderId = z.infer<typeof ProviderId>;
 /** Providers that receive task content and therefore need per-task consent. */
 export const ProviderScope = ProviderId.exclude(['demo']);

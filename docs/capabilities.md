@@ -14,6 +14,7 @@
 | Folder intake | Yes | 20 files, 64 MB total, 8 levels, 1,000 entries; excluded-item list |
 | Local Claude Code harness | Yes, when installed and logged in; live review verified | Headless `-p` with restricted/safe mode, Read/Grep/Glob only, JSON schema output; one step per run; no Orglet reservation |
 | Local Codex harness (`codex exec`) | Yes, when installed and logged in; live review verified | Sources inlined in the prompt; shell tools, apps, browser and computer use disabled; user config ignored |
+| Local Cursor Agent harness | Yes, when installed and logged in; live probe optional | Headless `agent -p --mode=ask --sandbox enabled --trust`; report schema embedded in the prompt; never `--force`/`--yolo`; no Orglet reservation |
 | Codex app-server | No | `codex exec` covers review runs; app-server is not used. See below |
 | Subscription quota display / internal allocation | No | Neither CLI exposes quota windows in headless mode; no screen is shown |
 | Shell, imported scripts, external writes | No | Not exposed through IPC or tool schemas |
@@ -22,14 +23,14 @@
 
 Decision (user, 2026-09-16): connect the agent harnesses already installed on the machine first, detected per machine so it works for other users too. The native OpenAI and Anthropic paths do not depend on them.
 
-| Capability Orglet needs | Claude Code 2.1.x | Codex CLI 0.154 |
-|---|---|---|
-| Read only the selected sources | Copies in a temp folder; `--restricted` confines file tools to it | Text inlined in the prompt; no file access (its shell-based reads are rejected by the Windows read-only sandbox, and shell tools are disabled) |
-| No shell, network, MCP, user plugins | `--restricted --safe-mode --strict-mcp-config --tools Read,Grep,Glob` | `--sandbox read-only --ignore-user-config`, `shell_tool`, `unified_exec`, apps, browser and computer use disabled |
-| Structured report | `--json-schema`, validated again by core | `--output-schema`, last message validated again by core |
-| Auth state | `claude auth status` JSON | `codex login status` text; an expired token only shows at run time |
-| Cost and quota | `total_cost_usd` reported, shown in activity; `--max-budget-usd` = remaining task budget | Not reported |
-| Cancellation | Process tree killed | Process tree killed |
+| Capability Orglet needs | Claude Code 2.1.x | Codex CLI 0.154 | Cursor Agent CLI |
+|---|---|---|---|
+| Read only the selected sources | Copies in a temp folder; `--restricted` confines file tools to it | Text inlined in the prompt; no file access (its shell-based reads are rejected by the Windows read-only sandbox, and shell tools are disabled) | Copies in a temp folder; `--workspace` points at the copy; ask mode |
+| No shell, network, MCP, user plugins | `--restricted --safe-mode --strict-mcp-config --tools Read,Grep,Glob` | `--sandbox read-only --ignore-user-config`, `shell_tool`, `unified_exec`, apps, browser and computer use disabled | `--mode=ask --sandbox enabled`; never `--force`/`--yolo`; MCP not auto-approved |
+| Structured report | `--json-schema`, validated again by core | `--output-schema`, last message validated again by core | Schema embedded in the prompt; `--output-format json`; validated again by core |
+| Auth state | `claude auth status` JSON | `codex login status` text; an expired token only shows at run time | `agent status --format json` (text fallback) |
+| Cost and quota | `total_cost_usd` reported, shown in activity; `--max-budget-usd` = remaining task budget | Not reported | Not reported |
+| Cancellation | Process tree killed | Process tree killed | Process tree killed |
 
 Verified locally: detection on this Windows machine (both found), argument contract, output parsing of real failure shapes, a `.cmd` shim round trip, runner validation and cancellation with an injected executor, packaged UI smoke. Live acceptance 2026-09-16: a Codex review through `CoreService` with real detection and execution completed. It found the contradiction in a three-line note, cited line 3 (re-validated by core), recommended `revision_required` and made no Orglet reservation. The first live attempt failed Orglet's gate because the model recommended ready with no checks; the report rules are now included in the harness prompt and the tool description. A Claude Code review (2.1.270, claude.ai Max login) through the same path also completed: it read the copied source with its restricted Read tool, cited line 3, recommended `revision_required`, reported an estimated $0.1191 against its plan, and made no Orglet reservation. The desktop-bundled CLI is not on PATH, so the login hint now shows the detected executable's full path.
 

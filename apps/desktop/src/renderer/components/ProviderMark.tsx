@@ -16,12 +16,13 @@ const marks: Record<ProviderId, { name: string; path?: string; color?: string }>
   xai: { name: 'Grok (xAI) API', path: paths.x },
   'claude-code': { name: 'Claude Code', path: paths.claude, color: '#D97757' },
   codex: { name: 'Codex', path: paths.openai },
+  cursor: { name: 'Cursor Agent' },
 };
 
 /** Pass decorative when visible text next to the mark already names the provider. */
 export function ProviderMark({ provider, size = 'default', decorative = false }: { provider: ProviderId; size?: 'default' | 'small'; decorative?: boolean }) {
   const mark = marks[provider];
   return <span className={`provider-mark ${size}`} {...(decorative ? { 'aria-hidden': true } : { title: mark.name, 'aria-label': mark.name, role: 'img' })}>
-    {mark.path ? <svg viewBox="0 0 24 24" aria-hidden="true" style={mark.color ? { color: mark.color } : undefined}><path d={mark.path} fill="currentColor" /></svg> : 'D'}
+    {mark.path ? <svg viewBox="0 0 24 24" aria-hidden="true" style={mark.color ? { color: mark.color } : undefined}><path d={mark.path} fill="currentColor" /></svg> : mark.name[0]}
   </span>;
 }

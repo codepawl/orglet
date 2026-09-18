@@ -14,13 +14,13 @@ try {
   const page = await app.firstWindow(); const errors = []; page.on('pageerror', error => errors.push(error.message));
   await useVietnamese(page);
   const detected = await page.evaluate(() => window.orglet.call('harnesses', { refresh: true }));
-  for (const item of detected) assert.ok(['claude-code', 'codex'].includes(item.id) && /\d+\.\d+/.test(item.version), JSON.stringify(item));
+  for (const item of detected) assert.ok(['claude-code', 'codex', 'cursor'].includes(item.id) && /\d+\.\d+/.test(item.version), JSON.stringify(item));
 
   await page.getByRole('button', { name: /^Cài đặt/ }).click();
   await page.getByRole('tab', { name: 'Harness trên máy', exact: true }).click();
   const section = page.getByRole('region', { name: 'Harness trên máy' });
   await section.waitFor();
-  if (!detected.length) await section.getByText('Chưa tìm thấy Claude Code hoặc Codex trên máy này.').waitFor();
+  if (!detected.length) await section.getByText('Chưa tìm thấy Claude Code, Codex hoặc Cursor Agent trên máy này.').waitFor();
   for (const item of detected) { await section.getByText(item.name, { exact: true }).waitFor(); await section.getByText(item.version, { exact: true }).waitFor(); }
   await page.getByRole('button', { name: 'Dò lại', exact: true }).click();
   await page.getByText('Đã dò lại harness.', { exact: true }).waitFor();
@@ -40,7 +40,8 @@ try {
   const model = page.getByRole('combobox', { name: 'Model', exact: true });
   await model.click();
   const options = await page.getByRole('option').allTextContents();
-  assert.deepEqual(options.filter(text => /^(Claude Code|Codex)/.test(text)).map(text => text.startsWith('Claude Code') ? 'claude-code' : 'codex'), detected.map(item => item.id));
+  const harnessOptionId = text => text.startsWith('Claude Code') ? 'claude-code' : text.startsWith('Codex') ? 'codex' : text.startsWith('Cursor Agent') ? 'cursor' : null;
+  assert.deepEqual(options.map(harnessOptionId).filter(Boolean), detected.map(item => item.id));
   await page.screenshot({ path: 'test-results/model-select.png' });
   await page.keyboard.press('Escape');
   const first = detected[0];

@@ -59,6 +59,7 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
 |---|---|---|
 | Claude Code on this computer | Claude Code installed and signed in | Your Claude plan |
 | Codex on this computer | Codex installed and signed in | Your ChatGPT plan |
+| Cursor Agent on this computer | Cursor Agent CLI installed and signed in | Your Cursor plan |
 | OpenAI, Anthropic or Grok (xAI) API | An API key saved in Settings | Pay per use, with limits you set |
 | Demo | Nothing | Free, sample replies only |
 
