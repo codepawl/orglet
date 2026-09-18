@@ -17,6 +17,8 @@ import { orglet } from '../api';
 import { Markdown } from './Markdown';
 import { ActivityGroup, LiveRun, savedSteps, useRunProgress } from './LiveRun';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
+import { MentionText } from './mentions';
+import type { MentionPerson } from '../../shared/mentions';
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
 
@@ -27,7 +29,7 @@ type Turn = { revision: number; runs: Run[]; brief: string; sourceCount: number;
  * worker's answer. Answers are normal messages; a structured report is shown only when one was asked for or a team
  * checklist requires it. Run controls and token usage belong to the latest turn only; dollar cost sits next to Chi tiết.
  */
-export function TaskThread({ detail, action, showSources, proposals, openKnowledge }: { detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void }) {
+export function TaskThread({ detail, action, showSources, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const current = detail.task.inputRevision ?? 0;
   const turns: Turn[] = [...new Set([0, current, ...detail.runs.map(run => run.snapshot.inputRevision ?? 0)])].sort((a, b) => a - b).map(revision => {
@@ -59,7 +61,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
           ?? turn.runs.findLast(item => item.error && item.error !== UNASSIGNED_PLAN_ERROR);
         const failedNames = [...new Set(turn.runs.filter(item => item.stage === 'member' && item.error && item.error !== UNASSIGNED_PLAN_ERROR).map(item => item.snapshot.worker.name))];
         return <div className="chat-turn" key={turn.revision}>
-          <div className="user-message"><p>{turn.brief}</p>{turn.sourceCount > 0 && <Button onClick={() => showSources()}><FileText size={16} />{t('{0} nguồn', [turn.sourceCount])}</Button>}</div>
+          <div className="user-message"><p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>{turn.sourceCount > 0 && <Button onClick={() => showSources()}><FileText size={16} />{t('{0} nguồn', [turn.sourceCount])}</Button>}</div>
           {turn.replies.map((reply, index) => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
             <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />

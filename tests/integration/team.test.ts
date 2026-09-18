@@ -11,12 +11,13 @@ import { nextTeamMessage } from '../../apps/desktop/src/shared/live-task';
 import { isPlanRequest, planReply } from './team-plan';
 
 let directory: string; let store: Store; let core: CoreService;
-let failReviewer: boolean; let planMode: 'all' | 'first' | 'invalid' | 'fail'; let calls: string[]; let live: number; let peak: number;
+let failReviewer: boolean; let planMode: 'all' | 'first' | 'invalid' | 'fail'; let calls: string[]; let planBodies: string[]; let live: number; let peak: number;
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orglet-team-')); store = new Store(join(directory, 'state.sqlite'));
-  failReviewer = false; planMode = 'all'; calls = []; live = 0; peak = 0;
+  failReviewer = false; planMode = 'all'; calls = []; planBodies = []; live = 0; peak = 0;
   const adapter: ModelAdapter = { async request(messages, tools) {
     if (isPlanRequest(tools)) {
+      planBodies.push(messages.map(message => String(message.content)).join('\n'));
       if (planMode === 'fail') throw new Error('Injected plan failure');
       if (planMode === 'invalid') return { calls: [{ id: 'plan', name: 'submit_plan', arguments: JSON.stringify({ assignments: [{ workerId: '00000000-0000-4000-8000-000000000000', brief: 'Nope' }] }) }], usage: { input: 10, output: 10 } };
       return planReply(messages, planMode === 'first' ? ids => ids.slice(0, 1) : undefined);
@@ -188,4 +189,25 @@ it('rejects a plan that names a worker outside the team', async () => {
   expect(detail.task.status).toBe('failed');
   expect(detail.runs.find(run => run.stage === 'plan')!.error).toBe(INVALID_PLAN_ERROR);
   expect(detail.artifacts).toHaveLength(0);
+});
+
+it('demo team plan assigns only @tagged members', async () => {
+  const team = await core.command('createTemplate', { templateId: 'research-review', provider: 'demo' }) as Team;
+  const tagged = store.get<Worker>('workers', team.memberIds[0]);
+  const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: `@${tagged.name} hãy đọc nguồn`, sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
+  await done(taskId);
+  const detail = store.detail(taskId);
+  expect(detail.runs.find(run => run.stage === 'plan')!.snapshot.plan).toEqual({ assignments: [{ workerId: tagged.id, brief: `@${tagged.name} hãy đọc nguồn` }], note: 'Giao các thành viên được gắn thẻ.' });
+  const members = detail.runs.filter(run => run.stage === 'member');
+  expect(members.filter(run => run.status === 'completed').map(run => run.snapshot.worker.id)).toEqual([tagged.id]);
+  expect(members.find(run => run.status === 'cancelled')!.error).toBe(UNASSIGNED_PLAN_ERROR);
+});
+
+it('tells a live planner which members the user tagged', async () => {
+  const team = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
+  const tagged = store.get<Worker>('workers', team.memberIds[0]);
+  const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: `@${tagged.name} hãy đọc nguồn`, sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
+  await done(taskId);
+  expect(store.detail(taskId).task.status).toBe('completed');
+  expect(planBodies.some(body => body.includes(`"tagged":["${tagged.id}"]`))).toBe(true);
 });
