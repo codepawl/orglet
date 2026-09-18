@@ -2,12 +2,15 @@
 
 Thanks for helping with Orglet. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). Security problems go through [SECURITY.md](SECURITY.md), not public issues.
 
+AI-assisted code is welcome. Unstructured dumps that ignore this repo's layout, naming, or [product direction](docs/product.md) are not. Coding agents should read [AGENTS.md](AGENTS.md) first. When you review a pull request, judge the diff — "an agent wrote it" is neither a reason to merge nor a reason to reject.
+
 ## Before you start
 
 - For anything larger than a small fix, open an issue first so we can agree on the approach.
 - Read [docs/product.md](docs/product.md). New features should fit who Orglet is for and avoid its "Not now" list.
 - The [technical guide](docs/technical-guide.md) explains how to run the app, the tests and the smoke checks.
 - Feature and UX changes update the [README](README.md) and the relevant pages under `docs/` **in the same pull request** (how it works, not only that it shipped). Do not land code-only.
+- Match nearby code. Do not reformat unrelated files or invent a parallel structure.
 
 ## Opening a pull request
 
