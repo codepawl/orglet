@@ -48,7 +48,7 @@ export class CoreService {
   private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
   private modelListEpoch = new Map<ModelListProviderId, number>();
   private modelListFailed = new Set<ModelListProviderId>();
-  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = { detect: () => detectHarnesses(), execute: executeHarness }, private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}) {
+  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = { detect: () => detectHarnesses(), execute: executeHarness }, private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
     this.notify = () => { this.policy.captureHandoffs(); notify(); };
@@ -79,7 +79,13 @@ export class CoreService {
         const input = commands.saveWorker.parse(args);
         assertSkillReady(this.store.get<Skill>('skills', input.skillId), this.store);
         if (input.id) this.store.get<Worker>('workers', input.id);
-        const worker: Worker = { ...input, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
+        const { modelId, ...fields } = input;
+        const worker: Worker = {
+          ...fields,
+          id: input.id ?? id(),
+          revision: input.id ? this.store.nextRevision(input.id) : 1,
+          ...(fields.provider !== 'demo' && modelId ? { modelId } : {}),
+        };
         this.store.version('workers', worker); this.notify(); return worker;
       }
       case 'saveSkill': {

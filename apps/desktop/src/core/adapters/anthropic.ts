@@ -6,7 +6,11 @@ import { modelCatalog } from './catalog';
 
 export class AnthropicAdapter implements ModelAdapter {
   private client: Anthropic;
-  constructor(key: string, baseURL?: string) { this.client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: 90_000, ...(baseURL ? { baseURL } : {}) }); }
+  private model: string;
+  constructor(key: string, baseURL?: string, model?: string) {
+    this.model = model || modelCatalog.anthropic.model;
+    this.client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: 90_000, ...(baseURL ? { baseURL } : {}) });
+  }
   async request(messages: ChatCompletionMessageParam[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply> {
     const system = messages.filter(message => message.role === 'system').map(message => String(message.content)).join('\n\n');
     const translated: MessageParam[] = [];
@@ -26,7 +30,7 @@ export class AnthropicAdapter implements ModelAdapter {
       if (tool.type !== 'function') throw new Error('Unsupported canonical tool definition.');
       return { name: tool.function.name, description: tool.function.description, input_schema: tool.function.parameters as Tool['input_schema'] };
     });
-    const stream = this.client.messages.stream({ model: modelCatalog.anthropic.model, max_tokens: 4096, system, messages: translated, tools: translatedTools, tool_choice: { type: 'any', disable_parallel_tool_use: true } }, { signal, ...(correlationId ? { headers: { 'X-Client-Request-Id': correlationId } } : {}) });
+    const stream = this.client.messages.stream({ model: this.model, max_tokens: 4096, system, messages: translated, tools: translatedTools, tool_choice: { type: 'any', disable_parallel_tool_use: true } }, { signal, ...(correlationId ? { headers: { 'X-Client-Request-Id': correlationId } } : {}) });
     stream.once('streamEvent', () => progress());
     const response = await stream.finalMessage();
     return {

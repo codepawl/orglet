@@ -2,12 +2,25 @@ import { harnessNames, isHarness } from '../../shared/harness';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
 
-/** Short model line for the new-task recipient strip and composer notes. */
-export function workerModelLabel(provider: Worker['provider']) {
-  if (provider === 'demo') return t('không gọi API');
-  if (provider === 'openai') return 'OpenAI · GPT-4.1 mini';
-  if (provider === 'anthropic') return 'Anthropic · Claude Haiku 4.5';
-  if (provider === 'xai') return 'Grok · grok-3-mini';
+const suggestions: Partial<Record<Worker['provider'], string>> = {
+  openai: 'GPT-4.1 mini',
+  anthropic: 'Claude Haiku 4.5',
+  xai: 'grok-3-mini',
+};
+
+function providerName(provider: Worker['provider']) {
+  if (provider === 'openai') return 'OpenAI';
+  if (provider === 'anthropic') return 'Anthropic';
+  if (provider === 'xai') return 'Grok';
   if (isHarness(provider)) return harnessNames[provider];
   return provider;
+}
+
+/** Short model line for the new-task recipient strip and composer notes. */
+export function workerModelLabel(worker: Pick<Worker, 'provider' | 'modelId'>) {
+  if (worker.provider === 'demo') return t('không gọi API');
+  const name = providerName(worker.provider);
+  if (worker.modelId) return `${name} · ${worker.modelId}`;
+  const suggestion = suggestions[worker.provider];
+  return suggestion ? `${name} · ${suggestion}` : name;
 }

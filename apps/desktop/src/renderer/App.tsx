@@ -214,7 +214,7 @@ export function App() {
       return {
         value: item.id,
         label: item.name,
-        detail: workerModelLabel(item.provider),
+        detail: workerModelLabel(item),
         group: t('Nhân viên'),
         icon: <Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />,
         ...(available ? {} : { dimmed: true, badge: unavailable }),

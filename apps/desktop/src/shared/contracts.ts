@@ -9,7 +9,7 @@ import { KnowledgeInput, type Knowledge, type RunContext } from './knowledge';
 import type { HarnessInfo } from './harness';
 import { CurrencyCode, type CurrencyState } from './currency';
 import { Language } from './i18n';
-import type { ModelListResult } from './models';
+import { CustomModelId, type ModelListResult } from './models';
 
 export const Id = z.string().uuid();
 export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'claude-code', 'codex', 'cursor']);
@@ -24,6 +24,8 @@ export const WorkerInput = z.object({
   id: Id.optional(), name: z.string().trim().min(1).max(80),
   instructions: z.string().trim().min(1).max(16000),
   provider: ProviderId, skillId: Id,
+  // Selected or typed model slug. Absence means the catalog suggestion for this provider (or the CLI default for a harness).
+  modelId: CustomModelId.optional(),
   // Default spending cap for tasks this worker runs through a paid API; harnesses and Demo ignore it.
   taskBudgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
   // Presentation only: shown in the app and carried by templates, never sent to a model.

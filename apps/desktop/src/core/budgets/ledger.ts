@@ -1,11 +1,13 @@
 import { Store, id } from '../storage/database';
 import { modelConfig } from '../adapters/catalog';
+import type { ModelRates } from '../models/resolve';
 
 export class BudgetError extends Error {}
+export type { ModelRates };
 // Integer micro-USD; round upward instead of losing fractional micro-dollars.
-export function cost(inputTokens: number, outputTokens: number, provider = 'openai') {
+export function cost(inputTokens: number, outputTokens: number, rates: string | Pick<ModelRates, 'inputTenths' | 'outputTenths'> = 'openai') {
   if (![inputTokens, outputTokens].every(n => Number.isSafeInteger(n) && n >= 0)) throw new Error('Usage không hợp lệ.');
-  const config = modelConfig(provider);
+  const config = typeof rates === 'string' ? modelConfig(rates) : rates;
   return Math.ceil((inputTokens * config.inputTenths + outputTokens * config.outputTenths) / 10);
 }
 export class BudgetLedger {
@@ -23,12 +25,12 @@ export class BudgetLedger {
       return reservation;
     });
   }
-  settle(reservation: string, input: number, output: number) {
+  settle(reservation: string, input: number, output: number, rates?: ModelRates) {
     this.store.transaction(() => {
       const row = this.store.db.prepare('SELECT state,provider FROM reservations WHERE id=?').get(reservation);
       if (!row || row.state === 'settled') throw new Error('Reservation đã được đối soát hoặc không tồn tại.');
-      const amount = cost(input, output, String(row.provider));
-      this.store.db.prepare('INSERT INTO ledger VALUES(?,?,?,?,?,?)').run(id(), reservation, amount, input, output, modelConfig(String(row.provider)).pricingVersion);
+      const amount = cost(input, output, rates ?? String(row.provider));
+      this.store.db.prepare('INSERT INTO ledger VALUES(?,?,?,?,?,?)').run(id(), reservation, amount, input, output, rates?.pricingVersion ?? modelConfig(String(row.provider)).pricingVersion);
       this.store.db.prepare("UPDATE reservations SET state='settled' WHERE id=?").run(reservation);
     });
   }

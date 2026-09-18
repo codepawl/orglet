@@ -3,9 +3,9 @@
 | Path | Enabled | Limits |
 |---|---|---|
 | Demo | Yes | Deterministic sample report; no model or source analysis |
-| OpenAI native | Implemented; live acceptance pending | GPT-4.1 mini snapshot, trusted text reader and validated report only |
-| Anthropic native | Implemented; live acceptance pending | Claude Haiku 4.5 snapshot, provider-scoped consent, trusted tools |
-| Grok (xAI) native | Implemented; live acceptance pending | OpenAI-compatible Chat Completions at `https://api.x.ai/v1`, `grok-3-mini`, same trusted tools and report gate |
+| OpenAI native | Implemented; live acceptance pending | Default suggestion `gpt-4.1-mini-2025-04-14`; worker may pick or type any ID. Verified mini prices only for that catalog ID. Trusted text reader and validated report only |
+| Anthropic native | Implemented; live acceptance pending | Default suggestion `claude-haiku-4-5-20251001`; worker may pick or type any ID. Verified Haiku prices only for that catalog ID. Provider-scoped consent, trusted tools |
+| Grok (xAI) native | Implemented; live acceptance pending | OpenAI-compatible Chat Completions at `https://api.x.ai/v1`, default suggestion `grok-3-mini`, worker may pick or type any ID; native list tenths used when cached. Same trusted tools and report gate |
 | Teams | Yes | Up to four members, parallel concurrency two, sequential upstream reports, partial retry and synthesis |
 | Team chat shell | Yes ([COD-24](https://linear.app/codepawl/issue/COD-24); [team-chat.md](team-chat.md)) | Click team → one live `tasks` row keyed by `teamId`; later messages `reviseTask`; member→synthesis unchanged; worker chat unchanged |
 | Provider request concurrency | Yes | Workspace-wide per provider, 1–4 (default 2); queued steps hold no budget reservation |
@@ -17,7 +17,8 @@
 | Local Codex harness (`codex exec`) | Yes, when installed and signed in; live review verified | Sources inlined in the prompt; shell tools, apps, browser and computer use disabled; user config ignored |
 | Local Cursor Agent harness | Yes, when installed and signed in; live probe optional | Headless `agent -p --mode=ask --sandbox enabled --trust`; report schema embedded in the prompt; never `--force`/`--yolo`; no Orglet reservation |
 | Codex app-server | No | `codex exec` covers review runs; app-server is not used. See below |
-| Model list fetch + cache | Yes ([COD-31](https://linear.app/codepawl/issue/COD-31)) | Native OpenAI/Anthropic/xAI HTTP, Codex/Cursor CLI, Claude Code aliases; SQLite `settings.modelLists`, 24h TTL, stale-while-revalidate; fail-open custom ID; no HTML scrape. Picker UI is COD-28. See [model-list-fetch.md](model-list-fetch.md) |
+| Model list fetch + cache | Yes ([COD-31](https://linear.app/codepawl/issue/COD-31)) | Native OpenAI/Anthropic/xAI HTTP, Codex/Cursor CLI, Claude Code aliases; SQLite `settings.modelLists`, 24h TTL, stale-while-revalidate; fail-open custom ID; no HTML scrape. See [model-list-fetch.md](model-list-fetch.md) |
+| Worker model picker | Yes ([COD-28](https://linear.app/codepawl/issue/COD-28)) | Per-worker list + typed custom ID; catalog defaults are suggestions; adapters/harness `--model`/`-m` use the saved ID. Deprecated chip is COD-30. |
 | Subscription quota display / internal allocation | No | Neither CLI exposes quota windows in headless mode; no screen is shown |
 | Shell, imported scripts, external writes | No | Not exposed through IPC or tool schemas |
 
@@ -43,8 +44,8 @@ Verified locally: detection on this Windows machine (both found), argument contr
 
 - Electron 44.3.0, Forge 7.11.2, Vite 8.3.0, React 19.3.0; exact transitive resolution in `pnpm-lock.yaml`.
 - Native desktop smoke reports the actual bundled SQLite engine, independently of the host Node engine. Startup rejects SQLite older than 3.51.3.
-- OpenAI SDK 7.15.0. `gpt-4.1-mini-2025-04-14`, standard text input $0.40 and output $1.60 per million tokens. Cached input is deliberately estimated at the ordinary rate. No server tools with additional fees are enabled.
-- xAI via the same OpenAI SDK with `baseURL` `https://api.x.ai/v1`. Default model `grok-3-mini` at $0.30 input / $0.50 output per million tokens (`pricingVersion` `grok-3-mini:0.30:0.50`). Revalidate against [xAI pricing](https://docs.x.ai/developers/pricing) before release.
+- OpenAI SDK 7.15.0. Default suggestion `gpt-4.1-mini-2025-04-14`, standard text input $0.40 and output $1.60 per million tokens for that catalog ID only. Cached input is deliberately estimated at the ordinary rate. No server tools with additional fees are enabled. Other IDs may be typed; they are not billed at mini rates.
+- xAI via the same OpenAI SDK with `baseURL` `https://api.x.ai/v1`. Default suggestion `grok-3-mini` at $0.30 input / $0.50 output per million tokens (`pricingVersion` `grok-3-mini:0.30:0.50`). Cached native tenths apply to other listed IDs. Revalidate against [xAI pricing](https://docs.x.ai/developers/pricing) before release.
 - The request upper bound uses serialized context/tool UTF-8 bytes plus framing allowance and the output cap. Reservation and settlement use integer micro-USD. Unknown requests keep their reservation across restarts and month boundaries.
 - Forge's rebuild dependency references Electron node-gyp by Git URL; `pnpm-workspace.yaml` overrides it with the registry release `10.2.0-electron.2`. Exotic-subdependency blocking remains enabled.
 - Forge needs hoisted node_modules. Lifecycle builds are explicitly allowed only for Electron, esbuild and electron-winstaller.
