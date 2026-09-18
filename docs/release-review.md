@@ -8,7 +8,7 @@ Local review updated 2026-09-18 for the Windows 0.2.0 branch stack. It records w
 - The production tree resolved from the direct dependencies has 49 packages. All use MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause or 0BSD, except `fast-sha256@1.3.0` (Unlicense, public-domain dedication).
 - Build-only packages add MPL-2.0 (`lightningcss`, used by Tailwind at build time), CC-BY-4.0 (`caniuse-lite` data), CC-BY-3.0/CC0 (`spdx-*` data) and BlueOak-1.0.0 (`minipass-flush`). None of these ship inside the packaged app code; confirm by inspecting `app.asar` before a public release.
 - Native code shipped: DuckDB Node bindings (MIT) unpacked from ASAR, and Electron itself. SQLite is Node's bundled engine; startup refuses versions older than 3.51.3.
-- Production dependency audit: CI runs `pnpm audit --prod --audit-level=high` on every Windows desktop workflow (fails the job on high or critical advisories). DevDependency-only findings are reviewed manually before release and are not a CI hard fail. Upstream maintenance status for each direct dependency is still a human check before tagging.
+- Production dependency audit: CI runs `pnpm audit --prod --audit-level=high` on every Windows desktop workflow (fails the job on high or critical advisories). A remaining high issue in `extract-zip` sits under Forge/packager (dev-only); see [windows-release-gates.md](windows-release-gates.md). DevDependency-only findings are reviewed manually before release and are not a CI hard fail. Upstream maintenance status for each direct dependency is still a human check before tagging.
 
 ## Third-party marks
 
@@ -31,8 +31,8 @@ Checked by reading `apps/desktop/src`:
 
 | Gate | Status |
 |---|---|
-| Installer on a clean Windows machine, startup, uninstall | Procedure in [windows-release-gates.md](windows-release-gates.md). Not yet run on a clean machine |
-| Code signing | Not configured. Env-var prep documented in windows-release-gates.md; leave unsigned until a cert is supplied |
+| Installer on a clean Windows machine, startup, uninstall | Not run. Human checklist (install, first launch, Settings harness tab, Demo worker/task, uninstall) is in [windows-release-gates.md](windows-release-gates.md). CI packaged smokes do not run Setup.exe. Installing from a development session on an MSIX-packaged host would also be virtualized |
+| Code signing | Locked for public 0.2.x: unsigned. SmartScreen is expected. Signed builds wait for a certificate; do not add a signing pipeline. See [windows-release-gates.md](windows-release-gates.md) |
 | Live OpenAI acceptance ($0.05 cap) | Script ready: set `ORGLET_LIVE_KEY_FILE` (+ optional `ORGLET_LIVE_PROVIDER=openai`) and run `pnpm test:live`. Waiting for the user's key file path |
 | Live xAI (Grok) acceptance ($0.05 cap) | Same script with `ORGLET_LIVE_PROVIDER=xai`. Waiting for the user's key file path |
 | Live Anthropic acceptance | Not authorized |

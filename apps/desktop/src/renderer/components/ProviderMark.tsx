@@ -1,4 +1,5 @@
 import type { ProviderId } from '../../shared/contracts';
+import type { HarnessCatalogId } from '../../shared/harness';
 
   // Official marks from Simple Icons 15.22.0 (CC0-1.0, https://simpleicons.org). Trademarks belong to their owners;
 // remove on request. Demo has no brand, so it keeps a plain monogram. xAI mark is the Simple Icons "x" path.
@@ -9,20 +10,20 @@ const paths = {
   x: 'M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z',
 } as const;
 
-const marks: Record<ProviderId, { name: string; path?: string; color?: string }> = {
+const marks: Record<ProviderId | Extract<HarnessCatalogId, 'cursor'>, { name: string; path?: string; color?: string; letter?: string }> = {
   demo: { name: 'Demo' },
   openai: { name: 'OpenAI API', path: paths.openai },
   anthropic: { name: 'Anthropic API', path: paths.anthropic },
   xai: { name: 'Grok (xAI) API', path: paths.x },
   'claude-code': { name: 'Claude Code', path: paths.claude, color: '#D97757' },
   codex: { name: 'Codex', path: paths.openai },
-  cursor: { name: 'Cursor Agent' },
+  cursor: { name: 'Cursor Agent', letter: 'C' },
 };
 
 /** Pass decorative when visible text next to the mark already names the provider. */
-export function ProviderMark({ provider, size = 'default', decorative = false }: { provider: ProviderId; size?: 'default' | 'small'; decorative?: boolean }) {
+export function ProviderMark({ provider, size = 'default', decorative = false }: { provider: ProviderId | 'cursor'; size?: 'default' | 'small'; decorative?: boolean }) {
   const mark = marks[provider];
   return <span className={`provider-mark ${size}`} {...(decorative ? { 'aria-hidden': true } : { title: mark.name, 'aria-label': mark.name, role: 'img' })}>
-    {mark.path ? <svg viewBox="0 0 24 24" aria-hidden="true" style={mark.color ? { color: mark.color } : undefined}><path d={mark.path} fill="currentColor" /></svg> : mark.name[0]}
+    {mark.path ? <svg viewBox="0 0 24 24" aria-hidden="true" style={mark.color ? { color: mark.color } : undefined}><path d={mark.path} fill="currentColor" /></svg> : (mark.letter ?? mark.name[0])}
   </span>;
 }

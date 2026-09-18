@@ -4,9 +4,8 @@ import type { TaskDetail, Workspace } from '../../shared/contracts';
 import { isHarness } from '../../shared/harness';
 import { Button } from './ui';
 import { formatMoney } from './money';
-import { providerLabel, type Readiness } from './providers';
-import { t } from '../i18n';
-import { taskWorkers } from '../assignees';
+import { providerLabel, settingsTabFor, type Readiness } from './providers';
+import { t } from '../i18n';import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
 
 const SINGLE_LINE = 44;
@@ -50,7 +49,7 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
 }
 
 /** Follow-up bar under a task: the text becomes an extra instruction for a new review of the same sources. */
-export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, action }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: () => void; action: (fn: () => Promise<unknown>) => void }) {
+export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, action }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: (tab?: 'connections' | 'harness') => void; action: (fn: () => Promise<unknown>) => void }) {
   const [text, setText] = useState('');
   const input = detail.task.currentInput ?? detail.task;
   const workers = taskWorkers(detail.task, workspace);
@@ -69,7 +68,7 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   return <div className="thread-composer">
     <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={busy ? t('Đang làm việc…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={blocked}
       leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Đính kèm tệp')} title={t('Đính kèm tệp')} disabled={busy} onClick={openRevision}><Plus size={20} /></Button>} />
-    {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={openSettings}>{t('Mở Cài đặt')}</button></p>}
+    {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
     {paid && <p className="composer-note composer-cost" role="status">{detail.usage.reservedMicros > 0
       ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(budget), formatMoney(detail.usage.reservedMicros)])
       : t('Đã dùng {0} / {1}', [formatMoney(used), formatMoney(budget)])}</p>}

@@ -7,7 +7,7 @@ import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { candidates, detectHarnesses, type Probe } from '../../apps/desktop/src/core/harness/detect';
 import { executeHarness, harnessArgs, HarnessError, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
-import type { HarnessInfo } from '../../apps/desktop/src/shared/harness';
+import { harnessReady, harnessStatus, loginCommand, missingHarness, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
 let directory: string;
@@ -45,13 +45,97 @@ describe('detection', () => {
       return { code: 0, stdout: 'Logged in using ChatGPT\n', stderr: '' };
     };
     const found = await detectHarnesses(env, 'win32', probe);
-    expect(found).toEqual([
-      expect.objectContaining({ id: 'claude-code', version: '2.1.10 (Claude Code)', auth: 'logged_out', executable: expect.stringContaining('2.1.10') }),
-      expect.objectContaining({ id: 'codex', version: 'codex-cli 0.154.0', auth: 'logged_in', executable: expect.stringContaining('bffc') }),
-      expect.objectContaining({ id: 'cursor', version: '2026.1.0', auth: 'logged_in', executable: expect.stringContaining('agent.exe') }),
-    ]);
+    expect(found.map(item => item.id)).toEqual(['claude-code', 'codex', 'cursor']);
+    expect(found[0]).toEqual(expect.objectContaining({
+      id: 'claude-code', version: '2.1.10 (Claude Code)', auth: 'logged_out', status: 'detected',
+      executable: expect.stringContaining('2.1.10'), runnable: true,
+      loginCommand: expect.stringContaining('auth login'),
+    }));
+    expect(found[1]).toEqual(expect.objectContaining({
+      id: 'codex', version: 'codex-cli 0.154.0', auth: 'logged_in', status: 'signed_in',
+      executable: expect.stringContaining('bffc'), runnable: true,
+    }));
+    expect(found[2]).toEqual(expect.objectContaining({
+      id: 'cursor', version: '2026.1.0', auth: 'logged_in', status: 'signed_in',
+      executable: expect.stringContaining('agent.exe'), runnable: true,
+    }));
+    expect(found[0].authDetail).toContain('chưa đăng nhập nên chưa sẵn sàng chạy');
+    expect(found[0].loginCommand).toMatch(/^& "/);
     // Probing is limited to version and the CLI's own login status command.
-    expect(calls.every(call => /(--version|auth status|login status|status --format json)$/.test(call))).toBe(true);
+    expect(calls.every(call => /(--version|auth status|login status|status(?: --format json)?)$/.test(call))).toBe(true);
+  });
+
+  it('lists Cursor from its Windows install folder and records auth-probe failures as auth_error, not ready', async () => {
+    const home = join(directory, 'home'); const local = join(home, 'AppData', 'Local');
+    const agent = join(local, 'cursor-agent', 'agent.cmd');
+    await touch(agent);
+    const env = { USERPROFILE: home, LOCALAPPDATA: local, APPDATA: join(home, 'AppData', 'Roaming'), PATH: '' };
+    expect(await candidates('cursor', env, 'win32')).toEqual([agent]);
+    const probe: Probe = async (executable, args) => {
+      if (args[0] === '--version') return { code: 0, stdout: executable.includes('agent') ? '2026.3.11\n' : '2.1.10\n', stderr: '' };
+      if (args[0] === 'status') return { code: 1, stdout: '', stderr: 'Error checking authentication' };
+      if (args.join(' ') === 'auth status') return { code: 0, stdout: 'not-json', stderr: '' };
+      if (args.join(' ') === 'login status') return { code: 2, stdout: '', stderr: 'Error checking login status' };
+      return { code: 1, stdout: '', stderr: '' };
+    };
+    const found = await detectHarnesses(env, 'win32', probe);
+    expect(found).toEqual([
+      expect.objectContaining({ id: 'claude-code', status: 'not_installed', auth: 'missing' }),
+      expect.objectContaining({ id: 'codex', status: 'not_installed', auth: 'missing' }),
+      expect.objectContaining({
+        id: 'cursor', auth: 'unknown', status: 'auth_error', runnable: true,
+        executable: agent, loginCommand: `& "${agent}" login`,
+      }),
+    ]);
+    expect(found[2].authDetail).toContain('không đọc được trạng thái đăng nhập');
+    expect(found[2].authDetail).toContain('không chuyển sang Demo');
+    expect(found[2].installCommand).toBe("irm 'https://cursor.com/install?win32=true' | iex");
+    expect(harnessReady(found[2])).toBe(false);
+  });
+
+  it('treats Cursor "Not authenticated" as detected, not ready-to-run', async () => {
+    const agent = join(directory, 'agent');
+    await touch(agent);
+    const env = { HOME: directory, PATH: directory };
+    const probe: Probe = async (_executable, args) => {
+      if (args[0] === '--version') return { code: 0, stdout: '2026.3.11\n', stderr: '' };
+      return { code: 1, stdout: 'Not authenticated\n', stderr: '' };
+    };
+    const [cursor] = (await detectHarnesses(env, 'linux', probe)).filter(item => item.id === 'cursor');
+    expect(cursor).toEqual(expect.objectContaining({
+      auth: 'logged_out',
+      status: 'detected',
+      executable: agent,
+      loginCommand: loginCommand('cursor', agent, 'linux'),
+    }));
+    expect(cursor.loginCommand).toMatch(/login$/);
+    expect(harnessReady(cursor)).toBe(false);
+  });
+});
+
+describe('status matrix', () => {
+  it('does not treat detected or unread auth as ready, and never maps a failed harness onto Demo', () => {
+    expect(harnessStatus('missing')).toBe('not_installed');
+    expect(harnessStatus('logged_out')).toBe('detected');
+    expect(harnessStatus('unknown')).toBe('auth_error');
+    expect(harnessStatus('logged_in')).toBe('signed_in');
+    const loggedOut = { auth: 'logged_out' as const, runnable: true };
+    const unread = { auth: 'unknown' as const, runnable: true };
+    const signedIn = { auth: 'logged_in' as const, runnable: true };
+    const cursorSignedIn = { auth: 'logged_in' as const, runnable: true };
+    expect(harnessReady(loggedOut)).toBe(false);
+    expect(harnessReady(unread)).toBe(false);
+    expect(harnessReady(signedIn)).toBe(true);
+    expect(harnessReady(cursorSignedIn)).toBe(true);
+    const catalog = [
+      { ...missingHarness('claude-code', 'linux'), auth: 'logged_out' as const, status: 'detected' as const, runnable: true },
+      missingHarness('codex', 'linux'),
+    ];
+    expect(harnessReady(catalog[0])).toBe(false);
+    expect(harnessReady(catalog[1])).toBe(false);
+    expect(loginCommand('claude-code', 'C:\\Claude\\claude.exe', 'win32')).toBe('& "C:\\Claude\\claude.exe" auth login');
+    expect(loginCommand('codex', undefined, 'linux')).toBe('codex login');
+    expect(loginCommand('cursor', '/home/me/.local/bin/agent', 'linux')).toBe('/home/me/.local/bin/agent login');
   });
 });
 
@@ -76,11 +160,12 @@ describe('command contract', () => {
 
   it('parses real CLI failure shapes into actionable login messages', () => {
     const notLoggedIn = JSON.stringify({ type: 'result', subtype: 'success', is_error: true, result: 'Not logged in · Please run /login', total_cost_usd: 0 });
-    expect(() => parseClaudeOutput(notLoggedIn)).toThrow('Harness trên máy');
+    expect(() => parseClaudeOutput(notLoggedIn)).toThrow('chưa đăng nhập');
+    expect(() => parseClaudeOutput(notLoggedIn)).toThrow('không chuyển sang Demo');
     expect(parseClaudeOutput(JSON.stringify({ is_error: false, result: '', structured_output: { title: 'x' }, total_cost_usd: 0.01 }))).toEqual({ output: { title: 'x' }, costUsd: 0.01 });
     expect(parseClaudeOutput(JSON.stringify({ is_error: false, result: '{"title":"y"}' })).output).toEqual({ title: 'y' });
     const expired = ['{"type":"thread.started"}', 'ERROR 401 Unauthorized: Provided authentication token is expired. token_expired', '{"type":"turn.failed","error":{"message":"The model is not supported"}}'].join('\n');
-    expect(() => parseCodexOutput(expired, null)).toThrow('Harness trên máy');
+    expect(() => parseCodexOutput(expired, null)).toThrow('chưa đăng nhập');
     expect(() => parseCodexOutput('{"type":"turn.completed"}', null)).toThrow(HarnessError);
     expect(parseCodexOutput('{"type":"turn.completed"}', '{"title":"z"}').output).toEqual({ title: 'z' });
     expect(parseCursorOutput(JSON.stringify({ result: '{"title":"c"}' })).output).toEqual({ title: 'c' });
@@ -106,12 +191,24 @@ describe('command contract', () => {
   });
 });
 
+const fixture = (item: Pick<HarnessInfo, 'id' | 'executable' | 'version' | 'auth' | 'authDetail'>): HarnessInfo => ({
+  name: item.id === 'claude-code' ? 'Claude Code' : item.id === 'codex' ? 'Codex' : 'Cursor Agent',
+  status: harnessStatus(item.auth),
+  loginCommand: loginCommand(item.id, item.executable || undefined, 'win32'),
+  runnable: true,
+  ...item,
+});
+
 describe('runner integration', () => {
   let store: Store; let core: CoreService; let sources: Source[]; let detected: HarnessInfo[];
   let requests: (HarnessRequest & { files: Record<string, string> })[]; let reply: (request: HarnessRequest) => Promise<unknown>;
   beforeEach(async () => {
     store = new Store(':memory:'); requests = [];
-    detected = [{ id: 'claude-code', name: 'Claude Code', executable: 'claude.exe', version: '2.1.270 (Claude Code)', auth: 'logged_in', authDetail: 'Đăng nhập qua claude.ai' }, { id: 'codex', name: 'Codex', executable: 'codex.exe', version: 'codex-cli 0.154.0', auth: 'logged_in', authDetail: 'Logged in using ChatGPT' }];
+    detected = [
+      fixture({ id: 'claude-code', executable: 'claude.exe', version: '2.1.270 (Claude Code)', auth: 'logged_in', authDetail: 'Đăng nhập qua claude.ai' }),
+      fixture({ id: 'codex', executable: 'codex.exe', version: 'codex-cli 0.154.0', auth: 'logged_in', authDetail: 'Logged in using ChatGPT' }),
+      fixture({ id: 'cursor', executable: '', version: '', auth: 'missing', authDetail: 'Chưa cài Cursor trên máy này. Cài xong bấm Dò lại.' }),
+    ];
     reply = async request => ({ title: 'Harness review', summary: 'Checked the note.', findings: [{ title: 'Answer located', severity: 'info', detail: 'Line two states the answer.', sourceIds: [sources[0].id], coverage: 'Full note', category: 'other', recommendation: null, checkerIds: [], locations: [{ sourceId: sources[0].id, startLine: 2, endLine: 2 }] }], limitations: [], review: { checks: [], recommendation: 'insufficient_evidence', draftFeedback: 'None.', upstreamFindingIds: [], conflicts: [] }, knowledgeProposals: [], cwd: request.cwd });
     core = new CoreService(store, () => {}, async () => { throw new Error('Native adapter must not be used'); }, undefined, undefined, {
       detect: async () => detected,
@@ -161,12 +258,26 @@ describe('runner integration', () => {
 
   it('requires consent for the harness and stops before copying sources when it is missing or logged out', async () => {
     await expect(run('codex', ['claude-code'])).rejects.toThrow('provider');
-    detected = [{ ...detected[0], auth: 'logged_out', authDetail: 'Chưa đăng nhập. Chạy `claude auth login` trong terminal.' }];
+    detected = [{ ...detected[0], auth: 'logged_out', status: 'detected', authDetail: 'Đã thấy Claude Code trên máy, nhưng chưa đăng nhập nên chưa sẵn sàng chạy. Dán lệnh này vào terminal: claude auth login' }];
     const loggedOut = await run('claude-code');
     expect(loggedOut.task.status).toBe('failed'); expect(loggedOut.runs[0].error).toContain('claude auth login');
+    expect(loggedOut.artifacts).toEqual([]);
+    expect(loggedOut.runs[0].snapshot.worker.provider).toBe('claude-code');
+    expect(loggedOut.runs[0].error).not.toMatch(/demo|Báo cáo mẫu/i);
     // Detection is cached; "Dò lại" in settings is the refresh path after installing or logging in.
     detected = []; await core.command('harnesses', { refresh: true });
     expect((await run('claude-code')).runs[0].error).toContain('Không tìm thấy Claude Code');
+    expect(requests).toEqual([]);
+  });
+
+  it('fails a signed-out auth probe as an auth error and does not fall back to Demo', async () => {
+    detected = [{ ...detected[0], auth: 'unknown', status: 'auth_error', authDetail: 'Claude Code có trên máy nhưng không đọc được trạng thái đăng nhập. Chạy claude auth login rồi bấm Dò lại. Orglet không chuyển sang Demo.' }];
+    const failed = await run('claude-code');
+    expect(failed.task.status).toBe('failed');
+    expect(failed.artifacts).toEqual([]);
+    expect(failed.runs[0].snapshot.worker.provider).toBe('claude-code');
+    expect(failed.runs[0].error).toContain('không chuyển sang Demo');
+    expect(failed.runs[0].error).toContain('claude auth login');
     expect(requests).toEqual([]);
   });
 

@@ -332,7 +332,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Notes introduce the group they sit under. */
 .settings-subheading+.setting-note,.settings-subheading-row+.setting-note { margin-top:2px; }
 .panel-heading+.setting-note { margin-top:0; }
-.setting-command { font-size:12px; background:var(--surface); border-radius:6px; padding:4px 8px; overflow-wrap:anywhere; width:fit-content; max-width:100%; }
+.setting-command { font-size:12px; background:var(--surface); border-radius:6px; padding:4px 8px; overflow-wrap:anywhere; min-width:0; flex:1; }
+.setting-repair { display:flex; flex-direction:column; gap:4px; margin-top:4px; max-width:100%; }
+.setting-repair-label { font-size:11px; color:var(--muted); }
+.setting-repair-row { display:flex; align-items:flex-start; gap:4px; max-width:100%; }
+.setting-repair-row .button { flex-shrink:0; }
+.harness-row { align-items:flex-start; }
+.harness-row .setting-title { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .setting-path { font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .settings-message { font-size:13px; margin-top:14px; color:var(--muted); }
 .money-input { display:inline-flex; align-items:center; gap:4px; min-height:36px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); }
@@ -360,7 +366,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .status-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:500; color:var(--muted); white-space:nowrap; }
 .status-pill .status-mark { margin-left:0; }
 .status-pill.logged_in { color:var(--success); }
-.status-pill.logged_out { color:var(--error); }
+.status-pill.logged_out,.status-pill.auth_error { color:var(--error); }
 @media(max-width:640px) {
   .settings-body { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); }
   .settings-tabs { flex-direction:row; overflow-x:auto; padding:8px; }

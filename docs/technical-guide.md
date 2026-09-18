@@ -41,11 +41,11 @@ Anthropic live acceptance needs a separate authorization and is not covered by `
 
 ## Local harnesses (Claude Code, Codex, Cursor Agent)
 
-Orglet can also run a worker through an agent CLI already installed on the machine, using whatever account that CLI is logged in with. **Cài đặt → Harness trên máy** lists what it found; **Dò lại** probes again after installing or logging in. Detection runs only each CLI's `--version` and its own login-status command, and looks in:
+Orglet can also run a worker through an agent CLI already installed on the machine, using whatever account that CLI is logged in with. **Cài đặt → Harness trên máy** always lists Claude Code, Codex and Cursor. Each row is **chưa cài** (not installed), **đã thấy · chưa đăng nhập** (found on disk), **đã đăng nhập · sẵn sàng** (signed in, ready to run) or **lỗi đăng nhập** (the status probe failed). Found on disk is not ready. A failed harness login does not fall back to Demo. **Dò lại** probes again after installing or logging in. Detection runs only each CLI's `--version` and its own login-status command, and looks in:
 
-- Claude Code: `PATH`, `~/.local/bin`, npm/bun/volta global bins, `~/.claude/local`, and the build Claude desktop downloads (`%APPDATA%\Claude\claude-code\<version>`, or the same folder inside the Claude MSIX package's `LocalCache`). Log in the CLI itself with `claude auth login`; the desktop app's session is not reused.
-- Codex: `PATH`, npm global bins and the Codex desktop app's `%LOCALAPPDATA%\OpenAI\Codex\bin`. Log in with `codex login`.
-- Cursor Agent: `PATH` and `%USERPROFILE%\.cursor\bin\agent.exe` (Windows install script). Log in with `agent login`.
+- Claude Code: `PATH`, `~/.local/bin`, npm/bun/volta global bins, `~/.claude/local`, and the build Claude desktop downloads (`%APPDATA%\Claude\claude-code\<version>`, or the same folder inside the Claude MSIX package's `LocalCache`). Sign in with `claude auth login` (the settings row copies the detected path). The desktop app's session is not reused.
+- Codex: `PATH`, npm global bins and the Codex desktop app's `%LOCALAPPDATA%\OpenAI\Codex\bin`. Sign in with `codex login`. An expired ChatGPT token can still look signed in until a run fails; then sign in again. Orglet does not call a paid model just to check this.
+- Cursor Agent: `PATH`, `~/.local/bin`, `%USERPROFILE%\.cursor\bin\agent.exe` (install script), and `%LOCALAPPDATA%\cursor-agent` (`agent` / `cursor-agent`). Sign in with `agent login`; install with the documented `curl https://cursor.com/install -fsS | bash` or Windows `irm 'https://cursor.com/install?win32=true' | iex`.
 
 Pick **Claude Code trên máy này**, **Codex trên máy này** or **Cursor Agent trên máy này** as a worker's model. Each task still needs explicit consent for that harness. A run copies the permitted, hash-checked sources and the skill's reference files into a temporary folder, sends the compiled context as the prompt and requires the same JSON report schema; Orglet then applies the same citation, checker, checklist and line-range checks as native runs and deletes the folder.
 
@@ -141,7 +141,7 @@ pnpm test:knowledge
 pnpm test:harness
 ```
 
-The harness smoke compares **Harness trên máy**, the worker model list and the consent gate with what the packaged core detects on the current machine. It never starts a harness run.
+The harness smoke installs fixture CLIs so **Harness trên máy** always has a logged-out Claude Code and an unreadable Codex login probe, and still lists Cursor (including a not-installed row). It checks status pills and copy-login commands, that detected is not signed-in, that an auth failure does not show Demo, and that the worker model list and send gate match those states. It never starts a harness run. GitHub Actions runs this on Windows after `pnpm make`; see [windows-release-gates.md](windows-release-gates.md).
 
 The knowledge smoke creates a team note in the library, carries it through a template export/import as a proposal, approves it, searches it and checks the frozen context shown in **Chi tiết**. `node scripts/knowledge-smoke.mjs --inspect-ui` leaves that task open for computer use.
 
@@ -155,7 +155,7 @@ The skill smoke checks directory import, review gating, resource preview, export
 
 The run-audit smoke checks structured log errors, direction selection, repeat/failure summaries and public/private rank changes. `node scripts/run-audit-smoke.mjs --inspect-ui` leaves the result open for computer use.
 
-`pnpm build` produces `out/Orglet-win32-x64/Orglet.exe`. `pnpm make` produces a ZIP and Squirrel installer under `out/make`. Builds are unsigned development builds.
+`pnpm build` produces `out/Orglet-win32-x64/Orglet.exe`. `pnpm make` produces a ZIP and Squirrel installer under `out/make`. Public Windows 0.2.x installers are unsigned by decision; see [windows-release-gates.md](windows-release-gates.md).
 
 See `docs/implementation_status.md` for actual verification and remaining work.
 

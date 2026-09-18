@@ -53,9 +53,9 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
 
 const authHint = (harness: HarnessId) => {
   const name = harness === 'claude-code' ? 'Claude Code' : harness === 'codex' ? 'Codex' : 'Cursor Agent';
-  return `${name} chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy để xem lệnh đăng nhập với đúng đường dẫn, rồi thử lại.`;
+  return `${name} chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy, sao chép lệnh đăng nhập, rồi thử lại. Orglet không chuyển sang Demo.`;
 };
-const looksLikeAuth = (text: string) => /not logged in|please run \/login|please run.*login|token_expired|401 unauthorized|invalid api key|authentication|unauthenticated/i.test(text);
+const looksLikeAuth = (text: string) => /not logged in|not authenticated|please run \/login|please run.*login|token_expired|401 unauthorized|invalid api key|authentication|unauthenticated/i.test(text);
 
 export function parseCursorOutput(stdout: string): HarnessResult {
   let data: unknown;

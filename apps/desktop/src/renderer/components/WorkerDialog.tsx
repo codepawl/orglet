@@ -78,9 +78,14 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         modelOption('openai', 'OpenAI', 'GPT-4.1 mini', t('API trả phí'), ready.openai),
         modelOption('anthropic', 'Anthropic', 'Claude Haiku 4.5', t('API trả phí'), ready.anthropic),
         modelOption('xai', 'Grok', 'grok-3-mini', t('API trả phí'), ready.xai),
-        ...(['claude-code', 'codex', 'cursor'] as const).filter(id => provider === id || harnesses.some(item => item.id === id)).map(id => {
+        ...(['claude-code', 'codex', 'cursor'] as const).map(id => {
           const found = harnesses.find(item => item.id === id);
-          return modelOption(id, harnessNames[id], [found ? found.version : t('chưa tìm thấy'), found?.auth === 'logged_out' ? t('chưa đăng nhập') : ''].filter(Boolean).join(' · '), t('Harness trên máy'), ready[id]);
+          const detail = !found || found.status === 'not_installed' ? t('chưa cài')
+            : found.status === 'detected' ? [found.version, t('đã thấy · chưa đăng nhập')].filter(Boolean).join(' · ')
+            : found.status === 'auth_error' ? [found.version, t('lỗi đăng nhập')].filter(Boolean).join(' · ')
+            : found.runnable ? [found.version, t('đã đăng nhập · sẵn sàng')].filter(Boolean).join(' · ')
+            : [found.version, t('đã đăng nhập')].filter(Boolean).join(' · ');
+          return modelOption(id, harnessNames[id], detail, t('Harness trên máy'), ready[id]);
         }),
       ]} />
       {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. {1} Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider], provider === 'codex' ? t('Codex nhận nội dung nguồn văn bản trong prompt và không có tool đọc tệp hay chạy lệnh.') : provider === 'cursor' ? t('Cursor Agent chạy ở chế độ ask với sandbox; chỉ đọc bản sao nguồn của task, không dùng --force.') : t('Claude Code chỉ đọc bản sao nguồn của task, không chạy lệnh.')])}</p>}
