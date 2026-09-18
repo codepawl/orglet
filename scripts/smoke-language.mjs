@@ -26,4 +26,5 @@ export async function openThreadByBrief(page, brief) {
 export async function archiveCurrentChat(page) {
   await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Lưu trữ', exact: true }).click();
+  await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).waitFor();
 }

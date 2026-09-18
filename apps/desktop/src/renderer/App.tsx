@@ -77,6 +77,7 @@ export function App() {
   const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const [dismissedCatchUpNotice, setDismissedCatchUpNotice] = useState('');
   const composer = useRef<HTMLTextAreaElement>(null); const refreshId = useRef(0);
+  const bootedLiveThread = useRef(false);
   /** Stamps from core + localStorage; renderer HMR can update before the core utility process restarts. */
   const seenInfo = useRef<Record<string, SeenInfo>>(readSeenStorage());
   const rememberSeen = useCallback((id: string, info: SeenInfo) => {
@@ -134,6 +135,10 @@ export function App() {
     media.addEventListener('change', collapse); return () => media.removeEventListener('change', collapse);
   }, []);
   const leaveThread = () => { setSelected(null); setDetail(undefined); setBrief(''); setSources([]); setSkippedSources([]); setError(''); };
+  const hideTaskLocally = (taskId: string, field: 'archivedAt' | 'deletedAt') => {
+    const stamp = new Date().toISOString();
+    setWorkspace(current => current ? { ...current, tasks: current.tasks.map(task => task.id === taskId ? { ...task, [field]: task[field] ?? stamp } : task) } : current);
+  };
   // Re-opening the task already shown keeps its detail; clearing it would wait for a reload that never comes.
   const openTask = (id: string) => {
     if (id !== selected) { setSelected(id); setDetail(undefined); }
@@ -179,8 +184,13 @@ export function App() {
     };
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
   }, [teamId, workerId, workspace]);
+  // First paint only: if this worker already has a live thread, show it so the empty composer cannot silently
+  // reviseTask a hidden row. After the user archives or leaves, stay on the empty chat — re-running this from a
+  // stale workspace would reopen the same thread and hide Thêm nguồn (desktop-smoke attach-sources after archive).
   useEffect(() => {
-    if (!workspace || selected || teamId || !workerId) return;
+    if (!workspace || !workerId || bootedLiveThread.current) return;
+    bootedLiveThread.current = true;
+    if (selected || teamId) return;
     const live = liveWorkerTask(workspace.tasks, workerId);
     if (live) openTask(live.id);
   }, [workspace, selected, teamId, workerId]);
@@ -221,8 +231,16 @@ export function App() {
   const openRoutines = (view: RoutineView = { editing: false }) => { setRoutineDraft(undefined); setRoutineView(view); setPanel('routines'); };
   const teamOrder = useReorder(workspace?.teams.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'teams', ids })));
   const workerOrder = useReorder(workspace?.workers.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'workers', ids })));
-  const deleteTask = (taskId: string) => action(async () => { await orglet.call('deleteTask', { id: taskId }); if (selected === taskId) leaveThread(); toast(t('Đã xóa cuộc trò chuyện.')); });
-  const archiveTask = (taskId: string, archived: boolean) => action(async () => { await orglet.call('archiveTask', { id: taskId, archived }); if (archived && selected === taskId) leaveThread(); toast(archived ? t('Đã lưu trữ cuộc trò chuyện.') : t('Đã khôi phục cuộc trò chuyện.')); });
+  const deleteTask = (taskId: string) => action(async () => {
+    await orglet.call('deleteTask', { id: taskId });
+    if (selectedRef.current === taskId) { hideTaskLocally(taskId, 'deletedAt'); leaveThread(); }
+    toast(t('Đã xóa cuộc trò chuyện.'));
+  });
+  const archiveTask = (taskId: string, archived: boolean) => action(async () => {
+    await orglet.call('archiveTask', { id: taskId, archived });
+    if (archived && selectedRef.current === taskId) { hideTaskLocally(taskId, 'archivedAt'); leaveThread(); }
+    toast(archived ? t('Đã lưu trữ cuộc trò chuyện.') : t('Đã khôi phục cuộc trò chuyện.'));
+  });
   setDisplayCurrency(workspace?.currency);
   if (!workspace) return <div className="startup"><span className="orglet-mark">o</span><h1>Orglet</h1><p role={error ? 'alert' : 'status'}>{error || t('Đang mở workspace…')}</p>{error && window.orglet && <Button onClick={() => void refresh()}>{t('Thử lại')}</Button>}</div>;
   const recipientOptions = [
