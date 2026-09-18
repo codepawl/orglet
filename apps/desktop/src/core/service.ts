@@ -1,5 +1,5 @@
 import type { Knowledge } from '../shared/knowledge';
-import { commands, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
+import { commands, type ApiProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
 import { Sources } from './tools/sources';
 import { Runner } from './orchestration/runner';
@@ -23,6 +23,9 @@ import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
 import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/currency';
 import { assertSkillReady, inspectPackage, packageForImport, packageForExport } from './skill-package';
 import { taskResultStamp } from '../shared/task-seen';
+import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './models/fetch';
+import { canStoreModelListRow, dropProviderRow, readModelListCache, writeModelListCache } from './models/cache';
+import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
 
 export class CoreService {
   feedbackText(artifactId: string): string {
@@ -40,7 +43,12 @@ export class CoreService {
   readonly policy: WorkPolicy;
   readonly knowledge: KnowledgeBase;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
-  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = { detect: () => detectHarnesses(), execute: executeHarness }, private fetchRate: RateFetcher = fetchUsdRate) {
+  private modelListMemory = emptyModelListCache();
+  private modelListLoaded = false;
+  private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
+  private modelListEpoch = new Map<ModelListProviderId, number>();
+  private modelListFailed = new Set<ModelListProviderId>();
+  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = { detect: () => detectHarnesses(), execute: executeHarness }, private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
     this.notify = () => { this.policy.captureHandoffs(); notify(); };
@@ -233,6 +241,7 @@ export class CoreService {
       }
       case 'searchKnowledge': return this.knowledge.search(commands.searchKnowledge.parse(args).query);
       case 'harnesses': return this.harnesses(commands.harnesses.parse(args).refresh);
+      case 'modelList': return this.modelList(commands.modelList.parse(args));
       case 'renameTask': {
         const input = commands.renameTask.parse(args);
         this.store.get<Task>('tasks', input.id);
@@ -328,11 +337,104 @@ export class CoreService {
   }
   /** Probing spawns each CLI, so results are reused for a minute unless the user asks to detect again. */
   harnesses(refresh: boolean): Promise<HarnessInfo[]> {
+    if (refresh) for (const id of ['claude-code', 'codex', 'cursor'] as const) this.invalidateModelList(id);
     if (refresh || !this.harnessCache || Date.now() - this.harnessCache.at > 60_000) {
       const value = this.harness.detect().catch(() => [] as HarnessInfo[]);
       this.harnessCache = { at: Date.now(), value };
     }
     return this.harnessCache.value;
+  }
+  /**
+   * Native or alias model list for one connection. Returns the last cache immediately when present;
+   * refreshes in the background when older than 24h. A typed custom ID is always valid (`customIdOk`).
+   */
+  async modelList(input: { provider: string; refresh?: boolean }): Promise<ModelListResult> {
+    if (input.provider === 'demo') {
+      return { models: [], fetchedAt: this.clock().toISOString(), stale: false, customIdOk: true, source: 'catalog-hint' };
+    }
+    const provider = ModelListProvider.parse(input.provider);
+    this.hydrateModelLists();
+    const row = this.modelListMemory.byProvider[provider];
+    const stale = !row || this.clock().getTime() - new Date(row.fetchedAt).getTime() > MODEL_LIST_TTL_MS;
+    if (row && !input.refresh) {
+      if (stale && !this.modelListFailed.has(provider)) this.scheduleModelListRefresh(provider);
+      return this.toModelListResult(row, stale);
+    }
+    return this.toModelListResult(await this.refreshModelList(provider), false);
+  }
+  /** Drop one provider's cached list (API key change, harness Dò lại, or cache-shape bump). */
+  invalidateModelList(provider: ApiProvider | ModelListProviderId) {
+  const parsed = ModelListProvider.safeParse(provider);
+  if (!parsed.success) return;
+  const id = parsed.data;
+    this.hydrateModelLists();
+    this.modelListEpoch.set(id, (this.modelListEpoch.get(id) ?? 0) + 1);
+    this.modelListFailed.delete(id);
+    this.modelListMemory = dropProviderRow(this.modelListMemory, id);
+    writeModelListCache(this.store, this.modelListMemory);
+  }
+  /** Tests wait for a stale-while-revalidate fetch to finish. */
+  waitForModelListRefresh(provider?: ModelListProviderId) {
+    if (provider) return this.modelListInflight.get(provider) ?? Promise.resolve();
+    return Promise.all(this.modelListInflight.values());
+  }
+  private hydrateModelLists() {
+    if (this.modelListLoaded) return;
+    this.modelListMemory = readModelListCache(this.store);
+    this.modelListLoaded = true;
+  }
+  private toModelListResult(row: ModelListRow, stale: boolean): ModelListResult {
+    return { models: row.models, fetchedAt: row.fetchedAt, stale, customIdOk: true, source: row.source, ...(row.error ? { error: row.error } : {}) };
+  }
+  private scheduleModelListRefresh(provider: ModelListProviderId) {
+    void this.refreshModelList(provider).then(() => this.notify()).catch(() => {});
+  }
+  private refreshModelList(provider: ModelListProviderId): Promise<ModelListRow> {
+    const existing = this.modelListInflight.get(provider);
+    if (existing) return existing;
+    const epoch = this.modelListEpoch.get(provider) ?? 0;
+    const previous = this.modelListMemory.byProvider[provider];
+    const work = fetchProviderList(provider, this.modelListFetchOptions()).then(row => {
+      if ((this.modelListEpoch.get(provider) ?? 0) !== epoch) return previous ?? row;
+      this.modelListFailed.delete(provider);
+      this.writeModelListRow(provider, row);
+      return this.modelListMemory.byProvider[provider] ?? row;
+    }).catch(error => {
+      this.modelListFailed.add(provider);
+      if (previous) return { ...previous, error: error instanceof Error ? error.message.slice(0, 500) : previous.error };
+      const message = error instanceof Error ? error.message.slice(0, 500) : `Không tải được danh sách model (${0}). Vẫn có thể gõ ID tùy chỉnh.`;
+      const row: ModelListRow = { fetchedAt: this.clock().toISOString(), ...withCatalogHint(provider, [], 'native', message) };
+      this.writeModelListRow(provider, row);
+      return this.modelListMemory.byProvider[provider] ?? row;
+    }).finally(() => {
+      if (this.modelListInflight.get(provider) === work) this.modelListInflight.delete(provider);
+    });
+    this.modelListInflight.set(provider, work);
+    return work;
+  }
+  private writeModelListRow(provider: ModelListProviderId, row: ModelListRow) {
+    if (!canStoreModelListRow(row)) {
+      const previous = this.modelListMemory.byProvider[provider];
+      if (previous) return;
+      const compact: ModelListRow = { fetchedAt: row.fetchedAt, source: 'catalog-hint', models: row.models.slice(0, 1), ...(row.error ? { error: row.error } : {}) };
+      if (!canStoreModelListRow(compact)) return;
+      this.modelListMemory = { version: MODEL_LIST_CACHE_VERSION, byProvider: { ...this.modelListMemory.byProvider, [provider]: compact } };
+      writeModelListCache(this.store, this.modelListMemory);
+      return;
+    }
+    this.modelListMemory = { version: MODEL_LIST_CACHE_VERSION, byProvider: { ...this.modelListMemory.byProvider, [provider]: row } };
+    writeModelListCache(this.store, this.modelListMemory);
+  }
+  private modelListFetchOptions() {
+    return {
+      readKey: this.modelListRuntime.readKey ?? (async () => null),
+      fetch: this.modelListRuntime.fetch,
+      endpoints: this.modelListRuntime.endpoints,
+      probe: this.modelListRuntime.probe,
+      timeoutMs: this.modelListRuntime.timeoutMs,
+      harnesses: () => this.harnesses(false),
+      now: this.clock,
+    };
   }
   /** A worker or team that is neither archived nor deleted, or undefined. */
   private entity(kind: 'worker' | 'team', entityId: string) {

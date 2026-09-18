@@ -126,6 +126,7 @@ async function start() {
     const body = z.object({ provider: ApiProvider, key: z.string().min(1).max(500).optional() }).strict().parse(raw);
     if (body.key !== undefined) {
       await credentials.save(body.provider, body.key.trim());
+      await request('invalidateModelList', body.provider).catch(() => {});
       return credentials.status();
     }
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn tệp .txt chỉ chứa API key — key được mã hóa bằng Windows'), properties: ['openFile'], filters: [{ name: 'API key text', extensions: ['txt'] }] });
@@ -137,11 +138,17 @@ async function start() {
         if (bytesRead > 1024) throw new Error('Tệp API key quá lớn.');
         await credentials.save(body.provider, buffer.subarray(0, bytesRead).toString('utf8').trim());
         buffer.fill(0);
+        await request('invalidateModelList', body.provider).catch(() => {});
       } finally { await file.close(); }
     }
     return credentials.status();
   });
-  handle('orglet:disconnect', async raw => { await credentials.remove(ApiProvider.parse(raw)); return credentials.status(); });
+  handle('orglet:disconnect', async raw => {
+    const provider = ApiProvider.parse(raw);
+    await credentials.remove(provider);
+    await request('invalidateModelList', provider).catch(() => {});
+    return credentials.status();
+  });
   handle('orglet:backup', async () => {
     const result = await dialog.showSaveDialog(window, { title: tr('Lưu bản sao lưu'), defaultPath: 'orglet-backup.json', filters: [{ name: 'Orglet backup', extensions: ['json'] }] });
     if (result.canceled || !result.filePath) return false;

@@ -4,12 +4,17 @@ import { Store } from './storage/database';
 import { CoreService } from './service';
 import { OpenAIAdapter } from './adapters/openai';
 import { AnthropicAdapter } from './adapters/anthropic';
-import { Id, type Command } from '../shared/contracts';
+import { ApiProvider, Id, type Command } from '../shared/contracts';
 import { DatasetProfile, type ProfileExecutor } from '../shared/profiles';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
 const pendingKeys = new Map<string, (key: string | null) => void>();
+const requestKey = (provider: string) => new Promise<string | null>(resolve => {
+  const requestId = crypto.randomUUID(); pendingKeys.set(requestId, resolve);
+  port.postMessage({ type: 'key', id: requestId, provider });
+  setTimeout(() => { if (pendingKeys.delete(requestId)) resolve(null); }, 5000).unref();
+});
 const pendingProfiles = new Map<string, (reply: unknown) => void>();
 const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject) => {
   const id = crypto.randomUUID();
@@ -30,16 +35,14 @@ const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject
 const store = new Store(join(process.argv[2], 'orglet.sqlite'));
 const core = new CoreService(store, () => port.postMessage({ type: 'changed' }), async provider => {
   if (!['openai', 'anthropic', 'xai'].includes(provider)) throw new Error('Provider chưa được hỗ trợ.');
-  const key = await new Promise<string | null>(resolve => {
-    const requestId = crypto.randomUUID(); pendingKeys.set(requestId, resolve);
-    port.postMessage({ type: 'key', id: requestId, provider });
-    setTimeout(() => { if (pendingKeys.delete(requestId)) resolve(null); }, 5000).unref();
-  });
+  const key = await requestKey(provider);
   if (!key) throw new Error(`Chưa kết nối ${provider}. Mở Cài đặt để nhập API key.`);
   if (provider === 'anthropic') return new AnthropicAdapter(key);
   if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai' });
   return new OpenAIAdapter(key);
-}, profile);
+}, profile, undefined, undefined, undefined, {
+  readKey: provider => requestKey(provider),
+});
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
 port.on('message', async ({ data }) => {
   const envelope = z.object({ id: z.string(), command: z.string(), args: z.unknown() }).safeParse(data);
@@ -62,6 +65,7 @@ port.on('message', async ({ data }) => {
       : command === 'templateImport' ? core.templates.import(z.string().parse(args))
       : command === 'skillImport' ? core.importSkill(args)
       : command === 'skillExport' ? core.exportSkill(Id.parse(args))
+      : command === 'invalidateModelList' ? core.invalidateModelList(ApiProvider.parse(args))
       : await core.command(command as Command, args);
     port.postMessage({ id, ok: true, value });
   } catch (error) {

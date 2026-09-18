@@ -1,0 +1,351 @@
+import { execFile } from 'node:child_process';
+import type { ApiProvider } from '../../shared/contracts';
+import {
+  CustomModelId,
+  hiddenOpenAIModel,
+  MODEL_LIST_MAX,
+  MODEL_LIST_TIMEOUT_MS,
+  ModelEntry,
+  type ModelListProvider,
+  type ModelListRow,
+  type ModelSource,
+} from '../../shared/models';
+import { modelCatalog, type CatalogProvider } from '../adapters/catalog';
+import { cleanEnv, commandLine, type Probe } from '../harness/detect';
+import { harnessNames, type HarnessInfo } from '../../shared/harness';
+
+export const MODEL_LIST_ENDPOINTS = {
+  openai: 'https://api.openai.com/v1',
+  anthropic: 'https://api.anthropic.com/v1',
+  xai: 'https://api.x.ai/v1',
+} as const;
+
+export const CLAUDE_CODE_ALIASES: ReadonlyArray<{ id: string; displayName: string }> = [
+  { id: 'sonnet', displayName: 'Sonnet' },
+  { id: 'opus', displayName: 'Opus' },
+  { id: 'haiku', displayName: 'Haiku' },
+  { id: 'fable', displayName: 'Fable' },
+];
+
+export type ModelListFetchOptions = {
+  readKey: (provider: ApiProvider) => Promise<string | null>;
+  fetch?: typeof fetch;
+  endpoints?: Partial<Record<keyof typeof MODEL_LIST_ENDPOINTS, string>>;
+  probe?: Probe;
+  harnesses: () => Promise<HarnessInfo[]>;
+  timeoutMs?: number;
+  now: () => Date;
+};
+
+/** Injected from core/entry (key IPC) and tests (HTTP/CLI fixtures). */
+export type ModelListRuntime = {
+  readKey?: (provider: ApiProvider) => Promise<string | null>;
+  fetch?: typeof fetch;
+  endpoints?: Partial<Record<keyof typeof MODEL_LIST_ENDPOINTS, string>>;
+  probe?: Probe;
+  timeoutMs?: number;
+};
+
+const shapeError = 'Danh sách model không đúng định dạng. Vẫn có thể gõ ID tùy chỉnh.';
+const timeoutError = 'Hết thời gian tải danh sách model. Vẫn có thể gõ ID tùy chỉnh.';
+const httpError = (status: number) => `Không tải được danh sách model (${status}). Vẫn có thể gõ ID tùy chỉnh.`;
+const missingKey = (provider: string) => `Chưa kết nối ${provider}. Vẫn có thể gõ ID model tùy chỉnh.`;
+const missingHarness = (name: string) => `Chưa cài ${name} trên máy này. Vẫn có thể gõ ID model tùy chỉnh.`;
+const signedOut = (name: string) => `Chưa đăng nhập ${name}. Vẫn có thể gõ ID model tùy chỉnh.`;
+
+export function catalogHint(provider: ModelListProvider): ModelEntry | undefined {
+  if (!Object.hasOwn(modelCatalog, provider)) return undefined;
+  const config = modelCatalog[provider as CatalogProvider];
+  return { provider, id: config.model, source: 'catalog-hint' };
+}
+
+export function withCatalogHint(provider: ModelListProvider, models: ModelEntry[], source: ModelSource, error?: string): Pick<ModelListRow, 'models' | 'source' | 'error'> {
+  const capped = models.slice(0, MODEL_LIST_MAX);
+  if (capped.length) return error ? { models: capped, source, error } : { models: capped, source };
+  const hint = catalogHint(provider);
+  if (hint) return error ? { models: [hint], source: 'catalog-hint', error } : { models: [hint], source: 'catalog-hint' };
+  return error ? { models: [], source, error } : { models: [], source };
+}
+
+function pickId(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const parsed = CustomModelId.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
+}
+
+function sunsetDate(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  const day = value.trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : undefined;
+}
+
+function xaiTenths(cents: unknown): number | undefined {
+  if (typeof cents !== 'number' || !Number.isInteger(cents) || cents < 0 || cents % 1000 !== 0) return undefined;
+  const tenths = cents / 1000;
+  return tenths <= 1_000_000 ? tenths : undefined;
+}
+
+export function parseOpenAIModels(payload: unknown): ModelEntry[] {
+  const data = payload && typeof payload === 'object' ? (payload as { data?: unknown }).data : undefined;
+  if (!Array.isArray(data)) throw new Error(shapeError);
+  const models: ModelEntry[] = [];
+  const seen = new Set<string>();
+  for (const row of data) {
+    if (!row || typeof row !== 'object') continue;
+    const rec = row as { id?: unknown; shutdown_date?: unknown };
+    const id = pickId(rec.id);
+    if (!id || seen.has(id) || hiddenOpenAIModel(id)) continue;
+    seen.add(id);
+    const sunsetAt = sunsetDate(rec.shutdown_date);
+    models.push({
+      provider: 'openai',
+      id,
+      source: 'native',
+      ...(sunsetAt ? { deprecated: true as const, sunsetAt } : {}),
+    });
+    if (models.length >= MODEL_LIST_MAX) break;
+  }
+  return models;
+}
+
+export function parseAnthropicModels(payload: unknown): { models: ModelEntry[]; hasMore: boolean; after?: string } {
+  if (!payload || typeof payload !== 'object') throw new Error(shapeError);
+  const body = payload as { data?: unknown; has_more?: unknown; last_id?: unknown };
+  if (!Array.isArray(body.data)) throw new Error(shapeError);
+  const models: ModelEntry[] = [];
+  for (const row of body.data) {
+    if (!row || typeof row !== 'object') continue;
+    const rec = row as { id?: unknown; display_name?: unknown };
+    const id = pickId(rec.id);
+    if (!id) continue;
+    const displayName = typeof rec.display_name === 'string' && rec.display_name.trim() ? rec.display_name.trim().slice(0, 200) : undefined;
+    models.push({ provider: 'anthropic', id, source: 'native', ...(displayName ? { displayName } : {}) });
+  }
+  const last = typeof body.last_id === 'string' ? body.last_id : undefined;
+  return { models, hasMore: body.has_more === true && Boolean(last), after: last };
+}
+
+export function parseXaiLanguageModels(payload: unknown): ModelEntry[] {
+  const rows = payload && typeof payload === 'object' ? (payload as { models?: unknown }).models : undefined;
+  if (!Array.isArray(rows)) throw new Error(shapeError);
+  const models: ModelEntry[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const rec = row as { id?: unknown; aliases?: unknown; output_modalities?: unknown; prompt_text_token_price?: unknown; completion_text_token_price?: unknown };
+    const modalities = rec.output_modalities;
+    if (!Array.isArray(modalities) || !modalities.includes('text')) continue;
+    const id = pickId(rec.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const aliases = Array.isArray(rec.aliases)
+      ? rec.aliases.flatMap(value => {
+        const parsed = CustomModelId.safeParse(value);
+        return parsed.success && parsed.data !== id ? [parsed.data] : [];
+      }).slice(0, 50)
+      : [];
+    const inputTenths = xaiTenths(rec.prompt_text_token_price);
+    const outputTenths = xaiTenths(rec.completion_text_token_price);
+    models.push({
+      provider: 'xai',
+      id,
+      source: 'native',
+      ...(aliases.length ? { aliases } : {}),
+      ...(inputTenths !== undefined ? { inputTenths } : {}),
+      ...(outputTenths !== undefined ? { outputTenths } : {}),
+    });
+    if (models.length >= MODEL_LIST_MAX) break;
+  }
+  return models;
+}
+
+function jsonObject(text: string): unknown {
+  const trimmed = text.trim();
+  if (!trimmed || /^\s*</.test(trimmed) || /<!DOCTYPE/i.test(trimmed)) throw new Error(shapeError);
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf('{');
+    const end = trimmed.lastIndexOf('}');
+    if (start < 0 || end <= start) throw new Error(shapeError);
+    try {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    } catch {
+      throw new Error(shapeError);
+    }
+  }
+}
+
+export function parseCodexModels(text: string): ModelEntry[] {
+  const parsed = jsonObject(text);
+  const rows = Array.isArray(parsed) ? parsed
+    : parsed && typeof parsed === 'object' && Array.isArray((parsed as { models?: unknown }).models) ? (parsed as { models: unknown[] }).models
+    : parsed && typeof parsed === 'object' && Array.isArray((parsed as { data?: unknown }).data) ? (parsed as { data: unknown[] }).data
+    : null;
+  if (!rows) throw new Error(shapeError);
+  const models: ModelEntry[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const rec = row as Record<string, unknown>;
+    const id = pickId(rec.id) ?? pickId(rec.slug) ?? pickId(rec.model);
+    if (!id) continue;
+    const displayName = typeof rec.display_name === 'string' ? rec.display_name.trim().slice(0, 200)
+      : typeof rec.displayName === 'string' ? rec.displayName.trim().slice(0, 200)
+        : typeof rec.name === 'string' ? rec.name.trim().slice(0, 200) : '';
+    const upgrade = rec.upgrade;
+    const replacementId = typeof upgrade === 'string' ? pickId(upgrade)
+      : upgrade && typeof upgrade === 'object' ? pickId((upgrade as { id?: unknown }).id) ?? pickId((upgrade as { slug?: unknown }).slug)
+        : undefined;
+    models.push({
+      provider: 'codex',
+      id,
+      source: 'native',
+      ...(displayName ? { displayName } : {}),
+      ...(replacementId && replacementId !== id ? { replacementId } : {}),
+    });
+    if (models.length >= MODEL_LIST_MAX) break;
+  }
+  if (rows.length > 0 && models.length === 0) throw new Error(shapeError);
+  return models;
+}
+
+export function parseCursorModels(text: string): ModelEntry[] {
+  if (/<!DOCTYPE/i.test(text) || /^\s*</.test(text.trim())) throw new Error(shapeError);
+  const models: ModelEntry[] = [];
+  const seen = new Set<string>();
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.trim().match(/^(\S+)\s+-\s+(.+)$/);
+    if (!match) continue;
+    const id = pickId(match[1]);
+    const displayName = match[2].trim().slice(0, 200);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    models.push({ provider: 'cursor', id, source: 'native', ...(displayName ? { displayName } : {}) });
+    if (models.length >= MODEL_LIST_MAX) break;
+  }
+  if (!models.length) throw new Error(shapeError);
+  return models;
+}
+
+export function claudeCodeModels(): ModelEntry[] {
+  return CLAUDE_CODE_ALIASES.map(item => ({
+    provider: 'claude-code' as const,
+    id: item.id,
+    displayName: item.displayName,
+    aliases: [item.id],
+    source: 'alias' as const,
+  }));
+}
+
+export function probeWithTimeout(timeoutMs: number): Probe {
+  return (executable, args) => new Promise(resolve => {
+    const command = commandLine(executable, args);
+    execFile(command.file, command.args, {
+      timeout: timeoutMs,
+      windowsHide: true,
+      windowsVerbatimArguments: command.verbatim,
+      maxBuffer: 2 * 1024 * 1024,
+      env: cleanEnv(process.env),
+    }, (error, stdout, stderr) => {
+      resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, stdout: String(stdout), stderr: String(stderr) });
+    });
+  });
+}
+
+async function readJson(url: string, headers: Record<string, string>, options: { fetch: typeof fetch; timeoutMs: number }): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await options.fetch(url, { headers, signal: AbortSignal.timeout(options.timeoutMs) });
+  } catch (error) {
+    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) throw new Error(timeoutError);
+    throw new Error(httpError(0));
+  }
+  const type = response.headers.get('content-type') ?? '';
+  if (type.includes('text/html')) throw new Error(shapeError);
+  if (!response.ok) throw new Error(httpError(response.status));
+  try {
+    return await response.json();
+  } catch {
+    throw new Error(shapeError);
+  }
+}
+
+function apiName(provider: ApiProvider) {
+  return provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'Grok (xAI)';
+}
+
+async function fetchOpenAI(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const key = await options.readKey('openai');
+  if (!key) return withCatalogHint('openai', [], 'native', missingKey(apiName('openai')));
+  const base = options.endpoints?.openai ?? MODEL_LIST_ENDPOINTS.openai;
+  const payload = await readJson(`${base}/models`, { Authorization: `Bearer ${key}` }, { fetch: options.fetch ?? fetch, timeoutMs: options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS });
+  return withCatalogHint('openai', parseOpenAIModels(payload), 'native');
+}
+
+async function fetchAnthropic(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const key = await options.readKey('anthropic');
+  if (!key) return withCatalogHint('anthropic', [], 'native', missingKey(apiName('anthropic')));
+  const base = options.endpoints?.anthropic ?? MODEL_LIST_ENDPOINTS.anthropic;
+  const http = options.fetch ?? fetch;
+  const timeoutMs = options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS;
+  const headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01' };
+  const models: ModelEntry[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < 20 && models.length < MODEL_LIST_MAX; page++) {
+    const url = new URL(`${base}/models`);
+    url.searchParams.set('limit', '1000');
+    if (after) url.searchParams.set('after_id', after);
+    const parsed = parseAnthropicModels(await readJson(url.toString(), headers, { fetch: http, timeoutMs }));
+    models.push(...parsed.models);
+    if (!parsed.hasMore || !parsed.after) break;
+    after = parsed.after;
+  }
+  return withCatalogHint('anthropic', models, 'native');
+}
+
+async function fetchXai(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const key = await options.readKey('xai');
+  if (!key) return withCatalogHint('xai', [], 'native', missingKey(apiName('xai')));
+  const base = options.endpoints?.xai ?? MODEL_LIST_ENDPOINTS.xai;
+  const payload = await readJson(`${base}/language-models`, { Authorization: `Bearer ${key}` }, { fetch: options.fetch ?? fetch, timeoutMs: options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS });
+  return withCatalogHint('xai', parseXaiLanguageModels(payload), 'native');
+}
+
+function harnessOf(list: HarnessInfo[], id: 'claude-code' | 'codex' | 'cursor') {
+  return list.find(item => item.id === id);
+}
+
+async function fetchCodex(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const info = harnessOf(await options.harnesses(), 'codex');
+  const name = harnessNames.codex;
+  if (!info || info.auth === 'missing' || !info.executable) return withCatalogHint('codex', [], 'native', missingHarness(name));
+  if (info.auth !== 'logged_in') return withCatalogHint('codex', [], 'native', signedOut(name));
+  const probe = options.probe ?? probeWithTimeout(options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS);
+  const remote = await probe(info.executable, ['debug', 'models']);
+  try {
+    return withCatalogHint('codex', parseCodexModels(`${remote.stdout}${remote.stderr}`), 'native');
+  } catch {
+    const bundled = await probe(info.executable, ['debug', 'models', '--bundled']);
+    return withCatalogHint('codex', parseCodexModels(`${bundled.stdout}${bundled.stderr}`), 'native');
+  }
+}
+
+async function fetchCursor(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const info = harnessOf(await options.harnesses(), 'cursor');
+  const name = harnessNames.cursor;
+  if (!info || info.auth === 'missing' || !info.executable) return withCatalogHint('cursor', [], 'native', missingHarness(name));
+  if (info.auth !== 'logged_in') return withCatalogHint('cursor', [], 'native', signedOut(name));
+  const probe = options.probe ?? probeWithTimeout(options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS);
+  const result = await probe(info.executable, ['--list-models']);
+  return withCatalogHint('cursor', parseCursorModels(`${result.stdout}${result.stderr}`), 'native');
+}
+
+export async function fetchProviderList(provider: ModelListProvider, options: ModelListFetchOptions): Promise<ModelListRow> {
+  const fetchedAt = options.now().toISOString();
+  if (provider === 'openai') return { fetchedAt, ...await fetchOpenAI(options) };
+  if (provider === 'anthropic') return { fetchedAt, ...await fetchAnthropic(options) };
+  if (provider === 'xai') return { fetchedAt, ...await fetchXai(options) };
+  if (provider === 'claude-code') return { fetchedAt, ...withCatalogHint('claude-code', claudeCodeModels(), 'alias') };
+  if (provider === 'codex') return { fetchedAt, ...await fetchCodex(options) };
+  return { fetchedAt, ...await fetchCursor(options) };
+}

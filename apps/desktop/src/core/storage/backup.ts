@@ -165,6 +165,7 @@ function snapshot(store: Store): Payload {
     workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs: store.all('runs'), events: store.all('events'), artifacts: store.all('artifacts'), sources: store.all('sources'), profiles: store.all('profiles'), preflights: store.all('preflights'),
     revisions: store.db.prepare('SELECT * FROM revisions ORDER BY rowid').all().map(row => ({ ...row, data: JSON.parse(String(row.data)) })),
     reservations: store.db.prepare('SELECT * FROM reservations ORDER BY rowid').all(), ledger: store.db.prepare('SELECT * FROM ledger ORDER BY rowid').all(),
+    // Keys, reviewedSkills and modelLists stay on this machine; they are derived from local credentials/CLIs.
     settings: { theme: store.setting('theme', 'system'), connectionLimitMicros: store.setting('connectionLimitMicros', 5_000_000) },
   });
 }
