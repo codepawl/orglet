@@ -23,7 +23,7 @@ export function DialogTabs<T extends string>({ label, tabs, value, onChange, pan
  * Centred editor with the Settings layout: tabs on the left, the current section on the right and Save/Cancel pinned
  * at the bottom so they stay reachable whichever section is open.
  */
-export function TabbedFormDialog<T extends string>({ open, onClose, title, tabs, tab, onTab, panelId, onSubmit, submitLabel, busy, actions, description, children }: { open: boolean; onClose: () => void; title: string; tabs: DialogTab<T>[]; tab: T; onTab: (tab: T) => void; panelId: string; onSubmit: () => void; submitLabel: string; busy: boolean; actions?: ReactNode; description?: ReactNode; children: ReactNode }) {
+export function TabbedFormDialog<T extends string>({ open, onClose, title, tabs, tab, onTab, panelId, onSubmit, submitLabel, busy, actions, description, error, children }: { open: boolean; onClose: () => void; title: string; tabs: DialogTab<T>[]; tab: T; onTab: (tab: T) => void; panelId: string; onSubmit: () => void; submitLabel: string; busy: boolean; actions?: ReactNode; description?: ReactNode; error?: string; children: ReactNode }) {
   const current = tabs.find(item => item.id === tab);
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
@@ -40,6 +40,7 @@ export function TabbedFormDialog<T extends string>({ open, onClose, title, tabs,
             </section>
           </div>
           <div className="dialog-footer">
+            {error ? <p className="form-error" role="alert">{error}</p> : <span className="dialog-footer-spacer" />}
             <Dialog.Close asChild><Button type="button" variant="outline" disabled={busy}>{t('Hủy')}</Button></Dialog.Close>
             <Button type="submit" variant="primary" disabled={busy}>{busy ? t('Đang lưu…') : submitLabel}</Button>
           </div>

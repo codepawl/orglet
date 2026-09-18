@@ -18,7 +18,7 @@ export class Credentials {
   }
   async save(provider: ApiProvider, key: string) {
     if (!safeStorage.isEncryptionAvailable() || (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')) throw new Error('OS credential storage không khả dụng.');
-    if (!keyPattern[provider].test(key)) throw new Error('Tệp cần chứa một API key hợp lệ, không có nội dung khác.');
+    if (!keyPattern[provider].test(key)) throw new Error('API key không hợp lệ.');
     await writeFile(this.path(provider), safeStorage.encryptString(key), { mode: 0o600 });
   }
   async remove(provider: ApiProvider) { await unlink(this.path(provider)).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; }); }

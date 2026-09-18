@@ -1,10 +1,13 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CornerDownLeft, MessageSquare, Search, Users, X } from 'lucide-react';
+import { CornerDownLeft, Search, Users, X } from 'lucide-react';
 import type { Task, Team } from '../../shared/contracts';
 import { Button } from './ui';
 import { t } from '../i18n';
 import { currentLocale } from '../i18n';
+import { StatusMark, taskStatusMark } from './StatusMark';
+import { statusLabel } from './TaskThread';
+import { taskResultSeen } from '../../shared/task-seen';
 
 /** Vietnamese relative day labels like the reference palette; older items fall back to a short date. */
 export function relativeDay(iso: string, now = new Date()) {
@@ -51,8 +54,9 @@ export function SearchDialog({ open, onClose, tasks, teams, onOpenTask }: { open
         <ul className="search-results" id="search-results" role="listbox" aria-label={t('Kết quả')} ref={list}>
           {results.map((task, index) => {
             const team = task.teamId ? teams.find(item => item.id === task.teamId)?.name ?? task.teamSnapshot?.name : undefined;
+            const mark = taskStatusMark(task.status, taskResultSeen(task));
             return <li key={task.id} id={`search-result-${task.id}`} data-index={index} role="option" aria-selected={index === active} className="search-result" onMouseMove={() => setActive(index)} onClick={() => choose(index)}>
-              {team ? <Users size={17} aria-hidden="true" /> : <MessageSquare size={17} aria-hidden="true" />}
+              {team ? <Users size={17} aria-hidden="true" /> : <StatusMark variant={mark.variant} tone={mark.tone} label={statusLabel[task.status]} />}
               <span className="search-result-title">{task.brief}{team && <span className="search-result-team"> · {team}</span>}</span>
               {index === active ? <CornerDownLeft size={16} className="search-result-enter" aria-hidden="true" /> : <time className="search-result-time" dateTime={task.createdAt}>{relativeDay(task.createdAt)}</time>}
             </li>;

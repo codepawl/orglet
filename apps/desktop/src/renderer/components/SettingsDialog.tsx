@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Unplug, Download, ArchiveRestore } from 'lucide-react';
-import type { Connections, ProviderScope, Workspace } from '../../shared/contracts';
+import { Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore } from 'lucide-react';
+import type { ApiProvider, Connections, ProviderScope, Workspace } from '../../shared/contracts';
 import type { HarnessInfo } from '../../shared/harness';
 import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
@@ -9,11 +9,15 @@ import { CurrencyFlag } from './CurrencyFlag';
 import { formatMoney, moneySymbol, toAmount, toMicros } from './money';
 import { currencies, CurrencyCode, usdCurrency } from '../../shared/currency';
 import { ProviderMark } from './ProviderMark';
+import { StatusMark } from './StatusMark';
 import { toast } from './toast';
 import { Switch } from './Switch';
 import { t } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
+
+/** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
+const SAVED_KEY_MASK = '••••••••••••••••';
 
 export type SettingsTab = 'general' | 'chat' | 'connections' | 'harness' | 'usage' | 'data';
 // Six short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming).
@@ -27,7 +31,7 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
 ];
 // Section notes sit under the section title.
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
-  connections: 'Nhập key từ tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu.',
+  connections: 'Bật provider cần dùng rồi dán key hoặc chọn tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu.',
   harness: 'Orglet dùng tài khoản bạn đã đăng nhập trong từng công cụ. Chọn harness ở mục Model khi thiết lập nhân viên.',
   usage: 'Chỉ tính request qua Orglet, không phải tổng hóa đơn API key. Harness trên máy dùng gói của chính nó nên không nằm trong các số này. Input cached được tính theo giá thường.',
 };
@@ -44,11 +48,16 @@ type Props = { open: boolean; tab: SettingsTab; onTab: (tab: SettingsTab) => voi
 
 export function SettingsDialog({ open, tab, onTab, onClose, workspace, connections, onConnections, harnesses, onHarnesses }: Props) {
   const [busy, setBusy] = useState(false);
+  const [keyDrafts, setKeyDrafts] = useState<Partial<Record<ApiProvider, string>>>({});
+  /** Providers the user opened for editing before a key is saved. Saved connections stay “on” from `connections`. */
+  const [editing, setEditing] = useState<Partial<Record<ApiProvider, boolean>>>({});
+  /** Cleared mask so the user can type a replacement without ever reading the real key back. */
+  const [replacing, setReplacing] = useState<Partial<Record<ApiProvider, boolean>>>({});
   const currency = workspace.currency ?? usdCurrency;
   const [limit, setLimit] = useState(toAmount(workspace.connectionLimitMicros));
   const [limitError, setLimitError] = useState('');
   const savedLimit = useRef(workspace.connectionLimitMicros);
-  useEffect(() => { if (!open) { setLimitError(''); setLimit(toAmount(workspace.connectionLimitMicros)); } }, [open, workspace.connectionLimitMicros, currency.code, currency.rate]);
+  useEffect(() => { if (!open) { setLimitError(''); setLimit(toAmount(workspace.connectionLimitMicros)); setKeyDrafts({}); setEditing({}); setReplacing({}); } }, [open, workspace.connectionLimitMicros, currency.code, currency.rate]);
 
   const act = async (action: () => Promise<string | void>) => {
     setBusy(true);
@@ -120,15 +129,59 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             {tab === 'connections' && <>
               {(['openai', 'anthropic', 'xai'] as const).map(provider => {
                 const name = provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'Grok (xAI)';
-                return <div key={provider} role="region" aria-label={t('Kết nối {0}', [name])} className="setting-row">
+                const draft = keyDrafts[provider] ?? '';
+                const active = connections[provider] || !!editing[provider];
+                const showMask = !!connections[provider] && !draft && !replacing[provider];
+                const titleId = `${provider}-connection-title`;
+                return <div key={provider} role="region" aria-label={t('Kết nối {0}', [name])} className={`setting-row setting-connection${active ? '' : ' inactive'}`}>
                   <ProviderMark provider={provider} />
                   <div className="setting-text">
-                    <span className="setting-title">{name} API</span>
-                    <span className="setting-description">{connections[provider] ? t('Đã lưu API key') : t('Chưa có API key')} · <button type="button" className="text-link" onClick={() => void act(async () => { await orglet.openPricing(provider); })}>{t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
+                    <span id={titleId} className="setting-title">{name} API</span>
+                    <span className="setting-description">{active
+                      ? (connections[provider] ? t('Đã lưu API key') : t('Nhập key để kích hoạt'))
+                      : t('Tắt · bật công tắc để nhập key')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); })}>{t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
+                    {active && <form className="setting-key-form" onSubmit={event => {
+                      event.preventDefault();
+                      const key = draft.trim();
+                      if (!key || key === SAVED_KEY_MASK) return;
+                      void act(async () => {
+                        onConnections(await orglet.connect(provider, key));
+                        setKeyDrafts(current => ({ ...current, [provider]: '' }));
+                        setEditing(current => ({ ...current, [provider]: false }));
+                        setReplacing(current => ({ ...current, [provider]: false }));
+                        return t('Đã lưu API key {0}.', [name]);
+                      });
+                    }}>
+                      <Button type="button" size="icon" variant="ghost" className="setting-key-file" disabled={busy} aria-label={t('Từ tệp')} onClick={() => void act(async () => {
+                        const next = await orglet.connect(provider);
+                        onConnections(next);
+                        if (next[provider]) {
+                          setKeyDrafts(current => ({ ...current, [provider]: '' }));
+                          setEditing(current => ({ ...current, [provider]: false }));
+                          setReplacing(current => ({ ...current, [provider]: false }));
+                          return t('Đã lưu API key {0}.', [name]);
+                        }
+                      })}><FileKey size={15} /></Button>
+                      <input type="password" name={`${provider}-api-key`} autoComplete="off" spellCheck={false} disabled={busy} value={showMask ? SAVED_KEY_MASK : draft} placeholder={connections[provider] ? t('Nhập key mới để thay') : t('Dán hoặc nhập API key')} aria-label={t('API key {0}', [name])} onFocus={() => { if (connections[provider] && !draft) setReplacing(current => ({ ...current, [provider]: true })); }} onBlur={() => { if (!draft) setReplacing(current => ({ ...current, [provider]: false })); }} onChange={event => setKeyDrafts(current => ({ ...current, [provider]: event.target.value }))} />
+                      <Button type="submit" variant="outline" disabled={busy || !draft.trim()}>{t('Lưu key')}</Button>
+                    </form>}
                   </div>
                   <div className="setting-control">
-                    {connections[provider] && <Button disabled={busy} onClick={() => void act(async () => { onConnections(await orglet.disconnect(provider)); return t('Đã ngắt {0}.', [name]); })}><Unplug size={14} />{t('Ngắt kết nối')}</Button>}
-                    <Button variant="outline" disabled={busy} onClick={() => void act(async () => { onConnections(await orglet.connect(provider)); })}><FileKey size={14} />{connections[provider] ? 'Thay key' : t('Nhập API key từ tệp')}</Button>
+                    <Switch checked={active} disabled={busy} labelledBy={titleId} onChange={on => {
+                      if (on) {
+                        setEditing(current => ({ ...current, [provider]: true }));
+                        return;
+                      }
+                      setKeyDrafts(current => ({ ...current, [provider]: '' }));
+                      setEditing(current => ({ ...current, [provider]: false }));
+                      setReplacing(current => ({ ...current, [provider]: false }));
+                      if (connections[provider]) {
+                        void act(async () => {
+                          onConnections(await orglet.disconnect(provider));
+                          return t('Đã ngắt {0}.', [name]);
+                        });
+                      }
+                    }} />
                   </div>
                 </div>;
               })}
@@ -144,7 +197,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                     {item.auth !== 'logged_in' && <code className="setting-command">{item.authDetail}</code>}
                     <span className="setting-path" title={item.executable}>{item.executable}</span>
                   </div>
-                  <div className="setting-control"><span className={`status-pill ${item.auth}`}>{item.auth === 'logged_in' ? t('Đã đăng nhập') : item.auth === 'logged_out' ? t('Chưa đăng nhập') : t('Chưa rõ')}</span></div>
+                  <div className="setting-control"><span className={`status-pill ${item.auth}`}><StatusMark variant={item.auth === 'logged_in' ? 'filled' : item.auth === 'logged_out' ? 'empty' : 'dashed'} tone={item.auth === 'logged_in' ? 'success' : item.auth === 'logged_out' ? 'error' : 'muted'} label={item.auth === 'logged_in' ? t('Đã đăng nhập') : item.auth === 'logged_out' ? t('Chưa đăng nhập') : t('Chưa rõ')} />{item.auth === 'logged_in' ? t('Đã đăng nhập') : item.auth === 'logged_out' ? t('Chưa đăng nhập') : t('Chưa rõ')}</span></div>
                 </div>)}
                 {!harnesses.length && <Row title={t('Chưa tìm thấy Claude Code, Codex hoặc Cursor Agent trên máy này.')} description={t('Cài một harness rồi bấm Dò lại.')} />}
               </div>

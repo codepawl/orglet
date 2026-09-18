@@ -98,7 +98,7 @@ export type Skill = z.infer<typeof SkillInput> & { id: string; revision: number;
 export type Source = { id: string; name: string; bytes: number; hash: string; revoked: boolean; format?: DataFormat };
 export type FolderIntake = { sources: Source[]; skipped: { name: string; reason: string }[] };
 export type TaskStatus = 'queued' | 'running' | 'pausing' | 'paused' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted' | 'waiting_budget' | 'waiting_input';
-export type Task = { id: string; brief: string; title?: string; workerId: string; teamId?: string; teamSnapshot?: Team; assignees?: 'all' | string[]; archivedAt?: string; deletedAt?: string; status: TaskStatus; createdAt: string; budgetMicros: number; sourceIds: string[]; excludedSources?: FolderIntake['skipped']; consent: boolean; providerScopes?: ProviderScope[]; accepted: boolean; routineId?: string; pauseReason?: 'shift'; handoff?: Handoff; evidenceRequests?: EvidenceRequest[]; inputRevision?: number; currentInput?: RunInput };
+export type Task = { id: string; brief: string; title?: string; workerId: string; teamId?: string; teamSnapshot?: Team; assignees?: 'all' | string[]; archivedAt?: string; deletedAt?: string; status: TaskStatus; createdAt: string; budgetMicros: number; sourceIds: string[]; excludedSources?: FolderIntake['skipped']; consent: boolean; providerScopes?: ProviderScope[]; accepted: boolean; /** Stamp of the result the user last opened; unread when it differs from `taskResultStamp`. */ seenStamp?: string; /** Latest saved answer/report id, part of the result stamp. */ lastArtifactId?: string; /** When the user last opened this task. */ seenAt?: string; routineId?: string; pauseReason?: 'shift'; handoff?: Handoff; evidenceRequests?: EvidenceRequest[]; inputRevision?: number; currentInput?: RunInput };
 export type Run = { id: string; taskId: string; stage?: 'member' | 'synthesis' | 'group'; status: TaskStatus; snapshot: { worker: Worker; skill: Skill; team?: Team; input?: RunInput; context?: RunContext; inputRevision?: number; upstreamArtifactIds?: string[]; preflightId?: string; model?: string; pricingVersion?: string }; startedAt: string; error: string | null };
 export type Activity = { id: string; runId: string; sequence?: number; message: string; createdAt: string };
 export type Artifact = { id: string; runId: string; report: Report; hash: string; createdAt: string };
@@ -132,6 +132,7 @@ export const commands = {
   auditRunLog: RunAuditArgs.extend({ taskId: Id }),
   cancelCheckers: z.object({ id: Id }),
   accept: z.object({ id: Id }),
+  markTaskSeen: z.object({ id: Id }),
   acknowledgeEvidence: z.object({ taskId: Id, requestId: Id }),
   saveKnowledge: KnowledgeInput,
   reviewKnowledge: z.object({ id: Id, revision: z.number().int().positive(), decision: z.enum(['approve', 'archive']) }).strict(),
@@ -155,13 +156,14 @@ export const commands = {
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; profileSources: DatasetProfile; cancelCheckers: void; accept: void; settings: void };
+export type Results = { renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;
   pickSources(): Promise<Source[]>;
   pickFolder(): Promise<FolderIntake>;
-  connect(provider: ApiProvider): Promise<Connections>;
+  /** Save an API key from typed input, or omit `key` to pick a .txt file. The key never comes back to the renderer. */
+  connect(provider: ApiProvider, key?: string): Promise<Connections>;
   disconnect(provider: ApiProvider): Promise<Connections>;
   connections(): Promise<Connections>;
   exportArtifact(id: string, format?: TextFormat): Promise<boolean>;

@@ -119,6 +119,12 @@ export class Store {
     const sequence = Number(this.db.prepare('SELECT COUNT(*)+1 AS sequence FROM events WHERE run_id=?').get(runId)!.sequence);
     this.put('events', { id: id(), runId, sequence, message, createdAt: now() } as Activity, { column: 'run_id', value: runId });
   }
+  /** Read-merge-write so concurrent fields like seenStamp are not dropped by a stale copy. */
+  patchTask(taskId: string, patch: Partial<Task>) {
+    const task = this.get<Task>('tasks', taskId);
+    this.update('tasks', { ...task, ...patch });
+    return this.get<Task>('tasks', taskId);
+  }
   status(taskId: string, runId: string, status: TaskStatus, error: string | null = null) {
     this.transaction(() => {
       this.put('tasks', { ...this.get<Task>('tasks', taskId), status });

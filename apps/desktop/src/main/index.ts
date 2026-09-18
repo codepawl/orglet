@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
 import { en, enGB } from '../shared/locales/en';
-import { commands, Id, type Reply, type Command, TextFormat } from '../shared/contracts';
+import { commands, Id, ApiProvider, type Reply, type Command, TextFormat } from '../shared/contracts';
 import { markdownToPlain } from '../shared/plainText';
 import { Credentials } from './credentials';
 import { readBoundedText, writeAtomicText } from './files';
@@ -123,7 +123,11 @@ async function start() {
     return result.canceled ? { sources: [], skipped: [] } : request('importFolder', result.filePaths[0]);
   });
   handle('orglet:connect', async raw => {
-    const provider = z.enum(['openai', 'anthropic', 'xai']).parse(raw);
+    const body = z.object({ provider: ApiProvider, key: z.string().min(1).max(500).optional() }).strict().parse(raw);
+    if (body.key !== undefined) {
+      await credentials.save(body.provider, body.key.trim());
+      return credentials.status();
+    }
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn tệp .txt chỉ chứa API key — key được mã hóa bằng Windows'), properties: ['openFile'], filters: [{ name: 'API key text', extensions: ['txt'] }] });
     if (!result.canceled) {
       const file = await open(result.filePaths[0], 'r');
@@ -131,13 +135,13 @@ async function start() {
         if (!(await file.stat()).isFile() || (await file.stat()).size > 1024) throw new Error('Tệp API key không hợp lệ.');
         const buffer = Buffer.alloc(1025); const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
         if (bytesRead > 1024) throw new Error('Tệp API key quá lớn.');
-        await credentials.save(provider, buffer.subarray(0, bytesRead).toString('utf8').trim());
+        await credentials.save(body.provider, buffer.subarray(0, bytesRead).toString('utf8').trim());
         buffer.fill(0);
       } finally { await file.close(); }
     }
     return credentials.status();
   });
-  handle('orglet:disconnect', async raw => { await credentials.remove(z.enum(['openai', 'anthropic', 'xai']).parse(raw)); return credentials.status(); });
+  handle('orglet:disconnect', async raw => { await credentials.remove(ApiProvider.parse(raw)); return credentials.status(); });
   handle('orglet:backup', async () => {
     const result = await dialog.showSaveDialog(window, { title: tr('Lưu bản sao lưu'), defaultPath: 'orglet-backup.json', filters: [{ name: 'Orglet backup', extensions: ['json'] }] });
     if (result.canceled || !result.filePath) return false;

@@ -31,6 +31,28 @@ it('stores task names separately from the task, so a run updating the task keeps
   await expect(core.command('renameTask', { id: crypto.randomUUID(), title: 'Missing' })).rejects.toThrow();
 });
 
+it('keeps a finished task marked seen after leaving it, and unread again after a new result', async () => {
+  await core.command('createTemplate', { templateId: 'research-review', provider: 'demo' });
+  const { workers } = await workspace();
+  const id = await core.command('createTask', { workerId: workers[0].id, brief: 'Đánh dấu đã đọc', sourceIds: [], consent: false, budgetMicros: 1000 }) as string;
+  const artifactId = crypto.randomUUID();
+  store.put('tasks', { ...store.get<Task>('tasks', id), status: 'completed', lastArtifactId: artifactId });
+  expect((await workspace()).tasks.find(task => task.id === id)?.seenStamp).toBeUndefined();
+
+  await core.command('markTaskSeen', { id });
+  expect((await workspace()).tasks.find(task => task.id === id)?.seenStamp).toBe(`0:${artifactId}`);
+
+  const other = await core.command('createTask', { workerId: workers[0].id, brief: 'Công việc khác', sourceIds: [], consent: false, budgetMicros: 1000 }) as string;
+  await core.command('task', { id: other });
+  expect((await workspace()).tasks.find(task => task.id === id)?.seenStamp).toBe(`0:${artifactId}`);
+
+  const nextArtifact = crypto.randomUUID();
+  store.put('tasks', { ...store.get<Task>('tasks', id), status: 'completed', lastArtifactId: nextArtifact });
+  expect((await workspace()).tasks.find(task => task.id === id)?.seenStamp).toBe(`0:${artifactId}`);
+  await core.command('markTaskSeen', { id });
+  expect((await workspace()).tasks.find(task => task.id === id)?.seenStamp).toBe(`0:${nextArtifact}`);
+});
+
 it('keeps the colours made in the avatar picker and rejects anything but lowercase hex', async () => {
   expect((await workspace()).avatarColors).toEqual([]);
   await core.command('saveAvatarColors', { colors: ['#1f6feb', '#00a86b'] });

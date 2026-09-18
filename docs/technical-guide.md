@@ -19,8 +19,8 @@ To try the interface without a model connection, keep the Researcher worker on *
 
 ## Connect a provider
 
-1. Save an OpenAI, Anthropic or xAI (Grok) API key in a local `.txt` file containing only the key.
-2. In **Cài đặt**, choose **Nhập API key từ tệp** under the matching provider. The main process encrypts the key using Windows DPAPI. It never sends the key to the renderer. The original file remains where you saved it; remove it yourself when it is no longer needed.
+1. In **Cài đặt → Kết nối API**, turn on the provider you need. Paste the key and choose **Lưu key**, or choose **Từ tệp**. Turn the switch off to disconnect and hide the fields.
+2. The main process encrypts the key with Windows DPAPI. The renderer never receives the saved key back (typed drafts are cleared after a successful save). The original `.txt`, if you used one, remains where you saved it; remove it yourself when it is no longer needed.
 3. Edit Researcher, choose **OpenAI · GPT-4.1 mini**, **Anthropic · Claude Haiku 4.5** or **Grok · grok-3-mini**, and save.
 4. Select UTF-8 text files, describe the task, set a task budget and allow the selected content to be sent to the providers listed for that task.
 5. Send the task. Open **Chi tiết** for activity or source references. Accepting a report only updates its status in Orglet.

@@ -10,6 +10,7 @@ import { t } from '../i18n';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Checkbox } from './Checkbox';
+import { StatusMark } from './StatusMark';
 
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
 /** Which screen of the Routines dialog is showing; the dialog title renders it as a breadcrumb. */
@@ -25,7 +26,7 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
       {workspace.routines.map(item => <section key={item.id} className="routine-card" aria-label={t('Lịch {0}', [item.name])}>
         <div className="routine-head">
           <span className="routine-icon" aria-hidden="true"><CalendarClock size={18} /></span>
-          <div className="routine-title"><h3>{item.name}</h3><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}>{item.enabled ? t('Đang bật') : t('Đã tắt')}</span></div>
+          <div className="routine-title"><h3>{item.name}</h3><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}><StatusMark variant={item.enabled ? 'filled' : 'empty'} tone={item.enabled ? 'success' : 'muted'} label={item.enabled ? t('Đang bật') : t('Đã tắt')} />{item.enabled ? t('Đang bật') : t('Đã tắt')}</span></div>
           <div className="routine-actions">
             <Button size="icon" aria-label={t('Sửa lịch {0}', [item.name])} title={t('Sửa lịch')} disabled={busy} onClick={() => onView({ editing: true, routine: item })}><Pencil size={16} /></Button>
             {item.enabled && <Button size="icon" aria-label={t('Tắt lịch')} title={t('Tắt lịch')} disabled={busy} onClick={() => void action(() => orglet.call('saveRoutine', { id: item.id, name: item.name, enabled: false, schedule: item.schedule, task: item.task }))}><Power size={16} /></Button>}
@@ -115,9 +116,9 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as typeof frequency); setApproved(false); }} options={[{ value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> }, { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> }]} />
         {frequency === 'weekly' && <Select label={<FieldLabel icon={CalendarDays} required>{t('Ngày trong tuần')}</FieldLabel>} value={String(weekday)} onChange={value => { setWeekday(Number(value)); setApproved(false); }} options={weekdays.map((day, index) => ({ value: String(index), label: day }))} />}
         <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>
-        <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError} aria-describedby={zoneError ? 'routine-zone-error' : undefined} /></label>
+        <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError || undefined} aria-describedby={zoneError ? 'routine-zone-error' : undefined} data-flash={zoneError ? 1 : undefined} /></label>
       </div>
-      {zoneError && <p id="routine-zone-error" role="alert" className="error">{error}</p>}
+      {zoneError && <span className="visually-hidden" id="routine-zone-error">{error}</span>}
       <p className="muted">{t('App tắt hoặc máy ngủ thì không chạy. Giờ bị bỏ qua do đổi giờ mùa hè không được chạy bù; giờ lặp chỉ chạy một lần.')}</p>
     </section>
 
@@ -125,11 +126,10 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       <h4 id="routine-group-limits">{t('Giới hạn & quyền')}</h4>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} required /></label>
       <Checkbox checked={enabled} onChange={event => setEnabled(event.target.checked)}>{t('Bật lịch')}</Checkbox>
-      {enabled && <Checkbox ref={approvalInput} checked={approved} aria-invalid={approvalError} aria-describedby={approvalError ? 'routine-approval-error' : undefined} onChange={event => { setApproved(event.target.checked); if (approvalError) setError(''); }} labelProps={{ onChange: event => event.stopPropagation() }}>{t('Cho phép tự chạy brief và {0} nguồn này với cấu hình hiện tại{1}, trong giới hạn đã đặt.', [sources.length, providers.length ? t(', gửi dữ liệu đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t(' ở chế độ Demo')])}</Checkbox>}
-      {approvalError && <p id="routine-approval-error" role="alert" className="error">{error}</p>}
+      {enabled && <Checkbox ref={approvalInput} checked={approved} aria-invalid={approvalError} aria-describedby={approvalError ? 'routine-approval-error' : undefined} data-flash={approvalError ? 1 : undefined} onChange={event => { setApproved(event.target.checked); if (approvalError) setError(''); }} labelProps={{ onChange: event => event.stopPropagation() }}>{t('Cho phép tự chạy brief và {0} nguồn này với cấu hình hiện tại{1}, trong giới hạn đã đặt.', [sources.length, providers.length ? t(', gửi dữ liệu đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t(' ở chế độ Demo')])}</Checkbox>}
+      {approvalError && <span className="visually-hidden" id="routine-approval-error">{error}</span>}
       <p className="muted">{t('Đổi nhân viên, skill, nhóm hoặc model sẽ yêu cầu lưu lại quyền chạy. Tắt lịch không hủy task đang chạy.')}</p>
     </section>
-    {error && !zoneError && !approvalError && <p role="alert" className="error">{error}</p>}
-    <div className="sticky-actions"><Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
+    <div className="sticky-actions">{error ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
   </form>;
 }

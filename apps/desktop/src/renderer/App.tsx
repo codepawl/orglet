@@ -1,8 +1,8 @@
 import { RevisionEditor } from './components/RevisionEditor';
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronRight, SquarePen, BookOpen, Download, FileText, PanelLeft, Pencil, Plus, Search, Settings2, SlidersHorizontal, Sparkles, CalendarClock, X, Archive, Trash2 } from 'lucide-react';
-import type { Connections, Skill, Source, TaskDetail, Worker, Workspace, Team, TaskInput } from '../shared/contracts';
+import { ArrowLeft, ChevronRight, SquarePen, BookOpen, Download, FileText, PanelLeft, Pencil, Plus, Search, Settings2, SlidersHorizontal, Sparkles, CalendarClock, Wallet, X, Archive, Trash2 } from 'lucide-react';
+import type { Connections, Skill, Source, Task, TaskDetail, Worker, Workspace, Team, TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
 import { WorkerDialog } from './components/WorkerDialog';
@@ -21,18 +21,32 @@ import { Composer, FollowUpComposer } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar } from './components/Avatar';
 import { ProviderMark } from './components/ProviderMark';
-import { ShowMore, SidebarTreeRow, TaskRow, useReorder } from './components/SidebarTree';
+import { ShowMore, SidebarTreeRow, TaskRow, useReorder, statusMarkLabel } from './components/SidebarTree';
 import { SearchDialog } from './components/SearchDialog';
+import { StatusMark, tasksStatusMark, rollupStatusMarks, type StatusMarkState } from './components/StatusMark';
+import { taskResultSeen } from '../shared/task-seen';
 import { RowMenu } from './components/RowMenu';
-import { setDisplayCurrency } from './components/money';
+import { Select } from './components/Select';
+import { setDisplayCurrency, formatMoney } from './components/money';
 import { Toaster, toast } from './components/toast';
 import { ContextManifestView, KnowledgeEditor, KnowledgeLibrary } from './components/KnowledgeLibrary';
 import type { Knowledge } from '../shared/knowledge';
 import type { HarnessInfo } from '../shared/harness';
+import { isHarness } from '../shared/harness';
 import { readiness, setupHint } from './components/providers';
+import { workerModelLabel } from './components/workerModel';
 import { t } from './i18n';
 import { currentLocale, setLanguage, tMessage, useLanguage } from './i18n';
 import { orglet } from './api';
+
+type SeenInfo = { seenStamp: string; lastArtifactId?: string };
+const seenStorageKey = 'orglet.task-seen-stamps';
+function readSeenStorage(): Record<string, SeenInfo> {
+  try { return JSON.parse(localStorage.getItem(seenStorageKey) || '{}') as Record<string, SeenInfo>; } catch { return {}; }
+}
+function writeSeenStorage(value: Record<string, SeenInfo>) {
+  try { localStorage.setItem(seenStorageKey, JSON.stringify(value)); } catch { /* ignore quota */ }
+}
 
 type Panel = 'task' | 'revision' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | 'sources' | null;
 export function App() {
@@ -62,6 +76,19 @@ export function App() {
   const openSettings = (tab: SettingsTab = 'general') => { setSettingsTab(tab); setPanel('settings'); };
   const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const composer = useRef<HTMLTextAreaElement>(null); const refreshId = useRef(0);
+  /** Stamps from core + localStorage; renderer HMR can update before the core utility process restarts. */
+  const seenInfo = useRef<Record<string, SeenInfo>>(readSeenStorage());
+  const rememberSeen = useCallback((id: string, info: SeenInfo) => {
+    seenInfo.current = { ...seenInfo.current, [id]: info };
+    writeSeenStorage(seenInfo.current);
+    // Patch the sidebar row immediately so leaving before refresh finishes keeps the grey mark.
+    setWorkspace(current => current ? {
+      ...current,
+      tasks: current.tasks.map(task => task.id === id
+        ? { ...task, seenStamp: info.seenStamp, ...(info.lastArtifactId ? { lastArtifactId: info.lastArtifactId } : {}) }
+        : task),
+    } : current);
+  }, []);
   // Refreshes started by older callbacks (an action finishing, a change event) must load the task shown now, not the
   // one selected when they were created; otherwise a late refresh replaces the open task with nothing.
   const selectedRef = useRef(selected); selectedRef.current = selected;
@@ -69,9 +96,23 @@ export function App() {
     const requestId = ++refreshId.current;
     const selected = selectedRef.current;
     try {
-      const [next, connectionState, taskDetail, detected] = await Promise.all([orglet.call('workspace', {}), orglet.connections(), selected ? orglet.call('task', { id: selected }) : Promise.resolve(undefined), orglet.call('harnesses', { refresh: false })]);
+      // Load the open task first so markTaskSeen lands in SQLite before workspace is read.
+      const taskDetail = selected ? await orglet.call('task', { id: selected }) : undefined;
+      const [next, connectionState, detected] = await Promise.all([orglet.call('workspace', {}), orglet.connections(), orglet.call('harnesses', { refresh: false })]);
       if (requestId !== refreshId.current) return;
-      setWorkspace(next); setConnections(connectionState); setHarnesses(detected); setDetail(taskDetail); setWorkerId(value => value || next.workers[0]?.id || '');
+      if (taskDetail?.task.seenStamp) {
+        seenInfo.current[taskDetail.task.id] = { seenStamp: taskDetail.task.seenStamp, lastArtifactId: taskDetail.task.lastArtifactId };
+      }
+      const tasks = next.tasks.map(task => {
+        const opened = taskDetail?.task.id === task.id ? taskDetail.task : undefined;
+        const cached = seenInfo.current[task.id];
+        const lastArtifactId = opened?.lastArtifactId ?? task.lastArtifactId ?? cached?.lastArtifactId;
+        const seenStamp = opened?.seenStamp ?? task.seenStamp ?? cached?.seenStamp;
+        if (seenStamp) seenInfo.current[task.id] = { seenStamp, lastArtifactId };
+        return { ...task, ...(lastArtifactId ? { lastArtifactId } : {}), ...(seenStamp ? { seenStamp } : {}) };
+      });
+      writeSeenStorage(seenInfo.current);
+      setWorkspace({ ...next, tasks }); setConnections(connectionState); setHarnesses(detected); setDetail(taskDetail); setWorkerId(value => value || next.workers[0]?.id || '');
     } catch (err) { if (requestId === refreshId.current) setError((err as Error).message); }
   }, []);
   useEffect(() => {
@@ -100,17 +141,34 @@ export function App() {
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
   }, [newTask]);
   // Re-opening the task already shown keeps its detail; clearing it would wait for a reload that never comes.
-  const openTask = (id: string) => { if (id !== selected) { setSelected(id); setDetail(undefined); } setError(''); if (matchMedia('(max-width: 780px)').matches) { setSidebar(false); setTimeout(() => document.getElementById('main-content')?.focus(), 0); } };
+  const openTask = (id: string) => {
+    if (id !== selected) { setSelected(id); setDetail(undefined); }
+    setError('');
+    // Apply the returned stamp even after leaving — waiting for selected refresh drops the grey mark.
+    void orglet.call('markTaskSeen', { id }).then((task: Task) => {
+      if (task.seenStamp) rememberSeen(task.id, { seenStamp: task.seenStamp, lastArtifactId: task.lastArtifactId });
+      if (selectedRef.current === id) void refresh();
+    }).catch(err => { if (selectedRef.current === id) setError((err as Error).message); });
+    if (matchMedia('(max-width: 780px)').matches) { setSidebar(false); setTimeout(() => document.getElementById('main-content')?.focus(), 0); }
+  };
   const action = (fn: () => Promise<unknown>) => { setError(''); void fn().then(() => refresh()).catch(err => setError((err as Error).message)); };
   const worker = workspace?.workers.find(item => item.id === workerId);
   const team = workspace?.teams.find(item => item.id === teamId);
   const executionWorkers = team ? workspace!.workers.filter(item => [...team.memberIds, team.synthesizerId].includes(item.id)) : worker ? [worker] : [];
   const nativeProviders = [...new Set(executionWorkers.map(item => item.provider).filter(provider => provider !== 'demo'))];
   const isDemo = nativeProviders.length === 0;
+  const paidProviders = nativeProviders.filter(provider => !isHarness(provider));
   const ready = readiness(connections, harnesses);
   const missingConnections = nativeProviders.filter(provider => !ready[provider]);
   // Choosing a model and attaching sources is the user's consent to send them; no separate permission step.
   const taskBudgetMicros = (team ?? worker)?.taskBudgetMicros ?? 500_000;
+  const unavailable = t('Chưa sẵn sàng');
+  const recipientReady = (providers: Worker['provider'][]) => providers.every(provider => provider === 'demo' || ready[provider as keyof typeof ready]);
+  const recipientValue = teamId ? `team:${teamId}` : workerId;
+  const pickRecipient = (value: string) => {
+    if (value.startsWith('team:')) { setTeamId(value.slice(5)); return; }
+    setWorkerId(value); setTeamId('');
+  };
   const send = async () => {
     if (!brief.trim() || busy || !worker) return;
     setBusy(true); setError('');
@@ -130,6 +188,31 @@ export function App() {
   const renamed = (fn: () => Promise<unknown>) => action(async () => { await fn(); toast(t('Đã đổi tên.')); });
   setDisplayCurrency(workspace?.currency);
   if (!workspace) return <div className="startup"><span className="orglet-mark">o</span><h1>Orglet</h1><p role={error ? 'alert' : 'status'}>{error || t('Đang mở workspace…')}</p>{error && window.orglet && <Button onClick={() => void refresh()}>{t('Thử lại')}</Button>}</div>;
+  const recipientOptions = [
+    ...workspace.workers.map(item => {
+      const available = recipientReady([item.provider]);
+      return {
+        value: item.id,
+        label: item.name,
+        detail: workerModelLabel(item.provider),
+        group: t('Nhân viên'),
+        icon: <Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />,
+        ...(available ? {} : { dimmed: true, badge: unavailable }),
+      };
+    }),
+    ...workspace.teams.map(item => {
+      const members = workspace.workers.filter(member => [...item.memberIds, item.synthesizerId].includes(member.id));
+      const available = recipientReady(members.map(member => member.provider));
+      return {
+        value: `team:${item.id}`,
+        label: item.name,
+        detail: t('{0} nhân viên', [members.length]),
+        group: t('Nhóm'),
+        icon: <Avatar name={item.name} seed={item.id} size="xs" />,
+        ...(available ? {} : { dimmed: true, badge: unavailable }),
+      };
+    }),
+  ];
   const archiveState = ({ archivedAt }: { archivedAt?: string }): ArchiveState | undefined => {
     if (!archivedAt || !workspace) return undefined;
     const retention = workspace.archiveRetentionDays;
@@ -142,7 +225,23 @@ export function App() {
   const deleteEntity = (kind: 'worker' | 'team', entityId: string) => action(async () => { await orglet.call('deleteEntity', { kind, id: entityId }); toast(t('Đã xóa.')); });
   const deleteTask = (taskId: string) => action(async () => { await orglet.call('deleteTask', { id: taskId }); if (selected === taskId) newTask(); toast(t('Đã xóa công việc.')); });
   const archiveTask = (taskId: string, archived: boolean) => action(async () => { await orglet.call('archiveTask', { id: taskId, archived }); toast(archived ? t('Đã lưu trữ công việc.') : t('Đã khôi phục công việc.')); });
-  const taskRow = (task: Workspace['tasks'][number], nested = false) => <TaskRow key={task.id} archive={nested ? undefined : archiveState(task)} onArchive={archived => archiveTask(task.id, archived)} onDelete={() => deleteTask(task.id)} title={task.title} brief={task.brief} nested={nested} active={selected === task.id} status={task.status} statusLabel={statusLabel[task.status]} askFirst={nested && workspace.confirmOpenTask} onOpen={dontAskAgain => nested ? openFromWorker(task.id, dontAskAgain) : openTask(task.id)} onRename={title => renamed(() => orglet.call('renameTask', { id: task.id, title }))} onEdit={() => { setEditingTask(task.id); setPanel('task'); }} />;
+  const activeTasks = workspace.tasks.filter(task => !task.archivedAt);
+  const taskSeen = (task: Workspace['tasks'][number]) => {
+    if (selected === task.id) return true;
+    const cached = seenInfo.current[task.id];
+    return taskResultSeen({
+      status: task.status,
+      inputRevision: task.inputRevision,
+      lastArtifactId: task.lastArtifactId ?? cached?.lastArtifactId,
+      seenStamp: task.seenStamp ?? cached?.seenStamp,
+    });
+  };
+  const workerStatus = (workerId: string): StatusMarkState => tasksStatusMark(activeTasks.filter(task => taskWorkers(task, workspace).some(worker => worker.id === workerId)).map(task => ({ status: task.status, seen: taskSeen(task) })));
+  const teamStatus = (team: Team): StatusMarkState => rollupStatusMarks([...new Set([...team.memberIds, team.synthesizerId])].map(workerStatus));
+  const taskRow = (task: Workspace['tasks'][number], nested = false) => <TaskRow key={task.id} archive={nested ? undefined : archiveState(task)} onArchive={archived => archiveTask(task.id, archived)} onDelete={() => deleteTask(task.id)} title={task.title} brief={task.brief} nested={nested} active={selected === task.id} status={task.status} statusLabel={statusLabel[task.status]} seen={taskSeen(task)} askFirst={nested && workspace.confirmOpenTask} onOpen={dontAskAgain => nested ? openFromWorker(task.id, dontAskAgain) : openTask(task.id)} onRename={title => renamed(() => orglet.call('renameTask', { id: task.id, title }))} onEdit={() => { setEditingTask(task.id); setPanel('task'); }} />;
+  const openTaskWorkers = detail ? taskWorkers(detail.task, workspace) : [];
+  const openTaskPaid = openTaskWorkers.some(item => item.provider !== 'demo' && !isHarness(item.provider));
+  const openTaskUsed = detail ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0;
   return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}`}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <aside className="sidebar" aria-label={t('Điều hướng')}>
@@ -151,14 +250,17 @@ export function App() {
       <div className="sidebar-scroll">
       
       <SidebarSection id="teams" title={t('Nhóm')} action={<Button size="icon" className="row-action" aria-label={t('Tạo nhóm')} onClick={() => { setEditingTeam(undefined); setPanel('team'); }}><Plus size={16} /></Button>}>
-        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} name={item.name} avatar={<Avatar name={item.name} seed={item.id} size="sm" />} active={teamId === item.id} onSelect={() => setTeamId(item.id)} reorder={teamOrder.bind(item.id)} expandLabel={t('Xem nhân viên của {0}', [item.name])}
+        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} name={item.name} avatar={<Avatar name={item.name} seed={item.id} size="sm" />} active={teamId === item.id} status={teamStatus(item)} onSelect={() => setTeamId(item.id)} reorder={teamOrder.bind(item.id)} expandLabel={t('Xem nhân viên của {0}', [item.name])}
           menu={<RowMenu label={t('Tùy chọn nhóm {0}', [item.name])} items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingTeam(item); setPanel('team'); } }, { label: t('Xuất template'), icon: Download, onSelect: () => action(() => orglet.exportTemplate(item.id)) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('team', item.id, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEntity('team', item.id), confirm: { question: t('Xóa {0}? Công việc cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}>
-          <ShowMore items={[...new Set([...item.memberIds, item.synthesizerId])].map(id => workspace.workers.find(member => member.id === id)).filter((member): member is Worker => Boolean(member))} empty={t('Nhóm chưa có nhân viên.')} render={member => <button key={member.id} type="button" className={`tree-leaf ${!teamId && workerId === member.id ? 'active' : ''}`} onClick={() => { setWorkerId(member.id); setTeamId(''); }}><Avatar name={member.name} seed={member.id} emoji={member.avatar?.emoji} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xs" badge={member.provider === 'demo' ? undefined : <ProviderMark provider={member.provider} size="small" decorative />} /><span>{member.name}</span>{member.id === item.synthesizerId && <small>{t('tổng hợp')}</small>}</button>} />
+          <ShowMore items={[...new Set([...item.memberIds, item.synthesizerId])].map(id => workspace.workers.find(member => member.id === id)).filter((member): member is Worker => Boolean(member))} empty={t('Nhóm chưa có nhân viên.')} render={member => {
+            const mark = workerStatus(member.id);
+            return <button key={member.id} type="button" className={`tree-leaf ${!teamId && workerId === member.id ? 'active' : ''}`} onClick={() => { setWorkerId(member.id); setTeamId(''); }}><StatusMark variant={mark.variant} tone={mark.tone} label={statusMarkLabel(mark)} /><Avatar name={member.name} seed={member.id} emoji={member.avatar?.emoji} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xs" badge={member.provider === 'demo' ? undefined : <ProviderMark provider={member.provider} size="small" decorative />} /><span className="row-name">{member.name}</span>{member.id === item.synthesizerId && <small>{t('tổng hợp')}</small>}</button>;
+          }} />
         </SidebarTreeRow>)}{!workspace.teams.length && <p className="empty-history">{t('Chưa có nhóm.')}</p>}
         <ArchivedList count={workspace.archivedTeams.length}>{workspace.archivedTeams.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('team', item.id, false)} onDelete={() => deleteEntity('team', item.id)} />)}</ArchivedList>
       </SidebarSection>
       <SidebarSection id="workers" title={t('Nhân viên')} action={<Button size="icon" className="row-action" aria-label={t('Tạo nhân viên')} onClick={() => { setEditingWorker(undefined); setPanel('worker'); }}><Plus size={16} /></Button>}>
-        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && workerId === item.id} reorder={workerOrder.bind(item.id)} onSelect={() => { setWorkerId(item.id); setTeamId(''); }} expandLabel={t('Xem công việc của {0}', [item.name])}
+        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && workerId === item.id} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { setWorkerId(item.id); setTeamId(''); }} expandLabel={t('Xem công việc của {0}', [item.name])}
           menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Công việc cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}>
           <ShowMore items={workspace.tasks.filter(task => !task.archivedAt && !task.teamId && taskWorkers(task, workspace).some(worker => worker.id === item.id))} empty={t('Chưa có công việc.')} render={task => taskRow(task, true)} />
         </SidebarTreeRow>)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có nhân viên.')}</p>}
@@ -170,19 +272,26 @@ export function App() {
         <ArchivedList count={workspace.tasks.filter(task => task.archivedAt).length}>{workspace.tasks.filter(task => task.archivedAt).map(task => taskRow(task))}</ArchivedList>
       </SidebarSection>
       </div>
-      <div className="sidebar-footer"><Button onClick={() => { setRoutineDraft(undefined); setRoutineView({ editing: false }); setPanel('routines'); }}><CalendarClock size={18} />{t('Lịch chạy')}{workspace.routines.some(item => item.pending) && <span className="badge">{t('Cần xem')}</span>}</Button><Button onClick={() => { if (workspace.knowledge.some(item => item.status === 'proposed')) setLibraryTab('knowledge'); setPanel('library'); }}><BookOpen size={18} />{t('Thư viện')}{workspace.knowledge.some(item => item.status === 'proposed') && <span className="badge">{t('Cần duyệt')}</span>}</Button><Button onClick={() => openSettings()}><Settings2 size={18} />{t('Cài đặt')}<span className={`connection-dot ${connections.openai || connections.anthropic || connections.xai ? 'connected' : ''}`} /></Button></div>
+      <div className="sidebar-footer"><Button onClick={() => { setRoutineDraft(undefined); setRoutineView({ editing: false }); setPanel('routines'); }}><CalendarClock size={18} />{t('Lịch chạy')}{workspace.routines.some(item => item.pending) && <span className="badge">{t('Cần xem')}</span>}</Button><Button onClick={() => { if (workspace.knowledge.some(item => item.status === 'proposed')) setLibraryTab('knowledge'); setPanel('library'); }}><BookOpen size={18} />{t('Thư viện')}{workspace.knowledge.some(item => item.status === 'proposed') && <span className="badge">{t('Cần duyệt')}</span>}</Button><Button onClick={() => openSettings()}><Settings2 size={18} />{t('Cài đặt')}</Button></div>
     </aside>}
     {/* Collapsed sidebar keeps its two most used actions in a narrow rail, stacked like ChatGPT. */}
     {!sidebar && <nav className="sidebar-rail" aria-label={t('Thanh bên thu gọn')}><Button size="icon" aria-label={t('Mở sidebar')} title={t('Mở sidebar')} onClick={() => setSidebar(true)}><PanelLeft size={20} /></Button><Button size="icon" aria-label={t('Công việc mới')} aria-keyshortcuts="Control+N" title={t('Công việc mới (Ctrl+N)')} onClick={newTask}><SquarePen size={19} /></Button><Button size="icon" aria-label={t('Tìm công việc (Ctrl K)')} aria-keyshortcuts="Control+K" aria-haspopup="dialog" title={t('Tìm công việc (Ctrl K)')} onClick={() => setSearchOpen(true)}><Search size={19} /></Button></nav>}
     <main className="main-pane" id="main-content" tabIndex={-1}>
-      <header className="topbar"><div><span>{selected ? (detail && assigneeLabel(detail.task, workspace, { all: t('Toàn bộ nhân viên'), many: count => t('{0} nhân viên', [count]) })) ?? detail?.runs.at(-1)?.snapshot.worker.name ?? t('Công việc') : team?.name ?? worker?.name ?? 'Orglet'}</span>{(selected ? detail?.runs.every(run => run.snapshot.worker.provider === 'demo') : isDemo) && <span className="badge">Demo</span>}</div>{selected && <Button onClick={() => setPanel('activity')}><SlidersHorizontal size={17} />{t('Chi tiết')}</Button>}</header>
+      <header className="topbar">
+        <div><span>{selected ? (detail && assigneeLabel(detail.task, workspace, { all: t('Toàn bộ nhân viên'), many: count => t('{0} nhân viên', [count]) })) ?? detail?.runs.at(-1)?.snapshot.worker.name ?? t('Công việc') : team?.name ?? worker?.name ?? 'Orglet'}</span>{(selected ? detail?.runs.every(run => run.snapshot.worker.provider === 'demo') : isDemo) && <span className="badge">Demo</span>}</div>
+        <div className="topbar-actions">
+          {selected && detail && openTaskPaid && <span className="topbar-cost" role="status" title={detail.usage.reservedMicros > 0 ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.reservedMicros)]) : t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}</span>}
+          {selected && <Button onClick={() => setPanel('activity')}><SlidersHorizontal size={17} />{t('Chi tiết')}</Button>}
+        </div>
+      </header>
       {error && <div className="error-banner" role="alert"><span>{error}</span><Button size="icon" aria-label={t('Đóng thông báo')} onClick={() => setError('')}><X size={16} /></Button></div>}
       {selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} action={action} showSources={openSources} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openRevision={() => setPanel('revision')} openSettings={() => openSettings('connections')} action={action} /></> : <div className="loading" role="status">{t('Đang mở công việc…')}</div>}</> : <div className="new-task-content">
         <h1 className="welcome">{t('Bạn muốn giao việc gì?')}</h1>
         <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Nội dung công việc')} placeholder={t('Nhắn hoặc giao việc cho nhân viên')} sendLabel={t('Gửi công việc')} disabled={busy} sendDisabled={!isDemo && missingConnections.length > 0}
           leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
+          trailing={recipientOptions.length > 0 ? <Select className="composer-to-select" ariaLabel={t('Đang nhắn với {0}', [team?.name ?? worker?.name ?? t('Nhân viên')])} value={recipientValue} onChange={pickRecipient} showDetail={false} menuMinWidth={280} options={recipientOptions} /> : undefined}
           attachments={sources.length > 0 ? sources.map(source => <span className="attachment" key={source.id}><FileText size={14} /><span>{source.name}</span><button type="button" aria-label={t('Bỏ {0}', [source.name])} onClick={() => { setSources(sources.filter(s => s.id !== source.id)); }}><X size={14} /></button></span>) : undefined} />
-        {isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}<button onClick={() => { if (team) { setEditingTeam(team); setPanel('team'); } else { setEditingWorker(worker); setPanel('worker'); } }}>{team ? t('Thiết lập nhóm') : t('Đổi model')}</button></p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings('connections')}>{missingConnections.map(setupHint).join(t(' và '))}</button></p> : null}
+        {isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}</p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings('connections')}>{missingConnections.map(setupHint).join(t(' và '))}</button></p> : paidProviders.length > 0 ? <p className="composer-note composer-cost">{t('Chi phí tối đa cho task này: {0}. Số thực tế hiện sau mỗi câu trả lời.', [formatMoney(taskBudgetMicros)])}</p> : <p className="composer-note">{t('Harness trên máy · chi phí theo gói của công cụ, không qua Orglet.')}</p>}
         {skippedSources.length > 0 && <details className="intake-skipped"><summary>{t('{0} mục không được thêm vào task', [skippedSources.length])}</summary><ul>{skippedSources.map((item, index) => <li key={index}>{item.name}: {item.reason}</li>)}</ul></details>}
         <ul className="suggestions" aria-label={t('Gợi ý')}>
           <li><button type="button" onClick={() => { setBrief(t('Đọc các tài liệu đã chọn, tóm tắt những điểm chính và chỉ rõ phần còn thiếu bằng chứng.')); composer.current?.focus(); }}><BookOpen size={18} />{t('Tóm tắt tài liệu')}</button></li>
@@ -194,7 +303,7 @@ export function App() {
     </main>
     <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở. Lịch bị lỡ được bỏ qua; bạn có thể chọn chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được. Gói nhập từ thư mục cần được review trước khi gắn cho nhân viên.') : t('Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><CalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><Button size="icon" aria-label={t('Quay lại danh sách lịch')} onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}><ArrowLeft size={18} /></Button><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? editingSkill?.package ? 'Review skill' : t('Chỉnh skill') : panel === 'knowledge' ? editingKnowledge ? 'Knowledge' : t('Knowledge mới') : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của công việc') : t('Chi tiết công việc')}>
       {panel === 'revision' && detail && <RevisionEditor key={`${detail.task.id}:${detail.task.inputRevision ?? 0}`} detail={detail} workspace={workspace} connections={ready} done={close} />}
-      {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { setSelected(id); close(); if (matchMedia('(max-width: 780px)').matches) setSidebar(false); }} />}
+      {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
       {panel === 'skill' && <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={close} />}
       {panel === 'library' && <div className="form">
@@ -206,7 +315,7 @@ export function App() {
       {panel === 'activity' && detail && <div className="form"><p>{statusLabel[detail.task.status]}</p>{detail.runs.map(run => <section key={run.id}><h3>{run.snapshot.worker.name} · v{run.snapshot.worker.revision}</h3><p className="muted">Skill v{run.snapshot.skill.revision} · {run.snapshot.worker.provider}</p><code className="hash">{run.id}</code><p className="muted">{run.snapshot.model}</p>{detail.artifacts.filter(artifact => artifact.runId === run.id).map(artifact => <details key={artifact.id}><summary>{t('{0} · xem báo cáo', [tMessage(artifact.report.title)])}</summary><p className="prose">{tMessage(artifact.report.summary)}</p>{artifact.report.findings.map((finding, index) => <section key={index}><h4>{finding.title}</h4><p className="prose">{finding.detail}</p><p className="muted">{finding.coverage}</p></section>)}<ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul><Button onClick={() => action(() => orglet.exportArtifact(artifact.id))}>{t('Xuất báo cáo này')}</Button></details>)}<ContextManifestView run={run} workspace={workspace} /><ol className="activity">{detail.events.filter(event => event.runId === run.id).map(event => <li key={event.id}><time>{new Date(event.createdAt).toLocaleTimeString(currentLocale())}</time><span>{tMessage(event.message)}</span></li>)}</ol></section>)}<Button variant="outline" onClick={() => openSources()}><FileText size={16} />{t('Xem nguồn')}</Button></div>}
       {panel === 'sources' && detail && <SourcePanel detail={detail} target={sourceTarget} refresh={() => void refresh()} />}
     </Drawer>
-    <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}`} open={panel === 'worker'} worker={editingWorker} workspace={workspace} harnesses={harnesses} onClose={close} />
+    <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}`} open={panel === 'worker'} worker={editingWorker} workspace={workspace} connections={connections} harnesses={harnesses} onClose={close} />
     <TeamDialog key={`team:${panel === 'team'}:${editingTeam?.id ?? 'new'}`} open={panel === 'team'} team={editingTeam} workspace={workspace} onClose={close} />
     <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />
     <Toaster />
