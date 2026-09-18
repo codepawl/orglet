@@ -64,7 +64,7 @@ There is no ESLint/Prettier. Match the file you are in.
 2. **One pull request, one change.** Do not bundle refactors, drive-by formatting, or unrelated files.
 3. **Stay in scope.** Do not take over someone else's in-flight PR or rewrite a subsystem to make your patch nicer.
 4. **Match nearby code** — naming, density, CSS variables, component patterns. Do not invent a new abstraction layer, state library, or UI kit.
-5. **Docs in the same PR** for feature and UX changes: README plus the relevant `docs/` page (how it works, not only that it shipped). Do not land code-only.
+5. **Docs in the same PR** for feature and UX changes: README plus the relevant `docs/` page (how it works, not only that it shipped). Do not land code-only. User-facing pages follow [docs/writing.md](docs/writing.md); do not rewrite product-spec pages into casual copy.
 6. **Tests for behavior.** Prefer `tests/integration/*.test.ts`. If you change UI copy, keep Vietnamese source strings and English in `apps/desktop/src/shared/locales/en.ts`.
 7. Say in the PR what you ran. Required GitHub check is Windows `desktop.yml` (check name `test`). macOS `macos.yml` also runs; it is not the merge gate.
 

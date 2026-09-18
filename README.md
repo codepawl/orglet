@@ -62,7 +62,7 @@ API keys are encrypted with your system's secure storage and never reach the app
 
 Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, and only with the files you attached.
 
-Further reading: [product direction](docs/product.md), [technical guide](docs/technical-guide.md), [team chat](docs/team-chat.md), [team/worker chat context plan](docs/team-chat-context.md), [model list fetch](docs/model-list-fetch.md), [Windows release gates](docs/windows-release-gates.md), [macOS packaging](docs/macos-packaging.md), [implementation status](docs/implementation_status.md).
+Start here: [Getting started](docs/getting-started.md). The [docs map](docs/README.md) lists how-it-works pages, product decisions, and ship records. Product fit is [product.md](docs/product.md). How to run and test is [technical-guide.md](docs/technical-guide.md).
 
 ## Install
 
