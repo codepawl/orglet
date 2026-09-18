@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { useVietnamese } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-finding-ui-')); const data = join(directory, 'data');
@@ -26,7 +26,7 @@ try {
     await window.orglet.call('profileSources', { taskId, sourceIds: [sources[1].id], idColumn: null });
     return { taskId, sourceIds: sources.map(source => source.id) };
   });
-  await page.getByRole('button', { name: /^Finding navigation UI fixture/ }).click();
+  await openThreadByBrief(page, 'Finding navigation UI fixture');
   await page.locator('.chat-reply, .report').first().waitFor();
   const detail = await page.evaluate(id => window.orglet.call('task', { id }), fixture.taskId);
   await app.close();
@@ -40,7 +40,7 @@ try {
   try { db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(profile), profile.id); db.prepare('UPDATE artifacts SET data=? WHERE id=?').run(JSON.stringify(artifact), artifact.id); }
   finally { db.close(); }
   app = await launch(); page = await app.firstWindow(); const errors = []; page.on('pageerror', error => errors.push(error.message));
-  await page.getByRole('button', { name: /^Finding navigation UI fixture/ }).click();
+  await openThreadByBrief(page, 'Finding navigation UI fixture');
   // The report arrives as a file; open it to read.
   await page.locator('.report-file', { hasText: 'Evidence navigation fixture' }).click();
   await page.getByRole('dialog', { name: 'Evidence navigation fixture' }).waitFor();

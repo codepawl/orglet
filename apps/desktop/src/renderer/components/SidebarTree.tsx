@@ -116,32 +116,34 @@ function RenameField({ name, label, onSave, onDone }: { name: string; label: str
 }
 
 /**
- * A team or worker row that can open to show what belongs to it. The avatar turns into a chevron on hover,
- * like project folders in ChatGPT. The chevron toggles the roster or tasks. The name selects: a team opens
- * its chat and stays expanded (`expandOnSelect`); a worker still toggles its task list.
- * Optional `status` is the rolled-up mark from its subset (tasks for a worker, workers for a team).
+ * A team or worker row. The name selects: a team opens its chat and stays expanded (`expandOnSelect`);
+ * a worker opens its live chat. When `children` is passed (a team roster), the avatar turns into a
+ * chevron on hover and toggles that list. Workers have no task pile, so they omit `children`.
+ * Optional `status` is the rolled-up mark from its subset (live thread for a worker, workers for a team).
  */
-export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, expandLabel, menu, reorder, expandOnSelect, children }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; expandLabel: string; menu: ReactNode; reorder: RowBindings; expandOnSelect?: boolean; children: ReactNode }) {
-  const [open, setOpen] = useState(() => readOpen(id));
+export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, expandLabel, menu, reorder, expandOnSelect, children }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; expandLabel?: string; menu: ReactNode; reorder: RowBindings; expandOnSelect?: boolean; children?: ReactNode }) {
+  const expandable = children !== undefined;
+  const [open, setOpen] = useState(() => expandable && readOpen(id));
   const toggle = () => setOpen(value => {
     try { localStorage.setItem(storageKey(id), value ? '0' : '1'); } catch { /* storage unavailable: keep in memory only */ }
     return !value;
   });
   const { ref, style, dragging, onMoveKey, ...pointer } = reorder;
+  const mark = dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : expandable ? <ChevronRight size={14} className="disclosure-chevron" aria-hidden="true" /> : null;
   return <div ref={ref} style={style} className={`tree-item ${open ? 'open' : ''} ${dragging ? 'dragging' : ''}`} {...pointer}>
     <div className="worker-row">
       {status && <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />}
-      <button type="button" className="row-disclosure" aria-expanded={open} aria-controls={`tree-${id}`} aria-label={expandLabel} title={expandLabel} onClick={toggle}>
-        {dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : <ChevronRight size={14} className="disclosure-chevron" aria-hidden="true" />}{avatar}
-      </button>
+      {expandable
+        ? <button type="button" className="row-disclosure" aria-expanded={open} aria-controls={`tree-${id}`} aria-label={expandLabel} title={expandLabel} onClick={toggle}>{mark}{avatar}</button>
+        : <span className="row-disclosure" aria-hidden="true">{mark}{avatar}</span>}
       <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} title={description ? `${description}
 ${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-        aria-expanded={open} aria-controls={`tree-${id}`} onClick={() => { onSelect(); if (expandOnSelect) { if (!open) toggle(); } else toggle(); }} onKeyDown={onMoveKey}>
+        aria-expanded={expandable ? open : undefined} aria-controls={expandable ? `tree-${id}` : undefined} onClick={() => { onSelect(); if (expandable && expandOnSelect) { if (!open) toggle(); } else if (expandable) toggle(); }} onKeyDown={onMoveKey}>
         <span>{name}</span>
       </button>
       <span data-no-drag>{menu}</span>
     </div>
-    <div id={`tree-${id}`} className="tree-children" role="group" aria-label={name} hidden={!open || dragging}>{children}</div>
+    {expandable && <div id={`tree-${id}`} className="tree-children" role="group" aria-label={name} hidden={!open || dragging}>{children}</div>}
   </div>;
 }
 

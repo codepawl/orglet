@@ -1,38 +1,49 @@
-# Team chat
+# Team and worker chat
 
-Shipped in [COD-24](https://linear.app/codepawl/issue/COD-24) (shell) and [COD-25](https://linear.app/codepawl/issue/COD-25) (orchestrator) under epic [COD-22](https://linear.app/codepawl/issue/COD-22). Long-chat context, memory, cost and fail-closed rules stay in [team-chat-context.md](team-chat-context.md) (the five policy defaults are approved). This page is what the app does **today**.
+Shipped in [COD-24](https://linear.app/codepawl/issue/COD-24) (team shell), [COD-25](https://linear.app/codepawl/issue/COD-25) (orchestrator) and [COD-26](https://linear.app/codepawl/issue/COD-26) (hide the task pile) under epic [COD-22](https://linear.app/codepawl/issue/COD-22). Long-chat context, memory, cost and fail-closed rules stay in [team-chat-context.md](team-chat-context.md) (the five policy defaults are approved). This page is what the app does **today**.
 
-It does not hide the task pile ([COD-26](https://linear.app/codepawl/issue/COD-26)), or change signing / [COD-19](https://linear.app/codepawl/issue/COD-19) / [COD-20](https://linear.app/codepawl/issue/COD-20).
+It does not change signing / [COD-19](https://linear.app/codepawl/issue/COD-19) / [COD-20](https://linear.app/codepawl/issue/COD-20).
 
-## Click a team → that team's chat
+## Mental model
 
-The sidebar **Nhóm** list is the way into team chat, not only a roster.
+Work is a **chat**, not a pile of tasks or sessions.
 
-1. Click a **team** name. The main pane opens that team's conversation. Members stay visible under the team row and as avatars in the header.
-2. If this team has no live thread yet, you get an empty chat (composer pinned at the bottom). The first send creates the thread.
+- Click a **worker** → that worker's conversation.
+- Click a **team** → that team's conversation (roster under the row and in the header).
+- One live thread per worker and per team. A new message is a turn in that chat, not a new row in the sidebar.
+- Archive the thread (⋯ next to **Chi tiết**) to start over. Search still finds older or archived chats.
+- **Lịch chạy** stays a list of discrete scheduled jobs. Those rows are not merged into the infinite chat.
+
+Under the hood the thread is still a `tasks` row. **Chi tiết** lists internal `runs` (plan, members, synthesis, or the single worker job) for retry, cost and cancel. Dollars sit next to **Chi tiết**.
+
+## Click a worker or team → that chat
+
+1. Click a **name** in **Nhân viên** or **Nhóm**. The main pane opens that conversation.
+2. If there is no live thread yet, you get an empty chat (composer pinned at the bottom). The first send creates the thread.
 3. If a live thread already exists, it opens with the saved messages. Later sends are follow-ups in the same chat.
 
-The chevron next to the avatar still expands or collapses the roster. Clicking the name selects the team and keeps the roster open.
+The chevron next to a **team** avatar still expands or collapses the roster. Clicking the team name selects the team and keeps the roster open. **Workers have no nested task list.**
 
-**Công việc mới** (Ctrl+N) leaves team chat and starts a normal new-task composer for a worker. Picking a team in that composer's recipient menu opens that team's chat again.
+Ctrl+N focuses the current worker or team chat (it does not create a new session). Search (Ctrl+K) finds chats by their text, including archived ones.
 
-## One live thread per team
+## One live thread
 
-Policy: one open conversation per team; archive it to start over; do **not** create a new `tasks` row on every message ([team-chat-context.md](team-chat-context.md)).
+Policy: one open conversation per worker and per team; archive it to start over; do **not** create a new `tasks` row on every message ([team-chat-context.md](team-chat-context.md)).
 
-There is no separate `threads` table. The thread is the newest non-archived, non-deleted `tasks` row with that `teamId`, no `assignees`, and no `routineId`.
+There is no separate `threads` table.
+
+| Thread | Identity |
+|---|---|
+| Worker chat | Newest non-archived, non-deleted `tasks` row with that `workerId`, no `teamId`, no `assignees`, no `routineId` |
+| Team chat | Newest non-archived, non-deleted `tasks` row with that `teamId`, no `assignees`, no `routineId` |
 
 | User does | Core |
 |---|---|
-| First message in this team's chat | `createTask` with `teamId` (synthesizer as `workerId`) |
+| First message in this chat | `createTask` (`teamId` + synthesizer as `workerId` for a team) |
 | Later message in the same chat | `reviseTask` on that row (`inputRevision` + 1) |
 | Archive the thread | Next click is an empty chat; the next send creates a new live row |
 
-Find-or-create lives in `apps/desktop/src/shared/live-task.ts` (`liveTeamTask`, `nextTeamMessage`). The renderer uses it when you click a team and when you send from the empty team composer. `createTask` itself is unchanged, so routines and explicit extra team tasks can still insert their own rows.
-
-Routines under **Lịch chạy** stay discrete tasks. They are not merged into the team chat.
-
-Until COD-26, **Công việc** may still list the live thread as a task. Opening that row is the same conversation.
+Find-or-create lives in `apps/desktop/src/shared/live-task.ts` (`liveWorkerTask`, `liveTeamTask`, `nextWorkerMessage`, `nextTeamMessage`). The renderer uses it when you click a worker or team and when you send from the empty composer. `createTask` itself is unchanged, so routines and explicit extra rows can still insert their own records. Group chats (`assignees`) stay reachable from search; they are not the primary sidebar.
 
 ## Orchestrator: one message → workers → one report
 
@@ -59,17 +70,7 @@ User message (inputRevision)
 | Cancel | `cancelled` | In-flight request may still bill; queued jobs are not started |
 | Retry | Same thread | Reuses a completed plan; starts **new** runs only for unfinished jobs of **this turn** |
 
-Cancel aborts the whole turn (plan + members + synthesis). Partial success stays `partial`, never silent `completed`.
-
-## How this relates to worker chat
-
-Worker chat is unchanged.
-
-- Click a **worker** to pick them for a new message, or open a task under that worker. That is still today's standalone (or group) path: no `teamId`.
-- A **group** chat (several workers, or everyone) still uses `assignees` and sequential `stage: 'group'` replies. That is not a team.
-- A **team** chat uses `teamId` + `teamSnapshot` and `TeamRunner.run`: plan → members → synthesis.
-
-You can still open an existing worker task while a team chat exists. The two threads do not share a `tasks` row.
+Cancel aborts the whole turn (plan + members + synthesis). Partial success stays `partial`, never silent `completed`. Worker chat is one run with no `stage`.
 
 ## Errors, budget, retry
 
@@ -77,9 +78,9 @@ Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết
 
 ## Code
 
-- Click / send: `apps/desktop/src/renderer/App.tsx` (`openTeam`, `send`)
+- Click / send: `apps/desktop/src/renderer/App.tsx` (`openWorker`, `openTeam`, `send`)
 - Identity: `apps/desktop/src/shared/live-task.ts`
 - Persist a turn: `createTask` / `reviseTask` in `apps/desktop/src/core/service.ts`
 - Orchestrator: `apps/desktop/src/core/orchestration/team.ts` (`run`) and `plan.ts`
 - Plan tool / Demo routing: `apps/desktop/src/core/orchestration/runner.ts` (`submit_plan`, `completePlan`)
-- Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`
+- Tests: `tests/integration/live-task.test.ts`, `tests/integration/team.test.ts`

@@ -57,11 +57,11 @@ Pick **Claude Code trên máy này**, **Codex trên máy này** or **Cursor Agen
 
 ## Teams
 
-Click a team in the sidebar to open **that team's chat** (roster under the row and in the header). How the shell works, how it differs from worker chat, and find-or-create: [team-chat.md](team-chat.md).
+Click a **worker** or a **team** in the sidebar to open that chat. How find-or-create, Chi tiết jobs, and the orchestrator work: [team-chat.md](team-chat.md).
 
-Identity: newest non-archived `tasks` row with that `teamId`, no `assignees`, no `routineId` (`liveTeamTask` in `apps/desktop/src/shared/live-task.ts`). The first user message calls `createTask`; later messages call `reviseTask` on the same id. Do not create a new task row per send. Routines stay separate. `createTask` itself is unchanged, so scheduled team work can still insert discrete rows.
+Identity: newest non-archived `tasks` row with that `workerId` (no `teamId`, no `assignees`, no `routineId`) or that `teamId` (`liveWorkerTask` / `liveTeamTask` in `apps/desktop/src/shared/live-task.ts`). The first user message calls `createTask`; later messages call `reviseTask` on the same id. Do not create a new task row per send. The sidebar does not list discrete task rows. Routines stay separate under **Lịch chạy**. `createTask` itself is unchanged, so scheduled work can still insert discrete rows.
 
-Execution is the COD-25 orchestrator (`TeamRunner.run` when `task.teamSnapshot` is set): plan job (synthesizer) → assigned member jobs → one synthesis report. Unassigned members are skipped with a named cancel, not treated as failures. A failed plan does not dispatch members or invent a report. Worker chat (no `teamId`) and group chat (`assignees`, `TeamRunner.chat`) are unchanged.
+Execution for a team is the COD-25 orchestrator (`TeamRunner.run` when `task.teamSnapshot` is set): plan job (synthesizer) → assigned member jobs → one synthesis report. Unassigned members are skipped with a named cancel, not treated as failures. A failed plan does not dispatch members or invent a report. Worker chat is one run with no `stage`. Group chat (`assignees`, `TeamRunner.chat`) stays reachable from search.
 
 Long-chat context budget, rolling summary, retrieval and refuse-the-send are specified in [team-chat-context.md](team-chat-context.md); follow-ups still send the existing truncated history window (10 turns, 24 000 characters) until that plan is implemented.
 

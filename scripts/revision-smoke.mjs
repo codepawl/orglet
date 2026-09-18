@@ -3,7 +3,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-revision-'));
 const env = { ...process.env, APPDATA: directory }; delete env.ELECTRON_RUN_AS_NODE;
@@ -21,7 +21,7 @@ try {
     const sources = await window.orglet.pickSources(); const workspace = await window.orglet.call('workspace', {}); const team = workspace.teams.find(team => team.name === 'Eris Review');
     return window.orglet.call('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Revision UI fixture', sourceIds: sources.map(source => source.id), consent: false, budgetMicros: 1000 });
   });
-  await page.getByRole('button', { name: /^Revision UI fixture/ }).click();
+  await openThreadByBrief(page, 'Revision UI fixture');
   // The follow-up bar's add button is enabled once the run has finished.
   await page.locator('button[aria-label="Đính kèm tệp"]:not([disabled])').waitFor();
   const before = await page.evaluate(id => window.orglet.call('task', { id }), id);

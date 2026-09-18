@@ -2,9 +2,9 @@
 
 Policy for epic [COD-22](https://linear.app/codepawl/issue/COD-22), written with [COD-23](https://linear.app/codepawl/issue/COD-23). **The five approval questions below are yes.** Numbers are defaults to implement, not a new settings screen.
 
-**Shipped:** team chat shell ([COD-24](https://linear.app/codepawl/issue/COD-24)) — click team → live thread, find-or-create one `tasks` row keyed by `teamId`. User-facing behavior: [team-chat.md](team-chat.md). Orchestrator 1→N→1 report ([COD-25](https://linear.app/codepawl/issue/COD-25)) — plan job → assigned member jobs → one synthesis report.
+**Shipped:** team chat shell ([COD-24](https://linear.app/codepawl/issue/COD-24)), orchestrator ([COD-25](https://linear.app/codepawl/issue/COD-25)), hide-task-pile UX ([COD-26](https://linear.app/codepawl/issue/COD-26)) — click worker or team → live thread, find-or-create one `tasks` row. User-facing behavior: [team-chat.md](team-chat.md).
 
-This page is still the long-chat policy (bounded prompt, extractive summary, retrieval, refuse-the-send, fail-closed). It does not ship the COD-26 hide-tasks UX, signing, [COD-19](https://linear.app/codepawl/issue/COD-19) release assets, or [COD-20](https://linear.app/codepawl/issue/COD-20) notarize.
+This page is still the long-chat policy (bounded prompt, extractive summary, retrieval, refuse-the-send, fail-closed). It does not ship signing, [COD-19](https://linear.app/codepawl/issue/COD-19) release assets, or [COD-20](https://linear.app/codepawl/issue/COD-20) notarize.
 
 ## Decision in one paragraph
 
@@ -21,7 +21,7 @@ Keep **one live thread per worker** and **one live thread per team**. The user t
 
 Routines stay discrete tasks under **Lịch chạy**. They are not merged into the infinite chat.
 
-Until COD-26 hides the pile, the sidebar may still list `tasks`. Identity for later UI: find-or-create the live thread for that worker or team; do not create a new `tasks` row on every message.
+The sidebar is **workers** and **teams**, not a task pile ([COD-26](https://linear.app/codepawl/issue/COD-26)). Identity: find-or-create the live thread for that worker or team; do not create a new `tasks` row on every message. Archive a thread to start over. Routines stay on **Lịch chạy**.
 
 Job stages:
 
@@ -121,7 +121,7 @@ Do **not** do this list in the COD-23 PR.
 
 **Shared core (before or with COD-25; COD-24 may stub):**
 
-1. Treat find-or-create live `tasks` row as the thread id; `reviseTask` remains “new message”. **Done for team chat** (`liveTeamTask` / empty composer `createTask`, then `reviseTask`). Not yet for one live worker thread.
+1. Treat find-or-create live `tasks` row as the thread id; `reviseTask` remains “new message”. **Done** for team chat (`liveTeamTask`) and worker chat (`liveWorkerTask`).
 2. Extend the frozen context manifest with transcript layers (`verbatimTurns`, `summaryChars`, `retrievedSnippets`, omission reasons).
 3. Extractive rolling summary + refuse path when over 200 000 bytes after compact (`runner.ts` `history()` / byte cap).
 4. FTS over this thread's older turns; 4 snippets / 8 KB; no cross-thread hits.
@@ -131,11 +131,11 @@ Do **not** do this list in the COD-23 PR.
 
 **COD-25 (orchestrator 1→N→report):** **done** — map plan/member/synthesis to `runs`; one user-facing report; fail-closed table above; cancel cancels the whole turn's jobs; retry unfinished jobs only. See [team-chat.md](team-chat.md).
 
-**COD-26 (hide task pile):** sidebar is workers/teams; Chi tiết still has jobs, cost, retry, cancel; routines stay on **Lịch chạy**.
+**COD-26 (hide task pile):** **done** — sidebar is workers/teams; Chi tiết still has jobs, cost, retry, cancel; routines stay on **Lịch chạy**. See [team-chat.md](team-chat.md).
 
 ## Out of scope (this policy page)
 
-- COD-26 hide-task-pile UX, @/tag polish (team chat shell is [team-chat.md](team-chat.md); orchestrator is COD-25, shipped)
+- @/tag polish (team chat shell, orchestrator and hide-task-pile UX are [team-chat.md](team-chat.md))
 - New SQLite `threads` table (reuse `tasks`)
 - LLM-billed summarization, embeddings, provider tokenizers
 - Cross-thread or workspace-wide auto-memory

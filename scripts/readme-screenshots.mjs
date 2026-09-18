@@ -47,7 +47,6 @@ async function startTask(page) {
   const workspace = await callCore(page, 'workspace', {});
   const taskId = await callCore(page, 'createTask', {
     workerId: workspace.workers[0].id,
-    assignees: 'all',
     brief,
     sourceIds: [],
     consent: false,
@@ -81,7 +80,7 @@ async function main() {
     await page.screenshot({ path: join(outputFolder, 'new-task.png') });
 
     await startTask(page);
-    await page.locator('.task-row').first().click();
+    await page.getByRole('button', { name: 'Researcher', exact: true }).click();
     await page.locator('.chat-turn').first().waitFor();
     await page.locator('.thinking').waitFor({ state: 'detached', timeout: 30_000 });
     await page.waitForTimeout(600);

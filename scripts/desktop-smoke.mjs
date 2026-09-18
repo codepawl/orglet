@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import electronPath from 'electron';
-import { useVietnamese } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, archiveCurrentChat } from './smoke-language.mjs';
 
 const data = await mkdtemp(join(tmpdir(), 'orglet-desktop-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
@@ -27,17 +27,17 @@ try {
   const exposed = await page.evaluate(async url => { try { return await (await fetch(url)).text(); } catch { return null; } }, pathToFileURL(forbidden).href);
   assert.equal(exposed, null, 'Renderer must not read arbitrary local files');
   await page.screenshot({ path: join(output, 'desktop-empty.png') });
-  await page.getByRole('textbox', { name: 'Nội dung công việc' }).fill('IME chưa hoàn tất');
-  await page.getByRole('textbox', { name: 'Nội dung công việc' }).evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true })));
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('IME chưa hoàn tất');
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true })));
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).tasks.length, 0);
   const sourcePath = join(data, 'evidence.txt'); await writeFile(sourcePath, 'Evidence fixture.\nSecond line.');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, sourcePath);
   await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).click(); await page.getByRole('menuitem', { name: /^Tệp/ }).click();
   await page.getByText('evidence.txt', { exact: true }).waitFor();
-  await page.getByRole('textbox', { name: 'Nội dung công việc' }).fill('Desktop smoke: persistent task');
-  await page.getByRole('textbox', { name: 'Nội dung công việc' }).press('Shift+Enter');
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: persistent task');
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).press('Shift+Enter');
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).tasks.length, 0);
-  await page.getByRole('button', { name: 'Gửi công việc', exact: true }).click();
+  await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   // A chat answer has no accept step; it is kept like any message.
   await page.getByRole('button', { name: 'Sao chép', exact: true }).waitFor();
@@ -131,13 +131,14 @@ try {
   await page.getByText(/xem báo cáo/).first().click();
   await page.getByRole('button', { name: 'Xuất báo cáo này', exact: true }).waitFor();
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: /^Công việc mới/ }).click();
+  await page.getByRole('button', { name: 'Researcher', exact: true }).click();
+  await archiveCurrentChat(page);
   const datasetPath = join(data, 'dataset.csv'); await writeFile(datasetPath, 'id,label\n1,a\n2,b\n2,c\n');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, datasetPath);
   await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).click(); await page.getByRole('menuitem', { name: /^Tệp/ }).click();
   await page.getByText('dataset.csv', { exact: true }).waitFor();
-  await page.getByRole('textbox', { name: 'Nội dung công việc' }).fill('Desktop smoke: deterministic dataset checker');
-  await page.getByRole('button', { name: 'Gửi công việc', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: deterministic dataset checker');
+  await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   await page.getByRole('button', { name: '1 nguồn', exact: true }).click();
   await page.getByRole('checkbox', { name: 'dataset.csv', exact: true }).check();
@@ -151,7 +152,7 @@ try {
   const checkedDetail = await page.evaluate(id => window.orglet.call('task', { id }), checkedTask.id);
   assert.equal(checkedDetail.profiles.length, 1); assert.equal(checkedDetail.profiles[0].result.datasets[0].rows, 3);
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: /^Công việc mới/ }).click();
+  await archiveCurrentChat(page);
   for (const name of ['first', 'second']) {
     const folder = join(data, name); await mkdir(folder);
     await writeFile(join(folder, `${name}.txt`), 'Folder evidence'); await writeFile(join(folder, `${name}.bin`), 'Unsupported fixture');
@@ -160,8 +161,8 @@ try {
     await page.getByText(`${name}.txt`, { exact: true }).waitFor();
   }
   await page.getByText('2 mục không được thêm vào task', { exact: true }).waitFor();
-  await page.getByRole('textbox', { name: 'Nội dung công việc' }).fill('Desktop smoke: two folders');
-  await page.getByRole('button', { name: 'Gửi công việc', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: two folders');
+  await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   const folderTask = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks[0];
   assert.equal(folderTask.excludedSources.length, 2); assert.equal(folderTask.sourceIds.length, 2);
@@ -170,7 +171,7 @@ try {
     const id = await window.orglet.call('createTask', { workerId: workspace.workers.find(worker => worker.provider === 'demo').id, brief: 'Desktop smoke: pause and resume', sourceIds: [], consent: false, budgetMicros: 1000 });
     await window.orglet.call('pause', { id }); return id;
   });
-  await page.getByRole('button', { name: /^Desktop smoke: pause and resume/ }).click();
+  await openThreadByBrief(page, 'Desktop smoke: pause and resume');
   await page.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).waitFor();
   const pausedRunId = (await page.evaluate(id => window.orglet.call('task', { id }), pausedTaskId)).runs[0].id;
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1024, 768));
@@ -184,14 +185,14 @@ try {
   await app.close(); app = await launch();
   const reopened = await app.firstWindow(); await useVietnamese(reopened);
   if (await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).count()) await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).click();
-  await reopened.getByRole('button', { name: /^Desktop smoke: persistent task/ }).click();
+  await openThreadByBrief(reopened, 'Desktop smoke: persistent task');
   await reopened.locator('.chat-reply, .report').first().waitFor();
   const restored = await reopened.evaluate(id => window.orglet.call('task', { id }), taskId);
   const restoredFolders = await reopened.evaluate(id => window.orglet.call('task', { id }), folderTask.id);
   assert.deepEqual(restoredFolders.task.excludedSources, folderTask.excludedSources);
   assert.equal(restored.artifacts.length, 1); assert.equal(restored.artifacts[0].report.format, 'chat'); assert.equal(restored.task.status, 'completed');
   if (await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).count()) await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).click();
-  await reopened.getByRole('button', { name: /^Desktop smoke: pause and resume/ }).click();
+  await openThreadByBrief(reopened, 'Desktop smoke: pause and resume');
   await reopened.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).click();
   await reopened.locator('.chat-reply, .report').first().waitFor();
   const resumed = await reopened.evaluate(id => window.orglet.call('task', { id }), pausedTaskId);

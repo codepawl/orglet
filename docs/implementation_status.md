@@ -184,7 +184,11 @@ Clicking a team opens that team's chat (roster in the sidebar and header). One l
 
 ## Team orchestrator (COD-25)
 
-A team-chat turn runs plan → assigned members → one synthesis report (`TeamRunner.run`). Plan is a `runs` row (`stage: 'plan'`) with `snapshot.plan`; it is not a user-facing artifact. Unassigned members are cancelled with a named skip. A failed plan does not dispatch members or invent results. Partial member failure stays `partial` with named `Role chưa hoàn tất` limitations. Cancel aborts the whole turn; retry reuses a completed plan and unfinished jobs only. Tests: `tests/integration/team.test.ts`. Out of this spike: COD-26 hide-task pile, COD-19/20.
+A team-chat turn runs plan → assigned members → one synthesis report (`TeamRunner.run`). Plan is a `runs` row (`stage: 'plan'`) with `snapshot.plan`; it is not a user-facing artifact. Unassigned members are cancelled with a named skip. A failed plan does not dispatch members or invent results. Partial member failure stays `partial` with named `Role chưa hoàn tất` limitations. Cancel aborts the whole turn; retry reuses a completed plan and unfinished jobs only. Tests: `tests/integration/team.test.ts`.
+
+## Hide task pile (COD-26)
+
+The sidebar is **Nhóm** and **Nhân viên**, not a **Công việc** list. Click a worker or a team to open the live thread (`liveWorkerTask` / `liveTeamTask`). Empty composer find-or-creates; later sends `reviseTask`. Archive from the thread ⋯ menu to start over. Search still finds older chats. **Chi tiết** keeps jobs, dollars, retry and cancel. Routines stay on **Lịch chạy**. Docs: [team-chat.md](team-chat.md).
 
 ## Model list fetch and cache (COD-31)
 

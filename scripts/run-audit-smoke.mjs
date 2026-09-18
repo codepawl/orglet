@@ -26,8 +26,8 @@ try {
   // Importing runs in the core; sending before both files appear would create a task without sources.
   await page.getByText('runs.csv', { exact: true }).waitFor();
   await page.getByText('invalid.csv', { exact: true }).waitFor();
-  await page.getByRole('textbox', { name: 'Nội dung công việc', exact: true }).fill('Run audit fixture: fixture-score higher is better.');
-  await page.getByRole('button', { name: 'Gửi công việc', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Tin nhắn', exact: true }).fill('Run audit fixture: fixture-score higher is better.');
+  await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   await page.getByRole('button', { name: '2 nguồn', exact: true }).click();
   await page.getByRole('checkbox', { name: 'runs.csv', exact: true }).check();

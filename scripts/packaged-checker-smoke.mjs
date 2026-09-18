@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-package-'));
 const env = { ...process.env, APPDATA: directory }; delete env.ELECTRON_RUN_AS_NODE;
@@ -47,7 +47,7 @@ try {
     const workspace = await window.orglet.call('workspace', {}); const team = workspace.teams.find(team => team.name === 'Eris Review');
     return window.orglet.call('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Packaged automatic preflight', sourceIds: [sourceId], consent: false, budgetMicros: 1000 });
   }, result.profile.datasets[0].sourceId);
-  await page.getByRole('button', { name: /^Packaged automatic preflight/ }).click();
+  await openThreadByBrief(page, 'Packaged automatic preflight');
   await page.locator('.report-file', { hasText: 'Báo cáo mẫu' }).first().waitFor();
   await page.locator('.report-file').first().click();
   const preflightDetail = await page.evaluate(id => window.orglet.call('task', { id }), preflightTaskId);
@@ -118,7 +118,7 @@ try {
   console.log(JSON.stringify({ backupRestore: 'passed', restoreDirectory, backupPath, restoredReports: restored.artifacts.length, restoredChecks: restored.profiles.length }));
   console.log(JSON.stringify({ userData, taskId: result.id, engine: result.profile.engine, rows: 3, duplicateIds: 1 }, null, 2));
   if (process.argv.includes('--inspect-ui')) {
-    await page.getByRole('button', { name: /^Packaged automatic preflight/ }).click();
+    await openThreadByBrief(page, 'Packaged automatic preflight');
     await page.getByRole('button', { name: 'Xem kiểm tra trước review', exact: true }).waitFor();
     console.log('Packaged UI ready for computer use; close its window when finished.');
     await new Promise(resolve => app.once('close', resolve));
