@@ -359,8 +359,10 @@ export function App() {
       {selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} action={action} showSources={openSources} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openRevision={() => setPanel('revision')} openSettings={tab => openSettings(tab ?? 'connections')} action={action} /></> : <div className="loading" role="status">{t('Đang mở cuộc trò chuyện…')}</div>}</> : (team || worker) ? <div className="team-chat">
         <div className="thread-scroll">
           <div className="thread-content team-chat-empty">
-            {team ? <RosterAvatars workers={roster} size="sm" /> : worker && <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />}
-            <h1 className="welcome">{t('Đang nhắn với {0}', [team?.name ?? worker?.name ?? 'Orglet'])}</h1>
+            <h1 className="welcome">
+              {team ? <RosterAvatars workers={roster} size="sm" /> : worker && <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />}
+              {t('Đang nhắn với {0}', [team?.name ?? worker?.name ?? 'Orglet'])}
+            </h1>
             {team && <p className="muted" aria-label={t('Nhân viên của {0}', [team.name])}>{roster.map(member => member.name).join(', ')}</p>}
             {worker && !team && <ul className="suggestions" aria-label={t('Gợi ý')}>
               <li><button type="button" onClick={() => { setBrief(t('Đọc các tài liệu đã chọn, tóm tắt những điểm chính và chỉ rõ phần còn thiếu bằng chứng.')); composer.current?.focus(); }}><BookOpen size={18} />{t('Tóm tắt tài liệu')}</button></li>
