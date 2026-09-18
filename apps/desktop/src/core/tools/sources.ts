@@ -12,12 +12,17 @@ export const fingerprint = (bytes: string | Buffer) => createHash('sha256').upda
  * True when the path, or any folder above it, is a symlink or junction. This checks each part of the path instead of
  * comparing it with realpath(), because realpath() also expands Windows short names such as C:UsersRUNNER~1, which
  * made ordinary files look like links.
+ *
+ * macOS maps /var, /tmp and /etc to /private/* with system symlinks. Those aliases are not user links; skipping them
+ * is required so files under os.tmpdir() (/var/folders/...) can be imported on a Mac.
  */
+const DARWIN_SYSTEM_ALIASES = new Set(['/var', '/tmp', '/etc']);
+
 export async function hasLinkInPath(path: string): Promise<boolean> {
   let current = resolve(path);
   while (true) {
     const status = await lstat(current);
-    if (status.isSymbolicLink()) return true;
+    if (status.isSymbolicLink() && !(process.platform === 'darwin' && DARWIN_SYSTEM_ALIASES.has(current))) return true;
     const parent = dirname(current);
     if (parent === current) return false;
     current = parent;
