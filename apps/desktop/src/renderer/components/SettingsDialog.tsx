@@ -181,7 +181,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                   return <div key={item.id} className="setting-row harness-row">
                     <ProviderMark provider={item.id} />
                     <div className="setting-text">
-                      <span className="setting-title">{item.name}{!item.runnable && <span className="badge">{t('Chỉ trạng thái')}</span>}</span>
+                      <span className="setting-title"><span>{item.name}</span>{!item.runnable && <span className="badge">{t('Chỉ trạng thái')}</span>}</span>
                       <span className="setting-description">{item.version || t('Chưa tìm thấy bản cài.')}</span>
                       <span className="setting-description">{tMessage(item.authDetail)}</span>
                       {item.status === 'not_installed' && item.installCommand && <CommandCopy command={item.installCommand} label={t('Lệnh cài (tài liệu chính thức)')} />}

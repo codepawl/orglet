@@ -30,7 +30,8 @@ try {
   await page.getByRole('tab', { name: 'Harness trên máy', exact: true }).click();
   const section = page.getByRole('region', { name: 'Harness trên máy' });
   await section.waitFor();
-  await section.getByText('không chuyển sang Demo', { exact: false }).waitFor();
+  // The no-Demo note lives on the settings panel heading, not inside the harness list region.
+  await page.locator('#settings-panel').getByText('không chuyển sang Demo', { exact: false }).waitFor();
   for (const item of detected) {
     const row = section.locator('.harness-row', { hasText: item.name });
     await row.getByText(item.name, { exact: true }).waitFor();
@@ -83,7 +84,8 @@ try {
     } else {
       assert.equal(await send.isDisabled(), true);
       assert.equal(await demoNote.count(), 0);
-      const label = hint[first.status === 'auth_error' ? 'auth_error' : first.status === 'detected' ? 'detected' : 'not_installed'](`${first.name} trên máy này`);
+      // setupHint uses providerLabel ("Claude Code trên máy này"), not the short catalog name.
+      const label = hint[first.status === 'auth_error' ? 'auth_error' : first.status === 'detected' ? 'detected' : 'not_installed'](first.name);
       await page.getByRole('button', { name: label, exact: true }).waitFor();
       await page.getByRole('button', { name: label, exact: true }).click();
       await page.getByRole('tab', { name: 'Harness trên máy', exact: true }).waitFor();
