@@ -18,7 +18,8 @@
 | Local Cursor Agent harness | Yes, when installed and signed in; live probe optional | Headless `agent -p --mode=ask --sandbox enabled --trust`; report schema embedded in the prompt; never `--force`/`--yolo`; no Orglet reservation |
 | Codex app-server | No | `codex exec` covers review runs; app-server is not used. See below |
 | Model list fetch + cache | Yes ([COD-31](https://linear.app/codepawl/issue/COD-31)) | Native OpenAI/Anthropic/xAI HTTP, Codex/Cursor CLI, Claude Code aliases; SQLite `settings.modelLists`, 24h TTL, stale-while-revalidate; fail-open custom ID; no HTML scrape. See [model-list-fetch.md](model-list-fetch.md) |
-| Worker model picker | Yes ([COD-28](https://linear.app/codepawl/issue/COD-28)) | Per-worker list + typed custom ID; catalog defaults are suggestions; adapters/harness `--model`/`-m` use the saved ID. Deprecated chip is COD-30. |
+| Worker model picker | Yes ([COD-28](https://linear.app/codepawl/issue/COD-28)) | Per-worker list + typed custom ID; catalog defaults are suggestions; adapters/harness `--model`/`-m` use the saved ID |
+| Deprecated model chip | Yes ([COD-30](https://linear.app/codepawl/issue/COD-30)) | Quiet chip on selected/suggested ID when cached `deprecated` is true; sunset day only from native `sunsetAt` (OpenAI `shutdown_date`); no HTML scrape or invented dates |
 | Subscription quota display / internal allocation | No | Neither CLI exposes quota windows in headless mode; no screen is shown |
 | Shell, imported scripts, external writes | No | Not exposed through IPC or tool schemas |
 

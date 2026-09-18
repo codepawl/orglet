@@ -18,7 +18,7 @@ The workspace contains only `plans/orglet_mvp_plan_vi.md` and its coding starter
 - Explicit demo mode, isolated from paid usage. No implicit mock fallback.
 - Versioned workers/skills and run snapshots; permissions checked at each source read.
 - Immutable usage entries in integer micro-USD; uncertain requests retain their reservation.
-- Custom model IDs: fetch lists from each provider's native API or CLI, cache in SQLite, fail-open to a typed ID, never scrape HTML ([docs/model-list-fetch.md](model-list-fetch.md); COD-31 fetch+cache and COD-28 picker shipped; deprecated chip is COD-30).
+- Custom model IDs: fetch lists from each provider's native API or CLI, cache in SQLite, fail-open to a typed ID, never scrape HTML ([docs/model-list-fetch.md](model-list-fetch.md); COD-31 fetch+cache, COD-28 picker, and COD-30 deprecated chip).
 
 ## Validation completed locally
 
@@ -184,8 +184,12 @@ Clicking a team opens that team's chat (roster in the sidebar and header). One l
 
 ## Model list fetch and cache (COD-31)
 
-Core command `modelList({ provider, refresh? })` loads each connection's models from that provider's own API or CLI, stores them in `settings.modelLists` (24h TTL, stale-while-revalidate, excluded from backup), and always sets `customIdOk`. OpenAI `shutdown_date` and Codex `upgrade` are stored for COD-30. Tests: `tests/integration/model-list.test.ts`. Plan: [model-list-fetch.md](model-list-fetch.md).
+Core command `modelList({ provider, refresh? })` loads each connection's models from that provider's own API or CLI, stores them in `settings.modelLists` (24h TTL, stale-while-revalidate, excluded from backup), and always sets `customIdOk`. OpenAI `shutdown_date` and Codex `upgrade` are stored for the picker chip. Tests: `tests/integration/model-list.test.ts`. Plan: [model-list-fetch.md](model-list-fetch.md).
 
 ## Worker model picker (COD-28)
 
-Workers store optional `modelId`. The worker dialog lists the cached models for that connection and always accepts a typed ID. Catalog defaults are suggestions. Native adapters and harness CLIs (`--model` / Codex `-m`) use the saved ID. Custom OpenAI/Anthropic IDs are not billed at mini/Haiku rates. Tests: `tests/integration/worker-model.test.ts`. Deprecated chip remains COD-30.
+Workers store optional `modelId`. The worker dialog lists the cached models for that connection and always accepts a typed ID. Catalog defaults are suggestions. Native adapters and harness CLIs (`--model` / Codex `-m`) use the saved ID. Custom OpenAI/Anthropic IDs are not billed at mini/Haiku rates. Tests: `tests/integration/worker-model.test.ts`.
+
+## Deprecated model chip (COD-30)
+
+The model picker chips a selected or suggested ID when the cached list has `deprecated: true`. A sunset day is shown only from native `sunsetAt` (OpenAI `shutdown_date`). Anthropic, xAI and harness lists omit dates; Orglet does not scrape HTML or guess them. Codex `replacementId` is a quiet “prefer” line, not an automatic switch. Opening the dialog does not toast. Tests: `tests/integration/model-deprecation.test.ts`.

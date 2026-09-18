@@ -765,6 +765,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .model-picker-chevron.open { transform:translateY(-50%) rotate(180deg); }
 .model-picker-refresh { flex-shrink:0; }
 .model-picker-note { margin:0; font-size:12px; font-weight:400; }
+.model-picker-deprecation { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0; font-size:12px; }
+.model-deprecation-chip {
+  color:var(--working);
+  background:color-mix(in srgb, var(--working) 16%, var(--surface));
+}
 /* Scrollbars everywhere: a slim rounded thumb in the text colour, no track, inset from the edge. */
 ::-webkit-scrollbar { width:12px; height:12px; }
 ::-webkit-scrollbar-track,::-webkit-scrollbar-corner { background:transparent; }
