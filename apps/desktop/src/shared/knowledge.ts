@@ -41,8 +41,11 @@ export const KnowledgeProposal = z.object({
 
 export const ContextManifest = z.object({
   bytes: z.number().int().nonnegative(),
-  loaded: z.array(z.object({ kind: z.enum(['platform', 'team', 'worker', 'skill', 'knowledge']), id: Uuid.optional(), revision: z.number().int().positive().optional(), hash: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int().nonnegative() }).strict()).max(40),
-  omitted: z.array(z.object({ kind: z.enum(['team', 'worker', 'skill', 'knowledge']), id: Uuid, revision: z.number().int().positive(), reason: z.enum(['duplicate', 'context_limit', 'not_relevant']) }).strict()).max(600),
+  loaded: z.array(z.object({ kind: z.enum(['platform', 'team', 'worker', 'skill', 'knowledge', 'summary', 'memory']), id: Uuid.optional(), revision: z.number().int().positive().optional(), hash: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int().nonnegative() }).strict()).max(40),
+  omitted: z.array(z.object({ kind: z.enum(['team', 'worker', 'skill', 'knowledge', 'turn']), id: Uuid.optional(), revision: z.number().int().positive(), reason: z.enum(['duplicate', 'context_limit', 'not_relevant', 'summarized', 'truncated']) }).strict()).max(600),
+  verbatimTurns: z.number().int().nonnegative().optional(),
+  summaryChars: z.number().int().nonnegative().optional(),
+  retrievedSnippets: z.number().int().nonnegative().optional(),
 }).strict();
 export type ContextManifest = z.infer<typeof ContextManifest>;
 export const RunContext = z.object({
