@@ -81,8 +81,8 @@ try {
   await page.getByRole('tab', { name: 'Harness trên máy', exact: true }).click();
   const section = page.getByRole('region', { name: 'Harness trên máy' });
   await section.waitFor();
-  // The no-Demo note lives on the settings panel heading, not inside the harness list region.
-  await page.locator('#settings-panel').getByText('không chuyển sang Demo', { exact: false }).waitFor();
+  // The no-Demo note lives on the settings panel heading. Auth-fail rows also mention it, so do not search the whole panel.
+  await page.locator('#settings-panel p.heading-description').getByText('không chuyển sang Demo', { exact: false }).waitFor();
   for (const item of detected) {
     const row = section.locator('.harness-row', { hasText: item.name });
     await row.getByText(item.name, { exact: true }).waitFor();
@@ -100,6 +100,7 @@ try {
   await claudeRow.getByText('Đã thấy · chưa đăng nhập', { exact: true }).waitFor();
   assert.equal(await claudeRow.getByText(/^Đã đăng nhập/, { exact: false }).count(), 0);
   await codexRow.getByText('Lỗi đăng nhập', { exact: true }).waitFor();
+  await codexRow.getByText('không chuyển sang Demo', { exact: false }).waitFor();
   assert.equal(await codexRow.getByText(/^Đã đăng nhập/, { exact: false }).count(), 0);
   await page.getByRole('button', { name: 'Dò lại', exact: true }).click();
   await page.getByText('Đã dò lại harness.', { exact: true }).waitFor();
