@@ -1,14 +1,15 @@
 import { _electron as electron } from 'playwright';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
+import { packagedExecutable } from './packaged-executable.mjs';
 
 // Language setting: switch to English, check UI text, a translated core error and persistence, then switch back.
 const directory = await mkdtemp(join(tmpdir(), 'orglet-i18n-'));
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
-const launch = () => electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${directory}`], env });
+const launch = () => electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
 const errors = [];
 // Records the title of the next native open dialog without showing it.
 const dialogTitle = async (app, page) => {

@@ -2,12 +2,13 @@ import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { packagedExecutable } from './packaged-executable.mjs';
 
 // Captures the README screenshots from the packaged app, using a throwaway data folder and Demo workers only.
 // Build the app with `pnpm make` first, then run `node scripts/readme-screenshots.mjs`.
 
 const outputFolder = resolve('docs/images');
-const executablePath = resolve('out/Orglet-win32-x64/Orglet.exe');
+const executablePath = packagedExecutable();
 const viewportSize = { width: 1400, height: 880 };
 
 const workers = [

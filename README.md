@@ -48,8 +48,8 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
 
 | Platform | Status |
 |---|---|
-| 🪟 Windows | Build from source today. Installers come with the first release. |
-| 🍎 macOS | Coming soon |
+| 🪟 Windows | Build from source today. Unsigned ZIP and Squirrel Setup from `pnpm make`. Public 0.2.x installers stay unsigned; see [windows-release-gates.md](docs/windows-release-gates.md). |
+| 🍎 macOS | Unsigned ZIP of `Orglet.app` from `pnpm make` on a Mac, or the `orglet-macos-unsigned-zip` CI artifact. **Not signed or notarized.** Gatekeeper will warn; right-click → Open. See [macos-packaging.md](docs/macos-packaging.md). |
 | 🐧 Linux | Coming soon |
 | 📱 iOS and Android | Coming soon |
 
@@ -68,22 +68,24 @@ API keys are encrypted with your system's secure storage and never reach the app
 
 ## Run it from source
 
-You need Windows, Node 24.19 or newer and pnpm 11.19.0.
+You need Windows or macOS, Node 24.19 or newer and pnpm 11.19.0.
 
-```powershell
+```
 pnpm install --frozen-lockfile
 pnpm dev
 ```
 
 The Researcher worker starts on **Demo**, so you can try the app without any account.
 
-To run the checks and build an unsigned installer under `out/make`:
+To run the checks and build an unsigned package under `out/make`:
 
-```powershell
+```
 pnpm typecheck
 pnpm test
 pnpm make
 ```
+
+On Windows that writes a ZIP and Squirrel Setup. On macOS it writes a ZIP of `Orglet.app`. Neither is signed or notarized.
 
 ## Privacy
 
@@ -93,6 +95,7 @@ Orglet has no account and no server of its own. Requests go only to the provider
 
 - [Product direction](docs/product.md): who Orglet is for and what it should do well
 - [Technical guide](docs/technical-guide.md): providers, harnesses, limits, checks and smoke tests
+- [macOS packaging](docs/macos-packaging.md): unsigned ZIP maker, CI job, and what to verify on a Mac
 - [Implementation status](docs/implementation_status.md): what is verified and what is left
 
 ## Contributing

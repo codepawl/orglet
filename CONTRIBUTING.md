@@ -19,6 +19,6 @@ To accept it, write this in your first pull request:
 ## Pull requests
 
 - Keep each pull request to one change.
-- Run `pnpm typecheck` and `pnpm test`, and say in the pull request what you ran. Required GitHub CI is Windows: those checks (plus a production `pnpm audit`) fail fast, then `pnpm make` and packaged smokes run. See [docs/windows-release-gates.md](docs/windows-release-gates.md).
+- Run `pnpm typecheck` and `pnpm test`, and say in the pull request what you ran. Required GitHub CI is Windows: those checks (plus a production `pnpm audit`) fail fast, then `pnpm make` and packaged smokes run. See [docs/windows-release-gates.md](docs/windows-release-gates.md). A separate macOS job runs typecheck, tests and `pnpm make`; it is not the required `test` check.
 - Shipping a public Windows GitHub Release is a separate maintainer checklist on that page (unsigned 0.2.x, human installer smoke, then tag). Do not push release tags from a pull request.
 - User-facing text goes through the translation files: Vietnamese source strings, with English in `apps/desktop/src/shared/locales/en.ts`.
