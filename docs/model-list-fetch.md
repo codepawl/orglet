@@ -1,6 +1,8 @@
 # Fetching model lists
 
-Plan for [COD-29](https://linear.app/codepawl/issue/COD-29) under epic [COD-27](https://linear.app/codepawl/issue/COD-27). **This page is the decision.** [COD-31](https://linear.app/codepawl/issue/COD-31) implements fetch + cache; [COD-28](https://linear.app/codepawl/issue/COD-28) is the picker UI; [COD-30](https://linear.app/codepawl/issue/COD-30) is the deprecated chip. None of those ship in the COD-29 PR.
+Plan for [COD-29](https://linear.app/codepawl/issue/COD-29) under epic [COD-27](https://linear.app/codepawl/issue/COD-27). **This page is the decision.** [COD-31](https://linear.app/codepawl/issue/COD-31) implements fetch + cache; [COD-28](https://linear.app/codepawl/issue/COD-28) is the picker UI; [COD-30](https://linear.app/codepawl/issue/COD-30) is the deprecated chip.
+
+**Shipped (COD-31):** `modelList` fetches each connection from its native API or CLI, caches the result in SQLite `settings.modelLists` (24h TTL, stale-while-revalidate), stores OpenAI `shutdown_date` and Codex `upgrade` when present, and always allows a typed custom model ID. No picker UI and no deprecated chip in that PR.
 
 It does not add feature UI, scrape HTML, or change signing / [COD-19](https://linear.app/codepawl/issue/COD-19) / [COD-20](https://linear.app/codepawl/issue/COD-20). Team chat ([COD-24](https://linear.app/codepawl/issue/COD-24)) is unrelated.
 
@@ -159,14 +161,16 @@ Do **not** do this list in the COD-29 PR.
 
 ### COD-31 — fetch + cache
 
-1. Typed `ModelEntry` / `ModelListCache` in `shared/` (zod). Settings key `modelLists`, versioned, excluded from backup.
-2. Core command `modelList({ provider, refresh?: boolean })`. Return `{ models, fetchedAt, stale, error? }`. Renderer-only; no keys.
-3. OpenAI / Anthropic / xAI: official SDK or `GET` with the saved key; 8s timeout; pagination for Anthropic; xAI `language-models`; OpenAI display filter above.
+Shipped. Remaining picker/chip work is COD-28 / COD-30.
+
+1. Typed `ModelEntry` / `ModelListCache` in `shared/models.ts` (zod). Settings key `modelLists`, versioned, excluded from backup.
+2. Core command `modelList({ provider, refresh?: boolean })`. Return `{ models, fetchedAt, stale, error?, customIdOk }`. Renderer-only; no keys.
+3. OpenAI / Anthropic / xAI: `GET` with the saved key; 8s timeout; pagination for Anthropic; xAI `language-models`; OpenAI display filter above.
 4. Codex: `codex debug models` JSON → `id`/`displayName`/`replacementId`. Cursor: `agent --list-models`, parse `id - name` lines; if the shape is wrong, fail-open. Claude Code: static aliases, no network. Demo: empty.
 5. Persist; TTL 24h; invalidate on key change and harness **Dò lại**; stale-while-revalidate.
 6. Map OpenAI `shutdown_date` into `deprecated` + `sunsetAt`. Leave other providers' deprecation fields omitted.
-7. Tests with HTTP/CLI fixtures: hit; cache reuse; TTL/invalidation; 401/timeout still returns custom-ID-ok + stale cache; Anthropic pagination; OpenAI filter hides embeddings but accepts a typed embedding ID at the schema layer; no HTML parser in the tree.
-8. Short note in this file's “Shipped” line when it lands. No worker dialog UI in COD-31.
+7. Tests with HTTP/CLI fixtures in `tests/integration/model-list.test.ts`.
+8. This file's “Shipped” line. No worker dialog UI in COD-31.
 
 ### COD-28 — UI (after or with a stub list)
 
@@ -191,15 +195,11 @@ Do **not** do this list in the COD-29 PR.
 - Passing `--model` before COD-28 persists `modelId`
 - COD-19/20 signing, COD-24/25 team chat
 
-## Code to change later (not in COD-29)
+## Code still later (COD-28 / COD-30)
 
-- `apps/desktop/src/core/adapters/catalog.ts` — keep as price/hint table, not the only ID
 - `apps/desktop/src/core/adapters/openai.ts`, `anthropic.ts` — construct with worker `modelId`
 - `apps/desktop/src/core/orchestration/runner.ts` — freeze selected ID
 - `apps/desktop/src/core/harness/exec.ts` — `--model` / `-m`
-- `apps/desktop/src/core/service.ts` — `modelList` command; invalidate next to `connect` / `harnesses(true)`
-- `apps/desktop/src/core/storage/database.ts` — settings key only
-- `apps/desktop/src/core/storage/backup.ts` — do not export `modelLists`
 - `apps/desktop/src/shared/contracts.ts` — `modelId` on `WorkerInput` (COD-28)
 - `apps/desktop/src/renderer/components/WorkerDialog.tsx` — COD-28
 

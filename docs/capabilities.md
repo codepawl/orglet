@@ -17,7 +17,7 @@
 | Local Codex harness (`codex exec`) | Yes, when installed and signed in; live review verified | Sources inlined in the prompt; shell tools, apps, browser and computer use disabled; user config ignored |
 | Local Cursor Agent harness | Yes, when installed and signed in; live probe optional | Headless `agent -p --mode=ask --sandbox enabled --trust`; report schema embedded in the prompt; never `--force`/`--yolo`; no Orglet reservation |
 | Codex app-server | No | `codex exec` covers review runs; app-server is not used. See below |
-| Model list fetch + cache | Plan only ([COD-29](https://linear.app/codepawl/issue/COD-29)) | Native provider APIs / harness CLIs first; SQLite `settings.modelLists`, 24h TTL; fail-open custom ID; no HTML scrape. See [model-list-fetch.md](model-list-fetch.md) |
+| Model list fetch + cache | Yes ([COD-31](https://linear.app/codepawl/issue/COD-31)) | Native OpenAI/Anthropic/xAI HTTP, Codex/Cursor CLI, Claude Code aliases; SQLite `settings.modelLists`, 24h TTL, stale-while-revalidate; fail-open custom ID; no HTML scrape. Picker UI is COD-28. See [model-list-fetch.md](model-list-fetch.md) |
 | Subscription quota display / internal allocation | No | Neither CLI exposes quota windows in headless mode; no screen is shown |
 | Shell, imported scripts, external writes | No | Not exposed through IPC or tool schemas |
 

@@ -18,7 +18,7 @@ The workspace contains only `plans/orglet_mvp_plan_vi.md` and its coding starter
 - Explicit demo mode, isolated from paid usage. No implicit mock fallback.
 - Versioned workers/skills and run snapshots; permissions checked at each source read.
 - Immutable usage entries in integer micro-USD; uncertain requests retain their reservation.
-- Custom model IDs: fetch lists from each provider's native API or CLI, cache in SQLite, fail-open to a typed ID, never scrape HTML ([docs/model-list-fetch.md](model-list-fetch.md), COD-29 plan; fetch/UI/chip are later CODs).
+- Custom model IDs: fetch lists from each provider's native API or CLI, cache in SQLite, fail-open to a typed ID, never scrape HTML ([docs/model-list-fetch.md](model-list-fetch.md), COD-31 fetch+cache shipped; picker UI is COD-28, deprecated chip is COD-30).
 
 ## Validation completed locally
 
@@ -181,3 +181,7 @@ User decision 2026-09-17: the interface is available in Vietnamese (default), En
 ## Team chat shell (COD-24)
 
 Clicking a team opens that team's chat (roster in the sidebar and header). One live `tasks` row keyed by `teamId`; the first message is `createTask`, later messages `reviseTask`. Execution stays today's member → synthesis path. Worker chat and group (`assignees`) chat are unchanged. Docs: [team-chat.md](team-chat.md), policy [team-chat-context.md](team-chat-context.md). Out of this spike: COD-25 orchestrator, COD-26 hide-task pile, COD-19/20.
+
+## Model list fetch and cache (COD-31)
+
+Core command `modelList({ provider, refresh? })` loads each connection's models from that provider's own API or CLI, stores them in `settings.modelLists` (24h TTL, stale-while-revalidate, excluded from backup), and always sets `customIdOk`. OpenAI `shutdown_date` and Codex `upgrade` are stored for COD-30; the worker picker (COD-28) and deprecated chip are not in this change. Tests: `tests/integration/model-list.test.ts`. Plan: [model-list-fetch.md](model-list-fetch.md).
