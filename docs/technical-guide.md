@@ -19,27 +19,41 @@ To try the interface without a model connection, keep the Researcher worker on *
 
 ## Connect a provider
 
-1. Save an OpenAI or Anthropic API key in a local `.txt` file containing only the key.
+1. Save an OpenAI, Anthropic or xAI (Grok) API key in a local `.txt` file containing only the key.
 2. In **Cài đặt**, choose **Nhập API key từ tệp** under the matching provider. The main process encrypts the key using Windows DPAPI. It never sends the key to the renderer. The original file remains where you saved it; remove it yourself when it is no longer needed.
-3. Edit Researcher, choose **OpenAI · GPT-4.1 mini** or **Anthropic · Claude Haiku 4.5**, and save.
+3. Edit Researcher, choose **OpenAI · GPT-4.1 mini**, **Anthropic · Claude Haiku 4.5** or **Grok · grok-3-mini**, and save.
 4. Select UTF-8 text files, describe the task, set a task budget and allow the selected content to be sent to the providers listed for that task.
 5. Send the task. Open **Chi tiết** for activity or source references. Accepting a report only updates its status in Orglet.
 
-Models are pinned to `gpt-4.1-mini-2025-04-14` and `claude-haiku-4-5-20251001`. A saved key does not establish that the provider account has credits. No subscription credentials are imported.
+Models are pinned to `gpt-4.1-mini-2025-04-14`, `claude-haiku-4-5-20251001` and `grok-3-mini`. A saved key does not establish that the provider account has credits. No subscription credentials are imported.
 
-## Local harnesses (Claude Code, Codex)
+### Live acceptance (manual)
+
+One authorized OpenAI or xAI task may be run against the real API with a **$0.05** budget. Orglet never searches for keys.
+
+```powershell
+$env:ORGLET_LIVE_KEY_FILE = 'C:\path\to\key.txt'
+$env:ORGLET_LIVE_PROVIDER = 'openai'   # or 'xai'
+pnpm test:live
+```
+
+Anthropic live acceptance needs a separate authorization and is not covered by `pnpm test:live`.
+
+## Local harnesses (Claude Code, Codex, Cursor Agent)
 
 Orglet can also run a worker through an agent CLI already installed on the machine, using whatever account that CLI is logged in with. **Cài đặt → Harness trên máy** lists what it found; **Dò lại** probes again after installing or logging in. Detection runs only each CLI's `--version` and its own login-status command, and looks in:
 
 - Claude Code: `PATH`, `~/.local/bin`, npm/bun/volta global bins, `~/.claude/local`, and the build Claude desktop downloads (`%APPDATA%\Claude\claude-code\<version>`, or the same folder inside the Claude MSIX package's `LocalCache`). Log in the CLI itself with `claude auth login`; the desktop app's session is not reused.
 - Codex: `PATH`, npm global bins and the Codex desktop app's `%LOCALAPPDATA%\OpenAI\Codex\bin`. Log in with `codex login`.
+- Cursor Agent: `PATH` and `%USERPROFILE%\.cursor\bin\agent.exe` (Windows install script). Log in with `agent login`.
 
-Pick **Claude Code trên máy này** or **Codex trên máy này** as a worker's model. Each task still needs explicit consent for that harness. A run copies the permitted, hash-checked sources and the skill's reference files into a temporary folder, sends the compiled context as the prompt and requires the same JSON report schema; Orglet then applies the same citation, checker, checklist and line-range checks as native runs and deletes the folder.
+Pick **Claude Code trên máy này**, **Codex trên máy này** or **Cursor Agent trên máy này** as a worker's model. Each task still needs explicit consent for that harness. A run copies the permitted, hash-checked sources and the skill's reference files into a temporary folder, sends the compiled context as the prompt and requires the same JSON report schema; Orglet then applies the same citation, checker, checklist and line-range checks as native runs and deletes the folder.
 
 - Claude Code runs with `-p --restricted --safe-mode --strict-mcp-config --tools Read,Grep,Glob --no-session-persistence`, so it has no command, web or MCP tools, ignores your hooks, plugins and CLAUDE.md, and its file tools stay inside the task folder. The remaining task budget is passed as `--max-budget-usd`.
 - Codex runs `exec --sandbox read-only --ignore-user-config --ignore-rules --ephemeral` with apps, browser use, computer use and its shell tools disabled. Codex reads files only through shell commands, which its Windows read-only sandbox rejects, so Orglet sends the permitted text sources in the prompt instead (256 KB per file, 1 MB total, no Parquet). Codex therefore has no file or command access at all.
+- Cursor Agent runs `agent -p --mode=ask --sandbox enabled --trust --workspace <task-copy> --output-format json`. Orglet never passes `--force` or `--yolo`. The report JSON schema is embedded in the prompt and validated again by core.
 - No Orglet budget reservation is made. Usage counts against the harness's plan or account; a cost the CLI reports is shown in activity only. Runs share the per-provider concurrency setting and stop after 15 minutes. Cancel kills the process tree. A harness run is one step: pausing takes effect before it starts, not inside it.
-- Orglet cannot see which files Claude Code actually opened, so its reports carry that limitation.
+- Orglet cannot see which files Claude Code or Cursor Agent actually opened, so its reports carry that limitation.
 
 ## Teams
 

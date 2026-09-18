@@ -33,7 +33,8 @@ Checked by reading `apps/desktop/src`:
 |---|---|
 | Installer on a clean Windows machine, startup, uninstall | Not run. Setup.exe is built but unsigned; installing from this development session would also be virtualized by the MSIX-packaged host |
 | Code signing | Not configured |
-| Live OpenAI acceptance ($0.05 cap) | Waiting for the user's key file path |
+| Live OpenAI acceptance ($0.05 cap) | Script ready: set `ORGLET_LIVE_KEY_FILE` (+ optional `ORGLET_LIVE_PROVIDER=openai`) and run `pnpm test:live`. Waiting for the user's key file path |
+| Live xAI (Grok) acceptance ($0.05 cap) | Same script with `ORGLET_LIVE_PROVIDER=xai`. Waiting for the user's key file path |
 | Live Anthropic acceptance | Not authorized |
 | Rollback onto an older installed build | Procedure documented in `docs/recovery.md`; only the database copy is tested |
 | Benchmark corpus (plan §14) | Needs an authorized corpus and labels |
