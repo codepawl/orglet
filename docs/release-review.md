@@ -8,7 +8,7 @@ Local review of the working tree on 2026-09-15. It records what was checked and 
 - The production tree resolved from the direct dependencies has 49 packages. All use MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause or 0BSD, except `fast-sha256@1.3.0` (Unlicense, public-domain dedication).
 - Build-only packages add MPL-2.0 (`lightningcss`, used by Tailwind at build time), CC-BY-4.0 (`caniuse-lite` data), CC-BY-3.0/CC0 (`spdx-*` data) and BlueOak-1.0.0 (`minipass-flush`). None of these ship inside the packaged app code; confirm by inspecting `app.asar` before a public release.
 - Native code shipped: DuckDB Node bindings (MIT) unpacked from ASAR, and Electron itself. SQLite is Node's bundled engine; startup refuses versions older than 3.51.3.
-- Not done: a vulnerability audit against an advisory database (`pnpm audit` or OSV), and a check of upstream maintenance status for each direct dependency. Both need network access and should run in CI before release.
+- CI runs `pnpm audit --prod --audit-level=high` on every pull request. A remaining high issue in `extract-zip` sits under Forge/packager (dev-only); see [windows-release-gates.md](windows-release-gates.md). Upstream maintenance status for each direct dependency is still not checked.
 
 ## Third-party marks
 
@@ -37,4 +37,4 @@ Checked by reading `apps/desktop/src`:
 | Live Anthropic acceptance | Not authorized |
 | Rollback onto an older installed build | Procedure documented in `docs/recovery.md`; only the database copy is tested |
 | Benchmark corpus (plan §14) | Needs an authorized corpus and labels |
-| Vulnerability and maintenance audit | Needs network access in CI |
+| Vulnerability and maintenance audit | Production `pnpm audit --prod --audit-level=high` is in PR CI; maintenance review of each direct dependency is still open |

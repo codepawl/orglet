@@ -19,5 +19,5 @@ To accept it, write this in your first pull request:
 ## Pull requests
 
 - Keep each pull request to one change.
-- Run `pnpm typecheck` and `pnpm test`, and say in the pull request what you ran.
+- Run `pnpm typecheck` and `pnpm test`, and say in the pull request what you ran. Required GitHub CI is Windows: those checks (plus a production `pnpm audit`) fail fast, then `pnpm make` and packaged smokes run. See [docs/windows-release-gates.md](docs/windows-release-gates.md).
 - User-facing text goes through the translation files: Vietnamese source strings, with English in `apps/desktop/src/shared/locales/en.ts`.
