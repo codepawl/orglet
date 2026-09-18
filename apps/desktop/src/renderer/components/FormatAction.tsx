@@ -15,7 +15,7 @@ export const FormatPreferences = createContext<Record<'copy' | 'download', Forma
 
 /**
  * Copy or download in a chosen format. With a saved preference one click uses it; with 'ask' the button opens a small
- * menu of formats. Preferences live in Cài đặt → Công việc.
+ * menu of formats. Preferences live in Cài đặt → Cuộc trò chuyện.
  */
 export function FormatAction({ kind, onPick }: { kind: 'copy' | 'download'; onPick: (format: TextFormat) => void }) {
   const preference = useContext(FormatPreferences)[kind];

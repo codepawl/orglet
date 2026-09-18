@@ -13,6 +13,7 @@ import { Switch } from './Switch';
 import { t, tMessage } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
+import { version as appVersion } from '../../../../../package.json';
 
 /** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
 const SAVED_KEY_MASK = '••••••••••••••••';
@@ -21,7 +22,7 @@ export type SettingsTab = 'general' | 'chat' | 'connections' | 'harness' | 'usag
 // Six short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming).
 const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'general', label: 'Chung', icon: <SlidersHorizontal size={16} /> },
-  { id: 'chat', label: 'Công việc', icon: <MessageSquare size={16} /> },
+  { id: 'chat', label: 'Cuộc trò chuyện', icon: <MessageSquare size={16} /> },
   { id: 'connections', label: 'Kết nối API', icon: <Plug size={16} /> },
   { id: 'harness', label: 'Harness trên máy', icon: <SquareTerminal size={16} /> },
   { id: 'usage', label: 'Chi phí & giới hạn', icon: <Wallet size={16} /> },
@@ -152,7 +153,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Định dạng khi tải xuống')} description={t('Chọn sẵn để bấm một lần là tải, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi tải xuống')} className="setting-select" value={workspace.downloadFormat} disabled={busy} onChange={value => void save({ downloadFormat: value as Workspace['downloadFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản (.txt)') }, { value: 'markdown', label: 'Markdown (.md)' }]} />
               </Row>
-              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Áp dụng cho công việc, nhân viên và nhóm, tính từ lúc lưu trữ. Công việc đã tốn phí chỉ giữ lại số liệu chi phí.')}>
+              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Áp dụng cho cuộc trò chuyện, nhân viên và nhóm, tính từ lúc lưu trữ. Cuộc trò chuyện đã tốn phí chỉ giữ lại số liệu chi phí.')}>
                 <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
               </Row>
               <Row title={t('Request đồng thời mỗi provider')} description={t('Bước vượt giới hạn sẽ xếp hàng và chưa giữ ngân sách.')}>
@@ -264,8 +265,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Khôi phục')} description={t('Bổ sung các mục còn thiếu, giữ nguyên dữ liệu và cài đặt hiện tại. Nguồn khôi phục cần được chọn lại để cấp quyền đọc.')}>
                 <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.restore()) ? t('Đã khôi phục các mục còn thiếu.') : undefined)}><ArchiveRestore size={14} />{t('Khôi phục từ tệp')}</Button>
               </Row>
-              <Row title={t('Phiên bản')} description={`Orglet 0.1 · SQLite ${workspace.sqliteVersion}`} />
-              <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi công việc, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet.')} />
+              <Row title={t('Phiên bản')} description={`Orglet ${appVersion} · SQLite ${workspace.sqliteVersion}`} />
+              <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi cuộc trò chuyện, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet.')} />
             </>}
           </section>
         </div>
