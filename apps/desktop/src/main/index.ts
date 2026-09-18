@@ -51,7 +51,7 @@ async function start() {
         return;
       }
       if (message.type === 'key') {
-        const provider = z.enum(['openai', 'anthropic']).safeParse(message.provider);
+        const provider = z.enum(['openai', 'anthropic', 'xai']).safeParse(message.provider);
         core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await credentials.read(provider.data) : null }); return;
       }
       if (message.type === 'profileCancel') { cancelProfile(message.id); return; }
@@ -123,7 +123,7 @@ async function start() {
     return result.canceled ? { sources: [], skipped: [] } : request('importFolder', result.filePaths[0]);
   });
   handle('orglet:connect', async raw => {
-    const provider = z.enum(['openai', 'anthropic']).parse(raw);
+    const provider = z.enum(['openai', 'anthropic', 'xai']).parse(raw);
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn tệp .txt chỉ chứa API key — key được mã hóa bằng Windows'), properties: ['openFile'], filters: [{ name: 'API key text', extensions: ['txt'] }] });
     if (!result.canceled) {
       const file = await open(result.filePaths[0], 'r');
@@ -137,7 +137,7 @@ async function start() {
     }
     return credentials.status();
   });
-  handle('orglet:disconnect', async raw => { await credentials.remove(z.enum(['openai', 'anthropic']).parse(raw)); return credentials.status(); });
+  handle('orglet:disconnect', async raw => { await credentials.remove(z.enum(['openai', 'anthropic', 'xai']).parse(raw)); return credentials.status(); });
   handle('orglet:backup', async () => {
     const result = await dialog.showSaveDialog(window, { title: tr('Lưu bản sao lưu'), defaultPath: 'orglet-backup.json', filters: [{ name: 'Orglet backup', extensions: ['json'] }] });
     if (result.canceled || !result.filePath) return false;
@@ -145,8 +145,8 @@ async function start() {
     return true;
   });
   handle('orglet:open-pricing', async raw => {
-    const pricing = { openai: 'https://openai.com/api/pricing/', anthropic: 'https://www.anthropic.com/pricing#api' } as const;
-    await shell.openExternal(pricing[z.enum(['openai', 'anthropic']).parse(raw)]);
+    const pricing = { openai: 'https://openai.com/api/pricing/', anthropic: 'https://www.anthropic.com/pricing#api', xai: 'https://docs.x.ai/developers/pricing' } as const;
+    await shell.openExternal(pricing[z.enum(['openai', 'anthropic', 'xai']).parse(raw)]);
   });
   handle('orglet:restore', async () => {
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn bản sao lưu Orglet'), properties: ['openFile'], filters: [{ name: 'Orglet backup', extensions: ['json'] }] });

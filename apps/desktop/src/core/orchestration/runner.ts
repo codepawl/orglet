@@ -29,7 +29,7 @@ import { detectUsageLimit, usageLimitMessage } from '../usageLimits';
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = { detect(): Promise<HarnessInfo[]>; execute: HarnessExecutor };
 
-const providerNames: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', ...harnessNames };
+const providerNames: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', xai: 'Grok (xAI)', ...harnessNames };
 
 /** The error shown for a failed run; provider refusals over plan, credit or rate limits say so plainly. */
 function failureMessage(run: Run, error: Error) {

@@ -29,14 +29,16 @@ const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject
 });
 const store = new Store(join(process.argv[2], 'orglet.sqlite'));
 const core = new CoreService(store, () => port.postMessage({ type: 'changed' }), async provider => {
-  if (!['openai', 'anthropic'].includes(provider)) throw new Error('Provider chưa được hỗ trợ.');
+  if (!['openai', 'anthropic', 'xai'].includes(provider)) throw new Error('Provider chưa được hỗ trợ.');
   const key = await new Promise<string | null>(resolve => {
     const requestId = crypto.randomUUID(); pendingKeys.set(requestId, resolve);
     port.postMessage({ type: 'key', id: requestId, provider });
     setTimeout(() => { if (pendingKeys.delete(requestId)) resolve(null); }, 5000).unref();
   });
   if (!key) throw new Error(`Chưa kết nối ${provider}. Mở Cài đặt để nhập API key.`);
-  return provider === 'anthropic' ? new AnthropicAdapter(key) : new OpenAIAdapter(key);
+  if (provider === 'anthropic') return new AnthropicAdapter(key);
+  if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai' });
+  return new OpenAIAdapter(key);
 }, profile);
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
 port.on('message', async ({ data }) => {

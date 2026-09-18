@@ -62,6 +62,7 @@ export function WorkerDialog({ open, worker, workspace, harnesses, onClose }: { 
         { value: 'demo', label: 'Demo', detail: t('không gọi API'), group: t('Thử nghiệm'), icon: <ProviderMark provider="demo" size="small" decorative /> },
         { value: 'openai', label: 'OpenAI', detail: 'GPT-4.1 mini', group: t('API trả phí'), icon: <ProviderMark provider="openai" size="small" decorative /> },
         { value: 'anthropic', label: 'Anthropic', detail: 'Claude Haiku 4.5', group: t('API trả phí'), icon: <ProviderMark provider="anthropic" size="small" decorative /> },
+        { value: 'xai', label: 'Grok', detail: 'grok-3-mini', group: t('API trả phí'), icon: <ProviderMark provider="xai" size="small" decorative /> },
         ...(['claude-code', 'codex'] as const).filter(id => provider === id || harnesses.some(item => item.id === id)).map(id => {
           const found = harnesses.find(item => item.id === id);
           return { value: id, label: harnessNames[id], group: t('Harness trên máy'), detail: [found ? found.version : t('chưa tìm thấy'), found?.auth === 'logged_out' ? t('chưa đăng nhập') : ''].filter(Boolean).join(' · '), icon: <ProviderMark provider={id} size="small" decorative /> };

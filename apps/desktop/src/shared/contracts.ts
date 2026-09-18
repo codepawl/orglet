@@ -11,11 +11,14 @@ import { CurrencyCode, type CurrencyState } from './currency';
 import { Language } from './i18n';
 
 export const Id = z.string().uuid();
-export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'claude-code', 'codex']);
+export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'claude-code', 'codex']);
 export type ProviderId = z.infer<typeof ProviderId>;
 /** Providers that receive task content and therefore need per-task consent. */
 export const ProviderScope = ProviderId.exclude(['demo']);
 export type ProviderScope = z.infer<typeof ProviderScope>;
+/** API providers that store an encrypted key (not local harnesses). */
+export const ApiProvider = z.enum(['openai', 'anthropic', 'xai']);
+export type ApiProvider = z.infer<typeof ApiProvider>;
 export const WorkerInput = z.object({
   id: Id.optional(), name: z.string().trim().min(1).max(80),
   instructions: z.string().trim().min(1).max(16000),
@@ -102,7 +105,7 @@ export type Artifact = { id: string; runId: string; report: Report; hash: string
 export type Usage = { chargedMicros: number; reservedMicros: number; uncertainCount: number };
 export type TaskDetail = { task: Task; runs: Run[]; events: Activity[]; artifacts: Artifact[]; profiles: ProfileRecord[]; preflights: PreflightRecord[]; sources: Source[]; usage: Usage };
 export type Workspace = { copyFormat: FormatPreference; downloadFormat: FormatPreference; archivedWorkers: (Worker & { archivedAt: string })[]; archivedTeams: (Team & { archivedAt: string })[]; language: Language; autoTitles: boolean; confirmOpenTask: boolean; archiveRetentionDays: ArchiveRetention; avatarColors: string[]; knowledge: Knowledge[]; workers: Worker[]; teams: Team[]; skills: Skill[]; tasks: Task[]; routines: Routine[]; usage: Usage; theme: 'system' | 'light' | 'dark'; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; currency: CurrencyState; sqliteVersion: string };
-export type Connections = { openai: boolean; anthropic: boolean };
+export type Connections = { openai: boolean; anthropic: boolean; xai: boolean };
 
 export const commands = {
   workspace: z.object({}),
@@ -158,8 +161,8 @@ export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;
   pickSources(): Promise<Source[]>;
   pickFolder(): Promise<FolderIntake>;
-  connect(provider: 'openai' | 'anthropic'): Promise<Connections>;
-  disconnect(provider: 'openai' | 'anthropic'): Promise<Connections>;
+  connect(provider: ApiProvider): Promise<Connections>;
+  disconnect(provider: ApiProvider): Promise<Connections>;
   connections(): Promise<Connections>;
   exportArtifact(id: string, format?: TextFormat): Promise<boolean>;
   copyArtifact(id: string, format: TextFormat): Promise<void>;
@@ -168,7 +171,7 @@ export interface Bridge {
   importTemplate(): Promise<Team | null>;
   importSkill(): Promise<Skill | null>;
   exportSkill(id: string): Promise<boolean>;
-  openPricing(provider: 'openai' | 'anthropic'): Promise<void>;
+  openPricing(provider: ApiProvider): Promise<void>;
   backup(): Promise<boolean>;
   restore(): Promise<boolean>;
   onChange(callback: () => void): () => void;

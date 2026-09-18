@@ -37,7 +37,7 @@ import { orglet } from './api';
 type Panel = 'task' | 'revision' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | 'sources' | null;
 export function App() {
   useLanguage();
-  const [workspace, setWorkspace] = useState<Workspace>(); const [connections, setConnections] = useState<Connections>({ openai: false, anthropic: false });
+  const [workspace, setWorkspace] = useState<Workspace>(); const [connections, setConnections] = useState<Connections>({ openai: false, anthropic: false, xai: false });
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([]);
   const [selected, setSelected] = useState<string | null>(null); const [detail, setDetail] = useState<TaskDetail>();
   const [workerId, setWorkerId] = useState(''); const [brief, setBrief] = useState(''); const [sources, setSources] = useState<Source[]>([]);
@@ -170,7 +170,7 @@ export function App() {
         <ArchivedList count={workspace.tasks.filter(task => task.archivedAt).length}>{workspace.tasks.filter(task => task.archivedAt).map(task => taskRow(task))}</ArchivedList>
       </SidebarSection>
       </div>
-      <div className="sidebar-footer"><Button onClick={() => { setRoutineDraft(undefined); setRoutineView({ editing: false }); setPanel('routines'); }}><CalendarClock size={18} />{t('Lịch chạy')}{workspace.routines.some(item => item.pending) && <span className="badge">{t('Cần xem')}</span>}</Button><Button onClick={() => { if (workspace.knowledge.some(item => item.status === 'proposed')) setLibraryTab('knowledge'); setPanel('library'); }}><BookOpen size={18} />{t('Thư viện')}{workspace.knowledge.some(item => item.status === 'proposed') && <span className="badge">{t('Cần duyệt')}</span>}</Button><Button onClick={() => openSettings()}><Settings2 size={18} />{t('Cài đặt')}<span className={`connection-dot ${connections.openai || connections.anthropic ? 'connected' : ''}`} /></Button></div>
+      <div className="sidebar-footer"><Button onClick={() => { setRoutineDraft(undefined); setRoutineView({ editing: false }); setPanel('routines'); }}><CalendarClock size={18} />{t('Lịch chạy')}{workspace.routines.some(item => item.pending) && <span className="badge">{t('Cần xem')}</span>}</Button><Button onClick={() => { if (workspace.knowledge.some(item => item.status === 'proposed')) setLibraryTab('knowledge'); setPanel('library'); }}><BookOpen size={18} />{t('Thư viện')}{workspace.knowledge.some(item => item.status === 'proposed') && <span className="badge">{t('Cần duyệt')}</span>}</Button><Button onClick={() => openSettings()}><Settings2 size={18} />{t('Cài đặt')}<span className={`connection-dot ${connections.openai || connections.anthropic || connections.xai ? 'connected' : ''}`} /></Button></div>
     </aside>}
     {/* Collapsed sidebar keeps its two most used actions in a narrow rail, stacked like ChatGPT. */}
     {!sidebar && <nav className="sidebar-rail" aria-label={t('Thanh bên thu gọn')}><Button size="icon" aria-label={t('Mở sidebar')} title={t('Mở sidebar')} onClick={() => setSidebar(true)}><PanelLeft size={20} /></Button><Button size="icon" aria-label={t('Công việc mới')} aria-keyshortcuts="Control+N" title={t('Công việc mới (Ctrl+N)')} onClick={newTask}><SquarePen size={19} /></Button><Button size="icon" aria-label={t('Tìm công việc (Ctrl K)')} aria-keyshortcuts="Control+K" aria-haspopup="dialog" title={t('Tìm công việc (Ctrl K)')} onClick={() => setSearchOpen(true)}><Search size={19} /></Button></nav>}

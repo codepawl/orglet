@@ -118,8 +118,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'connections' && <>
-              {(['openai', 'anthropic'] as const).map(provider => {
-                const name = provider === 'openai' ? 'OpenAI' : 'Anthropic';
+              {(['openai', 'anthropic', 'xai'] as const).map(provider => {
+                const name = provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'Grok (xAI)';
                 return <div key={provider} role="region" aria-label={t('Kết nối {0}', [name])} className="setting-row">
                   <ProviderMark provider={provider} />
                   <div className="setting-text">

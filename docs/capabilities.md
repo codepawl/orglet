@@ -5,6 +5,7 @@
 | Demo | Yes | Deterministic sample report; no model or source analysis |
 | OpenAI native | Implemented; live acceptance pending | GPT-4.1 mini snapshot, trusted text reader and validated report only |
 | Anthropic native | Implemented; live acceptance pending | Claude Haiku 4.5 snapshot, provider-scoped consent, trusted tools |
+| Grok (xAI) native | Implemented; live acceptance pending | OpenAI-compatible Chat Completions at `https://api.x.ai/v1`, `grok-3-mini`, same trusted tools and report gate |
 | Teams | Yes | Up to four members, parallel concurrency two, sequential upstream reports, partial retry and synthesis |
 | Provider request concurrency | Yes | Workspace-wide per provider, 1–4 (default 2); queued steps hold no budget reservation |
 | Local dataset checker | Yes | CSV/JSONL/Parquet; schema, counts, ID checks, column-name/row-count/ID-set comparison for two files; fixed SQL, process deadline, retained provenance |
@@ -37,6 +38,7 @@ Verified locally: detection on this Windows machine (both found), argument contr
 - Electron 44.3.0, Forge 7.11.2, Vite 8.3.0, React 19.3.0; exact transitive resolution in `pnpm-lock.yaml`.
 - Native desktop smoke reports the actual bundled SQLite engine, independently of the host Node engine. Startup rejects SQLite older than 3.51.3.
 - OpenAI SDK 7.15.0. `gpt-4.1-mini-2025-04-14`, standard text input $0.40 and output $1.60 per million tokens. Cached input is deliberately estimated at the ordinary rate. No server tools with additional fees are enabled.
+- xAI via the same OpenAI SDK with `baseURL` `https://api.x.ai/v1`. Default model `grok-3-mini` at $0.30 input / $0.50 output per million tokens (`pricingVersion` `grok-3-mini:0.30:0.50`). Revalidate against [xAI pricing](https://docs.x.ai/developers/pricing) before release.
 - The request upper bound uses serialized context/tool UTF-8 bytes plus framing allowance and the output cap. Reservation and settlement use integer micro-USD. Unknown requests keep their reservation across restarts and month boundaries.
 - Forge's rebuild dependency references Electron node-gyp by Git URL; `pnpm-workspace.yaml` overrides it with the registry release `10.2.0-electron.2`. Exotic-subdependency blocking remains enabled.
 - Forge needs hoisted node_modules. Lifecycle builds are explicitly allowed only for Electron, esbuild and electron-winstaller.
