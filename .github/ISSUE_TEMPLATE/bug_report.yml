@@ -20,6 +20,16 @@ body:
     validations:
       required: true
   - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS
+        - Other
+    validations:
+      required: true
+  - type: dropdown
     id: provider
     attributes:
       label: How does the worker run?
@@ -35,8 +45,9 @@ body:
   - type: input
     id: system
     attributes:
-      label: Operating system and Orglet version or commit
-      placeholder: Windows 11, commit 49105da
+      label: OS version and Orglet version or commit
+      description: Release tag (for example v0.2.0) or a commit SHA. Say if you built from source.
+      placeholder: Windows 11, v0.2.0 from source
     validations:
       required: true
   - type: textarea
