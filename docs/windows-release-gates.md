@@ -11,7 +11,7 @@ It does **not** record that a smoke already ran. It does **not** create tags or 
 | Installer smoke on a clean machine | A human, once before a tag | GitHub Release |
 | Git tag + GitHub Release | Maintainer, after they approve | Public 0.2.x ship |
 
-Required pull-request CI is the **Windows desktop** workflow (`.github/workflows/desktop.yml`). It runs on `windows-latest`. A separate **macOS desktop** workflow runs typecheck, tests and `pnpm make` on `macos-latest` for dogfood packaging; it is **not** the required merge check and must not replace the Windows `test` aggregator. See [macos-packaging.md](macos-packaging.md). There is no Linux packaging workflow.
+Required pull-request CI is the **Windows desktop** workflow (`.github/workflows/desktop.yml`). It runs on `windows-latest`. A separate **macOS desktop** workflow runs typecheck, tests and `pnpm make` on `macos-latest` for dogfood packaging (Developer ID sign when secrets exist; not notarized yet); it is **not** the required merge check and must not replace the Windows `test` aggregator. See [macos-packaging.md](macos-packaging.md). There is no Linux packaging workflow.
 
 ## CI gates
 
@@ -108,6 +108,6 @@ When a maintainer is ready to ship public 0.2.x:
 3. Set `package.json` `version` to the 0.2.x you are shipping if it is not already, and land that on `main`.
 4. Create an annotated tag on that commit, for example `git tag -a v0.2.0 -m "Orglet 0.2.0"` then `git push origin v0.2.0`. Only a maintainer does this.
 5. On GitHub: **Releases → Draft a new release**, choose that tag, and attach the unsigned `Setup.exe` and the ZIP from that commit's `orglet-windows-unsigned-setup` / `orglet-windows-unsigned-zip` artifacts (or a local `pnpm make`).
-6. Put the SmartScreen / unsigned paragraph in the release notes (see [Signing decision](#signing-decision-locked)). Link this page. State AGPL-3.0 and that the public GitHub Release ships Windows only. macOS ZIP packaging exists for dogfood (see [macos-packaging.md](macos-packaging.md)) and is not a Release asset.
+6. Put the SmartScreen / unsigned paragraph in the release notes (see [Signing decision](#signing-decision-locked)). Link this page. State AGPL-3.0 and that the public GitHub Release ships Windows only. macOS ZIP packaging exists for dogfood (see [macos-packaging.md](macos-packaging.md); Developer ID when secrets exist, not notarized yet) and is not a Release asset.
 
 Do not attach builds from a different commit. Do not upload signing certificates or private keys.

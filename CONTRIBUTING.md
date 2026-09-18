@@ -27,7 +27,7 @@ Pull requests run two GitHub Actions workflows. Docs-only changes still trigger 
 | Workflow | File | What it runs | Merge gate |
 |---|---|---|---|
 | Windows desktop | [`.github/workflows/desktop.yml`](.github/workflows/desktop.yml) | Fail-fast `pnpm audit --prod --audit-level=high`, `pnpm typecheck`, `pnpm test`; then `pnpm make` and packaged smokes | **Required** — check name `test` |
-| macOS desktop | [`.github/workflows/macos.yml`](.github/workflows/macos.yml) | `pnpm typecheck`, `pnpm test`, `pnpm make` (unsigned ZIP artifact) | Runs on PRs; **not** the required `test` check |
+| macOS desktop | [`.github/workflows/macos.yml`](.github/workflows/macos.yml) | `pnpm typecheck`, `pnpm test`, Developer ID import when secrets exist, `pnpm make` (signed or unsigned ZIP artifact) | Runs on PRs; **not** the required `test` check |
 
 There is no Linux workflow. A green macOS job does not replace the Windows aggregator. Details: [windows-release-gates.md](docs/windows-release-gates.md), [macos-packaging.md](docs/macos-packaging.md).
 

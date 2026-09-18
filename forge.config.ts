@@ -2,6 +2,7 @@ import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { VitePlugin } from '@electron-forge/plugin-vite';
+import { resolveOsxNotarize, resolveOsxSign } from './forge.macos';
 
 // Ship only the Vite build plus DuckDB's native addon tree. pnpm installs the
 // current platform's optional bindings; listing every OS here means a Mac make
@@ -23,8 +24,10 @@ const config: ForgeConfig = {
     asar: { unpack: '**/*.{node,dll,dylib,so}' },
     executableName: 'Orglet',
     appBundleId: 'com.codepawl.orglet',
-    // Unsigned and not notarized. Do not set osxSign or osxNotarize.
-    // Electron may still ad-hoc sign Apple Silicon so the binary can launch.
+    // Developer ID sign when APPLE_SIGNING_ENABLED=true (CI after P12 import).
+    // Notarize only when Apple ID or App Store Connect API key env is complete.
+    osxSign: resolveOsxSign(),
+    osxNotarize: resolveOsxNotarize(),
     // Regenerate with: node_modules/electron/dist/electron.exe scripts/build-icon.cjs
     icon: 'apps/desktop/assets/icon',
     // Vite's default ignores all node_modules, including external native dependencies.

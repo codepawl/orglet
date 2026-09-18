@@ -14,7 +14,7 @@ jobs:
   macos:
     name: typecheck, test and make
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: pnpm/action-setup@v6
@@ -27,10 +27,55 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm make
+      - name: Import Developer ID certificate
+        id: signing
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: bash scripts/ci-macos-import-signing.sh
+      - name: Prepare notarize API key file
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          set +x
+          if [ -z "${APPLE_API_KEY_P8:-}" ]; then
+            echo "App Store Connect API key is not set; notarize will run only if Apple ID secrets are complete."
+            exit 0
+          fi
+          umask 077
+          printf '%s' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+      - name: Make
+        env:
+          APPLE_SIGNING_ENABLED: ${{ steps.signing.outputs.enabled }}
+          APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: pnpm make
+      - name: Verify Developer ID signature
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apps=(out/Orglet-darwin-*/Orglet.app)
+          if [ "${#apps[@]}" -ne 1 ]; then
+            echo "expected one Orglet.app, found ${#apps[@]}"
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=2 "${apps[0]}"
+          codesign --display --verbose=2 "${apps[0]}"
+          if stapler validate "${apps[0]}" >/dev/null 2>&1; then
+            echo "Notarization staple: present"
+          else
+            echo "Notarization staple: absent (Apple ID / API key / issuer not configured)."
+          fi
       - uses: actions/upload-artifact@v4
         with:
-          name: orglet-macos-unsigned-zip
+          name: orglet-macos-${{ steps.signing.outputs.enabled == 'true' && 'signed' || 'unsigned' }}-zip
           path: out/make/zip/darwin/**/*.zip
           if-no-files-found: error
           retention-days: 14

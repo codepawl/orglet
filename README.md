@@ -68,12 +68,12 @@ Further reading: [product direction](docs/product.md), [technical guide](docs/te
 
 [Latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. The tag is public; Windows **Setup.exe** / **ZIP** assets on that release may still be empty. If they are missing, [build from source](#dev).
 
-There are no signed or notarized installers.
+Windows installers are unsigned. macOS CI can Developer ID sign when repo secrets exist; notarization is not configured yet.
 
 | Platform | Status |
 |---|---|
 | Windows | Public 0.2.x target. Unsigned ZIP and Squirrel Setup from `pnpm make`. If those files are not attached to the GitHub Release, build locally. SmartScreen may warn (unknown publisher); that is expected. See [windows-release-gates.md](docs/windows-release-gates.md). |
-| macOS | Unsigned ZIP of `Orglet.app` from `pnpm make` on a Mac, or the `orglet-macos-unsigned-zip` CI artifact. **Not signed or notarized**, and not a GitHub Release asset. Gatekeeper will warn; right-click → Open. See [macos-packaging.md](docs/macos-packaging.md). |
+| macOS | ZIP of `Orglet.app` from `pnpm make` on a Mac, or the `orglet-macos-signed-zip` / `orglet-macos-unsigned-zip` CI artifact. CI signs with Developer ID when P12 secrets are set. **Not notarized** yet, and not a GitHub Release asset. Gatekeeper will still warn until Apple ID or App Store Connect API key secrets exist; right-click → Open. See [macos-packaging.md](docs/macos-packaging.md). |
 | Linux | Coming soon |
 | iOS and Android | Coming soon |
 
@@ -88,7 +88,7 @@ pnpm dev
 
 The Researcher worker starts on **Demo**, so you can try the app without any account.
 
-To run the checks and build an unsigned package under `out/make`:
+To run the checks and build a package under `out/make`:
 
 ```
 pnpm typecheck
@@ -96,7 +96,7 @@ pnpm test
 pnpm make
 ```
 
-On Windows that writes a ZIP and Squirrel Setup. On macOS it writes a ZIP of `Orglet.app`. Neither is signed or notarized.
+On Windows that writes a ZIP and Squirrel Setup (unsigned). On macOS it writes a ZIP of `Orglet.app`. Local macOS makes stay unsigned unless `APPLE_SIGNING_ENABLED=true` and a Developer ID identity is in the keychain; CI signs when secrets exist. Notarization is a separate Apple ID / API key step.
 
 ## Contributing
 

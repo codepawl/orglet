@@ -163,7 +163,7 @@ The skill smoke checks directory import, review gating, resource preview, export
 
 The run-audit smoke checks structured log errors, direction selection, repeat/failure summaries and public/private rank changes. `node scripts/run-audit-smoke.mjs --inspect-ui` leaves the result open for computer use.
 
-`pnpm build` produces `out/Orglet-win32-x64/Orglet.exe` on Windows, or `out/Orglet-darwin-<arch>/Orglet.app` on a Mac. `pnpm make` writes makers under `out/make`: ZIP + Squirrel Setup on Windows; an unsigned ZIP of `Orglet.app` on macOS. Public Windows 0.2.x installers are unsigned by decision; see [windows-release-gates.md](windows-release-gates.md). macOS ZIPs are also unsigned and not notarized; see [macos-packaging.md](macos-packaging.md). GitHub Actions runs typecheck, tests and `pnpm make` on `macos-latest` in a separate workflow that is **not** the required Windows `test` aggregator.
+`pnpm build` produces `out/Orglet-win32-x64/Orglet.exe` on Windows, or `out/Orglet-darwin-<arch>/Orglet.app` on a Mac. `pnpm make` writes makers under `out/make`: ZIP + Squirrel Setup on Windows; a ZIP of `Orglet.app` on macOS. Public Windows 0.2.x installers are unsigned by decision; see [windows-release-gates.md](windows-release-gates.md). macOS CI Developer ID signs when P12 secrets exist and does not notarize until Apple ID or App Store Connect API key secrets exist; see [macos-packaging.md](macos-packaging.md). GitHub Actions runs typecheck, tests and `pnpm make` on `macos-latest` in a separate workflow that is **not** the required Windows `test` aggregator.
 
 See `docs/implementation_status.md` for actual verification and remaining work.
 
