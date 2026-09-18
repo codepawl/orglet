@@ -24,7 +24,7 @@ All four of these matter. When two conflict, the order below breaks the tie.
 
 ## How it should feel
 
-- **A chat first.** A task is a conversation. Workers answer like coworkers, and a formal report only appears when you ask for one or a team checklist needs it.
+- **A chat first.** Click a team to open that team's conversation, or a worker for theirs. A task is that chat. Workers answer like coworkers, and a formal report only appears when you ask for one or a team checklist needs it.
 - **Documents like attachments.** A report arrives as a file you open, not a wall of text in the chat.
 - **Quiet while working.** Show a spinner and a short status. Versions, paths and costs live in Details.
 - **Nothing to set up to start.** New installs speak US English, include a demo worker and pick avatars and titles automatically. Vietnamese and UK English are in Settings.
@@ -34,15 +34,15 @@ All four of these matter. When two conflict, the order below breaks the tie.
 
 | In the app | Meaning |
 |---|---|
-| Task (Công việc) | One conversation with one or more workers |
+| Task (Công việc) | One conversation with one or more workers. A team's live chat is also a task row under the hood. |
 | Worker (Nhân viên) | An AI coworker with a role, instructions and a skill |
-| Team (Nhóm) | Workers who take a message together and combine their results |
+| Team (Nhóm) | Workers who take a message together and combine their results. Click the team to open **that team's chat**. |
 | Routine (Lịch chạy) | A request that repeats on a schedule |
 | Skill / Knowledge | Reusable instructions and notes workers can use |
 
 Projects that group several tasks are postponed until real use shows a need (shared files or shared context across tasks).
 
-Proposed for epic COD-22 (pending An): one live chat per worker or team, with tasks/runs under the hood. Context, memory, cost and fail-closed rules: [team-chat-context.md](team-chat-context.md).
+**Team chat (COD-24, shipped):** click a team → that team's conversation. One live thread per team (find-or-create a `tasks` row keyed by `teamId`; a user message is a turn, not a new row). Worker chat is unchanged. How it works: [team-chat.md](team-chat.md). Long-chat context, memory, cost and fail-closed defaults: [team-chat-context.md](team-chat-context.md). Still later in epic COD-22: orchestrator 1→N→report (COD-25) and hiding the task pile (COD-26).
 
 ## Release
 

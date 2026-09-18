@@ -117,10 +117,11 @@ function RenameField({ name, label, onSave, onDone }: { name: string; label: str
 
 /**
  * A team or worker row that can open to show what belongs to it. The avatar turns into a chevron on hover,
- * like project folders in ChatGPT; selecting the name still picks the team or worker for the next task.
+ * like project folders in ChatGPT. The chevron toggles the roster or tasks. The name selects: a team opens
+ * its chat and stays expanded (`expandOnSelect`); a worker still toggles its task list.
  * Optional `status` is the rolled-up mark from its subset (tasks for a worker, workers for a team).
  */
-export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, expandLabel, menu, reorder, children }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; expandLabel: string; menu: ReactNode; reorder: RowBindings; children: ReactNode }) {
+export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, expandLabel, menu, reorder, expandOnSelect, children }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; expandLabel: string; menu: ReactNode; reorder: RowBindings; expandOnSelect?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(() => readOpen(id));
   const toggle = () => setOpen(value => {
     try { localStorage.setItem(storageKey(id), value ? '0' : '1'); } catch { /* storage unavailable: keep in memory only */ }
@@ -135,7 +136,7 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
       </button>
       <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} title={description ? `${description}
 ${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-        aria-expanded={open} aria-controls={`tree-${id}`} onClick={() => { onSelect(); toggle(); }} onKeyDown={onMoveKey}>
+        aria-expanded={open} aria-controls={`tree-${id}`} onClick={() => { onSelect(); if (expandOnSelect) { if (!open) toggle(); } else toggle(); }} onKeyDown={onMoveKey}>
         <span>{name}</span>
       </button>
       <span data-no-drag>{menu}</span>

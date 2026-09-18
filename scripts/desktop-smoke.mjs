@@ -104,13 +104,13 @@ try {
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
   await page.getByRole('button', { name: 'Research Review', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Research Review', exact: true }).click();
-  await page.getByRole('button', { name: /^Công việc mới/ }).click();
+  await page.getByRole('heading', { name: 'Đang nhắn với Research Review' }).waitFor();
   await page.getByRole('button', { name: 'Thiết lập nhóm', exact: true }).click();
   await page.getByRole('dialog', { name: 'Thiết lập nhóm' }).waitFor();
   assert.equal(await page.getByLabel('Tên nhóm', { exact: true }).inputValue(), 'Research Review');
   await page.keyboard.press('Escape');
-  await page.getByRole('textbox', { name: 'Nội dung công việc' }).fill('Desktop smoke: team synthesis');
-  await page.getByRole('button', { name: 'Gửi công việc', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: team synthesis');
+  await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   const teamTask = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks[0];
   const teamDetail = await page.evaluate(id => window.orglet.call('task', { id }), teamTask.id);

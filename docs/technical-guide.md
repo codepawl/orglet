@@ -57,7 +57,13 @@ Pick **Claude Code trên máy này**, **Codex trên máy này** or **Cursor Agen
 
 ## Teams
 
-Long team and worker chats (context budget, memory, fail-closed, thread↔job mapping) are specified in [team-chat-context.md](team-chat-context.md); that plan is not implemented in this guide's current behavior.
+Click a team in the sidebar to open **that team's chat** (roster under the row and in the header). How the shell works, how it differs from worker chat, and find-or-create: [team-chat.md](team-chat.md).
+
+Identity: newest non-archived `tasks` row with that `teamId`, no `assignees`, no `routineId` (`liveTeamTask` in `apps/desktop/src/shared/live-task.ts`). The first user message calls `createTask`; later messages call `reviseTask` on the same id. Do not create a new task row per send. Routines stay separate. `createTask` itself is unchanged, so scheduled team work can still insert discrete rows.
+
+Execution is today's member → synthesis path (`TeamRunner.run` when `task.teamSnapshot` is set). This spike does not add a COD-25 orchestrator. Worker chat (no `teamId`) and group chat (`assignees`, `TeamRunner.chat`) are unchanged.
+
+Long-chat context budget, rolling summary, retrieval and refuse-the-send are specified in [team-chat-context.md](team-chat-context.md); follow-ups still send the existing truncated history window (10 turns, 24 000 characters) until that plan is implemented.
 
 Choose **Tạo team** and use a Research Review or Eris Review template, or select up to four existing workers and a synthesizer. Templates start in Demo mode. Parallel teams run at most two members at once; sequential teams pass committed reports to the next member. The synthesizer joins the saved reports. Open **Chi tiết** to inspect or export individual role results. Retry keeps successful member results and continues missing roles.
 
@@ -83,7 +89,7 @@ Open **Thư viện → Knowledge** to save short reusable notes. Each note has a
 
 A model can suggest up to three notes when it submits a report. Suggestions and notes arriving in an imported team template wait under **Chờ duyệt** and never reach a model until approved. Editing, approving or archiving creates a new revision. Search uses SQLite FTS5 over title, content and tags.
 
-Before its first request, every run freezes the context it will use. **Chi tiết → Context đã nạp** lists the instruction and knowledge revisions loaded and anything left out as a duplicate, over the 12-note/16 KB limit, or unrelated to the brief. Later edits never change a finished or resumed run. Follow-up turns currently send a truncated recent window (10 turns, 24 000 characters), not a rolling summary; the proposed long-chat policy is [team-chat-context.md](team-chat-context.md). Team templates carry only that team's approved notes; backups carry all knowledge with its revision history.
+Before its first request, every run freezes the context it will use. **Chi tiết → Context đã nạp** lists the instruction and knowledge revisions loaded and anything left out as a duplicate, over the 12-note/16 KB limit, or unrelated to the brief. Later edits never change a finished or resumed run. Follow-up turns currently send a truncated recent window (10 turns, 24 000 characters), not a rolling summary; the long-chat policy is [team-chat-context.md](team-chat-context.md). Team chat UI (click team → one live thread) is [team-chat.md](team-chat.md). Team templates carry only that team's approved notes; backups carry all knowledge with its revision history.
 
 ## Current limits
 

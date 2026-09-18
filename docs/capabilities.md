@@ -7,6 +7,7 @@
 | Anthropic native | Implemented; live acceptance pending | Claude Haiku 4.5 snapshot, provider-scoped consent, trusted tools |
 | Grok (xAI) native | Implemented; live acceptance pending | OpenAI-compatible Chat Completions at `https://api.x.ai/v1`, `grok-3-mini`, same trusted tools and report gate |
 | Teams | Yes | Up to four members, parallel concurrency two, sequential upstream reports, partial retry and synthesis |
+| Team chat shell | Yes ([COD-24](https://linear.app/codepawl/issue/COD-24); [team-chat.md](team-chat.md)) | Click team → one live `tasks` row keyed by `teamId`; later messages `reviseTask`; member→synthesis unchanged; worker chat unchanged |
 | Provider request concurrency | Yes | Workspace-wide per provider, 1–4 (default 2); queued steps hold no budget reservation |
 | Local dataset checker | Yes | CSV/JSONL/Parquet; schema, counts, ID checks, column-name/row-count/ID-set comparison for two files; fixed SQL, process deadline, retained provenance |
 | Reviewed knowledge | Yes | Workspace/team/worker scope, immutable revisions, FTS5 keyword search, pins; model proposals and template imports wait for review |

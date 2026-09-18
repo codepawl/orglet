@@ -6,6 +6,7 @@ import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import type { Team, Worker } from '../../apps/desktop/src/shared/contracts';
 import type { ModelAdapter } from '../../apps/desktop/src/core/adapters/openai';
+import { nextTeamMessage } from '../../apps/desktop/src/shared/live-task';
 
 let directory: string; let store: Store; let core: CoreService;
 let failReviewer: boolean; let calls: string[]; let live: number; let peak: number;
@@ -118,6 +119,18 @@ it('starts fresh roles for an input revision while retaining previous artifacts 
   await expect(core.command('reviseTask', { taskId, brief: 'No consent', sourceIds: [], consent: false, providerScopes: [], budgetMicros: 1_000_000 })).rejects.toThrow('cho phép');
   expect(store.detail(taskId).task.inputRevision).toBe(1);
   expect(() => core.backups.preview(core.backups.export())).not.toThrow();
+});
+
+it('routes a later team message onto the live thread instead of opening a second task', async () => {
+  const { team, taskId } = await setup();
+  expect(nextTeamMessage(store.workspace().tasks, team.id)).toEqual({ mode: 'revise', taskId });
+  await core.command('reviseTask', { taskId, brief: 'Follow-up in the same team chat', sourceIds: [], consent: true, providerScopes: ['openai'], budgetMicros: 1_000_000 });
+  await done(taskId);
+  const after = store.workspace().tasks.filter(task => task.teamId === team.id && !task.routineId && !task.archivedAt);
+  expect(after).toHaveLength(1);
+  expect(after[0].id).toBe(taskId);
+  expect(after[0].inputRevision).toBe(1);
+  expect(after[0].currentInput?.brief).toBe('Follow-up in the same team chat');
 });
 
 it('does not accept an earlier synthesis as the result of an unfinished revision', async () => {

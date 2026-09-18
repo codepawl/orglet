@@ -25,12 +25,14 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
 - **Keep your data on your computer.** No Orglet account, no Orglet server. Chats, workers and files live in a local database.
 - **Made for one person.** Freelancers, solo founders and anyone who uses ChatGPT or Claude every day and wants a bit more structure.
 
+Click a **team** in the sidebar to open that team's chat (not only a list of workers). One live conversation per team; later messages stay in it. Click a **worker** to talk to them on their own. Details: [team chat](docs/team-chat.md).
+
 > Orglet is early. Expect rough edges, and check answers against your own sources before you rely on them.
 
 | | |
 |---|---|
 | 💬 **Chat with a worker** | Ask questions, talk things through or hand over a job. Follow-ups keep the earlier conversation. |
-| 👥 **Work as a team** | Send one message to a single worker, a few of them, everyone, or a team that combines their answers. |
+| 👥 **Chat with a team** | Click a team to open its chat. Members stay in the roster. One live thread per team — a new message is a turn, not a new task. [How it works](docs/team-chat.md). |
 | 📎 **Attach files safely** | A worker only reads the files you attach to that task. |
 | 📄 **Reports as documents** | Ask for a report and it opens like a file. Copy it as plain text or Markdown, or download it. |
 | 🔁 **Repeat work on a schedule** | Schedules send the same request every day or week while Orglet is open. If the computer was off, missed runs become one catch-up you can run or skip; the next time stays on the calendar. |
@@ -58,7 +60,7 @@ API keys are encrypted with your system's secure storage and never reach the app
 
 Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, and only with the files you attached.
 
-Further reading: [product direction](docs/product.md), [technical guide](docs/technical-guide.md), [team/worker chat context plan](docs/team-chat-context.md), [Windows release gates](docs/windows-release-gates.md), [macOS packaging](docs/macos-packaging.md), [implementation status](docs/implementation_status.md).
+Further reading: [product direction](docs/product.md), [technical guide](docs/technical-guide.md), [team chat](docs/team-chat.md), [team/worker chat context plan](docs/team-chat-context.md), [Windows release gates](docs/windows-release-gates.md), [macOS packaging](docs/macos-packaging.md), [implementation status](docs/implementation_status.md).
 
 ## Install
 

@@ -1,8 +1,10 @@
 # Team/worker chat: context, memory, cost, fail-closed
 
-Proposed with [COD-23](https://linear.app/codepawl/issue/COD-23) for epic [COD-22](https://linear.app/codepawl/issue/COD-22) (team chat + orchestrator, hide the task/session pile). **An must approve this page before COD-24 UI or COD-25 orchestrator code.** Numbers below are defaults to implement, not a new settings screen.
+Policy for epic [COD-22](https://linear.app/codepawl/issue/COD-22), written with [COD-23](https://linear.app/codepawl/issue/COD-23). **The five approval questions below are yes.** Numbers are defaults to implement, not a new settings screen.
 
-This is policy for long chats. It does not ship team-chat UI, orchestrator routing, signing, [COD-19](https://linear.app/codepawl/issue/COD-19) release assets, or [COD-20](https://linear.app/codepawl/issue/COD-20) notarize.
+**Shipped:** team chat shell ([COD-24](https://linear.app/codepawl/issue/COD-24)) — click team → live thread, find-or-create one `tasks` row keyed by `teamId`. User-facing behavior: [team-chat.md](team-chat.md).
+
+This page is still the long-chat policy (bounded prompt, extractive summary, retrieval, refuse-the-send, fail-closed). It does not ship the COD-25 orchestrator, COD-26 hide-tasks UX, signing, [COD-19](https://linear.app/codepawl/issue/COD-19) release assets, or [COD-20](https://linear.app/codepawl/issue/COD-20) notarize.
 
 ## Decision in one paragraph
 
@@ -119,21 +121,21 @@ Do **not** do this list in the COD-23 PR.
 
 **Shared core (before or with COD-25; COD-24 may stub):**
 
-1. Treat find-or-create live `tasks` row as the thread id; `reviseTask` remains “new message”.
+1. Treat find-or-create live `tasks` row as the thread id; `reviseTask` remains “new message”. **Done for team chat** (`liveTeamTask` / empty composer `createTask`, then `reviseTask`). Not yet for one live worker thread.
 2. Extend the frozen context manifest with transcript layers (`verbatimTurns`, `summaryChars`, `retrievedSnippets`, omission reasons).
 3. Extractive rolling summary + refuse path when over 200 000 bytes after compact (`runner.ts` `history()` / byte cap).
 4. FTS over this thread's older turns; 4 snippets / 8 KB; no cross-thread hits.
 5. Tests: window of 10; 11th turn summarized not inlined; retrieval misses other workers' threads; refuse when still over cap; no dispatch on retrieval failure; budget not reserved on refuse.
 
-**COD-24 (team chat shell):** click team → thread; persist the user message as a turn; do not invent orchestrator behavior; do not break worker chat; show refuse/budget/error copy in the thread, not a new session.
+**COD-24 (team chat shell):** **done** — [team-chat.md](team-chat.md). Click team → thread; persist the user message as a turn; do not invent orchestrator behavior; do not break worker chat; show refuse/budget/error copy in the thread, not a new session.
 
 **COD-25 (orchestrator 1→N→report):** map plan/member/synthesis to `runs`; one user-facing report; fail-closed table above; cancel cancels the whole turn's jobs; retry unfinished jobs only.
 
 **COD-26 (hide task pile):** sidebar is workers/teams; Chi tiết still has jobs, cost, retry, cancel; routines stay on **Lịch chạy**.
 
-## Out of scope (this PR and this plan)
+## Out of scope (this policy page)
 
-- Team chat UI, orchestrator implementation, @/tag polish
+- COD-25 orchestrator, @/tag polish, COD-26 hide-task-pile UX (team chat **shell** is [team-chat.md](team-chat.md))
 - New SQLite `threads` table (reuse `tasks`)
 - LLM-billed summarization, embeddings, provider tokenizers
 - Cross-thread or workspace-wide auto-memory
@@ -142,15 +144,17 @@ Do **not** do this list in the COD-23 PR.
 
 ## Approval questions for An
 
-1. **One live thread per worker and per team** (archive to start over), not a new chat row per message — yes/no?
-2. **Extractive summary only** for v1 (no extra model bill) — yes/no?
-3. **Per-turn money cap stays cumulative on the thread** (today's task budget), not a fresh cap every message — yes/no?
-4. **Partial team results stay `partial` and named**, even after orchestrator exists — yes/no?
-5. **Internal member runs stay out of the main transcript** (Chi tiết only) once orchestrator reports back — yes/no?
+Answered **yes** (COD-24 may implement against these defaults):
+
+1. **One live thread per worker and per team** (archive to start over), not a new chat row per message — **yes**.
+2. **Extractive summary only** for v1 (no extra model bill) — **yes**.
+3. **Per-turn money cap stays cumulative on the thread** (today's task budget), not a fresh cap every message — **yes**.
+4. **Partial team results stay `partial` and named**, even after orchestrator exists — **yes**.
+5. **Internal member runs stay out of the main transcript** (Chi tiết only) once orchestrator reports back — **yes**.
 
 ## What this is not
 
 - Not permission to stuff the full chat into every request.
 - Not a cloud memory service.
 - Not a change to source consent, checksums, or the 6-step / 4 096-output-token worker limits.
-- Not implemented by this documentation PR.
+- Not a substitute for [team-chat.md](team-chat.md) (the shipped click-team shell). Context layers 3–4 and the refuse path are still unimplemented.
