@@ -6,6 +6,7 @@ import { autoMascot, avatarPalette, mascotCategoryIds, mascotCategoryLabels, mas
 import { ColorPicker } from './ColorPicker';
 import { Select } from './Select';
 import { Button } from './ui';
+import type { Worker } from '../../shared/contracts';
 
 export { avatarPalette };
 export const avatarColor = (seed: string, color?: string) => color ?? avatarPalette[seedHash(seed) % avatarPalette.length];
@@ -30,6 +31,14 @@ export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, 
   return <span className={`avatar ${size} ${shape} ${face === 'emoji' ? 'emoji' : face ? 'has-mascot' : ''}`} style={{ '--avatar-color': ink } as CSSProperties} aria-hidden="true">
     <span className="avatar-face">{face === 'emoji' ? emoji : face ? <Mascot id={face} /> : letter}</span>
     {badge && <span className="avatar-badge">{badge}</span>}
+  </span>;
+}
+
+/** Overlapping worker faces for a team chat header or empty thread. */
+export function RosterAvatars({ workers, size = 'xs' }: { workers: readonly Worker[]; size?: 'xs' | 'sm' }) {
+  if (!workers.length) return null;
+  return <span className="composer-to-avatars">
+    {workers.map(worker => <Avatar key={worker.id} name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />)}
   </span>;
 }
 

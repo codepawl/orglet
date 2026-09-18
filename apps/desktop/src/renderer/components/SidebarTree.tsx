@@ -117,7 +117,8 @@ function RenameField({ name, label, onSave, onDone }: { name: string; label: str
 
 /**
  * A team or worker row that can open to show what belongs to it. The avatar turns into a chevron on hover,
- * like project folders in ChatGPT; selecting the name still picks the team or worker for the next task.
+ * like project folders in ChatGPT; the chevron toggles the roster or tasks, and the name selects (a team
+ * opens its chat). Selecting a closed row also expands it so the roster stays visible.
  * Optional `status` is the rolled-up mark from its subset (tasks for a worker, workers for a team).
  */
 export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, expandLabel, menu, reorder, children }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; expandLabel: string; menu: ReactNode; reorder: RowBindings; children: ReactNode }) {
@@ -135,7 +136,7 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
       </button>
       <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} title={description ? `${description}
 ${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-        aria-expanded={open} aria-controls={`tree-${id}`} onClick={() => { onSelect(); toggle(); }} onKeyDown={onMoveKey}>
+        aria-expanded={open} aria-controls={`tree-${id}`} onClick={() => { onSelect(); if (!open) toggle(); }} onKeyDown={onMoveKey}>
         <span>{name}</span>
       </button>
       <span data-no-drag>{menu}</span>

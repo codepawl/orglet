@@ -170,6 +170,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .suggestions button:disabled { opacity:.55; }
 /* Thread: the prompt bar stays pinned under the conversation. */
 .thread-composer { width:100%; max-width:780px; margin:0 auto; padding:8px var(--page-x) 0; }
+.team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
+.team-chat-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:42vh; text-align:center; }
+.team-chat-empty .welcome { margin-bottom:0; }
+.team-chat-empty .muted { max-width:36em; }
+.topbar-roster { flex-shrink:0; }
+.tree-leaf.roster { cursor:default; }
+.tree-leaf.roster:hover { background:transparent; }
 .source-picker { position:relative; }
 .source-menu { position:absolute; left:0; bottom:calc(100% + 6px); z-index:4; min-width:230px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001a; display:flex; flex-direction:column; gap:2px; }
 .source-menu.below { top:calc(100% + 6px); bottom:auto; }

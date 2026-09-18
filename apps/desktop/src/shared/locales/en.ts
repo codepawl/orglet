@@ -539,6 +539,8 @@ export const en: Dictionary = {
   'Không gửi được tin nhắn.': 'Couldn\'t send the message.',
   'Nhắn hoặc giao việc cho nhân viên': 'Message or give work to a worker',
   'Nhắn tiếp…': 'Reply…',
+  'Nhắn với nhóm…': 'Message the team…',
+  'Nhân viên của {0}': 'Workers in {0}',
   'Sao chép': 'Copy',
   'Sửa đăng nhập {0}': 'Fix sign-in for {0}',
   'Sau khi cài, đăng nhập bằng': 'After installing, sign in with',
