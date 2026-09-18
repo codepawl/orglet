@@ -58,7 +58,7 @@ User message (inputRevision)
 
 - Plan may assign a **subset** of members. Unassigned members are cancelled with a named skip (`Không được phân việc cho lượt này.`); they are not treated as failures.
 - Member chatter is **not** the user-facing transcript. **Chi tiết** still lists every job (plan, members, synthesis) for retry, cost and cancel. The thread copy/download on the synthesis reply is `Sao chép` / `Tải xuống`. Hidden job artifacts in Chi tiết still export with `Xuất báo cáo này` (the first Chi tiết `<details>` is `Context đã nạp` on the plan job, not a report).
-- Demo assigns every member the user brief (no invented extra workers) and does not call a model for routing.
+- Demo assigns every member the user brief, or only members you `@` tagged (no invented extra workers), and does not call a model for routing.
 
 ### Fail-closed
 
@@ -72,6 +72,15 @@ User message (inputRevision)
 
 Cancel aborts the whole turn (plan + members + synthesis). Partial success stays `partial`, never silent `completed`. Worker chat is one run with no `stage`.
 
+## @mentions
+
+In a **team** or **group** chat, type `@` in the composer to pick a worker, `@all`, or the team name. Tagged names highlight in the message.
+
+- **Group chat:** only tagged assignees answer that turn. `@all`, the team name, or no tag keeps everyone.
+- **Team chat:** Demo assigns the tagged members. A live planner is told who you tagged and may still assign others. Untagged messages still assign every member.
+
+Unknown `@` text is left as typed and does not change who runs.
+
 ## Errors, budget, retry
 
 Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết**, retry / resume / cancel on the same task). A failure does not open a new session. Cost still sits next to **Chi tiết**; settled tokens on the latest turn. If the compacted prompt is still over 200 KB, the send is refused (no reservation, no model call) with a repair message. Rolling summary and thread-memory retrieval are frozen on the run manifest (**Chi tiết → Context đã nạp**).
@@ -80,8 +89,9 @@ Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết
 
 - Click / send: `apps/desktop/src/renderer/App.tsx` (`openWorker`, `openTeam`, `send`)
 - Identity: `apps/desktop/src/shared/live-task.ts`
+- Mentions: `apps/desktop/src/shared/mentions.ts`
 - Persist a turn: `createTask` / `reviseTask` in `apps/desktop/src/core/service.ts`
 - Orchestrator: `apps/desktop/src/core/orchestration/team.ts` (`run`) and `plan.ts`
 - Transcript layers: `apps/desktop/src/core/context/thread.ts`
 - Plan tool / Demo routing: `apps/desktop/src/core/orchestration/runner.ts` (`submit_plan`, `completePlan`)
-- Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`, `tests/integration/thread-context.test.ts`
+- Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`, `tests/integration/thread-context.test.ts`, `tests/integration/mentions.test.ts`

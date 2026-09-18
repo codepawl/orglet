@@ -136,6 +136,22 @@ it('lets several workers, or all of them, answer each message in turn, each seei
   expect(() => core.backups.preview(core.backups.export())).not.toThrow();
 });
 
+it('lets @tags in a group chat limit who answers that turn', async () => {
+  const workerId = await chatWorker('openai');
+  const skillId = store.all<Worker>('workers')[0].skillId;
+  const second = await core.command('saveWorker', { name: 'Kế toán', instructions: 'Help with accounting.', provider: 'openai', skillId, taskBudgetMicros: 100_000 }) as Worker;
+  replies.push(answer('Chào từ Researcher.'));
+  const taskId = await core.command('createTask', { workerId, brief: 'Chào cả nhóm', ...scope }) as string;
+  await until(() => store.detail(taskId).task.status === 'completed');
+  await core.command('updateTask', { id: taskId, title: '', assignee: { kind: 'workers', workerIds: [workerId, second.id] }, budgetMicros: 100_000 });
+  replies.push(answer('Kế toán đây.'));
+  await core.command('reviseTask', { taskId, brief: '@Kế toán điểm danh giúp', ...scope });
+  await until(() => store.detail(taskId).task.status === 'completed' && store.detail(taskId).runs.some(run => run.stage === 'group' && run.snapshot.inputRevision === 1));
+  const tagged = store.detail(taskId).runs.filter(run => run.stage === 'group' && run.snapshot.inputRevision === 1);
+  expect(tagged.map(run => run.snapshot.worker.id)).toEqual([second.id]);
+  expect(tagged).toHaveLength(1);
+});
+
 it('turns Markdown into readable plain text for copying', () => {
   expect(markdownToPlain('# Kế hoạch\n\n**Mục tiêu:** ra mắt *quý 4*\n\n- Việc `một`\n- Xem [tài liệu](https://example.com)\n\n```js\nlet x = 1;\n```')).toBe('Kế hoạch\n\nMục tiêu: ra mắt quý 4\n\n• Việc một\n• Xem tài liệu (https://example.com)\n\nlet x = 1;');
 });

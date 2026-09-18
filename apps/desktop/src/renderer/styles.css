@@ -126,7 +126,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .team-chat-empty .welcome { text-box:trim-both cap alphabetic; }
 .welcome-who { display:inline-flex; align-items:safe center; gap:8px; vertical-align:middle; }
 /* Prompt bar: a one-line pill (add · input · [who] · send) that grows into a box when the text wraps or sources are attached. */
-.composer { display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"lead input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--border-subtle); border-radius:24px; background:var(--bg); box-shadow:0 2px 12px #00000008; }
+.composer { position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"lead input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--border-subtle); border-radius:24px; background:var(--bg); box-shadow:0 2px 12px #00000008; }
 .composer.has-trailing { grid-template-columns:auto minmax(0,1fr) auto auto; grid-template-areas:"lead input trail send"; }
 .composer.expanded { grid-template-areas:"attach attach attach" "input input input" "lead . send"; row-gap:5px; border-radius:22px; padding:7px; }
 .composer.expanded.has-trailing { grid-template-areas:"attach attach attach attach" "input input input input" "lead . trail send"; }
@@ -188,6 +188,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .source-menu span { display:flex; flex-direction:column; }
 .source-menu strong { font-size:14px; font-weight:500; }
 .source-menu small { font-size:12px; color:var(--muted); }
+.mention-menu { position:absolute; left:8px; right:8px; bottom:calc(100% + 6px); z-index:5; max-height:240px; overflow:auto; margin:0; padding:6px; list-style:none; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001a; display:flex; flex-direction:column; gap:2px; }
+.mention-menu button { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; padding:6px 10px; border:0; border-radius:8px; background:transparent; text-align:left; }
+.mention-menu button.active,.mention-menu button:hover,.mention-menu button:focus-visible { background:var(--surface); }
+.mention-menu span { display:flex; min-width:0; flex-direction:column; }
+.mention-menu strong { font-size:14px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mention-menu small { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mention-all { display:grid; place-items:center; width:22px; height:22px; border-radius:7px; background:var(--surface); color:var(--muted); font-size:13px; font-weight:600; flex-shrink:0; }
+.mention { font-weight:600; background:color-mix(in srgb, var(--focus) 18%, transparent); border-radius:4px; padding:0 3px; }
 .composer-note { margin:10px 0 0; text-align:center; color:var(--muted); font-size:12px; }
 .composer-note button { border:0; background:transparent; color:var(--text); text-decoration:underline; margin-left:6px; }
 .attachment { display:flex; align-items:center; gap:6px; font-size:12px; padding:6px 8px; border-radius:8px; background:var(--surface); max-width:100%; }

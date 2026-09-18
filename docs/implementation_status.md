@@ -190,6 +190,10 @@ A team-chat turn runs plan → assigned members → one synthesis report (`TeamR
 
 The sidebar is **Nhóm** and **Nhân viên**, not a **Công việc** list. Click a worker or a team to open the live thread (`liveWorkerTask` / `liveTeamTask`). Empty composer find-or-creates; later sends `reviseTask`. Archive from the thread ⋯ menu to start over. Search still finds older chats. **Chi tiết** keeps jobs, dollars, retry and cancel. Routines stay on **Lịch chạy**. Docs: [team-chat.md](team-chat.md).
 
+## Composer @mentions (COD-36)
+
+Team and group composers open a worker picker on `@`. Tagged names highlight in the user message. Group chat runs only tagged assignees that turn (`@all` / no tag keeps everyone). Demo team plans assign tagged members; a live planner receives `tagged` ids and a prefer-those-members instruction. Parser: `apps/desktop/src/shared/mentions.ts`. Tests: `tests/integration/mentions.test.ts`, group turn in `chat.test.ts`, Demo plan in `team.test.ts`.
+
 ## Thread context layers (COD-32)
 
 Each job hydrates a bounded prompt: compiled instructions, approved knowledge, an extractive rolling summary of older turns (≤ 8 KB), up to four keyword snippets from this thread only (≤ 8 KB), then the last 10 verbatim turns. If compacting still cannot fit 200 KB, the send is refused with no reservation. Frozen on `run.snapshot.context.manifest` (`verbatimTurns`, `summaryChars`, `retrievedSnippets`). Tests: `tests/integration/thread-context.test.ts`. Policy: [team-chat-context.md](team-chat-context.md).

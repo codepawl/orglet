@@ -26,6 +26,7 @@ import { taskResultStamp } from '../shared/task-seen';
 import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './models/fetch';
 import { canStoreModelListRow, dropProviderRow, readModelListCache, writeModelListCache } from './models/cache';
 import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
+import { mentionedPeople } from '../shared/mentions';
 
 export class CoreService {
   feedbackText(artifactId: string): string {
@@ -171,7 +172,7 @@ export class CoreService {
         else if (this.groupWorkers(task)) {
           this.teams.assertResumable(task.id);
           task.pauseReason = undefined; task.handoff = undefined; this.store.update('tasks', task);
-          void this.teams.chat(task, this.groupWorkers(task)!, true);
+          void this.teams.chat(task, this.groupTurnWorkers(task)!, true);
         }
         else {
           const run = this.store.detail(task.id).runs.at(-1);
@@ -548,6 +549,13 @@ export class CoreService {
     const workers = this.store.workspace().workers.filter(worker => task.assignees === 'all' || task.assignees!.includes(worker.id));
     return task.assignees === 'all' || workers.length > 1 ? workers : undefined;
   }
+  /** Assignees who should answer this group-chat turn: @tagged workers, or the whole group when nobody was tagged. */
+  private groupTurnWorkers(task: Task) {
+    const group = this.groupWorkers(task);
+    if (!group) return undefined;
+    const brief = (task.currentInput ?? task).brief;
+    return mentionedPeople(brief, group) ?? group;
+  }
   private prepareTask(input: TaskInput): Task {
     if (input.teamId) this.assertAssignable('team', input.teamId);
     const team = input.teamId ? this.store.get<Team>('teams', input.teamId) : undefined;
@@ -609,7 +617,7 @@ export class CoreService {
     task = { ...task, pauseReason: undefined, handoff: undefined };
     this.store.update('tasks', task);
     if (task.teamSnapshot) { void this.teams.run(task, task.teamSnapshot); return; }
-    const group = this.groupWorkers(task);
+    const group = this.groupTurnWorkers(task);
     if (group) { void this.teams.chat(task, group); return; }
     const worker = this.store.get<Worker>('workers', task.workerId);
     const skill = this.store.get<Skill>('skills', worker.skillId);
