@@ -93,7 +93,13 @@ describe('detection', () => {
       return { code: 1, stdout: 'Not authenticated\n', stderr: '' };
     };
     const [cursor] = (await detectHarnesses(env, 'linux', probe)).filter(item => item.id === 'cursor');
-    expect(cursor).toEqual(expect.objectContaining({ auth: 'logged_out', status: 'detected', loginCommand: `${agent} login` }));
+    expect(cursor).toEqual(expect.objectContaining({
+      auth: 'logged_out',
+      status: 'detected',
+      executable: agent,
+      loginCommand: loginCommand('cursor', agent, 'linux'),
+    }));
+    expect(cursor.loginCommand).toMatch(/login$/);
     expect(harnessReady(cursor)).toBe(false);
   });
 });
