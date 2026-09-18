@@ -27,7 +27,7 @@ The GitHub required check name remains `test`. That job does not run the suite a
 
 `extract-zip` currently has high advisories (`GHSA-jmr9-qjv8-65gv`, `GHSA-7pqw-9j4j-h8q3`) through `@electron/packager`. That tree is a **dev/packaging** dependency, so `--prod` does not report it and this workflow does not ignore those GHSAs. Do not allowlist a production CVE.
 
-Not in this workflow: nightly extra Windows jobs, live API keys, paid provider calls, running Squirrel Setup, or uploading installer artifacts.
+Not in this workflow: nightly extra Windows jobs, live API keys, paid provider calls, or running Squirrel Setup. The packaged job uploads unsigned Squirrel Setup and the win32 ZIP as Actions artifacts (`orglet-windows-unsigned-setup` and `orglet-windows-unsigned-zip`, 14-day retention).
 
 ## Signing decision (locked)
 
@@ -43,7 +43,7 @@ Signed builds are a later milestone, only after a code-signing certificate exist
 
 ## Installer smoke (human gate)
 
-CI builds the installer (`pnpm make`) and runs packaged Playwright smokes against that build with an isolated `--user-data-dir`. It does **not** run Squirrel Setup, does not install like a user, and does not uninstall. The Windows desktop workflow also does not upload `Setup.exe`.
+CI builds the installer (`pnpm make`) and runs packaged Playwright smokes against that build with an isolated `--user-data-dir`. It does **not** run Squirrel Setup, does not install like a user, and does not uninstall. After `pnpm make`, it uploads unsigned Setup and ZIP as Actions artifacts.
 
 Run the steps below **once on a clean Windows machine or VM** before tagging a GitHub Release. Packaged CI smokes are not this checklist. A maintainer may later write that they accept CI as enough for a given tag; until they do, a human still has to run Setup.
 
@@ -66,7 +66,7 @@ Use Windows 10 or 11 on a machine or VM that does not already have Orglet instal
 Copy this list into the release issue or tag notes and tick a step only after you have done it.
 
 1. **Get Setup**  
-   On a Windows build machine (it can be the same VM): `pnpm install --frozen-lockfile`, then `pnpm make`. Copy `*Setup.exe` from `out/make/squirrel.windows/` (Squirrel; often `orgletSetup.exe`) onto the clean machine. Optionally keep the ZIP from `out/make/zip/`. Build from the commit you intend to tag, not from another branch.
+   Download `orglet-windows-unsigned-setup` (and optionally `orglet-windows-unsigned-zip`) from the Windows `packaged` job on the commit you intend to tag. Or on a Windows build machine: `pnpm install --frozen-lockfile`, then `pnpm make`, and copy `*Setup.exe` from `out/make/squirrel.windows/` (Squirrel; typically `Orglet-<version> Setup.exe`). Optionally keep the ZIP from `out/make/zip/win32/`.
 
 2. **SmartScreen (expected)**  
    Run Setup. If SmartScreen appears, choose **More info** → **Run anyway**. Note whether the warning appeared. For unsigned 0.2.x, a SmartScreen warning is not a product defect.
@@ -101,7 +101,7 @@ When a maintainer is ready to ship public 0.2.x:
 2. Confirm the human installer smoke above has been run on that same commit, **or** the maintainer has written that they accept CI packaged smokes as enough for this tag.
 3. Set `package.json` `version` to the 0.2.x you are shipping if it is not already, and land that on `main`.
 4. Create an annotated tag on that commit, for example `git tag -a v0.2.0 -m "Orglet 0.2.0"` then `git push origin v0.2.0`. Only a maintainer does this.
-5. On GitHub: **Releases → Draft a new release**, choose that tag, and attach the unsigned `Setup.exe` and the ZIP produced by `pnpm make` from the tagged commit.
+5. On GitHub: **Releases → Draft a new release**, choose that tag, and attach the unsigned `Setup.exe` and the ZIP from that commit's `orglet-windows-unsigned-setup` / `orglet-windows-unsigned-zip` artifacts (or a local `pnpm make`).
 6. Put the SmartScreen / unsigned paragraph in the release notes (see [Signing decision](#signing-decision-locked)). Link this page. State AGPL-3.0 and that the public GitHub Release ships Windows only. macOS ZIP packaging exists for dogfood (see [macos-packaging.md](macos-packaging.md)) and is not a Release asset.
 
 Do not attach builds from a different commit. Do not upload signing certificates or private keys.

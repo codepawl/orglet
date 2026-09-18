@@ -46,6 +46,18 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm make
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orglet-windows-unsigned-setup
+          path: out/make/squirrel.windows/**
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orglet-windows-unsigned-zip
+          path: out/make/zip/win32/**/*.zip
+          if-no-files-found: error
+          retention-days: 14
       - run: pnpm test:desktop
       - run: pnpm test:packaged
       - run: pnpm test:routines
