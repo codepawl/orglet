@@ -54,13 +54,15 @@ Workers can run through a local CLI, an API key, or Demo:
 | OpenAI, Anthropic or Grok (xAI) API | An API key saved in Settings | Pay per use, with limits you set |
 | Demo | Nothing | Free, sample replies only |
 
+Each API or harness worker is tied to one model ID. Today that ID is pinned per provider (for example GPT-4.1 mini). The plan to fetch each provider's own list, cache it on this computer, and always allow typing a custom ID is [model-list-fetch.md](docs/model-list-fetch.md).
+
 **Settings → Local harnesses** always shows Claude Code, Codex and Cursor Agent as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. If sign-in fails, the screen gives the CLI login command to copy; Orglet does not switch to Demo.
 
 API keys are encrypted with your system's secure storage and never reach the app's interface.
 
 Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, and only with the files you attached.
 
-Further reading: [product direction](docs/product.md), [technical guide](docs/technical-guide.md), [team chat](docs/team-chat.md), [team/worker chat context plan](docs/team-chat-context.md), [Windows release gates](docs/windows-release-gates.md), [macOS packaging](docs/macos-packaging.md), [implementation status](docs/implementation_status.md).
+Further reading: [product direction](docs/product.md), [technical guide](docs/technical-guide.md), [team chat](docs/team-chat.md), [team/worker chat context plan](docs/team-chat-context.md), [model list fetch](docs/model-list-fetch.md), [Windows release gates](docs/windows-release-gates.md), [macOS packaging](docs/macos-packaging.md), [implementation status](docs/implementation_status.md).
 
 ## Install
 
