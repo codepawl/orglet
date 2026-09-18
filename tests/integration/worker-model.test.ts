@@ -91,7 +91,7 @@ describe('worker model preference', () => {
         openrouter: {
           fetchedAt: new Date().toISOString(),
           source: 'native',
-          models: [{ provider: 'openrouter', id: 'anthropic/claude-sonnet-4', source: 'native', inputTenths: 30, outputTenths: 150 }],
+          models: [{ provider: 'openrouter', id: 'anthropic/claude-sonnet-4', source: 'native', inputTenths: 10, outputTenths: 20 }],
         },
       },
     });
@@ -102,7 +102,7 @@ describe('worker model preference', () => {
     run.snapshot.worker = worker; store.put('runs', run, { column: 'task_id', value: task.id });
     await core.runner.run(task, run);
     expect(requested).toEqual({ provider: 'openrouter', model: 'anthropic/claude-sonnet-4' });
-    expect(store.detail(task.id).usage.chargedMicros).toBe(3000);
+    expect(store.detail(task.id).usage.chargedMicros).toBe(700);
     expect(store.detail(task.id).usage.uncertainCount).toBe(0);
   });
 

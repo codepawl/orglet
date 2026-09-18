@@ -163,9 +163,9 @@ describe('model list fetch adapters', () => {
   });
 
   it('parses OpenRouter and Ollama payloads without inventing sunset dates', () => {
-    expect(parseOpenRouterModels({ data: [{ id: 'meta-llama/llama-3.3-70b-instruct', pricing: { prompt: '0' } }] })).toEqual([
-      expect.objectContaining({ id: 'meta-llama/llama-3.3-70b-instruct', inputTenths: undefined }),
-    ]);
+    const openrouter = parseOpenRouterModels({ data: [{ id: 'meta-llama/llama-3.3-70b-instruct', pricing: { prompt: '0' } }] });
+    expect(openrouter).toEqual([expect.objectContaining({ id: 'meta-llama/llama-3.3-70b-instruct', source: 'native' })]);
+    expect(openrouter[0].inputTenths).toBeUndefined();
     expect(parseOllamaTags({ models: [{ name: 'llama3.2' }] })).toEqual([
       expect.objectContaining({ id: 'llama3.2', source: 'native' }),
     ]);
