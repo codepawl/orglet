@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; line-height: 1.5; color-scheme: light;
+  --font: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans: var(--font); --default-font-family: var(--font);
+  font-family: var(--font); font-size: 14px; line-height: 1.5; color-scheme: light;
   --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
   --primary:#171717; --primary-text:#fff; --error:#a82626; --success:#2e7a32; --working:#9a7b2f; --row-hover:#efeff0; --row-active:#e5e5e7; --focus:#576b99;
@@ -10,7 +12,7 @@
 :root[data-theme=dark] { color-scheme:dark; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#222222; --row-active:#2e2e2e; --focus:#a6c1ff; }
 @media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#222222; --row-active:#2e2e2e; --focus:#a6c1ff; } }
 * { box-sizing:border-box; }
-body { margin:0; background:var(--bg); color:var(--text); }
+body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
 button,input,textarea,select { font:inherit; color:inherit; }
 button { cursor:pointer; }
 button:disabled { cursor:default; opacity:.5; }
@@ -144,7 +146,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer-add:hover:not(:disabled) { background:var(--surface); }
 .send { grid-area:send; border-radius:50%; }
 .send:disabled { opacity:.35; }
-/* Compact recipient Select left of send — pill trigger like ChatGPT’s model chip. */
+/* Compact recipient Select left of send — pill trigger next to the send button. */
 .composer-trailing .composer-to-select.select-trigger {
   width:auto; max-width:100%; min-height:36px; padding:3px 8px 3px 4px; gap:6px;
   border:0; border-radius:999px; background:transparent; box-shadow:none;
@@ -359,7 +361,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .settings-message { font-size:13px; margin-top:14px; color:var(--muted); }
 .money-input { display:inline-flex; align-items:center; gap:4px; min-height:36px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); }
 .money-input>span { color:var(--muted); font-size:14px; }
-/* ChatGPT-style toast: inverted pill at the top centre, above dialogs, never blocking clicks. */
+/* Toast: inverted pill at the top centre, above dialogs, never blocking clicks. */
 .toaster { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:60; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; width:max-content; max-width:calc(100vw - 32px); }
 .toast { display:flex; align-items:center; gap:8px; padding:9px 14px; border-radius:12px; background:var(--primary); color:var(--primary-text); font-size:14px; box-shadow:0 8px 24px #00000033; animation:toast-in .18s ease-out; }
 .toast.error svg { color:#ff8a8a; }
@@ -605,14 +607,14 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .avatar.sm.emoji { font-size:13px; }
 .avatar.lg.emoji { font-size:19px; }
 .avatar.xl.emoji { font-size:30px; }
-.avatar-face { font-family:'Segoe UI', 'Segoe UI Emoji', system-ui, sans-serif; }
+.avatar-face { font-family: var(--font); }
 .avatar.xl .avatar-badge { width:20px; height:20px; right:-5px; bottom:-5px; }
 .avatar.xl .avatar-badge .provider-mark svg { width:13px; height:13px; }
 /* Avatar picker: preview left, letter/emoji and colour choices right. */
 .avatar-picker { display:flex; flex-direction:column; gap:12px; }
 .avatar-picker-head { display:flex; align-items:center; gap:16px; }
 .avatar-choice-row { display:flex; flex-wrap:wrap; gap:4px; }
-.avatar-choice { display:grid; place-items:center; width:32px; height:32px; padding:0; border:1px solid transparent; border-radius:9px; background:transparent; font-size:17px; font-weight:600; font-family:'Segoe UI', 'Segoe UI Emoji', system-ui, sans-serif; color:var(--text); }
+.avatar-choice { display:grid; place-items:center; width:32px; height:32px; padding:0; border:1px solid transparent; border-radius:9px; background:transparent; font-size:17px; font-weight:600; font-family: var(--font); color:var(--text); }
 .avatar-choice:hover { background:var(--row-hover); }
 .avatar-choice[aria-checked=true] { background:var(--row-active); border-color:var(--muted); }
 .avatar-swatch { display:grid; place-items:center; width:26px; height:26px; padding:0; border:2px solid var(--bg); border-radius:50%; background:var(--avatar-color); color:#fff; box-shadow:0 0 0 1px var(--border); }
@@ -814,7 +816,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* New task row under the brand; the shortcut appears on hover. */
 .new-task-row { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; min-height:var(--control-height); margin:0 0 8px; padding:5px 10px 5px 2px; border-radius:var(--radius); font-size:13px; font-weight:500; }
 .new-task-row:hover:not(:disabled) { background:var(--row-hover); }
-.new-task-row .shortcut { margin-left:auto; padding:1px 7px; border-radius:6px; background:var(--surface); color:var(--muted); font:500 11px/18px 'Segoe UI', system-ui, sans-serif; opacity:0; transition:opacity .12s; }
+.new-task-row .shortcut { margin-left:auto; padding:1px 7px; border-radius:6px; background:var(--surface); color:var(--muted); font:500 11px/18px var(--font); opacity:0; transition:opacity .12s; }
 .new-task-row:hover .shortcut,.new-task-row:focus-visible .shortcut { opacity:1; }
 .row-menu-popover { color:var(--text); }
 
