@@ -7,6 +7,7 @@ Thanks for helping with Orglet. Everyone taking part follows the [Code of Conduc
 - For anything larger than a small fix, open an issue first so we can agree on the approach.
 - Read [docs/product.md](docs/product.md). New features should fit who Orglet is for and avoid its "Not now" list.
 - The [technical guide](docs/technical-guide.md) explains how to run the app, the tests and the smoke checks.
+- Feature and UX changes update the [README](README.md) and the relevant pages under `docs/` **in the same pull request** (how it works, not only that it shipped). Do not land code-only.
 
 ## Opening a pull request
 
