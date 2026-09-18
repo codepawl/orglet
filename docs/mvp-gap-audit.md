@@ -1,6 +1,6 @@
 # MVP scope audit
 
-This is an implementation gap audit, not a completion certificate. The contract remains both files in `plans/`. Passing tests establish their tested behaviors, not all milestone acceptance gates. Updated 2026-09-15.
+This is an implementation gap audit, not a completion certificate. The contract remains both files in `plans/`. Passing tests establish their tested behaviors, not all milestone acceptance gates. Updated 2026-09-18 for the 0.2.0 Windows scope.
 
 ## Status against the plan
 

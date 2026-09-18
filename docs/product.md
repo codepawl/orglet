@@ -45,7 +45,7 @@ Projects that group several tasks are postponed until real use shows a need (sha
 ## Release
 
 - **Open source under AGPL-3.0, with a CLA.** The repository is public. Contributors sign the CLA so the project can also sell commercial licenses or be acquired later. Parts meant for reuse, such as the UI components, can be released under a more permissive license later.
-- **Every device.** Orglet is for Windows, macOS and Linux, and later iOS and Android. Windows is built and tested first; macOS and Linux builds, packaging and CI come next, then mobile. Builds are unsigned for now.
+- **Every device.** Orglet is for Windows, macOS and Linux, and later iOS and Android. Windows is built and tested first (**0.2.0** ships Windows-only connections for Claude Code, Codex, Cursor Agent, OpenAI, Anthropic and Grok/xAI). macOS and Linux builds, packaging and CI come next, then mobile. Builds are unsigned for now.
 
 ## Not now
 

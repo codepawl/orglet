@@ -8,7 +8,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D4)](#download)
-[![Status: early](https://img.shields.io/badge/status-early-orange)](docs/implementation_status.md)
+[![Status: early](https://img.shields.io/badge/status-0.2.0%20early-orange)](docs/implementation_status.md)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/chat-dark.png">

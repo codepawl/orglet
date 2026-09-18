@@ -1,6 +1,6 @@
-# Release review (v0.1 candidate)
+# Release review (v0.2.0 candidate)
 
-Local review of the working tree on 2026-09-15. It records what was checked and what is still open; it is not a release approval.
+Local review updated 2026-09-18 for the Windows 0.2.0 branch stack. It records what was checked and what is still open; it is not a release approval.
 
 ## Dependencies
 
