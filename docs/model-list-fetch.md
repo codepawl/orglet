@@ -4,7 +4,9 @@ Plan for [COD-29](https://linear.app/codepawl/issue/COD-29) under epic [COD-27](
 
 **Shipped (COD-31):** `modelList` fetches each connection from its native API or CLI, caches the result in SQLite `settings.modelLists` (24h TTL, stale-while-revalidate), stores OpenAI `shutdown_date` and Codex `upgrade` when present, and always allows a typed custom model ID.
 
-**Shipped (COD-28):** Worker settings persist optional `modelId`. The dialog lists cached models and always accepts a typed ID (`customIdOk`). Catalog defaults are suggestions. Adapters and harness CLIs use the saved ID. Deprecated chip UI is still COD-30.
+**Shipped (COD-28):** Worker settings persist optional `modelId`. The dialog lists cached models and always accepts a typed ID (`customIdOk`). Catalog defaults are suggestions. Adapters and harness CLIs use the saved ID.
+
+**Shipped (COD-30):** The worker model picker chips a selected or suggested model when cached `deprecated` is true. The sunset day is shown only from native `sunsetAt` (OpenAI `shutdown_date`). Anthropic, xAI and harness HTML dates are not scraped or guessed. Codex `replacementId` is plain “prefer” text, not an auto-switch. No toast on dialog open.
 
 It does not add feature UI, scrape HTML, or change signing / [COD-19](https://linear.app/codepawl/issue/COD-19) / [COD-20](https://linear.app/codepawl/issue/COD-20). Team chat ([COD-24](https://linear.app/codepawl/issue/COD-24)) is unrelated.
 
@@ -163,7 +165,7 @@ Do **not** do this list in the COD-29 PR.
 
 ### COD-31 — fetch + cache
 
-Shipped. Remaining picker/chip work is COD-28 / COD-30.
+Shipped. Picker and deprecated chip are COD-28 / COD-30.
 
 1. Typed `ModelEntry` / `ModelListCache` in `shared/models.ts` (zod). Settings key `modelLists`, versioned, excluded from backup.
 2. Core command `modelList({ provider, refresh?: boolean })`. Return `{ models, fetchedAt, stale, error?, customIdOk }`. Renderer-only; no keys.
@@ -185,23 +187,21 @@ Shipped. Worker dialog lists cached models and always accepts a typed custom ID.
 
 ### COD-30 — chip (after COD-31 metadata)
 
+Shipped. The picker reads cached `deprecated` / `sunsetAt` / `replacementId` and renders a quiet chip on the selected or catalog-suggested ID. List rows that are deprecated get the same short chip without a date. Tests: `tests/integration/model-deprecation.test.ts`.
+
 1. Chip on the selected model when `deprecated` is true. Show `sunsetAt` if present. Omit the date if absent (Anthropic/xAI/harness gap).
 2. Optional: `replacementId` as plain text, not an auto-switch.
 3. Do not toast on every dialog open. Chip on the worker row / picker row is enough.
 
 ## Out of scope (this plan page)
 
-- COD-28 picker chrome (shipped), COD-30 chip styling
+- COD-28 picker chrome and COD-30 chip (both shipped)
 - COD-31 code (this PR is docs)
 - Scraping, OpenRouter, models.dev overlay, embeddings/image models as workers
 - New SQLite `models` table, cloud sync of lists
 - Auto-migrating a worker to a replacement ID
 - Passing `--model` before COD-28 persists `modelId` (COD-28 now persists it)
 - COD-19/20 signing, COD-24/25 team chat
-
-## Code still later (COD-30)
-
-- Deprecated chip on the selected model (`deprecated`, `sunsetAt`, optional `replacementId` as text)
 
 ## What this is not
 

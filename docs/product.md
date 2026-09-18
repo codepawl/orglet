@@ -29,7 +29,7 @@ All four of these matter. When two conflict, the order below breaks the tie.
 - **Quiet while working.** Show a spinner and a short status. Versions, paths and costs live in Details.
 - **Nothing to set up to start.** New installs speak US English, include a demo worker and pick avatars and titles automatically. Vietnamese and UK English are in Settings.
 - **Clear about limits.** Answers can be wrong. The app says so once, plainly, and never hides where an answer came from.
-- **Your model, not ours.** A worker's model is a provider plus an ID the user chose or typed. Built-in names are suggestions. Lists come from that provider's own API or CLI and are cached on this computer; a failed fetch still leaves a custom ID field. See [model-list-fetch.md](model-list-fetch.md).
+- **Your model, not ours.** A worker's model is a provider plus an ID the user chose or typed. Built-in names are suggestions. Lists come from that provider's own API or CLI and are cached on this computer; a failed fetch still leaves a custom ID field. A deprecated ID gets a quiet chip, with a sunset date only when the native list included one. See [model-list-fetch.md](model-list-fetch.md).
 
 ## Words we use
 

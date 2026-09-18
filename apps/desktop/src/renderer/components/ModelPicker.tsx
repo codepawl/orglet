@@ -3,10 +3,16 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Hash, RefreshCw } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { CATALOG_HINT_IDS, type ModelEntry, type ModelListResult } from '../../shared/models';
-import { t } from '../i18n';
+import { deprecationNotice, formatSunsetDay, pickerListedModel } from '../../shared/modelDeprecation';
+import { currentLocale, t } from '../i18n';
 import { orglet } from '../api';
 import { Button, FieldLabel } from './ui';
 import { fieldInvalid } from './fieldInvalid';
+
+function deprecationChipLabel(sunsetAt?: string) {
+  const day = formatSunsetDay(sunsetAt, currentLocale());
+  return day ? t('Sắp ngừng · {0}', [day]) : t('Sắp ngừng');
+}
 
 type Placement = { style: CSSProperties; above: boolean };
 const GAP = 6, EDGE = 10, MAX_HEIGHT = 360, MIN_HEIGHT = 140;
@@ -123,10 +129,15 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   const note = busy && !list ? t('Đang tải danh sách model…')
     : list?.error || (!models.length && !busy ? failOpen : undefined)
     || (list?.stale ? t('Danh sách model từ lần tải trước.') : t('Gõ ID model hoặc chọn từ danh sách. Tên mặc định chỉ là gợi ý.'));
+  const selected = pickerListedModel(models, value, hint);
+  const notice = deprecationNotice(selected);
+  const replacementId = selected?.replacementId;
 
   const labelId = `${id}-label`;
   const listId = `${id}-list`;
   const noteId = `${id}-note`;
+  const deprecationId = `${id}-deprecation`;
+  const describedBy = notice || replacementId ? `${deprecationId} ${noteId}` : noteId;
 
   return <div className="field">
     <span className="field-title" id={labelId}><FieldLabel icon={Hash}>{t('ID model')}</FieldLabel></span>
@@ -134,7 +145,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
       <div className="model-picker-field">
       <input ref={input} data-field="modelId" value={value} maxLength={200} autoComplete="off" autoCorrect="off" spellCheck={false}
         placeholder={hint ?? t('Gõ ID model')}
-        aria-labelledby={labelId} aria-describedby={noteId} aria-invalid={invalid || undefined} data-flash={invalid ? flash : undefined}
+        aria-labelledby={labelId} aria-describedby={describedBy} aria-invalid={invalid || undefined} data-flash={invalid ? flash : undefined}
         role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={open ? listId : undefined}
         aria-activedescendant={open && options[active] ? `${id}-option-${active}` : undefined}
         onChange={event => { onChange(event.target.value); if (!open && models.length) openList(); }}
@@ -156,6 +167,10 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
         <RefreshCw size={13} className={busy ? 'spin' : undefined} />
       </Button>
     </div>
+    {(notice || replacementId) && <p id={deprecationId} className="model-picker-deprecation">
+      {notice && <span className="badge model-deprecation-chip" data-chip="deprecated">{deprecationChipLabel(notice.sunsetAt)}</span>}
+      {replacementId && <span className="muted">{t('Nên dùng {0}', [replacementId])}</span>}
+    </p>}
     <p id={noteId} className="muted model-picker-note">{note}</p>
     {open && options.length > 0 && createPortal(<ul ref={menu} id={listId} role="listbox" aria-labelledby={labelId}
       className={`select-menu ${placement?.above ? 'above' : ''}`} style={placement?.style ?? { position: 'fixed', visibility: 'hidden', left: 0, top: 0 }}>
@@ -167,6 +182,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
             <span>{option.displayName ?? option.id}</span>
             {option.displayName ? <span className="select-detail">{option.id}</span> : option.source === 'catalog-hint' ? <span className="select-detail">{t('Gợi ý')}</span> : null}
           </span>
+          {option.deprecated && <span className="select-option-badge model-deprecation-chip">{t('Sắp ngừng')}</span>}
           <Check size={16} className="select-check" aria-hidden="true" />
         </li>
       ))}
