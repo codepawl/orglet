@@ -18,6 +18,7 @@ The workspace contains only `plans/orglet_mvp_plan_vi.md` and its coding starter
 - Explicit demo mode, isolated from paid usage. No implicit mock fallback.
 - Versioned workers/skills and run snapshots; permissions checked at each source read.
 - Immutable usage entries in integer micro-USD; uncertain requests retain their reservation.
+- Custom model IDs: fetch lists from each provider's native API or CLI, cache in SQLite, fail-open to a typed ID, never scrape HTML ([docs/model-list-fetch.md](model-list-fetch.md), COD-29 plan; fetch/UI/chip are later CODs).
 
 ## Validation completed locally
 

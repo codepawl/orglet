@@ -17,6 +17,7 @@
 | Local Codex harness (`codex exec`) | Yes, when installed and signed in; live review verified | Sources inlined in the prompt; shell tools, apps, browser and computer use disabled; user config ignored |
 | Local Cursor Agent harness | Yes, when installed and signed in; live probe optional | Headless `agent -p --mode=ask --sandbox enabled --trust`; report schema embedded in the prompt; never `--force`/`--yolo`; no Orglet reservation |
 | Codex app-server | No | `codex exec` covers review runs; app-server is not used. See below |
+| Model list fetch + cache | Plan only ([COD-29](https://linear.app/codepawl/issue/COD-29)) | Native provider APIs / harness CLIs first; SQLite `settings.modelLists`, 24h TTL; fail-open custom ID; no HTML scrape. See [model-list-fetch.md](model-list-fetch.md) |
 | Subscription quota display / internal allocation | No | Neither CLI exposes quota windows in headless mode; no screen is shown |
 | Shell, imported scripts, external writes | No | Not exposed through IPC or tool schemas |
 
@@ -59,6 +60,12 @@ Verified locally: detection on this Windows machine (both found), argument contr
 - [Node SQLite API](https://nodejs.org/api/sqlite.html)
 - [OpenAI GPT-4.1 mini pricing and snapshot](https://developers.openai.com/api/docs/models/gpt-4.1-mini)
 - [Anthropic model overview](https://platform.claude.com/docs/en/models/overview)
+- [OpenAI list models](https://developers.openai.com/api/reference/resources/models/methods/list) (`shutdown_date` on the model object)
+- [Anthropic list models](https://platform.claude.com/docs/en/api/http/models/list.md) (no deprecation fields)
+- [xAI language-models](https://docs.x.ai/developers/rest-api-reference/inference/models) (native prices; no sunset field)
+- [Codex `debug models`](https://developers.openai.com/codex/cli/reference.md)
+- [Cursor Agent `--list-models`](https://cursor.com/docs/cli/reference/parameters.md)
+- [Model list fetch plan](model-list-fetch.md)
 - [DuckDB Node Neo](https://duckdb.org/docs/current/clients/node_neo/overview)
 - [DuckDB security configuration](https://duckdb.org/docs/current/operations_manual/securing_duckdb/overview)
 
