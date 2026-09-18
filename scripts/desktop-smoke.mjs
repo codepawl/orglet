@@ -71,7 +71,8 @@ try {
   const openaiRegion = page.getByRole('region', { name: 'Kết nối OpenAI', exact: true });
   await openaiRegion.getByRole('switch').click();
   await openaiRegion.getByRole('button', { name: 'Từ tệp', exact: true }).click();
-  await page.getByText(/^Đã lưu API key/).waitFor();
+  // Scope to the provider row — toast text also starts with "Đã lưu API key".
+  await openaiRegion.getByText(/^Đã lưu API key$/).waitFor();
   assert.equal((await readFile(join(data, 'openai.credential'))).includes(Buffer.from(fakeKey)), false);
   assert.equal(JSON.stringify(await page.evaluate(() => window.orglet.call('workspace', {}))).includes(fakeKey), false);
   await openaiRegion.getByRole('switch').click();
@@ -79,7 +80,7 @@ try {
   const anthropicRegion = page.getByRole('region', { name: 'Kết nối Anthropic', exact: true });
   await anthropicRegion.getByRole('switch').click();
   await anthropicRegion.getByRole('button', { name: 'Từ tệp', exact: true }).click();
-  await anthropicRegion.getByText(/^Đã lưu API key/).waitFor();
+  await anthropicRegion.getByText(/^Đã lưu API key$/).waitFor();
   assert.equal((await readFile(join(data, 'anthropic.credential'))).includes(Buffer.from(fakeKey)), false);
   await anthropicRegion.getByRole('switch').click();
   await page.getByText(/^Đã ngắt/).waitFor();
@@ -88,7 +89,7 @@ try {
   await openaiRegion.getByRole('switch').click();
   await page.getByLabel('API key OpenAI', { exact: true }).fill(typed);
   await openaiRegion.getByRole('button', { name: 'Lưu key', exact: true }).click();
-  await page.getByText(/^Đã lưu API key/).waitFor();
+  await openaiRegion.getByText(/^Đã lưu API key$/).waitFor();
   // Saved key stays as mask dots in the field (not the real secret) so the user sees it is filled.
   assert.equal(await page.getByLabel('API key OpenAI', { exact: true }).inputValue(), '••••••••••••••••');
   assert.equal((await readFile(join(data, 'openai.credential'))).includes(Buffer.from(typed)), false);
