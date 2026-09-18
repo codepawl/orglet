@@ -4,7 +4,7 @@ labels: [enhancement]
 body:
   - type: markdown
     attributes:
-      value: Check [product direction](https://github.com/codepawl/orglet/blob/main/docs/product.md) first, including the "Not now" list.
+      value: Check [product direction](https://github.com/codepawl/orglet/blob/main/docs/product.md) first, including the "Not now" list. For anything larger than a small fix, open the issue before a pull request ([CONTRIBUTING](https://github.com/codepawl/orglet/blob/main/CONTRIBUTING.md)).
   - type: textarea
     id: problem
     attributes:

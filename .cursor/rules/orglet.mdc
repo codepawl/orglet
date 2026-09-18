@@ -1,0 +1,12 @@
+---
+description: Orglet contribution rules for coding agents
+alwaysApply: true
+---
+
+AI-assisted code is welcome. Sloppy, unstructured, or convention-breaking changes are not.
+
+Read and follow `AGENTS.md`. Human process is `CONTRIBUTING.md`. Product fit (including **Not now**) is `docs/product.md`. Do not copy those files into this rule.
+
+One pull request, one change. Match nearby code. Vietnamese UI source strings; English in `apps/desktop/src/shared/locales/en.ts`. Feature and UX changes update README and `docs/` in the same PR.
+
+Do not take over unrelated in-flight work. Do not put secrets in the renderer, logs, backups, or git. Do not search the machine for API keys.
