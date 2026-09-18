@@ -248,6 +248,7 @@ describe('runner integration', () => {
     const loggedOut = await run('claude-code');
     expect(loggedOut.task.status).toBe('failed'); expect(loggedOut.runs[0].error).toContain('claude auth login');
     expect(loggedOut.artifacts).toEqual([]);
+    expect(loggedOut.runs[0].snapshot.worker.provider).toBe('claude-code');
     expect(loggedOut.runs[0].error).not.toMatch(/demo|Báo cáo mẫu/i);
     // Detection is cached; "Dò lại" in settings is the refresh path after installing or logging in.
     detected = []; await core.command('harnesses', { refresh: true });
@@ -260,6 +261,7 @@ describe('runner integration', () => {
     const failed = await run('claude-code');
     expect(failed.task.status).toBe('failed');
     expect(failed.artifacts).toEqual([]);
+    expect(failed.runs[0].snapshot.worker.provider).toBe('claude-code');
     expect(failed.runs[0].error).toContain('không chuyển sang Demo');
     expect(failed.runs[0].error).toContain('claude auth login');
     expect(requests).toEqual([]);

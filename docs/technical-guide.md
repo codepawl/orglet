@@ -128,7 +128,7 @@ pnpm test:knowledge
 pnpm test:harness
 ```
 
-The harness smoke compares **Harness trên máy** (always Claude Code, Codex and Cursor, including not-installed and auth-fail rows), the worker model list and the send gate with what the packaged core detects on the current machine. It never starts a harness run.
+The harness smoke installs fixture CLIs so **Harness trên máy** always has a logged-out Claude Code and an unreadable Codex login probe, and still lists Cursor (including a not-installed row). It checks status pills and copy-login commands, that detected is not signed-in, that an auth failure does not show Demo, and that the worker model list and send gate match those states. It never starts a harness run. GitHub Actions runs this on Windows after `pnpm make`; see [windows-release-gates.md](windows-release-gates.md).
 
 The knowledge smoke creates a team note in the library, carries it through a template export/import as a proposal, approves it, searches it and checks the frozen context shown in **Chi tiết**. `node scripts/knowledge-smoke.mjs --inspect-ui` leaves that task open for computer use.
 

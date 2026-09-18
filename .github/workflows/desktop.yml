@@ -11,7 +11,28 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  test:
+  # Fail-fast on Windows so a typecheck, unit/integration, or production CVE failure
+  # does not wait for Forge make. The required check name stays `test` (see aggregator).
+  checks:
+    name: typecheck and test
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6
+        with:
+          version: '11.19.0'
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24.19.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod --audit-level=high
+      - run: pnpm typecheck
+      - run: pnpm test
+  packaged:
+    name: packaged
+    needs: checks
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -24,8 +45,6 @@ jobs:
           node-version: '24.19.0'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm test
       - run: pnpm make
       - run: pnpm test:desktop
       - run: pnpm test:packaged
@@ -38,3 +57,18 @@ jobs:
       - run: pnpm test:harness
       - run: pnpm test:sidebar
       - run: pnpm test:i18n
+  # Branch protection requires this exact check name. It is green only when both
+  # Windows jobs succeeded, so packaged smokes stay required without a ruleset change.
+  test:
+    needs: [checks, packaged]
+    if: ${{ always() && !cancelled() }}
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require typecheck, tests, audit and packaged smokes
+        shell: bash
+        run: |
+          echo "checks=${{ needs.checks.result }}"
+          echo "packaged=${{ needs.packaged.result }}"
+          test "${{ needs.checks.result }}" = success
+          test "${{ needs.packaged.result }}" = success
