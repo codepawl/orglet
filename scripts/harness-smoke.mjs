@@ -124,9 +124,10 @@ try {
   };
   const model = await editResearcher();
   await model.click();
-  const options = await page.getByRole('option').allTextContents();
-  const harnessOptions = options.filter(text => /^(Claude Code|Codex|Cursor)/.test(text));
-  assert.deepEqual(harnessOptions.map(text => text.startsWith('Claude Code') ? 'claude-code' : text.startsWith('Codex') ? 'codex' : 'cursor'), ['claude-code', 'codex', 'cursor']);
+  // Accessible names ignore decorative ProviderMark glyphs; allTextContents would see Cursor's "C" monogram.
+  for (const name of ['Claude Code', 'Codex', 'Cursor Agent']) {
+    await page.getByRole('option', { name: new RegExp(`^${name}`) }).waitFor();
+  }
   await page.screenshot({ path: 'test-results/model-select.png' });
   await page.keyboard.press('Escape');
 
