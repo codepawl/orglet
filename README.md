@@ -7,7 +7,7 @@
 **Your own small team of AI workers, on your computer.**
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
-[![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078D4)](#download)
+[![Release](https://img.shields.io/github/v/release/codepawl/orglet)](https://github.com/codepawl/orglet/releases/latest)
 [![Status: early](https://img.shields.io/badge/status-early-orange)](docs/implementation_status.md)
 
 <picture>
@@ -17,7 +17,7 @@
 
 </div>
 
-## What is Orglet?
+## What
 
 Orglet is a desktop app where you keep a few AI workers, each with a name, a role and their own instructions, and give them work in a normal chat.
 
@@ -26,8 +26,6 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
 - **Made for one person.** Freelancers, solo founders and anyone who uses ChatGPT or Claude every day and wants a bit more structure.
 
 > Orglet is early. Expect rough edges, and check answers against your own sources before you rely on them.
-
-## Features
 
 | | |
 |---|---|
@@ -44,16 +42,7 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
   <img src="docs/images/new-task.png" alt="Starting a new task in Orglet" width="720">
 </p>
 
-## Download
-
-| Platform | Status |
-|---|---|
-| 🪟 Windows | Build from source today. Unsigned ZIP and Squirrel Setup from `pnpm make`. Public 0.2.x installers stay unsigned; see [windows-release-gates.md](docs/windows-release-gates.md). |
-| 🍎 macOS | Unsigned ZIP of `Orglet.app` from `pnpm make` on a Mac, or the `orglet-macos-unsigned-zip` CI artifact. **Not signed or notarized.** Gatekeeper will warn; right-click → Open. See [macos-packaging.md](docs/macos-packaging.md). |
-| 🐧 Linux | Coming soon |
-| 📱 iOS and Android | Coming soon |
-
-## How workers run
+Workers can run through a local CLI, an API key, or Demo:
 
 | Option | What you need | Cost |
 |---|---|---|
@@ -66,7 +55,24 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
 
 API keys are encrypted with your system's secure storage and never reach the app's interface.
 
-## Run it from source
+Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, and only with the files you attached.
+
+Further reading: [product direction](docs/product.md), [technical guide](docs/technical-guide.md), [Windows release gates](docs/windows-release-gates.md), [macOS packaging](docs/macos-packaging.md), [implementation status](docs/implementation_status.md).
+
+## Install
+
+[Latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. The tag is public; Windows **Setup.exe** / **ZIP** assets on that release may still be empty. If they are missing, [build from source](#dev).
+
+There are no signed or notarized installers.
+
+| Platform | Status |
+|---|---|
+| Windows | Public 0.2.x target. Unsigned ZIP and Squirrel Setup from `pnpm make`. If those files are not attached to the GitHub Release, build locally. SmartScreen may warn (unknown publisher); that is expected. See [windows-release-gates.md](docs/windows-release-gates.md). |
+| macOS | Unsigned ZIP of `Orglet.app` from `pnpm make` on a Mac, or the `orglet-macos-unsigned-zip` CI artifact. **Not signed or notarized**, and not a GitHub Release asset. Gatekeeper will warn; right-click → Open. See [macos-packaging.md](docs/macos-packaging.md). |
+| Linux | Coming soon |
+| iOS and Android | Coming soon |
+
+## Dev
 
 You need Windows or macOS, Node 24.19 or newer and pnpm 11.19.0.
 
@@ -86,17 +92,6 @@ pnpm make
 ```
 
 On Windows that writes a ZIP and Squirrel Setup. On macOS it writes a ZIP of `Orglet.app`. Neither is signed or notarized.
-
-## Privacy
-
-Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, and only with the files you attached.
-
-## Learn more
-
-- [Product direction](docs/product.md): who Orglet is for and what it should do well
-- [Technical guide](docs/technical-guide.md): providers, harnesses, limits, checks and smoke tests
-- [macOS packaging](docs/macos-packaging.md): unsigned ZIP maker, CI job, and what to verify on a Mac
-- [Implementation status](docs/implementation_status.md): what is verified and what is left
 
 ## Contributing
 

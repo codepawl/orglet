@@ -2,6 +2,9 @@ name: Feature request
 description: Suggest something Orglet should do
 labels: [enhancement]
 body:
+  - type: markdown
+    attributes:
+      value: Check [product direction](https://github.com/codepawl/orglet/blob/main/docs/product.md) first, including the "Not now" list.
   - type: textarea
     id: problem
     attributes:
