@@ -31,8 +31,8 @@ Checked by reading `apps/desktop/src`:
 
 | Gate | Status |
 |---|---|
-| Installer on a clean Windows machine, startup, uninstall | Not run. Setup.exe is built but unsigned; installing from this development session would also be virtualized by the MSIX-packaged host |
-| Code signing | Not configured |
+| Installer on a clean Windows machine, startup, uninstall | Procedure in [windows-release-gates.md](windows-release-gates.md). Not yet run on a clean machine |
+| Code signing | Not configured. Env-var prep documented in windows-release-gates.md; leave unsigned until a cert is supplied |
 | Live OpenAI acceptance ($0.05 cap) | Script ready: set `ORGLET_LIVE_KEY_FILE` (+ optional `ORGLET_LIVE_PROVIDER=openai`) and run `pnpm test:live`. Waiting for the user's key file path |
 | Live xAI (Grok) acceptance ($0.05 cap) | Same script with `ORGLET_LIVE_PROVIDER=xai`. Waiting for the user's key file path |
 | Live Anthropic acceptance | Not authorized |

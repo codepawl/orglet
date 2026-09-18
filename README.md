@@ -48,7 +48,7 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
 
 | Platform | Status |
 |---|---|
-| 🪟 Windows | Build from source today. Installers come with the first release. |
+| 🪟 Windows | Build from source today (`pnpm make`). Setup.exe is **unsigned** until a certificate is configured; see [docs/windows-release-gates.md](docs/windows-release-gates.md). |
 | 🍎 macOS | Coming soon |
 | 🐧 Linux | Coming soon |
 | 📱 iOS and Android | Coming soon |
