@@ -8,7 +8,7 @@ import { providerLabel, settingsTabFor, type Readiness } from './providers';
 import { t } from '../i18n';import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
 
-const SINGLE_LINE = 44;
+const SINGLE_LINE = 40;
 
 /**
  * ChatGPT-style prompt bar: a one-line pill with the add button, input and send button on one row.

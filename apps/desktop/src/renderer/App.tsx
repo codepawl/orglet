@@ -1,7 +1,7 @@
 import { RevisionEditor } from './components/RevisionEditor';
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronRight, SquarePen, BookOpen, Download, FileText, PanelLeft, Pencil, Plus, Search, Settings2, SlidersHorizontal, Sparkles, CalendarClock, Wallet, X, Archive, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, SquarePen, BookOpen, Download, FileText, PanelLeft, Pencil, Plus, Search, Settings2, SlidersHorizontal, Sparkles, CalendarClock, X, Archive, Trash2 } from 'lucide-react';
 import type { Connections, Skill, Source, Task, TaskDetail, Worker, Workspace, Team, TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
@@ -240,9 +240,6 @@ export function App() {
   const workerStatus = (workerId: string): StatusMarkState => tasksStatusMark(activeTasks.filter(task => taskWorkers(task, workspace).some(worker => worker.id === workerId)).map(task => ({ status: task.status, seen: taskSeen(task) })));
   const teamStatus = (team: Team): StatusMarkState => rollupStatusMarks([...new Set([...team.memberIds, team.synthesizerId])].map(workerStatus));
   const taskRow = (task: Workspace['tasks'][number], nested = false) => <TaskRow key={task.id} archive={nested ? undefined : archiveState(task)} onArchive={archived => archiveTask(task.id, archived)} onDelete={() => deleteTask(task.id)} title={task.title} brief={task.brief} nested={nested} active={selected === task.id} status={task.status} statusLabel={statusLabel[task.status]} seen={taskSeen(task)} askFirst={nested && workspace.confirmOpenTask} onOpen={dontAskAgain => nested ? openFromWorker(task.id, dontAskAgain) : openTask(task.id)} onRename={title => renamed(() => orglet.call('renameTask', { id: task.id, title }))} onEdit={() => { setEditingTask(task.id); setPanel('task'); }} />;
-  const openTaskWorkers = detail ? taskWorkers(detail.task, workspace) : [];
-  const openTaskPaid = openTaskWorkers.some(item => item.provider !== 'demo' && !isHarness(item.provider));
-  const openTaskUsed = detail ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0;
   const pendingCatchUp = workspace.routines.filter(item => item.pending);
   const catchUpNoticeKey = pendingCatchUp.map(item => item.id).sort().join(',');
   const catchUpNotice = pendingCatchUp.length > 0 && dismissedCatchUpNotice !== catchUpNoticeKey && panel !== 'routines';
@@ -285,7 +282,6 @@ export function App() {
       <header className="topbar">
         <div><span>{selected ? (detail && assigneeLabel(detail.task, workspace, { all: t('Toàn bộ nhân viên'), many: count => t('{0} nhân viên', [count]) })) ?? detail?.runs.at(-1)?.snapshot.worker.name ?? t('Công việc') : team?.name ?? worker?.name ?? 'Orglet'}</span>{(selected ? detail?.runs.every(run => run.snapshot.worker.provider === 'demo') : isDemo) && <span className="badge">Demo</span>}</div>
         <div className="topbar-actions">
-          {selected && detail && openTaskPaid && <span className="topbar-cost" role="status" title={detail.usage.reservedMicros > 0 ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.reservedMicros)]) : t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}</span>}
           {selected && <Button onClick={() => setPanel('activity')}><SlidersHorizontal size={17} />{t('Chi tiết')}</Button>}
         </div>
       </header>

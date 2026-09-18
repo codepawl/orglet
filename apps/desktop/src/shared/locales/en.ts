@@ -961,8 +961,6 @@ export const en: Dictionary = {
   'Harness trên máy · chi phí theo gói của công cụ, không qua Orglet.': 'Local harness · billed by that tool’s plan, not through Orglet.',
   'Đã dùng {0} / {1}': '{0} used / {1}',
   'Đã dùng {0} / {1} · đang giữ chỗ {2}': '{0} used / {1} · {2} reserved',
-  'Chi phí task: {0} / {1}': 'Task cost: {0} / {1}',
-  'Chi phí task: đã đối soát {0} · giữ chỗ {1} / giới hạn {2}': 'Task cost: settled {0} · reserved {1} / limit {2}',
   'Đang giữ chỗ': 'Reserved',
   'Đang gọi model · bước {0}/6': 'Calling the model · step {0}/6',
   'Đang kiểm tra': 'Checking',
