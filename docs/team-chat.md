@@ -73,7 +73,7 @@ You can still open an existing worker task while a team chat exists. The two thr
 
 ## Errors, budget, retry
 
-Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết**, retry / resume / cancel on the same task). A failure does not open a new session. Cost still sits next to **Chi tiết**; settled tokens on the latest turn. The rolling-summary / retrieval layers in [team-chat-context.md](team-chat-context.md) are not in this spike; follow-ups still send the existing truncated history window (10 turns / 24 000 characters).
+Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết**, retry / resume / cancel on the same task). A failure does not open a new session. Cost still sits next to **Chi tiết**; settled tokens on the latest turn. If the compacted prompt is still over 200 KB, the send is refused (no reservation, no model call) with a repair message. Rolling summary and thread-memory retrieval are frozen on the run manifest (**Chi tiết → Context đã nạp**).
 
 ## Code
 
@@ -81,5 +81,6 @@ Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết
 - Identity: `apps/desktop/src/shared/live-task.ts`
 - Persist a turn: `createTask` / `reviseTask` in `apps/desktop/src/core/service.ts`
 - Orchestrator: `apps/desktop/src/core/orchestration/team.ts` (`run`) and `plan.ts`
+- Transcript layers: `apps/desktop/src/core/context/thread.ts`
 - Plan tool / Demo routing: `apps/desktop/src/core/orchestration/runner.ts` (`submit_plan`, `completePlan`)
-- Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`
+- Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`, `tests/integration/thread-context.test.ts`

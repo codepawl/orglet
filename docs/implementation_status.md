@@ -186,6 +186,10 @@ Clicking a team opens that team's chat (roster in the sidebar and header). One l
 
 A team-chat turn runs plan → assigned members → one synthesis report (`TeamRunner.run`). Plan is a `runs` row (`stage: 'plan'`) with `snapshot.plan`; it is not a user-facing artifact. Unassigned members are cancelled with a named skip. A failed plan does not dispatch members or invent results. Partial member failure stays `partial` with named `Role chưa hoàn tất` limitations. Cancel aborts the whole turn; retry reuses a completed plan and unfinished jobs only. Tests: `tests/integration/team.test.ts`. Out of this spike: COD-26 hide-task pile, COD-19/20.
 
+## Thread context layers (COD-32)
+
+Each job hydrates a bounded prompt: compiled instructions, approved knowledge, an extractive rolling summary of older turns (≤ 8 KB), up to four keyword snippets from this thread only (≤ 8 KB), then the last 10 verbatim turns. If compacting still cannot fit 200 KB, the send is refused with no reservation. Frozen on `run.snapshot.context.manifest` (`verbatimTurns`, `summaryChars`, `retrievedSnippets`). Tests: `tests/integration/thread-context.test.ts`. Policy: [team-chat-context.md](team-chat-context.md).
+
 ## Model list fetch and cache (COD-31)
 
 Core command `modelList({ provider, refresh? })` loads each connection's models from that provider's own API or CLI, stores them in `settings.modelLists` (24h TTL, stale-while-revalidate, excluded from backup), and always sets `customIdOk`. OpenAI `shutdown_date` and Codex `upgrade` are stored for the picker chip. Tests: `tests/integration/model-list.test.ts`. Plan: [model-list-fetch.md](model-list-fetch.md).

@@ -77,11 +77,12 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
 export function ContextManifestView({ run, workspace }: { run: { snapshot: { context?: RunContext } }; workspace: Workspace }) {
   const context = run.snapshot.context;
   if (!context) return null;
-  const names: Record<string, string> = { platform: t('Chính sách Orglet'), team: t('Hướng dẫn nhóm'), worker: t('Hướng dẫn nhân viên'), skill: t('Kỹ năng'), knowledge: 'Knowledge' };
-  const reasons: Record<string, string> = { duplicate: t('trùng nội dung đã nạp'), context_limit: t('vượt giới hạn context'), not_relevant: t('không khớp yêu cầu') };
+  const names: Record<string, string> = { platform: t('Chính sách Orglet'), team: t('Hướng dẫn nhóm'), worker: t('Hướng dẫn nhân viên'), skill: t('Kỹ năng'), knowledge: 'Knowledge', summary: t('Tóm tắt hội thoại'), memory: t('Ghi nhớ hội thoại'), turn: t('Lượt cũ') };
+  const reasons: Record<string, string> = { duplicate: t('trùng nội dung đã nạp'), context_limit: t('vượt giới hạn context'), not_relevant: t('không khớp yêu cầu'), summarized: t('đã tóm tắt'), truncated: t('bị cắt') };
   const knowledgeTitle = (id?: string) => context.knowledge.find(entry => entry.id === id)?.title ?? workspace.knowledge.find(entry => entry.id === id)?.title;
   return <details><summary>{t('Context đã nạp · {0} phần', [context.manifest.loaded.length])}</summary>
+    {context.manifest.verbatimTurns != null && <p className="muted">{t('Lượt gần: {0} · tóm tắt {1} ký tự · {2} ghi chú cũ', [context.manifest.verbatimTurns, context.manifest.summaryChars ?? 0, context.manifest.retrievedSnippets ?? 0])}</p>}
     <ul>{context.manifest.loaded.map((entry, index) => <li key={index}>{names[entry.kind]}{entry.kind === 'knowledge' ? `: ${knowledgeTitle(entry.id)}` : ''}{entry.revision ? ` · v${entry.revision}` : ''} · {entry.bytes} bytes</li>)}</ul>
-    {context.manifest.omitted.length > 0 && <><h4>{t('Không nạp')}</h4><ul>{context.manifest.omitted.map((entry, index) => <li key={index}>{names[entry.kind]}{entry.kind === 'knowledge' ? `: ${knowledgeTitle(entry.id) ?? entry.id}` : ''} · v{entry.revision} · {reasons[entry.reason]}</li>)}</ul></>}
+    {context.manifest.omitted.length > 0 && <><h4>{t('Không nạp')}</h4><ul>{context.manifest.omitted.map((entry, index) => <li key={index}>{names[entry.kind]}{entry.kind === 'knowledge' ? `: ${knowledgeTitle(entry.id) ?? entry.id}` : entry.revision ? ` · v${entry.revision}` : ''} · {reasons[entry.reason]}</li>)}</ul></>}
   </details>;
 }
