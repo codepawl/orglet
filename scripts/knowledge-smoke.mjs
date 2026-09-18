@@ -14,9 +14,8 @@ const workspace = page => page.evaluate(() => window.orglet.call('workspace', {}
 try {
   const page = await app.firstWindow();
   await useVietnamese(page);
-  await page.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
-  await page.getByRole('button', { name: 'Research Review', exact: true }).click();
-  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
+  await page.getByRole('button', { name: 'Research Review', exact: true }).waitFor();
   const team = (await workspace(page)).teams.find(item => item.name === 'Research Review');
 
   // Author a team note through the library UI.

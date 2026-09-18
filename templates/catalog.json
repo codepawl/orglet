@@ -15,7 +15,7 @@
       }
     ],
     "synthesizer": {
-      "name": "Research synthesizer",
+      "name": "Research worker",
       "instructions": "Combine the committed role reports into a concise review. Verify cited sources yourself. Keep disagreements and missing evidence visible. Avoid repeating the same finding."
     }
   },
@@ -43,7 +43,7 @@
       }
     ],
     "synthesizer": {
-      "name": "Review synthesizer",
+      "name": "Review worker",
       "instructions": "Combine the role reports into one evidence-backed review and concise draft feedback. Re-read cited evidence, retain conflicts and missing checks, and never silently convert unknown to PASS. Do not submit, approve, or message anyone."
     },
     "reviewPolicy": {

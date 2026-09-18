@@ -93,7 +93,7 @@ describe('workspace backup and additive restore', () => {
     expect(restored.detail(f.task.id).runs[0].status).toBe('interrupted');
     expect(restored.get<Source>('sources', f.source.id).revoked).toBe(true);
     expect(restored.db.prepare('SELECT path FROM sources WHERE id=?').get(f.source.id)?.path).toBe('');
-    expect(restored.usage()).toEqual({ reservedMicros: 1000, chargedMicros: 0, uncertainCount: 1 });
+    expect(restored.usage()).toEqual({ reservedMicros: 1000, chargedMicros: 0, uncertainCount: 1, inputTokens: 0, outputTokens: 0 });
     expect(restored.setting('theme', '')).toBe('dark');
     expect(restored.db.prepare('SELECT id FROM task_search WHERE task_search MATCH ?').all('Restore')).toHaveLength(1);
     manager.restore(manager.preview(text).token);

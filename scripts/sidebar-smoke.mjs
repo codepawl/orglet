@@ -16,12 +16,10 @@ let app = await launch();
 try {
   let page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
   await useVietnamese(page);
-  await page.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
-  await page.getByRole('button', { name: 'Research Review', exact: true }).click();
-  await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  await page.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
-  await page.getByRole('button', { name: 'Eris Review', exact: true }).click();
-  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
+  await page.getByRole('button', { name: 'Research Review', exact: true }).waitFor();
+  await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
+  await page.getByRole('button', { name: 'Eris Review', exact: true }).waitFor();
 
   // A single click on the name selects the row and opens or closes its children.
   const researcher = page.getByRole('button', { name: 'Researcher', exact: true });

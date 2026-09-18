@@ -36,7 +36,9 @@ export class WorkPolicy {
             'Mở task trong ca tiếp theo, kiểm tra nguồn và ngân sách rồi tiếp tục từ checkpoint.',
             'Nếu request chưa rõ kết quả, kiểm tra reservation trước khi tạo lần thử mới.',
           ],
-          ...detail.usage,
+          chargedMicros: detail.usage.chargedMicros,
+          reservedMicros: detail.usage.reservedMicros,
+          uncertainCount: detail.usage.uncertainCount,
         },
       });
     }
