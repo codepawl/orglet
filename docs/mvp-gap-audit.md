@@ -1,12 +1,12 @@
 # MVP scope audit
 
-This is an implementation gap audit, not a completion certificate. The contract remains both files in `plans/`. Passing tests establish their tested behaviors, not all milestone acceptance gates. Updated 2026-09-15.
+This is an implementation gap audit, not a completion certificate. The contract remains both files in `plans/`. Passing tests establish their tested behaviors, not all milestone acceptance gates. Updated 2026-09-18 for the 0.2.0 Windows scope.
 
 ## Status against the plan
 
 | Plan requirement | Current evidence | Remaining work and proof required |
 |---|---|---|
-| §3.2, §8.3, demo 4: request missing evidence while independent work continues | `waiting_input` task state, persisted evidence requests, acknowledgment, supplement-by-revision, routine deferral, restart and backup preservation, all covered by integration and packaged revision E2E | Native UI exercise of the waiting state. No `waiting_for_approval` state exists because v0.1 has no external actions needing per-action approval |
+| §3.2, §8.3, demo 4: request missing evidence while independent work continues | `waiting_input` task state, persisted evidence requests, acknowledgment, supplement-by-revision, routine deferral, restart and backup preservation, all covered by integration and packaged revision E2E | Native UI checklist in [waiting-input-ui-review.md](waiting-input-ui-review.md); native computer-use rows still open |
 | §3.4, §8.2, §11: structured checks, recommendation, draft feedback | Review contract with checks, recommendation, feedback, conflicts; required checklist editor; feedback copy; run-audit and pair-alignment evidence gates | Semantic quality needs live model evaluation |
 | §8.2: conflicting findings and adjudication | Frozen upstream finding references, preserved conflicts, backup join-graph validation | Automatic detection of undeclared semantic disagreement is not attempted |
 | §3.4, demo 3: finding to exact source | Source and checker links, line-level locations validated against the re-read source and highlighted | Locations for Parquet/binary sources are not supported |

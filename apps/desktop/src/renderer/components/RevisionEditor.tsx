@@ -42,7 +42,9 @@ export function RevisionEditor({ detail, workspace, connections, done }: { detai
     <p className="muted">{t('Đã đối soát {0} · giữ chỗ {1}. Giới hạn này tính cả các tin nhắn trước.', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.usage.reservedMicros)])}</p>
     {providers.length ? null : <p className="muted">{t('Demo không gọi model; checker đã cấu hình vẫn chạy trên máy.')}</p>}
     {missing.length > 0 && <p role="status">{t('Cần kết nối hoặc đăng nhập {0} (xem Cài đặt) trước khi chạy.', [missing.map(providerLabel).join(', ')])}</p>}
-    {error && <p role="alert" className="error">{error}</p>}
-    <Button variant="primary" disabled={busy || !brief.trim() || missing.length > 0}>{t('Gửi tin nhắn')}</Button>
+    <div className="actions">
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      <Button variant="primary" disabled={busy || !brief.trim() || missing.length > 0}>{t('Gửi tin nhắn')}</Button>
+    </div>
   </form>;
 }

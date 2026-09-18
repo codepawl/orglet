@@ -57,8 +57,10 @@ export async function candidates(id: HarnessCatalogId, env: NodeJS.ProcessEnv = 
     for (const entry of await children(bin)) paths.push(join(bin, entry, 'codex.exe'));
     if (platform === 'darwin') paths.push('/Applications/Codex.app/Contents/Resources/codex');
   } else {
-    // Cursor CLI: documented ~/.local/bin plus the native Windows installer under %LOCALAPPDATA%\cursor-agent.
+    // Cursor Agent CLI: install script under ~/.cursor/bin, native Windows installer under %LOCALAPPDATA%\cursor-agent.
+    paths.push(join(home, '.cursor', 'bin', windows ? 'agent.exe' : 'agent'));
     pushNames(join(local, 'cursor-agent'), ['agent', 'cursor-agent']);
+    if (platform === 'darwin') paths.push('/usr/local/bin/agent', join(home, '.local', 'bin', 'agent'));
   }
   const found: string[] = [];
   for (const path of [...new Set(paths)]) if (await isFile(path)) found.push(path);
@@ -141,14 +143,27 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
       info = describeAuth(id, executable, platform, 'unknown', unread);
     }
   } else {
-    const status = await run(executable, ['status']);
-    const text = output(status);
-    if (/not (logged in|authenticated)/i.test(text)) {
-      info = describeAuth(id, executable, platform, 'logged_out', signedOut);
-    } else if (status.code === 0 && /(logged in|authenticated|login successful)/i.test(text)) {
-      info = describeAuth(id, executable, platform, 'logged_in', 'Đã đăng nhập Cursor CLI. Orglet chưa chạy Cursor trong phiên bản này.');
-    } else {
-      info = describeAuth(id, executable, platform, 'unknown', unread);
+    const status = await run(executable, ['status', '--format', 'json']);
+    const text = output(status).trim();
+    try {
+      const parsed = JSON.parse(status.stdout || '{}') as { loggedIn?: boolean; authenticated?: boolean; email?: string; user?: string };
+      const loggedIn = parsed.loggedIn === true || parsed.authenticated === true || Boolean(parsed.email ?? parsed.user);
+      const loggedOut = parsed.loggedIn === false || parsed.authenticated === false;
+      if (loggedIn) {
+        info = describeAuth(id, executable, platform, 'logged_in', `Đăng nhập Cursor${parsed.email || parsed.user ? ` · ${parsed.email ?? parsed.user}` : ''}`);
+      } else if (loggedOut) {
+        info = describeAuth(id, executable, platform, 'logged_out', signedOut);
+      } else {
+        info = describeAuth(id, executable, platform, 'unknown', unread);
+      }
+    } catch {
+      if (/not (logged in|authenticated)/i.test(text)) {
+        info = describeAuth(id, executable, platform, 'logged_out', signedOut);
+      } else if (status.code === 0 && /(logged in|authenticated|login successful|email)/i.test(text)) {
+        info = describeAuth(id, executable, platform, 'logged_in', text.split(/\r?\n/)[0].slice(0, 200));
+      } else {
+        info = describeAuth(id, executable, platform, 'unknown', unread);
+      }
     }
   }
   return { ...info, version };
@@ -158,8 +173,7 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
 export async function detectHarnesses(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, run: Probe = probe): Promise<HarnessInfo[]> {
   const result: HarnessInfo[] = [];
   for (const id of harnessCatalog) {
-    let found: HarnessInfo | null = null;
-    for (const executable of await candidates(id, env, platform)) {
+    let found: HarnessInfo | null = null;    for (const executable of await candidates(id, env, platform)) {
       found = await inspect(id, executable, run, platform);
       if (found) break;
     }

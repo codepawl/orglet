@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { candidates, detectHarnesses, type Probe } from '../../apps/desktop/src/core/harness/detect';
-import { executeHarness, harnessArgs, HarnessError, parseClaudeOutput, parseCodexOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
+import { executeHarness, harnessArgs, HarnessError, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import { harnessReady, harnessStatus, loginCommand, missingHarness, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
@@ -16,26 +16,32 @@ afterEach(async () => { await rm(directory, { recursive: true, force: true }); }
 const touch = async (path: string) => { await mkdir(join(path, '..'), { recursive: true }); await writeFile(path, ''); };
 
 describe('detection', () => {
-  it('finds PATH, desktop-bundled (including MSIX package) and Codex app installs, newest bundle first', async () => {
+  it('finds PATH, desktop-bundled (including MSIX package), Codex app and Cursor Agent installs, newest bundle first', async () => {
     const home = join(directory, 'home'); const local = join(home, 'AppData', 'Local'); const roaming = join(home, 'AppData', 'Roaming');
     const bin = join(directory, 'bin');
     await touch(join(bin, 'codex.cmd'));
     await touch(join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.9', 'claude.exe'));
     await touch(join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.10', 'claude.exe'));
     await touch(join(local, 'OpenAI', 'Codex', 'bin', 'bffc', 'codex.exe'));
+    await touch(join(home, '.cursor', 'bin', 'agent.exe'));
     const env = { USERPROFILE: home, LOCALAPPDATA: local, APPDATA: roaming, PATH: bin };
     expect(await candidates('claude-code', env, 'win32')).toEqual([
       join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.10', 'claude.exe'),
       join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.9', 'claude.exe'),
     ]);
     expect(await candidates('codex', env, 'win32')).toEqual([join(bin, 'codex.cmd'), join(local, 'OpenAI', 'Codex', 'bin', 'bffc', 'codex.exe')]);
+    expect(await candidates('cursor', env, 'win32')).toEqual([join(home, '.cursor', 'bin', 'agent.exe')]);
 
     const calls: string[] = [];
     const probe: Probe = async (executable, args) => {
       calls.push(`${executable} ${args.join(' ')}`);
       if (executable.endsWith('codex.cmd')) return { code: 1, stdout: '', stderr: 'broken shim' };
-      if (args[0] === '--version') return { code: 0, stdout: executable.includes('claude') ? '2.1.10 (Claude Code)\n' : 'codex-cli 0.154.0\n', stderr: '' };
+      if (args[0] === '--version') {
+        if (executable.includes('agent')) return { code: 0, stdout: '2026.1.0\n', stderr: '' };
+        return { code: 0, stdout: executable.includes('claude') ? '2.1.10 (Claude Code)\n' : 'codex-cli 0.154.0\n', stderr: '' };
+      }
       if (args.join(' ') === 'auth status') return { code: 0, stdout: JSON.stringify({ loggedIn: false, authMethod: 'none' }), stderr: '' };
+      if (args[0] === 'status') return { code: 0, stdout: JSON.stringify({ loggedIn: true, email: 'dev@example.com' }), stderr: '' };
       return { code: 0, stdout: 'Logged in using ChatGPT\n', stderr: '' };
     };
     const found = await detectHarnesses(env, 'win32', probe);
@@ -49,11 +55,14 @@ describe('detection', () => {
       id: 'codex', version: 'codex-cli 0.154.0', auth: 'logged_in', status: 'signed_in',
       executable: expect.stringContaining('bffc'), runnable: true,
     }));
-    expect(found[2]).toEqual(expect.objectContaining({ id: 'cursor', auth: 'missing', status: 'not_installed', runnable: false, loginCommand: 'agent login' }));
+    expect(found[2]).toEqual(expect.objectContaining({
+      id: 'cursor', version: '2026.1.0', auth: 'logged_in', status: 'signed_in',
+      executable: expect.stringContaining('agent.exe'), runnable: true,
+    }));
     expect(found[0].authDetail).toContain('chưa đăng nhập nên chưa sẵn sàng chạy');
     expect(found[0].loginCommand).toMatch(/^& "/);
     // Probing is limited to version and the CLI's own login status command.
-    expect(calls.every(call => /(--version|auth status|login status|status)$/.test(call))).toBe(true);
+    expect(calls.every(call => /(--version|auth status|login status|status(?: --format json)?)$/.test(call))).toBe(true);
   });
 
   it('finds Claude desktop bundles and PATH installs on macOS', async () => {
@@ -88,7 +97,7 @@ describe('detection', () => {
       expect.objectContaining({ id: 'claude-code', status: 'not_installed', auth: 'missing' }),
       expect.objectContaining({ id: 'codex', status: 'not_installed', auth: 'missing' }),
       expect.objectContaining({
-        id: 'cursor', auth: 'unknown', status: 'auth_error', runnable: false,
+        id: 'cursor', auth: 'unknown', status: 'auth_error', runnable: true,
         executable: agent, loginCommand: `& "${agent}" login`,
       }),
     ]);
@@ -127,11 +136,11 @@ describe('status matrix', () => {
     const loggedOut = { auth: 'logged_out' as const, runnable: true };
     const unread = { auth: 'unknown' as const, runnable: true };
     const signedIn = { auth: 'logged_in' as const, runnable: true };
-    const cursorSignedIn = { auth: 'logged_in' as const, runnable: false };
+    const cursorSignedIn = { auth: 'logged_in' as const, runnable: true };
     expect(harnessReady(loggedOut)).toBe(false);
     expect(harnessReady(unread)).toBe(false);
     expect(harnessReady(signedIn)).toBe(true);
-    expect(harnessReady(cursorSignedIn)).toBe(false);
+    expect(harnessReady(cursorSignedIn)).toBe(true);
     const catalog = [
       { ...missingHarness('claude-code', 'linux'), auth: 'logged_out' as const, status: 'detected' as const, runnable: true },
       missingHarness('codex', 'linux'),
@@ -159,6 +168,9 @@ describe('command contract', () => {
     expect(codex[codex.indexOf('--sandbox') + 1]).toBe('read-only');
     expect(codex).toEqual(expect.arrayContaining(['--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check', 'apps', 'browser_use', 'computer_use', 'shell_tool', 'unified_exec']));
     expect(codex.join(' ')).not.toMatch(/danger|workspace-write|approve-for-me/);
+    const cursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 });
+    expect(cursor).toEqual(expect.arrayContaining(['-p', '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', directory, '--output-format', 'json']));
+    expect(cursor.join(' ')).not.toMatch(/force|yolo|approve-mcps/);
   });
 
   it('parses real CLI failure shapes into actionable login messages', () => {
@@ -171,6 +183,8 @@ describe('command contract', () => {
     expect(() => parseCodexOutput(expired, null)).toThrow('chưa đăng nhập');
     expect(() => parseCodexOutput('{"type":"turn.completed"}', null)).toThrow(HarnessError);
     expect(parseCodexOutput('{"type":"turn.completed"}', '{"title":"z"}').output).toEqual({ title: 'z' });
+    expect(parseCursorOutput(JSON.stringify({ result: '{"title":"c"}' })).output).toEqual({ title: 'c' });
+    expect(() => parseCursorOutput(JSON.stringify({ error: 'Please run agent login' }))).toThrow('Harness trên máy');
   });
 
   it.runIf(process.platform === 'win32')('passes the JSON schema and prompt intact through an npm-style .cmd shim', async () => {
@@ -193,10 +207,10 @@ describe('command contract', () => {
 });
 
 const fixture = (item: Pick<HarnessInfo, 'id' | 'executable' | 'version' | 'auth' | 'authDetail'>): HarnessInfo => ({
-  name: item.id === 'claude-code' ? 'Claude Code' : item.id === 'codex' ? 'Codex' : 'Cursor',
+  name: item.id === 'claude-code' ? 'Claude Code' : item.id === 'codex' ? 'Codex' : 'Cursor Agent',
   status: harnessStatus(item.auth),
   loginCommand: loginCommand(item.id, item.executable || undefined, 'win32'),
-  runnable: item.id !== 'cursor',
+  runnable: true,
   ...item,
 });
 

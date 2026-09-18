@@ -65,8 +65,8 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
     <p className="muted">{t('Knowledge của nhóm chỉ nạp khi chạy trong nhóm đó, kể cả khi nhân viên tham gia nhiều nhóm.')}</p>
     <Checkbox checked={pinned} onChange={event => setPinned(event.target.checked)}>{t('Luôn nạp khi còn chỗ trong context')}</Checkbox>
     <p className="muted">{t('Mục không ghim chỉ được nạp khi khớp từ khóa với yêu cầu. Lưu thay đổi tạo revision mới; lần chạy cũ giữ nội dung đã dùng.')}</p>
-    {error && <p role="alert" className="error">{error}</p>}
     <div className="actions">
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
       {proposed && !changed && <Button type="button" variant="primary" disabled={busy} onClick={() => void run(() => orglet.call('reviewKnowledge', { id: item.id, revision: item.revision, decision: 'approve' }))}>{t('Duyệt')}</Button>}
       {(!proposed || changed) && <Button variant="primary" disabled={busy}>{proposed ? t('Lưu chỉnh sửa và duyệt') : item ? t('Lưu revision mới') : t('Lưu knowledge')}</Button>}
       {item && <Button type="button" variant="outline" disabled={busy} onClick={() => void run(() => orglet.call('reviewKnowledge', { id: item.id, revision: item.revision, decision: 'archive' }))}>{proposed ? t('Từ chối') : t('Lưu trữ')}</Button>}

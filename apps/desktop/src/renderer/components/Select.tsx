@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { t } from '../i18n';
 
-export type SelectOption = { value: string; label: string; detail?: string; icon?: ReactNode; disabled?: boolean; group?: string };
+export type SelectOption = { value: string; label: string; detail?: string; icon?: ReactNode; disabled?: boolean; dimmed?: boolean; group?: string; badge?: ReactNode };
 
 type Placement = { style: CSSProperties; above: boolean };
 const GAP = 6, EDGE = 10, MAX_HEIGHT = 360, MIN_HEIGHT = 140;
@@ -14,7 +14,7 @@ const GAP = 6, EDGE = 10, MAX_HEIGHT = 360, MIN_HEIGHT = 140;
  * there is more room above, fits its height to the space left in the window, and follows the trigger on resize/scroll.
  * Keyboard: arrows, Home/End, typing to jump, Enter/Space to choose, Escape to close.
  */
-export function Select({ value, options, onChange, label, ariaLabel, disabled, size = 'md', className = '', menuMinWidth = 0, showDetail = true, inlineDetail = false, describedBy }: {
+export function Select({ value, options, onChange, label, ariaLabel, disabled, size = 'md', className = '', menuMinWidth = 0, showDetail = true, inlineDetail = false, describedBy, invalid, flash }: {
   value: string; options: SelectOption[]; onChange: (value: string) => void;
   /** Visible label above the trigger; otherwise pass ariaLabel. */
   label?: ReactNode; ariaLabel?: string; disabled?: boolean; size?: 'md' | 'sm'; className?: string; menuMinWidth?: number;
@@ -22,6 +22,8 @@ export function Select({ value, options, onChange, label, ariaLabel, disabled, s
   showDetail?: boolean; describedBy?: string;
   /** Put each option's detail on the same line as its label instead of below it. */
   inlineDetail?: boolean;
+  /** Validation: red border + brief flash when `flash` changes. */
+  invalid?: boolean; flash?: number;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -104,6 +106,7 @@ export function Select({ value, options, onChange, label, ariaLabel, disabled, s
   const labelId = `${id}-label`;
   const button = <button ref={trigger} type="button" role="combobox" className={`select-trigger ${size} ${className}`} disabled={disabled} data-value={value}
     aria-label={label ? undefined : ariaLabel} aria-labelledby={label ? labelId : undefined} aria-describedby={describedBy}
+    aria-invalid={invalid || undefined} data-flash={invalid ? flash : undefined}
     aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined} aria-activedescendant={open ? `${id}-option-${active}` : undefined}
     onClick={() => open ? close() : openList()}
     onBlur={event => { if (!list.current?.contains(event.relatedTarget as Node | null)) close(); }}
@@ -134,10 +137,11 @@ export function Select({ value, options, onChange, label, ariaLabel, disabled, s
       const header = option.group && option.group !== lastGroup ? <li key={`group-${option.group}`} role="presentation" className="select-group">{option.group}</li> : null;
       lastGroup = option.group;
       return [header, <li key={option.value} id={`${id}-option-${index}`} data-index={index} role="option" aria-selected={option.value === value} aria-disabled={option.disabled || undefined}
-        className={`select-option ${index === active ? 'active' : ''}`}
+        className={`select-option${index === active ? ' active' : ''}${option.dimmed ? ' dimmed' : ''}`}
         onPointerMove={() => { if (!option.disabled && index !== active) setActive(index); }} onPointerDown={event => event.preventDefault()} onClick={() => choose(index)}>
         {option.icon && <span className="select-icon">{option.icon}</span>}
         <span className="select-option-text"><span>{option.label}</span>{option.detail && <span className="select-detail">{option.detail}</span>}</span>
+        {option.badge && <span className="select-option-badge">{option.badge}</span>}
         <Check size={16} className="select-check" aria-hidden="true" />
       </li>];
     })}

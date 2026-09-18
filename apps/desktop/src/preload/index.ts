@@ -12,7 +12,7 @@ const bridge: Bridge = {
   pickSources: () => invoke('orglet:pick'),
   pickFolder: () => invoke('orglet:pick-folder'),
   connections: () => invoke('orglet:connections'),
-  connect: provider => invoke('orglet:connect', provider),
+  connect: (provider, key) => invoke('orglet:connect', key === undefined ? { provider } : { provider, key }),
   disconnect: provider => invoke('orglet:disconnect', provider),
   exportArtifact: (id, format = 'markdown') => invoke('orglet:export', { id, format }),
   copyArtifact: (id, format) => invoke('orglet:copy', { id, format }),

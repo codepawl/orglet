@@ -6,7 +6,7 @@ The workspace contains only `plans/orglet_mvp_plan_vi.md` and its coding starter
 
 ## Current milestone
 
-M0 foundation and M1 native worker flow are implemented locally. M2 team orchestration and the native Anthropic portion of M3 are also implemented. Live acceptance and the remaining MVP work listed below are still open.
+**0.2.0 (Windows):** M0–M4 foundation plus Grok (xAI) API and Cursor Agent local harness. Live API acceptance, clean-machine installer and code signing remain gated on user inputs (see [windows-release-gates.md](windows-release-gates.md) and [release-review.md](release-review.md)). macOS/Linux packaging is deferred.
 
 ## Decisions
 

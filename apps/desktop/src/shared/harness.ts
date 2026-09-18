@@ -1,15 +1,15 @@
 import { z } from 'zod';
 
-/** Agent CLIs Orglet can drive as a read-only review worker. */
-export const HarnessId = z.enum(['claude-code', 'codex']);
+/** Agent CLIs installed on the user's machine that Orglet can drive as a read-only review worker. */
+export const HarnessId = z.enum(['claude-code', 'codex', 'cursor']);
 export type HarnessId = z.infer<typeof HarnessId>;
-/** Harnesses listed in Settings, including Cursor which is detected for auth status only. */
+/** Harnesses listed in Settings (same set as runnable ids while Cursor Agent is supported). */
 export const HarnessCatalogId = z.enum(['claude-code', 'codex', 'cursor']);
 export type HarnessCatalogId = z.infer<typeof HarnessCatalogId>;
 export const harnessCatalog = HarnessCatalogId.options;
-export const harnessNames: Record<HarnessCatalogId, string> = { 'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
+export const harnessNames: Record<HarnessCatalogId, string> = { 'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor Agent' };
 export const isHarness = (provider: string): provider is HarnessId => HarnessId.safeParse(provider).success;
-export const harnessRunnable = (id: HarnessCatalogId): id is HarnessId => id !== 'cursor';
+export const harnessRunnable = (id: HarnessCatalogId): id is HarnessId => HarnessId.safeParse(id).success;
 
 /** PATH / default binary names used in copy-paste commands when no install was found. */
 export const harnessBinaries: Record<HarnessCatalogId, string> = { 'claude-code': 'claude', codex: 'codex', cursor: 'agent' };
@@ -39,7 +39,7 @@ export type HarnessInfo = {
   loginCommand: string;
   /** Official install command when one is documented; omitted rather than invented. */
   installCommand?: string;
-  /** False for catalog rows Orglet cannot start (Cursor, until that runner ships). */
+  /** False for catalog rows Orglet cannot start (none today — Cursor Agent is runnable). */
   runnable: boolean;
 };
 

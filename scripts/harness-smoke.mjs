@@ -75,8 +75,7 @@ try {
     assert.ok(['not_installed', 'detected', 'signed_in', 'auth_error'].includes(item.status), JSON.stringify(item));
     assert.ok(typeof item.loginCommand === 'string' && item.loginCommand.length > 0, JSON.stringify(item));
     if (item.status !== 'not_installed') assert.ok(/\d+\.\d+/.test(item.version), JSON.stringify(item));
-    if (item.id === 'cursor') assert.equal(item.runnable, false);
-    else assert.equal(item.runnable, true);
+    assert.equal(item.runnable, true);
   }
 
   await page.getByRole('button', { name: /^Cài đặt/ }).click();
@@ -125,9 +124,10 @@ try {
   };
   const model = await editResearcher();
   await model.click();
-  const options = await page.getByRole('option').allTextContents();
-  const harnessOptions = options.filter(text => /^(Claude Code|Codex|Cursor)/.test(text));
-  assert.deepEqual(harnessOptions.map(text => text.startsWith('Claude Code') ? 'claude-code' : text.startsWith('Codex') ? 'codex' : 'cursor'), ['claude-code', 'codex']);
+  // Accessible names ignore decorative ProviderMark glyphs; allTextContents would see Cursor's "C" monogram.
+  for (const name of ['Claude Code', 'Codex', 'Cursor Agent']) {
+    await page.getByRole('option', { name: new RegExp(`^${name}`) }).waitFor();
+  }
   await page.screenshot({ path: 'test-results/model-select.png' });
   await page.keyboard.press('Escape');
 

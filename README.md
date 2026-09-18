@@ -8,7 +8,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/codepawl/orglet)](https://github.com/codepawl/orglet/releases/latest)
-[![Status: early](https://img.shields.io/badge/status-early-orange)](docs/implementation_status.md)
+[![Status: early](https://img.shields.io/badge/status-0.2.0%20early-orange)](docs/implementation_status.md)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/chat-dark.png">
@@ -48,10 +48,11 @@ Workers can run through a local CLI, an API key, or Demo:
 |---|---|---|
 | Claude Code on this computer | Claude Code installed **and signed in** | Your Claude plan |
 | Codex on this computer | Codex installed **and signed in** | Your ChatGPT plan |
-| OpenAI or Anthropic API | An API key saved in Settings | Pay per use, with limits you set |
+| Cursor Agent on this computer | Cursor Agent CLI installed **and signed in** | Your Cursor plan |
+| OpenAI, Anthropic or Grok (xAI) API | An API key saved in Settings | Pay per use, with limits you set |
 | Demo | Nothing | Free, sample replies only |
 
-**Settings → Local harnesses** always shows Claude Code, Codex and Cursor as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. If sign-in fails, the screen gives the CLI login command to copy; Orglet does not switch to Demo. Cursor is listed for install/sign-in status only in this version.
+**Settings → Local harnesses** always shows Claude Code, Codex and Cursor Agent as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. If sign-in fails, the screen gives the CLI login command to copy; Orglet does not switch to Demo.
 
 API keys are encrypted with your system's secure storage and never reach the app's interface.
 

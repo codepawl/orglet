@@ -1,4 +1,4 @@
-# Windows release gates
+# Windows release gates (Orglet 0.2)
 
 This page is the Windows ship checklist: required pull-request CI, the locked unsigned-installer decision for public 0.2.x, the human installer smoke, and the GitHub Release procedure.
 
@@ -78,7 +78,7 @@ Copy this list into the release issue or tag notes and tick a step only after yo
    Open Orglet from the Start Menu. The window should open. New installs default to US English and include a **Researcher** worker on **Demo**.
 
 5. **Settings → Local harnesses**  
-   Open **Settings** → **Local harnesses**. The tab must open and list Claude Code, Codex and Cursor. On a clean machine they are usually **Not installed**. That is enough here. Fixture detected / signed-out / auth-error states are CI's job (`pnpm test:harness`).
+   Open **Settings** → **Local harnesses**. The tab must open and list Claude Code, Codex and Cursor Agent. On a clean machine they are usually **Not installed**. That is enough here. Also open **Settings** → **Connections** and confirm OpenAI / Anthropic / Grok (xAI) show with no keys. Fixture detected / signed-out / auth-error states are CI's job (`pnpm test:harness`).
 
 6. **Create a Demo worker**  
    In the sidebar, create a worker (**+** next to Workers), keep **Model** on **Demo**, save. Using the seeded Researcher also counts as Demo; still create one extra worker so the create path is exercised.
@@ -90,6 +90,12 @@ Copy this list into the release issue or tag notes and tick a step only after yo
    Quit Orglet. Uninstall from **Settings → Apps → Installed apps** (Orglet / orglet). Confirm it is gone from the Start Menu and that the old shortcut no longer launches. `%APPDATA%\orglet` may remain; that is leftover workspace data, not a failed uninstall. Remove it by hand if the VM will be reused.
 
 When a human has actually done these steps, record the VM/machine, OS, commit SHA and date on the Linear issue or in the Release draft. This document is not that record.
+
+## Blocked without user input
+
+- Key file path for live OpenAI / xAI acceptance (`pnpm test:live`)
+- Clean Windows VM or spare machine for the installer smoke above
+- Code-signing certificate (optional for 0.2.x; locked unsigned for public ship — required before claiming a signed release)
 
 ## GitHub Release tag
 

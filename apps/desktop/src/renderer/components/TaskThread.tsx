@@ -75,6 +75,9 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
             {latest && run?.error && detail.task.status !== 'paused' && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{tMessage(run.error)}</p></div>}
+            {latest && (detail.usage.chargedMicros > 0 || detail.usage.reservedMicros > 0) && <p className="thread-cost" role="status">{detail.usage.reservedMicros > 0
+              ? t('Chi phí task: đã đối soát {0} · giữ chỗ {1} / giới hạn {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.usage.reservedMicros), formatMoney(detail.task.budgetMicros)])
+              : t('Chi phí task: {0} / {1}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros)])}</p>}
             {latest && <div className="actions">
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
               {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}

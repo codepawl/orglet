@@ -22,6 +22,7 @@ import { executeHarness } from './harness/exec';
 import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
 import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/currency';
 import { assertSkillReady, inspectPackage, packageForImport, packageForExport } from './skill-package';
+import { taskResultStamp } from '../shared/task-seen';
 
 export class CoreService {
   feedbackText(artifactId: string): string {
@@ -61,7 +62,11 @@ export class CoreService {
         workspace.skills = workspace.skills.map(skill => skill.package ? { ...skill, package: { ...skill.package, reviewedHash: reviewed.includes(`${skill.id}:${skill.package.hash}`) ? skill.package.hash : undefined } } : skill);
         return workspace;
       }
-      case 'task': return this.store.detail(this.liveTask((args as { id: string }).id).id);
+      case 'task': {
+        const id = (args as { id: string }).id;
+        this.markTaskSeen(id);
+        return this.store.detail(this.liveTask(id).id);
+      }
       case 'saveWorker': {
         const input = commands.saveWorker.parse(args);
         assertSkillReady(this.store.get<Skill>('skills', input.skillId), this.store);
@@ -199,7 +204,14 @@ export class CoreService {
         if (!['completed', 'partial', 'waiting_input'].includes(task.status)) throw new Error('Chỉ chấp nhận báo cáo đã hoàn tất hoặc có kết quả một phần.');
         const detail = this.store.detail(task.id);
         if (!detail.artifacts.some(artifact => detail.runs.some(run => run.id === artifact.runId && (run.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0) && (!task.teamSnapshot || run.stage === 'synthesis')))) throw new Error('Chưa có báo cáo tổng hợp để chấp nhận. Xem kết quả từng role và tiếp tục phần còn thiếu.');
-        this.store.put('tasks', { ...task, accepted: true, status: task.status === 'waiting_input' ? 'completed' : task.status }); this.notify(); return;
+        this.store.put('tasks', { ...task, accepted: true, status: task.status === 'waiting_input' ? 'completed' : task.status });
+        this.markTaskSeen(task.id);
+        this.notify(); return;
+      }
+      case 'markTaskSeen': {
+        const task = this.markTaskSeen(commands.markTaskSeen.parse(args).id);
+        this.notify();
+        return task;
       }
       case 'acknowledgeEvidence': {
         const input = commands.acknowledgeEvidence.parse(args);
@@ -363,6 +375,18 @@ export class CoreService {
     const task = this.store.get<Task>('tasks', taskId);
     if (task.deletedAt) throw new Error('Không tìm thấy mục này.');
     return task;
+  }
+  /** Record that the user opened this task's current result; unread returns when the stamp changes. */
+  private markTaskSeen(taskId: string) {
+    const detail = this.store.detail(this.liveTask(taskId).id);
+    const latest = [...detail.artifacts].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
+    const lastArtifactId = latest?.id ?? detail.task.lastArtifactId;
+    const task = lastArtifactId && detail.task.lastArtifactId !== lastArtifactId
+      ? this.store.patchTask(taskId, { lastArtifactId })
+      : detail.task;
+    const stamp = taskResultStamp(task);
+    if (task.seenStamp === stamp) return task;
+    return this.store.patchTask(taskId, { seenStamp: stamp, seenAt: now(), ...(lastArtifactId ? { lastArtifactId } : {}) });
   }
   private assertIdle(task: Task, message: string) {
     if (this.runner.isActive(task.id) || this.teams.isActive(task.id) || ['queued', 'running', 'pausing'].includes(task.status)) throw new Error(message);

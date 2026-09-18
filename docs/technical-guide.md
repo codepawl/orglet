@@ -2,7 +2,7 @@
 
 This guide covers how Orglet runs work, connects providers and harnesses, and what each limit and check does. For what Orglet is and who it is for, see the [README](../README.md) and [product direction](product.md).
 
-This build supports individual workers, sequential or parallel teams, native OpenAI and Anthropic connections, local dataset checks, routines, checkpoint/resume, backup/restore, team templates, Agent Skills import/review/export and reviewed reusable knowledge. The full MVP in `plans/orglet_mvp_plan_vi.md` is still in progress. Codex integration, metric recomputation, live provider acceptance, installer validation and benchmarks remain unfinished.
+This build supports individual workers, sequential or parallel teams, native OpenAI, Anthropic and xAI (Grok) connections, local Claude Code / Codex / Cursor Agent harnesses, local dataset checks, routines, checkpoint/resume, backup/restore, team templates, Agent Skills import/review/export and reviewed reusable knowledge. The full MVP in `plans/orglet_mvp_plan_vi.md` is still in progress. Metric recomputation, live provider acceptance (script ready, needs a key path), installer validation on a clean machine and benchmarks remain unfinished. macOS/Linux packaging is out of scope for 0.2.0.
 
 ## Run
 
@@ -19,28 +19,41 @@ To try the interface without a model connection, keep the Researcher worker on *
 
 ## Connect a provider
 
-1. Save an OpenAI or Anthropic API key in a local `.txt` file containing only the key.
-2. In **Cài đặt**, choose **Nhập API key từ tệp** under the matching provider. The main process encrypts the key using Electron `safeStorage` (DPAPI on Windows, Keychain on macOS). It never sends the key to the renderer. The original file remains where you saved it; remove it yourself when it is no longer needed.
-3. Edit Researcher, choose **OpenAI · GPT-4.1 mini** or **Anthropic · Claude Haiku 4.5**, and save.
+1. In **Cài đặt → Kết nối API**, turn on the provider you need. Paste the key and choose **Lưu key**, or choose **Từ tệp**. Turn the switch off to disconnect and hide the fields.
+2. The main process encrypts the key with Electron `safeStorage` (DPAPI on Windows, Keychain on macOS). The renderer never receives the saved key back (typed drafts are cleared after a successful save). The original `.txt`, if you used one, remains where you saved it; remove it yourself when it is no longer needed.
+3. Edit Researcher, choose **OpenAI · GPT-4.1 mini**, **Anthropic · Claude Haiku 4.5** or **Grok · grok-3-mini**, and save.
 4. Select UTF-8 text files, describe the task, set a task budget and allow the selected content to be sent to the providers listed for that task.
 5. Send the task. Open **Chi tiết** for activity or source references. Accepting a report only updates its status in Orglet.
 
-Models are pinned to `gpt-4.1-mini-2025-04-14` and `claude-haiku-4-5-20251001`. A saved key does not establish that the provider account has credits. No subscription credentials are imported.
+Models are pinned to `gpt-4.1-mini-2025-04-14`, `claude-haiku-4-5-20251001` and `grok-3-mini`. A saved key does not establish that the provider account has credits. No subscription credentials are imported.
 
-## Local harnesses (Claude Code, Codex, Cursor)
+### Live acceptance (manual)
+
+One authorized OpenAI or xAI task may be run against the real API with a **$0.05** budget. Orglet never searches for keys.
+
+```powershell
+$env:ORGLET_LIVE_KEY_FILE = 'C:\path\to\key.txt'
+$env:ORGLET_LIVE_PROVIDER = 'openai'   # or 'xai'
+pnpm test:live
+```
+
+Anthropic live acceptance needs a separate authorization and is not covered by `pnpm test:live`.
+
+## Local harnesses (Claude Code, Codex, Cursor Agent)
 
 Orglet can also run a worker through an agent CLI already installed on the machine, using whatever account that CLI is logged in with. **Cài đặt → Harness trên máy** always lists Claude Code, Codex and Cursor. Each row is **chưa cài** (not installed), **đã thấy · chưa đăng nhập** (found on disk), **đã đăng nhập · sẵn sàng** (signed in, ready to run) or **lỗi đăng nhập** (the status probe failed). Found on disk is not ready. A failed harness login does not fall back to Demo. **Dò lại** probes again after installing or logging in. Detection runs only each CLI's `--version` and its own login-status command, and looks in:
 
 - Claude Code: `PATH`, `~/.local/bin`, npm/bun/volta global bins, `~/.claude/local`, and the build Claude desktop downloads (`%APPDATA%\Claude\claude-code\<version>` on Windows, or `~/Library/Application Support/Claude/claude-code/<version>` on macOS; also the Claude MSIX package's `LocalCache` on Windows). Sign in with `claude auth login` (the settings row copies the detected path). The desktop app's session is not reused.
 - Codex: `PATH`, npm global bins and the Codex desktop app's `%LOCALAPPDATA%\OpenAI\Codex\bin` (Windows) or `/Applications/Codex.app/Contents/Resources/codex` (macOS). Sign in with `codex login`. An expired ChatGPT token can still look signed in until a run fails; then sign in again. Orglet does not call a paid model just to check this.
-- Cursor CLI: `PATH`, `~/.local/bin`, and `%LOCALAPPDATA%\cursor-agent` (`agent` / `cursor-agent`). Sign in with `agent login`; install with the documented `curl https://cursor.com/install -fsS | bash` or Windows `irm 'https://cursor.com/install?win32=true' | iex`. Cursor is status-only in this version: it is not a worker model and Orglet does not start Cursor runs.
+- Cursor Agent: `PATH`, `~/.local/bin`, `%USERPROFILE%\.cursor\bin\agent.exe` (install script), and `%LOCALAPPDATA%\cursor-agent` (`agent` / `cursor-agent`). Sign in with `agent login`; install with the documented `curl https://cursor.com/install -fsS | bash` or Windows `irm 'https://cursor.com/install?win32=true' | iex`.
 
-Pick **Claude Code trên máy này** or **Codex trên máy này** as a worker's model. Each task still needs explicit consent for that harness. A run copies the permitted, hash-checked sources and the skill's reference files into a temporary folder, sends the compiled context as the prompt and requires the same JSON report schema; Orglet then applies the same citation, checker, checklist and line-range checks as native runs and deletes the folder.
+Pick **Claude Code trên máy này**, **Codex trên máy này** or **Cursor Agent trên máy này** as a worker's model. Each task still needs explicit consent for that harness. A run copies the permitted, hash-checked sources and the skill's reference files into a temporary folder, sends the compiled context as the prompt and requires the same JSON report schema; Orglet then applies the same citation, checker, checklist and line-range checks as native runs and deletes the folder.
 
 - Claude Code runs with `-p --restricted --safe-mode --strict-mcp-config --tools Read,Grep,Glob --no-session-persistence`, so it has no command, web or MCP tools, ignores your hooks, plugins and CLAUDE.md, and its file tools stay inside the task folder. The remaining task budget is passed as `--max-budget-usd`.
 - Codex runs `exec --sandbox read-only --ignore-user-config --ignore-rules --ephemeral` with apps, browser use, computer use and its shell tools disabled. Codex reads files only through shell commands, which its Windows read-only sandbox rejects, so Orglet sends the permitted text sources in the prompt instead (256 KB per file, 1 MB total, no Parquet). Codex therefore has no file or command access at all.
+- Cursor Agent runs `agent -p --mode=ask --sandbox enabled --trust --workspace <task-copy> --output-format json`. Orglet never passes `--force` or `--yolo`. The report JSON schema is embedded in the prompt and validated again by core.
 - No Orglet budget reservation is made. Usage counts against the harness's plan or account; a cost the CLI reports is shown in activity only. Runs share the per-provider concurrency setting and stop after 15 minutes. Cancel kills the process tree. A harness run is one step: pausing takes effect before it starts, not inside it.
-- Orglet cannot see which files Claude Code actually opened, so its reports carry that limitation.
+- Orglet cannot see which files Claude Code or Cursor Agent actually opened, so its reports carry that limitation.
 
 ## Teams
 

@@ -1,10 +1,11 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { ArrowUp, Plus } from 'lucide-react';
 import type { TaskDetail, Workspace } from '../../shared/contracts';
+import { isHarness } from '../../shared/harness';
 import { Button } from './ui';
+import { formatMoney } from './money';
 import { providerLabel, settingsTabFor, type Readiness } from './providers';
-import { t } from '../i18n';
-import { taskWorkers } from '../assignees';
+import { t } from '../i18n';import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
 
 const SINGLE_LINE = 44;
@@ -14,7 +15,7 @@ const SINGLE_LINE = 44;
  * It grows into a multi-line box once the text wraps or attachments appear, and stays grown until cleared
  * so the layout does not flip back and forth at the wrap point.
  */
-export function Composer({ value, onChange, onSubmit, label, placeholder, sendLabel, leading, attachments, disabled, sendDisabled, textareaRef }: { value: string; onChange: (value: string) => void; onSubmit: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; attachments?: ReactNode; disabled?: boolean; sendDisabled?: boolean; textareaRef?: RefObject<HTMLTextAreaElement | null> }) {
+export function Composer({ value, onChange, onSubmit, label, placeholder, sendLabel, leading, trailing, attachments, disabled, sendDisabled, textareaRef }: { value: string; onChange: (value: string) => void; onSubmit: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: ReactNode; disabled?: boolean; sendDisabled?: boolean; textareaRef?: RefObject<HTMLTextAreaElement | null> }) {
   const ownRef = useRef<HTMLTextAreaElement>(null);
   const textarea = textareaRef ?? ownRef;
   const [expanded, setExpanded] = useState(false);
@@ -36,12 +37,13 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
     observer.observe(element);
     return () => observer.disconnect();
   }, [value, hasAttachments, textarea]);
-  return <form className={`composer ${expanded ? 'expanded' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) onSubmit(); }}>
+  return <form className={`composer${expanded ? ' expanded' : ''}${trailing ? ' has-trailing' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) onSubmit(); }}>
     {attachments && <div className="composer-attachments">{attachments}</div>}
     <div className="composer-leading">{leading}</div>
     <textarea ref={textarea} aria-label={label} placeholder={placeholder} value={value} disabled={disabled} rows={1} maxLength={16000}
       onChange={event => onChange(event.target.value)}
       onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); if (canSend) onSubmit(); } }} />
+    {trailing && <div className="composer-trailing">{trailing}</div>}
     <Button type="submit" variant="primary" size="icon" className="send" aria-label={sendLabel} disabled={!canSend}><ArrowUp size={19} /></Button>
   </form>;
 }
@@ -52,9 +54,12 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   const input = detail.task.currentInput ?? detail.task;
   const workers = taskWorkers(detail.task, workspace);
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
+  const paid = providers.some(provider => !isHarness(provider));
   const missing = providers.filter(provider => !ready[provider]);
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0;
+  const used = detail.usage.chargedMicros + detail.usage.reservedMicros;
+  const budget = detail.task.budgetMicros;
   const send = () => {
     const extra = text.trim(); if (!extra || busy || blocked) return;
     setText('');
@@ -64,5 +69,9 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
     <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={busy ? t('Đang làm việc…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={blocked}
       leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Đính kèm tệp')} title={t('Đính kèm tệp')} disabled={busy} onClick={openRevision}><Plus size={20} /></Button>} />
     {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
+    {paid && <p className="composer-note composer-cost" role="status">{detail.usage.reservedMicros > 0
+      ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(budget), formatMoney(detail.usage.reservedMicros)])
+      : t('Đã dùng {0} / {1}', [formatMoney(used), formatMoney(budget)])}</p>}
+    {!paid && providers.length > 0 && <p className="composer-note">{t('Harness trên máy · chi phí theo gói của công cụ, không qua Orglet.')}</p>}
   </div>;
 }

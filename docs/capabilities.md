@@ -5,6 +5,7 @@
 | Demo | Yes | Deterministic sample report; no model or source analysis |
 | OpenAI native | Implemented; live acceptance pending | GPT-4.1 mini snapshot, trusted text reader and validated report only |
 | Anthropic native | Implemented; live acceptance pending | Claude Haiku 4.5 snapshot, provider-scoped consent, trusted tools |
+| Grok (xAI) native | Implemented; live acceptance pending | OpenAI-compatible Chat Completions at `https://api.x.ai/v1`, `grok-3-mini`, same trusted tools and report gate |
 | Teams | Yes | Up to four members, parallel concurrency two, sequential upstream reports, partial retry and synthesis |
 | Provider request concurrency | Yes | Workspace-wide per provider, 1–4 (default 2); queued steps hold no budget reservation |
 | Local dataset checker | Yes | CSV/JSONL/Parquet; schema, counts, ID checks, column-name/row-count/ID-set comparison for two files; fixed SQL, process deadline, retained provenance |
@@ -13,7 +14,7 @@
 | Folder intake | Yes | 20 files, 64 MB total, 8 levels, 1,000 entries; excluded-item list |
 | Local Claude Code harness | Yes, when installed and signed in; live review verified | Headless `-p` with restricted/safe mode, Read/Grep/Glob only, JSON schema output; one step per run; no Orglet reservation |
 | Local Codex harness (`codex exec`) | Yes, when installed and signed in; live review verified | Sources inlined in the prompt; shell tools, apps, browser and computer use disabled; user config ignored |
-| Local Cursor harness | Status only | Settings lists install/sign-in; Orglet does not start Cursor runs in this version |
+| Local Cursor Agent harness | Yes, when installed and signed in; live probe optional | Headless `agent -p --mode=ask --sandbox enabled --trust`; report schema embedded in the prompt; never `--force`/`--yolo`; no Orglet reservation |
 | Codex app-server | No | `codex exec` covers review runs; app-server is not used. See below |
 | Subscription quota display / internal allocation | No | Neither CLI exposes quota windows in headless mode; no screen is shown |
 | Shell, imported scripts, external writes | No | Not exposed through IPC or tool schemas |
@@ -22,17 +23,17 @@
 
 Decision (user, 2026-09-16): connect the agent harnesses already installed on the machine first, detected per machine so it works for other users too. The native OpenAI and Anthropic paths do not depend on them.
 
-| Capability Orglet needs | Claude Code 2.1.x | Codex CLI 0.154 | Cursor CLI (`agent`) |
+| Capability Orglet needs | Claude Code 2.1.x | Codex CLI 0.154 | Cursor Agent CLI |
 |---|---|---|---|
-| Read only the selected sources | Copies in a temp folder; `--restricted` confines file tools to it | Text inlined in the prompt; no file access (its shell-based reads are rejected by the Windows read-only sandbox, and shell tools are disabled) | Not run |
-| No shell, network, MCP, user plugins | `--restricted --safe-mode --strict-mcp-config --tools Read,Grep,Glob` | `--sandbox read-only --ignore-user-config`, `shell_tool`, `unified_exec`, apps, browser and computer use disabled | Not run |
-| Structured report | `--json-schema`, validated again by core | `--output-schema`, last message validated again by core | Not run |
-| Auth state | `claude auth status` JSON | `codex login status` text; an expired token only shows at run time | `agent status` text |
+| Read only the selected sources | Copies in a temp folder; `--restricted` confines file tools to it | Text inlined in the prompt; no file access (its shell-based reads are rejected by the Windows read-only sandbox, and shell tools are disabled) | Copies in a temp folder; `--workspace` points at the copy; ask mode |
+| No shell, network, MCP, user plugins | `--restricted --safe-mode --strict-mcp-config --tools Read,Grep,Glob` | `--sandbox read-only --ignore-user-config`, `shell_tool`, `unified_exec`, apps, browser and computer use disabled | `--mode=ask --sandbox enabled`; never `--force`/`--yolo`; MCP not auto-approved |
+| Structured report | `--json-schema`, validated again by core | `--output-schema`, last message validated again by core | Schema embedded in the prompt; `--output-format json`; validated again by core |
+| Auth state | `claude auth status` JSON | `codex login status` text; an expired token only shows at run time | `agent status --format json` (text fallback) |
 | Sign-in command | `claude auth login` (detected path) | `codex login` (detected path) | `agent login` (detected path) |
-| Cost and quota | `total_cost_usd` reported, shown in activity; `--max-budget-usd` = remaining task budget | Not reported | Not run |
-| Cancellation | Process tree killed | Process tree killed | Not run |
+| Cost and quota | `total_cost_usd` reported, shown in activity; `--max-budget-usd` = remaining task budget | Not reported | Not reported |
+| Cancellation | Process tree killed | Process tree killed | Process tree killed |
 
-**Settings → Local harnesses** always lists Claude Code, Codex and Cursor with four states: **not installed**, **found on disk (detected, not signed in)**, **signed in**, and **sign-in error** when the status probe fails. Signed in is ready-to-run only for Claude Code and Codex. Detected-on-disk is never treated as ready. A failed harness login does not fall back to Demo. Repair steps are the CLI's own login command with the detected executable path (PowerShell `& "path" …` on Windows). Cursor also shows the documented install one-liner. There is no invented login URL; each CLI opens its own browser flow.
+**Settings → Local harnesses** always lists Claude Code, Codex and Cursor Agent with four states: **not installed**, **found on disk (detected, not signed in)**, **signed in (ready to run)**, and **sign-in error** when the status probe fails. Detected-on-disk is never treated as ready. A failed harness login does not fall back to Demo. Repair steps are the CLI's own login command with the detected executable path (PowerShell `& "path" …` on Windows). Cursor also shows the documented install one-liner. There is no invented login URL; each CLI opens its own browser flow.
 
 Verified locally: detection on this Windows machine (both found), argument contract, output parsing of real failure shapes, a `.cmd` shim round trip, runner validation and cancellation with an injected executor, packaged UI smoke. Live acceptance 2026-09-16: a Codex review through `CoreService` with real detection and execution completed. It found the contradiction in a three-line note, cited line 3 (re-validated by core), recommended `revision_required` and made no Orglet reservation. The first live attempt failed Orglet's gate because the model recommended ready with no checks; the report rules are now included in the harness prompt and the tool description. A Claude Code review (2.1.270, claude.ai Max login) through the same path also completed: it read the copied source with its restricted Read tool, cited line 3, recommended `revision_required`, reported an estimated $0.1191 against its plan, and made no Orglet reservation. The desktop-bundled CLI is not on PATH, so the login hint now shows the detected executable's full path.
 
@@ -41,6 +42,7 @@ Verified locally: detection on this Windows machine (both found), argument contr
 - Electron 44.3.0, Forge 7.11.2, Vite 8.3.0, React 19.3.0; exact transitive resolution in `pnpm-lock.yaml`.
 - Native desktop smoke reports the actual bundled SQLite engine, independently of the host Node engine. Startup rejects SQLite older than 3.51.3.
 - OpenAI SDK 7.15.0. `gpt-4.1-mini-2025-04-14`, standard text input $0.40 and output $1.60 per million tokens. Cached input is deliberately estimated at the ordinary rate. No server tools with additional fees are enabled.
+- xAI via the same OpenAI SDK with `baseURL` `https://api.x.ai/v1`. Default model `grok-3-mini` at $0.30 input / $0.50 output per million tokens (`pricingVersion` `grok-3-mini:0.30:0.50`). Revalidate against [xAI pricing](https://docs.x.ai/developers/pricing) before release.
 - The request upper bound uses serialized context/tool UTF-8 bytes plus framing allowance and the output cap. Reservation and settlement use integer micro-USD. Unknown requests keep their reservation across restarts and month boundaries.
 - Forge's rebuild dependency references Electron node-gyp by Git URL; `pnpm-workspace.yaml` overrides it with the registry release `10.2.0-electron.2`. Exotic-subdependency blocking remains enabled.
 - Forge needs hoisted node_modules. Lifecycle builds are explicitly allowed only for Electron, esbuild and electron-winstaller.

@@ -29,7 +29,7 @@ import { detectUsageLimit, usageLimitMessage } from '../usageLimits';
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = { detect(): Promise<HarnessInfo[]>; execute: HarnessExecutor };
 
-const providerNames: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', ...harnessNames };
+const providerNames: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', xai: 'Grok (xAI)', ...harnessNames };
 
 /** The error shown for a failed run; provider refusals over plan, credit or rate limits say so plainly. */
 function failureMessage(run: Run, error: Error) {
@@ -449,7 +449,12 @@ export class Runner {
         const current = this.store.get<Task>('tasks', task.id);
         this.store.update('tasks', { ...current, evidenceRequests: [...(current.evidenceRequests ?? []), { id: id(), artifactId: artifact.id, checks: missing, state: 'pending', createdAt: now() }] });
       }
-      if (!keepTaskOpen) this.store.put('tasks', { ...this.store.get<Task>('tasks', task.id), status: missing.length ? 'waiting_input' : 'completed' });
+      const current = this.store.get<Task>('tasks', task.id);
+      this.store.put('tasks', {
+        ...current,
+        lastArtifactId: artifact.id,
+        ...(!keepTaskOpen ? { status: (missing.length ? 'waiting_input' : 'completed') as Task['status'] } : {}),
+      });
       this.store.put('runs', { ...run, status: 'completed', error: null }, { column: 'task_id', value: task.id });
       this.store.event(run.id, report.format === 'chat' ? 'Đã lưu câu trả lời.' : 'Đã lưu báo cáo và nguồn tham chiếu.');
       this.store.db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);

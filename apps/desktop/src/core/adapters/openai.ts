@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import { modelCatalog } from './catalog';
+import { modelCatalog, type CatalogProvider } from './catalog';
 
 export type ModelReply = { calls: { id: string; name: string; arguments: string }[]; usage?: { input: number; output: number } };
 export interface ModelAdapter {
@@ -8,10 +8,15 @@ export interface ModelAdapter {
 }
 export class OpenAIAdapter implements ModelAdapter {
   private client: OpenAI;
-  constructor(key: string, baseURL?: string) { this.client = new OpenAI({ apiKey: key, maxRetries: 0, timeout: 90_000, ...(baseURL ? { baseURL } : {}) }); }
+  private model: string;
+  constructor(key: string, options: { baseURL?: string; provider?: CatalogProvider } = {}) {
+    const provider = options.provider ?? 'openai';
+    this.model = modelCatalog[provider].model;
+    this.client = new OpenAI({ apiKey: key, maxRetries: 0, timeout: 90_000, ...(options.baseURL ? { baseURL: options.baseURL } : {}) });
+  }
   async request(messages: ChatCompletionMessageParam[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply> {
     const stream = await this.client.chat.completions.create({
-      model: modelCatalog.openai.model, messages, tools, tool_choice: 'required',
+      model: this.model, messages, tools, tool_choice: 'required',
       parallel_tool_calls: false, max_completion_tokens: 4096,
       stream: true, stream_options: { include_usage: true },
     }, { signal, ...(correlationId ? { headers: { 'X-Client-Request-Id': correlationId } } : {}) });
