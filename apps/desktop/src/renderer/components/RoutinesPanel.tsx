@@ -135,6 +135,6 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       {approvalError && <span className="visually-hidden" id="routine-approval-error">{error}</span>}
       <p className="muted">{t('Đổi nhân viên, skill, nhóm hoặc model sẽ yêu cầu lưu lại quyền chạy. Tắt lịch không hủy task đang chạy.')}</p>
     </section>
-    <div className="sticky-actions">{error ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
+    <div className="sticky-actions">{error && !zoneError ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
   </form>;
 }
