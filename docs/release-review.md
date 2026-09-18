@@ -8,11 +8,11 @@ Local review of the working tree on 2026-09-15. It records what was checked and 
 - The production tree resolved from the direct dependencies has 49 packages. All use MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause or 0BSD, except `fast-sha256@1.3.0` (Unlicense, public-domain dedication).
 - Build-only packages add MPL-2.0 (`lightningcss`, used by Tailwind at build time), CC-BY-4.0 (`caniuse-lite` data), CC-BY-3.0/CC0 (`spdx-*` data) and BlueOak-1.0.0 (`minipass-flush`). None of these ship inside the packaged app code; confirm by inspecting `app.asar` before a public release.
 - Native code shipped: DuckDB Node bindings (MIT) unpacked from ASAR, and Electron itself. SQLite is Node's bundled engine; startup refuses versions older than 3.51.3.
-- Not done: a vulnerability audit against an advisory database (`pnpm audit` or OSV), and a check of upstream maintenance status for each direct dependency. Both need network access and should run in CI before release.
+- Production dependency audit: CI runs `pnpm audit --prod --audit-level=high` on every Windows desktop workflow (fails the job on high or critical advisories). DevDependency-only findings are reviewed manually before release and are not a CI hard fail. Upstream maintenance status for each direct dependency is still a human check before tagging.
 
 ## Third-party marks
 
-Provider logos (OpenAI, Anthropic, Claude) are inline SVG paths from Simple Icons 15.22.0, released under CC0-1.0. The license covers the SVG files, not the trademarks, which belong to their owners. User decision 2026-09-16: ship the official marks and remove them if an owner objects. They live in `apps/desktop/src/renderer/components/ProviderMark.tsx`; Demo keeps a plain monogram.
+Provider logos (OpenAI, Anthropic, Claude, X for xAI) are inline SVG paths from Simple Icons 15.22.0, released under CC0-1.0. The license covers the SVG files, not the trademarks, which belong to their owners. User decision 2026-09-16: ship the official marks and remove them if an owner objects. They live in `apps/desktop/src/renderer/components/ProviderMark.tsx`; Demo and Cursor Agent keep a plain monogram.
 
 ## Privacy and data flow
 
@@ -37,4 +37,4 @@ Checked by reading `apps/desktop/src`:
 | Live Anthropic acceptance | Not authorized |
 | Rollback onto an older installed build | Procedure documented in `docs/recovery.md`; only the database copy is tested |
 | Benchmark corpus (plan §14) | Needs an authorized corpus and labels |
-| Vulnerability and maintenance audit | Needs network access in CI |
+| Vulnerability and maintenance audit | CI: `pnpm audit --prod --audit-level=high`. Manual maintenance review of direct deps still required before tag |
