@@ -758,6 +758,13 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .archived-row .history-item { cursor:default; }
 .archived-row .row-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .select-option + .select-group { margin-top:10px; }
+.model-picker { display:flex; align-items:center; gap:8px; }
+.model-picker-field { position:relative; flex:1; min-width:0; }
+.model-picker-field input { padding-right:32px; }
+.model-picker-chevron { position:absolute; right:10px; top:50%; width:16px; height:16px; color:var(--muted); pointer-events:none; transform:translateY(-50%); transition:transform .15s; }
+.model-picker-chevron.open { transform:translateY(-50%) rotate(180deg); }
+.model-picker-refresh { flex-shrink:0; }
+.model-picker-note { margin:0; font-size:12px; font-weight:400; }
 /* Scrollbars everywhere: a slim rounded thumb in the text colour, no track, inset from the edge. */
 ::-webkit-scrollbar { width:12px; height:12px; }
 ::-webkit-scrollbar-track,::-webkit-scrollbar-corner { background:transparent; }

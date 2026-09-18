@@ -28,7 +28,7 @@ export class TeamTemplates {
     const text = JSON.stringify(Template.parse({
       format: 'orglet-team-template', version: 1,
       team: { name: team.name, instructions: team.instructions, workflow: team.workflow, monthlyBudgetMicros: team.monthlyBudgetMicros, ...(team.reviewPolicy ? { reviewPolicy: team.reviewPolicy } : {}), ...(team.preflight ? { preflight: team.preflight } : {}), ...(team.workHours ? { workHours: team.workHours } : {}), ...(team.maxConcurrentTasks ? { maxConcurrentTasks: team.maxConcurrentTasks } : {}), memberKeys: team.memberIds.map(workerId => workerKeys.get(workerId)), synthesizerKey: workerKeys.get(team.synthesizerId) },
-      workers: workers.map(worker => ({ key: workerKeys.get(worker.id), name: worker.name, instructions: worker.instructions, provider: worker.provider, skillKey: skillKeys.get(worker.skillId), ...(worker.avatar ? { avatar: worker.avatar } : {}), ...(worker.description ? { description: worker.description } : {}) })),
+      workers: workers.map(worker => ({ key: workerKeys.get(worker.id), name: worker.name, instructions: worker.instructions, provider: worker.provider, skillKey: skillKeys.get(worker.skillId), ...(worker.modelId ? { modelId: worker.modelId } : {}), ...(worker.avatar ? { avatar: worker.avatar } : {}), ...(worker.description ? { description: worker.description } : {}) })),
       skills: skills.map(skill => ({ key: skillKeys.get(skill.id), name: skill.name, content: skill.content, ...(skill.package ? { package: skill.package } : {}) })),
       ...(knowledge.length ? { knowledge } : {}),
     }), null, 2);

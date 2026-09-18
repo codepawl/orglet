@@ -171,6 +171,8 @@ describe('command contract', () => {
     const cursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 });
     expect(cursor).toEqual(expect.arrayContaining(['-p', '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', directory, '--output-format', 'json']));
     expect(cursor.join(' ')).not.toMatch(/force|yolo|approve-mcps/);
+    expect(harnessArgs({ harness: 'claude-code', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 0.25, model: 'haiku' })).toEqual(expect.arrayContaining(['--model', 'haiku']));
+    expect(harnessArgs({ harness: 'codex', cwd: directory, schema: {}, maxBudgetUsd: 1, model: 'gpt-5' })).toEqual(expect.arrayContaining(['-m', 'gpt-5']));
   });
 
   it('parses real CLI failure shapes into actionable login messages', () => {

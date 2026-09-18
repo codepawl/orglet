@@ -54,6 +54,13 @@ export const ModelListResult = z.object({
 }).strict();
 export type ModelListResult = z.infer<typeof ModelListResult>;
 
+/** Pinned suggestion IDs. The picker may show these; a worker is not locked to them. */
+export const CATALOG_HINT_IDS = {
+  openai: 'gpt-4.1-mini-2025-04-14',
+  anthropic: 'claude-haiku-4-5-20251001',
+  xai: 'grok-3-mini',
+} as const;
+
 export const MODEL_LIST_CACHE_VERSION = 1;
 export const MODEL_LISTS_SETTING = 'modelLists';
 export const MODEL_LIST_TTL_MS = 24 * 60 * 60 * 1000;

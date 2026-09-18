@@ -16,6 +16,8 @@ export type HarnessRequest = {
   schema: object;
   signal: AbortSignal;
   maxBudgetUsd: number;
+  /** Exact `--model` / `-m` slug. Omitted so the CLI keeps its own default. */
+  model?: string;
   /** Called as a streaming harness thinks, uses tools and writes. Harnesses that do not stream never call it. */
   onProgress?: (progress: HarnessProgress) => void;
 };
@@ -41,14 +43,20 @@ const LAST_MESSAGE_FILE = 'orglet-last-message.json';
  * the shell tools are disabled outright; user config is ignored (no MCP servers or plugins) and apps/browser/computer
  * use are off. Cursor Agent: ask mode + sandbox, never --force/--yolo; report schema is embedded in the prompt.
  */
-export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd'>): string[] {
+function modelFlag(harness: HarnessId, model?: string) {
+  if (!model) return [];
+  return harness === 'codex' ? ['-m', model] : ['--model', model];
+}
+
+export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model'>): string[] {
+  const model = modelFlag(request.harness, request.model);
   if (request.harness === 'claude-code') {
-    return ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', '--max-budget-usd', request.maxBudgetUsd.toFixed(4)];
+    return ['-p', ...model, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', '--max-budget-usd', request.maxBudgetUsd.toFixed(4)];
   }
   if (request.harness === 'cursor') {
-    return ['-p', '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', request.cwd, '--output-format', 'json'];
+    return ['-p', ...model, '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', request.cwd, '--output-format', 'json'];
   }
-  return ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), '--json', '-'];
+  return ['exec', ...model, '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), '--json', '-'];
 }
 
 const authHint = (harness: HarnessId) => {

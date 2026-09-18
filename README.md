@@ -54,7 +54,7 @@ Workers can run through a local CLI, an API key, or Demo:
 | OpenAI, Anthropic or Grok (xAI) API | An API key saved in Settings | Pay per use, with limits you set |
 | Demo | Nothing | Free, sample replies only |
 
-Each API or harness worker can use a model ID from **that provider's own list** (cached 24 hours in the local database) or a typed custom ID. Fetching the list does not change the worker picker yet — workers still start on the pinned catalog ID until [COD-28](https://linear.app/codepawl/issue/COD-28). Details: [model-list-fetch.md](docs/model-list-fetch.md).
+Each API or harness worker can use a model ID from **that provider's own list** (cached 24 hours in the local database) or a typed custom ID. Catalog names such as GPT-4.1 mini are suggestions, not a lock. If the list is empty or fails to load, you can still type an ID. Details: [model-list-fetch.md](docs/model-list-fetch.md).
 
 **Settings → Local harnesses** always shows Claude Code, Codex and Cursor Agent as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. If sign-in fails, the screen gives the CLI login command to copy; Orglet does not switch to Demo.
 

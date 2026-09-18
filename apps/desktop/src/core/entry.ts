@@ -33,13 +33,13 @@ const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject
   port.postMessage({ type: 'profile', id, input });
 });
 const store = new Store(join(process.argv[2], 'orglet.sqlite'));
-const core = new CoreService(store, () => port.postMessage({ type: 'changed' }), async provider => {
+const core = new CoreService(store, () => port.postMessage({ type: 'changed' }), async (provider, model) => {
   if (!['openai', 'anthropic', 'xai'].includes(provider)) throw new Error('Provider chưa được hỗ trợ.');
   const key = await requestKey(provider);
   if (!key) throw new Error(`Chưa kết nối ${provider}. Mở Cài đặt để nhập API key.`);
-  if (provider === 'anthropic') return new AnthropicAdapter(key);
-  if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai' });
-  return new OpenAIAdapter(key);
+  if (provider === 'anthropic') return new AnthropicAdapter(key, undefined, model);
+  if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai', model });
+  return new OpenAIAdapter(key, { model });
 }, profile, undefined, undefined, undefined, {
   readKey: provider => requestKey(provider),
 });

@@ -32,10 +32,10 @@ describe('live provider acceptance', () => {
     expect(key.length).toBeGreaterThanOrEqual(16);
     expect(key.includes('\n')).toBe(false);
     store = new Store(join(directory, 'orglet.sqlite'));
-    core = new CoreService(store, () => {}, async id => {
+    core = new CoreService(store, () => {}, async (id, model) => {
       expect(id).toBe(provider);
-      if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai' });
-      return new OpenAIAdapter(key);
+      if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai', model });
+      return new OpenAIAdapter(key, { model });
     });
   });
 

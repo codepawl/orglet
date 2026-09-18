@@ -5,7 +5,8 @@ import { Store, id, now } from '../storage/database';
 import { BudgetLedger, BudgetError, cost } from '../budgets/ledger';
 import { Sources, fingerprint } from '../tools/sources';
 import type { ModelAdapter } from '../adapters/openai';
-import { modelConfig } from '../adapters/catalog';
+import { readModelListCache } from '../models/cache';
+import { resolveWorkerModel } from '../models/resolve';
 import { ProfileArgs, type ProfileRecord } from '../../shared/profiles';
 import type { PreflightRecord } from '../../shared/preflight';
 import { Checkpoints, type Checkpoint } from '../storage/checkpoints';
@@ -112,7 +113,7 @@ export class Runner {
   private slots = new ProviderSlots(() => this.store.setting('providerConcurrency', DEFAULT_PROVIDER_CONCURRENCY));
   /** Receives live progress from streaming harnesses; the core process forwards it to the window. */
   onProgress: (update: RunProgressUpdate) => void = () => {};
-  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }) {}
+  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }) {}
   isActive(taskId: string) { return [...this.active.values()].some(item => item.taskId === taskId); }
   cancel(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.controller.abort(); }
   pause(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.paused = true; }
@@ -154,10 +155,14 @@ export class Runner {
       run = { ...run, snapshot: { ...run.snapshot, input } };
       task = { ...task, ...input };
       assertSkillReady(run.snapshot.skill, this.store);
-      if (run.snapshot.worker.provider !== 'demo' && !isHarness(run.snapshot.worker.provider)) {
-        const config = modelConfig(run.snapshot.worker.provider);
-        if (run.snapshot.model && (run.snapshot.model !== config.model || run.snapshot.pricingVersion !== config.pricingVersion)) throw new Error('Model hoặc bảng giá đã đổi. Tạo lần chạy mới để dùng cấu hình hiện tại.');
-        run = { ...run, snapshot: { ...run.snapshot, model: config.model, pricingVersion: config.pricingVersion } };
+      const resolved = resolveWorkerModel(run.snapshot.worker, readModelListCache(this.store));
+      if (run.snapshot.worker.provider !== 'demo') {
+        if (!run.snapshot.model && resolved.id) {
+          run = { ...run, snapshot: { ...run.snapshot, model: resolved.id, pricingVersion: resolved.pricingVersion } };
+        } else if (run.snapshot.model && !run.snapshot.worker.modelId && !isHarness(run.snapshot.worker.provider)
+          && (run.snapshot.model !== resolved.id || run.snapshot.pricingVersion !== resolved.pricingVersion)) {
+          throw new Error('Model hoặc bảng giá đã đổi. Tạo lần chạy mới để dùng cấu hình hiện tại.');
+        }
       }
       // Freeze the knowledge selection before any dispatch; later edits or approvals only affect new runs.
       const context = run.snapshot.context ?? compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, brief: input.brief, candidates: new KnowledgeBase(this.store).candidates(run.snapshot.worker.id, run.snapshot.team?.id) }).context;
@@ -208,7 +213,7 @@ export class Runner {
         await this.runHarness(run.snapshot.worker.provider, task, run, messages, { manifest, preflight, preflightLimits, checkedSourceIds: checkedProfiles.flatMap(profile => Object.keys(profile.sourceHashes)) }, options, control, signal);
         return;
       }
-      const model = await this.adapter(run.snapshot.worker.provider);
+      const model = await this.adapter(run.snapshot.worker.provider, run.snapshot.model);
       signal.throwIfAborted();
       const ledger = new BudgetLedger(this.store);
       const tools = toolsFor(run);
@@ -235,11 +240,16 @@ export class Runner {
           try {
             if (control.paused || !this.canDispatch(task)) throw new Paused();
             const teamBudget = task.teamSnapshot ? { id: task.teamSnapshot.id, limit: this.store.get<Team>('teams', task.teamSnapshot.id).monthlyBudgetMicros } : undefined;
-            const reservation = ledger.reserve(run.id, task.id, provider, cost(upperInput, 4096, provider), task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, reservationId => this.checkpoints.requested(checkpoint, reservationId));
+            const usage = this.store.usage(task.id);
+            const hold = resolved.rates
+              ? cost(upperInput, 4096, resolved.rates)
+              : Math.max(1000, task.budgetMicros - usage.chargedMicros - usage.reservedMicros);
+            if (!resolved.rates) this.event(run.id, 'Model tùy chỉnh chưa có giá đã xác minh trong Orglet. Chi phí được giữ chỗ chưa rõ.');
+            const reservation = ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, reservationId => this.checkpoints.requested(checkpoint, reservationId));
             this.event(run.id, `Đang gọi model · bước ${step + 1}/6`);
             try {
               reply = await model.request(messages, tools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation);
-              if (reply.usage) ledger.settle(reservation, reply.usage.input, reply.usage.output);
+              if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
               else ledger.unknown(reservation);
               this.checkpoints.received(checkpoint, reply);
             } catch {
@@ -379,6 +389,7 @@ export class Runner {
           schema: z.toJSONSchema(needsReport(run) ? ModelReportSchema : HarnessAnswerSchema, { target: 'draft-7' }),
           signal,
           maxBudgetUsd: remainingUsd,
+          ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
           onProgress: update => progress.update(showSourceNames(update)),
         });
       } finally {

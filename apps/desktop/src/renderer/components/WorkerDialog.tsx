@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { AlignLeft, Smile, Cpu, ScrollText, Sparkles, UserRound, Wallet, SlidersHorizontal } from 'lucide-react';
 import type { Connections, Worker, Workspace } from '../../shared/contracts';
+import { CATALOG_HINT_IDS } from '../../shared/models';
 import { harnessNames, isHarness, type HarnessInfo } from '../../shared/harness';
 import { FieldLabel, MoneyInput } from './ui';
 import { Select } from './Select';
+import { ModelPicker } from './ModelPicker';
 import { ProviderMark } from './ProviderMark';
 import { AvatarPicker } from './Avatar';
 import { isMascot, mascotIds } from './mascots';
@@ -18,7 +20,7 @@ import { orglet } from '../api';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
 type Tab = 'general' | 'instructions' | 'skill';
-type InvalidField = 'name' | 'instructions' | 'budget';
+type InvalidField = 'name' | 'instructions' | 'budget' | 'modelId';
 const tabs = [
   { id: 'general' as const, label: 'Chung', icon: <SlidersHorizontal size={16} /> },
   { id: 'instructions' as const, label: 'Hướng dẫn', icon: <ScrollText size={16} /> },
@@ -33,6 +35,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [name, setName] = useState(worker?.name ?? '');
   const [instructions, setInstructions] = useState(worker?.instructions ?? defaultInstructions);
   const [provider, setProvider] = useState<Worker['provider']>(worker?.provider ?? 'demo');
+  const [modelId, setModelId] = useState(worker?.modelId ?? '');
   const [skillId, setSkill] = useState(worker?.skillId ?? workspace.skills[0].id);
   const [budget, setBudget] = useState(toAmount(worker?.taskBudgetMicros ?? 500_000));
   const [avatar, setAvatar] = useState(worker?.avatar ?? {});
@@ -61,9 +64,11 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     if (!instructions.trim()) return fail('instructions', t('Hướng dẫn không được để trống.'), 'instructions');
     const taskBudgetMicros = toMicros(budget);
     if (!Number.isFinite(taskBudgetMicros) || taskBudgetMicros < 0) return fail('general', t('Giới hạn mỗi task phải là số không âm.'), 'budget');
+    const trimmedModel = modelId.trim();
+    if (trimmedModel.length > 200) return fail('general', t('ID model tối đa 200 ký tự.'), 'modelId');
     setBusy(true); clearError();
     try {
-      await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}) });
+      await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}) });
       toast(worker ? t('Đã lưu nhân viên.') : t('Đã tạo nhân viên.')); onClose();
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
@@ -73,11 +78,11 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error'))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên nhân viên')}</FieldLabel><input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} {...fieldInvalid(invalid === 'name', flash)} /></label>
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
-      <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} value={provider} onChange={value => setProvider(value as Worker['provider'])} options={[
+      <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} value={provider} onChange={value => { const next = value as Worker['provider']; setProvider(next); if (next !== provider) setModelId(''); }} options={[
         modelOption('demo', 'Demo', t('không gọi API'), t('Thử nghiệm'), true),
-        modelOption('openai', 'OpenAI', 'GPT-4.1 mini', t('API trả phí'), ready.openai),
-        modelOption('anthropic', 'Anthropic', 'Claude Haiku 4.5', t('API trả phí'), ready.anthropic),
-        modelOption('xai', 'Grok', 'grok-3-mini', t('API trả phí'), ready.xai),
+        modelOption('openai', 'OpenAI', t('gợi ý {0}', [CATALOG_HINT_IDS.openai]), t('API trả phí'), ready.openai),
+        modelOption('anthropic', 'Anthropic', t('gợi ý {0}', [CATALOG_HINT_IDS.anthropic]), t('API trả phí'), ready.anthropic),
+        modelOption('xai', 'Grok', t('gợi ý {0}', [CATALOG_HINT_IDS.xai]), t('API trả phí'), ready.xai),
         ...(['claude-code', 'codex', 'cursor'] as const).map(id => {
           const found = harnesses.find(item => item.id === id);
           const detail = !found || found.status === 'not_installed' ? t('chưa cài')
@@ -88,6 +93,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
           return modelOption(id, harnessNames[id], detail, t('Harness trên máy'), ready[id]);
         }),
       ]} />
+      {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} />}
       {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. {1} Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider], provider === 'codex' ? t('Codex nhận nội dung nguồn văn bản trong prompt và không có tool đọc tệp hay chạy lệnh.') : provider === 'cursor' ? t('Cursor Agent chạy ở chế độ ask với sandbox; chỉ đọc bản sao nguồn của task, không dùng --force.') : t('Claude Code chỉ đọc bản sao nguồn của task, không chạy lệnh.')])}</p>}
       {paid && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
     </>}

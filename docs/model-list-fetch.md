@@ -2,7 +2,9 @@
 
 Plan for [COD-29](https://linear.app/codepawl/issue/COD-29) under epic [COD-27](https://linear.app/codepawl/issue/COD-27). **This page is the decision.** [COD-31](https://linear.app/codepawl/issue/COD-31) implements fetch + cache; [COD-28](https://linear.app/codepawl/issue/COD-28) is the picker UI; [COD-30](https://linear.app/codepawl/issue/COD-30) is the deprecated chip.
 
-**Shipped (COD-31):** `modelList` fetches each connection from its native API or CLI, caches the result in SQLite `settings.modelLists` (24h TTL, stale-while-revalidate), stores OpenAI `shutdown_date` and Codex `upgrade` when present, and always allows a typed custom model ID. No picker UI and no deprecated chip in that PR.
+**Shipped (COD-31):** `modelList` fetches each connection from its native API or CLI, caches the result in SQLite `settings.modelLists` (24h TTL, stale-while-revalidate), stores OpenAI `shutdown_date` and Codex `upgrade` when present, and always allows a typed custom model ID.
+
+**Shipped (COD-28):** Worker settings persist optional `modelId`. The dialog lists cached models and always accepts a typed ID (`customIdOk`). Catalog defaults are suggestions. Adapters and harness CLIs use the saved ID. Deprecated chip UI is still COD-30.
 
 It does not add feature UI, scrape HTML, or change signing / [COD-19](https://linear.app/codepawl/issue/COD-19) / [COD-20](https://linear.app/codepawl/issue/COD-20). Team chat ([COD-24](https://linear.app/codepawl/issue/COD-24)) is unrelated.
 
@@ -12,7 +14,7 @@ Fetch each connection's model list from **that provider's own API or CLI**. Cach
 
 ## What Orglet does today
 
-A worker stores only `provider` (`apps/desktop/src/shared/contracts.ts`). The model ID and price are hardcoded per provider in `apps/desktop/src/core/adapters/catalog.ts`:
+A worker stores `provider` and optional `modelId` (`apps/desktop/src/shared/contracts.ts`). Absence of `modelId` means the catalog suggestion for that provider (or the CLI default for a harness). Verified prices for the three pinned IDs stay in `apps/desktop/src/core/adapters/catalog.ts`:
 
 | Provider | Pinned ID | Price snapshot |
 |---|---|---|
@@ -21,7 +23,7 @@ A worker stores only `provider` (`apps/desktop/src/shared/contracts.ts`). The mo
 | xAI | `grok-3-mini` | $0.30 / $0.50 per MTok |
 | Demo / Claude Code / Codex / Cursor | (none) | No Orglet reservation |
 
-The worker dialog labels those three IDs as if they were the only choice (`WorkerDialog.tsx`, `workerModel.ts`). The runner freezes `run.snapshot.model` from the catalog, not from the worker (`runner.ts`). Changing the catalog later invalidates in-flight runs and routine approval fingerprints. That is the lock COD-27 removes.
+The worker dialog labels those three IDs as suggestions in the picker (`WorkerDialog.tsx`, `workerModel.ts`). A saved `modelId` is frozen onto `run.snapshot.model`. Custom OpenAI/Anthropic IDs are not billed at mini/Haiku rates (unknown reservation until a later COD stores a verified price). xAI native tenths from the cached list are used when present. Harness runs pass `--model` / `-m` when `modelId` is set.
 
 ## Per-provider source
 
@@ -174,6 +176,8 @@ Shipped. Remaining picker/chip work is COD-28 / COD-30.
 
 ### COD-28 — UI (after or with a stub list)
 
+Shipped. Worker dialog lists cached models and always accepts a typed custom ID. `modelId` persists on the worker; adapters and harness `--model`/`-m` use it. Catalog-hint is a suggestion.
+
 1. Worker (and harness) picker: searchable list + **always-on custom ID** field. Catalog-hint is a suggestion, not a lock.
 2. Persist `modelId` on the worker revision. Adapter + `harnessArgs` use it. Labels in `workerModel.ts` show the chosen ID.
 3. Opening the dialog calls `modelList` once; shows stale list instantly; does not spam. Quiet refresh control.
@@ -187,21 +191,17 @@ Shipped. Remaining picker/chip work is COD-28 / COD-30.
 
 ## Out of scope (this plan page)
 
-- COD-28 picker chrome, COD-30 chip styling
+- COD-28 picker chrome (shipped), COD-30 chip styling
 - COD-31 code (this PR is docs)
 - Scraping, OpenRouter, models.dev overlay, embeddings/image models as workers
 - New SQLite `models` table, cloud sync of lists
 - Auto-migrating a worker to a replacement ID
-- Passing `--model` before COD-28 persists `modelId`
+- Passing `--model` before COD-28 persists `modelId` (COD-28 now persists it)
 - COD-19/20 signing, COD-24/25 team chat
 
-## Code still later (COD-28 / COD-30)
+## Code still later (COD-30)
 
-- `apps/desktop/src/core/adapters/openai.ts`, `anthropic.ts` — construct with worker `modelId`
-- `apps/desktop/src/core/orchestration/runner.ts` — freeze selected ID
-- `apps/desktop/src/core/harness/exec.ts` — `--model` / `-m`
-- `apps/desktop/src/shared/contracts.ts` — `modelId` on `WorkerInput` (COD-28)
-- `apps/desktop/src/renderer/components/WorkerDialog.tsx` — COD-28
+- Deprecated chip on the selected model (`deprecated`, `sunsetAt`, optional `replacementId` as text)
 
 ## What this is not
 

@@ -2,8 +2,7 @@ import { RoutineInput, type Routine, type TaskInput, type Team, type Worker, typ
 import { nextOccurrence } from '../../shared/schedule';
 import { Store, id } from '../storage/database';
 import { Sources, fingerprint } from '../tools/sources';
-import { modelConfig } from '../adapters/catalog';
-import { isHarness } from '../../shared/harness';
+import { resolveWorkerModel } from '../models/resolve';
 
 /** First tick after startup, a gap, or overdue delay above this is a miss — never auto-replayed. See docs/routines.md. */
 export const ROUTINE_MISS_MS = 30_000;
@@ -26,7 +25,11 @@ export class Routines {
     const workers = [...new Set(team ? [...team.memberIds, team.synthesizerId] : [input.workerId])].map(workerId => this.store.get<Worker>('workers', workerId));
     const skills = [...new Set(workers.map(worker => worker.skillId))].map(skillId => this.store.get<Skill>('skills', skillId));
     // ponytail: harness version is not part of the approval fingerprint (detection is async); a CLI update does not reset approval.
-    const models = [...new Set(workers.map(worker => worker.provider))].filter(provider => provider !== 'demo').map(provider => isHarness(provider) ? { provider } : { provider, ...modelConfig(provider) });
+    const models = workers.map(worker => {
+      if (worker.provider === 'demo') return { provider: worker.provider };
+      const resolved = resolveWorkerModel(worker);
+      return { provider: worker.provider, modelId: worker.modelId ?? null, model: resolved.id ?? null, pricingVersion: resolved.pricingVersion };
+    });
     return fingerprint(JSON.stringify({ team, workers, skills, models }));
   }
   save(raw: unknown) {
