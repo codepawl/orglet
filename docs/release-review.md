@@ -31,8 +31,8 @@ Checked by reading `apps/desktop/src`:
 
 | Gate | Status |
 |---|---|
-| Installer on a clean Windows machine, startup, uninstall | Not run. Setup.exe is built but unsigned; installing from this development session would also be virtualized by the MSIX-packaged host |
-| Code signing | Not configured |
+| Installer on a clean Windows machine, startup, uninstall | Not run. Human checklist (install, first launch, Settings harness tab, Demo worker/task, uninstall) is in [windows-release-gates.md](windows-release-gates.md). CI packaged smokes do not run Setup.exe. Installing from a development session on an MSIX-packaged host would also be virtualized |
+| Code signing | Locked for public 0.2.x: unsigned. SmartScreen is expected. Signed builds wait for a certificate; do not add a signing pipeline. See [windows-release-gates.md](windows-release-gates.md) |
 | Live OpenAI acceptance ($0.05 cap) | Waiting for the user's key file path |
 | Live Anthropic acceptance | Not authorized |
 | Rollback onto an older installed build | Procedure documented in `docs/recovery.md`; only the database copy is tested |
