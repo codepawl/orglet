@@ -11,7 +11,7 @@ Work is a **chat**, not a pile of tasks or sessions.
 - Click a **worker** → that worker's conversation.
 - Click a **team** → that team's conversation (roster under the row and in the header).
 - One live thread per worker and per team. A new message is a turn in that chat, not a new row in the sidebar.
-- Archive the thread (⋯ next to **Chi tiết**) to start over. Search still finds older or archived chats.
+- Archive the thread (⋯ next to **Chi tiết** / Chat details) to start over. Search still finds older or archived chats.
 - **Lịch chạy** stays a list of discrete scheduled jobs. Those rows are not merged into the infinite chat.
 
 Under the hood the thread is still a `tasks` row. **Chi tiết** lists internal `runs` (plan, members, synthesis, or the single worker job) for retry, cost and cancel. Dollars sit next to **Chi tiết**.

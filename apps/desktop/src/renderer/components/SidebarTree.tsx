@@ -141,7 +141,7 @@ export type ArchiveState = { daysLeft: number | null; tone: 'fresh' | 'aging' | 
 export function ArchivedRow({ name, mark, archive, onRestore, onDelete }: { name: string; mark: ReactNode; archive: ArchiveState; onRestore: () => void; onDelete: () => void }) {
   return <div className="task-row archived-row">
     <span className="history-item">{mark}<span className="row-name">{name}</span>{archive.daysLeft !== null && <span className={`archive-age ${archive.tone}`} title={t('Tự xóa sau {0} ngày', [archive.daysLeft])}>{t('{0} ngày', [archive.daysLeft])}</span>}</span>
-    <RowMenu label={t('Tùy chọn {0}', [name])} items={[{ label: t('Khôi phục'), icon: ArchiveRestore, onSelect: onRestore }, { label: t('Xóa vĩnh viễn'), icon: Trash2, danger: true, onSelect: onDelete, confirm: { question: t('Xóa {0}? Công việc cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
+    <RowMenu label={t('Tùy chọn {0}', [name])} items={[{ label: t('Khôi phục'), icon: ArchiveRestore, onSelect: onRestore }, { label: t('Xóa vĩnh viễn'), icon: Trash2, danger: true, onSelect: onDelete, confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
   </div>;
 }
 
