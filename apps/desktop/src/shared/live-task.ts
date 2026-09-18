@@ -1,24 +1,51 @@
 import type { Task } from './contracts';
 
-/** Fields that identify the one live team chat thread (`docs/team-chat-context.md`). */
-export type TeamThreadTask = Pick<Task, 'id' | 'createdAt' | 'teamId' | 'assignees' | 'archivedAt' | 'deletedAt' | 'routineId'>;
+/** Fields that identify one live worker or team chat (`docs/team-chat-context.md`). */
+export type LiveThreadTask = Pick<Task, 'id' | 'createdAt' | 'workerId' | 'teamId' | 'assignees' | 'archivedAt' | 'deletedAt' | 'routineId'>;
 
-/** True when this row is the open conversation for `teamId`, not a routine or archived pile item. */
-export function isLiveTeamThread(task: TeamThreadTask, teamId: string): boolean {
-  return !task.archivedAt && !task.deletedAt && !task.routineId && !task.assignees && task.teamId === teamId;
+/** @deprecated Use `LiveThreadTask`. Kept so existing imports keep compiling. */
+export type TeamThreadTask = LiveThreadTask;
+
+function isOpenEnvelope(task: Pick<LiveThreadTask, 'archivedAt' | 'deletedAt' | 'routineId' | 'assignees'>): boolean {
+  return !task.archivedAt && !task.deletedAt && !task.routineId && !task.assignees;
 }
 
-/** Newest non-archived team chat for this team. Undefined until the first user message creates the row. */
-export function liveTeamTask<T extends TeamThreadTask>(tasks: readonly T[], teamId: string): T | undefined {
+/** True when this row is the open conversation for `teamId`, not a routine or archived pile item. */
+export function isLiveTeamThread(task: LiveThreadTask, teamId: string): boolean {
+  return isOpenEnvelope(task) && task.teamId === teamId;
+}
+
+/** True when this row is the open 1:1 conversation for `workerId` (no team, no group assignees). */
+export function isLiveWorkerThread(task: LiveThreadTask, workerId: string): boolean {
+  return isOpenEnvelope(task) && !task.teamId && task.workerId === workerId;
+}
+
+function newestLive<T extends LiveThreadTask>(tasks: readonly T[], match: (task: T) => boolean): T | undefined {
   return tasks.reduce<T | undefined>((newest, task) => {
-    if (!isLiveTeamThread(task, teamId)) return newest;
+    if (!match(task)) return newest;
     if (!newest || task.createdAt > newest.createdAt) return task;
     return newest;
   }, undefined);
 }
 
+/** Newest non-archived team chat for this team. Undefined until the first user message creates the row. */
+export function liveTeamTask<T extends LiveThreadTask>(tasks: readonly T[], teamId: string): T | undefined {
+  return newestLive(tasks, task => isLiveTeamThread(task, teamId));
+}
+
+/** Newest non-archived 1:1 chat for this worker. Undefined until the first user message creates the row. */
+export function liveWorkerTask<T extends LiveThreadTask>(tasks: readonly T[], workerId: string): T | undefined {
+  return newestLive(tasks, task => isLiveWorkerThread(task, workerId));
+}
+
 /** How the team chat composer should persist the next user message: one live `tasks` row, not a row per send. */
-export function nextTeamMessage(tasks: readonly TeamThreadTask[], teamId: string): { mode: 'create' } | { mode: 'revise'; taskId: string } {
+export function nextTeamMessage(tasks: readonly LiveThreadTask[], teamId: string): { mode: 'create' } | { mode: 'revise'; taskId: string } {
   const live = liveTeamTask(tasks, teamId);
+  return live ? { mode: 'revise', taskId: live.id } : { mode: 'create' };
+}
+
+/** How the worker chat composer should persist the next user message: one live `tasks` row, not a row per send. */
+export function nextWorkerMessage(tasks: readonly LiveThreadTask[], workerId: string): { mode: 'create' } | { mode: 'revise'; taskId: string } {
+  const live = liveWorkerTask(tasks, workerId);
   return live ? { mode: 'revise', taskId: live.id } : { mode: 'create' };
 }

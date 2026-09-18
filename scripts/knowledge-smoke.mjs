@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-knowledge-'));
@@ -66,7 +66,7 @@ try {
   const detail = await page.evaluate(id => window.orglet.call('task', { id }), taskId);
   assert.equal(detail.task.status, 'completed');
   for (const run of detail.runs) assert.deepEqual(run.snapshot.context.knowledge.map(item => [item.id, item.revision]), [[approved.id, 2]]);
-  await page.getByRole('button', { name: /^Knowledge context fixture/ }).click();
+  await openThreadByBrief(page, 'Knowledge context fixture');
   await page.getByRole('button', { name: 'Chi tiết', exact: true }).click();
   await page.getByText(/Context đã nạp/).first().click();
   await page.getByText('Knowledge: Evidence limits · v2', { exact: false }).first().waitFor();

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
-import { useVietnamese } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-routine-ui-'));
@@ -18,8 +18,8 @@ const launch = async () => {
 let app = await launch();
 try {
   let page = await app.firstWindow(); await useVietnamese(page);
-  await page.getByRole('textbox', { name: 'Nội dung công việc' }).fill('Routine smoke: scheduled demo');
-  await page.getByRole('button', { name: 'Lên lịch cho công việc này', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Routine smoke: scheduled demo');
+  await page.getByRole('button', { name: 'Lên lịch cho tin này', exact: true }).click();
   await page.getByLabel('Tên lịch', { exact: true }).fill('Morning routine');
   await page.getByLabel('Timezone', { exact: true }).fill('Invalid/Zone');
   await page.getByRole('button', { name: 'Lưu lịch', exact: true }).click();
@@ -92,7 +92,7 @@ try {
     await window.orglet.call('saveTeam', { ...saved, workHours: { timeZone: 'UTC', start, end, days: [0, 1, 2, 3, 4, 5, 6] } });
     return taskId;
   }, team);
-  await page.getByRole('button', { name: /^Routine smoke: shift handoff/ }).click();
+  await openThreadByBrief(page, 'Routine smoke: shift handoff');
   await page.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).waitFor();
   await page.locator('summary').filter({ hasText: 'Bàn giao cuối ca' }).click();
   await page.getByRole('heading', { name: 'Bước tiếp theo', exact: true }).waitFor();

@@ -25,23 +25,23 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
 - **Keep your data on your computer.** No Orglet account, no Orglet server. Chats, workers and files live in a local database.
 - **Made for one person.** Freelancers, solo founders and anyone who uses ChatGPT or Claude every day and wants a bit more structure.
 
-Click a **team** in the sidebar to open that team's chat (not only a list of workers). One live conversation per team; a message is planned, members work as hidden jobs, and one report comes back. Click a **worker** to talk to them on their own. Details: [team chat](docs/team-chat.md).
+Click a **team** or **worker** in the sidebar to open that chat. One live conversation each; a new message is a turn, not a new task. Team chats plan, run members as hidden jobs, and bring one report back. Internal jobs stay under **Details**. [How it works](docs/team-chat.md).
 
 > Orglet is early. Expect rough edges, and check answers against your own sources before you rely on them.
 
 | | |
 |---|---|
-| 💬 **Chat with a worker** | Ask questions, talk things through or hand over a job. Follow-ups keep the earlier conversation. |
-| 👥 **Chat with a team** | Click a team to open its chat. Members stay in the roster. One live thread per team — a new message is a turn, not a new task. The team lead assigns work; you see one report. [How it works](docs/team-chat.md). |
-| 📎 **Attach files safely** | A worker only reads the files you attach to that task. |
+| 💬 **Chat with a worker** | Click a worker. One live thread — a new message is a turn, not a new task. |
+| 👥 **Chat with a team** | Click a team to open its chat. Members stay in the roster. One live thread per team. The lead plans, assigned members work, one report comes back. [How it works](docs/team-chat.md). |
+| 📎 **Attach files safely** | A worker only reads the files you attach to that chat. |
 | 📄 **Reports as documents** | Ask for a report and it opens like a file. Copy it as plain text or Markdown, or download it. |
 | 🔁 **Repeat work on a schedule** | Schedules send the same request every day or week while Orglet is open. If the computer was off, missed runs become one catch-up you can run or skip; the next time stays on the calendar. |
-| 📚 **Reuse what works** | Save skills and notes that workers use in later tasks. |
-| 🗂️ **Stay tidy** | Archive or delete tasks, workers and teams. Archived items can clear themselves after 7 or 30 days. |
+| 📚 **Reuse what works** | Save skills and notes that workers use in later chats. |
+| 🗂️ **Stay tidy** | Archive a chat to start over. Archive or delete workers and teams. Archived items can clear themselves after 7 or 30 days. |
 | 🌐 **Your language** | US English by default, with UK English and Vietnamese in Settings. |
 
 <p align="center">
-  <img src="docs/images/new-task.png" alt="Starting a new task in Orglet" width="720">
+  <img src="docs/images/new-task.png" alt="Empty worker chat in Orglet, ready for the first message" width="720">
 </p>
 
 Workers can run through a local CLI, an API key, or Demo:

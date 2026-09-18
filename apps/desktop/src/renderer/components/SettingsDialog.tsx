@@ -143,11 +143,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'chat' && <>
-              <Row id="auto-title-label" title={t('Tự đặt tên công việc')} description={t('Sau câu trả lời đầu tiên, nhân viên đặt một tên ngắn cho công việc. Tên bạn tự đổi luôn được giữ.')}>
+              <Row id="auto-title-label" title={t('Tự đặt tên cuộc trò chuyện')} description={t('Sau câu trả lời đầu tiên, nhân viên đặt một tên ngắn. Tên bạn tự đổi luôn được giữ.')}>
                 <Switch checked={workspace.autoTitles} disabled={busy} labelledBy="auto-title-label" onChange={value => void save({ autoTitles: value })} />
-              </Row>
-              <Row id="confirm-open-label" title={t('Hỏi trước khi mở công việc')} description={t('Khi bấm một công việc trong danh sách của nhân viên.')}>
-                <Switch checked={workspace.confirmOpenTask} disabled={busy} labelledBy="confirm-open-label" onChange={value => void save({ confirmOpenTask: value })} />
               </Row>
               <Row title={t('Định dạng khi sao chép')} description={t('Chọn sẵn để bấm một lần là sao chép, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi sao chép')} className="setting-select" value={workspace.copyFormat} disabled={busy} onChange={value => void save({ copyFormat: value as Workspace['copyFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản thuần') }, { value: 'markdown', label: 'Markdown' }]} />

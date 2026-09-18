@@ -69,7 +69,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .worker-row:hover .row-action,.worker-row:focus-within .row-action,.worker-row:has(.worker.active) .row-action,.row-action[aria-expanded=true] { opacity:1; }
 .worker-row .row-action:hover:not(:disabled),.worker-row .row-action[aria-expanded=true] { background:var(--bg); }
 @media (hover:none) { .worker-row .row-action { opacity:1; } }
-.row-menu-popover { position:fixed; z-index:20; width:max-content; min-width:200px; max-width:280px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001f; display:flex; flex-direction:column; gap:2px; }
+.row-menu-popover { position:fixed; z-index:30; width:max-content; min-width:200px; max-width:280px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001f; display:flex; flex-direction:column; gap:2px; }
 .row-menu-popover button { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; padding:6px 10px; border:0; border-radius:8px; background:transparent; font-size:14px; text-align:left; }
 .row-menu-popover button svg { color:var(--muted); }
 .row-menu-popover button:hover,.row-menu-popover button:focus-visible { background:var(--surface); }
@@ -171,9 +171,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Thread: the prompt bar stays pinned under the conversation. */
 .thread-composer { width:100%; max-width:780px; margin:0 auto; padding:8px var(--page-x) 0; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
-.team-chat-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:42vh; text-align:center; }
-.team-chat-empty .welcome { margin-bottom:0; }
-.team-chat-empty .muted { max-width:36em; }
+.team-chat-empty .suggestions { width:min(100%, 440px); margin:12px 0 0; padding:0; text-align:left; }
+.thread-menu { flex-shrink:0; }
 .topbar-roster { flex-shrink:0; }
 .tree-leaf.roster { cursor:default; }
 .tree-leaf.roster:hover { background:transparent; }

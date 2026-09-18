@@ -35,15 +35,15 @@ All four of these matter. When two conflict, the order below breaks the tie.
 
 | In the app | Meaning |
 |---|---|
-| Task (Công việc) | One conversation with one or more workers. A team's live chat is also a task row under the hood. |
-| Worker (Nhân viên) | An AI coworker with a role, instructions and a skill |
+| Chat | One live conversation with a worker or a team. Stored as a `tasks` row under the hood. |
+| Worker (Nhân viên) | An AI coworker with a role, instructions and a skill. Click the worker to open **that worker's chat**. |
 | Team (Nhóm) | Workers who take a message together and combine their results. Click the team to open **that team's chat**. |
 | Routine (Lịch chạy) | A request that repeats on a schedule |
 | Skill / Knowledge | Reusable instructions and notes workers can use |
 
 Projects that group several tasks are postponed until real use shows a need (shared files or shared context across tasks).
 
-**Team chat (COD-24 + COD-25, shipped):** click a team → that team's conversation. One live thread per team (find-or-create a `tasks` row keyed by `teamId`; a user message is a turn, not a new row). The synthesizer plans, assigned members run as hidden jobs, one report comes back. Worker chat is unchanged. How it works: [team-chat.md](team-chat.md). Long-chat context, memory, cost and fail-closed defaults: [team-chat-context.md](team-chat-context.md). Still later in epic COD-22: hiding the task pile (COD-26).
+**Team and worker chat (COD-24 + COD-25 + COD-26, shipped):** click a worker or a team → that conversation. One live thread each (find-or-create a `tasks` row; a user message is a turn, not a new row). The sidebar is workers and teams, not a task pile. The synthesizer plans, assigned members run as hidden jobs, one report comes back. How it works: [team-chat.md](team-chat.md). Long-chat context, memory, cost and fail-closed defaults: [team-chat-context.md](team-chat-context.md).
 
 ## Release
 

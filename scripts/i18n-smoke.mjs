@@ -36,9 +36,11 @@ try {
   assert.equal(await dialogTitle(app, page), 'Choose sources: text up to 256 KB; CSV, JSONL, Parquet up to 32 MB each');
   await page.keyboard.press('Escape');
 
-  await page.getByRole('heading', { name: 'What should we work on?' }).waitFor();
+  await page.getByRole('heading', { name: 'Chatting with Researcher' }).waitFor();
   await page.getByRole('button', { name: 'Summarize documents', exact: true }).waitFor();
-  for (const name of ['New team', 'New worker', 'New task']) await page.getByRole('button', { name, exact: true }).first().waitFor();
+  for (const name of ['New team', 'New worker']) await page.getByRole('button', { name, exact: true }).first().waitFor();
+  assert.equal(await page.getByRole('button', { name: 'New task', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('navigation', { name: 'All tasks' }).count(), 0);
   await page.getByRole('button', { name: /^Schedules/ }).click();
   await page.getByText('No schedules yet.', { exact: true }).waitFor();
   await page.keyboard.press('Escape');
@@ -52,7 +54,7 @@ try {
 
   // Persists across restarts.
   await app.close(); app = await launch(); page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
-  await page.getByRole('heading', { name: 'What should we work on?' }).waitFor();
+  await page.getByRole('heading', { name: 'Chatting with Researcher' }).waitFor();
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).language, 'en');
   assert.equal(await dialogTitle(app, page), 'Choose sources: text up to 256 KB; CSV, JSONL, Parquet up to 32 MB each', 'language is read at startup');
   // British English: same text with UK spellings.
@@ -69,7 +71,7 @@ try {
   await page.getByRole('option', { name: 'Tiếng Việt', exact: true }).click();
   await page.getByRole('combobox', { name: 'Ngôn ngữ', exact: true }).waitFor();
   await page.keyboard.press('Escape');
-  await page.getByRole('heading', { name: 'Bạn muốn giao việc gì?' }).waitFor();
+  await page.getByRole('heading', { name: 'Đang nhắn với Researcher' }).waitFor();
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ directory, result: 'passed' }));
 } finally { await app.close(); }

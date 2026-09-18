@@ -135,8 +135,8 @@ try {
   await page.getByText('Dùng bản Claude Code đã cài', { exact: false }).waitFor();
   await page.getByRole('button', { name: 'Lưu nhân viên', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  await page.getByRole('textbox', { name: 'Nội dung công việc' }).fill('Harness send gate');
-  const send = page.getByRole('button', { name: 'Gửi công việc', exact: true });
+  await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Harness send gate');
+  const send = page.getByRole('button', { name: 'Gửi tin nhắn', exact: true });
   assert.equal(await page.getByText('Giới hạn task', { exact: false }).count(), 0);
   await noDemo(page);
   assert.equal(await send.isDisabled(), true);
