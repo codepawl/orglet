@@ -1,9 +1,10 @@
 import { _electron as electron } from 'playwright';
 import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
+import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-skill-ui-'));
 const skillPath = join(directory, 'review-kit'); const exportPath = join(directory, 'exports');
@@ -12,7 +13,7 @@ await writeFile(join(skillPath, 'SKILL.md'), '---\nname: review-kit\ndescription
 await writeFile(join(skillPath, 'references/checks.md'), 'Check each claim against a selected source.');
 await writeFile(join(skillPath, 'scripts/helper.py'), 'raise Exception("DO NOT RUN")');
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
-const app = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${join(directory, 'data')}`], env });
+const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${join(directory, 'data')}`], env });
 let closed = false; app.once('close', () => { closed = true; });
 try {
   const page = await app.firstWindow(); await useVietnamese(page);

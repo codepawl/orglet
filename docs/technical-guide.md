@@ -6,7 +6,7 @@ This build supports individual workers, sequential or parallel teams, native Ope
 
 ## Run
 
-Use Windows, Node 24.19 or newer and pnpm 11.19.0.
+Use Windows or macOS, Node 24.19 or newer and pnpm 11.19.0.
 
 ```powershell
 pnpm install --frozen-lockfile
@@ -20,7 +20,7 @@ To try the interface without a model connection, keep the Researcher worker on *
 ## Connect a provider
 
 1. In **Cài đặt → Kết nối API**, turn on the provider you need. Paste the key and choose **Lưu key**, or choose **Từ tệp**. Turn the switch off to disconnect and hide the fields.
-2. The main process encrypts the key with Windows DPAPI. The renderer never receives the saved key back (typed drafts are cleared after a successful save). The original `.txt`, if you used one, remains where you saved it; remove it yourself when it is no longer needed.
+2. The main process encrypts the key with Electron `safeStorage` (DPAPI on Windows, Keychain on macOS). The renderer never receives the saved key back (typed drafts are cleared after a successful save). The original `.txt`, if you used one, remains where you saved it; remove it yourself when it is no longer needed.
 3. Edit Researcher, choose **OpenAI · GPT-4.1 mini**, **Anthropic · Claude Haiku 4.5** or **Grok · grok-3-mini**, and save.
 4. Select UTF-8 text files, describe the task, set a task budget and allow the selected content to be sent to the providers listed for that task.
 5. Send the task. Open **Chi tiết** for activity or source references. Accepting a report only updates its status in Orglet.
@@ -43,8 +43,8 @@ Anthropic live acceptance needs a separate authorization and is not covered by `
 
 Orglet can also run a worker through an agent CLI already installed on the machine, using whatever account that CLI is logged in with. **Cài đặt → Harness trên máy** always lists Claude Code, Codex and Cursor. Each row is **chưa cài** (not installed), **đã thấy · chưa đăng nhập** (found on disk), **đã đăng nhập · sẵn sàng** (signed in, ready to run) or **lỗi đăng nhập** (the status probe failed). Found on disk is not ready. A failed harness login does not fall back to Demo. **Dò lại** probes again after installing or logging in. Detection runs only each CLI's `--version` and its own login-status command, and looks in:
 
-- Claude Code: `PATH`, `~/.local/bin`, npm/bun/volta global bins, `~/.claude/local`, and the build Claude desktop downloads (`%APPDATA%\Claude\claude-code\<version>`, or the same folder inside the Claude MSIX package's `LocalCache`). Sign in with `claude auth login` (the settings row copies the detected path). The desktop app's session is not reused.
-- Codex: `PATH`, npm global bins and the Codex desktop app's `%LOCALAPPDATA%\OpenAI\Codex\bin`. Sign in with `codex login`. An expired ChatGPT token can still look signed in until a run fails; then sign in again. Orglet does not call a paid model just to check this.
+- Claude Code: `PATH`, `~/.local/bin`, npm/bun/volta global bins, `~/.claude/local`, and the build Claude desktop downloads (`%APPDATA%\Claude\claude-code\<version>` on Windows, or `~/Library/Application Support/Claude/claude-code/<version>` on macOS; also the Claude MSIX package's `LocalCache` on Windows). Sign in with `claude auth login` (the settings row copies the detected path). The desktop app's session is not reused.
+- Codex: `PATH`, npm global bins and the Codex desktop app's `%LOCALAPPDATA%\OpenAI\Codex\bin` (Windows) or `/Applications/Codex.app/Contents/Resources/codex` (macOS). Sign in with `codex login`. An expired ChatGPT token can still look signed in until a run fails; then sign in again. Orglet does not call a paid model just to check this.
 - Cursor Agent: `PATH`, `~/.local/bin`, `%USERPROFILE%\.cursor\bin\agent.exe` (install script), and `%LOCALAPPDATA%\cursor-agent` (`agent` / `cursor-agent`). Sign in with `agent login`; install with the documented `curl https://cursor.com/install -fsS | bash` or Windows `irm 'https://cursor.com/install?win32=true' | iex`.
 
 Pick **Claude Code trên máy này**, **Codex trên máy này** or **Cursor Agent trên máy này** as a worker's model. Each task still needs explicit consent for that harness. A run copies the permitted, hash-checked sources and the skill's reference files into a temporary folder, sends the compiled context as the prompt and requires the same JSON report schema; Orglet then applies the same citation, checker, checklist and line-range checks as native runs and deletes the folder.
@@ -69,7 +69,7 @@ In a saved team's settings, choose **Xuất template đã lưu** to export its s
 
 Choose **Lên lịch cho công việc này** after writing a brief and selecting sources, or open **Lịch chạy → Tạo lịch**. Set a daily or weekly time, an IANA timezone such as `Asia/Ho_Chi_Minh`, and a per-task budget. Enabling a schedule requires recurring approval for its selected content and providers. A change to worker, skill, team, model or pricing configuration blocks automatic dispatch until you review and save the schedule again.
 
-Orglet checks schedules while the app is open. Closing it or putting the machine to sleep prevents execution. On return, missed occurrences become one **Chạy bù một lần** choice; they are never queued in bulk. **Bỏ qua lần lỡ** dismisses that choice. A prior paused, interrupted or budget-blocked task must be resolved before another occurrence runs. Changed or revoked source files block execution. Turning off a schedule does not cancel its current task. There are at most 100 saved schedules.
+Orglet checks schedules while the app is open. Closing it or putting the machine to sleep prevents execution. The next due time stays on the calendar. On return, missed occurrences become **one** **Chạy bù một lần** choice (`pending`); they are never queued in bulk and never start automatically. **Bỏ qua lần lỡ** dismisses that choice. See [Routine catch-up](routines.md) for the exact miss threshold (30 seconds), reopen/first-tick rule, and N=1 coalescing. A prior paused, interrupted or budget-blocked task must be resolved before another occurrence runs. Changed or revoked source files block execution. Turning off a schedule does not cancel its current task. There are at most 100 saved schedules.
 
 Times follow the schedule's timezone; the next occurrence is stored in UTC. A nonexistent daylight-saving time is skipped, and a repeated time runs only at its first occurrence. The scheduler polls every five seconds; a gap or delay over 30 seconds is treated as missed work, not permission to catch up automatically.
 
@@ -101,7 +101,7 @@ In **Cài đặt → Sao lưu và khôi phục**, save a JSON backup of workers,
 - Click a finding's source to open its location and preview eligible text, or its checker link to expand the exact result. Provenance is available in a disclosure and Markdown exports. Line-level citations and links between findings are still pending.
 - Budgets cover calls through Orglet only. Input is conservatively charged at the uncached rate. Unknown usage remains reserved; there is no automatic reconciliation against provider invoices yet.
 - Cancelling stops further dispatch. An in-flight request may still cost money. Restart marks interrupted runs explicitly and never silently replays them; retry creates a new run using current worker/skill revisions.
-- History, reports and checkpoint context are stored in `%APPDATA%\orglet\orglet.sqlite`. Checkpoints can contain selected source text; they are removed on successful report commit, and never sent through the renderer bridge. DPAPI protects stored keys, not against every process running as your Windows user. Workspace records are not encrypted.
+- History, reports and checkpoint context are stored in `%APPDATA%\orglet\orglet.sqlite` on Windows, or `~/Library/Application Support/Orglet/orglet.sqlite` on macOS. Checkpoints can contain selected source text; they are removed on successful report commit, and never sent through the renderer bridge. `safeStorage` protects stored keys (DPAPI on Windows, Keychain on macOS), not against every process running as your user. Workspace records are not encrypted.
 
 ## Structured run logs
 
@@ -141,7 +141,7 @@ pnpm test:knowledge
 pnpm test:harness
 ```
 
-The harness smoke installs fixture CLIs so **Harness trên máy** always has a logged-out Claude Code and an unreadable Codex login probe, and still lists Cursor (including a not-installed row). It checks status pills and copy-login commands, that detected is not signed-in, that an auth failure does not show Demo, and that the worker model list and send gate match those states. It never starts a harness run. GitHub Actions runs this on Windows after `pnpm make`; see [windows-release-gates.md](windows-release-gates.md).
+The harness smoke installs fixture CLIs so **Harness trên máy** always has a logged-out Claude Code and an unreadable Codex login probe, and still lists Cursor (including a not-installed row). It checks status pills and copy-login commands, that detected is not signed-in, that an auth failure does not show Demo, and that the worker model list and send gate match those states. It never starts a harness run. GitHub Actions runs this on Windows after `pnpm make`; see [windows-release-gates.md](windows-release-gates.md). Packaged smoke scripts resolve the Windows `.exe` or the macOS `.app` binary via `scripts/packaged-executable.mjs`.
 
 The knowledge smoke creates a team note in the library, carries it through a template export/import as a proposal, approves it, searches it and checks the frozen context shown in **Chi tiết**. `node scripts/knowledge-smoke.mjs --inspect-ui` leaves that task open for computer use.
 
@@ -155,7 +155,7 @@ The skill smoke checks directory import, review gating, resource preview, export
 
 The run-audit smoke checks structured log errors, direction selection, repeat/failure summaries and public/private rank changes. `node scripts/run-audit-smoke.mjs --inspect-ui` leaves the result open for computer use.
 
-`pnpm build` produces `out/Orglet-win32-x64/Orglet.exe`. `pnpm make` produces a ZIP and Squirrel installer under `out/make`. Public Windows 0.2.x installers are unsigned by decision; see [windows-release-gates.md](windows-release-gates.md).
+`pnpm build` produces `out/Orglet-win32-x64/Orglet.exe` on Windows, or `out/Orglet-darwin-<arch>/Orglet.app` on a Mac. `pnpm make` writes makers under `out/make`: ZIP + Squirrel Setup on Windows; an unsigned ZIP of `Orglet.app` on macOS. Public Windows 0.2.x installers are unsigned by decision; see [windows-release-gates.md](windows-release-gates.md). macOS ZIPs are also unsigned and not notarized; see [macos-packaging.md](macos-packaging.md). GitHub Actions runs typecheck, tests and `pnpm make` on `macos-latest` in a separate workflow that is **not** the required Windows `test` aggregator.
 
 See `docs/implementation_status.md` for actual verification and remaining work.
 

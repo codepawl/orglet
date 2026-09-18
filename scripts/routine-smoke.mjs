@@ -5,13 +5,14 @@ import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
+import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-routine-ui-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
 let closed = false;
 const launch = async () => {
-  const instance = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${directory}`], env });
+  const instance = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
   closed = false; instance.once('close', () => { closed = true; }); return instance;
 };
 let app = await launch();
@@ -48,13 +49,24 @@ try {
   // Only modify isolated fixture state while the app/core are closed. No production test hook.
   const db = new DatabaseSync(join(directory, 'orglet.sqlite'));
   const saved = JSON.parse(db.prepare('SELECT data FROM routines WHERE id=?').get(routine.id).data);
-  db.prepare('UPDATE routines SET data=? WHERE id=?').run(JSON.stringify({ ...saved, enabled: true, nextDueAt: new Date(Date.now() - 7 * 86_400_000).toISOString() }), routine.id); db.close();
+  const overdueAt = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  db.prepare('UPDATE routines SET data=? WHERE id=?').run(JSON.stringify({ ...saved, enabled: true, pending: null, nextDueAt: overdueAt }), routine.id); db.close();
   app = await launch(); page = await app.firstWindow(); await useVietnamese(page);
-  await page.getByRole('button', { name: /Lịch chạy/ }).click();
-  await page.getByText(/Đã bỏ qua lịch khi app không hoạt động/).waitFor();
+  const notice = page.getByRole('status').filter({ hasText: 'Lịch không mất' });
+  await notice.waitFor();
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).tasks.length, 1);
+  await page.screenshot({ path: join(output, 'routine-reopen-notice.png') });
+  await notice.getByRole('button', { name: 'Xem lịch chạy', exact: true }).click();
+  const missedCard = page.getByRole('region', { name: 'Lịch Morning routine', exact: true });
+  await missedCard.getByRole('heading', { name: 'Lần chạy bị lỡ', exact: true }).waitFor();
+  await missedCard.getByText(/Nhiều lần trong lúc máy tắt được gộp thành một lần chạy bù/).waitFor();
+  await page.getByText(/Đã bỏ qua lịch khi app không hoạt động/).waitFor();
+  const missed = (await page.evaluate(() => window.orglet.call('workspace', {}))).routines[0];
+  assert.equal(missed.pending.dueAt, overdueAt);
+  assert.equal(missed.pending.reason.includes('không hoạt động'), true);
+  assert.ok(new Date(missed.nextDueAt).getTime() > Date.now());
   await page.screenshot({ path: join(output, 'routine-missed.png') });
-  await page.getByRole('button', { name: 'Chạy bù một lần', exact: true }).click();
+  await missedCard.getByRole('button', { name: 'Chạy bù một lần', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   const state = await page.evaluate(() => window.orglet.call('workspace', {}));
   assert.equal(state.tasks.length, 2); assert.equal(state.routines[0].pending, null);

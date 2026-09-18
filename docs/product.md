@@ -20,7 +20,7 @@ All four of these matter. When two conflict, the order below breaks the tie.
 1. **A team with roles.** Each worker has a name, avatar, instructions and a skill. You talk to one worker, a few of them, all of them, or a team, and they can see what the others said.
 2. **Your existing AI plan.** Workers can run through Claude Code or Codex using the account you are already logged in to, so there is no extra API bill. An API key is optional.
 3. **Private by default.** No Orglet account. Chats, workers and files live in a local database. A worker reads only the files you attach to that task.
-4. **Repeat work runs itself.** Routines send the same request daily or weekly while the app is open, and you come back to finished answers.
+4. **Repeat work runs itself.** Routines send the same request daily or weekly while the app is open. If the machine was off, the schedule is still there: missed runs become one catch-up choice, not a vanished calendar.
 
 ## How it should feel
 
@@ -45,7 +45,7 @@ Projects that group several tasks are postponed until real use shows a need (sha
 ## Release
 
 - **Open source under AGPL-3.0, with a CLA.** The repository is public. Contributors sign the CLA so the project can also sell commercial licenses or be acquired later. Parts meant for reuse, such as the UI components, can be released under a more permissive license later.
-- **Every device.** Orglet is for Windows, macOS and Linux, and later iOS and Android. Windows is built and tested first (**0.2.0** ships Windows-only connections for Claude Code, Codex, Cursor Agent, OpenAI, Anthropic and Grok/xAI). macOS and Linux builds, packaging and CI come next, then mobile. Public Windows 0.2.x installers stay unsigned; see [windows-release-gates.md](windows-release-gates.md).
+- **Every device.** Orglet is for Windows, macOS and Linux, and later iOS and Android. Windows is built and tested first (**0.2.0** ships Windows-only connections for Claude Code, Codex, Cursor Agent, OpenAI, Anthropic and Grok/xAI). macOS has unsigned ZIP packaging and a `macos-latest` typecheck/test/make job; that job is not the required merge check. Linux packaging is still later. Public Windows 0.2.x installers stay unsigned; see [windows-release-gates.md](windows-release-gates.md) and [macos-packaging.md](macos-packaging.md).
 
 ## Not now
 

@@ -24,6 +24,7 @@ function shortPathOf(path: string): string | null {
 }
 
 it('accepts a plain file and a Windows short path to it', async () => {
+  // On macOS tmpdir is under /var/folders; /var is a system alias to /private/var, not a user link.
   const folder = join(directory, 'A folder with a long name');
   await mkdir(folder);
   const file = join(folder, 'note.txt');

@@ -1,9 +1,10 @@
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
+import { delimiter, join } from 'node:path';
 import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
+import { packagedExecutable } from './packaged-executable.mjs';
 
 const pills = { not_installed: 'Chưa cài', detected: 'Đã thấy · chưa đăng nhập', signed_in_ready: 'Đã đăng nhập · sẵn sàng', signed_in: 'Đã đăng nhập', auth_error: 'Lỗi đăng nhập' };
 const hint = { not_installed: name => `Cài và đăng nhập ${name} trên máy này`, detected: name => `Đăng nhập ${name} trên máy này`, auth_error: name => `Sửa đăng nhập ${name} trên máy này` };
@@ -19,6 +20,7 @@ async function fakeHarnessPath(directory) {
     const script = join(bin, `${name}.mjs`);
     await writeFile(script, source);
     await writeFile(join(bin, `${name}.cmd`), `@echo off\r\n"${node}" "${script}" %*\r\n`);
+    await writeFile(join(bin, name), `#!/bin/sh\nexec "${node}" "${script}" "$@"\n`, { mode: 0o755 });
   };
   await shim('claude', `
     const args = process.argv.slice(2);
@@ -46,7 +48,7 @@ await mkdir('test-results', { recursive: true });
 const bin = await fakeHarnessPath(directory);
 const pathValue = `${bin}${delimiter}${process.env.PATH ?? process.env.Path ?? ''}`;
 const env = { ...process.env, PATH: pathValue, Path: pathValue }; delete env.ELECTRON_RUN_AS_NODE;
-const app = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${directory}`], env });
+const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
 let closed = false; app.once('close', () => { closed = true; });
 const noDemo = async page => {
   assert.equal(await page.getByText('Đang dùng Demo', { exact: false }).count(), 0);

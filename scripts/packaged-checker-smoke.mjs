@@ -1,14 +1,15 @@
 import { _electron as electron } from 'playwright';
 import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
+import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-package-'));
 const env = { ...process.env, APPDATA: directory }; delete env.ELECTRON_RUN_AS_NODE;
 let closed = false;
 const launch = async data => {
-  const instance = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${data}`], env });
+  const instance = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${data}`], env });
   closed = false; instance.once('close', () => { closed = true; }); return instance;
 };
 let app = await launch(directory);

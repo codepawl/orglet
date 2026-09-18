@@ -34,6 +34,7 @@ app.whenReady().then(async () => {
   });
   writeFileSync(join(assets, 'icon.ico'), Buffer.concat([header, ...entries.map(png => png.data)]));
   writeFileSync(join(assets, 'icon.png'), pngs.find(png => png.size === 512).data);
+  require('./write-icns.cjs');
   console.log(`icon.ico (${entries.map(png => png.size).join(', ')}) and icon.png written`);
   app.quit();
 });

@@ -13,6 +13,7 @@ import { Checkbox } from './Checkbox';
 import { StatusMark } from './StatusMark';
 
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
+export const formatRoutineTime = (iso: string, timeZone: string) => new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' });
 /** Which screen of the Routines dialog is showing; the dialog title renders it as a breadcrumb. */
 export type RoutineView = { editing: false } | { editing: true; routine?: Routine };
 export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack, onDirty }: { workspace: Workspace; draft?: TaskInput; openTask: (id: string) => void; view: RoutineView; onView: (view: RoutineView) => void; onBack: () => void; onDirty: (dirty: boolean) => void }) {
@@ -35,13 +36,17 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
         <ul className="routine-meta">
           <li><Repeat size={14} aria-hidden="true" />{t('{0} lúc {1}', [item.schedule.frequency === 'daily' ? t('Hằng ngày') : t('Mỗi {0}', [weekdays[item.schedule.weekday].toLowerCase()]), item.schedule.time])}</li>
           <li><Globe size={14} aria-hidden="true" />{item.schedule.timeZone}</li>
-          {item.enabled && <li><CalendarDays size={14} aria-hidden="true" />{t('Lần tới {0}', [new Date(item.nextDueAt).toLocaleString(currentLocale(), { timeZone: item.schedule.timeZone, dateStyle: 'short', timeStyle: 'short' })])}</li>}
+          {item.enabled && <li><CalendarDays size={14} aria-hidden="true" />{t('Lần tới {0}', [formatRoutineTime(item.nextDueAt, item.schedule.timeZone)])}</li>}
           <li><UserRound size={14} aria-hidden="true" />{assignee(item)}</li>
           <li><Wallet size={14} aria-hidden="true" />{t('{0} mỗi lần', [formatMoney(item.task.budgetMicros)])}</li>
           <li><FileText size={14} aria-hidden="true" />{t('{0} nguồn', [item.task.sourceIds.length])}</li>
         </ul>
         <p className="routine-brief"><MessageSquareText size={14} aria-hidden="true" /><span>{item.task.brief}</span></p>
-        {item.pending && <div className="routine-alert" role="status"><AlertTriangle size={16} aria-hidden="true" /><div><p>{tMessage(item.pending.reason)}</p><div className="actions">
+        {item.pending && <div className="routine-alert" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>
+          <h4>{t('Lần chạy bị lỡ')}</h4>
+          <p>{tMessage(item.pending.reason)}</p>
+          <p className="muted">{t('Lần bị lỡ {0}. Nhiều lần trong lúc máy tắt được gộp thành một lần chạy bù; lịch tới không mất.', [formatRoutineTime(item.pending.dueAt, item.schedule.timeZone)])}</p>
+          <div className="actions">
           <Button disabled={busy || !item.enabled} variant="primary" onClick={() => void action(async () => openTask(await orglet.call('catchUpRoutine', { id: item.id })))}>{t('Chạy bù một lần')}</Button>
           <Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Bỏ qua lần lỡ')}</Button>
         </div></div></div>}
@@ -118,8 +123,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>
         <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError || undefined} aria-describedby={zoneError ? 'routine-zone-error' : undefined} data-flash={zoneError ? 1 : undefined} /></label>
       </div>
-      {zoneError && <span className="visually-hidden" id="routine-zone-error">{error}</span>}
-      <p className="muted">{t('App tắt hoặc máy ngủ thì không chạy. Giờ bị bỏ qua do đổi giờ mùa hè không được chạy bù; giờ lặp chỉ chạy một lần.')}</p>
+      {zoneError && <p id="routine-zone-error" role="alert" className="error">{error}</p>}
+      <p className="muted">{t('App tắt hoặc máy ngủ thì không chạy. Lịch không mất: khi mở lại, các lần lỡ gộp thành một lần chạy bù. Giờ bị bỏ qua do đổi giờ mùa hè không được chạy bù; giờ lặp chỉ chạy một lần.')}</p>
     </section>
 
     <section className="routine-group" aria-labelledby="routine-group-limits">

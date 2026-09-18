@@ -5,6 +5,16 @@ import { Sources, fingerprint } from '../tools/sources';
 import { modelConfig } from '../adapters/catalog';
 import { isHarness } from '../../shared/harness';
 
+/** First tick after startup, a gap, or overdue delay above this is a miss — never auto-replayed. See docs/routines.md. */
+export const ROUTINE_MISS_MS = 30_000;
+export const SKIPPED_WHILE_INACTIVE = 'Đã bỏ qua lịch khi app không hoạt động hoặc còn lần chờ xử lý. Có thể chạy bù một lần.';
+
+/** Catch-up is at most one pending prompt per routine. Startup, sleep, and late ticks defer instead of running a backlog. */
+export function shouldDeferRoutine(now: number, nextDueAt: number, lastTick: number | null, pending: boolean) {
+  const resumed = lastTick === null || now - lastTick > ROUTINE_MISS_MS;
+  return resumed || now - nextDueAt > ROUTINE_MISS_MS || pending;
+}
+
 export class Routines {
   private lastTick: number | null = null;
   private ticking = false;
@@ -39,13 +49,13 @@ export class Routines {
     if (this.ticking) return;
     this.ticking = true;
     const at = this.clock(); const timestamp = at.getTime();
-    const resumed = this.lastTick === null || timestamp - this.lastTick > 30_000;
+    const previousTick = this.lastTick;
     this.lastTick = timestamp;
     try {
       for (const routine of this.store.all<Routine>('routines')) {
         if (!routine.enabled || new Date(routine.nextDueAt).getTime() > timestamp || this.dispatching.has(routine.id)) continue;
-        if (resumed || timestamp - new Date(routine.nextDueAt).getTime() > 30_000 || routine.pending) {
-          this.defer(routine, at, 'Đã bỏ qua lịch khi app không hoạt động hoặc còn lần chờ xử lý. Có thể chạy bù một lần.');
+        if (shouldDeferRoutine(timestamp, new Date(routine.nextDueAt).getTime(), previousTick, Boolean(routine.pending))) {
+          this.defer(routine, at, SKIPPED_WHILE_INACTIVE);
         } else {
           try { await this.runOccurrence(routine, at); }
           catch (error) {
