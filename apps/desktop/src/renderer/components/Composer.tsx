@@ -3,12 +3,11 @@ import { ArrowUp, Plus } from 'lucide-react';
 import type { TaskDetail, Workspace } from '../../shared/contracts';
 import { isHarness } from '../../shared/harness';
 import { Button } from './ui';
-import { formatMoney } from './money';
 import { providerLabel, settingsTabFor, type Readiness } from './providers';
 import { t } from '../i18n';import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
 
-const SINGLE_LINE = 44;
+const SINGLE_LINE = 40;
 
 /**
  * ChatGPT-style prompt bar: a one-line pill with the add button, input and send button on one row.
@@ -58,8 +57,6 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   const missing = providers.filter(provider => !ready[provider]);
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0;
-  const used = detail.usage.chargedMicros + detail.usage.reservedMicros;
-  const budget = detail.task.budgetMicros;
   const send = () => {
     const extra = text.trim(); if (!extra || busy || blocked) return;
     setText('');
@@ -69,9 +66,6 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
     <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={busy ? t('Đang làm việc…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={blocked}
       leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Đính kèm tệp')} title={t('Đính kèm tệp')} disabled={busy} onClick={openRevision}><Plus size={20} /></Button>} />
     {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
-    {paid && <p className="composer-note composer-cost" role="status">{detail.usage.reservedMicros > 0
-      ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(budget), formatMoney(detail.usage.reservedMicros)])
-      : t('Đã dùng {0} / {1}', [formatMoney(used), formatMoney(budget)])}</p>}
     {!paid && providers.length > 0 && <p className="composer-note">{t('Harness trên máy · chi phí theo gói của công cụ, không qua Orglet.')}</p>}
   </div>;
 }

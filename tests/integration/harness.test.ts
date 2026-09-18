@@ -257,7 +257,7 @@ describe('runner integration', () => {
     expect(report.findings[0].locations).toEqual([{ sourceId: sources[0].id, startLine: 2, endLine: 2 }]);
     expect(report.limitations.join(' ')).toContain('Claude Code 2.1.270');
     expect(report).not.toHaveProperty('cwd');
-    expect(detail.usage).toEqual({ chargedMicros: 0, reservedMicros: 0, uncertainCount: 0 });
+    expect(detail.usage).toEqual({ chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 });
     expect(detail.events.map(event => event.message).join(' ')).toContain('$0.0030');
   });
 

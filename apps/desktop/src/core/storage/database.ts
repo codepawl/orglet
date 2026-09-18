@@ -133,8 +133,8 @@ export class Store {
   }
   usage(taskId?: string): Usage {
     const where = taskId ? 'WHERE r.task_id=?' : '';
-    const row = this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN r.state!='settled' THEN r.amount ELSE 0 END),0) AS reserved, COALESCE(SUM(l.amount),0) AS charged, COALESCE(SUM(CASE WHEN r.state='unknown' THEN 1 ELSE 0 END),0) AS uncertain FROM reservations r LEFT JOIN ledger l ON l.reservation_id=r.id ${where}`).get(...(taskId ? [taskId] : []))!;
-    return { reservedMicros: Number(row.reserved), chargedMicros: Number(row.charged), uncertainCount: Number(row.uncertain) };
+    const row = this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN r.state!='settled' THEN r.amount ELSE 0 END),0) AS reserved, COALESCE(SUM(l.amount),0) AS charged, COALESCE(SUM(CASE WHEN r.state='unknown' THEN 1 ELSE 0 END),0) AS uncertain, COALESCE(SUM(l.input_tokens),0) AS input_tokens, COALESCE(SUM(l.output_tokens),0) AS output_tokens FROM reservations r LEFT JOIN ledger l ON l.reservation_id=r.id ${where}`).get(...(taskId ? [taskId] : []))!;
+    return { reservedMicros: Number(row.reserved), chargedMicros: Number(row.charged), uncertainCount: Number(row.uncertain), inputTokens: Number(row.input_tokens), outputTokens: Number(row.output_tokens) };
   }
   setting<T>(key: string, fallback: T): T {
     const row = this.db.prepare('SELECT data FROM settings WHERE id=?').get(key);

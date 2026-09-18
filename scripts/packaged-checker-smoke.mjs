@@ -26,8 +26,8 @@ try {
     return { id, profile };
   });
   assert.equal(result.profile.datasets[0].rows, 3); assert.equal(result.profile.datasets[0].id.duplicateNonNull, 1);
-  await page.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
-  await page.getByRole('button', { name: 'Eris Review', exact: true }).click();
+  await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
+  await page.getByRole('button', { name: 'Tùy chọn nhóm Eris Review', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Tùy chọn nhóm Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
   await page.getByRole('tab', { name: 'Checklist', exact: true }).click();
   assert.equal(await page.getByLabel(/^Tên mục \d+$/).count(), 5);
@@ -40,7 +40,7 @@ try {
   assert.equal(await page.getByRole('combobox', { name: 'Bằng chứng cho mục 5', exact: true }).getAttribute('data-value'), 'run_audit');
   await page.getByRole('tab', { name: 'Dataset', exact: true }).click();
   assert.equal(await page.getByLabel('Kiểm tra dataset trước khi review', { exact: true }).isChecked(), true);
-  await page.getByLabel('Cột ID cho preflight (không bắt buộc)', { exact: true }).fill('id');
+  await page.getByLabel('Cột ID (không bắt buộc)', { exact: true }).fill('id');
   await page.getByLabel('Đối chiếu schema và ID khi task có đúng hai dataset', { exact: true }).uncheck();
   await page.getByRole('button', { name: 'Lưu nhóm', exact: true }).click();
   const preflightTaskId = await page.evaluate(async sourceId => {
@@ -80,7 +80,7 @@ try {
   await page.keyboard.press('Escape');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, templatePath);
   await page.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
-  await page.getByRole('button', { name: 'Nhập template từ tệp', exact: true }).click();
+  await page.getByRole('button', { name: 'Nhập template', exact: true }).click();
   await page.getByRole('button', { name: 'Tùy chọn nhóm Imported review', exact: true }).waitFor();
   const importedWorkspace = await page.evaluate(() => window.orglet.call('workspace', {}));
   assert.equal(importedWorkspace.teams.length, 2); assert.equal(importedWorkspace.tasks.length, 2);

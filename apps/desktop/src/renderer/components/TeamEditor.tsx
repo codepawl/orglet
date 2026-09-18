@@ -8,7 +8,6 @@ import { TabbedFormDialog } from './DialogTabs';
 import { Select } from './Select';
 import { toast } from './toast';
 import { toAmount, toMicros } from './money';
-import templates from '../../../../../templates/catalog.json';
 import { TimeZone } from '../../shared/schedule';
 import { ReviewPolicy } from '../../shared/review';
 import { fieldInvalid } from './fieldInvalid';
@@ -82,18 +81,14 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
     : tab === 'general' && team
       ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.exportTemplate(team.id)) toast(t('Đã xuất template.')); })}><Download size={16} />{t('Xuất template đã lưu')}</Button>
       : tab === 'general'
-        ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.importTemplate()) onClose(); })}><FileUp size={16} />{t('Nhập template từ tệp')}</Button>
+        ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.importTemplate()) onClose(); })}><FileUp size={16} />{t('Nhập template')}</Button>
         : undefined;
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={team ? t('Thiết lập nhóm') : t('Nhóm mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="team-panel" onSubmit={submit} submitLabel={t('Lưu nhóm')} busy={busy} actions={actions} error={error} description={tab === 'checklist' ? t('Báo cáo tổng hợp phải đề cập các mục này. Mục thiếu bằng chứng được giữ là chưa đánh giá. Thay đổi chỉ áp dụng cho lần chạy mới.') : undefined}>
+  return <TabbedFormDialog open={open} onClose={onClose} title={team ? t('Thiết lập nhóm') : t('Nhóm mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="team-panel" onSubmit={submit} submitLabel={t('Lưu nhóm')} busy={busy} actions={actions} error={error} description={tab === 'checklist' ? t('Báo cáo phải trả lời các mục này. Chỉ áp dụng cho lần chạy mới.') : undefined}>
     {tab === 'general' && <>
-      {!team && <section><h3>{t('Bắt đầu từ template')}</h3>
-        <div className="template-choices">{templates.map(template => <Button type="button" key={template.id} variant="outline" disabled={busy} onClick={() => void run(async () => { await orglet.call('createTemplate', { templateId: template.id as 'research-review' | 'eris-review', provider: 'demo' }); onClose(); })}>{template.name}</Button>)}</div>
-        <p className="muted">{t('Template tạo nhân viên ở chế độ Demo. Chọn model cho từng nhân viên khi sẵn sàng.')}</p>
-      </section>}
       <label><FieldLabel icon={Users} required>{t('Tên nhóm')}</FieldLabel><input data-field="name" value={name} onChange={e => { setName(e.target.value); if (invalid === 'name') clearError(); }} maxLength={80} {...fieldInvalid(invalid === 'name', flash)} /></label>
-      <fieldset><legend><FieldLabel icon={Users} required>{t('Thành viên (1–4)')}</FieldLabel></legend>{workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} data-field={invalid === 'members' ? 'members' : undefined} checked={members.includes(worker.id)} onChange={e => { setMembers(current => e.target.checked ? [...current, worker.id] : current.filter(id => id !== worker.id)); if (invalid === 'members') clearError(); }} {...fieldInvalid(invalid === 'members', flash)}><span className="inline-mark"><Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />{worker.name}</span></Checkbox>)}{!workspace.workers.length && <p className="muted">{t('Chưa có nhân viên. Tạo nhân viên trước hoặc bắt đầu từ template.')}</p>}</fieldset>
-      <Select label={<FieldLabel icon={Combine} required>{t('Nhân viên tổng hợp')}</FieldLabel>} value={synthesizer} onChange={setSynthesizer} options={workspace.workers.map(worker => ({ value: worker.id, label: worker.name, icon: <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} /> }))} />
+      <fieldset><legend><FieldLabel icon={Users} required>{t('Thành viên (1–4)')}</FieldLabel></legend>{workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} data-field={invalid === 'members' ? 'members' : undefined} checked={members.includes(worker.id)} onChange={e => { setMembers(current => e.target.checked ? [...current, worker.id] : current.filter(id => id !== worker.id)); if (invalid === 'members') clearError(); }} {...fieldInvalid(invalid === 'members', flash)}><span className="inline-mark"><Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />{worker.name}</span></Checkbox>)}{!workspace.workers.length && <p className="muted">{t('Chưa có nhân viên. Tạo nhân viên trước.')}</p>}</fieldset>
+      <Select label={<FieldLabel icon={Combine} required>{t('Tổng hợp')}</FieldLabel>} value={synthesizer} onChange={setSynthesizer} options={workspace.workers.map(worker => ({ value: worker.id, label: worker.name, icon: <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} /> }))} />
       <Select label={<FieldLabel icon={Workflow} required>{t('Quy trình')}</FieldLabel>} value={workflow} onChange={value => setWorkflow(value as typeof workflow)} options={[{ value: 'parallel', label: t('Song song, rồi tổng hợp'), icon: <Columns2 size={16} /> }, { value: 'sequential', label: t('Tuần tự, rồi tổng hợp'), icon: <ListOrdered size={16} /> }]} />
       <p className="muted">{t('Tuần tự theo thứ tự chọn thành viên. Song song chạy tối đa hai role cùng lúc. Thử lại giữ các kết quả role đã hoàn tất.')}</p>
       {team && <p className="muted">{t('Template xuất ra gồm cấu hình nhóm, nhân viên và skill đã lưu. Không chứa API key, nguồn hay lịch sử công việc.')}</p>}
@@ -107,15 +102,14 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
           <Button type="button" disabled={busy} aria-label={t('Bỏ mục {0}', [index + 1])} onClick={() => setRequiredChecks(current => current.filter((_, position) => position !== index))}>{t('Bỏ mục')}</Button>
         </div>
       </fieldset>)}
-      {!requiredChecks.length && <p className="empty-history">{t('Chưa đặt checklist bắt buộc cho nhóm này.')}</p>}
     </>}
     {tab === 'dataset' && <>
       <Checkbox checked={preflight} onChange={event => setPreflight(event.target.checked)}>{t('Kiểm tra dataset trước khi review')}</Checkbox>
-      <p className="muted">{t('Chạy checker local cho các CSV, JSONL và Parquet đã chọn trước mọi role, kể cả Demo. Lưu phạm vi và lỗi kiểm tra vào báo cáo; không chạy code challenge.')}</p>
+      <p className="muted">{t('Kiểm tra tệp CSV/JSON trên máy trước khi nhóm review. Không gọi model.')}</p>
       {preflight && <>
-        <label><FieldLabel icon={KeyRound}>{t('Cột ID cho preflight (không bắt buộc)')}</FieldLabel><input value={idColumn} onChange={event => setIdColumn(event.target.value)} maxLength={256} placeholder={t('Ví dụ: id')} /></label>
+        <label><FieldLabel icon={KeyRound}>{t('Cột ID (không bắt buộc)')}</FieldLabel><input value={idColumn} onChange={event => setIdColumn(event.target.value)} maxLength={256} placeholder={t('Ví dụ: id')} /></label>
         <Checkbox checked={compareTwo} onChange={event => setCompareTwo(event.target.checked)}>{t('Đối chiếu schema và ID khi task có đúng hai dataset')}</Checkbox>
-        <p className="muted">{t('Đối chiếu không tự xác định quan hệ train/test hay submission/answers. Chọn đúng hai nguồn cần so sánh; để trống cột ID nếu chưa biết contract.')}</p>
+        <p className="muted">{t('Khi có đúng hai tệp, so cột và ID. Để trống cột ID nếu chưa rõ.')}</p>
       </>}
     </>}
     {tab === 'limits' && <>

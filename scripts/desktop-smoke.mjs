@@ -101,8 +101,8 @@ try {
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark', undefined, { timeout: 5000 });
   await page.screenshot({ path: join(output, 'desktop-dark-settings.png') });
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
-  await page.getByRole('button', { name: 'Research Review', exact: true }).click();
+  await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
+  await page.getByRole('button', { name: 'Research Review', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Research Review', exact: true }).click();
   await page.getByRole('button', { name: /^Công việc mới/ }).click();
   await page.getByRole('button', { name: 'Thiết lập nhóm', exact: true }).click();
