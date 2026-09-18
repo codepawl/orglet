@@ -8,6 +8,7 @@ import { nextOccurrence, inWorkHours, type Schedule } from '../../apps/desktop/s
 import { ROUTINE_MISS_MS, SKIPPED_WHILE_INACTIVE, shouldDeferRoutine } from '../../apps/desktop/src/core/orchestration/routines';
 import type { Routine, Task, Team } from '../../apps/desktop/src/shared/contracts';
 import { modelCatalog } from '../../apps/desktop/src/core/adapters/catalog';
+import { isPlanRequest, planReply } from './team-plan';
 
 let store: Store; let core: CoreService; let current: Date; let directory: string;
 const schedule: Schedule = { timeZone: 'Asia/Ho_Chi_Minh', time: '09:00', frequency: 'daily', weekday: 1 };
@@ -178,7 +179,8 @@ it('keeps reservations and provider budget gates for automatic execution', async
 it('pauses in-flight work at shift end and rejects a second task at capacity', async () => {
   current = new Date('2026-01-05T09:00:00Z'); let entered!: () => void; let release!: () => void; let calls = 0;
   const entering = new Promise<void>(resolve => { entered = resolve; }); const waiting = new Promise<void>(resolve => { release = resolve; });
-  core = new CoreService(store, () => {}, async () => ({ async request() {
+  core = new CoreService(store, () => {}, async () => ({ async request(messages, tools) {
+    if (isPlanRequest(tools)) return planReply(messages);
     calls++; entered(); await waiting;
     return { calls: [{ id: 'report', name: 'submit_report', arguments: JSON.stringify({ title: 'Review', summary: 'Finished current step', findings: [], limitations: [] }) }], usage: { input: 100, output: 100 } };
   } }), undefined, () => current);
@@ -205,7 +207,8 @@ it('invalidates a pending dispatch when the routine is disabled during source ve
 });
 it('enforces live team concurrency and shift boundaries with a deterministic resumable handoff', async () => {
   current = new Date('2026-01-05T09:00:00Z'); let calls = 0;
-  core = new CoreService(store, () => {}, async () => ({ async request() {
+  core = new CoreService(store, () => {}, async () => ({ async request(messages, tools) {
+    if (isPlanRequest(tools)) return planReply(messages);
     calls++; current = new Date('2026-01-05T17:00:00Z');
     return { calls: [{ id: `report-${calls}`, name: 'submit_report', arguments: JSON.stringify({ title: 'Review', summary: 'Evidence fixture', findings: [], limitations: [] }) }], usage: { input: 100, output: 100 } };
   } }), undefined, () => current);

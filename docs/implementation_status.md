@@ -180,7 +180,11 @@ User decision 2026-09-17: the interface is available in Vietnamese (default), En
 
 ## Team chat shell (COD-24)
 
-Clicking a team opens that team's chat (roster in the sidebar and header). One live `tasks` row keyed by `teamId`; the first message is `createTask`, later messages `reviseTask`. Execution stays today's member → synthesis path. Worker chat and group (`assignees`) chat are unchanged. Docs: [team-chat.md](team-chat.md), policy [team-chat-context.md](team-chat-context.md). Out of this spike: COD-25 orchestrator, COD-26 hide-task pile, COD-19/20.
+Clicking a team opens that team's chat (roster in the sidebar and header). One live `tasks` row keyed by `teamId`; the first message is `createTask`, later messages `reviseTask`. Worker chat and group (`assignees`) chat are unchanged. Docs: [team-chat.md](team-chat.md), policy [team-chat-context.md](team-chat-context.md).
+
+## Team orchestrator (COD-25)
+
+A team-chat turn runs plan → assigned members → one synthesis report (`TeamRunner.run`). Plan is a `runs` row (`stage: 'plan'`) with `snapshot.plan`; it is not a user-facing artifact. Unassigned members are cancelled with a named skip. A failed plan does not dispatch members or invent results. Partial member failure stays `partial` with named `Role chưa hoàn tất` limitations. Cancel aborts the whole turn; retry reuses a completed plan and unfinished jobs only. Tests: `tests/integration/team.test.ts`. Out of this spike: COD-26 hide-task pile, COD-19/20.
 
 ## Model list fetch and cache (COD-31)
 

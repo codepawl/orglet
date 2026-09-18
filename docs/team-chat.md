@@ -1,8 +1,8 @@
 # Team chat
 
-Shipped in [COD-24](https://linear.app/codepawl/issue/COD-24) under epic [COD-22](https://linear.app/codepawl/issue/COD-22). Long-chat context, memory, cost and fail-closed rules stay in [team-chat-context.md](team-chat-context.md) (the five policy defaults are approved). This page is what the app does **today**.
+Shipped in [COD-24](https://linear.app/codepawl/issue/COD-24) (shell) and [COD-25](https://linear.app/codepawl/issue/COD-25) (orchestrator) under epic [COD-22](https://linear.app/codepawl/issue/COD-22). Long-chat context, memory, cost and fail-closed rules stay in [team-chat-context.md](team-chat-context.md) (the five policy defaults are approved). This page is what the app does **today**.
 
-It does not add the COD-25 orchestrator (plan → N members → one report), hide the task pile (COD-26), or change signing / [COD-19](https://linear.app/codepawl/issue/COD-19) / [COD-20](https://linear.app/codepawl/issue/COD-20).
+It does not hide the task pile ([COD-26](https://linear.app/codepawl/issue/COD-26)), or change signing / [COD-19](https://linear.app/codepawl/issue/COD-19) / [COD-20](https://linear.app/codepawl/issue/COD-20).
 
 ## Click a team → that team's chat
 
@@ -34,13 +34,40 @@ Routines under **Lịch chạy** stay discrete tasks. They are not merged into t
 
 Until COD-26, **Công việc** may still list the live thread as a task. Opening that row is the same conversation.
 
+## Orchestrator: one message → workers → one report
+
+A user message on a team thread is one turn. The synthesizer (team lead) runs a **plan** job, then only the assigned members run as internal jobs, then one **synthesis** report comes back to the chat.
+
+```
+User message (inputRevision)
+  → plan run (synthesizer, stage: plan)     hidden job
+  → member runs (assigned workers only)     hidden jobs
+  → synthesis run (stage: synthesis)        the report in the transcript
+```
+
+- Plan may assign a **subset** of members. Unassigned members are cancelled with a named skip (`Không được phân việc cho lượt này.`); they are not treated as failures.
+- Member chatter is **not** the user-facing transcript. **Chi tiết** still lists every job (plan, members, synthesis) for retry, cost and cancel. The thread copy/download on the synthesis reply is `Sao chép` / `Tải xuống`. Hidden job artifacts in Chi tiết still export with `Xuất báo cáo này` (the first Chi tiết `<details>` is `Context đã nạp` on the plan job, not a report).
+- Demo assigns every member the user brief (no invented extra workers) and does not call a model for routing.
+
+### Fail-closed
+
+| Event | Thread shows | Dispatch |
+|---|---|---|
+| Plan fails (schema, unknown worker, provider) | Team-lead error on this turn | No member jobs, no invented report. Status `failed`. |
+| A member fails | That worker's name; synthesis limitations `Role chưa hoàn tất`; status `partial` | Remaining assigned members keep today's rule. Synthesis must not invent the missing result. |
+| All assigned members fail | Failed turn | No synthesis report |
+| Cancel | `cancelled` | In-flight request may still bill; queued jobs are not started |
+| Retry | Same thread | Reuses a completed plan; starts **new** runs only for unfinished jobs of **this turn** |
+
+Cancel aborts the whole turn (plan + members + synthesis). Partial success stays `partial`, never silent `completed`.
+
 ## How this relates to worker chat
 
 Worker chat is unchanged.
 
 - Click a **worker** to pick them for a new message, or open a task under that worker. That is still today's standalone (or group) path: no `teamId`.
 - A **group** chat (several workers, or everyone) still uses `assignees` and sequential `stage: 'group'` replies. That is not a team.
-- A **team** chat uses `teamId` + `teamSnapshot`. Execution is today's member → synthesis workflow (`TeamRunner.run`): members run, then the synthesizer joins. There is no new orchestrator. Member reports stay in **Chi tiết**; the main transcript shows the synthesis (or chat) result for that turn.
+- A **team** chat uses `teamId` + `teamSnapshot` and `TeamRunner.run`: plan → members → synthesis.
 
 You can still open an existing worker task while a team chat exists. The two threads do not share a `tasks` row.
 
@@ -53,5 +80,6 @@ Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết
 - Click / send: `apps/desktop/src/renderer/App.tsx` (`openTeam`, `send`)
 - Identity: `apps/desktop/src/shared/live-task.ts`
 - Persist a turn: `createTask` / `reviseTask` in `apps/desktop/src/core/service.ts`
-- Team run: `apps/desktop/src/core/orchestration/team.ts` (`run`, not `chat`)
-- Tests: `tests/integration/live-task.test.ts`, plus the live-thread case in `tests/integration/team.test.ts`
+- Orchestrator: `apps/desktop/src/core/orchestration/team.ts` (`run`) and `plan.ts`
+- Plan tool / Demo routing: `apps/desktop/src/core/orchestration/runner.ts` (`submit_plan`, `completePlan`)
+- Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`

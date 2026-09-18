@@ -43,7 +43,7 @@ All four of these matter. When two conflict, the order below breaks the tie.
 
 Projects that group several tasks are postponed until real use shows a need (shared files or shared context across tasks).
 
-**Team chat (COD-24, shipped):** click a team → that team's conversation. One live thread per team (find-or-create a `tasks` row keyed by `teamId`; a user message is a turn, not a new row). Worker chat is unchanged. How it works: [team-chat.md](team-chat.md). Long-chat context, memory, cost and fail-closed defaults: [team-chat-context.md](team-chat-context.md). Still later in epic COD-22: orchestrator 1→N→report (COD-25) and hiding the task pile (COD-26).
+**Team chat (COD-24 + COD-25, shipped):** click a team → that team's conversation. One live thread per team (find-or-create a `tasks` row keyed by `teamId`; a user message is a turn, not a new row). The synthesizer plans, assigned members run as hidden jobs, one report comes back. Worker chat is unchanged. How it works: [team-chat.md](team-chat.md). Long-chat context, memory, cost and fail-closed defaults: [team-chat-context.md](team-chat-context.md). Still later in epic COD-22: hiding the task pile (COD-26).
 
 ## Release
 

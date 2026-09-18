@@ -1,4 +1,5 @@
 import type { Artifact, Run, Skill, Task, Team, Worker } from '../../shared/contracts';
+import { MISSING_PLAN_ERROR, UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
 import { Runner } from './runner';
 import { Preflight, PreflightError } from './preflight';
@@ -20,24 +21,42 @@ export class TeamRunner {
     this.store.update('tasks', { ...task, status: 'running', accepted: false }); this.notify();
     task = { ...task, ...(task.currentInput ?? {}) };
     try {
-      // Freeze every role before the first asynchronous step, including roles not dispatched yet.
+      // Freeze plan, every role and synthesis before the first asynchronous step, including roles not dispatched yet.
       const prior = this.store.detail(task.id);
       prior.runs = prior.runs.filter(run => (run.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0));
       const planned = this.store.transaction(() => {
+        const plan = prior.runs.findLast(r => r.stage === 'plan' && (resume || r.status === 'completed')) || this.createRun(task, team, team.synthesizerId, 'plan', []);
         const members = new Map(team.memberIds.map(workerId => {
           const saved = prior.runs.findLast(r => r.stage === 'member' && r.snapshot.worker.id === workerId && (resume || r.status === 'completed'));
           return [workerId, saved ?? this.createRun(task, team, workerId, 'member', [])];
         }));
         const synthesis = (resume && prior.runs.findLast(r => r.stage === 'synthesis')) || this.createRun(task, team, team.synthesizerId, 'synthesis', []);
-        return { members, synthesis };
+        return { plan, members, synthesis };
       });
       let preflightId: string | undefined;
       if (team.preflight) {
-        this.store.event(planned.synthesis.id, 'Đang chạy preflight local trước khi bắt đầu các role.'); this.notify();
+        this.store.event(planned.plan.id, 'Đang chạy preflight local trước khi bắt đầu các role.'); this.notify();
         const checked = await this.preflight.run(task, team.preflight, control.controller.signal, () => control.paused || !this.canDispatch(task));
         if (control.paused || checked.status === 'paused') { this.finish(task, 'paused'); return; }
         preflightId = checked.id;
-        this.store.event(planned.synthesis.id, `Preflight: ${checked.status}. Xem phạm vi và giới hạn trong nguồn của công việc.`); this.notify();
+        this.store.event(planned.plan.id, `Preflight: ${checked.status}. Xem phạm vi và giới hạn trong nguồn của công việc.`); this.notify();
+      }
+      const planRun = this.join(planned.plan, [], preflightId);
+      if (planRun.status !== 'completed') await this.runner.run(task, planRun, { keepTaskOpen: true });
+      const plannedNow = this.store.get<Run>('runs', planRun.id);
+      if (plannedNow.status === 'paused' || plannedNow.status === 'waiting_budget') control.paused = true;
+      if (control.cancelled) { this.finish(task, 'cancelled'); return; }
+      if (control.paused) { this.finish(task, plannedNow.status === 'waiting_budget' ? 'waiting_budget' : 'paused'); return; }
+      if (plannedNow.status !== 'completed' || !plannedNow.snapshot.plan) {
+        this.deferQueued(planned, MISSING_PLAN_ERROR);
+        this.finish(task, plannedNow.status === 'failed' ? 'failed' : 'interrupted');
+        return;
+      }
+      const assigned = new Set(plannedNow.snapshot.plan.assignments.map(assignment => assignment.workerId));
+      for (const workerId of team.memberIds) {
+        if (assigned.has(workerId)) continue;
+        const run = planned.members.get(workerId)!;
+        if (run.status === 'queued') this.store.update('runs', { ...run, status: 'cancelled', error: UNASSIGNED_PLAN_ERROR });
       }
       const memberArtifacts: Artifact[] = [];
       const failures: string[] = [];
@@ -48,22 +67,24 @@ export class TeamRunner {
         const finished = existing.runs.findLast(r => (r.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0) && r.stage === 'member' && r.snapshot.worker.id === workerId && r.status === 'completed');
         const retained = finished && existing.artifacts.find(a => a.runId === finished.id);
         if (retained) { memberArtifacts.push(retained); return; }
+        const assignment = plannedNow.snapshot.plan!.assignments.find(item => item.workerId === workerId)?.brief;
         const run = this.join(planned.members.get(workerId)!, team.workflow === 'sequential' ? memberArtifacts : [], preflightId);
-        await this.runner.run(task, run, { keepTaskOpen: true, upstream: team.workflow === 'sequential' ? [...memberArtifacts] : [] });
+        await this.runner.run(task, run, { keepTaskOpen: true, upstream: team.workflow === 'sequential' ? [...memberArtifacts] : [], assignment });
         const result = this.store.detail(task.id);
         if (result.runs.find(r => r.id === run.id)?.status === 'paused') control.paused = true;
         const artifact = result.artifacts.find(a => a.runId === run.id);
         if (artifact) memberArtifacts.push(artifact);
         else failures.push(`${run.snapshot.worker.name}: ${result.runs.find(r => r.id === run.id)?.error ?? 'chưa hoàn tất'}`);
       };
+      const assignedIds = team.memberIds.filter(workerId => assigned.has(workerId));
       if (team.workflow === 'parallel') {
         // At most two native executions at once. This is a fixed workflow, not a free-form swarm.
-        for (let i = 0; i < team.memberIds.length && !control.cancelled && !control.paused; i += 2) await Promise.all(team.memberIds.slice(i, i + 2).map(execute));
-      } else for (const workerId of team.memberIds) { if (control.cancelled || control.paused) break; await execute(workerId); }
+        for (let i = 0; i < assignedIds.length && !control.cancelled && !control.paused; i += 2) await Promise.all(assignedIds.slice(i, i + 2).map(execute));
+      } else for (const workerId of assignedIds) { if (control.cancelled || control.paused) break; await execute(workerId); }
       if (control.cancelled) { this.finish(task, 'cancelled'); return; }
       if (control.paused) { this.finish(task, 'paused'); return; }
       if (!memberArtifacts.length) { this.finish(task, 'failed'); return; }
-      // Freeze a deterministic join input from committed member artifacts only.
+      // Freeze a deterministic join input from committed member artifacts only. Do not invent missing roles.
       memberArtifacts.sort((a, b) => a.id.localeCompare(b.id));
       const synthesis = this.join(planned.synthesis, memberArtifacts, preflightId);
       await this.runner.run(task, synthesis, { keepTaskOpen: true, upstream: memberArtifacts, limitations: failures.map(failure => `Role chưa hoàn tất: ${failure}`) });
@@ -110,12 +131,12 @@ export class TeamRunner {
       this.finish(task, control.cancelled ? 'cancelled' : 'interrupted');
     } finally { this.active.delete(task.id); this.notify(); }
   }
-  private createRun(task: Task, team: Team, workerId: string, stage: 'member' | 'synthesis', upstream: Artifact[]) {
+  private createRun(task: Task, team: Team, workerId: string, stage: 'plan' | 'member' | 'synthesis', upstream: Artifact[]) {
     const worker = this.store.get<Worker>('workers', workerId);
     const skill = this.store.get<Skill>('skills', worker.skillId);
     const run: Run = { id: id(), taskId: task.id, stage, status: 'queued', snapshot: { worker, skill, team, inputRevision: task.inputRevision ?? 0, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources }, upstreamArtifactIds: upstream.map(a => a.id) }, startedAt: now(), error: null };
     this.store.put('runs', run, { column: 'task_id', value: task.id });
-    this.store.event(run.id, stage === 'synthesis' ? `Đang tổng hợp ${upstream.length} kết quả đã lưu.` : `Bắt đầu role ${worker.name}.`);
+    this.store.event(run.id, stage === 'plan' ? 'Đang phân việc.' : stage === 'synthesis' ? `Đang tổng hợp ${upstream.length} kết quả đã lưu.` : `Bắt đầu role ${worker.name}.`);
     return run;
   }
   private join(run: Run, upstream: Artifact[], preflightId?: string) {
@@ -124,6 +145,11 @@ export class TeamRunner {
     if (dispatched && (JSON.stringify(run.snapshot.upstreamArtifactIds ?? []) !== JSON.stringify(ids) || run.snapshot.preflightId !== preflightId)) throw new Error('Join input đã thay đổi; cần tạo lần chạy mới.');
     const prepared = { ...run, snapshot: { ...run.snapshot, upstreamArtifactIds: ids, ...(preflightId ? { preflightId } : {}) } };
     this.store.update('runs', prepared); return prepared;
+  }
+  private deferQueued(planned: { members: Map<string, Run>; synthesis: Run }, error: string) {
+    for (const run of [...planned.members.values(), planned.synthesis]) {
+      if (run.status === 'queued') this.store.update('runs', { ...run, status: 'interrupted', error });
+    }
   }
   private finish(task: Task, status: Task['status']) {
     this.store.transaction(() => {

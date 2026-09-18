@@ -2,9 +2,9 @@
 
 Policy for epic [COD-22](https://linear.app/codepawl/issue/COD-22), written with [COD-23](https://linear.app/codepawl/issue/COD-23). **The five approval questions below are yes.** Numbers are defaults to implement, not a new settings screen.
 
-**Shipped:** team chat shell ([COD-24](https://linear.app/codepawl/issue/COD-24)) — click team → live thread, find-or-create one `tasks` row keyed by `teamId`. User-facing behavior: [team-chat.md](team-chat.md).
+**Shipped:** team chat shell ([COD-24](https://linear.app/codepawl/issue/COD-24)) — click team → live thread, find-or-create one `tasks` row keyed by `teamId`. User-facing behavior: [team-chat.md](team-chat.md). Orchestrator 1→N→1 report ([COD-25](https://linear.app/codepawl/issue/COD-25)) — plan job → assigned member jobs → one synthesis report.
 
-This page is still the long-chat policy (bounded prompt, extractive summary, retrieval, refuse-the-send, fail-closed). It does not ship the COD-25 orchestrator, COD-26 hide-tasks UX, signing, [COD-19](https://linear.app/codepawl/issue/COD-19) release assets, or [COD-20](https://linear.app/codepawl/issue/COD-20) notarize.
+This page is still the long-chat policy (bounded prompt, extractive summary, retrieval, refuse-the-send, fail-closed). It does not ship the COD-26 hide-tasks UX, signing, [COD-19](https://linear.app/codepawl/issue/COD-19) release assets, or [COD-20](https://linear.app/codepawl/issue/COD-20) notarize.
 
 ## Decision in one paragraph
 
@@ -23,11 +23,11 @@ Routines stay discrete tasks under **Lịch chạy**. They are not merged into t
 
 Until COD-26 hides the pile, the sidebar may still list `tasks`. Identity for later UI: find-or-create the live thread for that worker or team; do not create a new `tasks` row on every message.
 
-Job stages (names for COD-25; reuse existing values until then):
+Job stages:
 
 - Worker chat: one run, no `stage` (today's standalone path).
-- Team chat stub (COD-24): today's `group` sequential replies, or today's member → `synthesis` workflow. No new orchestrator.
-- Team orchestrator (COD-25): plan job → `member` jobs → `synthesis` report back to the user. Internal member chatter is **not** the user-facing transcript; the orchestrator report (and optional short status) is.
+- Group chat: sequential `stage: 'group'` replies. Not a team.
+- Team orchestrator ([COD-25](https://linear.app/codepawl/issue/COD-25)): `plan` job → `member` jobs → `synthesis` report back to the user. Internal member chatter is **not** the user-facing transcript; the orchestrator report (and optional short status) is.
 
 ```
 Thread (worker | team)           = tasks row
@@ -127,15 +127,15 @@ Do **not** do this list in the COD-23 PR.
 4. FTS over this thread's older turns; 4 snippets / 8 KB; no cross-thread hits.
 5. Tests: window of 10; 11th turn summarized not inlined; retrieval misses other workers' threads; refuse when still over cap; no dispatch on retrieval failure; budget not reserved on refuse.
 
-**COD-24 (team chat shell):** **done** — [team-chat.md](team-chat.md). Click team → thread; persist the user message as a turn; do not invent orchestrator behavior; do not break worker chat; show refuse/budget/error copy in the thread, not a new session.
+**COD-24 (team chat shell):** **done** — [team-chat.md](team-chat.md). Click team → thread; persist the user message as a turn; do not break worker chat; show refuse/budget/error copy in the thread, not a new session.
 
-**COD-25 (orchestrator 1→N→report):** map plan/member/synthesis to `runs`; one user-facing report; fail-closed table above; cancel cancels the whole turn's jobs; retry unfinished jobs only.
+**COD-25 (orchestrator 1→N→report):** **done** — map plan/member/synthesis to `runs`; one user-facing report; fail-closed table above; cancel cancels the whole turn's jobs; retry unfinished jobs only. See [team-chat.md](team-chat.md).
 
 **COD-26 (hide task pile):** sidebar is workers/teams; Chi tiết still has jobs, cost, retry, cancel; routines stay on **Lịch chạy**.
 
 ## Out of scope (this policy page)
 
-- COD-25 orchestrator, @/tag polish, COD-26 hide-task-pile UX (team chat **shell** is [team-chat.md](team-chat.md))
+- COD-26 hide-task-pile UX, @/tag polish (team chat shell is [team-chat.md](team-chat.md); orchestrator is COD-25, shipped)
 - New SQLite `threads` table (reuse `tasks`)
 - LLM-billed summarization, embeddings, provider tokenizers
 - Cross-thread or workspace-wide auto-memory
@@ -157,4 +157,4 @@ Answered **yes** (COD-24 may implement against these defaults):
 - Not permission to stuff the full chat into every request.
 - Not a cloud memory service.
 - Not a change to source consent, checksums, or the 6-step / 4 096-output-token worker limits.
-- Not a substitute for [team-chat.md](team-chat.md) (the shipped click-team shell). Context layers 3–4 and the refuse path are still unimplemented.
+- Not a substitute for [team-chat.md](team-chat.md) (the shipped click-team shell and orchestrator). Context layers 3–4 and the refuse path are still unimplemented.
