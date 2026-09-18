@@ -142,7 +142,7 @@ The skill smoke checks directory import, review gating, resource preview, export
 
 The run-audit smoke checks structured log errors, direction selection, repeat/failure summaries and public/private rank changes. `node scripts/run-audit-smoke.mjs --inspect-ui` leaves the result open for computer use.
 
-`pnpm build` produces `out/Orglet-win32-x64/Orglet.exe`. `pnpm make` produces a ZIP and Squirrel installer under `out/make`. Builds are unsigned development builds.
+`pnpm build` produces `out/Orglet-win32-x64/Orglet.exe`. `pnpm make` produces a ZIP and Squirrel installer under `out/make`. Public Windows 0.2.x installers are unsigned by decision; see [windows-release-gates.md](windows-release-gates.md).
 
 See `docs/implementation_status.md` for actual verification and remaining work.
 
