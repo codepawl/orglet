@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, useId } from 'react';
-import { ChevronRight, GripVertical, Pencil, SlidersHorizontal, ArrowUpRight, CheckCheck, X, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
-import type { TaskStatus } from '../../shared/contracts';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { ChevronRight, GripVertical, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { t } from '../i18n';
 import { RowMenu } from './RowMenu';
-import { StatusMark, taskStatusMark, type StatusMarkState } from './StatusMark';
+import { StatusMark, type StatusMarkState } from './StatusMark';
 
 const storageKey = (id: string) => `orglet.sidebar.tree.${id}.open`;
 function readOpen(id: string) {
@@ -104,17 +103,6 @@ export function useReorder(ids: string[], commit: (ids: string[]) => void) {
   return { order, bind, dragging: drag !== null };
 }
 
-/** Text field for renaming, opened from a row menu; Enter or leaving the field saves, Escape cancels. */
-function RenameField({ name, label, onSave, onDone }: { name: string; label: string; onSave: (name: string) => void; onDone: () => void }) {
-  const cancelled = useRef(false);
-  return <input className="row-rename" defaultValue={name} maxLength={120} aria-label={label} autoFocus onFocus={event => event.currentTarget.select()}
-    onKeyDown={event => {
-      if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
-      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelled.current = true; event.currentTarget.blur(); }
-    }}
-    onBlur={event => { const next = event.currentTarget.value.trim(); if (!cancelled.current && next !== name) onSave(next); onDone(); }} />;
-}
-
 /**
  * A team or worker row. The name selects: a team opens its chat and stays expanded (`expandOnSelect`);
  * a worker opens its live chat. When `children` is passed (a team roster), the avatar turns into a
@@ -147,70 +135,7 @@ ${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')} aria-keyshortcu
   </div>;
 }
 
-/** A task link with a menu to rename it; clearing the name shows the first message again. */
 export type ArchiveState = { daysLeft: number | null; tone: 'fresh' | 'aging' | 'expiring' };
-export function TaskRow({ title, brief, active, nested, askFirst, status, statusLabel, seen, archive, onOpen, onRename, onEdit, onArchive, onDelete }: { title?: string; brief: string; active: boolean; nested?: boolean; askFirst?: boolean; status: TaskStatus; statusLabel: string; seen: boolean; archive?: ArchiveState; onOpen: (dontAskAgain?: boolean) => void; onRename: (title: string) => void; onEdit: () => void; onArchive: (archived: boolean) => void; onDelete: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const name = title ?? brief;
-  const mark = taskStatusMark(status, seen);
-  if (nested) return <TaskLink name={name} status={status} statusLabel={statusLabel} seen={seen} askFirst={Boolean(askFirst)} onOpen={onOpen} />;
-  if (editing) return <div className={`history-item editing ${nested ? 'nested' : ''}`}><RenameField name={name} label={t('Tên mới cho công việc {0}', [name])} onSave={onRename} onDone={() => setEditing(false)} /></div>;
-  return <div className={`task-row ${active ? 'active' : ''}`}>
-    <button className={`history-item ${nested ? 'nested' : ''} ${active ? 'active' : ''}`} aria-current={active || undefined} title={statusLabel} onClick={() => onOpen()}>
-      {!archive && <StatusMark variant={mark.variant} tone={mark.tone} label={statusLabel} decorative />}
-      <span className="row-name">{name}</span>
-      {archive && archive.daysLeft !== null && <span className={`archive-age ${archive.tone}`} title={t('Tự xóa sau {0} ngày', [archive.daysLeft])}>{t('{0} ngày', [archive.daysLeft])}</span>}
-    </button>
-    <RowMenu label={t('Tùy chọn công việc {0}', [name])} items={archive
-      ? [{ label: t('Khôi phục'), icon: ArchiveRestore, onSelect: () => onArchive(false) }, { label: t('Xóa vĩnh viễn'), icon: Trash2, danger: true, onSelect: onDelete, confirm: { question: t('Xóa công việc này? Không thể hoàn tác.'), label: t('Xóa') } }]
-      : [{ label: t('Chỉnh sửa'), icon: SlidersHorizontal, onSelect: onEdit }, { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing(true) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => onArchive(true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: onDelete, confirm: { question: t('Xóa công việc này? Không thể hoàn tác.'), label: t('Xóa') } }]} />
-  </div>;
-}
-
-/**
- * A task listed under a worker: a plain link to the task (an arrow shows on hover), edited only from the Công việc list.
- * With `askFirst`, a small popover beside the row asks before leaving (user decision 2026-09-17: not a centred dialog):
- * open, open and stop asking, or stay. It closes on Escape, outside click or focus leaving it.
- */
-function TaskLink({ name, status, statusLabel, seen, askFirst, onOpen }: { name: string; status: TaskStatus; statusLabel: string; seen: boolean; askFirst: boolean; onOpen: (dontAskAgain?: boolean) => void }) {
-  const [position, setPosition] = useState<CSSProperties>();
-  const link = useRef<HTMLButtonElement>(null);
-  const popover = useRef<HTMLDivElement>(null);
-  const id = useId();
-  const mark = taskStatusMark(status, seen);
-  const close = (restoreFocus = false) => { setPosition(undefined); if (restoreFocus) link.current?.focus(); };
-  useEffect(() => {
-    if (!position) return;
-    popover.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    const outside = (event: Event) => { if (!popover.current?.contains(event.target as Node) && !link.current?.contains(event.target as Node)) close(); };
-    const dismiss = () => close();
-    document.addEventListener('pointerdown', outside); window.addEventListener('resize', dismiss);
-    return () => { document.removeEventListener('pointerdown', outside); window.removeEventListener('resize', dismiss); };
-  }, [position]);
-  const click = () => {
-    if (!askFirst) { onOpen(); return; }
-    if (position) { close(); return; }
-    // Beside the row, kept inside the window.
-    const rect = link.current!.getBoundingClientRect();
-    setPosition({ left: Math.min(rect.right + 8, innerWidth - 228), top: Math.max(8, Math.min(rect.top - 6, innerHeight - 176)) });
-  };
-  const choose = (open: boolean, dontAskAgain = false) => { close(!open); if (open) onOpen(dontAskAgain); };
-  return <>
-    <button ref={link} type="button" className="tree-leaf task-link" title={statusLabel} aria-haspopup={askFirst ? 'dialog' : undefined} aria-expanded={askFirst ? Boolean(position) : undefined} aria-controls={position ? id : undefined} onClick={click}>
-      <StatusMark variant={mark.variant} tone={mark.tone} label={statusLabel} decorative />
-      <span className="row-name">{name}</span>
-      <ArrowUpRight size={14} className="task-link-arrow" aria-hidden="true" />
-    </button>
-    {position && <div ref={popover} id={id} className="row-menu-popover open-task-popover" role="dialog" aria-label={t('Mở công việc này?')} style={position}
-      onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close(true); } }}
-      onBlur={event => { if (!popover.current?.contains(event.relatedTarget as Node | null)) close(); }}>
-      <p className="open-task-question">{t('Mở công việc này?')}</p>
-      <button type="button" onClick={() => choose(true)}><ArrowUpRight size={16} aria-hidden="true" /><span>{t('Mở')}</span></button>
-      <button type="button" onClick={() => choose(true, true)}><CheckCheck size={16} aria-hidden="true" /><span>{t('Mở, không hỏi lại')}</span></button>
-      <button type="button" onClick={() => choose(false)}><X size={16} aria-hidden="true" /><span>{t('Không')}</span></button>
-    </div>}
-  </>;
-}
 
 /** An archived worker or team: its mark, name and days left, with Khôi phục and Xóa vĩnh viễn in its menu. */
 export function ArchivedRow({ name, mark, archive, onRestore, onDelete }: { name: string; mark: ReactNode; archive: ArchiveState; onRestore: () => void; onDelete: () => void }) {
