@@ -75,14 +75,14 @@ try {
   assert.equal((await readFile(join(data, 'openai.credential'))).includes(Buffer.from(fakeKey)), false);
   assert.equal(JSON.stringify(await page.evaluate(() => window.orglet.call('workspace', {}))).includes(fakeKey), false);
   await openaiRegion.getByRole('switch').click();
-  await page.getByText(/^Đã ngắt/).waitFor();
+  await page.getByRole('status').filter({ hasText: 'Đã ngắt OpenAI.' }).waitFor();
   const anthropicRegion = page.getByRole('region', { name: 'Kết nối Anthropic', exact: true });
   await anthropicRegion.getByRole('switch').click();
   await anthropicRegion.getByRole('button', { name: 'Từ tệp', exact: true }).click();
   await page.getByRole('status').filter({ hasText: 'Đã lưu API key Anthropic.' }).waitFor();
   assert.equal((await readFile(join(data, 'anthropic.credential'))).includes(Buffer.from(fakeKey)), false);
   await anthropicRegion.getByRole('switch').click();
-  await page.getByText(/^Đã ngắt/).waitFor();
+  await page.getByRole('status').filter({ hasText: 'Đã ngắt Anthropic.' }).waitFor();
   // Typed-key path: enable the provider, send once to main, never return, clear the draft.
   const typed = 'sk-orglet-typed-fixture-not-a-real-key';
   await openaiRegion.getByRole('switch').click();
@@ -94,7 +94,7 @@ try {
   assert.equal((await readFile(join(data, 'openai.credential'))).includes(Buffer.from(typed)), false);
   assert.equal(JSON.stringify(await page.evaluate(() => window.orglet.call('workspace', {}))).includes(typed), false);
   await openaiRegion.getByRole('switch').click();
-  await page.getByText(/^Đã ngắt/).waitFor();
+  await page.getByRole('status').filter({ hasText: 'Đã ngắt OpenAI.' }).waitFor();
   await page.getByRole('tab', { name: 'Chung', exact: true }).click();
   await page.getByRole('combobox', { name: 'Giao diện', exact: true }).click(); await page.getByRole('option', { name: 'Tối', exact: true }).click();
   await page.getByText('Đã lưu.', { exact: true }).waitFor();
