@@ -56,6 +56,20 @@ describe('detection', () => {
     expect(calls.every(call => /(--version|auth status|login status|status)$/.test(call))).toBe(true);
   });
 
+  it('finds Claude desktop bundles and PATH installs on macOS', async () => {
+    const home = join(directory, 'home');
+    const bin = join(directory, 'bin');
+    await touch(join(bin, 'claude'));
+    await touch(join(home, 'Library', 'Application Support', 'Claude', 'claude-code', '2.1.9', 'claude'));
+    await touch(join(home, 'Library', 'Application Support', 'Claude', 'claude-code', '2.1.10', 'claude'));
+    const env = { HOME: home, USERPROFILE: home, PATH: bin };
+    expect(await candidates('claude-code', env, 'darwin')).toEqual([
+      join(bin, 'claude'),
+      join(home, 'Library', 'Application Support', 'Claude', 'claude-code', '2.1.10', 'claude'),
+      join(home, 'Library', 'Application Support', 'Claude', 'claude-code', '2.1.9', 'claude'),
+    ]);
+  });
+
   it('lists Cursor from its Windows install folder and records auth-probe failures as auth_error, not ready', async () => {
     const home = join(directory, 'home'); const local = join(home, 'AppData', 'Local');
     const agent = join(local, 'cursor-agent', 'agent.cmd');
@@ -127,6 +141,7 @@ describe('status matrix', () => {
     expect(loginCommand('claude-code', 'C:\\Claude\\claude.exe', 'win32')).toBe('& "C:\\Claude\\claude.exe" auth login');
     expect(loginCommand('codex', undefined, 'linux')).toBe('codex login');
     expect(loginCommand('cursor', '/home/me/.local/bin/agent', 'linux')).toBe('/home/me/.local/bin/agent login');
+    expect(loginCommand('claude-code', '/Users/me/claude', 'darwin')).toBe('/Users/me/claude auth login');
   });
 });
 

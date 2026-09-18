@@ -1,6 +1,6 @@
 # Workspace recovery and rollback
 
-Orglet keeps its workspace in `orglet.sqlite` inside the app data folder (`%APPDATA%\orglet`, or the folder passed with `--user-data-dir`). The database refuses to open when it was written by a newer schema than the running build.
+Orglet keeps its workspace in `orglet.sqlite` inside the app data folder (`%APPDATA%\orglet` on Windows, `~/Library/Application Support/Orglet` on macOS, or the folder passed with `--user-data-dir`). The database refuses to open when it was written by a newer schema than the running build.
 
 ## What happens on upgrade
 
@@ -16,7 +16,7 @@ Schema history: v1 base tables, v2 checkpoints/leases/step attempts, v3 prefligh
 
 ## Rolling back to an older build
 
-1. Quit Orglet completely and check that no `Orglet.exe` process is left.
+1. Quit Orglet completely and check that no Orglet process is left (`Orglet.exe` on Windows).
 2. In the app data folder, move `orglet.sqlite`, `orglet.sqlite-wal` and `orglet.sqlite-shm` to a separate folder. Keep them: they hold everything done since the upgrade.
 3. Copy the `.bak` file whose name matches the older build's schema and rename the copy to `orglet.sqlite`.
 4. Start the older build.

@@ -1,9 +1,10 @@
 import { _electron as electron } from 'playwright';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
+import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-run-audit-ui-'));
 const csv = join(directory, 'runs.csv'); const invalid = join(directory, 'invalid.csv');
@@ -15,7 +16,7 @@ for (let i = 0; i < 15; i++) for (const run of ['1', '2']) {
 lines.push('s14,3,private,fixture-score,failed,0,timeout');
 await writeFile(csv, lines.join('\n')); await writeFile(invalid, 'id,score\n1,4\n');
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
-const app = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${join(directory, 'data')}`], env });
+const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${join(directory, 'data')}`], env });
 let closed = false; app.once('close', () => { closed = true; });
 try {
   const page = await app.firstWindow(); const errors = []; page.on('pageerror', error => errors.push(error.message));

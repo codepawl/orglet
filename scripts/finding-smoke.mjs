@@ -1,18 +1,19 @@
 import { _electron as electron } from 'playwright';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve, relative, isAbsolute } from 'node:path';
+import { join, relative, isAbsolute } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
+import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-finding-ui-')); const data = join(directory, 'data');
 const text = join(directory, 'evidence.txt'); const csv = join(directory, 'data.csv');
 await writeFile(text, 'Navigation fixture evidence.\nSecond line.'); await writeFile(csv, 'id,value\n1,2\n');
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
 let closed = true;
-const launch = async () => { const instance = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${data}`], env }); closed = false; instance.once('close', () => { closed = true; }); return instance; };
+const launch = async () => { const instance = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${data}`], env }); closed = false; instance.once('close', () => { closed = true; }); return instance; };
 let app = await launch();
 try {
   let page = await app.firstWindow(); await useVietnamese(page);

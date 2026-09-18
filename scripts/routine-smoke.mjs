@@ -5,13 +5,14 @@ import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
+import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-routine-ui-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
 const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
 let closed = false;
 const launch = async () => {
-  const instance = await electron.launch({ executablePath: resolve('out/Orglet-win32-x64/Orglet.exe'), args: [`--user-data-dir=${directory}`], env });
+  const instance = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
   closed = false; instance.once('close', () => { closed = true; }); return instance;
 };
 let app = await launch();
