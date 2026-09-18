@@ -27,12 +27,13 @@ To try the interface without a model connection, keep the Researcher worker on *
 
 Models are pinned to `gpt-4.1-mini-2025-04-14` and `claude-haiku-4-5-20251001`. A saved key does not establish that the provider account has credits. No subscription credentials are imported.
 
-## Local harnesses (Claude Code, Codex)
+## Local harnesses (Claude Code, Codex, Cursor)
 
-Orglet can also run a worker through an agent CLI already installed on the machine, using whatever account that CLI is logged in with. **Cài đặt → Harness trên máy** lists what it found; **Dò lại** probes again after installing or logging in. Detection runs only each CLI's `--version` and its own login-status command, and looks in:
+Orglet can also run a worker through an agent CLI already installed on the machine, using whatever account that CLI is logged in with. **Cài đặt → Harness trên máy** always lists Claude Code, Codex and Cursor. Each row is **chưa cài** (not installed), **đã thấy · chưa đăng nhập** (found on disk), **đã đăng nhập · sẵn sàng** (signed in, ready to run) or **lỗi đăng nhập** (the status probe failed). Found on disk is not ready. A failed harness login does not fall back to Demo. **Dò lại** probes again after installing or logging in. Detection runs only each CLI's `--version` and its own login-status command, and looks in:
 
-- Claude Code: `PATH`, `~/.local/bin`, npm/bun/volta global bins, `~/.claude/local`, and the build Claude desktop downloads (`%APPDATA%\Claude\claude-code\<version>`, or the same folder inside the Claude MSIX package's `LocalCache`). Log in the CLI itself with `claude auth login`; the desktop app's session is not reused.
-- Codex: `PATH`, npm global bins and the Codex desktop app's `%LOCALAPPDATA%\OpenAI\Codex\bin`. Log in with `codex login`.
+- Claude Code: `PATH`, `~/.local/bin`, npm/bun/volta global bins, `~/.claude/local`, and the build Claude desktop downloads (`%APPDATA%\Claude\claude-code\<version>`, or the same folder inside the Claude MSIX package's `LocalCache`). Sign in with `claude auth login` (the settings row copies the detected path). The desktop app's session is not reused.
+- Codex: `PATH`, npm global bins and the Codex desktop app's `%LOCALAPPDATA%\OpenAI\Codex\bin`. Sign in with `codex login`. An expired ChatGPT token can still look signed in until a run fails; then sign in again. Orglet does not call a paid model just to check this.
+- Cursor CLI: `PATH`, `~/.local/bin`, and `%LOCALAPPDATA%\cursor-agent` (`agent` / `cursor-agent`). Sign in with `agent login`; install with the documented `curl https://cursor.com/install -fsS | bash` or Windows `irm 'https://cursor.com/install?win32=true' | iex`. Cursor is status-only in this version: it is not a worker model and Orglet does not start Cursor runs.
 
 Pick **Claude Code trên máy này** or **Codex trên máy này** as a worker's model. Each task still needs explicit consent for that harness. A run copies the permitted, hash-checked sources and the skill's reference files into a temporary folder, sends the compiled context as the prompt and requires the same JSON report schema; Orglet then applies the same citation, checker, checklist and line-range checks as native runs and deletes the folder.
 
@@ -127,7 +128,7 @@ pnpm test:knowledge
 pnpm test:harness
 ```
 
-The harness smoke compares **Harness trên máy**, the worker model list and the consent gate with what the packaged core detects on the current machine. It never starts a harness run.
+The harness smoke compares **Harness trên máy** (always Claude Code, Codex and Cursor, including not-installed and auth-fail rows), the worker model list and the send gate with what the packaged core detects on the current machine. It never starts a harness run.
 
 The knowledge smoke creates a team note in the library, carries it through a template export/import as a proposal, approves it, searches it and checks the frozen context shown in **Chi tiết**. `node scripts/knowledge-smoke.mjs --inspect-ui` leaves that task open for computer use.
 

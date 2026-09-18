@@ -62,9 +62,14 @@ export function WorkerDialog({ open, worker, workspace, harnesses, onClose }: { 
         { value: 'demo', label: 'Demo', detail: t('không gọi API'), group: t('Thử nghiệm'), icon: <ProviderMark provider="demo" size="small" decorative /> },
         { value: 'openai', label: 'OpenAI', detail: 'GPT-4.1 mini', group: t('API trả phí'), icon: <ProviderMark provider="openai" size="small" decorative /> },
         { value: 'anthropic', label: 'Anthropic', detail: 'Claude Haiku 4.5', group: t('API trả phí'), icon: <ProviderMark provider="anthropic" size="small" decorative /> },
-        ...(['claude-code', 'codex'] as const).filter(id => provider === id || harnesses.some(item => item.id === id)).map(id => {
+        ...(['claude-code', 'codex'] as const).map(id => {
           const found = harnesses.find(item => item.id === id);
-          return { value: id, label: harnessNames[id], group: t('Harness trên máy'), detail: [found ? found.version : t('chưa tìm thấy'), found?.auth === 'logged_out' ? t('chưa đăng nhập') : ''].filter(Boolean).join(' · '), icon: <ProviderMark provider={id} size="small" decorative /> };
+          const detail = !found || found.status === 'not_installed' ? t('chưa cài')
+            : found.status === 'detected' ? [found.version, t('đã thấy · chưa đăng nhập')].filter(Boolean).join(' · ')
+            : found.status === 'auth_error' ? [found.version, t('lỗi đăng nhập')].filter(Boolean).join(' · ')
+            : found.runnable ? [found.version, t('đã đăng nhập · sẵn sàng')].filter(Boolean).join(' · ')
+            : [found.version, t('đã đăng nhập')].filter(Boolean).join(' · ');
+          return { value: id, label: harnessNames[id], group: t('Harness trên máy'), detail, icon: <ProviderMark provider={id} size="small" decorative /> };
         }),
       ]} />
       {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. {1} Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider], provider === 'codex' ? t('Codex nhận nội dung nguồn văn bản trong prompt và không có tool đọc tệp hay chạy lệnh.') : t('Claude Code chỉ đọc bản sao nguồn của task, không chạy lệnh.')])}</p>}

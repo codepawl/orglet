@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Unplug, Download, ArchiveRestore } from 'lucide-react';
+import { Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Unplug, Download, ArchiveRestore, Copy } from 'lucide-react';
 import type { Connections, ProviderScope, Workspace } from '../../shared/contracts';
 import type { HarnessInfo } from '../../shared/harness';
 import { Button, PanelHeading, keepOpenForPopup } from './ui';
@@ -11,7 +11,7 @@ import { currencies, CurrencyCode, usdCurrency } from '../../shared/currency';
 import { ProviderMark } from './ProviderMark';
 import { toast } from './toast';
 import { Switch } from './Switch';
-import { t } from '../i18n';
+import { t, tMessage } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
 
@@ -28,7 +28,7 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
 // Section notes sit under the section title.
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
   connections: 'Nhập key từ tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu.',
-  harness: 'Orglet dùng tài khoản bạn đã đăng nhập trong từng công cụ. Chọn harness ở mục Model khi thiết lập nhân viên.',
+  harness: 'Chưa cài, đã thấy trên máy, và đã đăng nhập sẵn sàng chạy là ba trạng thái khác nhau. Lỗi đăng nhập hiện lệnh sửa; Orglet không chuyển sang Demo. Cursor chỉ hiện trạng thái cài/đăng nhập, phiên bản này chưa chạy Cursor.',
   usage: 'Chỉ tính request qua Orglet, không phải tổng hóa đơn API key. Harness trên máy dùng gói của chính nó nên không nằm trong các số này. Input cached được tính theo giá thường.',
 };
 
@@ -36,6 +36,45 @@ function Row({ title, description, children, id }: { title: string; description?
   return <div className="setting-row">
     <div className="setting-text"><span id={id} className="setting-title">{title}</span>{description && <span className="setting-description">{description}</span>}</div>
     {children && <div className="setting-control">{children}</div>}
+  </div>;
+}
+
+function statusPill(item: HarnessInfo) {
+  if (item.status === 'not_installed') return { className: 'not_installed', label: t('Chưa cài') };
+  if (item.status === 'detected') return { className: 'logged_out', label: t('Đã thấy · chưa đăng nhập') };
+  if (item.status === 'auth_error') return { className: 'auth_error', label: t('Lỗi đăng nhập') };
+  if (item.runnable) return { className: 'logged_in', label: t('Đã đăng nhập · sẵn sàng') };
+  return { className: 'logged_in', label: t('Đã đăng nhập') };
+}
+
+async function copyCommand(command: string) {
+  try {
+    await navigator.clipboard.writeText(command);
+    toast(t('Đã sao chép lệnh.'));
+  } catch {
+    try {
+      const field = document.createElement('textarea');
+      field.value = command;
+      field.setAttribute('readonly', '');
+      field.style.cssText = 'position:fixed;left:-9999px';
+      document.body.appendChild(field);
+      field.select();
+      if (!document.execCommand('copy')) throw new Error('copy');
+      field.remove();
+      toast(t('Đã sao chép lệnh.'));
+    } catch {
+      toast(t('Không sao chép được lệnh.'), 'error');
+    }
+  }
+}
+
+function CommandCopy({ command, label }: { command: string; label: string }) {
+  return <div className="setting-repair">
+    <span className="setting-repair-label">{label}</span>
+    <div className="setting-repair-row">
+      <code className="setting-command">{command}</code>
+      <Button type="button" size="icon" aria-label={t('Sao chép lệnh')} title={t('Sao chép lệnh')} onClick={() => void copyCommand(command)}><Copy size={13} /></Button>
+    </div>
   </div>;
 }
 
@@ -136,19 +175,24 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
 
             {tab === 'harness' && <>
               <div role="region" aria-label={t('Harness trên máy')}>
-                {harnesses.map(item => <div key={item.id} className="setting-row">
-                  <ProviderMark provider={item.id} />
-                  <div className="setting-text">
-                    <span className="setting-title">{item.name}</span>
-                    <span className="setting-description">{item.version}</span>
-                    {item.auth !== 'logged_in' && <code className="setting-command">{item.authDetail}</code>}
-                    <span className="setting-path" title={item.executable}>{item.executable}</span>
-                  </div>
-                  <div className="setting-control"><span className={`status-pill ${item.auth}`}>{item.auth === 'logged_in' ? t('Đã đăng nhập') : item.auth === 'logged_out' ? t('Chưa đăng nhập') : t('Chưa rõ')}</span></div>
-                </div>)}
-                {!harnesses.length && <Row title={t('Chưa tìm thấy Claude Code hoặc Codex trên máy này.')} description={t('Cài một harness rồi bấm Dò lại.')} />}
+                {harnesses.map(item => {
+                  const pill = statusPill(item);
+                  const showLogin = item.status !== 'signed_in';
+                  return <div key={item.id} className="setting-row harness-row">
+                    <ProviderMark provider={item.id} />
+                    <div className="setting-text">
+                      <span className="setting-title">{item.name}{!item.runnable && <span className="badge">{t('Chỉ trạng thái')}</span>}</span>
+                      <span className="setting-description">{item.version || t('Chưa tìm thấy bản cài.')}</span>
+                      <span className="setting-description">{tMessage(item.authDetail)}</span>
+                      {item.status === 'not_installed' && item.installCommand && <CommandCopy command={item.installCommand} label={t('Lệnh cài (tài liệu chính thức)')} />}
+                      {showLogin && <CommandCopy command={item.loginCommand} label={item.status === 'not_installed' ? t('Sau khi cài, đăng nhập bằng') : t('Lệnh đăng nhập')} />}
+                      {item.executable ? <span className="setting-path" title={item.executable}>{item.executable}</span> : null}
+                    </div>
+                    <div className="setting-control"><span className={`status-pill ${pill.className}`}>{pill.label}</span></div>
+                  </div>;
+                })}
+                {!harnesses.length && <Row title={t('Chưa dò được harness trên máy này.')} description={t('Bấm Dò lại sau khi cài Claude Code, Codex hoặc Cursor CLI.')} />}
               </div>
-
             </>}
 
             {tab === 'usage' && <>

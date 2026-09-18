@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } fro
 import { ArrowUp, Plus } from 'lucide-react';
 import type { TaskDetail, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
-import { providerLabel, type Readiness } from './providers';
+import { providerLabel, settingsTabFor, type Readiness } from './providers';
 import { t } from '../i18n';
 import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
@@ -47,7 +47,7 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
 }
 
 /** Follow-up bar under a task: the text becomes an extra instruction for a new review of the same sources. */
-export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, action }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: () => void; action: (fn: () => Promise<unknown>) => void }) {
+export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, action }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: (tab?: 'connections' | 'harness') => void; action: (fn: () => Promise<unknown>) => void }) {
   const [text, setText] = useState('');
   const input = detail.task.currentInput ?? detail.task;
   const workers = taskWorkers(detail.task, workspace);
@@ -63,6 +63,6 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   return <div className="thread-composer">
     <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={busy ? t('Đang làm việc…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={blocked}
       leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Đính kèm tệp')} title={t('Đính kèm tệp')} disabled={busy} onClick={openRevision}><Plus size={20} /></Button>} />
-    {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={openSettings}>{t('Mở Cài đặt')}</button></p>}
+    {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
   </div>;
 }
