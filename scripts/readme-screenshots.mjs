@@ -2,68 +2,56 @@ import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import electronPath from 'electron';
 import { packagedExecutable } from './packaged-executable.mjs';
 
-// Captures the README screenshots from the packaged app, using a throwaway data folder and Demo workers only.
-// Build the app with `pnpm make` first, then run `node scripts/readme-screenshots.mjs`.
+// Captures README / Getting started screenshots from Demo only, in a throwaway data folder.
+// Prefers a packaged binary (`pnpm make` / `pnpm build`). On Linux, falls back to unpackaged
+// Electron after a Vite compile (`pnpm exec electron-forge package` or a prior `pnpm dev`).
 
 const outputFolder = resolve('docs/images');
-const executablePath = packagedExecutable();
 const viewportSize = { width: 1400, height: 880 };
-
-const workers = [
-  { name: 'Writer', instructions: 'Write clear, friendly drafts in plain English.' },
-  { name: 'Planner', instructions: 'Break goals into small steps with dates.' },
-];
-
 const brief = 'Plan the launch of my weekly newsletter next month. Keep it short.';
+
+function launchTarget() {
+  try {
+    return { executablePath: packagedExecutable(), args: [] };
+  } catch (error) {
+    const linuxBinary = resolve(`out/Orglet-linux-${process.arch}/Orglet`);
+    const linuxX64 = resolve('out/Orglet-linux-x64/Orglet');
+    if (existsSync(linuxBinary)) return { executablePath: linuxBinary, args: [] };
+    if (existsSync(linuxX64)) return { executablePath: linuxX64, args: [] };
+    if (existsSync(resolve('.vite/build/main.js'))) {
+      return { executablePath: electronPath, args: ['.'] };
+    }
+    throw error;
+  }
+}
 
 async function launchApp() {
   const dataFolder = await mkdtemp(join(tmpdir(), 'orglet-readme-'));
-  const environment = { ...process.env };
+  const environment = { ...process.env, ORGLET_DATA_DIR: dataFolder };
   delete environment.ELECTRON_RUN_AS_NODE;
-  return electron.launch({ executablePath, args: [`--user-data-dir=${dataFolder}`], env: environment });
+  const target = launchTarget();
+  return electron.launch({ executablePath: target.executablePath, args: [...target.args, `--user-data-dir=${dataFolder}`], env: environment });
 }
 
 async function callCore(page, command, args) {
   return page.evaluate(([name, input]) => window.orglet.call(name, input), [command, args]);
 }
 
-async function addDemoWorkers(page) {
-  const workspace = await callCore(page, 'workspace', {});
-  const researcher = workspace.workers[0];
-  for (const worker of workers) {
-    await callCore(page, 'saveWorker', {
-      name: worker.name,
-      instructions: worker.instructions,
-      provider: 'demo',
-      skillId: researcher.skillId,
-      taskBudgetMicros: researcher.taskBudgetMicros,
-    });
-  }
-}
-
-async function startTask(page) {
-  const workspace = await callCore(page, 'workspace', {});
-  const taskId = await callCore(page, 'createTask', {
-    workerId: workspace.workers[0].id,
-    brief,
-    sourceIds: [],
-    consent: false,
-    providerScopes: [],
-    budgetMicros: 100_000,
-  });
-  await page.waitForFunction(async id => {
-    const detail = await window.orglet.call('task', { id });
-    return detail.task.status === 'completed';
-  }, taskId, { timeout: 30_000 });
-  return taskId;
-}
-
 async function setTheme(page, theme) {
   const workspace = await callCore(page, 'workspace', {});
-  await callCore(page, 'settings', { theme, connectionLimitMicros: workspace.connectionLimitMicros });
+  await callCore(page, 'settings', { language: workspace.language ?? 'en', theme, connectionLimitMicros: workspace.connectionLimitMicros });
   await page.waitForTimeout(400);
+}
+
+async function waitForTask(page, taskId) {
+  await page.waitForFunction(async id => {
+    const detail = await window.orglet.call('task', { id });
+    return ['completed', 'partial', 'failed'].includes(detail.task.status);
+  }, taskId, { timeout: 60_000 });
 }
 
 async function main() {
@@ -74,20 +62,33 @@ async function main() {
     await page.setViewportSize(viewportSize);
     await page.waitForFunction(() => window.orglet !== undefined);
     await page.locator('.welcome, .main-pane').first().waitFor();
-
-    await addDemoWorkers(page);
     await setTheme(page, 'light');
+    await page.getByRole('textbox', { name: 'Message' }).waitFor();
     await page.screenshot({ path: join(outputFolder, 'new-task.png') });
 
-    await startTask(page);
-    await page.getByRole('button', { name: 'Researcher', exact: true }).click();
-    await page.locator('.chat-turn').first().waitFor();
-    await page.locator('.thinking').waitFor({ state: 'detached', timeout: 30_000 });
+    const team = await callCore(page, 'createTemplate', { templateId: 'research-review', provider: 'demo' });
+    await page.getByRole('button', { name: team.name, exact: true }).click();
+    await page.getByRole('textbox', { name: 'Message' }).fill(brief);
+    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    const taskHandle = await page.waitForFunction(async teamId => {
+      const workspace = await window.orglet.call('workspace', {});
+      return workspace.tasks.find(task => task.teamId === teamId && !task.archivedAt)?.id ?? false;
+    }, team.id, { timeout: 15_000 });
+    await waitForTask(page, await taskHandle.jsonValue());
+    await page.locator('.chat-reply, .report').first().waitFor();
+    await page.locator('.thinking').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
     await page.waitForTimeout(600);
     await page.screenshot({ path: join(outputFolder, 'chat-light.png') });
 
     await setTheme(page, 'dark');
     await page.screenshot({ path: join(outputFolder, 'chat-dark.png') });
+
+    await setTheme(page, 'light');
+    await page.getByRole('textbox', { name: 'Message' }).click();
+    await page.getByRole('textbox', { name: 'Message' }).fill('@');
+    await page.locator('.mention-menu').waitFor();
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: join(outputFolder, 'mention-picker.png') });
   } finally {
     await app.close();
   }

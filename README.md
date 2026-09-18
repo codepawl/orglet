@@ -12,7 +12,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/chat-dark.png">
-  <img src="docs/images/chat-light.png" alt="Orglet with three workers answering the same message in one chat" width="900">
+  <img src="docs/images/chat-light.png" alt="Orglet team chat: one report back, workers and teams in the sidebar, no task list" width="900">
 </picture>
 
 </div>
@@ -41,7 +41,7 @@ Click a **team** or **worker** in the sidebar to open that chat. One live conver
 | 🌐 **Your language** | US English by default, with UK English and Vietnamese in Settings. |
 
 <p align="center">
-  <img src="docs/images/new-task.png" alt="Empty worker chat in Orglet, ready for the first message" width="720">
+  <img src="docs/images/new-task.png" alt="Empty worker chat in Orglet. The sidebar lists teams and workers, not a pile of tasks." width="720">
 </p>
 
 Workers can run through a local CLI, an API key, or Demo:
@@ -63,7 +63,7 @@ API keys are encrypted with your system's secure storage and never reach the app
 
 Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, and only with the files you attached.
 
-Further reading: [product direction](docs/product.md), [technical guide](docs/technical-guide.md), [team chat](docs/team-chat.md), [team/worker chat context plan](docs/team-chat-context.md), [model list fetch](docs/model-list-fetch.md), [Windows release gates](docs/windows-release-gates.md), [macOS packaging](docs/macos-packaging.md), [implementation status](docs/implementation_status.md).
+Start here: [Getting started](docs/getting-started.md). The [docs map](docs/README.md) lists how-it-works pages, product decisions, and ship records. Product fit is [product.md](docs/product.md). How to run and test is [technical-guide.md](docs/technical-guide.md).
 
 ## Install
 

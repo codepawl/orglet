@@ -9,6 +9,7 @@ AI-assisted code is welcome. Unstructured dumps that ignore this repo's layout, 
 - For anything larger than a small fix, open an issue first so we can agree on the approach.
 - Read [docs/product.md](docs/product.md). New features should fit who Orglet is for and avoid its "Not now" list.
 - The [technical guide](docs/technical-guide.md) explains how to run the app, the tests and the smoke checks.
+- New user docs start at [Getting started](docs/getting-started.md). The [docs map](docs/README.md) is the index. How to write them: [docs/writing.md](docs/writing.md).
 - Feature and UX changes update the [README](README.md) and the relevant pages under `docs/` **in the same pull request** (how it works, not only that it shipped). Do not land code-only.
 - Match nearby code. Do not reformat unrelated files or invent a parallel structure.
 
