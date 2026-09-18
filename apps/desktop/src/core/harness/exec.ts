@@ -48,8 +48,8 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
   return ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), '--json', '-'];
 }
 
-const authHint = (harness: HarnessId) => `${harness === 'claude-code' ? 'Claude Code' : 'Codex'} chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy để xem lệnh đăng nhập với đúng đường dẫn, rồi thử lại.`;
-const looksLikeAuth = (text: string) => /not logged in|please run \/login|token_expired|401 unauthorized|invalid api key|authentication/i.test(text);
+const authHint = (harness: HarnessId) => `${harness === 'claude-code' ? 'Claude Code' : 'Codex'} chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy, sao chép lệnh đăng nhập, rồi thử lại. Orglet không chuyển sang Demo.`;
+const looksLikeAuth = (text: string) => /not logged in|not authenticated|please run \/login|token_expired|401 unauthorized|invalid api key|authentication/i.test(text);
 
 export function parseClaudeOutput(stdout: string, rateLimit: ClaudeRateLimitInfo | null = null): HarnessResult {
   let data: { is_error?: boolean; result?: string; structured_output?: unknown; total_cost_usd?: number; subtype?: string };
