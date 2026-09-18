@@ -122,6 +122,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* New task: greeting, one prompt bar and a quiet list of starters, centred like a fresh chat. */
 .new-task-content { margin:auto; padding:24px var(--page-x) 12vh; width:100%; max-width:768px; overflow:auto; }
 .welcome { text-align:center; font-size:1.5rem; font-weight:400; letter-spacing:-.3px; margin-bottom:22px; }
+/* Empty chat: avatar sits with the worker/team name, not in front of the whole heading. */
+.team-chat-empty .welcome { text-box:trim-both cap alphabetic; }
+.welcome-who { display:inline-flex; align-items:safe center; gap:8px; vertical-align:middle; }
 /* Prompt bar: a one-line pill (add · input · [who] · send) that grows into a box when the text wraps or sources are attached. */
 .composer { display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"lead input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--border-subtle); border-radius:24px; background:var(--bg); box-shadow:0 2px 12px #00000008; }
 .composer.has-trailing { grid-template-columns:auto minmax(0,1fr) auto auto; grid-template-areas:"lead input trail send"; }
