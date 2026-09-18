@@ -42,6 +42,8 @@ All four of these matter. When two conflict, the order below breaks the tie.
 
 Projects that group several tasks are postponed until real use shows a need (shared files or shared context across tasks).
 
+Proposed for epic COD-22 (pending An): one live chat per worker or team, with tasks/runs under the hood. Context, memory, cost and fail-closed rules: [team-chat-context.md](team-chat-context.md).
+
 ## Release
 
 - **Open source under AGPL-3.0, with a CLA.** The repository is public. Contributors sign the CLA so the project can also sell commercial licenses or be acquired later. Parts meant for reuse, such as the UI components, can be released under a more permissive license later.
