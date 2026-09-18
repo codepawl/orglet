@@ -57,6 +57,8 @@ Pick **Claude Code trên máy này**, **Codex trên máy này** or **Cursor Agen
 
 ## Teams
 
+Long team and worker chats (context budget, memory, fail-closed, thread↔job mapping) are specified in [team-chat-context.md](team-chat-context.md); that plan is not implemented in this guide's current behavior.
+
 Choose **Tạo team** and use a Research Review or Eris Review template, or select up to four existing workers and a synthesizer. Templates start in Demo mode. Parallel teams run at most two members at once; sequential teams pass committed reports to the next member. The synthesizer joins the saved reports. Open **Chi tiết** to inspect or export individual role results. Retry keeps successful member results and continues missing roles.
 
 Use **Tạm dừng sau bước này** to finish the current step and save a checkpoint. **Tiếp tục từ checkpoint** uses the same run and frozen worker/skill settings, including team roles that have not started. A completed final report wins over a pending pause. After restart, interrupted requests are never replayed automatically: a saved response can be processed, but an uncertain request blocks resume. Inspect its retained cost reservation before choosing a new retry. A retry uses current settings for unfinished roles.
@@ -81,7 +83,7 @@ Open **Thư viện → Knowledge** to save short reusable notes. Each note has a
 
 A model can suggest up to three notes when it submits a report. Suggestions and notes arriving in an imported team template wait under **Chờ duyệt** and never reach a model until approved. Editing, approving or archiving creates a new revision. Search uses SQLite FTS5 over title, content and tags.
 
-Before its first request, every run freezes the context it will use. **Chi tiết → Context đã nạp** lists the instruction and knowledge revisions loaded and anything left out as a duplicate, over the 12-note/16 KB limit, or unrelated to the brief. Later edits never change a finished or resumed run. Team templates carry only that team's approved notes; backups carry all knowledge with its revision history.
+Before its first request, every run freezes the context it will use. **Chi tiết → Context đã nạp** lists the instruction and knowledge revisions loaded and anything left out as a duplicate, over the 12-note/16 KB limit, or unrelated to the brief. Later edits never change a finished or resumed run. Follow-up turns currently send a truncated recent window (10 turns, 24 000 characters), not a rolling summary; the proposed long-chat policy is [team-chat-context.md](team-chat-context.md). Team templates carry only that team's approved notes; backups carry all knowledge with its revision history.
 
 ## Current limits
 
