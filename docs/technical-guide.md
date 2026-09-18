@@ -61,7 +61,7 @@ Click a team in the sidebar to open **that team's chat** (roster under the row a
 
 Identity: newest non-archived `tasks` row with that `teamId`, no `assignees`, no `routineId` (`liveTeamTask` in `apps/desktop/src/shared/live-task.ts`). The first user message calls `createTask`; later messages call `reviseTask` on the same id. Do not create a new task row per send. Routines stay separate. `createTask` itself is unchanged, so scheduled team work can still insert discrete rows.
 
-Execution is today's member → synthesis path (`TeamRunner.run` when `task.teamSnapshot` is set). This spike does not add a COD-25 orchestrator. Worker chat (no `teamId`) and group chat (`assignees`, `TeamRunner.chat`) are unchanged.
+Execution is the COD-25 orchestrator (`TeamRunner.run` when `task.teamSnapshot` is set): plan job (synthesizer) → assigned member jobs → one synthesis report. Unassigned members are skipped with a named cancel, not treated as failures. A failed plan does not dispatch members or invent a report. Worker chat (no `teamId`) and group chat (`assignees`, `TeamRunner.chat`) are unchanged.
 
 Long-chat context budget, rolling summary, retrieval and refuse-the-send are specified in [team-chat-context.md](team-chat-context.md); follow-ups still send the existing truncated history window (10 turns, 24 000 characters) until that plan is implemented.
 

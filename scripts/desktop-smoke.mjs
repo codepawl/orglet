@@ -115,6 +115,7 @@ try {
   const teamTask = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks[0];
   const teamDetail = await page.evaluate(id => window.orglet.call('task', { id }), teamTask.id);
   assert.equal(teamDetail.task.status, 'completed'); assert.equal(teamDetail.artifacts.length, 3);
+  assert.equal(teamDetail.runs.filter(run => run.stage === 'plan').length, 1);
   assert.equal(teamDetail.runs.filter(run => run.stage === 'synthesis').length, 1);
   await page.getByRole('button', { name: 'Chi tiết', exact: true }).click();
   await page.locator('details').first().locator('summary').click();

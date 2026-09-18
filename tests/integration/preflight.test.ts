@@ -10,12 +10,14 @@ import { analyze } from '../../apps/desktop/src/profiler/analyze';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import type { Team, Task } from '../../apps/desktop/src/shared/contracts';
 import type { ProfileExecutor } from '../../apps/desktop/src/shared/profiles';
+import { isPlanRequest, planReply } from './team-plan';
 
 let directory: string; let store: Store; let core: CoreService; let calls: number; let contexts: string[];
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-preflight-')); store = new Store(join(directory, 'state.sqlite')); calls = 0; contexts = []; });
 afterEach(async () => { store.close(); await rm(directory, { recursive: true, force: true }); });
 function service(executor: ProfileExecutor) {
-  return new CoreService(store, () => {}, async () => ({ async request(messages) {
+  return new CoreService(store, () => {}, async () => ({ async request(messages, tools) {
+    if (isPlanRequest(tools)) return planReply(messages);
     calls++; contexts.push(JSON.stringify(messages));
     expect(store.all<{ status: string }>('preflights')[0].status).not.toBe('running');
     return { calls: [{ id: 'report', name: 'submit_report', arguments: JSON.stringify({ title: 'Review', summary: 'Fixture review', findings: [], limitations: Array.from({ length: 30 }, (_, i) => `Model limitation ${i}`) }) }], usage: { input: 100, output: 100 } };
@@ -139,7 +141,7 @@ it('binds a source revision to fresh roles and preflight without changing histor
   expect(after.task.sourceIds).toEqual([...sources.map(source => source.id), added.id]);
   expect(after.preflights).toHaveLength(2); expect(after.artifacts).toHaveLength(8);
   expect(after.artifacts.slice(0, 4)).toEqual(previousArtifacts);
-  expect(after.runs.slice(4).every(run => run.snapshot.input?.sourceIds.length === 1 && run.snapshot.input.sourceIds[0] === added.id && run.snapshot.preflightId === after.preflights[1].id)).toBe(true);
+  expect(after.runs.filter(run => (run.snapshot.inputRevision ?? 0) === 1).every(run => run.snapshot.input?.sourceIds.length === 1 && run.snapshot.input.sourceIds[0] === added.id && run.snapshot.preflightId === after.preflights[1].id)).toBe(true);
   expect(core.exportMarkdown(previousArtifacts[0].id)).not.toContain(added.id);
   expect(() => core.backups.preview(core.backups.export())).not.toThrow();
 });

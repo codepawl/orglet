@@ -8,13 +8,15 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import { compileContext, KNOWLEDGE_ITEM_LIMIT } from '../../apps/desktop/src/core/context/compiler';
 import type { Knowledge } from '../../apps/desktop/src/shared/knowledge';
 import type { Team, Worker, Skill, Task } from '../../apps/desktop/src/shared/contracts';
+import { isPlanRequest, planReply } from './team-plan';
 
 let directory: string; let store: Store; let core: CoreService;
 let systems: string[]; let knowledgeMessages: (string | null)[]; let proposals: unknown[];
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orglet-knowledge-')); store = new Store(join(directory, 'state.sqlite'));
   systems = []; knowledgeMessages = []; proposals = [];
-  core = new CoreService(store, () => {}, async () => ({ async request(messages) {
+  core = new CoreService(store, () => {}, async () => ({ async request(messages, tools) {
+    if (isPlanRequest(tools)) return planReply(messages);
     systems.push(String(messages[0].content));
     knowledgeMessages.push(messages.map(message => String(message.content ?? '')).find(content => content.includes('approvedKnowledge')) ?? null);
     return { calls: [{ id: 'report', name: 'submit_report', arguments: JSON.stringify({ title: 'Report', summary: 'No sources.', findings: [], limitations: [], review: { checks: [], recommendation: 'insufficient_evidence', draftFeedback: 'None.', upstreamFindingIds: [], conflicts: [] }, knowledgeProposals: proposals }) }], usage: { input: 10, output: 10 } };

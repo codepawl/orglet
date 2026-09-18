@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { Store, now, id } from './database';
-import { Id, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput } from '../../shared/contracts';
+import { Id, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput, TeamPlan } from '../../shared/contracts';
 import { DatasetProfile, DataFormat } from '../../shared/profiles';
 import { PreflightRecord } from '../../shared/preflight';
 import { SkillPackage } from '../../shared/skill-package';
@@ -19,7 +19,7 @@ const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPack
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
 const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
-const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
+const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
 const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime() }).strict();
 const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime() }).strict();
 const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional() }).strict();
@@ -73,6 +73,12 @@ function validateRelations(data: Payload) {
   for (const team of teams.values()) if ([...team.memberIds, team.synthesizerId].some(id => !workers.has(id))) fail('Nhóm thiếu nhân viên.');
   for (const task of tasks.values()) if (!workers.has(task.workerId) || task.sourceIds.some(id => !sources.has(id)) || (task.teamId && (!teams.has(task.teamId) || task.teamSnapshot?.id !== task.teamId))) fail('Task thiếu nhân viên, nhóm hoặc nguồn.');
   for (const run of runs.values()) if (!tasks.has(run.taskId) || run.snapshot.worker.skillId !== run.snapshot.skill.id || run.snapshot.upstreamArtifactIds?.some(id => !artifacts.has(id))) fail('Snapshot hoặc task của run không hợp lệ.');
+  for (const run of runs.values()) {
+    const plan = run.snapshot.plan;
+    if (!plan) continue;
+    if (run.stage !== 'plan' || !run.snapshot.team) fail('Phân việc không thuộc lần chạy trưởng phòng.');
+    if (plan.assignments.some(assignment => !run.snapshot.team!.memberIds.includes(assignment.workerId))) fail('Phân việc tham chiếu nhân viên ngoài nhóm.');
+  }
   // Validate the whole join graph, including runs that never committed an artifact.
   // Kahn's traversal avoids recursive stack growth on a large imported history.
   const dependencies = new Map<string, number>();

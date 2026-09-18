@@ -8,6 +8,7 @@ import { Checkpoints } from '../../apps/desktop/src/core/storage/checkpoints';
 import { BudgetLedger } from '../../apps/desktop/src/core/budgets/ledger';
 import type { ModelAdapter, ModelReply } from '../../apps/desktop/src/core/adapters/openai';
 import type { Run, Skill, Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
+import { isPlanRequest, planReply } from './team-plan';
 
 let directory: string; let store: Store; let core: CoreService;
 const report = (sources: string[] = []): ModelReply => ({ calls: [{ id: id(), name: 'submit_report', arguments: JSON.stringify({ title: 'Saved report', summary: 'Fixture summary', findings: sources.map(source => ({ title: 'Observed', detail: 'Saved evidence', severity: 'info', sourceIds: [source], coverage: 'Full fixture' })), limitations: [] }) }], usage: { input: 100, output: 20 } });
@@ -100,7 +101,8 @@ it('migrates a v1 workspace without losing reports and refuses a newer database 
 });
 it('freezes undispatched team roles across pause/resume and reuses completed member reports', async () => {
   let calls = 0; let taskId = ''; const systems: string[] = [];
-  core = new CoreService(store, () => {}, async () => ({ async request(messages) {
+  core = new CoreService(store, () => {}, async () => ({ async request(messages, tools) {
+    if (isPlanRequest(tools)) return planReply(messages);
     calls++; systems.push(String(messages[0].content));
     if (calls === 1) await core.command('pause', { id: store.all<Task>('tasks')[0].id });
     return report();
@@ -113,12 +115,13 @@ it('freezes undispatched team roles across pause/resume and reuses completed mem
   const other = store.get<Worker>('workers', team.memberIds[1]); await core.command('saveWorker', { ...other, instructions: 'CHANGED ROLE' });
   await core.command('resume', { id: taskId }); await idle(taskId);
   expect(calls).toBe(3); expect(systems.join(' ')).not.toContain('CHANGED ROLE');
-  expect(store.detail(taskId).task.status).toBe('completed'); expect(store.detail(taskId).runs).toHaveLength(3);
+  expect(store.detail(taskId).task.status).toBe('completed'); expect(store.detail(taskId).runs).toHaveLength(4);
   expect(store.detail(taskId).artifacts.filter(artifact => artifact.id === retained)).toHaveLength(1);
 });
 it('honors a lowered live team cap and refuses acceptance without a synthesis artifact', async () => {
   let calls = 0;
-  core = new CoreService(store, () => {}, async () => ({ async request() {
+  core = new CoreService(store, () => {}, async () => ({ async request(_messages, tools) {
+    if (isPlanRequest(tools)) return planReply(_messages);
     calls++;
     const team = store.all<Task>('tasks')[0].teamSnapshot!;
     await core.command('saveTeam', { ...team, monthlyBudgetMicros: 1000 });

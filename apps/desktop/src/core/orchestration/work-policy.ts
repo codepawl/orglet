@@ -25,7 +25,7 @@ export class WorkPolicy {
       const detail = this.store.detail(task.id); const complete = task.status === 'completed';
       const latest = new Map(detail.runs.map(run => [`${run.stage ?? 'worker'}:${run.snapshot.worker.id}`, run]));
       const blockers = [...latest.values()].filter(run => run.status !== 'completed' && run.error)
-        .map(run => `${run.snapshot.worker.name}${run.stage === 'synthesis' ? ' (tổng hợp)' : ''}: ${run.error}`);
+        .map(run => `${run.snapshot.worker.name}${run.stage === 'plan' ? ' (phân việc)' : run.stage === 'synthesis' ? ' (tổng hợp)' : ''}: ${run.error}`);
       this.store.update('tasks', {
         ...task,
         handoff: {

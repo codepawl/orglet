@@ -16,6 +16,7 @@ import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Markdown } from './Markdown';
 import { ActivityGroup, LiveRun, savedSteps, useRunProgress } from './LiveRun';
+import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
 
@@ -49,8 +50,14 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
     <div className="thread-content">
       {turns.map(turn => {
         const latest = turn.revision === current;
-        const run = turn.runs.at(-1);
-        const liveUpdate = latest && busy && run ? liveRuns[run.id] : undefined;
+        const activeRun = turn.runs.find(item => item.status === 'running') ?? turn.runs.find(item => item.status === 'queued');
+        const synthesisLive = latest && busy ? turn.runs.find(item => item.stage === 'synthesis' && liveRuns[item.id]) : undefined;
+        const liveUpdate = synthesisLive ? liveRuns[synthesisLive.id] : undefined;
+        const thinkingRun = liveUpdate ? synthesisLive : activeRun;
+        const headline = turn.runs.find(item => item.stage === 'plan' && item.error && item.status !== 'completed')
+          ?? turn.runs.filter(item => item.stage === 'member' && item.error && item.error !== UNASSIGNED_PLAN_ERROR).at(-1)
+          ?? turn.runs.findLast(item => item.error && item.error !== UNASSIGNED_PLAN_ERROR);
+        const failedNames = [...new Set(turn.runs.filter(item => item.stage === 'member' && item.error && item.error !== UNASSIGNED_PLAN_ERROR).map(item => item.snapshot.worker.name))];
         return <div className="chat-turn" key={turn.revision}>
           <div className="user-message"><p>{turn.brief}</p>{turn.sourceCount > 0 && <Button onClick={() => showSources()}><FileText size={16} />{t('{0} nguồn', [turn.sourceCount])}</Button>}</div>
           {turn.replies.map((reply, index) => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
@@ -60,23 +67,23 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
               ? <ChatReply artifact={reply.artifact} action={action} usage={latest && index === turn.replies.length - 1 ? <TaskUsage detail={detail} /> : undefined} />
               : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} usage={latest && index === turn.replies.length - 1 ? <TaskUsage detail={detail} className="message-usage thread-usage" /> : undefined} />}
           </section>)}
-          {(!turn.replies.length || (latest && (busy || run?.error || detail.task.status !== 'completed'))) && <section className="assistant-message" aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
-            {liveUpdate ? byline(run) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
+          {(!turn.replies.length || (latest && (busy || headline?.error || detail.task.status !== 'completed'))) && <section className="assistant-message" aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
+            {liveUpdate ? byline(thinkingRun) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
-            {latest && busy && run && (liveUpdate
-              ? <LiveRun update={liveUpdate} provider={run.snapshot.worker.provider} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />
-              : <Thinking provider={run.snapshot.worker.provider} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />)}
+            {latest && busy && thinkingRun && (liveUpdate
+              ? <LiveRun update={liveUpdate} provider={thinkingRun.snapshot.worker.provider} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />
+              : <Thinking provider={thinkingRun.snapshot.worker.provider} stage={thinkingRun.stage} workerName={thinkingRun.snapshot.worker.name} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />)}
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
-            {latest && detail.task.status === 'partial' && <p className="run-error">{t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
-            {!turn.artifact && !turn.replies.length && !(latest && busy) && !(latest && run?.error) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
+            {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
+            {!turn.artifact && !turn.replies.length && !(latest && busy) && !(latest && headline?.error) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
             {turn.artifact && !turn.replies.length && <FinishedActivity steps={savedSteps(detail.events, turn.artifact.runId)} />}
             {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
               ? <ChatReply artifact={turn.artifact} action={action} usage={latest ? <TaskUsage detail={detail} /> : undefined} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} usage={latest ? <TaskUsage detail={detail} className="message-usage thread-usage" /> : undefined} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
-            {latest && run?.error && detail.task.status !== 'paused' && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{tMessage(run.error)}</p></div>}
+            {latest && headline?.error && detail.task.status !== 'paused' && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{headline.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(headline.error)]) : tMessage(headline.error)}</p></div>}
             {latest && !turn.replies.length && !turn.artifact && <TaskUsage detail={detail} className="message-usage thread-usage" />}
             {latest && <div className="actions">
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
@@ -93,9 +100,16 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
  * Work in progress, kept visual (user decision 2026-09-17): the provider's mark inside a spinning ring, one short phrase
  * for what is happening, and a quiet stop button. Details (versions, paths, costs) stay in Chi tiết.
  */
-function Thinking({ provider, message, pausing, onStop }: { provider: Run['snapshot']['worker']['provider']; message?: string; pausing: boolean; onStop: () => void }) {
+function Thinking({ provider, stage, workerName, message, pausing, onStop }: { provider: Run['snapshot']['worker']['provider']; stage?: Run['stage']; workerName?: string; message?: string; pausing: boolean; onStop: () => void }) {
   const read = message?.match(/^Đã đọc (.+)$/);
-  const label = pausing ? t('Đang dừng sau bước này…') : read ? t('Đang đọc {0}', [read[1]]) : message?.startsWith('Đang chờ lượt') ? t('Đang chờ lượt…') : message === 'Model đang trả kết quả…' ? t('Đang viết câu trả lời…') : t('Đang suy nghĩ…');
+  const label = pausing ? t('Đang dừng sau bước này…')
+    : stage === 'plan' || message === 'Đang phân việc.' ? t('Đang phân việc…')
+    : stage === 'member' ? t('Đang giao {0}…', [workerName ?? ''])
+    : stage === 'synthesis' || message?.startsWith('Đang tổng hợp') ? t('Đang tổng hợp…')
+    : read ? t('Đang đọc {0}', [read[1]])
+    : message?.startsWith('Đang chờ lượt') ? t('Đang chờ lượt…')
+    : message === 'Model đang trả kết quả…' ? t('Đang viết câu trả lời…')
+    : t('Đang suy nghĩ…');
   return <div role="status" className="thinking">
     <span className="thinking-mark" aria-hidden="true">{provider === 'demo' ? <span className="orglet-mark small">o</span> : <ProviderMark provider={provider} size="small" decorative />}</span>
     <span className="thinking-text">{label}</span>
