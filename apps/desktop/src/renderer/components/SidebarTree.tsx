@@ -153,8 +153,8 @@ export function TaskRow({ title, brief, active, nested, askFirst, status, status
   if (nested) return <TaskLink name={name} status={status} statusLabel={statusLabel} seen={seen} askFirst={Boolean(askFirst)} onOpen={onOpen} />;
   if (editing) return <div className={`history-item editing ${nested ? 'nested' : ''}`}><RenameField name={name} label={t('Tên mới cho công việc {0}', [name])} onSave={onRename} onDone={() => setEditing(false)} /></div>;
   return <div className={`task-row ${active ? 'active' : ''}`}>
-    <button className={`history-item ${nested ? 'nested' : ''} ${active ? 'active' : ''}`} aria-current={active || undefined} onClick={() => onOpen()}>
-      {!archive && <StatusMark variant={mark.variant} tone={mark.tone} label={statusLabel} />}
+    <button className={`history-item ${nested ? 'nested' : ''} ${active ? 'active' : ''}`} aria-current={active || undefined} title={statusLabel} onClick={() => onOpen()}>
+      {!archive && <StatusMark variant={mark.variant} tone={mark.tone} label={statusLabel} decorative />}
       <span className="row-name">{name}</span>
       {archive && archive.daysLeft !== null && <span className={`archive-age ${archive.tone}`} title={t('Tự xóa sau {0} ngày', [archive.daysLeft])}>{t('{0} ngày', [archive.daysLeft])}</span>}
     </button>
@@ -193,8 +193,8 @@ function TaskLink({ name, status, statusLabel, seen, askFirst, onOpen }: { name:
   };
   const choose = (open: boolean, dontAskAgain = false) => { close(!open); if (open) onOpen(dontAskAgain); };
   return <>
-    <button ref={link} type="button" className="tree-leaf task-link" aria-haspopup={askFirst ? 'dialog' : undefined} aria-expanded={askFirst ? Boolean(position) : undefined} aria-controls={position ? id : undefined} onClick={click}>
-      <StatusMark variant={mark.variant} tone={mark.tone} label={statusLabel} />
+    <button ref={link} type="button" className="tree-leaf task-link" title={statusLabel} aria-haspopup={askFirst ? 'dialog' : undefined} aria-expanded={askFirst ? Boolean(position) : undefined} aria-controls={position ? id : undefined} onClick={click}>
+      <StatusMark variant={mark.variant} tone={mark.tone} label={statusLabel} decorative />
       <span className="row-name">{name}</span>
       <ArrowUpRight size={14} className="task-link-arrow" aria-hidden="true" />
     </button>

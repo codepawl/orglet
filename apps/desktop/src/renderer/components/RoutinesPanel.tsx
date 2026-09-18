@@ -27,7 +27,7 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
       {workspace.routines.map(item => <section key={item.id} className="routine-card" aria-label={t('Lịch {0}', [item.name])}>
         <div className="routine-head">
           <span className="routine-icon" aria-hidden="true"><CalendarClock size={18} /></span>
-          <div className="routine-title"><h3>{item.name}</h3><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}><StatusMark variant={item.enabled ? 'filled' : 'empty'} tone={item.enabled ? 'success' : 'muted'} label={item.enabled ? t('Đang bật') : t('Đã tắt')} />{item.enabled ? t('Đang bật') : t('Đã tắt')}</span></div>
+          <div className="routine-title"><h3>{item.name}</h3><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}><StatusMark variant={item.enabled ? 'filled' : 'empty'} tone={item.enabled ? 'success' : 'muted'} label={item.enabled ? t('Đang bật') : t('Đã tắt')} decorative />{item.enabled ? t('Đang bật') : t('Đã tắt')}</span></div>
           <div className="routine-actions">
             <Button size="icon" aria-label={t('Sửa lịch {0}', [item.name])} title={t('Sửa lịch')} disabled={busy} onClick={() => onView({ editing: true, routine: item })}><Pencil size={16} /></Button>
             {item.enabled && <Button size="icon" aria-label={t('Tắt lịch')} title={t('Tắt lịch')} disabled={busy} onClick={() => void action(() => orglet.call('saveRoutine', { id: item.id, name: item.name, enabled: false, schedule: item.schedule, task: item.task }))}><Power size={16} /></Button>}

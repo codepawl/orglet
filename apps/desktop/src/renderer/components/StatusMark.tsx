@@ -7,14 +7,16 @@ export type StatusMarkState = { variant: StatusMarkVariant; tone: StatusMarkTone
 /**
  * Shared status circle (left of titles): hollow idle, dashed waiting, filled unread/ready,
  * busy = soft spinner. Colours stay on Orglet tokens (success / error / muted / working).
+ * Pass `decorative` when the mark sits inside a named control so it does not steal the accessible name.
  */
-export function StatusMark({ variant, tone = 'muted', label, className }: {
+export function StatusMark({ variant, tone = 'muted', label, decorative, className }: {
   variant: StatusMarkVariant;
   tone?: StatusMarkTone;
   label: string;
+  decorative?: boolean;
   className?: string;
 }) {
-  return <span className={`status-mark ${variant} ${tone}${className ? ` ${className}` : ''}`} role="status" title={label} aria-label={label} />;
+  return <span className={`status-mark ${variant} ${tone}${className ? ` ${className}` : ''}`} title={label} {...(decorative ? { 'aria-hidden': true as const } : { role: 'status' as const, 'aria-label': label })} />;
 }
 
 /** Map a task's run state to the circle. Finished work stays filled until the user opens it (`seen`). */
