@@ -35,7 +35,7 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
 | 👥 **Work as a team** | Send one message to a single worker, a few of them, everyone, or a team that combines their answers. |
 | 📎 **Attach files safely** | A worker only reads the files you attach to that task. |
 | 📄 **Reports as documents** | Ask for a report and it opens like a file. Copy it as plain text or Markdown, or download it. |
-| 🔁 **Repeat work on a schedule** | Schedules send the same request every day or week while Orglet is open. |
+| 🔁 **Repeat work on a schedule** | Schedules send the same request every day or week while Orglet is open. If the computer was off, missed runs become one catch-up you can run or skip; the next time stays on the calendar. |
 | 📚 **Reuse what works** | Save skills and notes that workers use in later tasks. |
 | 🗂️ **Stay tidy** | Archive or delete tasks, workers and teams. Archived items can clear themselves after 7 or 30 days. |
 | 🌐 **Your language** | US English by default, with UK English and Vietnamese in Settings. |

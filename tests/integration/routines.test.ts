@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { nextOccurrence, inWorkHours, type Schedule } from '../../apps/desktop/src/shared/schedule';
+import { ROUTINE_MISS_MS, SKIPPED_WHILE_INACTIVE, shouldDeferRoutine } from '../../apps/desktop/src/core/orchestration/routines';
 import type { Routine, Task, Team } from '../../apps/desktop/src/shared/contracts';
 import { modelCatalog } from '../../apps/desktop/src/core/adapters/catalog';
 
@@ -22,6 +23,15 @@ async function idle() {
   for (let i = 0; i < 200 && store.all<Task>('tasks').some(task => core.runner.isActive(task.id) || core.teams.isActive(task.id)); i++) await new Promise(resolve => setTimeout(resolve, 10));
   expect(store.all<Task>('tasks').some(task => core.runner.isActive(task.id) || core.teams.isActive(task.id))).toBe(false);
 }
+it('defers on first tick, after a 30s gap, when overdue, or when a catch-up is already pending', () => {
+  const now = Date.parse('2026-01-05T02:00:10Z');
+  const due = Date.parse('2026-01-05T02:00:00Z');
+  expect(shouldDeferRoutine(now, due, null, false)).toBe(true);
+  expect(shouldDeferRoutine(now, due, now - 5_000, false)).toBe(false);
+  expect(shouldDeferRoutine(now, due, now - ROUTINE_MISS_MS - 1, false)).toBe(true);
+  expect(shouldDeferRoutine(now + ROUTINE_MISS_MS + 1, due, now, false)).toBe(true);
+  expect(shouldDeferRoutine(now, due, now - 5_000, true)).toBe(true);
+});
 it('computes local daily/weekly dates, skips DST gaps and runs only the first overlap', () => {
   expect(nextOccurrence(schedule, current)).toBe('2026-01-05T02:00:00.000Z');
   expect(nextOccurrence({ ...schedule, frequency: 'weekly', weekday: 0 }, current)).toBe('2026-01-11T02:00:00.000Z');
@@ -68,12 +78,51 @@ it('preserves waiting evidence across restart and defers routines until explicit
   expect(store.detail(taskId).artifacts).toEqual(reports);
 });
 it('coalesces offline days into one explicit catch-up and prevents double dispatch', async () => {
-  const routine = await save(); current = new Date('2026-01-12T04:00:00Z'); await core.tick();
-  expect(store.workspace().tasks).toHaveLength(0); expect(store.get<Routine>('routines', routine.id).pending).not.toBeNull();
+  const routine = await save();
+  const firstDue = store.get<Routine>('routines', routine.id).nextDueAt;
+  current = new Date('2026-01-12T04:00:00Z'); await core.tick();
+  const skipped = store.get<Routine>('routines', routine.id);
+  expect(store.workspace().tasks).toHaveLength(0);
+  expect(skipped.pending).toEqual({ dueAt: firstDue, reason: SKIPPED_WHILE_INACTIVE });
+  expect(skipped.nextDueAt).toBe(nextOccurrence(schedule, current));
   current = new Date('2026-01-19T04:00:00Z'); await core.tick();
+  expect(store.get<Routine>('routines', routine.id).pending?.dueAt).toBe(firstDue);
+  expect(store.get<Routine>('routines', routine.id).nextDueAt).toBe(nextOccurrence(schedule, current));
   const results = await Promise.allSettled([core.command('catchUpRoutine', { id: routine.id }), core.command('catchUpRoutine', { id: routine.id })]);
   expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1); await idle();
   expect(store.workspace().tasks).toHaveLength(1); expect(store.get<Routine>('routines', routine.id).pending).toBeNull();
+});
+it('keeps one catch-up after reopen across a long overdue window', async () => {
+  const routine = await save();
+  const firstDue = store.get<Routine>('routines', routine.id).nextDueAt;
+  expect(firstDue).toBe('2026-01-05T02:00:00.000Z');
+  store.close();
+  current = new Date('2026-02-04T04:00:00Z');
+  store = new Store(join(directory, 'state.sqlite'));
+  core = new CoreService(store, () => {}, async () => { throw new Error('No provider'); }, undefined, () => current);
+  await core.tick();
+  const skipped = store.get<Routine>('routines', routine.id);
+  expect(store.workspace().tasks).toHaveLength(0);
+  expect(skipped.pending).toEqual({ dueAt: firstDue, reason: SKIPPED_WHILE_INACTIVE });
+  expect(skipped.nextDueAt).toBe('2026-02-05T02:00:00.000Z');
+  await core.tick();
+  expect(store.get<Routine>('routines', routine.id).pending?.dueAt).toBe(firstDue);
+  expect(store.workspace().tasks).toHaveLength(0);
+  await core.command('catchUpRoutine', { id: routine.id }); await idle();
+  expect(store.workspace().tasks).toHaveLength(1);
+  expect(store.get<Routine>('routines', routine.id).pending).toBeNull();
+  await expect(core.command('catchUpRoutine', { id: routine.id })).rejects.toThrow('Không có lần chạy bù đang chờ.');
+});
+it('dismisses a coalesced miss without creating a task or moving the next due time', async () => {
+  const routine = await save();
+  current = new Date('2026-02-04T04:00:00Z'); await core.tick();
+  const skipped = store.get<Routine>('routines', routine.id);
+  expect(skipped.pending).not.toBeNull();
+  await core.command('dismissRoutine', { id: routine.id });
+  const after = store.get<Routine>('routines', routine.id);
+  expect(after.pending).toBeNull();
+  expect(after.nextDueAt).toBe(skipped.nextDueAt);
+  expect(store.workspace().tasks).toHaveLength(0);
 });
 it('does not silently reuse recurring approval after worker changes or send changed source bytes', async () => {
   const path = join(directory, 'source.txt'); await writeFile(path, 'original'); const source = (await core.sources.import([path]))[0];
