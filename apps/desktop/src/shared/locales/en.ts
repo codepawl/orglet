@@ -1012,6 +1012,7 @@ export const en: Dictionary = {
   'Đang mở workspace…': 'Opening workspace…',
   'Đang tải danh sách model…': 'Loading the model list…',
   'Đang tạm dừng': 'Pausing',
+  'Đang tổng hợp': 'Combining',
   'Đang tổng hợp {0} kết quả đã lưu.': 'Combining {0} saved results.',
   'Đang tổng hợp…': 'Combining…',
   'Đang đọc gói skill…': 'Reading the skill package…',
