@@ -30,6 +30,8 @@ Academic or specialized notes stay academic. The exception is the language, not 
 
 User guides that are not written yet stay as a row in the map. Do not add empty stub files.
 
+When the app's layout changes (sidebar, composer, font), replace the shots in `docs/images/` with `node scripts/readme-screenshots.mjs` after a local `pnpm make` (or, on Linux, a Vite compile plus unpackaged Electron). Keep the files the README and Getting started already link.
+
 ## Do not
 
 - Duplicate [AGENTS.md](../AGENTS.md) (how coding agents work in this repo) or [CONTRIBUTING.md](../CONTRIBUTING.md) (how humans open a pull request). Point at them.

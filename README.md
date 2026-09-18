@@ -12,7 +12,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/chat-dark.png">
-  <img src="docs/images/chat-light.png" alt="Orglet with three workers answering the same message in one chat" width="900">
+  <img src="docs/images/chat-light.png" alt="Orglet team chat: one report back, workers and teams in the sidebar, no task list" width="900">
 </picture>
 
 </div>
@@ -41,7 +41,7 @@ Click a **team** or **worker** in the sidebar to open that chat. One live conver
 | 🌐 **Your language** | US English by default, with UK English and Vietnamese in Settings. |
 
 <p align="center">
-  <img src="docs/images/new-task.png" alt="Empty worker chat in Orglet, ready for the first message" width="720">
+  <img src="docs/images/new-task.png" alt="Empty worker chat in Orglet. The sidebar lists teams and workers, not a pile of tasks." width="720">
 </p>
 
 Workers can run through a local CLI, an API key, or Demo:

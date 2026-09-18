@@ -32,13 +32,17 @@ The Researcher worker starts on **Demo**, so you can try the app without any acc
 
 ## 2. First look
 
-On first launch the window is US English. A **Researcher** worker is already there, on **Demo**.
+On first launch the window is US English. A **Researcher** worker is already there, on **Demo**. The app uses your system's usual interface font.
 
-- The **sidebar** lists **Workers** and **Teams**. Click a name to open that chat.
-- The **main column** is the conversation. The message box sits at the bottom.
+- The **sidebar** lists **Teams** and **Workers** only. There is no task list. Click a name to open that chat.
+- The **main column** is the conversation, headed **Chatting with …**. The message box sits at the bottom.
 - The footer has **Schedules**, **Library**, and **Settings**.
 
-To change language: **Settings** → **General** → **Language** (English (US), English (UK), or Tiếng Việt).
+<p align="center">
+  <img src="images/new-task.png" alt="Empty Researcher chat. Sidebar shows Teams and Workers, not tasks." width="720">
+</p>
+
+To change language: **Settings** → **General** → **Language** (English (US), English (UK), or Tiếng Việt). To switch light or dark: **Settings** → **General** → **Appearance**.
 
 ## 3. Send a Demo message
 
@@ -76,9 +80,19 @@ If the model list fails to load, you can still type an ID. Built-in names are su
 
 ## 5. Chat with a worker or a team
 
-Click a **worker** to talk to that one worker. Click a **team** to talk to the group. Each has **one live chat**. A new message is a turn in that chat, not a new item in the sidebar.
+Click a **worker** to talk to that one worker. Click a **team** to talk to the group. Each has **one live chat**. A new message is a turn in that chat, not a new item in the sidebar. The sidebar never fills up with old jobs.
 
 On a team, the lead plans, assigned members work as hidden jobs, and one report comes back. Open **Details** for those jobs, cost, retry, and cancel.
+
+<p align="center">
+  <img src="images/chat-light.png" alt="A team chat after a Demo turn. One report is in the thread; member jobs stay under Details." width="720">
+</p>
+
+In a **team** chat, type `@` to pick a worker, `@all`, or the team name. Tagged names highlight. Demo then asks those members. Leave it untagged, or type `@all`, to ask everyone. A 1:1 worker chat has no `@` picker.
+
+<p align="center">
+  <img src="images/mention-picker.png" alt="Typing @ in a team chat opens a list of workers, all, and the team name." width="720">
+</p>
 
 How that works: [team-chat.md](team-chat.md).
 
