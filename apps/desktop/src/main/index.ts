@@ -8,7 +8,7 @@ import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
 import { en, enGB } from '../shared/locales/en';
 import { commands, Id, ApiProvider, type Reply, type Command, TextFormat } from '../shared/contracts';
 import { markdownToPlain } from '../shared/plainText';
-import { Credentials } from './credentials';
+import { Credentials, OLLAMA_LOCAL_TOKEN } from './credentials';
 import { readBoundedText, writeAtomicText } from './files';
 import { readSkillDirectory, writeSkillDirectory } from './skill-files';
 import { isViteDevRequest, preferLoopbackIpv4 } from './vite-dev-url';
@@ -52,7 +52,7 @@ async function start() {
         return;
       }
       if (message.type === 'key') {
-        const provider = z.enum(['openai', 'anthropic', 'xai']).safeParse(message.provider);
+        const provider = ApiProvider.safeParse(message.provider);
         core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await credentials.read(provider.data) : null }); return;
       }
       if (message.type === 'profileCancel') { cancelProfile(message.id); return; }
@@ -131,6 +131,11 @@ async function start() {
   });
   handle('orglet:connect', async raw => {
     const body = z.object({ provider: ApiProvider, key: z.string().min(1).max(500).optional() }).strict().parse(raw);
+    if (body.provider === 'ollama' && body.key === undefined) {
+      await credentials.save('ollama', OLLAMA_LOCAL_TOKEN);
+      await request('invalidateModelList', 'ollama').catch(() => {});
+      return credentials.status();
+    }
     if (body.key !== undefined) {
       await credentials.save(body.provider, body.key.trim());
       await request('invalidateModelList', body.provider).catch(() => {});
@@ -163,8 +168,14 @@ async function start() {
     return true;
   });
   handle('orglet:open-pricing', async raw => {
-    const pricing = { openai: 'https://openai.com/api/pricing/', anthropic: 'https://www.anthropic.com/pricing#api', xai: 'https://docs.x.ai/developers/pricing' } as const;
-    await shell.openExternal(pricing[z.enum(['openai', 'anthropic', 'xai']).parse(raw)]);
+    const pricing = {
+      openai: 'https://openai.com/api/pricing/',
+      anthropic: 'https://www.anthropic.com/pricing#api',
+      xai: 'https://docs.x.ai/developers/pricing',
+      openrouter: 'https://openrouter.ai/models',
+      ollama: 'https://ollama.com',
+    } as const;
+    await shell.openExternal(pricing[ApiProvider.parse(raw)]);
   });
   handle('orglet:restore', async () => {
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn bản sao lưu Orglet'), properties: ['openFile'], filters: [{ name: 'Orglet backup', extensions: ['json'] }] });

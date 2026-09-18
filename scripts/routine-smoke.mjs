@@ -70,7 +70,7 @@ try {
   await page.locator('.chat-reply, .report').first().waitFor();
   const state = await page.evaluate(() => window.orglet.call('workspace', {}));
   assert.equal(state.tasks.length, 2); assert.equal(state.routines[0].pending, null);
-  assert.deepEqual(await page.evaluate(() => window.orglet.connections()), { openai: false, anthropic: false, xai: false });
+  assert.deepEqual(await page.evaluate(() => window.orglet.connections()), { openai: false, anthropic: false, xai: false, openrouter: false, ollama: false });
   // Work-hour configuration uses ordinary native form controls.
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
   await page.getByRole('button', { name: 'Tùy chọn nhóm Research Review', exact: true }).waitFor();

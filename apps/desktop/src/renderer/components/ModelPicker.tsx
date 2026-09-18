@@ -46,7 +46,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   const [placement, setPlacement] = useState<Placement>();
   const input = useRef<HTMLInputElement>(null);
   const menu = useRef<HTMLUListElement>(null);
-  const hint = provider === 'openai' || provider === 'anthropic' || provider === 'xai' ? CATALOG_HINT_IDS[provider] : undefined;
+  const hint = Object.hasOwn(CATALOG_HINT_IDS, provider) ? CATALOG_HINT_IDS[provider as keyof typeof CATALOG_HINT_IDS] : undefined;
   const models = list?.models ?? [];
   const options = filterModels(models, value);
   const failOpen = t('Gõ ID model. Danh sách chưa tải được.');

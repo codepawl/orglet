@@ -1,6 +1,6 @@
-import type { Worker } from '../../shared/contracts';
+import { isLocalApi, type Worker } from '../../shared/contracts';
 import { isHarness } from '../../shared/harness';
-import type { ModelEntry, ModelListCache } from '../../shared/models';
+import { CATALOG_HINT_IDS, type ModelEntry, type ModelListCache } from '../../shared/models';
 import { modelCatalog, type CatalogProvider } from '../adapters/catalog';
 
 export type ModelRates = { inputTenths: number; outputTenths: number; pricingVersion: string };
@@ -28,13 +28,17 @@ export function resolveWorkerModel(worker: Pick<Worker, 'provider' | 'modelId'>,
       ? { id: custom, pricingVersion: `harness:${worker.provider}:${custom}` }
       : { pricingVersion: `harness:${worker.provider}` };
   }
+  if (isLocalApi(worker.provider)) {
+    const id = custom || CATALOG_HINT_IDS.ollama;
+    return { id, pricingVersion: custom ? `ollama:${custom}` : 'ollama' };
+  }
   if (!Object.hasOwn(modelCatalog, worker.provider)) throw new Error('Provider không có catalog giá hợp lệ.');
   const provider = worker.provider as CatalogProvider;
   const catalog = modelCatalog[provider];
   const id = custom || catalog.model;
   if (id === catalog.model) return { id, rates: catalogRates(provider), pricingVersion: catalog.pricingVersion };
-  if (provider === 'xai') {
-    const entry = matchEntry(cache?.byProvider.xai?.models, id);
+  if (provider === 'xai' || provider === 'openrouter') {
+    const entry = matchEntry(cache?.byProvider[provider]?.models, id);
     if (entry && entry.inputTenths != null && entry.outputTenths != null) {
       const pricingVersion = pricingVersionOf(id, entry.inputTenths, entry.outputTenths);
       return { id, rates: { inputTenths: entry.inputTenths, outputTenths: entry.outputTenths, pricingVersion }, pricingVersion };

@@ -84,6 +84,43 @@ describe('worker model preference', () => {
     expect(store.detail(task.id).usage.chargedMicros).toBe(0);
   });
 
+  it('settles an OpenRouter ID using native tenths from the cached list', async () => {
+    store.setSetting(MODEL_LISTS_SETTING, {
+      version: MODEL_LIST_CACHE_VERSION,
+      byProvider: {
+        openrouter: {
+          fetchedAt: new Date().toISOString(),
+          source: 'native',
+          models: [{ provider: 'openrouter', id: 'anthropic/claude-sonnet-4', source: 'native', inputTenths: 10, outputTenths: 20 }],
+        },
+      },
+    });
+    const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'openrouter', modelId: 'anthropic/claude-sonnet-4' }) as Worker;
+    replies.push(call('submit_report', report, { input: 500, output: 100 }));
+    const { task, run } = fixtureRun({ ...worker });
+    task.providerScopes = ['openrouter']; store.put('tasks', task);
+    run.snapshot.worker = worker; store.put('runs', run, { column: 'task_id', value: task.id });
+    await core.runner.run(task, run);
+    expect(requested).toEqual({ provider: 'openrouter', model: 'anthropic/claude-sonnet-4' });
+    expect(store.detail(task.id).usage.chargedMicros).toBe(700);
+    expect(store.detail(task.id).usage.uncertainCount).toBe(0);
+  });
+
+  it('does not reserve Orglet budget for a local Ollama run', async () => {
+    const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'ollama', modelId: 'llama3.2' }) as Worker;
+    replies.push(call('submit_report', report, { input: 500, output: 100 }));
+    const { task, run } = fixtureRun({ ...worker });
+    task.providerScopes = ['ollama']; store.put('tasks', task);
+    run.snapshot.worker = worker; store.put('runs', run, { column: 'task_id', value: task.id });
+    await core.runner.run(task, run);
+    expect(requested).toEqual({ provider: 'ollama', model: 'llama3.2' });
+    expect(store.detail(task.id).runs[0].snapshot.pricingVersion).toBe('ollama:llama3.2');
+    expect(store.detail(task.id).usage.chargedMicros).toBe(0);
+    expect(store.detail(task.id).usage.reservedMicros).toBe(0);
+    expect(store.detail(task.id).usage.uncertainCount).toBe(0);
+    expect(store.detail(task.id).task.status).toBe('completed');
+  });
+
   it('settles an xAI ID using native tenths from the cached list', async () => {
     store.setSetting(MODEL_LISTS_SETTING, {
       version: MODEL_LIST_CACHE_VERSION,
@@ -175,5 +212,8 @@ describe('resolveWorkerModel', () => {
     expect(resolveWorkerModel({ provider: 'claude-code' }).id).toBeUndefined();
     expect(resolveWorkerModel({ provider: 'claude-code', modelId: 'opus' }).id).toBe('opus');
     expect(resolveWorkerModel({ provider: 'openai', modelId: 'gpt-4o' }).rates).toBeUndefined();
+    expect(resolveWorkerModel({ provider: 'ollama' })).toEqual({ id: CATALOG_HINT_IDS.ollama, pricingVersion: 'ollama' });
+    expect(resolveWorkerModel({ provider: 'openrouter' }).id).toBe(CATALOG_HINT_IDS.openrouter);
+    expect(resolveWorkerModel({ provider: 'openrouter' }).rates?.pricingVersion).toBe(modelCatalog.openrouter.pricingVersion);
   });
 });

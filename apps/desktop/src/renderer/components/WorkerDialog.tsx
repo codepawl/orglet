@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AlignLeft, Smile, Cpu, ScrollText, Sparkles, UserRound, Wallet, SlidersHorizontal } from 'lucide-react';
-import type { Connections, Worker, Workspace } from '../../shared/contracts';
+import { isPaidApi, type Connections, type Worker, type Workspace } from '../../shared/contracts';
 import { CATALOG_HINT_IDS } from '../../shared/models';
 import { harnessNames, isHarness, type HarnessInfo } from '../../shared/harness';
 import { FieldLabel, MoneyInput } from './ui';
@@ -46,7 +46,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [invalid, setInvalid] = useState<InvalidField>();
   const [flash, setFlash] = useState(0);
   const ready = readiness(connections, harnesses);
-  const paid = provider !== 'demo' && !isHarness(provider);
+  const paid = isPaidApi(provider);
   const skill = workspace.skills.find(item => item.id === skillId);
   const clearError = () => { setError(''); setInvalid(undefined); };
   const fail = (at: Tab, message: string, field?: InvalidField) => {
@@ -83,6 +83,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         modelOption('openai', 'OpenAI', t('gợi ý {0}', [CATALOG_HINT_IDS.openai]), t('API trả phí'), ready.openai),
         modelOption('anthropic', 'Anthropic', t('gợi ý {0}', [CATALOG_HINT_IDS.anthropic]), t('API trả phí'), ready.anthropic),
         modelOption('xai', 'Grok', t('gợi ý {0}', [CATALOG_HINT_IDS.xai]), t('API trả phí'), ready.xai),
+        modelOption('openrouter', 'OpenRouter', t('gợi ý {0}', [CATALOG_HINT_IDS.openrouter]), t('API trả phí'), ready.openrouter),
+        modelOption('ollama', 'Ollama', t('gợi ý {0}', [CATALOG_HINT_IDS.ollama]), t('Local trên máy này'), ready.ollama),
         ...(['claude-code', 'codex', 'cursor'] as const).map(id => {
           const found = harnesses.find(item => item.id === id);
           const detail = !found || found.status === 'not_installed' ? t('chưa cài')
@@ -95,6 +97,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       ]} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} />}
       {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. {1} Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider], provider === 'codex' ? t('Codex nhận nội dung nguồn văn bản trong prompt và không có tool đọc tệp hay chạy lệnh.') : provider === 'cursor' ? t('Cursor Agent chạy ở chế độ ask với sandbox; chỉ đọc bản sao nguồn của task, không dùng --force.') : t('Claude Code chỉ đọc bản sao nguồn của task, không chạy lệnh.')])}</p>}
+      {provider === 'ollama' && <p className="muted">{t('Gọi Ollama trên máy này tại 127.0.0.1:11434. Cài Ollama và kéo model trước. Orglet không giữ ngân sách cho lần chạy local.')}</p>}
       {paid && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
     </>}
     {tab === 'instructions' && <>

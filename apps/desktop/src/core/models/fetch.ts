@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
-import type { ApiProvider } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, type ApiProvider } from '../../shared/contracts';
 import {
+  CATALOG_HINT_IDS,
   CustomModelId,
   hiddenOpenAIModel,
   MODEL_LIST_MAX,
@@ -18,6 +19,8 @@ export const MODEL_LIST_ENDPOINTS = {
   openai: 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com/v1',
   xai: 'https://api.x.ai/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+  ollama: 'http://127.0.0.1:11434',
 } as const;
 
 export const CLAUDE_CODE_ALIASES: ReadonlyArray<{ id: string; displayName: string }> = [
@@ -54,6 +57,9 @@ const missingHarness = (name: string) => `Chưa cài ${name} trên máy này. V�
 const signedOut = (name: string) => `Chưa đăng nhập ${name}. Vẫn có thể gõ ID model tùy chỉnh.`;
 
 export function catalogHint(provider: ModelListProvider): ModelEntry | undefined {
+  if (Object.hasOwn(CATALOG_HINT_IDS, provider)) {
+    return { provider, id: CATALOG_HINT_IDS[provider as keyof typeof CATALOG_HINT_IDS], source: 'catalog-hint' };
+  }
   if (!Object.hasOwn(modelCatalog, provider)) return undefined;
   const config = modelCatalog[provider as CatalogProvider];
   return { provider, id: config.model, source: 'catalog-hint' };
@@ -153,6 +159,72 @@ export function parseXaiLanguageModels(payload: unknown): ModelEntry[] {
       ...(aliases.length ? { aliases } : {}),
       ...(inputTenths !== undefined ? { inputTenths } : {}),
       ...(outputTenths !== undefined ? { outputTenths } : {}),
+    });
+    if (models.length >= MODEL_LIST_MAX) break;
+  }
+  return models;
+}
+
+function openrouterText(architecture: unknown): boolean {
+  if (!architecture || typeof architecture !== 'object') return true;
+  const rec = architecture as { output_modalities?: unknown; modality?: unknown };
+  if (Array.isArray(rec.output_modalities)) return rec.output_modalities.includes('text');
+  return typeof rec.modality !== 'string' || rec.modality.includes('text');
+}
+
+function openrouterTenths(price: unknown): number | undefined {
+  const n = typeof price === 'string' ? Number(price) : typeof price === 'number' ? price : NaN;
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  const tenths = Math.round(n * 10_000_000);
+  return Number.isInteger(tenths) && tenths > 0 && tenths <= 1_000_000 ? tenths : undefined;
+}
+
+export function parseOpenRouterModels(payload: unknown): ModelEntry[] {
+  const data = payload && typeof payload === 'object' ? (payload as { data?: unknown }).data : undefined;
+  if (!Array.isArray(data)) throw new Error(shapeError);
+  const models: ModelEntry[] = [];
+  const seen = new Set<string>();
+  for (const row of data) {
+    if (!row || typeof row !== 'object') continue;
+    const rec = row as { id?: unknown; name?: unknown; pricing?: unknown; architecture?: unknown };
+    if (!openrouterText(rec.architecture)) continue;
+    const id = pickId(rec.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const displayName = typeof rec.name === 'string' && rec.name.trim() ? rec.name.trim().slice(0, 200) : undefined;
+    const pricing = rec.pricing && typeof rec.pricing === 'object' ? rec.pricing as { prompt?: unknown; completion?: unknown } : undefined;
+    const inputTenths = pricing ? openrouterTenths(pricing.prompt) : undefined;
+    const outputTenths = pricing ? openrouterTenths(pricing.completion) : undefined;
+    models.push({
+      provider: 'openrouter',
+      id,
+      source: 'native',
+      ...(displayName && displayName !== id ? { displayName } : {}),
+      ...(inputTenths !== undefined ? { inputTenths } : {}),
+      ...(outputTenths !== undefined ? { outputTenths } : {}),
+    });
+    if (models.length >= MODEL_LIST_MAX) break;
+  }
+  return models;
+}
+
+export function parseOllamaTags(payload: unknown): ModelEntry[] {
+  const rows = payload && typeof payload === 'object' ? (payload as { models?: unknown }).models : undefined;
+  if (!Array.isArray(rows)) throw new Error(shapeError);
+  const models: ModelEntry[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const rec = row as { name?: unknown; model?: unknown };
+    const id = pickId(rec.name) ?? pickId(rec.model);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const displayName = id.endsWith(':latest') ? id.slice(0, -':latest'.length) : undefined;
+    models.push({
+      provider: 'ollama',
+      id,
+      source: 'native',
+      ...(displayName && displayName !== id ? { displayName } : {}),
     });
     if (models.length >= MODEL_LIST_MAX) break;
   }
@@ -271,7 +343,7 @@ async function readJson(url: string, headers: Record<string, string>, options: {
 }
 
 function apiName(provider: ApiProvider) {
-  return provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'Grok (xAI)';
+  return API_PROVIDER_NAMES[provider];
 }
 
 async function fetchOpenAI(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
@@ -311,6 +383,22 @@ async function fetchXai(options: ModelListFetchOptions): Promise<Pick<ModelListR
   return withCatalogHint('xai', parseXaiLanguageModels(payload), 'native');
 }
 
+async function fetchOpenRouter(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const key = await options.readKey('openrouter');
+  if (!key) return withCatalogHint('openrouter', [], 'native', missingKey(apiName('openrouter')));
+  const base = options.endpoints?.openrouter ?? MODEL_LIST_ENDPOINTS.openrouter;
+  const payload = await readJson(`${base}/models`, { Authorization: `Bearer ${key}` }, { fetch: options.fetch ?? fetch, timeoutMs: options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS });
+  return withCatalogHint('openrouter', parseOpenRouterModels(payload), 'native');
+}
+
+async function fetchOllama(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const key = await options.readKey('ollama');
+  if (!key) return withCatalogHint('ollama', [], 'native', missingKey(apiName('ollama')));
+  const base = options.endpoints?.ollama ?? MODEL_LIST_ENDPOINTS.ollama;
+  const payload = await readJson(`${base}/api/tags`, {}, { fetch: options.fetch ?? fetch, timeoutMs: options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS });
+  return withCatalogHint('ollama', parseOllamaTags(payload), 'native');
+}
+
 function harnessOf(list: HarnessInfo[], id: 'claude-code' | 'codex' | 'cursor') {
   return list.find(item => item.id === id);
 }
@@ -345,6 +433,8 @@ export async function fetchProviderList(provider: ModelListProvider, options: Mo
   if (provider === 'openai') return { fetchedAt, ...await fetchOpenAI(options) };
   if (provider === 'anthropic') return { fetchedAt, ...await fetchAnthropic(options) };
   if (provider === 'xai') return { fetchedAt, ...await fetchXai(options) };
+  if (provider === 'openrouter') return { fetchedAt, ...await fetchOpenRouter(options) };
+  if (provider === 'ollama') return { fetchedAt, ...await fetchOllama(options) };
   if (provider === 'claude-code') return { fetchedAt, ...withCatalogHint('claude-code', claudeCodeModels(), 'alias') };
   if (provider === 'codex') return { fetchedAt, ...await fetchCodex(options) };
   return { fetchedAt, ...await fetchCursor(options) };

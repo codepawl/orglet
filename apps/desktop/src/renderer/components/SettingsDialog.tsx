@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy } from 'lucide-react';
-import type { ApiProvider, Connections, ProviderScope, Workspace } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type ProviderScope, type Workspace } from '../../shared/contracts';
 import type { HarnessInfo } from '../../shared/harness';import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
@@ -30,7 +30,7 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
 ];
 // Section notes sit under the section title.
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
-  connections: 'Bật provider cần dùng rồi dán key hoặc chọn tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu.',
+  connections: 'Bật provider cần dùng rồi dán key hoặc chọn tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu. Ollama chỉ cần bật công tắc — không cần key.',
   harness: 'Chưa cài, đã thấy trên máy, và đã đăng nhập sẵn sàng chạy là ba trạng thái khác nhau. Lỗi đăng nhập hiện lệnh sửa; Orglet không chuyển sang Demo. Chọn harness ở mục Model khi thiết lập nhân viên.',
   usage: 'Chỉ tính request qua Orglet, không phải tổng hóa đơn API key. Harness trên máy dùng gói của chính nó nên không nằm trong các số này. Input cached được tính theo giá thường.',
 };
@@ -162,8 +162,9 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'connections' && <>
-              {(['openai', 'anthropic', 'xai'] as const).map(provider => {
-                const name = provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'Grok (xAI)';
+              {ApiProvider.options.map(provider => {
+                const name = API_PROVIDER_NAMES[provider];
+                const local = isLocalApi(provider);
                 const draft = keyDrafts[provider] ?? '';
                 const active = connections[provider] || !!editing[provider];
                 const showMask = !!connections[provider] && !draft && !replacing[provider];
@@ -171,11 +172,13 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 return <div key={provider} role="region" aria-label={t('Kết nối {0}', [name])} className={`setting-row setting-connection${active ? '' : ' inactive'}`}>
                   <ProviderMark provider={provider} />
                   <div className="setting-text">
-                    <span id={titleId} className="setting-title">{name} API</span>
-                    <span className="setting-description">{active
-                      ? (connections[provider] ? t('Đã lưu API key') : t('Nhập key để kích hoạt'))
-                      : t('Tắt · bật công tắc để nhập key')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); })}>{t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
-                    {active && <form className="setting-key-form" onSubmit={event => {
+                    <span id={titleId} className="setting-title">{local ? name : `${name} API`}</span>
+                    <span className="setting-description">{local
+                      ? (connections[provider] ? t('Đã bật Ollama tại 127.0.0.1:11434') : t('Tắt · bật công tắc nếu Ollama đang chạy trên máy này'))
+                      : active
+                        ? (connections[provider] ? t('Đã lưu API key') : t('Nhập key để kích hoạt'))
+                        : t('Tắt · bật công tắc để nhập key')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); })}>{local ? t('Tài liệu') : t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
+                    {active && !local && <form className="setting-key-form" onSubmit={event => {
                       event.preventDefault();
                       const key = draft.trim();
                       if (!key || key === SAVED_KEY_MASK) return;
@@ -203,6 +206,13 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                   </div>
                   <div className="setting-control">
                     <Switch checked={active} disabled={busy} labelledBy={titleId} onChange={on => {
+                      if (local) {
+                        void act(async () => {
+                          onConnections(on ? await orglet.connect('ollama') : await orglet.disconnect('ollama'));
+                          return on ? t('Đã bật Ollama.') : t('Đã ngắt {0}.', [name]);
+                        });
+                        return;
+                      }
                       if (on) {
                         setEditing(current => ({ ...current, [provider]: true }));
                         return;

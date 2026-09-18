@@ -16,16 +16,17 @@ Fetch each connection's model list from **that provider's own API or CLI**. Cach
 
 ## What Orglet does today
 
-A worker stores `provider` and optional `modelId` (`apps/desktop/src/shared/contracts.ts`). Absence of `modelId` means the catalog suggestion for that provider (or the CLI default for a harness). Verified prices for the three pinned IDs stay in `apps/desktop/src/core/adapters/catalog.ts`:
+A worker stores `provider` and optional `modelId` (`apps/desktop/src/shared/contracts.ts`). Absence of `modelId` means the catalog suggestion for that provider (or the CLI default for a harness). Verified prices for the pinned IDs stay in `apps/desktop/src/core/adapters/catalog.ts`:
 
 | Provider | Pinned ID | Price snapshot |
 |---|---|---|
 | OpenAI | `gpt-4.1-mini-2025-04-14` | $0.40 / $1.60 per MTok |
 | Anthropic | `claude-haiku-4-5-20251001` | $1.00 / $5.00 per MTok |
 | xAI | `grok-3-mini` | $0.30 / $0.50 per MTok |
-| Demo / Claude Code / Codex / Cursor | (none) | No Orglet reservation |
+| OpenRouter | `openai/gpt-4.1-mini` | $0.40 / $1.60 per MTok (catalog hint; native list tenths when cached) |
+| Demo / Claude Code / Codex / Cursor / Ollama | (none) | No Orglet reservation |
 
-The worker dialog labels those three IDs as suggestions in the picker (`WorkerDialog.tsx`, `workerModel.ts`). A saved `modelId` is frozen onto `run.snapshot.model`. Custom OpenAI/Anthropic IDs are not billed at mini/Haiku rates (unknown reservation until a later COD stores a verified price). xAI native tenths from the cached list are used when present. Harness runs pass `--model` / `-m` when `modelId` is set.
+The worker dialog labels those three IDs as suggestions in the picker (`WorkerDialog.tsx`, `workerModel.ts`). A saved `modelId` is frozen onto `run.snapshot.model`. Custom OpenAI/Anthropic IDs are not billed at mini/Haiku rates (unknown reservation until a later COD stores a verified price). xAI and OpenRouter native tenths from the cached list are used when present. Harness runs pass `--model` / `-m` when `modelId` is set. Ollama runs make no Orglet reservation.
 
 ## Per-provider source
 
@@ -36,6 +37,8 @@ Checked against official docs on 2026-09-18. Revalidate URLs before COD-31 lands
 | **OpenAI API** | Native `GET https://api.openai.com/v1/models` with the saved key (SDK `client.models.list()`). | Account-specific availability. Same key Orglet already stores. | **`shutdown_date`** (`YYYY-MM-DD` or null) on the model object. Treat non-null as deprecated + sunset. No separate `deprecated` boolean. |
 | **Anthropic API** | Native `GET https://api.anthropic.com/v1/models` (SDK `client.models.list()`, paginate `limit` up to 1000 until `has_more` is false). | Already the Messages API we call. Returns `id` + `display_name`. | **None.** `created_at`, capabilities, token limits only. Retirement dates live on the HTML deprecations page — **do not scrape it.** |
 | **xAI (Grok) API** | Native `GET https://api.x.ai/v1/language-models` with the saved key. | Chat/tool models plus **native prices**. Better than `/v1/models`, which mixes image-generation rows Orglet cannot run. | **None.** Retirement notices are HTML ([May 15 retirement](https://docs.x.ai/developers/migration/may-15-retirement)) — do not scrape. |
+| **OpenRouter API** | Native `GET https://openrouter.ai/api/v1/models` with the saved OpenRouter key. | That connection's own catalog and prices. Not used as a list for OpenAI/Anthropic/xAI workers. | **None.** Do not scrape HTML. |
+| **Ollama** | Native `GET http://127.0.0.1:11434/api/tags` after the Settings toggle. | Local tags already pulled on this machine. | **None.** |
 | **Claude Code** | No list command. Ship the documented `--model` **aliases** (`sonnet`, `opus`, `haiku`, `fable`) plus custom ID. | Official CLI has `--model` but no `claude model list` ([feature request](https://github.com/anthropics/claude-code/issues/12612)). `/model` is interactive. Anthropic Models API **rejects** Claude Code OAuth. | **None.** Aliases are not versions and have no sunset. |
 | **Codex** | Native `codex debug models` JSON on the detected executable (logged-in). Fall back to `codex debug models --bundled` if the remote catalog refresh fails. | Official CLI JSON. Do **not** start Codex app-server (`model/list`) — [capabilities.md](capabilities.md) already keeps app-server off. | No sunset date. Optional **`upgrade`** (replacement slug) and `visibility` if present. Map `upgrade` as `replacementId` for COD-30 copy, not as a date. |
 | **Cursor Agent** | Native `agent --list-models` (same as `agent models`) on the detected executable. Prefer the flag so older builds do not treat `models` as a prompt. | Official CLI. Account-specific. | **None.** Text rows `id - display name` only. |
@@ -49,13 +52,13 @@ Checked against official docs on 2026-09-18. Revalidate URLs before COD-31 lands
 
 Do not invent a chat allowlist that drops a new family. A typed ID is never rejected because it failed the display filter.
 
-xAI: keep rows whose `output_modalities` include `text`; drop image-generation-only. Anthropic's list is already Messages models.
+xAI: keep rows whose `output_modalities` include `text`; drop image-generation-only. OpenRouter: keep rows whose architecture output includes `text`. Anthropic's list is already Messages models.
 
 ### Aggregators considered and rejected
 
 | Aggregator | Why not |
 |---|---|
-| OpenRouter `/api/v1/models` | Different account and bill. Orglet already holds native keys. |
+| OpenRouter `/api/v1/models` **as a list for other connections** | Different account and bill. Native OpenAI/Anthropic/xAI keys already have their own lists. OpenRouter as a first-class connection uses this URL for that connection only. |
 | LiteLLM / any local proxy | Extra process Orglet does not ship or detect. |
 | [models.dev](https://models.dev) `api.json` | Community catalog, not this key's availability. `status: deprecated` has **no sunset date** (v2 only proposes one). OpenAI already returns `shutdown_date` natively. Not clearly better. |
 | Provider HTML (OpenAI deprecations, Anthropic deprecations, xAI migration pages) | Forbidden. Fragile, ToS-risky, and the epic says avoid scrape/heuristic. |
@@ -67,14 +70,14 @@ A later COD may add an optional community overlay **only** if a native list is s
 Normalize every source into one object. Unknown fields stay omitted, never invented.
 
 ```
-provider        openai | anthropic | xai | claude-code | codex | cursor
+provider        openai | anthropic | xai | openrouter | ollama | claude-code | codex | cursor
 id              exact slug sent to the API or `--model`
-displayName     optional (Anthropic, Codex, Cursor)
+displayName     optional (Anthropic, Codex, Cursor, OpenRouter, Ollama)
 aliases         optional (xAI, Claude Code)
 deprecated      true only when the native payload says so
 sunsetAt        ISO date only when native (`shutdown_date`)
 replacementId   optional (Codex `upgrade`)
-inputTenths     optional; only xAI native prices in v1
+inputTenths     optional; xAI and OpenRouter native prices
 outputTenths    optional; same
 source          native | alias | catalog-hint
 ```

@@ -1,9 +1,14 @@
-import type { Connections, ProviderScope } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, type Connections, type ProviderScope } from '../../shared/contracts';
 import { harnessReady, isHarness, type HarnessInfo } from '../../shared/harness';
 import { t } from '../i18n';
 
 export type Readiness = Record<ProviderScope, boolean>;
-const labels: Record<ProviderScope, string> = { openai: 'OpenAI', anthropic: 'Anthropic', xai: 'Grok (xAI)', 'claude-code': 'Claude Code trên máy này', codex: 'Codex trên máy này', cursor: 'Cursor Agent trên máy này' };
+const labels: Record<ProviderScope, string> = {
+  ...API_PROVIDER_NAMES,
+  'claude-code': 'Claude Code trên máy này',
+  codex: 'Codex trên máy này',
+  cursor: 'Cursor Agent trên máy này',
+};
 export const providerLabel = (provider: ProviderScope) => t(labels[provider]);
 
 /** API providers need a stored key; local harnesses need a signed-in, runnable install — detected-on-disk is not enough. */

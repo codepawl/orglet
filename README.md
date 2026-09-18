@@ -51,7 +51,8 @@ Workers can run through a local CLI, an API key, or Demo:
 | Claude Code on this computer | Claude Code installed **and signed in** | Your Claude plan |
 | Codex on this computer | Codex installed **and signed in** | Your ChatGPT plan |
 | Cursor Agent on this computer | Cursor Agent CLI installed **and signed in** | Your Cursor plan |
-| OpenAI, Anthropic or Grok (xAI) API | An API key saved in Settings | Pay per use, with limits you set |
+| OpenAI, Anthropic, Grok (xAI) or OpenRouter API | An API key saved in Settings | Pay per use, with limits you set |
+| Ollama on this computer | Ollama running locally | Local, no Orglet budget |
 | Demo | Nothing | Free, sample replies only |
 
 Each API or harness worker can use a model ID from **that provider's own list** (cached 24 hours in the local database) or a typed custom ID. Catalog names such as GPT-4.1 mini are suggestions, not a lock. If the list is empty or fails to load, you can still type an ID. When the cached list marks the selected (or suggested) model as deprecated, the picker shows a quiet chip; a sunset date appears only if that provider's API included one (OpenAI `shutdown_date`). Anthropic, xAI and harness lists have no native dates, so Orglet does not invent them. Details: [model-list-fetch.md](docs/model-list-fetch.md).

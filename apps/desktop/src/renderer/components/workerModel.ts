@@ -6,12 +6,16 @@ const suggestions: Partial<Record<Worker['provider'], string>> = {
   openai: 'GPT-4.1 mini',
   anthropic: 'Claude Haiku 4.5',
   xai: 'grok-3-mini',
+  openrouter: 'openai/gpt-4.1-mini',
+  ollama: 'llama3.2',
 };
 
 function providerName(provider: Worker['provider']) {
   if (provider === 'openai') return 'OpenAI';
   if (provider === 'anthropic') return 'Anthropic';
   if (provider === 'xai') return 'Grok';
+  if (provider === 'openrouter') return 'OpenRouter';
+  if (provider === 'ollama') return 'Ollama';
   if (isHarness(provider)) return harnessNames[provider];
   return provider;
 }
