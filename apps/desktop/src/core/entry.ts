@@ -5,6 +5,8 @@ import { CoreService } from './service';
 import { OpenAIAdapter } from './adapters/openai';
 import { AnthropicAdapter } from './adapters/anthropic';
 import { ApiProvider, Id, type Command } from '../shared/contracts';
+import { CATALOG_HINT_IDS } from '../shared/models';
+import { MODEL_LIST_ENDPOINTS } from './models/fetch';
 import { DatasetProfile, type ProfileExecutor } from '../shared/profiles';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
@@ -34,11 +36,16 @@ const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject
 });
 const store = new Store(join(process.argv[2], 'orglet.sqlite'));
 const core = new CoreService(store, () => port.postMessage({ type: 'changed' }), async (provider, model) => {
-  if (!['openai', 'anthropic', 'xai'].includes(provider)) throw new Error('Provider chưa được hỗ trợ.');
+  if (!ApiProvider.safeParse(provider).success) throw new Error('Provider chưa được hỗ trợ.');
   const key = await requestKey(provider);
   if (!key) throw new Error(`Chưa kết nối ${provider}. Mở Cài đặt để nhập API key.`);
   if (provider === 'anthropic') return new AnthropicAdapter(key, undefined, model);
   if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai', model });
+  if (provider === 'openrouter') return new OpenAIAdapter(key, {
+    baseURL: MODEL_LIST_ENDPOINTS.openrouter, provider: 'openrouter', model,
+    defaultHeaders: { 'HTTP-Referer': 'https://github.com/codepawl/orglet', 'X-Title': 'Orglet' },
+  });
+  if (provider === 'ollama') return new OpenAIAdapter(key, { baseURL: `${MODEL_LIST_ENDPOINTS.ollama}/v1`, model: model || CATALOG_HINT_IDS.ollama });
   return new OpenAIAdapter(key, { model });
 }, profile, undefined, undefined, undefined, {
   readKey: provider => requestKey(provider),

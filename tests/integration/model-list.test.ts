@@ -8,7 +8,7 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import { acceptCustomModelId, hiddenOpenAIModel, MODEL_LISTS_SETTING } from '../../apps/desktop/src/shared/models';
 import { canStoreModelListRow } from '../../apps/desktop/src/core/models/cache';
-import { catalogHint, parseCodexModels, parseCursorModels, parseOpenAIModels } from '../../apps/desktop/src/core/models/fetch';
+import { catalogHint, parseCodexModels, parseCursorModels, parseOllamaTags, parseOpenAIModels, parseOpenRouterModels } from '../../apps/desktop/src/core/models/fetch';
 import { modelCatalog } from '../../apps/desktop/src/core/adapters/catalog';
 import { harnessNames, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { ModelListResult } from '../../apps/desktop/src/shared/models';
@@ -123,6 +123,52 @@ describe('model list fetch adapters', () => {
       expect(pages.some(url => url.includes('after_id=claude-opus-4-6'))).toBe(true);
       expect(list.models[0].deprecated).toBeUndefined();
     } finally { server.close(); }
+  });
+
+  it('keeps OpenRouter text models with native tenths and drops image-only rows', async () => {
+    const server = await listen((request, response) => {
+      expect(request.headers.authorization).toBe('Bearer sk-or-test');
+      expect(request.url).toBe('/v1/models');
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({
+        data: [
+          { id: 'openai/gpt-4.1-mini', name: 'OpenAI: GPT-4.1 Mini', pricing: { prompt: '0.0000004', completion: '0.0000016' }, architecture: { output_modalities: ['text'] } },
+          { id: 'black-forest-labs/flux', name: 'FLUX', architecture: { output_modalities: ['image'] } },
+        ],
+      }));
+    });
+    try {
+      const core = coreFor(store(), { readKey: async () => 'sk-or-test', endpoints: { openrouter: server.url } });
+      const list = await core.command('modelList', { provider: 'openrouter' }) as ModelListResult;
+      expect(list.models).toEqual([expect.objectContaining({
+        id: 'openai/gpt-4.1-mini', displayName: 'OpenAI: GPT-4.1 Mini', inputTenths: 4, outputTenths: 16, source: 'native',
+      })]);
+    } finally { server.close(); }
+  });
+
+  it('lists local Ollama tags without a billed key', async () => {
+    const server = await listen((request, response) => {
+      expect(request.url).toBe('/api/tags');
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ models: [{ name: 'llama3.2:latest' }, { name: 'qwen2.5:7b' }] }));
+    });
+    try {
+      const core = coreFor(store(), { readKey: async () => 'ollama-local', endpoints: { ollama: server.url.replace(/\/v1$/, '') } });
+      const list = await core.command('modelList', { provider: 'ollama' }) as ModelListResult;
+      expect(list.models).toEqual([
+        expect.objectContaining({ id: 'llama3.2:latest', displayName: 'llama3.2', source: 'native' }),
+        expect.objectContaining({ id: 'qwen2.5:7b', source: 'native' }),
+      ]);
+    } finally { server.close(); }
+  });
+
+  it('parses OpenRouter and Ollama payloads without inventing sunset dates', () => {
+    expect(parseOpenRouterModels({ data: [{ id: 'meta-llama/llama-3.3-70b-instruct', pricing: { prompt: '0' } }] })).toEqual([
+      expect.objectContaining({ id: 'meta-llama/llama-3.3-70b-instruct', inputTenths: undefined }),
+    ]);
+    expect(parseOllamaTags({ models: [{ name: 'llama3.2' }] })).toEqual([
+      expect.objectContaining({ id: 'llama3.2', source: 'native' }),
+    ]);
   });
 
   it('keeps xAI text models with native tenths and drops image-only rows', async () => {

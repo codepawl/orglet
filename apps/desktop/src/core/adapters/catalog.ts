@@ -6,6 +6,8 @@ export const modelCatalog = {
   anthropic: { model: CATALOG_HINT_IDS.anthropic, inputTenths: 10, outputTenths: 50, pricingVersion: `${CATALOG_HINT_IDS.anthropic}:1.00:5.00` },
   // ponytail: grok-3-mini keeps the cheap default; revalidate against https://docs.x.ai/developers/pricing before release.
   xai: { model: CATALOG_HINT_IDS.xai, inputTenths: 3, outputTenths: 5, pricingVersion: `${CATALOG_HINT_IDS.xai}:0.30:0.50` },
+  // OpenRouter pass-through of the OpenAI mini snapshot; native list tenths win when cached. Revalidate at https://openrouter.ai/models.
+  openrouter: { model: CATALOG_HINT_IDS.openrouter, inputTenths: 4, outputTenths: 16, pricingVersion: `${CATALOG_HINT_IDS.openrouter}:0.40:1.60` },
 } as const;
 export type CatalogProvider = keyof typeof modelCatalog;
 export function modelConfig(provider: string) {

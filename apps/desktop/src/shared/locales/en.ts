@@ -6,7 +6,7 @@ import type { Dictionary } from '../i18n';
  */
 export const en: Dictionary = {
   // Labels that are already English but pass through t(), so a missing-key check can see them.
-  'Anthropic': 'Anthropic', 'Checklist': 'Checklist', 'Dataset': 'Dataset', 'OpenAI': 'OpenAI',
+  'Anthropic': 'Anthropic', 'Checklist': 'Checklist', 'Dataset': 'Dataset', 'Ollama': 'Ollama', 'OpenAI': 'OpenAI', 'OpenRouter': 'OpenRouter',
   '\nChưa có kết quả kiểm tra run-log đủ bằng chứng cho mục này.': '\nNo run-log check result provides enough evidence for this item yet.',
   '\nChưa có kết quả đối chiếu hai dataset (cột, số dòng, tập ID không trùng/thiếu) cho mục này.': '\nNo two-dataset comparison (columns, row counts, ID sets without duplicates or gaps) exists for this item yet.',
   ' (phân việc)': ' (routing)',
@@ -700,7 +700,15 @@ export const en: Dictionary = {
   'API key {0}': '{0} API key',
   'API key không hợp lệ.': 'Invalid API key.',
   'Đã lưu API key {0}.': 'Saved {0} API key.',
-  'Bật provider cần dùng rồi dán key hoặc chọn tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu.': 'Turn on each provider you need, then paste a key or choose a .txt file. Keys are encrypted on this computer and are not included in backups.',
+  'Bật provider cần dùng rồi dán key hoặc chọn tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu. Ollama chỉ cần bật công tắc — không cần key.': 'Turn on each provider you need, then paste a key or choose a .txt file. Keys are encrypted on this computer and are not included in backups. Ollama only needs the switch — no key.',
+  'Chạy trên máy này · không qua ngân sách Orglet.': 'Runs on this computer · not billed through Orglet.',
+  'Đã bật Ollama.': 'Ollama is connected.',
+  'Đã bật Ollama tại 127.0.0.1:11434': 'Ollama is on at 127.0.0.1:11434',
+  'Gọi Ollama trên máy này tại 127.0.0.1:11434. Cài Ollama và kéo model trước. Orglet không giữ ngân sách cho lần chạy local.': 'This calls Ollama on this computer at 127.0.0.1:11434. Install Ollama and pull a model first. Orglet does not reserve a budget for local runs.',
+  'Local trên máy này': 'Local on this computer',
+  'Request model không hoàn tất. Kiểm tra Ollama đang chạy trên máy này trước khi thử lại.': 'The model request did not finish. Check that Ollama is running on this computer before retrying.',
+  'Tài liệu': 'Docs',
+  'Tắt · bật công tắc nếu Ollama đang chạy trên máy này': 'Off · turn the switch on if Ollama is running on this computer',
   'Nhập key để kích hoạt': 'Enter a key to activate',
   'Tắt · bật công tắc để nhập key': 'Off · turn the switch on to enter a key',
   'Chưa tìm thấy Claude Code, Codex hoặc Cursor Agent trên máy này.': 'Claude Code, Codex or Cursor Agent was not found on this computer.',

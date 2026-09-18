@@ -12,14 +12,23 @@ import { Language } from './i18n';
 import { CustomModelId, type ModelListResult } from './models';
 
 export const Id = z.string().uuid();
-export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'claude-code', 'codex', 'cursor']);
+export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'openrouter', 'ollama', 'claude-code', 'codex', 'cursor']);
 export type ProviderId = z.infer<typeof ProviderId>;
 /** Providers that receive task content and therefore need per-task consent. */
 export const ProviderScope = ProviderId.exclude(['demo']);
 export type ProviderScope = z.infer<typeof ProviderScope>;
-/** API providers that store an encrypted key (not local harnesses). */
-export const ApiProvider = z.enum(['openai', 'anthropic', 'xai']);
+/** API providers that store an encrypted connection (not local harnesses). Ollama stores a local sentinel, not a billed key. */
+export const ApiProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'ollama']);
 export type ApiProvider = z.infer<typeof ApiProvider>;
+export const API_PROVIDER_NAMES: Record<ApiProvider, string> = {
+  openai: 'OpenAI', anthropic: 'Anthropic', xai: 'Grok (xAI)', openrouter: 'OpenRouter', ollama: 'Ollama',
+};
+export function isLocalApi(provider: string): provider is 'ollama' {
+  return provider === 'ollama';
+}
+export function isPaidApi(provider: string): boolean {
+  return provider === 'openai' || provider === 'anthropic' || provider === 'xai' || provider === 'openrouter';
+}
 export const WorkerInput = z.object({
   id: Id.optional(), name: z.string().trim().min(1).max(80),
   instructions: z.string().trim().min(1).max(16000),
@@ -120,7 +129,8 @@ export type Artifact = { id: string; runId: string; report: Report; hash: string
 export type Usage = { chargedMicros: number; reservedMicros: number; uncertainCount: number; inputTokens: number; outputTokens: number };
 export type TaskDetail = { task: Task; runs: Run[]; events: Activity[]; artifacts: Artifact[]; profiles: ProfileRecord[]; preflights: PreflightRecord[]; sources: Source[]; usage: Usage };
 export type Workspace = { copyFormat: FormatPreference; downloadFormat: FormatPreference; archivedWorkers: (Worker & { archivedAt: string })[]; archivedTeams: (Team & { archivedAt: string })[]; language: Language; autoTitles: boolean; confirmOpenTask: boolean; archiveRetentionDays: ArchiveRetention; avatarColors: string[]; knowledge: Knowledge[]; workers: Worker[]; teams: Team[]; skills: Skill[]; tasks: Task[]; routines: Routine[]; usage: Usage; theme: 'system' | 'light' | 'dark'; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; currency: CurrencyState; sqliteVersion: string };
-export type Connections = { openai: boolean; anthropic: boolean; xai: boolean };
+export type Connections = { openai: boolean; anthropic: boolean; xai: boolean; openrouter: boolean; ollama: boolean };
+export const emptyConnections = (): Connections => ({ openai: false, anthropic: false, xai: false, openrouter: false, ollama: false });
 
 export const commands = {
   workspace: z.object({}),

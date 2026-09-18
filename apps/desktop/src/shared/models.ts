@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Connections that can produce a native or alias model list. Demo never fetches. */
-export const ModelListProvider = z.enum(['openai', 'anthropic', 'xai', 'claude-code', 'codex', 'cursor']);
+export const ModelListProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'ollama', 'claude-code', 'codex', 'cursor']);
 export type ModelListProvider = z.infer<typeof ModelListProvider>;
 export const ModelSource = z.enum(['native', 'alias', 'catalog-hint']);
 export type ModelSource = z.infer<typeof ModelSource>;
@@ -37,6 +37,8 @@ export const ModelListCache = z.object({
     openai: ModelListRow.optional(),
     anthropic: ModelListRow.optional(),
     xai: ModelListRow.optional(),
+    openrouter: ModelListRow.optional(),
+    ollama: ModelListRow.optional(),
     'claude-code': ModelListRow.optional(),
     codex: ModelListRow.optional(),
     cursor: ModelListRow.optional(),
@@ -59,6 +61,8 @@ export const CATALOG_HINT_IDS = {
   openai: 'gpt-4.1-mini-2025-04-14',
   anthropic: 'claude-haiku-4-5-20251001',
   xai: 'grok-3-mini',
+  openrouter: 'openai/gpt-4.1-mini',
+  ollama: 'llama3.2',
 } as const;
 
 export const MODEL_LIST_CACHE_VERSION = 1;

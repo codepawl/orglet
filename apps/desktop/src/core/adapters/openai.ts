@@ -9,10 +9,14 @@ export interface ModelAdapter {
 export class OpenAIAdapter implements ModelAdapter {
   private client: OpenAI;
   private model: string;
-  constructor(key: string, options: { baseURL?: string; provider?: CatalogProvider; model?: string } = {}) {
+  constructor(key: string, options: { baseURL?: string; provider?: CatalogProvider; model?: string; defaultHeaders?: Record<string, string> } = {}) {
     const provider = options.provider ?? 'openai';
     this.model = options.model || modelCatalog[provider].model;
-    this.client = new OpenAI({ apiKey: key, maxRetries: 0, timeout: 90_000, ...(options.baseURL ? { baseURL: options.baseURL } : {}) });
+    this.client = new OpenAI({
+      apiKey: key, maxRetries: 0, timeout: 90_000,
+      ...(options.baseURL ? { baseURL: options.baseURL } : {}),
+      ...(options.defaultHeaders ? { defaultHeaders: options.defaultHeaders } : {}),
+    });
   }
   async request(messages: ChatCompletionMessageParam[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply> {
     const stream = await this.client.chat.completions.create({

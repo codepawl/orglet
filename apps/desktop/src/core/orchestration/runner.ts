@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import { Report, Finding, FindingCategory, Id, RunInput, SourceLocation, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, Finding, FindingCategory, Id, isLocalApi, Report, RunInput, SourceLocation, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
 import { BudgetLedger, BudgetError, cost } from '../budgets/ledger';
 import { Sources, fingerprint } from '../tools/sources';
@@ -33,7 +33,7 @@ import { mentionedPeople } from '../../shared/mentions';
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = { detect(): Promise<HarnessInfo[]>; execute: HarnessExecutor };
 
-const providerNames: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', xai: 'Grok (xAI)', ...harnessNames };
+const providerNames: Record<string, string> = { ...API_PROVIDER_NAMES, ...harnessNames };
 
 /** The error shown for a failed run; provider refusals over plan, credit or rate limits say so plainly. */
 function failureMessage(run: Run, error: Error) {
@@ -164,7 +164,7 @@ export class Runner {
       if (run.snapshot.worker.provider !== 'demo') {
         if (!run.snapshot.model && resolved.id) {
           run = { ...run, snapshot: { ...run.snapshot, model: resolved.id, pricingVersion: resolved.pricingVersion } };
-        } else if (run.snapshot.model && !run.snapshot.worker.modelId && !isHarness(run.snapshot.worker.provider)
+        } else if (run.snapshot.model && !run.snapshot.worker.modelId && !isHarness(run.snapshot.worker.provider) && !isLocalApi(run.snapshot.worker.provider)
           && (run.snapshot.model !== resolved.id || run.snapshot.pricingVersion !== resolved.pricingVersion)) {
           throw new Error('Model hoặc bảng giá đã đổi. Tạo lần chạy mới để dùng cấu hình hiện tại.');
         }
@@ -279,22 +279,32 @@ export class Runner {
           const release = await this.slots.acquire(provider, signal);
           try {
             if (control.paused || !this.canDispatch(task)) throw new Paused();
-            const teamBudget = task.teamSnapshot ? { id: task.teamSnapshot.id, limit: this.store.get<Team>('teams', task.teamSnapshot.id).monthlyBudgetMicros } : undefined;
-            const usage = this.store.usage(task.id);
-            const hold = resolved.rates
-              ? cost(upperInput, 4096, resolved.rates)
-              : Math.max(1000, task.budgetMicros - usage.chargedMicros - usage.reservedMicros);
-            if (!resolved.rates) this.event(run.id, 'Model tùy chỉnh chưa có giá đã xác minh trong Orglet. Chi phí được giữ chỗ chưa rõ.');
-            const reservation = ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, reservationId => this.checkpoints.requested(checkpoint, reservationId));
-            this.event(run.id, `Đang gọi model · bước ${step + 1}/6`);
-            try {
-              reply = await model.request(messages, tools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation);
-              if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
-              else ledger.unknown(reservation);
-              this.checkpoints.received(checkpoint, reply);
-            } catch {
-              ledger.unknown(reservation);
-              throw new Error('Request model không hoàn tất. Chi phí chưa rõ vẫn được giữ chỗ; kiểm tra kết nối hoặc quota trước khi thử lại.');
+            if (isLocalApi(provider)) {
+              this.event(run.id, `Đang gọi model · bước ${step + 1}/6`);
+              try {
+                reply = await model.request(messages, tools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+                this.checkpoints.received(checkpoint, reply);
+              } catch {
+                throw new Error('Request model không hoàn tất. Kiểm tra Ollama đang chạy trên máy này trước khi thử lại.');
+              }
+            } else {
+              const teamBudget = task.teamSnapshot ? { id: task.teamSnapshot.id, limit: this.store.get<Team>('teams', task.teamSnapshot.id).monthlyBudgetMicros } : undefined;
+              const usage = this.store.usage(task.id);
+              const hold = resolved.rates
+                ? cost(upperInput, 4096, resolved.rates)
+                : Math.max(1000, task.budgetMicros - usage.chargedMicros - usage.reservedMicros);
+              if (!resolved.rates) this.event(run.id, 'Model tùy chỉnh chưa có giá đã xác minh trong Orglet. Chi phí được giữ chỗ chưa rõ.');
+              const reservation = ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, reservationId => this.checkpoints.requested(checkpoint, reservationId));
+              this.event(run.id, `Đang gọi model · bước ${step + 1}/6`);
+              try {
+                reply = await model.request(messages, tools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation);
+                if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
+                else ledger.unknown(reservation);
+                this.checkpoints.received(checkpoint, reply);
+              } catch {
+                ledger.unknown(reservation);
+                throw new Error('Request model không hoàn tất. Chi phí chưa rõ vẫn được giữ chỗ; kiểm tra kết nối hoặc quota trước khi thử lại.');
+              }
             }
           } finally { release(); }
         }

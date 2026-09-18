@@ -2,7 +2,7 @@
 
 This guide covers how Orglet runs work, connects providers and harnesses, and what each limit and check does. For what Orglet is and who it is for, see the [README](../README.md) and [product direction](product.md).
 
-This build supports individual workers, sequential or parallel teams, native OpenAI, Anthropic and xAI (Grok) connections, local Claude Code / Codex / Cursor Agent harnesses, local dataset checks, routines, checkpoint/resume, backup/restore, team templates, Agent Skills import/review/export and reviewed reusable knowledge. The full MVP in `plans/orglet_mvp_plan_vi.md` is still in progress. Metric recomputation, live provider acceptance (script ready, needs a key path), installer validation on a clean machine and benchmarks remain unfinished. macOS/Linux packaging is out of scope for 0.2.0.
+This build supports individual workers, sequential or parallel teams, native OpenAI, Anthropic, xAI (Grok) and OpenRouter connections, local Ollama, local Claude Code / Codex / Cursor Agent harnesses, local dataset checks, routines, checkpoint/resume, backup/restore, team templates, Agent Skills import/review/export and reviewed reusable knowledge. The full MVP in `plans/orglet_mvp_plan_vi.md` is still in progress. Metric recomputation, live provider acceptance (script ready, needs a key path), installer validation on a clean machine and benchmarks remain unfinished. macOS/Linux packaging is out of scope for 0.2.0.
 
 ## Run
 
@@ -19,13 +19,13 @@ To try the interface without a model connection, keep the Researcher worker on *
 
 ## Connect a provider
 
-1. In **Cài đặt → Kết nối API**, turn on the provider you need. Paste the key and choose **Lưu key**, or choose **Từ tệp**. Turn the switch off to disconnect and hide the fields.
+1. In **Cài đặt → Kết nối API**, turn on the provider you need. Paste the key and choose **Lưu key**, or choose **Từ tệp**. Turn the switch off to disconnect and hide the fields. Ollama has no key: turn the switch on if Ollama is running at `127.0.0.1:11434`.
 2. The main process encrypts the key with Electron `safeStorage` (DPAPI on Windows, Keychain on macOS). The renderer never receives the saved key back (typed drafts are cleared after a successful save). The original `.txt`, if you used one, remains where you saved it; remove it yourself when it is no longer needed.
-3. Edit Researcher, choose a connection (OpenAI, Anthropic, Grok, or a local harness), then pick a model from the fetched list or type a custom ID, and save. Catalog names such as GPT-4.1 mini are suggestions only.
+3. Edit Researcher, choose a connection (OpenAI, Anthropic, Grok, OpenRouter, Ollama, or a local harness), then pick a model from the fetched list or type a custom ID, and save. Catalog names such as GPT-4.1 mini are suggestions only.
 4. Select UTF-8 text files, describe the task, set a task budget and allow the selected content to be sent to the providers listed for that task.
 5. Send the task. Open **Chi tiết** for activity or source references. Accepting a report only updates its status in Orglet.
 
-The worker dialog lists each connection and, for every non-Demo worker, a model ID field: pick from that provider's cached list or type a custom ID. Catalog IDs in `apps/desktop/src/core/adapters/catalog.ts` (`gpt-4.1-mini-2025-04-14`, `claude-haiku-4-5-20251001`, `grok-3-mini`) are suggestions, not a lock. Core fetches each provider's own model list (`modelList`), caches it for 24 hours in SQLite `settings.modelLists`, and always accepts a typed custom ID if the fetch fails. Leaving the ID blank keeps the catalog suggestion (or the CLI default for a harness). If the cached list marks that selected or suggested ID as deprecated, the picker shows a quiet chip; the sunset date is included only when the native payload had `shutdown_date`. A saved key does not establish that the provider account has credits. No subscription credentials are imported. See [model-list-fetch.md](model-list-fetch.md).
+The worker dialog lists each connection and, for every non-Demo worker, a model ID field: pick from that provider's cached list or type a custom ID. Catalog IDs in `apps/desktop/src/core/adapters/catalog.ts` (`gpt-4.1-mini-2025-04-14`, `claude-haiku-4-5-20251001`, `grok-3-mini`, `openai/gpt-4.1-mini`) and the Ollama suggestion `llama3.2` are suggestions, not a lock. Core fetches each provider's own model list (`modelList`), caches it for 24 hours in SQLite `settings.modelLists`, and always accepts a typed custom ID if the fetch fails. Leaving the ID blank keeps the catalog suggestion (or the CLI default for a harness). If the cached list marks that selected or suggested ID as deprecated, the picker shows a quiet chip; the sunset date is included only when the native payload had `shutdown_date`. A saved key does not establish that the provider account has credits. No subscription credentials are imported. See [model-list-fetch.md](model-list-fetch.md).
 
 ### Live acceptance (manual)
 

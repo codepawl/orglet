@@ -15,6 +15,8 @@ const marks: Record<ProviderId | Extract<HarnessCatalogId, 'cursor'>, { name: st
   openai: { name: 'OpenAI API', path: paths.openai },
   anthropic: { name: 'Anthropic API', path: paths.anthropic },
   xai: { name: 'Grok (xAI) API', path: paths.x },
+  openrouter: { name: 'OpenRouter API', letter: 'R' },
+  ollama: { name: 'Ollama', letter: 'O' },
   'claude-code': { name: 'Claude Code', path: paths.claude, color: '#D97757' },
   codex: { name: 'Codex', path: paths.openai },
   cursor: { name: 'Cursor Agent', letter: 'C' },
