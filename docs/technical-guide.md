@@ -13,7 +13,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-`pnpm dev` opens the Electron app. `pnpm dev:web` only serves the renderer and intentionally has no desktop data bridge.
+`pnpm dev` opens the Electron app. The Vite renderer binds `127.0.0.1`; Electron loads that loopback address even when Forge still injects `localhost`. `pnpm dev:web` only serves the renderer and intentionally has no desktop data bridge.
 
 To try the interface without a model connection, keep the Researcher worker on **Demo**. Demo reports are labeled and do not analyze files or call an API.
 

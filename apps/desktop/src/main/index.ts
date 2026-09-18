@@ -11,6 +11,7 @@ import { markdownToPlain } from '../shared/plainText';
 import { Credentials } from './credentials';
 import { readBoundedText, writeAtomicText } from './files';
 import { readSkillDirectory, writeSkillDirectory } from './skill-files';
+import { isViteDevRequest, preferLoopbackIpv4 } from './vite-dev-url';
 import squirrelStartup from 'electron-squirrel-startup';
 import { executeProfile, cancelProfile, stopProfiles } from './profiler';
 import type { BackupSummary } from '../core/storage/backup';
@@ -71,10 +72,19 @@ async function start() {
   });
   language = await request('workspace', {}).then(workspace => (workspace as { language?: Language }).language ?? DEFAULT_LANGUAGE).catch(() => DEFAULT_LANGUAGE);
   const rendererRoot = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
-  const url = MAIN_WINDOW_VITE_DEV_SERVER_URL || pathToFileURL(join(rendererRoot, 'index.html')).href;
+  const url = MAIN_WINDOW_VITE_DEV_SERVER_URL ? preferLoopbackIpv4(MAIN_WINDOW_VITE_DEV_SERVER_URL) : pathToFileURL(join(rendererRoot, 'index.html')).href;
+  const expected = new URL(url);
+  const devServer = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL) : undefined;
   window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', event => event.preventDefault());
+  window.webContents.on('will-navigate', event => {
+    try {
+      const target = new URL(event.url);
+      if (expected.protocol === 'file:') { if (target.href === expected.href) return; }
+      else if (devServer ? isViteDevRequest(target, devServer) : target.origin === expected.origin) return;
+    } catch { /* deny */ }
+    event.preventDefault();
+  });
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     try {
@@ -83,20 +93,17 @@ async function start() {
         const within = relative(rendererRoot, fileURLToPath(target));
         callback({ cancel: within.startsWith('..') || isAbsolute(within) }); return;
       }
-      if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-        const dev = new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-        callback({ cancel: target.host !== dev.host || !['http:', 'ws:'].includes(target.protocol) }); return;
-      }
+      if (devServer) { callback({ cancel: !isViteDevRequest(target, devServer) }); return; }
       callback({ cancel: !['data:', 'devtools:'].includes(target.protocol) });
     } catch { callback({ cancel: true }); }
   });
-  const expected = new URL(url);
   const authorized = (event: Electron.IpcMainInvokeEvent) => {
     // The dev server URL has no trailing slash while the loaded page does, so compare origins; file: pages
     // share the opaque "null" origin, so the packaged build also pins the exact renderer file path.
     const frame = event.senderFrame ? new URL(event.senderFrame.url) : undefined;
-    const sameDocument = frame && frame.origin === expected.origin && (expected.protocol !== 'file:' || frame.pathname === expected.pathname);
-    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !sameDocument) throw new Error('IPC sender không được phép.');
+    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !frame) throw new Error('IPC sender không được phép.');
+    const sameOrigin = devServer ? isViteDevRequest(frame, devServer) : frame.origin === expected.origin;
+    if (!sameOrigin || (expected.protocol === 'file:' && frame.pathname !== expected.pathname)) throw new Error('IPC sender không được phép.');
   };
   function handle(channel: string, fn: (arg: unknown) => Promise<unknown>) {
     ipcMain.handle(channel, async (event, arg): Promise<Reply<unknown>> => {
@@ -208,7 +215,7 @@ async function start() {
     await writeAtomicText(result.filePath, text); return true;
   });
   handle('orglet:copy', async raw => { clipboard.writeText((await artifactText(raw)).text); });
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+  if (devServer) {
     // Forge can start Electron before Vite finishes the first renderer build, which leaves a blank window.
     for (let attempt = 0; attempt < 60; attempt++) {
       try { if ((await fetch(url)).ok) break; } catch { /* dev server not listening yet */ }
@@ -216,7 +223,11 @@ async function start() {
     }
     window.webContents.on('did-fail-load', (_event, _code, _description, _url, isMainFrame) => { if (isMainFrame) setTimeout(() => { if (!window.isDestroyed()) void window.loadURL(url); }, 500); });
   }
-  await window.loadURL(url);
+  try { await window.loadURL(url); }
+  catch (error) {
+    // Chromium reports ERR_ABORTED when a loopback alias is cancelled; did-fail-load retries the same URL.
+    if (!devServer || !/ERR_ABORTED|-3/.test(error instanceof Error ? error.message : '')) throw error;
+  }
 }
 if (squirrelStartup || !app.requestSingleInstanceLock()) app.quit();
 else {
