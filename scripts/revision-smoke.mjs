@@ -26,6 +26,9 @@ try {
   await page.locator('button[aria-label="Đính kèm tệp"]:not([disabled])').waitFor();
   const before = await page.evaluate(id => window.orglet.call('task', { id }), id);
   assert.equal(before.artifacts.length, 4);
+  assert.equal(before.runs.filter(run => run.stage === 'plan').length, 1);
+  assert.equal(before.runs.filter(run => run.stage === 'member').length, 3);
+  assert.equal(before.runs.filter(run => run.stage === 'synthesis').length, 1);
   assert.equal(before.task.status, 'waiting_input');
   await page.getByText('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.', { exact: true }).waitFor();
   await page.locator('.report-file').last().click();
@@ -54,8 +57,12 @@ try {
   assert.equal(after.task.currentInput.sourceIds.length, 1); assert.equal(after.task.sourceIds.length, 2);
   assert.equal(after.preflights.length, 2);
   for (const artifact of before.artifacts) assert.deepEqual(after.artifacts.find(row => row.id === artifact.id), artifact);
-  assert.equal(after.runs.filter(run => run.snapshot.inputRevision === 1).length, 4);
-  for (const run of after.runs.filter(run => run.snapshot.inputRevision === 1)) assert.deepEqual(run.snapshot.input.sourceIds, after.task.currentInput.sourceIds);
+  const revised = after.runs.filter(run => run.snapshot.inputRevision === 1);
+  assert.equal(revised.length, 5);
+  assert.equal(revised.filter(run => run.stage === 'plan').length, 1);
+  assert.equal(revised.filter(run => run.stage === 'member').length, 3);
+  assert.equal(revised.filter(run => run.stage === 'synthesis').length, 1);
+  for (const run of revised) assert.deepEqual(run.snapshot.input.sourceIds, after.task.currentInput.sourceIds);
   // Both messages stay in one thread; only the latest report can be accepted.
   await page.getByText('Review supplemented evidence from UI', { exact: true }).waitFor();
   assert.equal(await page.locator('.report-file', { hasText: 'Báo cáo mẫu' }).count(), 2);

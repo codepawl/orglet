@@ -115,10 +115,20 @@ try {
   const teamTask = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks[0];
   const teamDetail = await page.evaluate(id => window.orglet.call('task', { id }), teamTask.id);
   assert.equal(teamDetail.task.status, 'completed'); assert.equal(teamDetail.artifacts.length, 3);
-  assert.equal(teamDetail.runs.filter(run => run.stage === 'plan').length, 1);
+  const plan = teamDetail.runs.find(run => run.stage === 'plan');
+  assert.equal(plan?.status, 'completed'); assert.equal(plan.snapshot.plan?.assignments.length, 2);
+  assert.equal(teamDetail.artifacts.some(artifact => artifact.runId === plan.id), false);
+  assert.equal(teamDetail.runs.filter(run => run.stage === 'member').length, 2);
   assert.equal(teamDetail.runs.filter(run => run.stage === 'synthesis').length, 1);
+  // Transcript is the synthesis only. Member jobs stay in Chi tiết; the plan job has no artifact.
+  assert.equal(await page.locator('.assistant-message .chat-reply, .assistant-message .report').count(), 1);
+  await page.getByRole('button', { name: 'Sao chép', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Chi tiết', exact: true }).click();
-  await page.locator('details').first().locator('summary').click();
+  await page.getByRole('heading', { name: /\(phân việc\)/ }).waitFor();
+  await page.getByRole('heading', { name: /\(tổng hợp\)/ }).waitFor();
+  await page.getByText('Source researcher: Desktop smoke: team synthesis', { exact: true }).waitFor();
+  // First <details> is Context đã nạp on the plan job. Export lives on member/synthesis artifacts.
+  await page.getByText(/xem báo cáo/).first().click();
   await page.getByRole('button', { name: 'Xuất báo cáo này', exact: true }).waitFor();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: /^Công việc mới/ }).click();
