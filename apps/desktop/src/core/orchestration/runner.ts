@@ -1,6 +1,9 @@
+import { snapshotCapabilities } from '../../shared/tool-policy';
+import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
+import { assertToolCall, toolDefinitions, toolsFor, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswerSchema, HarnessAnswer, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
 import { z } from 'zod';
-import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import { API_PROVIDER_NAMES, Finding, FindingCategory, Id, isLocalApi, Report, RunInput, SourceLocation, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { API_PROVIDER_NAMES, isLocalApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
 import { BudgetLedger, BudgetError, cost } from '../budgets/ledger';
 import { Sources, fingerprint } from '../tools/sources';
@@ -12,9 +15,7 @@ import type { PreflightRecord } from '../../shared/preflight';
 import { Checkpoints, type Checkpoint } from '../storage/checkpoints';
 import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
-import { Review } from '../../shared/review';
 import { applyReviewPolicy, validateReview } from '../review';
-import { KnowledgeProposal } from '../../shared/knowledge';
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, type Colleague } from '../context/compiler';
 import { applyThreadManifest, compactThread, fitThread, threadMessages } from '../context/thread';
@@ -65,32 +66,6 @@ function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId
 }
 
 class Paused extends Error {}
-const Recommendation = z.string().min(1).max(2000).nullable();
-const CheckerIds = z.array(Id).max(20);
-const Proposals = z.array(KnowledgeProposal).max(3);
-const Locations = z.array(SourceLocation).max(20);
-const ModelFindingSchema = Finding.omit({ provenance: true }).extend({ category: FindingCategory, recommendation: Recommendation, checkerIds: CheckerIds, locations: Locations });
-const ModelReportSchema = Report.omit({ format: true }).extend({ review: Review, findings: z.array(ModelFindingSchema).max(50), limitations: z.array(z.string().min(1).max(2000)).max(30), knowledgeProposals: Proposals });
-// Old persisted replies predate these fields. Defaults do not fabricate a recommendation or evidence.
-const ModelFinding = ModelFindingSchema.extend({ category: FindingCategory.default('other'), recommendation: Recommendation.default(null), checkerIds: CheckerIds.default([]), locations: Locations.default([]) });
-const ModelReport = ModelReportSchema.extend({ review: Review.nullable().optional(), findings: z.array(ModelFinding).max(50), knowledgeProposals: Proposals.default([]) });
-
-/**
- * A finding has to cite a source that was read, which `finalize` enforces. With nothing attached, every finding
- * the model writes fails that gate and the whole turn is lost, answer included: a user who simply wrote the word
- * "báo cáo" in a chat with no files got a partial failure and no reply (user, 2026-09-20). The model cannot see
- * the gate, so the run says the precondition out loud instead.
- */
-const NO_SOURCES_INSTRUCTION = 'No sources are attached to this chat. A finding must cite a source you read, so no finding can be supported here. Answer as a normal chat message; produce a report only if the user clearly wants a written document, and then with an empty findings array.';
-const SUBMIT_REPORT_DESCRIPTION = 'Finish with an evidence-backed report. Classify findings, provide a supported recommendation or null, and cite profile IDs returned by your checker calls or the provided preflight. Use no checker IDs for text-only findings. locations give 1-based inclusive line ranges inside text sources you read with read_source and cite; use an empty array when a finding has no specific lines. Never claim unperformed checks. Use recommendation ready_for_human_review only when review.checks is non-empty, every check passes, there are no conflicts and no critical findings; otherwise choose revision_required, rerun_required or insufficient_evidence. Finding identities and authorship are assigned by the app. knowledgeProposals may suggest at most three reusable, general lessons (no task-specific facts or secrets); they are stored for user review and never apply automatically. Use an empty array when nothing qualifies.';
-const SUBMIT_PLAN_DESCRIPTION = 'Assign this user message to one or more listed team members. Use only those member ids. You may assign a subset. Each assignment brief is that worker\'s job for this turn. Do not invent workers or missing results.';
-const REPLY_DESCRIPTION = 'Send your answer to the user as a normal chat message (Markdown allowed). Use this for questions, discussion and ordinary requests. Mention the sources you relied on by name. title: when the latest message has nameChat true, a short name for this chat (2 to 6 words, in the user\'s language, no quotes or trailing period); otherwise null. knowledgeProposals may suggest at most three reusable, general lessons for user review; use an empty array when nothing qualifies.';
-const ChatTitle = z.string().trim().min(1).max(80).nullable();
-const ChatReplySchema = z.object({ message: z.string().min(1).max(16000), title: ChatTitle, knowledgeProposals: Proposals }).strict();
-const ChatReply = ChatReplySchema.extend({ title: ChatTitle.default(null), knowledgeProposals: Proposals.default([]) });
-// Local harnesses return one JSON answer: the message, plus a report only when one was asked for.
-const HarnessAnswerSchema = z.object({ message: z.string().min(1).max(16000), title: ChatTitle, report: ModelReportSchema.nullable() }).strict();
-const HarnessAnswer = z.object({ message: z.string().min(1).max(16000), title: ChatTitle.default(null), report: z.unknown().nullable() });
 /** A chat reply stored in the report shape, so history, export and search keep working. */
 const chatReport = (message: string): Report => ({ format: 'chat', title: message.trim().split('\n')[0].replace(/^#+\s*/, '').slice(0, 120) || 'Trả lời', summary: message.trim(), findings: [], limitations: [] });
 /**
@@ -107,18 +82,6 @@ export function taskTitle(suggested: string | null, report: Report, brief: strin
 }
 /** Team syntheses with required checks must produce the structured report those checks are recorded in. */
 const needsReport = (run: Run) => run.stage === 'synthesis' && !!run.snapshot.team?.reviewPolicy?.requiredChecks.length;
-const allTools: ChatCompletionTool[] = [
-  { type: 'function', function: { name: 'audit_run_log', description: 'Audit one selected structured run-log dataset with solution/run/split/metric/status/score columns. Direction must follow the declared metric. Summarizes repeat scores and failures, compares public/private ranks when comparable. Never executes code, recomputes the metric or automatically passes stability.', strict: true, parameters: z.toJSONSchema(RunAuditArgs, { target: 'draft-7' }) } },
-  { type: 'function', function: { name: 'read_skill_resource', description: 'Read a UTF-8 text resource from references/ or assets/ in the reviewed skill package. Never executes scripts or grants source permissions.', strict: true, parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } } },
-  { type: 'function', function: { name: 'profile_dataset', description: 'Run trusted full-coverage schema/row/null/distinct checks on 1–2 selected CSV, JSONL or Parquet sources. Optional idColumn checks duplicates and ID alignment/overlap. No arbitrary SQL, scripts or external access.', strict: true, parameters: z.toJSONSchema(ProfileArgs, { target: 'draft-7' }) } },
-  { type: 'function', function: { name: 'read_source', description: 'Read an explicitly allowed UTF-8 text source by ID. No path or code execution.', strict: true, parameters: { type: 'object', properties: { sourceId: { type: 'string' } }, required: ['sourceId'], additionalProperties: false } } },
-  { type: 'function', function: { name: 'submit_report', description: SUBMIT_REPORT_DESCRIPTION, strict: true, parameters: z.toJSONSchema(ModelReportSchema, { target: 'draft-7' }) } },
-  { type: 'function', function: { name: 'reply', description: REPLY_DESCRIPTION, strict: true, parameters: z.toJSONSchema(ChatReplySchema, { target: 'draft-7' }) } },
-];
-const planTool: ChatCompletionTool = { type: 'function', function: { name: 'submit_plan', description: SUBMIT_PLAN_DESCRIPTION, strict: true, parameters: z.toJSONSchema(TeamPlan, { target: 'draft-7' }) } };
-const toolsFor = (run: Run) => run.stage === 'plan' ? [planTool] : needsReport(run) ? allTools.filter(tool => tool.type === 'function' && tool.function.name !== 'reply') : allTools;
-const ReadArgs = z.object({ sourceId: z.string().uuid() }).strict();
-
 export class Runner {
   private active = new Map<string, { taskId: string; controller: AbortController; paused: boolean }>();
   private get checkpoints() { return new Checkpoints(this.store); }
@@ -179,7 +142,7 @@ export class Runner {
     try {
       const input = RunInput.parse(run.snapshot.input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources });
       if (input.sourceIds.some(id => !task.sourceIds.includes(id))) throw new Error('Snapshot tham chiếu nguồn ngoài task.');
-      run = { ...run, snapshot: { ...run.snapshot, input } };
+      run = { ...run, snapshot: { ...run.snapshot, input, toolCapabilities: run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider, task.toolCapabilities) } };
       task = { ...task, ...input };
       assertSkillReady(run.snapshot.skill, this.store);
       const resolved = resolveWorkerModel(run.snapshot.worker, readModelListCache(this.store));
@@ -238,7 +201,7 @@ export class Runner {
         return;
       }
       if (!task.consent || !(task.providerScopes ?? ['openai']).includes(run.snapshot.worker.provider)) throw new Error('Task chưa có quyền gửi dữ liệu đến provider này. Tạo task mới và xác nhận provider đã chọn.');
-      const tools = toolsFor(run);
+      const tools = toolsFor(run, task);
       const resume = this.checkpoints.get(run.id);
       const assemble = (layer: ReturnType<typeof compactThread>) => {
         const next: ChatCompletionMessageParam[] = [{ role: 'system', content: compiled.system }];
@@ -291,6 +254,7 @@ export class Runner {
         if (control.paused || !this.canDispatch(task)) throw new Paused();
         // Cached content is still subject to live permission revocation before every dispatch.
         for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Quyền nguồn đã bị thu hồi; dừng gửi context.');
+        for (const capability of run.snapshot.toolCapabilities ?? []) assertCapability(run, this.store.get<Task>('tasks', task.id), capability);
         // UTF-8 byte count bounds byte-fallback tokens; extra allowance covers chat framing/schema overhead.
         const upperInput = Buffer.byteLength(JSON.stringify({ messages, tools }), 'utf8') + 8192;
         if (upperInput > 200_000) throw new Error('Context quá lớn cho chế độ giới hạn chi phí.');
@@ -334,6 +298,7 @@ export class Runner {
         signal.throwIfAborted();
         if (reply.calls.length !== 1) throw new Error('Model không trả về đúng một tool call hợp lệ.');
         const call = reply.calls[0];
+        assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
         messages.push({ role: 'assistant', tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
         if (call.name === 'reply') {
           if (needsReport(run)) throw new Error('Hội có checklist bắt buộc cần báo cáo đầy đủ, không phải tin nhắn.');
@@ -352,7 +317,9 @@ export class Runner {
           const audit = call.name === 'audit_run_log' ? RunAuditArgs.parse(JSON.parse(call.arguments)) : undefined;
           const args = audit ? { sourceIds: [audit.sourceId], idColumn: null } : ProfileArgs.parse(JSON.parse(call.arguments));
           const profileId = id();
-          const result = await this.sources.profile(args.sourceIds, task.sourceIds, args.idColumn, signal, { id: profileId, taskId: task.id, runId: run.id }, audit ? { direction: audit.direction } : undefined);
+          const result = await executeReadTool({ signal, timeoutMs: toolDefinitions[call.name].timeoutMs,
+            authorize: () => assertCapability(run, this.store.get<Task>('tasks', task.id), 'dataset.check'),
+            execute: toolSignal => this.sources.profile(args.sourceIds, task.sourceIds, args.idColumn, toolSignal, { id: profileId, taskId: task.id, runId: run.id }, audit ? { direction: audit.direction } : undefined) });
           for (const sourceId of args.sourceIds) readIds.add(sourceId);
           this.event(run.id, `Đã kiểm tra ${audit ? 'run-log' : 'dataset'}: ${args.sourceIds.map(sourceId => this.store.get<Source>('sources', sourceId).name).join(', ')} · toàn bộ dữ liệu trong giới hạn checker.`);
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ profileId, result }) });
@@ -360,8 +327,10 @@ export class Runner {
           continue;
         }
         if (call.name === 'read_skill_resource') {
-          const args = z.object({ path: z.string().max(240) }).strict().parse(JSON.parse(call.arguments));
-          const result = skillResource(run.snapshot.skill, args.path, this.store);
+          const args = SkillResourceArgs.parse(JSON.parse(call.arguments));
+          const result = await executeReadTool({ signal, timeoutMs: toolDefinitions.read_skill_resource.timeoutMs,
+            authorize: () => assertCapability(run, this.store.get<Task>('tasks', task.id), 'skill.read'),
+            execute: () => skillResource(run.snapshot.skill, args.path, this.store) });
           this.event(run.id, `Đã đọc tài nguyên skill: ${args.path}`);
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
           checkpoint = { id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] }; this.checkpoints.committed(checkpoint);
@@ -369,7 +338,9 @@ export class Runner {
         }
         if (call.name !== 'read_source') throw new Error('Tool không được policy cho phép.');
         const { sourceId } = ReadArgs.parse(JSON.parse(call.arguments));
-        const content = await this.sources.read(sourceId, task.sourceIds);
+        const content = await executeReadTool({ signal, timeoutMs: toolDefinitions.read_source.timeoutMs,
+          authorize: () => assertCapability(run, this.store.get<Task>('tasks', task.id), 'source.read'),
+          execute: () => this.sources.read(sourceId, task.sourceIds) });
         signal.throwIfAborted();
         readIds.add(sourceId);
         this.event(run.id, `Đã đọc ${this.store.get<Source>('sources', sourceId).name}`);
@@ -434,8 +405,11 @@ export class Runner {
       const inline: { sourceId: string; name: string; content: string }[] = [];
       let inlineBytes = 0;
       for (const [index, source] of scope.manifest.entries()) {
+        if (!hasCapability(run, this.store.get<Task>('tasks', task.id), 'source.read')) continue;
         const file = `sources/${String(index + 1).padStart(2, '0')}-${source.name.replace(/[^\p{L}\p{N}._-]+/gu, '_').slice(-120)}`;
-        const bytes = await this.sources.readVerified(source.id, task.sourceIds);
+        const bytes = await executeReadTool({ signal, timeoutMs: toolDefinitions.read_source.timeoutMs,
+          authorize: () => assertCapability(run, this.store.get<Task>('tasks', task.id), 'source.read'),
+          execute: () => this.sources.readVerified(source.id, task.sourceIds) });
         await writeFile(join(directory, file), bytes, { flag: 'wx' });
         files.push({ sourceId: source.id, name: source.name, file, format: source.format ?? 'text' });
         // Codex has no usable file tool here, so it gets the same text a native read_source call would return.
@@ -445,6 +419,7 @@ export class Runner {
       }
       // Package paths were validated at import (no traversal); only text resources the native tool would serve.
       for (const resource of run.snapshot.skill.package?.files.filter(item => /^(references|assets)\//.test(item.path)) ?? []) {
+        if (!hasCapability(run, this.store.get<Task>('tasks', task.id), 'skill.read')) continue;
         await mkdir(dirname(join(directory, 'skill', resource.path)), { recursive: true });
         await writeFile(join(directory, 'skill', resource.path), Buffer.from(resource.base64, 'base64'), { flag: 'wx' });
       }
@@ -458,6 +433,7 @@ export class Runner {
       });
       let result: Awaited<ReturnType<HarnessRuntime['execute']>>;
       try {
+        for (const capability of run.snapshot.toolCapabilities ?? []) assertCapability(run, this.store.get<Task>('tasks', task.id), capability);
         result = await this.harness.execute({
           harness: provider,
           executable: tool.executable,
@@ -473,6 +449,7 @@ export class Runner {
         progress.close();
         this.recordSteps(run.id, progress.lastProgress);
       }
+      for (const capability of run.snapshot.toolCapabilities ?? []) assertCapability(run, this.store.get<Task>('tasks', task.id), capability);
       if (result.notice) this.event(run.id, result.notice);
       signal.throwIfAborted();
       this.event(run.id, result.costUsd === null ? `${tool.name} đã trả lời; không báo chi phí.` : `${tool.name} đã trả lời; harness ước tính $${result.costUsd.toFixed(4)} theo gói hoặc tài khoản của nó, không trừ vào ngân sách Orglet.`);

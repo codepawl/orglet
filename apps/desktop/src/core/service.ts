@@ -1,3 +1,4 @@
+import { snapshotCapabilities } from '../shared/tool-policy';
 import type { Knowledge } from '../shared/knowledge';
 import { commands, type ApiProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
@@ -188,6 +189,24 @@ export class CoreService {
         if (this.runner.isActive(task.id) || this.teams.isActive(task.id)) throw new Error('Task đang chạy.');
         if (task.status === 'completed') throw new Error('Task đã hoàn tất. Tạo task mới để chạy lại.');
         this.start(task); return;
+      }
+      case 'setToolCapabilities': {
+        const input = commands.setToolCapabilities.parse(args);
+        const task = this.liveTask(input.taskId);
+        const workers = task.teamSnapshot
+          ? [...new Set([...task.teamSnapshot.memberIds, task.teamSnapshot.synthesizerId])]
+          : task.assignees === 'all' ? this.store.all<Worker>('workers').map(worker => worker.id)
+          : task.assignees ?? [task.workerId];
+        for (const workerId of workers) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, input.capabilities);
+        const reduced = this.store.detail(task.id).runs.some(run =>
+          (run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider)).some(capability => !input.capabilities.includes(capability)));
+        this.store.update('tasks', { ...task, toolCapabilities: input.capabilities });
+        if (reduced) {
+          this.teams.cancel(task.id);
+          this.runner.cancel(task.id);
+        }
+        this.notify();
+        return;
       }
       case 'revoke': {
         const source = this.store.get<Source>('sources', (args as { id: string }).id);
@@ -572,6 +591,8 @@ export class CoreService {
   }
   private createTask(input: TaskInput, routine?: Routine): string {
     const task = this.prepareTask(input);
+    const workerIds = task.teamSnapshot ? [...task.teamSnapshot.memberIds, task.teamSnapshot.synthesizerId] : task.assignees === 'all' ? this.store.all<Worker>('workers').map(worker => worker.id) : task.assignees ?? [task.workerId];
+    for (const workerId of workerIds) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, task.toolCapabilities);
     this.policy.assertStart(task.teamId);
     if (routine) task.routineId = routine.id;
     this.store.transaction(() => {
@@ -622,7 +643,7 @@ export class CoreService {
     if (group) { void this.teams.chat(task, group); return; }
     const worker = this.store.get<Worker>('workers', task.workerId);
     const skill = this.store.get<Skill>('skills', worker.skillId);
-    const run: Run = { id: id(), taskId: task.id, status: 'queued', snapshot: { worker, skill, inputRevision: task.inputRevision ?? 0, input: task.currentInput ?? { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };
+    const run: Run = { id: id(), taskId: task.id, status: 'queued', snapshot: { toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, inputRevision: task.inputRevision ?? 0, input: task.currentInput ?? { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };
     this.store.put('runs', run, { column: 'task_id', value: task.id });
     // Runner records terminal failures itself; never launch an unobserved provider promise.
     void this.runner.run(task, run).catch(() => {

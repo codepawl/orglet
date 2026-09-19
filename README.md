@@ -112,3 +112,5 @@ Orglet is free software under the [GNU Affero General Public License v3.0](LICEN
 For a commercial license without those terms, contact legal@codepawl.com.
 
 Copyright (C) 2026 Nguyen Xuan An (CodePawl).
+
+Tool access is checked by core against both the run's frozen permissions and the task's current permissions. Reducing permissions cancels active work; restored backups do not restore tool grants. See [tool permissions](docs/agent-tools.md).

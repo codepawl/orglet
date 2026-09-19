@@ -1,3 +1,4 @@
+import { snapshotCapabilities } from '../../shared/tool-policy';
 import type { Artifact, Run, Skill, Task, Team, Worker } from '../../shared/contracts';
 import { MISSING_PLAN_ERROR, UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
@@ -117,7 +118,7 @@ export class TeamRunner {
         if (runs.some(run => run.status === 'completed' && detail.artifacts.some(artifact => artifact.runId === run.id))) { answered++; continue; }
         let run = resume ? runs.findLast(item => ['paused', 'interrupted', 'waiting_budget', 'queued'].includes(item.status)) : undefined;
         if (!run) {
-          run = { id: id(), taskId: task.id, stage: 'group', status: 'queued', snapshot: { worker, skill: this.store.get<Skill>('skills', worker.skillId), inputRevision: revision, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };
+          run = { id: id(), taskId: task.id, stage: 'group', status: 'queued', snapshot: { toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill: this.store.get<Skill>('skills', worker.skillId), inputRevision: revision, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };
           this.store.put('runs', run, { column: 'task_id', value: task.id });
         }
         await this.runner.run(task, run, { keepTaskOpen: true });
@@ -134,7 +135,7 @@ export class TeamRunner {
   private createRun(task: Task, team: Team, workerId: string, stage: 'plan' | 'member' | 'synthesis', upstream: Artifact[]) {
     const worker = this.store.get<Worker>('workers', workerId);
     const skill = this.store.get<Skill>('skills', worker.skillId);
-    const run: Run = { id: id(), taskId: task.id, stage, status: 'queued', snapshot: { worker, skill, team, inputRevision: task.inputRevision ?? 0, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources }, upstreamArtifactIds: upstream.map(a => a.id) }, startedAt: now(), error: null };
+    const run: Run = { id: id(), taskId: task.id, stage, status: 'queued', snapshot: { toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, team, inputRevision: task.inputRevision ?? 0, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources }, upstreamArtifactIds: upstream.map(a => a.id) }, startedAt: now(), error: null };
     this.store.put('runs', run, { column: 'task_id', value: task.id });
     this.store.event(run.id, stage === 'plan' ? 'Đang phân việc.' : stage === 'synthesis' ? `Đang tổng hợp ${upstream.length} kết quả đã lưu.` : `Bắt đầu role ${worker.name}.`);
     return run;
