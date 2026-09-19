@@ -24,6 +24,7 @@ Two things are true of the runner rather than of Orglet, so they are fixed in th
 
 - **No screen.** The job installs `xvfb` and runs the smoke through `xvfb-run`.
 - **No unprivileged user namespaces.** Ubuntu 24.04 restricts them through AppArmor, and Electron's sandbox needs them, so the job sets `kernel.apparmor_restrict_unprivileged_userns=0`. Never weaken the sandbox in the app to work around a CI host.
+- **No keyring.** API keys go through Electron's `safeStorage`, which encrypts through libsecret and needs a running, unlocked keyring; without one the smoke never sees the key saved. The job starts a throwaway `gnome-keyring` under `dbus-run-session` and names `XDG_CURRENT_DESKTOP` so Electron picks libsecret.
 
 ## Running it on a desktop Linux
 

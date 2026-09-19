@@ -34,12 +34,24 @@ jobs:
           path: out/make/zip/linux/**/*.zip
           if-no-files-found: error
           retention-days: 14
-      # The runner has no screen, and Ubuntu 24.04 blocks the unprivileged user namespaces
-      # Electron's sandbox needs. Both are runner facts, so neither is worked around in the app.
+      # Three things the runner lacks and a desktop has: a screen, the unprivileged user
+      # namespaces Electron's sandbox needs, and a keyring for API keys. All three are runner
+      # facts, so none of them is worked around in the app.
       - name: Let Electron start on a headless runner
         run: |
           sudo apt-get update
-          sudo apt-get install --yes xvfb
+          sudo apt-get install --yes xvfb gnome-keyring dbus-x11
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # Electron's safeStorage encrypts API keys through libsecret, which needs a running,
+      # unlocked keyring. Without one the smoke never sees "API key saved". The empty password
+      # unlocks a throwaway keyring that exists only for this job.
       - name: Smoke the app
-        run: xvfb-run --auto-servernum pnpm test:desktop
+        env:
+          # Electron picks its password store from the desktop environment. Naming one keeps it
+          # on libsecret, which is the keyring started on the next line.
+          XDG_CURRENT_DESKTOP: GNOME
+        run: |
+          dbus-run-session -- bash -c '
+            echo "" | gnome-keyring-daemon --unlock --components=secrets
+            xvfb-run --auto-servernum pnpm test:desktop
+          '
