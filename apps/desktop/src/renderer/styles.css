@@ -645,6 +645,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .brand .orglet-mark::before { width:5px; height:5px; border-width:1.6px; }
 /* Required fields: a small red asterisk after the label. */
 .field-label.required::after { content:"*" / ""; color:var(--error); margin-left:-4px; font-weight:600; }
+/* The same mark on anything else that must be chosen, a checkbox included (user, 2026-09-19). */
+.checkbox-text.required::after { content:"*" / ""; color:var(--error); margin-left:3px; font-weight:600; }
 /* Breadcrumb in a dialog title: back arrow, parent link, current page. */
 .breadcrumb { display:inline-flex; align-items:center; gap:6px; min-width:0; margin-left:-10px; }
 .breadcrumb-link { border:0; background:transparent; padding:2px 4px; border-radius:6px; color:var(--muted); font:inherit; font-weight:500; }

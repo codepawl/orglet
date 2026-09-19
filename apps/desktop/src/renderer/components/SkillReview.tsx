@@ -54,7 +54,7 @@ export function SkillReview({ skill, done }: { skill: Skill; done: () => void })
       {file && (file.text !== null ? <textarea aria-label={t('Nội dung {0}', [file.path])} readOnly rows={14} value={file.text} /> : <p>{t('Tệp nhị phân: giữ nguyên khi xuất, không gửi cho model.')}</p>)}
       <details><summary>{t('Metadata và hash')}</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(review.metadata.metadata ?? {}, null, 2)}{'\n'}SHA-256: {review.hash}</pre></details>
       {skill.package?.reviewedHash === review.hash ? <p role="status">{t('Đã review trên máy này.')}</p> : <>
-        <Checkbox checked={accepted} onChange={e => setAccepted(e.target.checked)} disabled={review.blockers.length > 0}>{t('Tôi đã xem nội dung và đồng ý dùng gói này làm hướng dẫn cho nhân viên.')}</Checkbox>
+        <Checkbox required checked={accepted} onChange={e => setAccepted(e.target.checked)} disabled={review.blockers.length > 0}>{t('Tôi đã xem nội dung và đồng ý dùng gói này làm hướng dẫn cho nhân viên.')}</Checkbox>
         <Button variant="primary" disabled={busy || !accepted || review.blockers.length > 0} onClick={async () => {
           setBusy(true); setError('');
           try { await orglet.call('reviewSkill', { id: skill.id, hash: review.hash }); done(); }
