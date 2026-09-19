@@ -84,7 +84,7 @@ try {
   await page.getByRole('button', { name: 'Tùy chọn nhóm Research Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
   await page.getByRole('tab', { name: 'Giới hạn & ca', exact: true }).click();
   await page.getByLabel('Số công việc chạy đồng thời', { exact: true }).fill('1');
-  await page.getByLabel('Giới hạn khung giờ làm việc', { exact: true }).check();
+  await page.getByRole('switch', { name: 'Giới hạn khung giờ làm việc', exact: true }).click();
   await page.getByLabel('Timezone của ca', { exact: true }).fill('UTC');
   await page.getByLabel('Bắt đầu ca', { exact: true }).fill('09:00'); await page.getByLabel('Kết thúc ca', { exact: true }).fill('17:00');
   await page.getByRole('button', { name: 'Lưu nhóm', exact: true }).click();

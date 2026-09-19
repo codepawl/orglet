@@ -9,7 +9,7 @@ import { Select } from './Select';
 import { t } from '../i18n';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
-import { Checkbox } from './Checkbox';
+import { SwitchField } from './Switch';
 import { StatusMark } from './StatusMark';
 
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
@@ -136,7 +136,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
     <section className="routine-group" aria-labelledby="routine-group-limits">
       <h4 id="routine-group-limits">{t('Giới hạn & quyền')}</h4>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} required /></label>
-      <Checkbox checked={enabled} onChange={event => setEnabled(event.target.checked)}>{t('Bật lịch')}</Checkbox>
+      <SwitchField checked={enabled} onChange={setEnabled}>{t('Bật lịch')}</SwitchField>
       {/* Where the data goes is worth saying; it just is not worth asking about twice, since saving is the
           permission (user, 2026-09-19). It stays as a plain line rather than a tick. */}
       {enabled && <p className="muted">{t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo')])}</p>}
