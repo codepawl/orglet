@@ -7,7 +7,7 @@ import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
 import { WorkerDialog } from './components/WorkerDialog';
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog';
-import { TaskThread, statusLabel } from './components/TaskThread';
+import { TaskThread } from './components/TaskThread';
 import { SourcePanel, type SourceTarget } from './components/SourcePanel';
 import { TeamDialog } from './components/TeamEditor';
 import { TaskDialog } from './components/TaskDialog';
@@ -22,22 +22,23 @@ import { Composer, FollowUpComposer } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { Starters } from './components/Starters';
+import { DetailsPanel } from './components/DetailsPanel';
 import { suggestStarters } from '../shared/starters';
 import { ProviderMark } from './components/ProviderMark';
-import { ShowMore, SidebarTreeRow, useReorder, statusMarkLabel } from './components/SidebarTree';
+import { SidebarTreeRow, useReorder } from './components/SidebarTree';
 import { SearchDialog } from './components/SearchDialog';
-import { StatusMark, tasksStatusMark, rollupStatusMarks, type StatusMarkState } from './components/StatusMark';
+import { tasksStatusMark, rollupStatusMarks, type StatusMarkState } from './components/StatusMark';
 import { taskResultSeen } from '../shared/task-seen';
 import { RowMenu } from './components/RowMenu';
 import { Select } from './components/Select';
 import { setDisplayCurrency, formatMoney } from './components/money';
 import { Toaster, toast } from './components/toast';
-import { ContextManifestView, KnowledgeEditor, KnowledgeLibrary } from './components/KnowledgeLibrary';
+import { KnowledgeEditor, KnowledgeLibrary } from './components/KnowledgeLibrary';
 import type { Knowledge } from '../shared/knowledge';
 import type { HarnessInfo } from '../shared/harness';
 import { readiness, settingsTabFor, setupHint } from './components/providers';
 import { workerModelLabel } from './components/workerModel';
-import { t } from './i18n';import { currentLocale, setLanguage, tMessage, useLanguage } from './i18n';
+import { t, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
@@ -361,6 +362,10 @@ export function App() {
   const catchUpNotice = pendingCatchUp.length > 0 && dismissedCatchUpNotice !== catchUpNoticeKey && panel !== 'routines';
   const singleCatchUp = pendingCatchUp.length === 1 ? pendingCatchUp[0] : undefined;
   const roster = team ? teamRoster(team, workspace.workers) : [];
+  // The details panel is about the chat you are in: a selected task carries its own team or worker, otherwise
+  // it is whichever chat is open, so a team can be read before anything has been sent (COD-68).
+  const detailsTeam = detailTeam ?? team;
+  const detailsWorker = detailsTeam ? undefined : detail ? workspace.workers.find(item => item.id === detail.task.workerId) : worker;
   // Openers for the empty chat, read from this workspace rather than a fixed list (COD-48).
   const chatTasks = workspace.tasks.filter(task => team ? task.teamId === team.id : !task.teamId && task.workerId === workerId);
   const starters = suggestStarters({ worker, team, members: roster, skills: workspace.skills, tasks: chatTasks, hasSources: sources.length > 0 });
@@ -412,7 +417,7 @@ export function App() {
         </div>
         <div className="topbar-actions">
           {selected && detail && openTaskPaid && <span className="task-cost" role="status" title={detail.usage.reservedMicros > 0 ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.reservedMicros)]) : t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}</span>}
-          {selected && <Button onClick={() => setPanel('activity')}><SlidersHorizontal size={17} />{t('Chi tiết')}</Button>}
+          {(selected || team || worker) && <Button onClick={() => setPanel('activity')}><SlidersHorizontal size={17} />{t('Chi tiết')}</Button>}
           {selected && <RowMenu className="thread-menu" label={t('Tùy chọn cuộc trò chuyện')} items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingTask(selected); setPanel('task'); } }, detail?.task.archivedAt ? { label: t('Khôi phục'), icon: ArchiveRestore, onSelect: () => archiveTask(selected, false) } : { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveTask(selected, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteTask(selected), confirm: { question: t('Xóa cuộc trò chuyện này? Không thể hoàn tác.'), label: t('Xóa') } }]} />}
         </div>
       </header>
@@ -436,19 +441,8 @@ export function App() {
       </div> : null}
       <footer className="main-footer">{t('Orglet không đảm bảo câu trả lời luôn chính xác. Hãy kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
     </main>
-    {detailsOpen && detail && <aside className="details-pane" aria-label={t('Chi tiết')}>
-      <div className="details-head"><h2>{t('Chi tiết')}</h2><Button size="icon" aria-label={t('Đóng panel')} onClick={close}><X size={18} /></Button></div>
-      <div className="details-body">
-        <div className="form">
-          {detailTeam && <section className="details-roster"><h3>{t('Thành viên')}</h3>
-            <ShowMore items={teamRoster(detailTeam, workspace.workers)} empty={t('Nhóm chưa có nhân viên.')} render={member => {
-              const mark = workerStatus(member.id);
-              return <div key={member.id} className="tree-leaf roster"><StatusMark variant={mark.variant} tone={mark.tone} label={statusMarkLabel(mark)} decorative /><Avatar name={member.name} seed={member.id} emoji={member.avatar?.emoji} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xs" badge={member.provider === 'demo' ? undefined : <ProviderMark provider={member.provider} size="small" decorative />} /><span className="row-name">{member.name}</span>{member.id === detailTeam.synthesizerId && <small>{t('tổng hợp')}</small>}</div>;
-            }} />
-          </section>}
-          <p>{statusLabel[detail.task.status]}</p>{detail.usage.inputTokens + detail.usage.outputTokens > 0 && <p className="muted">{t('Đã dùng {0} token', [(detail.usage.inputTokens + detail.usage.outputTokens).toLocaleString(currentLocale())])}</p>}{detail.runs.map(run => <section key={run.id}><h3>{run.snapshot.worker.name}{run.stage === 'plan' ? t(' (phân việc)') : run.stage === 'synthesis' ? t(' (tổng hợp)') : ''} · v{run.snapshot.worker.revision}</h3><p className="muted">Skill v{run.snapshot.skill.revision} · {run.snapshot.worker.provider}</p><code className="hash">{run.id}</code><p className="muted">{run.snapshot.model}</p>{run.snapshot.plan && <ul>{run.snapshot.plan.assignments.map(assignment => <li key={assignment.workerId}>{detail.runs.find(item => item.stage === 'member' && item.snapshot.worker.id === assignment.workerId)?.snapshot.worker.name ?? assignment.workerId}: {assignment.brief}</li>)}</ul>}{detail.artifacts.filter(artifact => artifact.runId === run.id).map(artifact => <details key={artifact.id}><summary>{t('{0} · xem báo cáo', [tMessage(artifact.report.title)])}</summary><p className="prose">{tMessage(artifact.report.summary)}</p>{artifact.report.findings.map((finding, index) => <section key={index}><h4>{finding.title}</h4><p className="prose">{finding.detail}</p><p className="muted">{finding.coverage}</p></section>)}<ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul><Button onClick={() => action(() => orglet.exportArtifact(artifact.id))}>{t('Xuất báo cáo này')}</Button></details>)}<ContextManifestView run={run} workspace={workspace} /><ol className="activity">{detail.events.filter(event => event.runId === run.id).map(event => <li key={event.id}><time>{new Date(event.createdAt).toLocaleTimeString(currentLocale())}</time><span>{tMessage(event.message)}</span></li>)}</ol></section>)}<Button variant="outline" onClick={() => openSources()}><FileText size={16} />{t('Xem nguồn')}</Button></div>
-      </div>
-    </aside>}
+    {detailsOpen && (detail || detailsTeam || detailsWorker) && <DetailsPanel workspace={workspace} team={detailsTeam} worker={detailsWorker} detail={detail}
+      workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
     <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở. Máy tắt không làm lịch biến mất: các lần lỡ gộp thành một lần chạy bù.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được. Gói nhập từ thư mục cần được review trước khi gắn cho nhân viên.') : t('Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><CalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><Button size="icon" aria-label={t('Quay lại danh sách lịch')} onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}><ArrowLeft size={18} /></Button><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? editingSkill?.package ? 'Review skill' : t('Chỉnh skill') : panel === 'knowledge' ? editingKnowledge ? 'Knowledge' : t('Knowledge mới') : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
       {panel === 'revision' && detail && <RevisionEditor key={`${detail.task.id}:${detail.task.inputRevision ?? 0}`} detail={detail} workspace={workspace} connections={ready} done={close} />}
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}

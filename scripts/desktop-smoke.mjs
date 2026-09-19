@@ -125,12 +125,13 @@ try {
   assert.equal(await page.locator('.assistant-message .chat-reply, .assistant-message .report').count(), 1);
   await page.getByRole('button', { name: 'Sao chép', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Chi tiết', exact: true }).click();
-  await page.getByRole('heading', { name: /\(phân việc\)/ }).waitFor();
-  await page.getByRole('heading', { name: /\(tổng hợp\)/ }).waitFor();
+  // Each job is a line of the story, with its stage as a chip beside the worker's name.
+  await page.locator('.details-run-who').filter({ hasText: 'phân việc' }).waitFor();
+  await page.locator('.details-run-who').filter({ hasText: 'gộp kết quả' }).waitFor();
+  // Run ids, revisions, the context manifest, the plan's assignments and export sit under one collapsed block.
+  await page.locator('.details-technical > summary').click();
   await page.getByText('Source researcher: Desktop smoke: team synthesis', { exact: true }).waitFor();
-  // First <details> is Context đã nạp on the plan job. Export lives on member/synthesis artifacts.
-  await page.getByText(/xem báo cáo/).first().click();
-  await page.getByRole('button', { name: 'Xuất báo cáo này', exact: true }).waitFor();
+  await page.getByRole('button', { name: /^Xuất / }).first().waitFor();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Researcher', exact: true }).click();
   await archiveCurrentChat(page);
