@@ -13,15 +13,14 @@ import type { Worker } from '../../shared/contracts';
  * spinner: the product's own shape moving, rather than a borrowed ring.
  */
 
-/** The worker's avatar with a short arc of light running around its edge while it works. */
+/**
+ * The worker's avatar while it thinks: the face turns slowly from side to side, the way someone does when they are
+ * working something out (user, 2026-09-19). No ring around it — a spinner says a machine is busy, and this is
+ * meant to say a person is thinking.
+ */
 export function WorkingMark({ worker }: { worker: Worker }) {
   return <span className="working-mark">
-    <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" alive />
-    {/* pathLength normalises the outline to 200 units, so the dash lengths below read as percentages of it. */}
-    <svg className="working-halo" viewBox="0 0 34 34" aria-hidden="true" focusable="false">
-      <rect className="working-track" x="2" y="2" width="30" height="30" rx="10" pathLength="200" />
-      <rect className="working-trace" x="2" y="2" width="30" height="30" rx="10" pathLength="200" />
-    </svg>
+    <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />
   </span>;
 }
 
