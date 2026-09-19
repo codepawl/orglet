@@ -1089,6 +1089,8 @@ export const en: Dictionary = {
   'Độ lệch chuẩn mẫu tính trong cùng solution/split. Khác biệt giữa các solutions không phải nhiễu rerun.': 'Sample standard deviation within each solution/split. Differences between solutions are not rerun noise.',
   'Đợi lần chạy kết thúc trước khi ghi nhận giới hạn.': 'Wait for the run to finish before acknowledging the limit.',
   'Đợi lần chạy và checker kết thúc trước khi tạo revision.': 'Wait for the run and checkers to finish before creating a revision.',
+  'Màu thẻ @tên': '@name tag color',
+  'Màu của @tên và @all trong tin nhắn, để chúng không lẫn với chữ thường.': 'The colour of @name and @all in messages, so they do not read as ordinary words.',
   // Chat details panel (components/DetailsPanel.tsx).
   'Cuộc trò chuyện này': 'This conversation',
   'Ngân sách tháng {0}': 'Monthly budget {0}',

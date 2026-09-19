@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import type { Task, Workspace } from '../../apps/desktop/src/shared/contracts';
+import { DEFAULT_MENTION_COLOR } from '../../apps/desktop/src/shared/mentions';
 
 let store: Store; let core: CoreService;
 beforeEach(() => { store = new Store(':memory:'); core = new CoreService(store, () => {}, async () => { throw new Error('no model'); }); });
@@ -51,6 +52,16 @@ it('keeps a finished task marked seen after leaving it, and unread again after a
   expect((await workspace()).tasks.find(task => task.id === id)?.seenStamp).toBe(`0:${artifactId}`);
   await core.command('markTaskSeen', { id });
   expect((await workspace()).tasks.find(task => task.id === id)?.seenStamp).toBe(`0:${nextArtifact}`);
+});
+
+it('keeps the mention tag colour the user picks, and rejects anything that is not a hex colour', async () => {
+  expect((await workspace()).mentionColor).toBe(DEFAULT_MENTION_COLOR);
+  await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, mentionColor: '#d97757' });
+  expect((await workspace()).mentionColor).toBe('#d97757');
+  // Leaving it out of a later save keeps what was chosen rather than resetting it.
+  await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000 });
+  expect((await workspace()).mentionColor).toBe('#d97757');
+  await expect(core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, mentionColor: 'blue' })).rejects.toThrow();
 });
 
 it('keeps the colours made in the avatar picker and rejects anything but lowercase hex', async () => {
