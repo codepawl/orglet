@@ -103,21 +103,19 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .history-item .row-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .history-item svg { color:var(--muted); }
 .history-item .status-mark svg { color:inherit; }
-/* StatusMark: soft rings inspired by connection chips — idle hollow, dashed waiting, filled ready/alert, busy spinner. */
-.status-mark { --status-mark-size:7px; width:var(--status-mark-size); height:var(--status-mark-size); border-radius:50%; flex-shrink:0; box-sizing:border-box; color:var(--muted); }
+/* Status mark: a glyph, not a coloured dot, so a row says what its state is (user, 2026-09-19).
+   Only a state carrying news gets a tinted disc; an idle row stays plain so a long list is quiet. */
+.status-mark { --status-mark-size:15px; display:grid; place-items:center; width:var(--status-mark-size); height:var(--status-mark-size); border-radius:50%; flex-shrink:0; box-sizing:border-box; color:var(--muted); }
+.status-mark svg { width:100%; height:100%; }
 .status-mark.success { color:var(--success); }
 .status-mark.error { color:var(--error); }
 .status-mark.working { color:var(--working); }
-.status-mark.empty { background:transparent; border:1.5px solid color-mix(in srgb, var(--muted) 38%, transparent); }
-.status-mark.dashed { background:transparent; border:1.5px dashed color-mix(in srgb, currentColor 72%, transparent); }
-.status-mark.filled { background:currentColor; border:0; box-shadow:0 0 0 2px color-mix(in srgb, currentColor 14%, transparent); }
-.status-mark.busy {
-  width:8px; height:8px; border:1.5px solid color-mix(in srgb, var(--working) 22%, transparent);
-  border-top-color:var(--working); background:transparent; color:var(--working);
-  animation:status-mark-spin .75s linear infinite;
-}
+.status-mark.empty { color:color-mix(in srgb, var(--muted) 55%, transparent); }
+.status-mark.filled, .status-mark.busy { background:color-mix(in srgb, currentColor 13%, transparent); }
+.status-mark.busy { color:var(--working); }
+.status-mark.busy svg { animation:status-mark-spin .75s linear infinite; }
 @keyframes status-mark-spin { to { transform:rotate(360deg); } }
-@media (prefers-reduced-motion:reduce) { .status-mark.busy { animation:none; border-color:color-mix(in srgb, var(--working) 45%, transparent); border-top-color:var(--working); } }
+@media (prefers-reduced-motion:reduce) { .status-mark.busy svg { animation:none; } }
 .empty-history { padding:12px; color:var(--muted); opacity:.7; font-size:13px; text-align:center; }
 .sidebar-footer { padding-top:10px; display:flex; flex-direction:column; gap:3px; }
 .sidebar-scroll { flex:1; min-height:0; overflow:auto; padding-top:12px; }
@@ -183,10 +181,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
   border:0; border-radius:999px; background:transparent; color:var(--text); font:inherit; cursor:pointer;
 }
 .composer-to:hover { background:var(--surface); }
+/* A team's members read as one mark, not a row of separate faces (user, 2026-09-19): smaller than a worker's own
+   avatar and overlapping, with the panel showing through the overlap so two filled mascots stay separate shapes.
+   The later face sits on top, so the stack reads left to right like the roster it stands for. */
 .composer-to-avatars { display:flex; align-items:center; flex-shrink:0; }
-/* Filled mascots read on their own, so members sit side by side instead of overlapping behind a ring. */
-.composer-to-avatars .avatar + .avatar { margin-left:3px; }
-.roster-more { margin-left:3px; font-size:11px; font-weight:500; color:var(--muted); }
+.composer-to-avatars .avatar { transform:scale(.85); }
+.composer-to-avatars .avatar + .avatar { margin-left:-6px; }
+.roster-more { margin-left:1px; font-size:11px; font-weight:500; color:var(--muted); }
 .composer-to-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:500; color:var(--muted); }
 .composer-to:hover .composer-to-name { color:var(--text); }
 .suggestions { list-style:none; margin:22px 0 0; padding:0 8px; display:flex; flex-direction:column; gap:2px; }
@@ -200,7 +201,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
    centres what is actually drawn: a centred 440px box would leave the text hugging its left edge. */
 .team-chat-empty .suggestions { width:fit-content; max-width:min(100%, 440px); margin:12px auto 0; padding:0; text-align:left; }
 .thread-menu { flex-shrink:0; }
-.topbar-roster { flex-shrink:0; }
 .tree-leaf.roster { cursor:default; }
 .tree-leaf.roster:hover { background:transparent; }
 .source-picker { position:relative; }
@@ -300,8 +300,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .search-results { list-style:none; margin:0; padding:4px 10px 10px; overflow:auto; overscroll-behavior:contain; }
 .search-result { display:flex; align-items:center; gap:12px; min-height:44px; padding:8px 14px; border-radius:10px; cursor:pointer; color:var(--text); }
 .search-result>svg { color:var(--muted); }
-.search-result .status-mark { margin-left:0; --status-mark-size:8px; }
-.search-result .status-mark.busy { width:9px; height:9px; }
+.search-result .status-mark { margin-left:0; }
 .search-result[aria-selected=true] { background:var(--surface); }
 .search-result-title { flex:1; min-width:0; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .search-result-team { color:var(--muted); }
