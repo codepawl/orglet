@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { ChevronRight, GripVertical, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
+import { GripVertical, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { t } from '../i18n';
 import { RowMenu } from './RowMenu';
 import { StatusMark, type StatusMarkState } from './StatusMark';
-
-const storageKey = (id: string) => `orglet.sidebar.tree.${id}.open`;
-function readOpen(id: string) {
-  try { return localStorage.getItem(storageKey(id)) === '1'; } catch { return false; }
-}
 
 export function statusMarkLabel(status: StatusMarkState): string {
   if (status.variant === 'busy') return t('Đang làm');
@@ -104,34 +99,23 @@ export function useReorder(ids: string[], commit: (ids: string[]) => void) {
 }
 
 /**
- * A team or worker row. The name selects and opens the list; only the chevron closes it again.
- * a worker opens its live chat. When `children` is passed (a team roster), the avatar turns into a
- * chevron on hover and toggles that list. Workers have no task pile, so they omit `children`.
+ * A team or worker row: the name opens that chat. A team lists its members in the chat details panel
+ * (user, 2026-09-19), so no row expands here.
  * Optional `status` is the rolled-up mark from its subset (live thread for a worker, workers for a team).
  */
-export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, expandLabel, menu, reorder, children }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; expandLabel?: string; menu: ReactNode; reorder: RowBindings; children?: ReactNode }) {
-  const expandable = children !== undefined;
-  const [open, setOpen] = useState(() => expandable && readOpen(id));
-  const toggle = () => setOpen(value => {
-    try { localStorage.setItem(storageKey(id), value ? '0' : '1'); } catch { /* storage unavailable: keep in memory only */ }
-    return !value;
-  });
+export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, menu, reorder }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; menu?: ReactNode; reorder: RowBindings }) {
   const { ref, style, dragging, onMoveKey, ...pointer } = reorder;
-  const mark = dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : expandable ? <ChevronRight size={14} className="disclosure-chevron" aria-hidden="true" /> : null;
-  return <div ref={ref} style={style} className={`tree-item ${open ? 'open' : ''} ${dragging ? 'dragging' : ''}`} {...pointer}>
+  const mark = dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : null;
+  return <div ref={ref} style={style} className={`tree-item ${dragging ? 'dragging' : ''}`} {...pointer} data-row-id={id}>
     <div className="worker-row">
       {status && <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />}
-      {expandable
-        ? <button type="button" className="row-disclosure" aria-expanded={open} aria-controls={`tree-${id}`} aria-label={expandLabel} title={expandLabel} onClick={toggle}>{mark}{avatar}</button>
-        : <span className="row-disclosure" aria-hidden="true">{mark}{avatar}</span>}
-      <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} title={description ? `${description}
-${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-        aria-expanded={expandable ? open : undefined} aria-controls={expandable ? `tree-${id}` : undefined} onClick={() => { onSelect(); if (expandable && !open) toggle(); }} onKeyDown={onMoveKey}>
+      <span className="row-disclosure" aria-hidden="true">{mark}{avatar}</span>
+      <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} title={description ? `${description}\n${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+        onClick={onSelect} onKeyDown={onMoveKey}>
         <span>{name}</span>
       </button>
       <span data-no-drag>{menu}</span>
     </div>
-    {expandable && <div id={`tree-${id}`} className="tree-children" role="group" aria-label={name} hidden={!open || dragging}>{children}</div>}
   </div>;
 }
 
