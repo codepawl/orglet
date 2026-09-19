@@ -76,7 +76,7 @@ Windows installers are unsigned. macOS CI signs with Developer ID and notarizes 
 | Windows | Public 0.2.x target. Unsigned ZIP and Squirrel Setup from `pnpm make`. If those files are not attached to the GitHub Release, build locally. SmartScreen may warn (unknown publisher); that is expected. See [windows-release-gates.md](docs/windows-release-gates.md). |
 | macOS | ZIP of `Orglet.app` from `pnpm make` on a Mac, or the `orglet-macos-signed-zip` CI artifact. CI signs it with Developer ID and notarizes it with Apple, so it opens without the right-click workaround. Not a GitHub Release asset yet, and a local `pnpm make` stays unsigned. See [macos-packaging.md](docs/macos-packaging.md). |
 | Linux | ZIP from `pnpm make` on Linux, or the `orglet-linux-zip` CI artifact. CI builds it and starts it headless on every pull request, but nobody has used it on a real Linux desktop yet, so treat it as untested. See [linux-packaging.md](docs/linux-packaging.md). |
-| iOS and Android | Coming soon |
+| iOS and Android | Not started. The shape under discussion is a companion to a desktop workspace, not a port: a phone cannot run a worker. See [mobile.md](docs/mobile.md). |
 
 ## Dev
 
