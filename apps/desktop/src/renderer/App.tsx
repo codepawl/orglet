@@ -39,6 +39,7 @@ import type { Knowledge } from '../shared/knowledge';
 import type { HarnessInfo } from '../shared/harness';
 import { readiness, settingsTabFor, setupHint } from './components/providers';
 import { workerModelLabel } from './components/workerModel';
+import { ComposerModel } from './components/ComposerModel';
 import { t, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
 
@@ -398,11 +399,21 @@ export function App() {
     // The caret belongs at the end: most openers stop at a colon for the person to keep typing.
     setTimeout(() => { textarea.focus(); textarea.setSelectionRange(prompt.length, prompt.length); }, 0);
   };
+  // The prompt bar's right-hand control. A one-to-one chat names its worker in the header already, so the spot
+  // carries the model the worker will answer with instead of a list holding that one name (user, 2026-09-19).
+  // A team keeps the recipient list, and so does a chat with nobody chosen yet, where it is how you choose.
+  const composerTrailing = worker && !team && worker.provider !== 'demo'
+    // An empty choice means whatever the provider defaults to, and a stored id may not be empty, so it is dropped.
+    ? <ComposerModel worker={{ ...worker, provider: worker.provider }}
+      onChange={modelId => action(() => orglet.call('saveWorker', { ...worker, modelId: modelId || undefined }))} />
+    : recipientOptions.length > 0
+      ? <Select className="composer-to-select" ariaLabel={t('Đang nhắn với {0}', [team?.name ?? worker?.name ?? t('Nhân viên')])} value={recipientValue} onChange={pickRecipient} showDetail={false} showIcon={false} menuMinWidth={280} options={recipientOptions} />
+      : undefined;
   const chatName = team?.name ?? worker?.name ?? 'Orglet';
   const [chatHeadingBefore = '', chatHeadingAfter = ''] = t('Đang nhắn với {0}').split('{0}');
   const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với nhóm…') : t('Nhắn với {0}…', [worker?.name ?? t('Nhân viên')])} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={!isDemo && missingConnections.length > 0} mentions={team ? { people: executionWorkers, allNames: [team.name] } : undefined}
     leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
-    trailing={recipientOptions.length > 0 ? <Select className="composer-to-select" ariaLabel={t('Đang nhắn với {0}', [team?.name ?? worker?.name ?? t('Nhân viên')])} value={recipientValue} onChange={pickRecipient} showDetail={false} showIcon={false} menuMinWidth={280} options={recipientOptions} /> : undefined}
+    trailing={composerTrailing}
     attachments={sources.length > 0 ? sources.map(source => <span className="attachment" key={source.id}><FileText size={14} /><span>{source.name}</span><button type="button" aria-label={t('Bỏ {0}', [source.name])} onClick={() => { setSources(sources.filter(s => s.id !== source.id)); }}><X size={14} /></button></span>) : undefined} />;
   const composerHint = isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}<button onClick={() => { if (team) { setEditingTeam(team); setPanel('team'); } else { setEditingWorker(worker); setPanel('worker'); } }}>{team ? t('Thiết lập nhóm') : t('Đổi model')}</button></p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p> : null;
   return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
