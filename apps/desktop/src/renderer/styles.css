@@ -196,7 +196,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Thread: the prompt bar stays pinned under the conversation. */
 .thread-composer { width:100%; max-width:780px; margin:0 auto; padding:8px var(--page-x) 0; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
-.team-chat-empty .suggestions { width:min(100%, 440px); margin:12px 0 0; padding:0; text-align:left; }
+/* The starters sit under a centred greeting, so the block is centred too and only its text stays left. */
+.team-chat-empty .suggestions { width:min(100%, 440px); margin:12px auto 0; padding:0; text-align:left; }
 .thread-menu { flex-shrink:0; }
 .topbar-roster { flex-shrink:0; }
 .tree-leaf.roster { cursor:default; }
