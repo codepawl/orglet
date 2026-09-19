@@ -30,17 +30,20 @@ export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, 
   // Workers only use mascots (user decision 2026-09-17), so emoji or letter values saved earlier are ignored there.
   const face = defaultMascot ? (isMascot(mascot) ? mascot : autoMascot(mascotIds, seed ?? name, { name, description: hint })) : emoji ? 'emoji' : isMascot(mascot) ? mascot : undefined;
   const ink = color ?? (defaultMascot && face && face !== 'emoji' ? mascotColors[face] : avatarColor(seed ?? name));
-  // Each face waits its own share of the cycle before blinking, so two of them never blink together.
-  const blinkDelay = `-${seedHash(seed ?? name) % BLINK_SECONDS}s`;
+  // Each face waits its own share of the idle cycle before blinking, so two of them never blink together, and
+  // looks up towards its own side, so two faces on one screen never mirror each other.
+  const hash = seedHash(seed ?? name);
+  const idleDelay = `-${hash % IDLE_SECONDS}s`;
+  const idleSide = hash % 2 === 0 ? 1 : -1;
   return <span className={`avatar ${size} ${shape} ${face === 'emoji' ? 'emoji' : face ? 'has-mascot' : ''}${alive ? ' alive' : ''}`}
-    style={{ '--avatar-color': ink, '--blink-delay': blinkDelay } as CSSProperties} aria-hidden="true">
+    style={{ '--avatar-color': ink, '--idle-delay': idleDelay, '--idle-side': idleSide } as CSSProperties} aria-hidden="true">
     <span className="avatar-face">{face === 'emoji' ? emoji : face ? <Mascot id={face} /> : letter}</span>
     {badge && <span className="avatar-badge">{badge}</span>}
   </span>;
 }
 
-/** One blink cycle, matching the `mascot-blink` keyframes; the delay is spread across it. */
-const BLINK_SECONDS = 7;
+/** One idle cycle (`--motion-idle` in styles.css: a blink, and on a prominent face a look-up); the delay is spread across it. */
+const IDLE_SECONDS = 7;
 
 /** Overlapping worker faces for a team chat header or empty thread. */
 export function RosterAvatars({ workers, size = 'xs', max = 4, alive }: { workers: readonly Worker[]; size?: 'xs' | 'sm'; max?: number; alive?: boolean }) {
@@ -111,10 +114,11 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
     return <button key={color} type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1} className="avatar-swatch" style={{ '--avatar-color': color } as CSSProperties} aria-label={label} title={label} onClick={() => set({ color: index === 0 ? undefined : color })}>{checked && <Check size={12} strokeWidth={3} aria-hidden="true" />}</button>;
   };
 
-  // The avatar and its quick actions share one centred row; the full choice opens below at full width.
+  // The avatar and its quick actions share one centred row; the full choice opens below at full width. The preview
+  // is keyed by its mascot so a newly chosen face remounts and hops in (the Arriving state in styles.css).
   return <div className="avatar-picker">
     <div className="avatar-picker-head">
-      <Avatar name={name || '?'} seed={seed} mascot={value.mascot} defaultMascot hint={hint} color={value.color} badge={badge} size="xl" />
+      <Avatar key={face} name={name || '?'} seed={seed} mascot={value.mascot} defaultMascot hint={hint} color={value.color} badge={badge} size="xl" />
       <div className="avatar-picker-toolbar">
         <Button type="button" variant="outline" className="avatar-action" onClick={suggest} title={t('Chọn linh vật khác hợp với tên, mô tả và kỹ năng')}><Sparkles size={15} aria-hidden="true" />{t('Gợi ý khác')}</Button>
         <Button type="button" variant="outline" className="avatar-action" onClick={randomize}><Shuffle size={15} aria-hidden="true" />{t('Ngẫu nhiên')}</Button>
