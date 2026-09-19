@@ -101,7 +101,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       <h4 id="routine-group-job">{t('Công việc')}</h4>
       <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><input value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
       <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><textarea rows={4} value={brief} onChange={event => setBrief(event.target.value)} required maxLength={16000} /></label>
-      <Select label={<FieldLabel icon={UserRound} required>Giao cho</FieldLabel>} value={target} onChange={value => { setTarget(value); setApproved(false); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Nhân viên'), icon: <UserRound size={16} /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Nhóm'), icon: <Users size={16} /> }))]} />
+      <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); setApproved(false); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Nhân viên'), icon: <UserRound size={16} /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Nhóm'), icon: <Users size={16} /> }))]} />
       <div className="routine-sources">
         <PanelHeading level={3} title={<FieldLabel icon={FileText}>{t('Nguồn ({0}/20)', [sources.length])}</FieldLabel>}>
           <Button type="button" variant="outline" disabled={busy} onClick={async () => {
