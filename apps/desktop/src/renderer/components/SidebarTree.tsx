@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
-import { GripVertical, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
+import { GripVertical, Archive, ArchiveRestore, EllipsisVertical, Trash } from './icons';
 import { t } from '../i18n';
 import { RowMenu } from './RowMenu';
 import { StatusMark, type StatusMarkState } from './StatusMark';
@@ -125,7 +125,7 @@ export type ArchiveState = { daysLeft: number | null; tone: 'fresh' | 'aging' | 
 export function ArchivedRow({ name, mark, archive, onRestore, onDelete }: { name: string; mark: ReactNode; archive: ArchiveState; onRestore: () => void; onDelete: () => void }) {
   return <div className="task-row archived-row">
     <span className="history-item">{mark}<span className="row-name">{name}</span>{archive.daysLeft !== null && <span className={`archive-age ${archive.tone}`} title={t('Tự xóa sau {0} ngày', [archive.daysLeft])}>{t('{0} ngày', [archive.daysLeft])}</span>}</span>
-    <RowMenu label={t('Tùy chọn {0}', [name])} items={[{ label: t('Khôi phục'), icon: ArchiveRestore, onSelect: onRestore }, { label: t('Xóa vĩnh viễn'), icon: Trash2, danger: true, onSelect: onDelete, confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
+    <RowMenu label={t('Tùy chọn {0}', [name])} icon={EllipsisVertical} items={[{ label: t('Khôi phục'), icon: ArchiveRestore, onSelect: onRestore }, { label: t('Xóa vĩnh viễn'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
   </div>;
 }
 
