@@ -28,6 +28,16 @@ export function useRunProgress(taskId: string) {
   return updates;
 }
 
+/**
+ * The run whose live progress this turn should show: a team's synthesis when it is streaming, otherwise whichever run
+ * of the turn is streaming. A worker chat has no synthesis run, so without the fallback nothing would show.
+ */
+export function liveRunOf(runs: Run[], updates: Record<string, RunProgressUpdate>) {
+  const streaming = (run: Run) => updates[run.id] !== undefined;
+  const run = runs.find(item => item.stage === 'synthesis' && streaming(item)) ?? runs.find(streaming);
+  return run ? { run, update: updates[run.id] } : undefined;
+}
+
 /** Seconds since a moment, refreshed every second while shown. */
 function useElapsedSeconds(since: number) {
   const [now, setNow] = useState(() => Date.now());

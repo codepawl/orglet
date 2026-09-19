@@ -15,7 +15,7 @@ import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Markdown } from './Markdown';
-import { ActivityGroup, LiveRun, savedSteps, useRunProgress } from './LiveRun';
+import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
 import type { MentionPerson } from '../../shared/mentions';
@@ -53,9 +53,9 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
       {turns.map(turn => {
         const latest = turn.revision === current;
         const activeRun = turn.runs.find(item => item.status === 'running') ?? turn.runs.find(item => item.status === 'queued');
-        const synthesisLive = latest && busy ? turn.runs.find(item => item.stage === 'synthesis' && liveRuns[item.id]) : undefined;
-        const liveUpdate = synthesisLive ? liveRuns[synthesisLive.id] : undefined;
-        const thinkingRun = liveUpdate ? synthesisLive : activeRun;
+        const live = latest && busy ? liveRunOf(turn.runs, liveRuns) : undefined;
+        const liveUpdate = live?.update;
+        const thinkingRun = live?.run ?? activeRun;
         const headline = turn.runs.find(item => item.stage === 'plan' && item.error && item.status !== 'completed')
           ?? turn.runs.filter(item => item.stage === 'member' && item.error && item.error !== UNASSIGNED_PLAN_ERROR).at(-1)
           ?? turn.runs.findLast(item => item.error && item.error !== UNASSIGNED_PLAN_ERROR);
