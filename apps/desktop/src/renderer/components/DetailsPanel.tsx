@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Clock, Cpu, FileText, ListOrdered, MessageSquare, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
 import { t, currentLocale, tMessage } from '../i18n';
 import { Avatar, RosterAvatars } from './Avatar';
@@ -9,7 +10,7 @@ import { statusLabel } from './TaskThread';
 import { statusMarkLabel } from './SidebarTree';
 import { formatMoney } from './money';
 import { providerName } from './workerModel';
-import { Button } from './ui';
+import { Button, Drawer } from './ui';
 import { teamRoster } from '../assignees';
 import type { Run, TaskDetail, Team, Worker, Workspace } from '../../shared/contracts';
 
@@ -78,10 +79,16 @@ function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; 
         {providerName(worker.provider)}
       </span>
     </p>
-    {worker.description && <p className="details-subject-note">{worker.description}</p>}
-    {worker.taskBudgetMicros != null && <div className="details-facts"><Fact icon={Wallet} title={t('Ngân sách mỗi việc')}>{formatMoney(worker.taskBudgetMicros)}</Fact></div>}
+    {(worker.description || worker.taskBudgetMicros != null) && <p className="details-subject-note">
+      {worker.description}
+      {worker.taskBudgetMicros != null && <Fact icon={Wallet} title={t('Ngân sách mỗi việc')}>{formatMoney(worker.taskBudgetMicros)}</Fact>}
+    </p>}
   </div>;
 }
+
+// Progress the live view already showed. Once a run has finished these only pad the story out.
+const routineChatter = [/^Đang gọi model · bước /, /^Model đang trả kết quả/, /^Đã lưu câu trả lời/, /^Đang chờ lượt/];
+const worthKeeping = (message: string) => !routineChatter.some(pattern => pattern.test(message));
 
 /** One run as a line of the story: who spoke, what part they were doing, how long it took and what it reported. */
 function RunEntry({ run, events }: { run: Run; events: { id: string; message: string; createdAt: string }[] }) {
@@ -97,7 +104,7 @@ function RunEntry({ run, events }: { run: Run; events: { id: string; message: st
         {stage && <small>{stage}</small>}
         {took && <time className="details-run-took" title={t('Bước này mất bao lâu')}>{took}</time>}
       </p>
-      {events.map(event => <p key={event.id} className="muted">
+      {events.filter(event => worthKeeping(event.message)).map(event => <p key={event.id} className="muted">
         <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })}</time>
         <span>{tMessage(event.message)}</span>
       </p>)}
@@ -115,6 +122,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
   onOpenSources: () => void;
   onExport: (artifactId: string) => void;
 }) {
+  const [technical, setTechnical] = useState(false);
   const members = team ? teamRoster(team, workspace.workers) : [];
   const spent = detail ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0;
   const tokens = detail ? detail.usage.inputTokens + detail.usage.outputTokens : 0;
@@ -148,7 +156,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
         }} />
       </Section>}
 
-      {detail && <Section icon={MessageSquare} title={t('Cuộc trò chuyện này')}>
+      {detail && <section className="details-section details-chat">
         <p className="details-status">{statusLabel[detail.task.status]}</p>
         <div className="details-facts">
           <Fact icon={Wallet} title={t('Đã tiêu cho cuộc trò chuyện này')}>{formatMoney(spent)}</Fact>
@@ -161,7 +169,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
           <ShowMore items={detail.sources} limit={3} empty="" render={source => <p key={source.id} className="details-source"><FileText size={14} aria-hidden="true" />{source.name}</p>} />
           <Button variant="outline" onClick={onOpenSources}><FileText size={16} />{t('Xem nguồn')}</Button>
         </>}
-      </Section>}
+      </section>}
 
       {detail && detail.runs.length > 0 && <Section icon={Clock} title={t('Diễn biến')}>
         <ol className="details-runs">
@@ -169,11 +177,14 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
         </ol>
       </Section>}
 
-      {detail && <details className="details-technical" open>
-        <summary><Wrench size={15} aria-hidden="true" />{t('Chi tiết kỹ thuật')}</summary>
-        {detail.runs.map(run => <section key={run.id}>
-          <h4>{run.snapshot.worker.name} · v{run.snapshot.worker.revision}</h4>
-          <p className="muted">{t('Skill v{0}', [run.snapshot.skill.revision])} · {run.snapshot.worker.provider}{run.snapshot.model ? ` · ${run.snapshot.model}` : ''}</p>
+      {detail && <Button variant="outline" className="details-technical-open" onClick={() => setTechnical(true)}>
+        <Wrench size={16} />{t('Chi tiết kỹ thuật')}
+      </Button>}
+
+      {detail && technical && <Drawer open onClose={() => setTechnical(false)} title={t('Chi tiết kỹ thuật')} description={t('Số liệu để dò lỗi hoặc đối chiếu một lần chạy.')}>
+        {detail.runs.map(run => <section key={run.id} className="technical-run">
+          <h4>{run.snapshot.worker.name}</h4>
+          <p className="muted">{t('Skill {0}', [run.snapshot.skill.name])} · {run.snapshot.worker.provider}{run.snapshot.model ? ` · ${run.snapshot.model}` : ''}</p>
           <code className="hash">{run.id}</code>
           {run.snapshot.plan && <ul>{run.snapshot.plan.assignments.map(assignment => <li key={assignment.workerId}>
             {detail.runs.find(item => item.stage === 'member' && item.snapshot.worker.id === assignment.workerId)?.snapshot.worker.name ?? assignment.workerId}: {assignment.brief}
@@ -183,7 +194,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
             <FileText size={16} />{artifact.report.format === 'chat' ? t('Xuất câu trả lời') : t('Xuất báo cáo')}
           </Button>)}
         </section>)}
-      </details>}
+      </Drawer>}
     </div>
   </aside>;
 }

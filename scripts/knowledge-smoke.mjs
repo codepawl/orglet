@@ -69,7 +69,8 @@ try {
   await openThreadByBrief(page, 'Knowledge context fixture');
   await page.locator('.topbar-actions .thread-menu').click();
   await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
-  // The context manifest sits in the technical block, which opens with the panel.
+  // The context manifest sits in the technical dialog now.
+  await page.getByRole('button', { name: 'Chi tiết kỹ thuật', exact: true }).click();
   await page.getByText(/Context đã nạp/).first().click();
   await page.getByText('Knowledge: Evidence limits · v2', { exact: false }).first().waitFor();
   // Templates reuse the same text for team instructions and the skill; the manifest shows the duplicate was dropped.
