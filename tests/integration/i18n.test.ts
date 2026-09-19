@@ -37,6 +37,14 @@ it('derives British English spellings from the US text', () => {
   expect(Object.keys(enGB)).toEqual(Object.keys(en));
 });
 
+it('keeps the US English text free of the British spellings it derives', () => {
+  // `en` is the US English source and `en-GB` is derived from it one way, so a British spelling written into
+  // the US text reaches US readers and nothing downstream can undo it. Only the spellings the derivation
+  // table in locales/en.ts produces are listed: "analysis" and "synthesis" are US English too, so they stay.
+  const britishOnly = /\b(colour|licence|catalogue|customis|summaris|analys(e|ing))/i;
+  expect(Object.entries(en).filter(([, text]) => britishOnly.test(text))).toEqual([]);
+});
+
 it('has English text for every Vietnamese UI key in the source tree', () => {
   const result = spawnSync(process.execPath, [join(__dirname, '..', '..', 'scripts', 'i18n-keys.cjs')], { encoding: 'utf8' });
   expect(result.stderr).toMatch(/0 missing/);

@@ -1083,7 +1083,7 @@ export const en: Dictionary = {
   'Đợi lần chạy kết thúc trước khi ghi nhận giới hạn.': 'Wait for the run to finish before acknowledging the limit.',
   'Đợi lần chạy và checker kết thúc trước khi tạo revision.': 'Wait for the run and checkers to finish before creating a revision.',
   'Màu thẻ @tên': '@name tag color',
-  'Màu của @tên và @all trong tin nhắn, để chúng không lẫn với chữ thường.': 'The colour of @name and @all in messages, so they do not read as ordinary words.',
+  'Màu của @tên và @all trong tin nhắn, để chúng không lẫn với chữ thường.': 'The color of @name and @all in messages, so they do not read as ordinary words.',
   '{0}s': '{0}s',
   // Schedule editor: saving is the permission, so the data note is a line rather than a tick.
   'Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.': 'Each run sends this brief and its {0} sources {1}, within the limit above.',
