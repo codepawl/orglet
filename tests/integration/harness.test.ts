@@ -167,6 +167,8 @@ describe('command contract', () => {
     const codex = harnessArgs({ harness: 'codex', cwd: directory, schema: {}, maxBudgetUsd: 1 });
     expect(codex[codex.indexOf('--sandbox') + 1]).toBe('read-only');
     expect(codex).toEqual(expect.arrayContaining(['--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check', 'apps', 'browser_use', 'computer_use', 'shell_tool', 'unified_exec']));
+    // Without this the CLI emits no reasoning items, and a run shows nothing until it finishes.
+    expect(codex[codex.indexOf('-c') + 1]).toBe('model_reasoning_summary=detailed');
     expect(codex.join(' ')).not.toMatch(/danger|workspace-write|approve-for-me/);
     const cursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 });
     expect(cursor).toEqual(expect.arrayContaining(['-p', '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', directory, '--output-format', 'json']));

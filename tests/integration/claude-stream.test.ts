@@ -100,3 +100,16 @@ it('sends the first update at once, the newest one later, and a final null on cl
   vi.advanceTimersByTime(200);
   expect(sent.map(update => update.progress?.answer ?? null)).toEqual(['a', 'abc', null]);
 });
+
+it('sends the progress still waiting on the timer before it closes', () => {
+  vi.useFakeTimers();
+  const sent: RunProgressUpdate[] = [];
+  const sender = new ProgressSender('task', 'run', update => sent.push(update));
+  const progress = (answer: string): HarnessProgress => ({ thinking: '', preamble: '', activity: [], answer, writing: true });
+
+  sender.update(progress('a'));
+  sender.update(progress('ab'));
+  // The run ends inside the throttle window, so nothing has flushed "ab" yet.
+  sender.close();
+  expect(sent.map(update => update.progress?.answer ?? null)).toEqual(['a', 'ab', null]);
+});

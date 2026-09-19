@@ -15,8 +15,9 @@ type CodexEvent = {
 
 /**
  * Reads `codex exec --json` output. Codex reports whole items rather than text as it is typed, so progress moves in
- * steps: its reasoning summaries while it thinks, then the answer once the message is complete. The full output is
- * kept, because errors and the final message are read from it after Codex exits.
+ * steps: its reasoning summaries while it thinks, then the answer once the message is complete. Those summaries only
+ * arrive because the run asks for them; see the Codex arguments in exec.ts. The full output is kept, because
+ * errors and the final message are read from it after Codex exits.
  */
 export class CodexStreamParser {
   private output = '';

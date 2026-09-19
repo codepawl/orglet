@@ -41,7 +41,11 @@ const LAST_MESSAGE_FILE = 'orglet-last-message.json';
  * removes command tools; safe mode skips the user's hooks, plugins, skills and CLAUDE.md. Codex: its only file access
  * is shell commands, which its Windows read-only sandbox rejects, so the runner inlines source text in the prompt and
  * the shell tools are disabled outright; user config is ignored (no MCP servers or plugins) and apps/browser/computer
- * use are off. Cursor Agent: ask mode + sandbox, never --force/--yolo; report schema is embedded in the prompt.
+ * use are off. Ignoring the user config also drops their `model_reasoning_summary`, and without it `codex exec`
+ * emits no reasoning items at all, so the window would sit on "thinking" for a whole run and then show the
+ * finished answer. Asking for detailed summaries puts that thinking back (checked against codex-cli 0.155.0:
+ * unset and "auto" both produce none, "detailed" produces them).
+ * Cursor Agent: ask mode + sandbox, never --force/--yolo; report schema is embedded in the prompt.
  */
 function modelFlag(harness: HarnessId, model?: string) {
   if (!model) return [];
@@ -56,7 +60,7 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
   if (request.harness === 'cursor') {
     return ['-p', ...model, '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', request.cwd, '--output-format', 'json'];
   }
-  return ['exec', ...model, '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), '--json', '-'];
+  return ['exec', ...model, '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), '--json', '-'];
 }
 
 const authHint = (harness: HarnessId) => {
