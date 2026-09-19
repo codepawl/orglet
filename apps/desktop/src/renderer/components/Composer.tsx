@@ -1,8 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { ArrowUp, Plus } from 'lucide-react';
 import type { TaskDetail, Worker, Workspace } from '../../shared/contracts';
-import { isPaidApi } from '../../shared/contracts';
-import { isHarness } from '../../shared/harness';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
 import { Button } from './ui';
 import { Avatar } from './Avatar';
@@ -109,7 +107,6 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   const workers = taskWorkers(detail.task, workspace);
   const team = detail.task.teamId ? workspace.teams.find(item => item.id === detail.task.teamId) : undefined;
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
-  const paid = providers.some(isPaidApi);
   const missing = providers.filter(provider => !ready[provider]);
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0;
@@ -123,6 +120,5 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
       leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Đính kèm tệp')} title={t('Đính kèm tệp')} disabled={busy} onClick={openRevision}><Plus size={20} /></Button>} />
     {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
-    {!paid && providers.length > 0 && <p className="composer-note">{providers.every(isHarness) ? t('Harness trên máy · chi phí theo gói của công cụ, không qua Orglet.') : t('Chạy trên máy này · không qua ngân sách Orglet.')}</p>}
   </div>;
 }

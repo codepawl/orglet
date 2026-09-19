@@ -32,7 +32,7 @@ import { setDisplayCurrency, formatMoney } from './components/money';
 import { Toaster, toast } from './components/toast';
 import { ContextManifestView, KnowledgeEditor, KnowledgeLibrary } from './components/KnowledgeLibrary';
 import type { Knowledge } from '../shared/knowledge';
-import { isHarness, type HarnessInfo } from '../shared/harness';
+import type { HarnessInfo } from '../shared/harness';
 import { readiness, settingsTabFor, setupHint } from './components/providers';
 import { workerModelLabel } from './components/workerModel';
 import { t } from './i18n';import { currentLocale, setLanguage, tMessage, useLanguage } from './i18n';
@@ -250,7 +250,6 @@ export function App() {
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : worker ? [worker] : [];
   const nativeProviders = [...new Set(executionWorkers.map(item => item.provider).filter(provider => provider !== 'demo'))];
   const isDemo = nativeProviders.length === 0;
-  const paidProviders = nativeProviders.filter(isPaidApi);
   const ready = readiness(connections, harnesses);
   const missingConnections = nativeProviders.filter(provider => !ready[provider]);
   // Choosing a model and attaching sources is the user's consent to send them; no separate permission step.
@@ -366,7 +365,7 @@ export function App() {
     leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
     trailing={recipientOptions.length > 0 ? <Select className="composer-to-select" ariaLabel={t('Đang nhắn với {0}', [team?.name ?? worker?.name ?? t('Nhân viên')])} value={recipientValue} onChange={pickRecipient} showDetail={false} menuMinWidth={280} options={recipientOptions} /> : undefined}
     attachments={sources.length > 0 ? sources.map(source => <span className="attachment" key={source.id}><FileText size={14} /><span>{source.name}</span><button type="button" aria-label={t('Bỏ {0}', [source.name])} onClick={() => { setSources(sources.filter(s => s.id !== source.id)); }}><X size={14} /></button></span>) : undefined} />;
-  const composerHint = isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}<button onClick={() => { if (team) { setEditingTeam(team); setPanel('team'); } else { setEditingWorker(worker); setPanel('worker'); } }}>{team ? t('Thiết lập nhóm') : t('Đổi model')}</button></p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p> : paidProviders.length === 0 && nativeProviders.length > 0 ? <p className="composer-note">{nativeProviders.every(isHarness) ? t('Harness trên máy · chi phí theo gói của công cụ, không qua Orglet.') : t('Chạy trên máy này · không qua ngân sách Orglet.')}</p> : null;
+  const composerHint = isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}<button onClick={() => { if (team) { setEditingTeam(team); setPanel('team'); } else { setEditingWorker(worker); setPanel('worker'); } }}>{team ? t('Thiết lập nhóm') : t('Đổi model')}</button></p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p> : null;
   return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" role="separator" aria-orientation="vertical"
