@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Check, RotateCcw, Square } from 'lucide-react';
+import { FileText, Check, RotateCcw } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus } from '../../shared/contracts';
+import type { RunProgressUpdate } from '../../shared/progress';
 import { Button } from './ui';
 import { formatMoney } from './money';
 import type { SourceTarget } from './SourcePanel';
@@ -18,6 +19,7 @@ import { Markdown } from './Markdown';
 import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
+import { WorkingLine } from './Working';
 import type { MentionPerson } from '../../shared/mentions';
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
@@ -29,6 +31,10 @@ type Turn = { revision: number; runs: Run[]; brief: string; sourceCount: number;
  * worker's answer. Answers are normal messages; a structured report is shown only when one was asked for or a team
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
+/** Whether a streaming run has already put something on screen worth putting a name above. */
+const liveShowsContent = (update: RunProgressUpdate) =>
+  Boolean(update.progress && (update.progress.preamble || update.progress.activity.length > 0 || update.progress.answer.length > 0));
+
 export function TaskThread({ detail, action, showSources, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const current = detail.task.inputRevision ?? 0;
@@ -70,12 +76,12 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
               : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
           </section>)}
           {(!turn.replies.length || (latest && (busy || headline?.error || detail.task.status !== 'completed'))) && <section className="assistant-message" aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
-            {liveUpdate ? byline(thinkingRun) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
+            {liveUpdate ? (liveShowsContent(liveUpdate) && byline(thinkingRun)) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
             {latest && busy && thinkingRun && (liveUpdate
-              ? <LiveRun update={liveUpdate} provider={thinkingRun.snapshot.worker.provider} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />
-              : <Thinking provider={thinkingRun.snapshot.worker.provider} stage={thinkingRun.stage} workerName={thinkingRun.snapshot.worker.name} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />)}
+              ? <LiveRun update={liveUpdate} worker={thinkingRun.snapshot.worker} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />
+              : <Thinking worker={thinkingRun.snapshot.worker} stage={thinkingRun.stage} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />)}
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
@@ -101,21 +107,17 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
  * Work in progress, kept visual (user decision 2026-09-17): the provider's mark inside a spinning ring, one short phrase
  * for what is happening, and a quiet stop button. Details (versions, paths, costs) stay in Chi tiết.
  */
-function Thinking({ provider, stage, workerName, message, pausing, onStop }: { provider: Run['snapshot']['worker']['provider']; stage?: Run['stage']; workerName?: string; message?: string; pausing: boolean; onStop: () => void }) {
+function Thinking({ worker, stage, message, pausing, onStop }: { worker: Run['snapshot']['worker']; stage?: Run['stage']; message?: string; pausing: boolean; onStop: () => void }) {
   const read = message?.match(/^Đã đọc (.+)$/);
   const label = pausing ? t('Đang dừng sau bước này…')
     : stage === 'plan' || message === 'Đang phân việc.' ? t('Đang phân việc…')
-    : stage === 'member' ? t('Đang giao {0}…', [workerName ?? ''])
+    : stage === 'member' ? t('Đang giao {0}…', [worker.name])
     : stage === 'synthesis' || message?.startsWith('Đang tổng hợp') ? t('Đang tổng hợp…')
     : read ? t('Đang đọc {0}', [read[1]])
     : message?.startsWith('Đang chờ lượt') ? t('Đang chờ lượt…')
     : message === 'Model đang trả kết quả…' ? t('Đang viết câu trả lời…')
     : t('Đang suy nghĩ…');
-  return <div role="status" className="thinking">
-    <span className="thinking-mark" aria-hidden="true">{provider === 'demo' ? <span className="orglet-mark small">o</span> : <ProviderMark provider={provider} size="small" decorative />}</span>
-    <span className="thinking-text">{label}</span>
-    <Button size="icon" className="thinking-stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}><Square size={11} fill="currentColor" /></Button>
-  </div>;
+  return <WorkingLine worker={worker} label={label} onStop={onStop} />;
 }
 
 /** A normal chat answer: the message, with copy and export tucked into a quiet row. */

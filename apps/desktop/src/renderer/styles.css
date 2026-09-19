@@ -910,15 +910,25 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .row-menu-popover { color:var(--text); }
 
 /* Working indicator: the provider mark inside a spinning ring and one short phrase. */
-.thinking { display:flex; align-items:center; gap:12px; min-height:40px; }
-.thinking-mark { position:relative; display:grid; place-items:center; width:34px; height:34px; flex-shrink:0; }
-.thinking-mark::before { content:''; position:absolute; inset:0; border-radius:50%; border:2px solid color-mix(in srgb, var(--text) 10%, transparent); border-top-color:var(--text); animation:thinking-spin .9s linear infinite; }
-.thinking-mark .provider-mark,.thinking-mark .orglet-mark { border:0; background:transparent; }
-.thinking-text { font-size:14px; color:var(--muted); background:linear-gradient(90deg, var(--muted) 30%, var(--text) 50%, var(--muted) 70%); background-size:200% 100%; -webkit-background-clip:text; background-clip:text; color:transparent; animation:thinking-shimmer 1.8s linear infinite; }
+/* Waiting is one line (user, 2026-09-19): the worker's face with a light running round it, what it is doing,
+   how long it has taken, and a way to stop. One mark, not a spinner sitting beside an avatar. */
+.thinking { display:flex; align-items:center; gap:8px; min-height:34px; }
+.working-mark { position:relative; display:grid; place-items:center; width:34px; height:34px; flex-shrink:0; }
+.working-halo { position:absolute; inset:0; width:100%; height:100%; }
+.working-track,.working-trace { fill:none; stroke-width:2; stroke-linejoin:round; }
+.working-track { stroke:color-mix(in srgb, var(--text) 9%, transparent); }
+/* A short arc of light travels the avatar's own edge, easing rather than turning at a constant rate, so it
+   reads as something alive instead of a machine spinning. pathLength=200 makes the dashes read as percent. */
+.working-trace { stroke:var(--text); stroke-dasharray:34 166; animation:working-trace 1.6s cubic-bezier(.62,0,.38,1) infinite; }
+.working-who { font-size:14px; font-weight:600; flex-shrink:0; }
+/* The words are muted, with a band of light sweeping across them in time with the mark. */
+.thinking-text { font-size:14px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  background:linear-gradient(100deg, var(--muted) 38%, var(--text) 50%, var(--muted) 62%); background-size:220% 100%;
+  -webkit-background-clip:text; background-clip:text; color:transparent; animation:thinking-shimmer 1.6s ease-in-out infinite; }
 .thinking-stop { width:28px; height:28px; min-height:28px; margin-left:4px; border-radius:50%; background:var(--surface); color:var(--text); }
 .thinking-seconds { font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .thinking-toggle { padding:0; border:0; cursor:pointer; }
-.thinking-notes { margin:4px 0 0 46px; max-height:220px; overflow-y:auto; font-size:13px; line-height:1.6; color:var(--muted); white-space:pre-wrap; }
+.thinking-notes { margin:4px 0 0 42px; max-height:220px; overflow-y:auto; font-size:13px; line-height:1.6; color:var(--muted); white-space:pre-wrap; }
 /* Live run: preamble, activity steps and the answer as it streams. Groups are separated by space only. */
 .live-run { display:flex; flex-direction:column; gap:12px; padding-left:35px; }
 .live-run .prose { line-height:1.65; }
@@ -937,6 +947,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .activity-step.running .activity-verb { animation:thinking-pulse 1.4s ease-in-out infinite; }
 @keyframes thinking-pulse { 50% { opacity:.45; } }
 @media(max-width:1000px) { .live-run { padding-left:0; } }
-@keyframes thinking-spin { to { transform:rotate(360deg); } }
-@keyframes thinking-shimmer { from { background-position:100% 0; } to { background-position:-100% 0; } }
-@media (prefers-reduced-motion: reduce) { .thinking-mark::before { animation-duration:3s; } .thinking-text { animation:none; color:var(--muted); background:none; } .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }
+@keyframes thinking-shimmer { from { background-position:120% 0; } to { background-position:-120% 0; } }
+@keyframes working-trace { to { stroke-dashoffset:-200; } }
+@media (prefers-reduced-motion: reduce) { .working-trace { animation-duration:4s; } .thinking-text { animation:none; color:var(--muted); background:none; } .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }
