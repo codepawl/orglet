@@ -43,13 +43,13 @@ try {
   const completed = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks;
   assert.equal(completed.length, 1); assert.equal(completed[0].routineId, routine.id);
   await page.getByRole('button', { name: /Lịch chạy/ }).click();
-  await region.getByRole('button', { name: 'Tắt lịch', exact: true }).click();
+  await region.getByRole('switch', { name: 'Bật lịch', exact: true }).click();
   await region.getByText(/Đã tắt/).waitFor();
-  // Turning one off must leave a way to turn it back on: the card used to drop the button entirely.
-  await region.getByRole('button', { name: 'Bật lịch', exact: true }).click();
+  // Turning one off must leave a way to turn it back on: the card used to drop the control entirely.
+  await region.getByRole('switch', { name: 'Bật lịch', exact: true }).click();
   await region.getByText(/Đang bật/).waitFor();
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).routines[0].enabled, true);
-  await region.getByRole('button', { name: 'Tắt lịch', exact: true }).click();
+  await region.getByRole('switch', { name: 'Bật lịch', exact: true }).click();
   await region.getByText(/Đã tắt/).waitFor();
   await page.screenshot({ path: join(output, 'routine-completed.png') });
   await app.close();

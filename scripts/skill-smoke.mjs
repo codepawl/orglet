@@ -47,7 +47,7 @@ try {
   await page.getByText('Đã review trên máy này.', { exact: true }).waitFor();
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, exportPath);
   await page.getByRole('button', { name: 'Xuất gói skill', exact: true }).click();
-  await page.getByText('Đã xuất gói skill vào thư mục mới.', { exact: true }).waitFor();
+  await page.getByText('Đã xuất gói skill vào thư mục mới', { exact: true }).waitFor();
   assert.equal(await readFile(join(exportPath, 'review-kit/references/checks.md'), 'utf8'), 'Check each claim against a selected source.');
   assert.equal(JSON.parse(await readFile(join(exportPath, 'review-kit/orglet.json'), 'utf8')).evaluator, 'orglet-report-v1');
   await page.keyboard.press('Escape');

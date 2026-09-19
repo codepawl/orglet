@@ -7,6 +7,7 @@ import { deprecationNotice, formatSunsetDay, pickerListedModel } from '../../sha
 import { currentLocale, t } from '../i18n';
 import { orglet } from '../api';
 import { Button, FieldLabel } from './ui';
+import { ProviderMark } from './ProviderMark';
 import { fieldInvalid } from './fieldInvalid';
 
 function deprecationChipLabel(sunsetAt?: string) {
@@ -178,6 +179,9 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
         <li key={option.id} id={`${id}-option-${index}`} data-index={index} role="option" aria-selected={option.id === value}
           className={`select-option${index === active ? ' active' : ''}`}
           onPointerMove={() => { if (index !== active) setActive(index); }} onPointerDown={event => event.preventDefault()} onClick={() => choose(index)}>
+          {/* The provider is the same for every row, but without its mark a list of bare slugs says nothing about
+              what it belongs to (user, 2026-09-19). */}
+          <ProviderMark provider={provider} size="small" decorative />
           <span className="select-option-text">
             <span>{option.displayName ?? option.id}</span>
             {option.displayName ? <span className="select-detail">{option.id}</span> : option.source === 'catalog-hint' ? <span className="select-detail">{t('Gợi ý')}</span> : null}

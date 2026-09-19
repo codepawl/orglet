@@ -73,14 +73,14 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
     if (shift && (!shiftDays.length || shiftStart === shiftEnd)) return fail('limits', t('Chọn ít nhất một ngày làm việc và giờ bắt đầu khác giờ kết thúc.'), 'shift');
     void run(async () => {
       await orglet.call('saveTeam', { ...(team ? { id: team.id } : {}), name, instructions, ...(requiredChecks.length ? { reviewPolicy: { requiredChecks } } : {}), memberIds: members, synthesizerId: synthesizer, workflow, monthlyBudgetMicros, taskBudgetMicros, maxConcurrentTasks: concurrency, ...(shift ? { workHours: { timeZone: shiftZone, start: shiftStart, end: shiftEnd, days: shiftDays } } : {}), ...(preflight ? { preflight: { idColumn: idColumn.trim() || null, compareTwo } } : {}) });
-      toast(team ? t('Đã lưu nhóm.') : t('Đã tạo nhóm.')); onClose();
+      toast(team ? t('Đã lưu nhóm') : t('Đã tạo nhóm')); onClose();
     });
   };
 
   const actions = tab === 'checklist'
     ? <Button type="button" variant="outline" disabled={busy || requiredChecks.length >= 20} onClick={() => { setRequiredChecks(current => [...current, { name: '', checker: 'none' }]); setTimeout(() => (document.querySelector('#team-panel fieldset:last-of-type input') as HTMLElement | null)?.focus(), 0); }}><Plus size={16} />{t('Thêm mục kiểm tra')}</Button>
     : tab === 'general' && team
-      ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.exportTemplate(team.id)) toast(t('Đã xuất template.')); })}><Download size={16} />{t('Xuất template đã lưu')}</Button>
+      ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.exportTemplate(team.id)) toast(t('Đã xuất template')); })}><Download size={16} />{t('Xuất template đã lưu')}</Button>
       : tab === 'general'
         ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.importTemplate()) onClose(); })}><FileUp size={16} />{t('Nhập template')}</Button>
         : undefined;

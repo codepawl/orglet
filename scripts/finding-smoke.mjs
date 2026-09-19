@@ -50,7 +50,7 @@ try {
   await page.getByText('Please supply run logs before assessing stability.', { exact: true }).waitFor();
   await app.evaluate(({ clipboard }) => { globalThis.originalClipboardWrite = clipboard.writeText; clipboard.writeText = text => { globalThis.copiedFeedback = text; }; });
   await page.getByRole('button', { name: 'Sao chép feedback', exact: true }).click();
-  await page.getByText('Đã sao chép feedback.', { exact: true }).waitFor();
+  await page.getByText('Đã sao chép feedback', { exact: true }).waitFor();
   assert.equal(await app.evaluate(() => globalThis.copiedFeedback), 'Please supply run logs before assessing stability.');
   await app.evaluate(({ clipboard }) => { clipboard.writeText = globalThis.originalClipboardWrite; });
   await page.getByText('Nguồn gốc finding', { exact: true }).click();

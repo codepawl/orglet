@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Routine, TaskInput, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
-import { CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, FilePlus, FileText, Globe, MessageSquare, MessageSquareText, Pencil, Power, Repeat, UserRound, Wallet, X } from 'lucide-react';
+import { CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, FilePlus, FileText, Globe, MessageSquare, MessageSquareText, Pencil, Repeat, UserRound, Wallet, X } from 'lucide-react';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
 import { TimeZone } from '../../shared/schedule';
@@ -9,7 +9,7 @@ import { Select } from './Select';
 import { t } from '../i18n';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
-import { SwitchField } from './Switch';
+import { Switch, SwitchField } from './Switch';
 import { StatusMark } from './StatusMark';
 
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
@@ -30,10 +30,10 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
           <div className="routine-title"><h3>{item.name}</h3><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}><StatusMark variant={item.enabled ? 'filled' : 'empty'} tone={item.enabled ? 'success' : 'muted'} label={item.enabled ? t('Đang bật') : t('Đã tắt')} decorative />{item.enabled ? t('Đang bật') : t('Đã tắt')}</span></div>
           <div className="routine-actions">
             <Button size="icon" aria-label={t('Sửa lịch {0}', [item.name])} title={t('Sửa lịch')} disabled={busy} onClick={() => onView({ editing: true, routine: item })}><Pencil size={16} /></Button>
-            {/* One button both ways. It used to render only while the schedule was on, so turning one off left
-                no way to turn it back on from the card (user, 2026-09-19). */}
-            <Button size="icon" className={item.enabled ? undefined : 'routine-off'} aria-label={item.enabled ? t('Tắt lịch') : t('Bật lịch')} title={item.enabled ? t('Tắt lịch') : t('Bật lịch')} disabled={busy}
-              onClick={() => void action(() => orglet.call('saveRoutine', { id: item.id, name: item.name, enabled: !item.enabled, schedule: item.schedule, task: item.task }))}><Power size={16} /></Button>
+            {/* On or off is two states, so it wears a switch (user, 2026-09-19). Its name stays "Bật lịch"
+                whichever way it is set, because the state is what aria-checked says. */}
+            <Switch checked={item.enabled} disabled={busy} label={t('Bật lịch')}
+              onChange={enabled => void action(() => orglet.call('saveRoutine', { id: item.id, name: item.name, enabled, schedule: item.schedule, task: item.task }))} />
           </div>
         </div>
         <ul className="routine-meta">

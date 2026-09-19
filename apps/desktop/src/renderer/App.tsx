@@ -37,8 +37,8 @@ import { Toaster, toast } from './components/toast';
 import { KnowledgeEditor, KnowledgeLibrary } from './components/KnowledgeLibrary';
 import type { Knowledge } from '../shared/knowledge';
 import type { HarnessInfo } from '../shared/harness';
-import { readiness, settingsTabFor, setupHint } from './components/providers';
-import { workerModelLabel } from './components/workerModel';
+import { providerLabel, readiness, settingsTabFor, setupHint } from './components/providers';
+import { workerModelLabel, providerName } from './components/workerModel';
 import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
 import { t, setLanguage, useLanguage } from './i18n';
@@ -109,6 +109,13 @@ export function App() {
   const detailsPane = usePaneWidth({ storageKey: 'orglet.details-width', bounds: DETAILS_WIDTH, widthFromPointer: clientX => innerWidth - clientX - shellGap(), widerKey: 'ArrowLeft' });
   const sidebarWidth = sidebarPane.width;
   const resizing = sidebarPane.resizing || detailsPane.resizing;
+  const [panelMoving, setPanelMoving] = useState(false);
+  useEffect(() => {
+    setPanelMoving(true);
+    const motion = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion-base')) || 170;
+    const timer = setTimeout(() => setPanelMoving(false), motion + 40);
+    return () => clearTimeout(timer);
+  }, [sidebar, detailsOpen]);
   const [dismissedCatchUpNotice, setDismissedCatchUpNotice] = useState('');
   const composer = useRef<HTMLTextAreaElement>(null); const refreshId = useRef(0);
   const bootedLiveThread = useRef(false);
@@ -271,12 +278,12 @@ export function App() {
   const deleteTask = (taskId: string) => action(async () => {
     await orglet.call('deleteTask', { id: taskId });
     if (selectedRef.current === taskId) { hideTaskLocally(taskId, 'deletedAt'); leaveThread(); }
-    toast(t('Đã xóa cuộc trò chuyện.'));
+    toast(t('Đã xóa cuộc trò chuyện'));
   });
   const archiveTask = (taskId: string, archived: boolean) => action(async () => {
     await orglet.call('archiveTask', { id: taskId, archived });
     if (archived && selectedRef.current === taskId) { hideTaskLocally(taskId, 'archivedAt'); leaveThread(); }
-    toast(archived ? t('Đã lưu trữ cuộc trò chuyện.') : t('Đã khôi phục cuộc trò chuyện.'));
+    toast(archived ? t('Đã lưu trữ cuộc trò chuyện') : t('Đã khôi phục cuộc trò chuyện'));
   });
   setDisplayCurrency(workspace?.currency);
   // Phase 5 of the avatar animations: a row that was just created rises into the list once. This sits above the
@@ -316,8 +323,8 @@ export function App() {
     const share = daysLeft / retention;
     return { daysLeft, tone: share > 0.5 ? 'fresh' : share > 0.2 ? 'aging' : 'expiring' };
   };
-  const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => action(async () => { await orglet.call('archiveEntity', { kind, id: entityId, archived }); toast(archived ? t('Đã lưu trữ.') : t('Đã khôi phục.')); });
-  const deleteEntity = (kind: 'worker' | 'team', entityId: string) => action(async () => { await orglet.call('deleteEntity', { kind, id: entityId }); toast(t('Đã xóa.')); });
+  const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => action(async () => { await orglet.call('archiveEntity', { kind, id: entityId, archived }); toast(archived ? t('Đã lưu trữ') : t('Đã khôi phục')); });
+  const deleteEntity = (kind: 'worker' | 'team', entityId: string) => action(async () => { await orglet.call('deleteEntity', { kind, id: entityId }); toast(t('Đã xóa')); });
   const activeTasks = workspace.tasks.filter(task => !task.archivedAt);
   const taskSeen = (task: Workspace['tasks'][number]) => {
     if (selected === task.id) return true;
@@ -374,6 +381,10 @@ export function App() {
     : recipientOptions.length > 0
       ? <Select className="composer-to-select" ariaLabel={t('Đang nhắn với {0}', [team?.name ?? worker?.name ?? t('Nhân viên')])} value={recipientValue} onChange={pickRecipient} showDetail={false} showIcon={false} menuMinWidth={280} options={recipientOptions} />
       : undefined;
+  // One provider behind this chat, or none to name: a team split across providers says nothing in the header and
+  // lets the details panel list them.
+  const chatProviders = [...new Set((selected && detail ? detail.runs.map(run => run.snapshot.worker.provider) : executionWorkers.map(item => item.provider)))];
+  const headerProvider = chatProviders.length === 1 ? chatProviders[0] : undefined;
   const chatName = team?.name ?? worker?.name ?? 'Orglet';
   const [chatHeadingBefore = '', chatHeadingAfter = ''] = t('Đang nhắn với {0}').split('{0}');
   const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với nhóm…') : t('Nhắn với {0}…', [worker?.name ?? t('Nhân viên')])} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={!isDemo && missingConnections.length > 0} mentions={team ? { people: executionWorkers, allNames: [team.name] } : undefined}
@@ -381,11 +392,11 @@ export function App() {
     trailing={composerTrailing}
     attachments={sources.length > 0 ? sources.map(source => <span className="attachment" key={source.id}><FileText size={14} /><span>{source.name}</span><button type="button" aria-label={t('Bỏ {0}', [source.name])} onClick={() => { setSources(sources.filter(s => s.id !== source.id)); }}><X size={14} /></button></span>) : undefined} />;
   const composerHint = isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}<button onClick={() => { if (team) { setEditingTeam(team); setPanel('team'); } else { setEditingWorker(worker); setPanel('worker'); } }}>{team ? t('Thiết lập nhóm') : t('Đổi model')}</button></p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p> : null;
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsPane.width}px` } as CSSProperties}>
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsPane.width}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {detailsOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
-    {sidebar && <aside className="sidebar" aria-label={t('Điều hướng')}>
+    <aside className={`sidebar${sidebar ? '' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={!sidebar || undefined}>
       <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong><Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button><Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={() => setSidebar(false)}><PanelLeft size={18} /></Button></div>
       <div className="sidebar-scroll">
       
@@ -402,7 +413,7 @@ export function App() {
       </SidebarSection>
       </div>
       <div className="sidebar-footer"><Button onClick={() => openRoutines()}><CalendarClock size={18} />{t('Lịch chạy')}{workspace.routines.some(item => item.pending) && <span className="badge">{t('Cần xem')}</span>}</Button><Button onClick={() => { if (workspace.knowledge.some(item => item.status === 'proposed')) setLibraryTab('knowledge'); setPanel('library'); }}><BookOpen size={18} />{t('Thư viện')}{workspace.knowledge.some(item => item.status === 'proposed') && <span className="badge">{t('Cần duyệt')}</span>}</Button><Button onClick={() => openSettings()}><Settings2 size={18} />{t('Cài đặt')}<span className={`connection-dot ${Object.values(connections).some(Boolean) ? 'connected' : ''}`} /></Button></div>
-    </aside>}
+    </aside>
     {/* Collapsed sidebar keeps its two most used actions in a narrow rail, stacked like ChatGPT. */}
 
     <main className="main-pane" id="main-content" tabIndex={-1}>
@@ -414,7 +425,12 @@ export function App() {
         </div>}
         <div>
           <span>{selected ? (detail && assigneeLabel(detail.task, workspace, { all: t('Toàn bộ nhân viên'), many: count => t('{0} nhân viên', [count]) })) ?? team?.name ?? t('Công việc') : team?.name ?? worker?.name ?? 'Orglet'}</span>
-          {(selected ? detail?.runs.every(run => run.snapshot.worker.provider === 'demo') : isDemo) && <span className="badge">Demo</span>}
+          {/* Which model is answering, not only whether it is Demo (user, 2026-09-19). A team running on several
+              providers says nothing here; the details panel lists them one by one. */}
+          {headerProvider && <span className="topbar-provider" title={headerProvider === 'demo' ? t('Demo · không gọi API') : providerLabel(headerProvider)}>
+            {headerProvider !== 'demo' && <ProviderMark provider={headerProvider} size="small" decorative />}
+            {providerName(headerProvider)}
+          </span>}
         </div>
         <div className="topbar-actions">
           {selected && detail && openTaskPaid && <span className="task-cost" role="status" title={detail.usage.reservedMicros > 0 ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.reservedMicros)]) : t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}</span>}
@@ -443,7 +459,7 @@ export function App() {
     </main>
     {detailsOpen && (detail || detailsTeam || detailsWorker) && <DetailsPanel workspace={workspace} team={detailsTeam} worker={detailsWorker} detail={detail}
       workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
-    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở. Máy tắt không làm lịch biến mất: các lần lỡ gộp thành một lần chạy bù.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được. Gói nhập từ thư mục cần được review trước khi gắn cho nhân viên.') : t('Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><CalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><Button size="icon" aria-label={t('Quay lại danh sách lịch')} onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}><ArrowLeft size={18} /></Button><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? editingSkill?.package ? 'Review skill' : t('Chỉnh skill') : panel === 'knowledge' ? editingKnowledge ? 'Knowledge' : t('Knowledge mới') : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
+    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lỡ thì chạy bù một lần') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được. Gói nhập từ thư mục cần được review trước khi gắn cho nhân viên.') : t('Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><CalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><Button size="icon" aria-label={t('Quay lại danh sách lịch')} onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}><ArrowLeft size={18} /></Button><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? editingSkill?.package ? 'Review skill' : t('Chỉnh skill') : panel === 'knowledge' ? editingKnowledge ? 'Knowledge' : t('Knowledge mới') : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
       {panel === 'revision' && detail && <RevisionEditor key={`${detail.task.id}:${detail.task.inputRevision ?? 0}`} detail={detail} workspace={workspace} connections={ready} done={close} />}
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       

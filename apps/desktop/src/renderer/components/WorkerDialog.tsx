@@ -69,7 +69,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     setBusy(true); clearError();
     try {
       await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}) });
-      toast(worker ? t('Đã lưu nhân viên.') : t('Đã tạo nhân viên.')); onClose();
+      toast(worker ? t('Đã lưu nhân viên') : t('Đã tạo nhân viên')); onClose();
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
 

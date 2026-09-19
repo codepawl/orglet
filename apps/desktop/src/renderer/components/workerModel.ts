@@ -10,7 +10,8 @@ const suggestions: Partial<Record<Worker['provider'], string>> = {
   ollama: 'llama3.2',
 };
 
-function providerName(provider: Worker['provider']) {
+/** The provider's own short name, for a chip or a line where the long "… trên máy này" wording would not fit. */
+export function providerName(provider: Worker['provider']) {
   if (provider === 'openai') return 'OpenAI';
   if (provider === 'anthropic') return 'Anthropic';
   if (provider === 'xai') return 'Grok';
