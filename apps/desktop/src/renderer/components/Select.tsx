@@ -14,12 +14,14 @@ const GAP = 6, EDGE = 10, MAX_HEIGHT = 360, MIN_HEIGHT = 140;
  * there is more room above, fits its height to the space left in the window, and follows the trigger on resize/scroll.
  * Keyboard: arrows, Home/End, typing to jump, Enter/Space to choose, Escape to close.
  */
-export function Select({ value, options, onChange, label, ariaLabel, disabled, size = 'md', className = '', menuMinWidth = 0, showDetail = true, inlineDetail = false, describedBy, invalid, flash }: {
+export function Select({ value, options, onChange, label, ariaLabel, disabled, size = 'md', className = '', menuMinWidth = 0, showDetail = true, showIcon = true, inlineDetail = false, describedBy, invalid, flash }: {
   value: string; options: SelectOption[]; onChange: (value: string) => void;
   /** Visible label above the trigger; otherwise pass ariaLabel. */
   label?: ReactNode; ariaLabel?: string; disabled?: boolean; size?: 'md' | 'sm'; className?: string; menuMinWidth?: number;
   /** Show the option's detail next to its label inside the trigger. */
   showDetail?: boolean; describedBy?: string;
+  /** Show the chosen option's icon inside the trigger. The menu keeps its icons either way. */
+  showIcon?: boolean;
   /** Put each option's detail on the same line as its label instead of below it. */
   inlineDetail?: boolean;
   /** Validation: red border + brief flash when `flash` changes. */
@@ -125,7 +127,7 @@ export function Select({ value, options, onChange, label, ariaLabel, disabled, s
       else if (event.key === 'End') { event.preventDefault(); setActive(move(options.length, -1)); }
       else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(active); }
     }}>
-    {current?.icon && <span className="select-icon">{current.icon}</span>}
+    {showIcon && current?.icon && <span className="select-icon">{current.icon}</span>}
     <span className="select-value">{current ? <>{current.label}{showDetail && current.detail && <span className="select-detail"> · {current.detail}</span>}</> : <span className="select-placeholder">{t('Chọn')}</span>}</span>
     <ChevronDown size={16} className="select-chevron" aria-hidden="true" />
   </button>;
