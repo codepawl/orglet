@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ChevronRight, FileText, FolderSearch, Search, Square, Wrench } from 'lucide-react';
+import { ChevronRight, FileText, FolderSearch, Search, Wrench } from 'lucide-react';
 import type { Activity, Run } from '../../shared/contracts';
 import type { ActivityKind, ActivityStep, RunProgressUpdate } from '../../shared/progress';
-import { Button } from './ui';
+
 import { Markdown } from './Markdown';
-import { ProviderMark } from './ProviderMark';
+import { WorkingLine } from './Working';
 import { orglet } from '../api';
 import { t } from '../i18n';
 
@@ -48,14 +48,13 @@ function useElapsedSeconds(since: number) {
   return Math.max(0, Math.floor((now - since) / 1000));
 }
 
-type Provider = Run['snapshot']['worker']['provider'];
 
 /**
  * A worker's run as it happens, modelled on streaming coding agents: what it said it will do, the files it reads and
  * searches (open while it works, folded into one line once it writes), a timer while it thinks, and the answer
  * appearing as it is written.
  */
-export function LiveRun({ update, provider, pausing, onStop }: { update: RunProgressUpdate; provider: Provider; pausing: boolean; onStop: () => void }) {
+export function LiveRun({ update, worker, pausing, onStop }: { update: RunProgressUpdate; worker: Run['snapshot']['worker']; pausing: boolean; onStop: () => void }) {
   const progress = update.progress!;
   const answering = progress.answer.length > 0;
 
@@ -64,7 +63,7 @@ export function LiveRun({ update, provider, pausing, onStop }: { update: RunProg
     {progress.activity.length > 0 && <ActivityGroup steps={progress.activity} folded={progress.writing} />}
     {answering && <Markdown className="prose live-answer" text={progress.answer} />}
     <WorkingRow
-      provider={provider}
+      worker={worker}
       startedAt={update.startedAt}
       label={pausing ? t('Đang dừng sau bước này…') : progress.writing ? t('Đang viết câu trả lời…') : t('Đang suy nghĩ…')}
       thinking={progress.thinking}
@@ -112,19 +111,13 @@ export function ActivityGroup({ steps, folded }: { steps: ActivityStep[]; folded
   </div>;
 }
 
-function WorkingRow({ provider, startedAt, label, thinking, onStop }: { provider: Provider; startedAt: number; label: string; thinking: string; onStop: () => void }) {
+function WorkingRow({ worker, startedAt, label, thinking, onStop }: { worker: Run['snapshot']['worker']; startedAt: number; label: string; thinking: string; onStop: () => void }) {
   const seconds = useElapsedSeconds(startedAt);
   const [showThinking, setShowThinking] = useState(false);
 
   return <div className="live-working">
-    <div role="status" className="thinking">
-      <span className="thinking-mark" aria-hidden="true">{provider === 'demo' ? <span className="orglet-mark small">o</span> : <ProviderMark provider={provider} size="small" decorative />}</span>
-      {thinking
-        ? <button type="button" className="thinking-text thinking-toggle" aria-expanded={showThinking} onClick={() => setShowThinking(!showThinking)}>{label}</button>
-        : <span className="thinking-text">{label}</span>}
-      <span className="thinking-seconds">{seconds}s</span>
-      <Button size="icon" className="thinking-stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}><Square size={11} fill="currentColor" /></Button>
-    </div>
+    <WorkingLine worker={worker} label={label} seconds={seconds} expanded={showThinking}
+      onToggleThinking={thinking ? () => setShowThinking(!showThinking) : undefined} onStop={onStop} />
     {thinking && showThinking && <p className="thinking-notes">{thinking}</p>}
   </div>;
 }
