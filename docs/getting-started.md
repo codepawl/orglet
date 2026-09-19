@@ -23,7 +23,7 @@ The [latest release](https://github.com/codepawl/orglet/releases/latest) is **v0
 
 You need Node **24.19** or newer and pnpm **11.19.0**.
 
-```
+```bash
 pnpm install --frozen-lockfile
 pnpm dev
 ```

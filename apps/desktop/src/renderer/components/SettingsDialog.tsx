@@ -252,14 +252,21 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                   return <div key={item.id} className="setting-row harness-row">
                     <ProviderMark provider={item.id} />
                     <div className="setting-text">
-                      <span className="setting-title"><span>{item.name}</span>{!item.runnable && <span className="badge">{t('Chỉ trạng thái')}</span>}</span>
-                      <span className="setting-description">{item.version || t('Chưa tìm thấy bản cài.')}</span>
+                      {/* The mark, the name and the state read as one line, so the eye does not have to travel
+                          down the row to learn whether this harness is usable (user, 2026-09-19). */}
+                      <span className="harness-head">
+                        <span className="setting-title"><span>{item.name}</span>{!item.runnable && <span className="badge">{t('Chỉ trạng thái')}</span>}</span>
+                        <span className={`status-pill ${pill.className}`}>{pill.label}</span>
+                      </span>
+                      {/* With nothing installed the version line only repeats what the detail line already says. */}
+                      {item.version && <span className="setting-description">{item.version}</span>}
                       <span className="setting-description">{tMessage(item.authDetail)}</span>
-                      {item.status === 'not_installed' && item.installCommand && <CommandCopy command={item.installCommand} label={t('Lệnh cài (tài liệu chính thức)')} />}
-                      {showLogin && <CommandCopy command={item.loginCommand} label={item.status === 'not_installed' ? t('Sau khi cài, đăng nhập bằng') : t('Lệnh đăng nhập')} />}
                       {item.executable ? <span className="setting-path" title={item.executable}>{item.executable}</span> : null}
+                      {((item.status === 'not_installed' && item.installCommand) || showLogin) && <div className="harness-commands">
+                        {item.status === 'not_installed' && item.installCommand && <CommandCopy command={item.installCommand} label={t('Lệnh cài (tài liệu chính thức)')} />}
+                        {showLogin && <CommandCopy command={item.loginCommand} label={item.status === 'not_installed' ? t('Sau khi cài, đăng nhập bằng') : t('Lệnh đăng nhập')} />}
+                      </div>}
                     </div>
-                    <div className="setting-control"><span className={`status-pill ${pill.className}`}>{pill.label}</span></div>
                   </div>;
                 })}
                 {!harnesses.length && <Row title={t('Chưa tìm thấy Claude Code, Codex hoặc Cursor Agent trên máy này.')} description={t('Cài một harness rồi bấm Dò lại.')} />}

@@ -93,7 +93,6 @@ export const en: Dictionary = {
   'Chưa so sánh rank: cần ít nhất hai solutions, cùng tập ở public/private và mỗi nhóm có điểm completed.': 'Ranks not compared: needs at least two solutions, the same set on public/private, and a completed score in each group.',
   'Chưa thể khuyến nghị sẵn sàng khi còn check thiếu/lỗi, bất đồng hoặc finding nghiêm trọng.': 'Cannot recommend ready while checks are missing or failed, disagreements remain, or critical findings exist.',
   'Chưa thể sử dụng gói này:': 'This package cannot be used yet:',
-  'Chưa tìm thấy bản cài.': 'No install found.',
   'Chưa đánh giá': 'Not assessed',
   'Chưa đăng nhập': 'Signed out',
   'Chưa đăng nhập {0}. Vẫn có thể gõ ID model tùy chỉnh.': '{0} is not signed in. You can still type a custom model ID.',
