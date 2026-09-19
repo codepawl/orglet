@@ -44,11 +44,12 @@ try {
   const state = await page.evaluate(() => window.orglet.call('workspace', {}));
   const taskId = state.tasks[0].id; assert.equal(state.tasks[0].accepted, false);
   await page.screenshot({ path: join(output, 'desktop-report.png') });
-  await page.getByRole('button', { name: 'Chi tiết', exact: true }).click();
+  await page.locator('.topbar-actions .thread-menu').click();
+  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
   const details = page.getByRole('complementary', { name: 'Chi tiết' });
   await details.waitFor(); await page.keyboard.press('Escape');
   assert.equal(await details.count(), 0);
-  await page.waitForFunction(() => document.activeElement?.textContent === 'Chi tiết');
+  await page.waitForFunction(() => document.activeElement?.classList.contains('thread-menu'));
   await page.getByRole('button', { name: '1 nguồn', exact: true }).click();
   await page.getByRole('button', { name: 'Đọc nội dung', exact: true }).click();
   await page.getByText('Evidence fixture.', { exact: false }).waitFor();
@@ -124,7 +125,8 @@ try {
   // Transcript is the synthesis only. Member jobs stay in Chi tiết; the plan job has no artifact.
   assert.equal(await page.locator('.assistant-message .chat-reply, .assistant-message .report').count(), 1);
   await page.getByRole('button', { name: 'Sao chép', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Chi tiết', exact: true }).click();
+  await page.locator('.topbar-actions .thread-menu').click();
+  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
   // Each job is a line of the story, with its stage as a chip beside the worker's name.
   await page.locator('.details-run-who').filter({ hasText: 'phân việc' }).waitFor();
   await page.locator('.details-run-who').filter({ hasText: 'gộp kết quả' }).waitFor();

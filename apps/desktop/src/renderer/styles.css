@@ -49,10 +49,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .sidebar-resizer:hover::after,.sidebar-resizer:focus-visible::after,.app.resizing .sidebar-resizer::after { background:color-mix(in srgb, var(--text) 22%, transparent); }
 .sidebar-resizer:focus-visible { outline:none; }
 .app.resizing { cursor:col-resize; user-select:none; }
-.app.sidebar-hidden { grid-template-columns:56px minmax(0,1fr); }
+.app.sidebar-hidden { grid-template-columns:minmax(0,1fr); }
 /* Chat details are a third panel in the shell, the same card as the sidebar (user, 2026-09-19). */
 .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr) var(--details-width); }
-.app.sidebar-hidden.with-details { grid-template-columns:56px minmax(0,1fr) var(--details-width); }
+.app.sidebar-hidden.with-details { grid-template-columns:minmax(0,1fr) var(--details-width); }
 .details-pane { display:flex; flex-direction:column; min-height:0; background:var(--sidebar); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); overflow:hidden; animation:pane-in var(--motion-base) var(--ease-out); }
 @keyframes pane-in { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
 /* The close button sits in the top-right corner, so the head starts below where the curve ends. */
@@ -65,18 +65,22 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Who this chat is with, at the top and larger than anything under it. */
 .details-subject { display:flex; flex-direction:column; gap:5px; }
 .details-subject-name { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; line-height:1.3; }
-.details-subject-meta { display:flex; flex-direction:column; gap:2px; padding-left:10px; }
-.details-subject-meta p { font-size:12.5px; line-height:1.45; }
+.details-subject-note { padding-left:10px; font-size:12.5px; line-height:1.45; color:var(--muted); }
+/* Short facts with an icon each, wrapping onto as many rows as they need. */
+.details-facts { display:flex; flex-wrap:wrap; gap:6px 12px; padding-left:10px; }
+.details-fact { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; color:var(--muted); white-space:nowrap; }
+.details-fact svg { flex-shrink:0; color:var(--muted); }
+
 .details-runs-on { display:flex; align-items:center; gap:5px; }
 .details-section { display:flex; flex-direction:column; gap:7px; }
 .details-section h3 { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--muted); }
 .details-section h3 svg { color:var(--muted); }
 /* A member reads as a person: face, name, and what they are here for. */
-.details-member { display:flex; align-items:flex-start; gap:8px; padding:3px 0; }
-.details-member > .avatar { margin-top:1px; }
+.details-member { display:flex; align-items:center; gap:8px; min-height:34px; }
+.details-member > div { min-width:0; }
 .details-member-name { font-size:13px; display:flex; align-items:center; gap:6px; }
 .details-member-name small { font-size:11px; color:var(--muted); }
-.details-member p.muted { font-size:12px; line-height:1.4; }
+.details-member p.muted { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .details-status { font-size:13px; font-weight:500; }
 .details-source { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .details-source svg { flex-shrink:0; }
@@ -93,7 +97,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-technical h4 { font-size:12.5px; font-weight:600; }
 .details-technical .hash { font-size:11px; }
 @media(max-width:1000px) { .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr); } .details-pane { display:none; } }
-.sidebar-rail { display:flex; flex-direction:column; align-items:center; gap:6px; padding:17px 0 16px; background:transparent; }
+/* Collapsed sidebar: the two buttons live in the main panel, not on the window behind it (user, 2026-09-19). */
+.topbar-rail { display:flex; align-items:center; gap:2px; margin-right:6px; flex-shrink:0; }
 /* Top and bottom clear the corner curve, because the brand row and the footer buttons sit right in it. */
 .sidebar { background:var(--sidebar); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); padding:var(--panel-inset) 10px; display:flex; flex-direction:column; overflow:hidden; }
 .brand { display:flex; align-items:center; gap:8px; padding:0 6px 14px; }
@@ -347,7 +352,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .form textarea { resize:vertical; min-height:100px; line-height:1.6; }
 .form fieldset { border:1px solid var(--border); border-radius:10px; padding:12px; }
 .form legend { font-size:13px; padding:0 4px; }
-
 
 .form section { display:flex; flex-direction:column; gap:10px; }
 .form section+.form section { padding-top:8px; }
@@ -665,7 +669,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .tab-row-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .tab-count { min-width:18px; padding:0 5px; border-radius:9px; background:color-mix(in srgb, var(--text) 8%, transparent); color:var(--muted); font-size:11px; line-height:18px; text-align:center; font-variant-numeric:tabular-nums; }
 .tabs .button { gap:6px; }
-@media(max-width:780px) { .app.sidebar-hidden { grid-template-columns:52px minmax(0,1fr); } }
+
 /* Checkbox: native input kept for keyboard, forms and assistive tech; the box is drawn. */
 .checkbox { position:relative; display:flex; align-items:flex-start; gap:10px; margin:6px 0; font-size:14px; font-weight:400; cursor:pointer; }
 .form label.checkbox { flex-direction:row; gap:10px; font-weight:400; }

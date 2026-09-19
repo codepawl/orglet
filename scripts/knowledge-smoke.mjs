@@ -67,7 +67,8 @@ try {
   assert.equal(detail.task.status, 'completed');
   for (const run of detail.runs) assert.deepEqual(run.snapshot.context.knowledge.map(item => [item.id, item.revision]), [[approved.id, 2]]);
   await openThreadByBrief(page, 'Knowledge context fixture');
-  await page.getByRole('button', { name: 'Chi tiết', exact: true }).click();
+  await page.locator('.topbar-actions .thread-menu').click();
+  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
   // The context manifest is machine detail, so it sits inside the collapsed technical block.
   await page.locator('.details-technical > summary').click();
   await page.getByText(/Context đã nạp/).first().click();
