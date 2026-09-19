@@ -56,7 +56,7 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: pnpm make
-      - name: Verify Developer ID signature
+      - name: Verify signature, staple and Gatekeeper
         if: steps.signing.outputs.enabled == 'true'
         run: |
           set -euo pipefail
@@ -68,11 +68,17 @@ jobs:
           fi
           codesign --verify --deep --strict --verbose=2 "${apps[0]}"
           codesign --display --verbose=2 "${apps[0]}"
-          if stapler validate "${apps[0]}" >/dev/null 2>&1; then
-            echo "Notarization staple: present"
+          # The runner is a real Mac, so it answers the question a download would: does Gatekeeper open this app?
+          # Only a notarized build can pass, so this is a gate when notarization credentials exist and a note when they do not.
+          if [ -n "${APPLE_API_KEY:-}" ] || { [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; }; then
+            stapler validate "${apps[0]}"
+            spctl --assess --type execute --verbose=4 "${apps[0]}"
           else
-            echo "Notarization staple: absent (Apple ID / API key / issuer not configured)."
+            echo "Notarization credentials are not set; signed but not notarized, so Gatekeeper is not checked."
           fi
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       - uses: actions/upload-artifact@v4
         with:
           name: orglet-macos-${{ steps.signing.outputs.enabled == 'true' && 'signed' || 'unsigned' }}-zip
