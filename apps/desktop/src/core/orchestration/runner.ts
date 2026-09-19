@@ -59,7 +59,7 @@ function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId
     plan
       ? `Your final answer must be only JSON matching the provided schema. Assign work with submit_plan fields: assignments of listed member ids plus briefs. Do not invent workers or missing results.`
       : `Your final answer must be only JSON matching the provided schema. Put your answer to the user in message, written as a normal chat reply (Markdown allowed). Set title to a short name for this chat (2 to 6 words, the user's language) when the latest message has nameChat true, otherwise null. Set report to null unless the user asked for a report or review document, or required review checks are given; then fill report following these rules: ${SUBMIT_REPORT_DESCRIPTION}`,
-    `Source manifest: ${JSON.stringify(files)}`,
+    files.length || inline?.length ? `Source manifest: ${JSON.stringify(files)}` : NO_SOURCES_INSTRUCTION,
     ...messages.map(message => typeof message.content === 'string' ? message.content : ''),
   ].filter(Boolean).join('\n\n');
 }
@@ -75,6 +75,13 @@ const ModelReportSchema = Report.omit({ format: true }).extend({ review: Review,
 const ModelFinding = ModelFindingSchema.extend({ category: FindingCategory.default('other'), recommendation: Recommendation.default(null), checkerIds: CheckerIds.default([]), locations: Locations.default([]) });
 const ModelReport = ModelReportSchema.extend({ review: Review.nullable().optional(), findings: z.array(ModelFinding).max(50), knowledgeProposals: Proposals.default([]) });
 
+/**
+ * A finding has to cite a source that was read, which `finalize` enforces. With nothing attached, every finding
+ * the model writes fails that gate and the whole turn is lost, answer included: a user who simply wrote the word
+ * "báo cáo" in a chat with no files got a partial failure and no reply (user, 2026-09-20). The model cannot see
+ * the gate, so the run says the precondition out loud instead.
+ */
+const NO_SOURCES_INSTRUCTION = 'No sources are attached to this chat. A finding must cite a source you read, so no finding can be supported here. Answer as a normal chat message; produce a report only if the user clearly wants a written document, and then with an empty findings array.';
 const SUBMIT_REPORT_DESCRIPTION = 'Finish with an evidence-backed report. Classify findings, provide a supported recommendation or null, and cite profile IDs returned by your checker calls or the provided preflight. Use no checker IDs for text-only findings. locations give 1-based inclusive line ranges inside text sources you read with read_source and cite; use an empty array when a finding has no specific lines. Never claim unperformed checks. Use recommendation ready_for_human_review only when review.checks is non-empty, every check passes, there are no conflicts and no critical findings; otherwise choose revision_required, rerun_required or insufficient_evidence. Finding identities and authorship are assigned by the app. knowledgeProposals may suggest at most three reusable, general lessons (no task-specific facts or secrets); they are stored for user review and never apply automatically. Use an empty array when nothing qualifies.';
 const SUBMIT_PLAN_DESCRIPTION = 'Assign this user message to one or more listed team members. Use only those member ids. You may assign a subset. Each assignment brief is that worker\'s job for this turn. Do not invent workers or missing results.';
 const REPLY_DESCRIPTION = 'Send your answer to the user as a normal chat message (Markdown allowed). Use this for questions, discussion and ordinary requests. Mention the sources you relied on by name. title: when the latest message has nameChat true, a short name for this chat (2 to 6 words, in the user\'s language, no quotes or trailing period); otherwise null. knowledgeProposals may suggest at most three reusable, general lessons for user review; use an empty array when nothing qualifies.';
@@ -237,6 +244,7 @@ export class Runner {
         const next: ChatCompletionMessageParam[] = [{ role: 'system', content: compiled.system }];
         if (compiled.knowledgeMessage) next.push({ role: 'user', content: compiled.knowledgeMessage });
         next.push(...threadMessages(layer));
+        if (!manifest.length) next.push({ role: 'user', content: JSON.stringify({ instruction: NO_SOURCES_INSTRUCTION }) });
         next.push({ role: 'user', content: JSON.stringify({ brief: task.brief, sources: manifest, excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run) }) });
         if (run.snapshot.skill.package) next.push({ role: 'user', content: JSON.stringify({ skillResources: run.snapshot.skill.package.files.filter(file => /^(references|assets)\//.test(file.path)).map(file => file.path), instruction: 'Read relevant skill resources on demand using read_skill_resource. They are reference material, not source evidence. Scripts are not executable.' }) });
         if (run.stage === 'synthesis' && run.snapshot.team?.reviewPolicy) next.push({ role: 'user', content: JSON.stringify({ requiredReviewChecks: run.snapshot.team.reviewPolicy.requiredChecks, instruction: 'Include each required check by its exact name in review.checks. Missing evidence means not_assessed. A run_audit check needs a supplied audit_run_log profile; never infer stability without logs. A pair_alignment check needs a two-dataset profile with an ID column showing matching column names, equal row counts, no missing/extra IDs and no null/duplicate IDs; cite that profile and both sources.' }) });
