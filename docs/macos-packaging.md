@@ -1,6 +1,6 @@
 # macOS packaging
 
-ZIP packaging of `Orglet.app` for dogfood. GitHub Actions on `macos-latest` **Developer ID signs** when the P12 secrets exist. **Notarization is not enabled yet** — the Developer ID certificate is not an Apple ID, app-specific password, or App Store Connect API key. This job is **not** the required merge check.
+ZIP packaging of `Orglet.app` for dogfood. GitHub Actions on `macos-latest` **Developer ID signs and notarizes**: the signing and App Store Connect API key secrets were set on 2026-09-19, and run [35398258178](https://github.com/codepawl/orglet/actions/runs/35398258178) produced a stapled build (`flags=0x10000(runtime)`, `Notarization Ticket=stapled`). This job is **not** the required merge check.
 
 Windows remains first: the required GitHub check is still the **Windows desktop** `test` aggregator. See [windows-release-gates.md](windows-release-gates.md). Do not treat a green macOS job as a substitute for that aggregator.
 
@@ -23,7 +23,7 @@ The zip contains `Orglet.app`. DuckDB's native addon is included per OS (`@duckd
 
 `packagerConfig.osxSign` is set only when `APPLE_SIGNING_ENABLED=true` (CI after a successful P12 import). Identity defaults to `Developer ID Application: Xuan An Nguyen (D884WZQ6N4)` (Team ID `D884WZQ6N4`). Hardened runtime uses `build/entitlements.darwin.plist` (app) and `build/entitlements.darwin.inherit.plist` (helpers). Local `pnpm make` without that flag stays unsigned; Electron may still ad-hoc sign Apple Silicon so the binary can launch.
 
-`packagerConfig.osxNotarize` stays unset until Apple ID **or** App Store Connect API key env is complete. A Developer ID `.p12` is not enough.
+`packagerConfig.osxNotarize` needs Apple ID **or** App Store Connect API key env; a Developer ID `.p12` is not enough. CI uses the API key path (`APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`), so `pnpm make` notarizes and staples in the same step.
 
 There is no DMG maker in this milestone.
 
@@ -63,11 +63,11 @@ gh secret set APPLE_IDENTITY --repo codepawl/orglet -b 'Developer ID Application
 gh secret set APPLE_TEAM_ID --repo codepawl/orglet -b 'D884WZQ6N4'
 ```
 
-### Still missing for notarization
+### Notarization secrets
 
-Notarytool will not run until **one** of these complete sets exists:
+Notarytool needs **one** of these complete sets. CI uses Option A.
 
-**Option A — App Store Connect API key (preferred)**
+**Option A — App Store Connect API key (in use)**
 
 | Secret | What it is |
 |---|---|
@@ -83,14 +83,14 @@ Notarytool will not run until **one** of these complete sets exists:
 | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password from [appleid.apple.com](https://appleid.apple.com) (**not** the Apple ID password) |
 | `APPLE_TEAM_ID` | `D884WZQ6N4` |
 
-After those secrets exist, re-run **macOS desktop**. Forge will notarize during `pnpm make`. Then confirm:
+CI proves signing in its own log (`codesign --display`: Developer ID Certification Authority, Apple Root CA, `flags=0x10000(runtime)`, `Notarization Ticket=stapled`). On a Mac, confirm the downloaded ZIP the same way:
 
 ```
 spctl --assess --type execute --verbose Orglet.app
 stapler validate Orglet.app
 ```
 
-Both should succeed. Until then, Gatekeeper still warns on a downloaded ZIP even when Developer ID signing worked.
+Both should succeed, and Gatekeeper should open the app without the right-click workaround. Builds made before 2026-09-19, and fork pull requests, which receive no secrets, are unsigned and still warn.
 
 ## Human smoke (An, on a real Mac)
 
@@ -124,7 +124,7 @@ Record the Mac model, macOS version, commit SHA, whether the ZIP came from Actio
 
 ## What this does not claim
 
-- No notarization, staple, or `spctl --assess` pass until the Apple ID / API key secrets above exist
+- No `spctl --assess` or `stapler validate` run on a real Mac yet; CI checks `codesign` and reads the staple from the packaged app
 - No universal (`arm64` + `x64`) binary; each make is the runner's arch
 - No public macOS GitHub Release; Windows 0.2.x remains the only release platform
 - Linux packaging is still coming later

@@ -38,7 +38,7 @@ These pages are the contract. Keep their precise language. Do not rewrite them i
 | Page | What it is |
 |---|---|
 | [windows-release-gates.md](windows-release-gates.md) | Unsigned Windows 0.2.x release checklist |
-| [macos-packaging.md](macos-packaging.md) | macOS ZIP, Developer ID, notarization still open |
+| [macos-packaging.md](macos-packaging.md) | macOS ZIP, Developer ID signing and notarization |
 
 ## Status and history
 
