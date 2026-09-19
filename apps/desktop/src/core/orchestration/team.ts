@@ -94,7 +94,7 @@ export class TeamRunner {
       const last = this.store.detail(task.id).runs.at(-1);
       if (last && last.status !== 'completed') this.store.update('runs', { ...last, error: error instanceof PreflightError ? error.message : 'Nhóm bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.' });
       this.finish(task, control.cancelled ? 'cancelled' : error instanceof PreflightError ? 'failed' : 'interrupted');
-    } finally { this.active.delete(task.id); this.notify(); }
+    } finally { this.notify(); this.active.delete(task.id); }
   }
   /**
    * Group chat: every assigned worker answers the latest message in order, each seeing the replies before it. Workers
@@ -129,7 +129,7 @@ export class TeamRunner {
       this.finish(task, control.cancelled ? 'cancelled' : control.paused ? 'paused' : !answered ? 'failed' : failed ? 'partial' : 'completed');
     } catch {
       this.finish(task, control.cancelled ? 'cancelled' : 'interrupted');
-    } finally { this.active.delete(task.id); this.notify(); }
+    } finally { this.notify(); this.active.delete(task.id); }
   }
   private createRun(task: Task, team: Team, workerId: string, stage: 'plan' | 'member' | 'synthesis', upstream: Artifact[]) {
     const worker = this.store.get<Worker>('workers', workerId);
