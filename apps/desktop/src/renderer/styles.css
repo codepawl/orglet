@@ -216,21 +216,29 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer-add:hover:not(:disabled) { background:var(--surface); }
 .send { grid-area:send; border-radius:50%; }
 .send:disabled { opacity:.35; }
-/* Compact recipient Select left of send — pill trigger like ChatGPT’s model chip. */
+/* Compact Select left of send — pill trigger like ChatGPT’s model chip. A team chat puts the recipient here; a
+   one-to-one chat puts the worker's model, since its header already names the worker (user, 2026-09-19). */
 /* Shorter than the send button: it is the secondary control, and at the send button's height its pill crowded
    the prompt bar's own corner curve (user, 2026-09-19). */
-.composer-trailing .composer-to-select.select-trigger {
+.composer-trailing .composer-to-select.select-trigger,
+.composer-trailing .composer-model-select.select-trigger {
   width:auto; max-width:100%; min-height:30px; padding:3px 10px; gap:6px;
   border:0; border-radius:999px; background:transparent; box-shadow:none;
 }
 .composer-trailing .composer-to-select.select-trigger:hover:not(:disabled),
-.composer-trailing .composer-to-select.select-trigger[aria-expanded=true] {
+.composer-trailing .composer-to-select.select-trigger[aria-expanded=true],
+.composer-trailing .composer-model-select.select-trigger:hover:not(:disabled),
+.composer-trailing .composer-model-select.select-trigger[aria-expanded=true] {
   background:var(--surface); border-color:transparent;
 }
-.composer-trailing .composer-to-select .select-value { font-size:12px; font-weight:500; color:var(--muted); }
+.composer-trailing .composer-to-select .select-value,
+.composer-trailing .composer-model-select .select-value { font-size:12px; font-weight:500; color:var(--muted); }
 .composer-trailing .composer-to-select.select-trigger:hover .select-value,
-.composer-trailing .composer-to-select.select-trigger[aria-expanded=true] .select-value { color:var(--text); }
-.composer-trailing .composer-to-select .select-chevron { width:14px; height:14px; flex-shrink:0; color:var(--muted); }
+.composer-trailing .composer-to-select.select-trigger[aria-expanded=true] .select-value,
+.composer-trailing .composer-model-select.select-trigger:hover .select-value,
+.composer-trailing .composer-model-select.select-trigger[aria-expanded=true] .select-value { color:var(--text); }
+.composer-trailing .composer-to-select .select-chevron,
+.composer-trailing .composer-model-select .select-chevron { width:14px; height:14px; flex-shrink:0; color:var(--muted); }
 .composer-trailing .composer-to-select .select-icon { display:flex; }
 .composer-to {
   display:inline-flex; align-items:center; gap:6px; max-width:100%; min-height:36px; padding:3px 8px 3px 4px;

@@ -1090,6 +1090,9 @@ export const en: Dictionary = {
   'đến {0}': 'to {0}',
   'ở chế độ Demo': 'in Demo mode',
   'Đổi nhân viên, skill, nhóm hoặc model thì phải mở lịch và lưu lại. Tắt lịch không hủy task đang chạy.': 'Changing the worker, skill, team or model means opening the schedule and saving it again. Turning a schedule off does not cancel running tasks.',
+  // Model picker on the prompt bar of a one-to-one chat (components/ComposerModel.tsx).
+  'Model của {0}': "{0}'s model",
+  'Mặc định': 'Default',
   // Chat details panel (components/DetailsPanel.tsx).
   'Số nhân viên trong nhóm': 'Workers in this team',
   'song song': 'in parallel',
