@@ -216,6 +216,17 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer-add:hover:not(:disabled) { background:var(--surface); }
 .send { grid-area:send; border-radius:50%; }
 .send:disabled { opacity:.35; }
+/* While a run is in progress the send button is the stop button, and a ring turns inside it so the eye lands
+   there (user, 2026-09-19). The arc is drawn in the button's own text colour: outside the button it would run
+   dark on dark and read as a halo rather than as something moving. */
+.send.stop { position:relative; }
+.send.stop .send-spin {
+  position:absolute; inset:3px; border-radius:50%; pointer-events:none;
+  border:2px solid color-mix(in srgb, var(--primary-text) 28%, transparent); border-top-color:var(--primary-text);
+  animation:send-spin 820ms linear infinite;
+}
+@keyframes send-spin { to { transform:rotate(1turn); } }
+@media(prefers-reduced-motion:reduce) { .send.stop .send-spin { animation-duration:2.4s; } }
 /* Compact Select left of send — pill trigger like ChatGPT’s model chip. A team chat puts the recipient here; a
    one-to-one chat puts the worker's model, since its header already names the worker (user, 2026-09-19). */
 /* Shorter than the send button: it is the secondary control, and at the send button's height its pill crowded
@@ -997,7 +1008,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .thinking-text { font-size:14px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   background:linear-gradient(100deg, var(--muted) 38%, var(--text) 50%, var(--muted) 62%); background-size:220% 100%;
   -webkit-background-clip:text; background-clip:text; color:transparent; animation:thinking-shimmer 1.6s ease-in-out infinite; }
-.thinking-stop { width:28px; height:28px; min-height:28px; margin-left:4px; border-radius:50%; background:var(--surface); color:var(--text); }
 .thinking-seconds { font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .thinking-toggle { padding:0; border:0; cursor:pointer; }
 .thinking-notes { margin:4px 0 0; max-height:220px; overflow-y:auto; font-size:13px; line-height:1.6; color:var(--muted); white-space:pre-wrap; }
