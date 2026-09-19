@@ -32,8 +32,8 @@ export function ReviewSummary({ report, artifactId, detail, showSources }: { rep
     <h3>{t('Feedback nháp')}</h3><p className="prose">{review.draftFeedback}</p>
     <Button variant="outline" disabled={copying} onClick={async () => {
       setCopying(true);
-      try { await orglet.copyFeedback(artifactId); toast(t('Đã sao chép feedback.')); }
-      catch (error) { toast(error instanceof Error ? error.message : t('Không thể sao chép feedback.'), 'error'); }
+      try { await orglet.copyFeedback(artifactId); toast(t('Đã sao chép feedback')); }
+      catch (error) { toast(error instanceof Error ? error.message : t('Không thể sao chép feedback'), 'error'); }
       finally { setCopying(false); }
     }}>{t('Sao chép feedback')}</Button>
     <p className="muted">{t('Chưa gửi ra ngoài. Kiểm tra và chỉnh nội dung trước khi sử dụng.')}</p>

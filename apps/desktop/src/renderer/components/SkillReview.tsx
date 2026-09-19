@@ -63,7 +63,7 @@ export function SkillReview({ skill, done }: { skill: Skill; done: () => void })
       </>}
       <Button variant="outline" disabled={busy} onClick={async () => {
         setBusy(true); setError('');
-        try { if (await orglet.exportSkill(skill.id)) toast(t('Đã xuất gói skill vào thư mục mới.')); }
+        try { if (await orglet.exportSkill(skill.id)) toast(t('Đã xuất gói skill vào thư mục mới')); }
         catch (err) { setError((err as Error).message); } finally { setBusy(false); }
       }}>{t('Xuất gói skill')}</Button>
     </>}

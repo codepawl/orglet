@@ -73,7 +73,7 @@ try {
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, templatePath);
   await page.getByRole('button', { name: 'Tùy chọn nhóm Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
   await page.getByRole('button', { name: 'Xuất template đã lưu', exact: true }).click();
-  await page.getByText('Đã xuất template.', { exact: true }).waitFor();
+  await page.getByText('Đã xuất template', { exact: true }).waitFor();
   const template = JSON.parse(await readFile(templatePath, 'utf8'));
   assert.equal(template.team.reviewPolicy.requiredChecks.length, 5);
   assert.equal(template.team.reviewPolicy.requiredChecks[0].name, 'Mục tiêu và GPU relevance');
@@ -92,7 +92,7 @@ try {
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, backupPath);
   await page.getByRole('button', { name: 'Cài đặt', exact: true }).click(); await page.getByRole('tab', { name: 'Dữ liệu', exact: true }).click();
   await page.getByRole('button', { name: 'Lưu bản sao lưu', exact: true }).click();
-  await page.getByText('Đã lưu bản sao lưu.', { exact: true }).waitFor();
+  await page.getByText('Đã lưu bản sao lưu', { exact: true }).waitFor();
   const backup = JSON.parse(await readFile(backupPath, 'utf8'));
   assert.equal(backup.payload.profiles.length, 2); assert.equal(backup.payload.artifacts.length, 5); assert.equal(backup.payload.preflights.length, 1);
   assert.equal(backup.payload.sources[0].path, undefined);
@@ -107,7 +107,7 @@ try {
   }, backupPath);
   await page.getByRole('button', { name: 'Cài đặt', exact: true }).click(); await page.getByRole('tab', { name: 'Dữ liệu', exact: true }).click();
   await page.getByRole('button', { name: 'Khôi phục từ tệp', exact: true }).click();
-  await page.getByText('Đã khôi phục các mục còn thiếu.', { exact: true }).waitFor();
+  await page.getByText('Đã khôi phục các mục còn thiếu', { exact: true }).waitFor();
   const restored = await page.evaluate(id => window.orglet.call('task', { id }), result.id);
   assert.equal(restored.artifacts.length, 1); assert.equal(restored.profiles[0].result.datasets[0].rows, 3);
   assert.equal(restored.sources[0].revoked, true); assert.equal(restored.task.consent, false);

@@ -104,7 +104,7 @@ try {
   await codexRow.getByText('không chuyển sang Demo', { exact: false }).waitFor();
   assert.equal(await codexRow.getByText(/^Đã đăng nhập/, { exact: false }).count(), 0);
   await page.getByRole('button', { name: 'Dò lại', exact: true }).click();
-  await page.getByText('Đã dò lại harness.', { exact: true }).waitFor();
+  await page.getByText('Đã dò lại harness', { exact: true }).waitFor();
   await page.screenshot({ path: 'test-results/settings-connections.png' });
   await page.setViewportSize({ width: 600, height: 760 });
   assert.equal(await page.evaluate(() => { const panel = document.querySelector('.settings-panel'); return panel.scrollWidth > panel.clientWidth + 1; }), false);

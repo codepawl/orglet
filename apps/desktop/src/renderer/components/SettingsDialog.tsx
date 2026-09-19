@@ -55,7 +55,7 @@ function statusPill(item: HarnessInfo) {
 async function copyCommand(command: string) {
   try {
     await navigator.clipboard.writeText(command);
-    toast(t('Đã sao chép lệnh.'));
+    toast(t('Đã sao chép lệnh'));
   } catch {
     try {
       const field = document.createElement('textarea');
@@ -66,9 +66,9 @@ async function copyCommand(command: string) {
       field.select();
       if (!document.execCommand('copy')) throw new Error('copy');
       field.remove();
-      toast(t('Đã sao chép lệnh.'));
+      toast(t('Đã sao chép lệnh'));
     } catch {
-      toast(t('Không sao chép được lệnh.'), 'error');
+      toast(t('Không sao chép được lệnh'), 'error');
     }
   }
 }
@@ -108,7 +108,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   // Settings apply as soon as they change; the command always carries the full current set.
   const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; mentionColor: string }>) => act(async () => {
     await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], mentionColor: workspace.mentionColor, ...patch });
-    return t('Đã lưu.');
+    return t('Đã lưu');
   });
   const commitLimit = () => {
     const micros = toMicros(limit);
@@ -134,7 +134,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             {tabs.map(item => <button key={item.id} id={`settings-tab-${item.id}`} type="button" role="tab" aria-selected={tab === item.id} aria-controls="settings-panel" tabIndex={tab === item.id ? 0 : -1} onClick={() => onTab(item.id)}>{item.icon}<span>{t(item.label)}</span></button>)}
           </nav>
           <section className="settings-panel" id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
-            <PanelHeading title={t(current.label)} description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}>{tab === 'harness' && <Button disabled={busy} onClick={() => void act(async () => { onHarnesses(await orglet.call('harnesses', { refresh: true })); return t('Đã dò lại harness.'); })}><RefreshCw size={13} />{t('Dò lại')}</Button>}</PanelHeading>
+            <PanelHeading title={t(current.label)} description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}>{tab === 'harness' && <Button disabled={busy} onClick={() => void act(async () => { onHarnesses(await orglet.call('harnesses', { refresh: true })); return t('Đã dò lại harness'); })}><RefreshCw size={13} />{t('Dò lại')}</Button>}</PanelHeading>
 
             {tab === 'general' && <>
               <Row title={t('Ngôn ngữ')} description={t('Áp dụng cho toàn bộ giao diện và thông báo.')}>
@@ -199,7 +199,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         setKeyDrafts(current => ({ ...current, [provider]: '' }));
                         setEditing(current => ({ ...current, [provider]: false }));
                         setReplacing(current => ({ ...current, [provider]: false }));
-                        return t('Đã lưu API key {0}.', [name]);
+                        return t('Đã lưu API key {0}', [name]);
                       });
                     }}>
                       <Button type="button" size="icon" variant="ghost" className="setting-key-file" disabled={busy} aria-label={t('Từ tệp')} onClick={() => void act(async () => {
@@ -209,7 +209,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                           setKeyDrafts(current => ({ ...current, [provider]: '' }));
                           setEditing(current => ({ ...current, [provider]: false }));
                           setReplacing(current => ({ ...current, [provider]: false }));
-                          return t('Đã lưu API key {0}.', [name]);
+                          return t('Đã lưu API key {0}', [name]);
                         }
                       })}><FileKey size={15} /></Button>
                       <input type="password" name={`${provider}-api-key`} autoComplete="off" spellCheck={false} disabled={busy} value={showMask ? SAVED_KEY_MASK : draft} placeholder={connections[provider] ? t('Nhập key mới để thay') : t('Dán hoặc nhập API key')} aria-label={t('API key {0}', [name])} onFocus={() => { if (connections[provider] && !draft) setReplacing(current => ({ ...current, [provider]: true })); }} onBlur={() => { if (!draft) setReplacing(current => ({ ...current, [provider]: false })); }} onChange={event => setKeyDrafts(current => ({ ...current, [provider]: event.target.value }))} />
@@ -221,7 +221,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       if (local) {
                         void act(async () => {
                           onConnections(on ? await orglet.connect('ollama') : await orglet.disconnect('ollama'));
-                          return on ? t('Đã bật Ollama.') : t('Đã ngắt {0}.', [name]);
+                          return on ? t('Đã bật Ollama') : t('Đã ngắt {0}', [name]);
                         });
                         return;
                       }
@@ -235,7 +235,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       if (connections[provider]) {
                         void act(async () => {
                           onConnections(await orglet.disconnect(provider));
-                          return t('Đã ngắt {0}.', [name]);
+                          return t('Đã ngắt {0}', [name]);
                         });
                       }
                     }} />
@@ -283,16 +283,16 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 <Select ariaLabel={t('Tiền tệ')} className="setting-select" inlineDetail menuMinWidth={270} value={currency.code} disabled={busy} onChange={value => void act(async () => { await orglet.call('setCurrency', { code: CurrencyCode.parse(value) }); return value === 'USD' ? t('Đã đổi sang USD.') : t('Đã đổi sang {0} theo tỷ giá mới nhất.', [value]); })} options={(Object.keys(currencies) as CurrencyCode[]).map(code => ({ value: code, label: code, detail: t(currencies[code]), icon: <CurrencyFlag code={code} /> }))} />
               </Row>
               {currency.code !== 'USD' && <Row title={t('Tỷ giá')} description={currency.error ? <span className="error">{t('{0} Đang dùng tỷ giá gần nhất.', [currency.error])}</span> : t('Tự làm mới mỗi 12 giờ từ open.er-api.com. Request không kèm dữ liệu của bạn.')}>
-                <Button disabled={busy} onClick={() => void act(async () => { await orglet.call('refreshCurrency', {}); return t('Đã cập nhật tỷ giá.'); })}><RefreshCw size={14} />{t('Cập nhật')}</Button>
+                <Button disabled={busy} onClick={() => void act(async () => { await orglet.call('refreshCurrency', {}); return t('Đã cập nhật tỷ giá'); })}><RefreshCw size={14} />{t('Cập nhật')}</Button>
               </Row>}
             </>}
 
             {tab === 'data' && <>
               <Row title={t('Sao lưu')} description={t('Nhân viên, nhóm, lịch sử, báo cáo và chi phí vào một tệp JSON. Không gồm API key hay nội dung tệp nguồn; báo cáo có thể chứa trích dẫn.')}>
-                <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.backup()) ? t('Đã lưu bản sao lưu.') : undefined)}><Download size={14} />{t('Lưu bản sao lưu')}</Button>
+                <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.backup()) ? t('Đã lưu bản sao lưu') : undefined)}><Download size={14} />{t('Lưu bản sao lưu')}</Button>
               </Row>
               <Row title={t('Khôi phục')} description={t('Bổ sung các mục còn thiếu, giữ nguyên dữ liệu và cài đặt hiện tại. Nguồn khôi phục cần được chọn lại để cấp quyền đọc.')}>
-                <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.restore()) ? t('Đã khôi phục các mục còn thiếu.') : undefined)}><ArchiveRestore size={14} />{t('Khôi phục từ tệp')}</Button>
+                <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.restore()) ? t('Đã khôi phục các mục còn thiếu') : undefined)}><ArchiveRestore size={14} />{t('Khôi phục từ tệp')}</Button>
               </Row>
               <Row title={t('Phiên bản')} description={`Orglet ${appVersion} · SQLite ${workspace.sqliteVersion}`} />
               <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi cuộc trò chuyện, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet.')} />

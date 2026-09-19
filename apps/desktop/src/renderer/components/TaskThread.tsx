@@ -7,6 +7,7 @@ import type { SourceTarget } from './SourcePanel';
 import { ReviewSummary } from './ReviewSummary';
 import type { Knowledge } from '../../shared/knowledge';
 import { ProviderMark } from './ProviderMark';
+import { providerName } from './workerModel';
 import { Avatar } from './Avatar';
 import { toast } from './toast';
 import { t } from '../i18n';
@@ -20,6 +21,18 @@ import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
 import { WorkingLine } from './Working';
 import type { MentionPerson } from '../../shared/mentions';
+
+/**
+ * What this worker was doing for the team on this turn: assigning the work, doing a share of it, or combining the
+ * results. A one-to-one chat and a plain group turn say nothing, because there is no role to tell apart (user,
+ * 2026-09-19). The words match the ones the details panel uses for the same stages.
+ */
+const teamRoleNames: Partial<Record<NonNullable<Run['stage']>, string>> = { plan: 'phân việc', member: 'phần việc', synthesis: 'gộp kết quả' };
+function bylineRole(author: Run) {
+  const name = author.stage && teamRoleNames[author.stage];
+  if (!name || !author.snapshot.team) return null;
+  return <span className="byline-role">{t(name)}</span>;
+}
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
 
@@ -48,7 +61,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
   const liveLength = Object.values(liveRuns).reduce((total, update) => total + (update.progress ? update.progress.preamble.length + update.progress.answer.length + update.progress.activity.length : 0), 0);
   useEffect(() => { if (atBottom.current && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; }, [detail.events.length, detail.artifacts.length, turns.length, liveLength]);
 
-  const byline = (author?: Run, working = false) => <div className={working ? 'message-byline working' : 'message-byline'}>{/* Agent marks sit left of the name. */}{author ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} /> : <span className="orglet-mark small">o</span>}<strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author?.snapshot.worker.provider === 'demo' && <span className="badge">Demo</span>}</div>;
+  const byline = (author?: Run, working = false) => <div className={working ? 'message-byline working' : 'message-byline'}>{/* Agent marks sit left of the name. */}{author ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} /> : <span className="orglet-mark small">o</span>}<strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author && bylineRole(author)}{author && <span className="byline-provider">{providerName(author.snapshot.worker.provider)}</span>}</div>;
 
   return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
     <div className="thread-content">
@@ -138,7 +151,7 @@ function ChatReply({ artifact, action }: { artifact: Artifact; action: (fn: () =
 /** Copy and download for an answer or document, in the format the user picks or saved as default. */
 function ArtifactActions({ artifactId, action }: { artifactId: string; action: (fn: () => Promise<unknown>) => void }) {
   return <>
-    <FormatAction kind="copy" onPick={format => action(async () => { await orglet.copyArtifact(artifactId, format); toast(format === 'text' ? t('Đã sao chép văn bản.') : t('Đã sao chép Markdown.')); })} />
+    <FormatAction kind="copy" onPick={format => action(async () => { await orglet.copyArtifact(artifactId, format); toast(format === 'text' ? t('Đã sao chép văn bản') : t('Đã sao chép Markdown')); })} />
     <FormatAction kind="download" onPick={format => action(() => orglet.exportArtifact(artifactId, format))} />
   </>;
 }

@@ -8,6 +8,7 @@ import { ContextManifestView } from './KnowledgeLibrary';
 import { statusLabel } from './TaskThread';
 import { statusMarkLabel } from './SidebarTree';
 import { formatMoney } from './money';
+import { providerName } from './workerModel';
 import { Button } from './ui';
 import { teamRoster } from '../assignees';
 import type { Run, TaskDetail, Team, Worker, Workspace } from '../../shared/contracts';
@@ -72,12 +73,13 @@ function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; 
     <p className="details-subject-name">
       <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />
       <strong>{worker.name}</strong>
+      <span className="details-fact" title={t('Chạy bằng')}>
+        {worker.provider !== 'demo' && <ProviderMark provider={worker.provider} size="small" decorative />}
+        {providerName(worker.provider)}
+      </span>
     </p>
     {worker.description && <p className="details-subject-note">{worker.description}</p>}
-    <div className="details-facts">
-      <span className="details-fact" title={t('Chạy bằng')}><ProviderMark provider={worker.provider} size="small" decorative />{worker.provider === 'demo' ? 'Demo' : worker.provider}</span>
-      {worker.taskBudgetMicros != null && <Fact icon={Wallet} title={t('Ngân sách mỗi việc')}>{formatMoney(worker.taskBudgetMicros)}</Fact>}
-    </div>
+    {worker.taskBudgetMicros != null && <div className="details-facts"><Fact icon={Wallet} title={t('Ngân sách mỗi việc')}>{formatMoney(worker.taskBudgetMicros)}</Fact></div>}
   </div>;
 }
 
