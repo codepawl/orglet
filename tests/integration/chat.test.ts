@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Store, id } from '../../apps/desktop/src/core/storage/database';
@@ -151,6 +151,40 @@ it('lets @tags in a group chat limit who answers that turn', async () => {
   expect(tagged.map(run => run.snapshot.worker.id)).toEqual([second.id]);
   expect(tagged).toHaveLength(1);
 });
+
+const unsourcedReport = (): ModelReply => ({
+  calls: [{ id: id(), name: 'submit_report', arguments: JSON.stringify({ title: 'Tình hình', summary: 'Công ty ổn.', findings: [{ title: 'Doanh thu tăng', detail: 'Theo trí nhớ', severity: 'info', sourceIds: [], coverage: 'Không có nguồn' }], limitations: [] }) }],
+  usage: { input: 200, output: 50 },
+});
+
+it('tells a chat with no sources that it cannot support a finding, and still refuses one that slips through', async () => {
+  const workerId = await chatWorker('openai');
+  replies.push(answer('Đây là tình hình công ty.'));
+  // The word "báo cáo" used to send the model straight into the citation gate, losing the answer with it.
+  const taskId = await core.command('createTask', { workerId, brief: 'hello báo cáo tình hình công ty đi', ...scope }) as string;
+  await until(() => store.detail(taskId).task.status === 'completed');
+  expect(JSON.stringify(sent[0].messages)).toContain('No sources are attached to this chat');
+  expect(store.detail(taskId).artifacts[0].report.summary).toBe('Đây là tình hình công ty.');
+
+  // The gate itself is unchanged: a finding with no source is still refused, and the run says why.
+  replies.push(unsourcedReport());
+  await core.command('reviseTask', { taskId, brief: 'Viết thành báo cáo đi', ...scope });
+  await until(() => store.detail(taskId).task.status === 'failed');
+  expect(store.detail(taskId).runs.at(-1)!.error).toContain('nguồn đã đọc');
+}, 20_000);
+
+it('keeps the source manifest, and drops the no-sources note, once a file is attached', async () => {
+  const workerId = await chatWorker('openai');
+  const file = join(directory, 'doanh-thu.txt');
+  await writeFile(file, 'Quý 4: doanh thu 120 triệu.');
+  const source = (await core.sources.import([file]))[0];
+  replies.push(answer('Doanh thu quý 4 là 120 triệu.'));
+  const taskId = await core.command('createTask', { workerId, brief: 'Báo cáo doanh thu', ...scope, sourceIds: [source.id] }) as string;
+  await until(() => store.detail(taskId).task.status === 'completed');
+  const prompt = JSON.stringify(sent[0].messages);
+  expect(prompt).not.toContain('No sources are attached to this chat');
+  expect(prompt).toContain(source.id);
+}, 20_000);
 
 it('turns Markdown into readable plain text for copying', () => {
   expect(markdownToPlain('# Kế hoạch\n\n**Mục tiêu:** ra mắt *quý 4*\n\n- Việc `một`\n- Xem [tài liệu](https://example.com)\n\n```js\nlet x = 1;\n```')).toBe('Kế hoạch\n\nMục tiêu: ra mắt quý 4\n\n• Việc một\n• Xem tài liệu (https://example.com)\n\nlet x = 1;');
