@@ -30,7 +30,9 @@ Academic or specialized notes stay academic. The exception is the language, not 
 
 User guides that are not written yet stay as a row in the map. Do not add empty stub files.
 
-When the app's layout changes (sidebar, composer, font), replace the shots in `docs/images/` with `node scripts/readme-screenshots.mjs` after a local `pnpm make` (or, on Linux, a Vite compile plus unpackaged Electron). Keep the files the README and Getting started already link.
+When the app's layout changes (sidebar, composer, font), replace the shots in `docs/images/` with `pnpm images:readme` after a local `pnpm make` (or, on Linux, a Vite compile plus unpackaged Electron). Keep the files the README and Getting started already link.
+
+`docs/images/social-preview.png` is the card GitHub, Slack and X show for a repository link. `pnpm images:social` redraws it from the mascots and the product line; it needs no packaged build. GitHub has no API for the social preview, so after changing it someone has to upload the file under Settings → General → Social preview.
 
 ## Do not
 
