@@ -1,4 +1,4 @@
-import { Clock, FileText, Users, Wallet, Wrench, X } from 'lucide-react';
+import { Clock, FileText, ListOrdered, Shuffle, Users, Wallet, Wrench, X } from 'lucide-react';
 import { t, currentLocale, tMessage } from '../i18n';
 import { Avatar, RosterAvatars } from './Avatar';
 import { ProviderMark } from './ProviderMark';
@@ -32,14 +32,25 @@ function Section({ icon: Icon, title, children }: { icon: typeof Users; title: s
   </section>;
 }
 
-/** The face and name of whoever this chat is with, and one line saying what they are. */
+/** One fact about this chat: an icon and a value, short enough that several fit on a line. */
+function Fact({ icon: Icon, children, title }: { icon: typeof Users; children: React.ReactNode; title: string }) {
+  return <span className="details-fact" title={title}><Icon size={13} aria-hidden="true" />{children}</span>;
+}
+
+/**
+ * Who this chat is with: the face, the name, and the few facts worth knowing, as icons and values on one wrapping
+ * line rather than a sentence per fact (user, 2026-09-19).
+ */
 function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; members: readonly Worker[] }) {
   if (team) {
     return <div className="details-subject">
       <p className="details-subject-name"><RosterAvatars workers={members} size="sm" max={3} /><strong>{team.name}</strong></p>
-      <div className="details-subject-meta">
-        <p className="muted">{t('{0} nhân viên · {1}', [members.length, team.workflow === 'parallel' ? t('làm song song') : t('làm lần lượt')])}</p>
-        <p className="muted">{t('Ngân sách tháng {0}', [formatMoney(team.monthlyBudgetMicros)])}</p>
+      <div className="details-facts">
+        <Fact icon={Users} title={t('Số nhân viên trong nhóm')}>{members.length}</Fact>
+        <Fact icon={team.workflow === 'parallel' ? Shuffle : ListOrdered} title={team.workflow === 'parallel' ? t('làm song song') : t('làm lần lượt')}>
+          {team.workflow === 'parallel' ? t('song song') : t('lần lượt')}
+        </Fact>
+        <Fact icon={Wallet} title={t('Ngân sách tháng')}>{formatMoney(team.monthlyBudgetMicros)}</Fact>
       </div>
     </div>;
   }
@@ -49,10 +60,10 @@ function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; 
       <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />
       <strong>{worker.name}</strong>
     </p>
-    <div className="details-subject-meta">
-      {worker.description && <p className="muted">{worker.description}</p>}
-      <p className="muted details-runs-on"><ProviderMark provider={worker.provider} size="small" decorative />{worker.provider === 'demo' ? t('Demo · không gọi API') : worker.provider}</p>
-      {worker.taskBudgetMicros != null && <p className="muted">{t('Ngân sách mỗi việc {0}', [formatMoney(worker.taskBudgetMicros)])}</p>}
+    {worker.description && <p className="details-subject-note">{worker.description}</p>}
+    <div className="details-facts">
+      <span className="details-fact" title={t('Chạy bằng')}><ProviderMark provider={worker.provider} size="small" decorative />{worker.provider === 'demo' ? 'Demo' : worker.provider}</span>
+      {worker.taskBudgetMicros != null && <Fact icon={Wallet} title={t('Ngân sách mỗi việc')}>{formatMoney(worker.taskBudgetMicros)}</Fact>}
     </div>
   </div>;
 }

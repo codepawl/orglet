@@ -52,7 +52,7 @@ export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className
         <p className="row-menu-question">{asking.confirm!.question}</p>
         <button type="button" role="menuitem" className="danger" onClick={() => { const item = asking; close(true); item.onSelect(); }}><asking.icon size={16} aria-hidden="true" /><span>{asking.confirm!.label}</span></button>
         <button type="button" role="menuitem" onClick={() => setAsking(undefined)}><X size={16} aria-hidden="true" /><span>{t('Không')}</span></button>
-      </> : items.map(item => <button key={item.label} type="button" role="menuitem" className={item.danger ? 'danger' : undefined} onClick={() => { if (item.confirm) { setAsking(item); return; } close(); item.onSelect(); }}><item.icon size={16} aria-hidden="true" /><span>{item.label}</span></button>)}
+      </> : items.map(item => <button key={item.label} type="button" role="menuitem" className={item.danger ? 'danger' : undefined} onClick={() => { if (item.confirm) { setAsking(item); return; } close(true); item.onSelect(); }}><item.icon size={16} aria-hidden="true" /><span>{item.label}</span></button>)}
     </div>,
     document.body,
   );
