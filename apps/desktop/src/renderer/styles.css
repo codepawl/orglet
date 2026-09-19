@@ -19,8 +19,8 @@
   --ease-out: cubic-bezier(.2, 0, 0, 1);
   /* Faces (the orglet animation system, documented above the `.avatar .mascot` rules). A gesture overshoots on a
      spring, which the decelerating curve above cannot do; every slow loop shares one breath-length cycle so two
-     faces on screen never beat against each other. */
-  --motion-gesture: 500ms; --ease-spring: cubic-bezier(.34, 1.56, .64, 1); --motion-cycle: 2.8s;
+     faces on screen never beat against each other, and the idle loops (blink, look-up) share one longer cycle. */
+  --motion-gesture: 500ms; --ease-spring: cubic-bezier(.34, 1.56, .64, 1); --motion-cycle: 2.8s; --motion-idle: 7s;
 }
 /* The eyes' vertical gaze, registered so a change of state glides instead of jumping. */
 @property --gaze-y { syntax:'<length>'; inherits:false; initial-value:0px; }
@@ -834,84 +834,148 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 
      Still      Every face by default: the sidebar, the picker grid, the details panel. Nothing moves. A list of
                 thirty faces costs nothing because a still face has no animation at all.
-     Present    `.avatar.alive`: the few faces in the chat you are reading. One blink every 7 s, offset per face by
-                a seeded negative delay so no two blink together. The only motion an idle app ever shows.
-     Noticing   You reached for it. Pointing at a sidebar row lifts its face 2 px and deepens its colour; a face in
-                the picker grid lifts under the pointer; while you write in the prompt bar, the face you are
-                writing to (the chat heading, or the latest reply) drops its eyes to the words. Transitions only.
-     Thinking   `.message-byline.working` before anything has streamed: the head turns from side to side with the
-                eyes a beat ahead, which reads as looking rather than wobbling.
+     Present    `.avatar.alive`: the few faces in the chat you are reading. One blink every idle cycle, offset per
+                face by a seeded negative delay so no two blink together. A prominent face (see Prominence) also
+                looks up from its work once a cycle: the eyes go first, the head follows a beat later on a spring,
+                and both settle back. Each face has its own side to look towards (`--idle-side`, seeded like the
+                delay), so two faces on one screen never mirror each other.
+     Noticing   You reached for it. Pointing at a sidebar row, or focusing its name, makes its face look up at you
+                and rise 2 px on a spring, eyes first, and deepens its colour; a team's faces rise one after
+                another. A face in the picker grid answers the pointer and keyboard focus the same way. While you
+                write in the prompt bar, the face you are writing to (the chat heading, or the latest reply) drops
+                its eyes to the words. Transitions only.
+     Thinking   `.message-byline.working` before anything has streamed: the head hops once as your message lands,
+                then turns from side to side, pausing at each side with the eyes a beat ahead, which reads as
+                looking rather than wobbling. The eyes sit a touch high, the way eyes do while thinking.
      Working    The same byline once `.live-run` is on screen: the head settles level and leans in 1 px, the eyes
-                drop to the work and read it, sweeping left to right and jumping back.
-     Finishing  `.message-byline.landed`: one nod on a spring as the answer lands. `landed` is set only for a run
-                that finished after the chat was opened, so an old chat opens with every face still.
+                drop to the work and read it, sweeping left to right and blinking on the jump back to the start.
+     Finishing  `.message-byline.landed`: one nod on a spring as the answer lands, over the idle look-up, which
+                carries on underneath. `landed` is set only for a run that finished after the chat was opened, so
+                an old chat opens with every face still.
      Needs you  `.assistant-message.needs-you`: a slow breath. The one loop allowed while the app waits, because
                 waiting on the person is the point and the face must stay findable.
-     Arriving   `.tree-item.arriving`: a row that was just created rises into the list once. Rows present at
-                startup do not.
+     Arriving   `.tree-item.arriving`: a row that was just created rises into the list once, and its face gives one
+                small hop once the row has settled. Rows present at startup do not. The picker preview hops the
+                same way when a different mascot is chosen (its `key` is the mascot, so the face remounts).
+
+   Prominence (user, 2026-09-20: the faces should feel alive, like a companion character, without the sidebar
+   turning into a twitching list). What a face may do unprompted scales with how much of the screen it has:
+     Prominent  The face in the chat heading (`.welcome-who`) and the faces of the turn being read
+                (`.chat-turn:last-child .message-byline`): the one or few faces you are looking at. An idle
+                gesture is allowed here, on the blink's own cycle and no bigger than a glance: under 1.5 px for
+                the eyes, under 3° for the head. Only a prominent face ever moves unprompted beyond a blink.
+     In the chat but not prominent: earlier replies. They blink and nothing more.
+     In a list  Sidebar rows, the picker grid, the details panel. Still until you reach for them. Ten small faces
+                each doing something small is still ten things moving, so a listed face reacts and never acts.
+   Motion you caused (hover, focus, send, a run finishing, a row you created) may always be livelier than motion
+   nobody asked for: a reaction is what feels satisfying, an ambient loop is what feels noisy. So every reaction
+   is a one-shot on a spring, and the only loops are the blink, the look-up, and the states of a run in progress.
 
    Timing. Transitions use --motion-base and --ease-out like the rest of the app. A one-shot gesture uses
-   --motion-gesture on --ease-spring so it overshoots. Every slow loop (thinking, working, needs you) runs on
-   --motion-cycle, so faces on the same screen share one cadence. A blink cycle is 7 s (BLINK_SECONDS in
-   Avatar.tsx), long enough to be forgotten between blinks.
+   --motion-gesture on --ease-spring so it overshoots; a gesture that eases to a stop reads as mechanical. Every
+   slow loop (thinking, working, needs you) runs on --motion-cycle, so faces on the same screen share one cadence.
+   The idle loops (blink, look-up) share --motion-idle (IDLE_SECONDS in Avatar.tsx, which seeds each face's
+   delay), long enough to be forgotten between blinks. A loop that begins with its state starts from rest, so a
+   head never snaps into a loop's first frame. A one-shot that interrupts a loop is listed after the loop in
+   `animation`, so it wins while it plays and the loop carries on underneath (see Finishing); a loop that follows
+   a one-shot is delayed by the gesture's length instead (see Thinking).
 
    Carry-through. `.avatar.has-mascot .mascot` sits on `transform:translateY(var(--mascot-lift))`; a keyframe or
    hover rule that sets `transform` replaces that and drops the art, so every head transform begins with
    `translateY(var(--mascot-lift))`. The eyes work the same way: every eye keyframe begins with
    `translateY(var(--gaze-y))`, so a state that only moves the gaze sets `--gaze-y` and leaves blinking alone.
+   The prominence rules are wrapped in `:where()` so they weigh the same as the plain blink, and every state rule
+   written after them still wins.
 
    Never animated: the bubble's colour or fill, the stroke width, the provider badge, the status mark, a letter or
    emoji avatar (only mascots have a face), and any box property. Transform and opacity only. No loop runs while
-   the app is idle except the blink; a face that is not doing anything is still.
+   the app is idle except the blink and, on a prominent face, the look-up; a face that is not doing anything is
+   still.
    ========================================================================================================== */
 .avatar .mascot,.avatar-face { transition:transform var(--motion-base) var(--ease-out), filter var(--motion-base) var(--ease-out); }
 .mascot-eyes { transform-box:fill-box; transform-origin:center; transform:translateY(var(--gaze-y)); transition:--gaze-y var(--motion-base) var(--ease-out); }
 
 /* Present: blinking. Only faces marked alive blink, never a whole sidebar. */
-.avatar.alive .mascot-eyes { animation:mascot-blink 7s var(--blink-delay, 0s) infinite; }
+.avatar.alive .mascot-eyes { animation:mascot-blink var(--motion-idle) var(--idle-delay, 0s) infinite; }
 @keyframes mascot-blink { 0%,95%,100% { transform:translateY(var(--gaze-y)) scaleY(1); } 97.5% { transform:translateY(var(--gaze-y)) scaleY(.12); } }
+/* Present, prominent: the face being read blinks twice a cycle and, between the blinks, looks up to its own side,
+   eyes first and the head a beat behind; the spring on the head makes the turn and the settle overshoot. */
+:where(.welcome-who, .chat-turn:last-child .message-byline) .avatar.alive .mascot { animation:mascot-look-head var(--motion-idle) var(--ease-spring) var(--idle-delay, 0s) infinite; }
+:where(.welcome-who, .chat-turn:last-child .message-byline) .avatar.alive .mascot-eyes { animation:mascot-look-eyes var(--motion-idle) ease-out var(--idle-delay, 0s) infinite; }
+@keyframes mascot-look-eyes {
+  0%,41.5%,46.5%,66%,77%,95%,100% { transform:translateY(var(--gaze-y)) translateX(0) scaleY(1); }
+  44%,97.5% { transform:translateY(var(--gaze-y)) translateX(0) scaleY(.12); }
+  68%,74% { transform:translateY(var(--gaze-y)) translateX(calc(1.3px * var(--idle-side, 1))) scaleY(1); }
+}
+@keyframes mascot-look-head {
+  0%,67%,79%,100% { transform:translateY(var(--mascot-lift)) rotate(0deg); }
+  69.5%,75% { transform:translateY(var(--mascot-lift)) rotate(calc(2.5deg * var(--idle-side, 1))); }
+}
 
-/* Noticing: pointing at a row lifts its face and deepens its colour. No background: a row already tints, and a
-   tint inside a tint is against the house rules. The picker grid answers the pointer the same way. */
-.worker-row:hover .row-disclosure > .avatar .mascot,
-.worker-row:hover .composer-to-avatars .mascot { transform:translateY(var(--mascot-lift)) translateY(-2px); filter:saturate(1.18); }
+/* Noticing: pointing at a row, or focusing its name, makes its face look up and rise on a spring, eyes first, and
+   deepens its colour. No background: a row already tints, and a tint inside a tint is against the house rules.
+   A team's faces rise one after another. The picker grid answers the pointer and the keyboard the same way. */
+.worker-row:is(:hover, :has(.worker:focus-visible)) .row-disclosure .mascot { transform:translateY(var(--mascot-lift)) translateY(-2px); filter:saturate(1.18); transition:transform var(--motion-gesture) var(--ease-spring), filter var(--motion-base) var(--ease-out); }
+.worker-row:is(:hover, :has(.worker:focus-visible)) .row-disclosure .mascot-eyes { --gaze-y:-0.9px; }
+.worker-row:is(:hover, :has(.worker:focus-visible)) .composer-to-avatars .avatar:nth-child(2) .mascot { transition-delay:45ms; }
+.worker-row:is(:hover, :has(.worker:focus-visible)) .composer-to-avatars .avatar:nth-child(3) .mascot { transition-delay:90ms; }
 .mascot-choice .mascot { transition:transform var(--motion-base) var(--ease-out); }
-.mascot-choice:hover .mascot { transform:translateY(-2px); }
+.mascot-choice:is(:hover, :focus-visible) .mascot { transform:translateY(-2px); transition:transform var(--motion-gesture) var(--ease-spring); }
+.mascot-choice:is(:hover, :focus-visible) .mascot-eyes { --gaze-y:-0.9px; }
 /* Noticing: while you write, the face you are writing to looks down at the words. */
 .fresh-chat:has(.composer textarea:focus) .welcome-who .mascot-eyes,
 .main-pane:has(.thread-composer textarea:focus) .chat-turn:last-child .message-byline:not(.working) .mascot-eyes { --gaze-y:1.6px; }
 
-/* Thinking: the head turns slowly from side to side, the eyes leading the turn (user, 2026-09-19). */
-.message-byline.working .mascot { animation:mascot-ponder var(--motion-cycle) ease-in-out infinite; }
-.message-byline.working .mascot-eyes { animation:mascot-glance var(--motion-cycle) ease-in-out infinite; }
-@keyframes mascot-ponder { 0%,100% { transform:translateY(var(--mascot-lift)) rotate(-5deg); } 50% { transform:translateY(var(--mascot-lift)) rotate(5deg); } }
-@keyframes mascot-glance { 0%,100% { transform:translateY(var(--gaze-y)) translateX(-1.3px); } 50% { transform:translateY(var(--gaze-y)) translateX(1.3px); } }
+/* Thinking: one hop as the message lands, then the head turns from side to side and pauses at each side, the eyes
+   leading the turn (user, 2026-09-19). The loop waits for the hop and starts level, so nothing snaps. */
+.message-byline.working .mascot { animation:mascot-hop var(--motion-gesture) var(--ease-spring) 1, mascot-ponder var(--motion-cycle) ease-in-out var(--motion-gesture) infinite; }
+.message-byline.working .mascot-eyes { --gaze-y:-0.8px; animation:mascot-glance var(--motion-cycle) ease-in-out var(--motion-gesture) infinite; }
+@keyframes mascot-hop { 0%,100% { transform:translateY(var(--mascot-lift)); } 35% { transform:translateY(var(--mascot-lift)) translateY(-3px); } }
+@keyframes mascot-ponder {
+  0%,100% { transform:translateY(var(--mascot-lift)) rotate(0deg); }
+  22% { transform:translateY(var(--mascot-lift)) rotate(-5deg); } 40% { transform:translateY(var(--mascot-lift)) rotate(-3.5deg); }
+  62% { transform:translateY(var(--mascot-lift)) rotate(5deg); } 80% { transform:translateY(var(--mascot-lift)) rotate(3.5deg); }
+}
+@keyframes mascot-glance {
+  0%,100% { transform:translateY(var(--gaze-y)) translateX(0); }
+  14%,36% { transform:translateY(var(--gaze-y)) translateX(-1.3px); } 54%,76% { transform:translateY(var(--gaze-y)) translateX(1.3px); }
+}
 
-/* Working: once output streams the head settles and leans in, and the eyes read the work. */
+/* Working: once output streams the head settles and leans in, and the eyes read the work, blinking as they jump
+   back to the start of the line. */
 .assistant-message:has(> .live-run) .message-byline.working .mascot { animation:none; transform:translateY(var(--mascot-lift)) translateY(1px); }
 .assistant-message:has(> .live-run) .message-byline.working .mascot-eyes { --gaze-y:1.6px; animation:mascot-read var(--motion-cycle) linear infinite; }
-@keyframes mascot-read { 0%,8% { transform:translateY(var(--gaze-y)) translateX(-1.4px); } 80% { transform:translateY(var(--gaze-y)) translateX(1.4px); } 88%,100% { transform:translateY(var(--gaze-y)) translateX(-1.4px); } }
+@keyframes mascot-read {
+  0%,8% { transform:translateY(var(--gaze-y)) translateX(-1.4px) scaleY(1); } 80% { transform:translateY(var(--gaze-y)) translateX(1.4px) scaleY(1); }
+  83% { transform:translateY(var(--gaze-y)) translateX(-.4px) scaleY(.12); } 86%,100% { transform:translateY(var(--gaze-y)) translateX(-1.4px) scaleY(1); }
+}
 
-/* Finishing: one nod as the answer lands. */
+/* Finishing: one nod as the answer lands. In the turn being read the nod is listed after the look-up so it wins
+   while it plays and the look-up carries on; an earlier landed reply keeps the nod alone. */
 .message-byline.landed .avatar .mascot { animation:mascot-nod var(--motion-gesture) var(--ease-spring) 1; }
+:where(.chat-turn:last-child) .message-byline.landed .avatar .mascot { animation:mascot-look-head var(--motion-idle) var(--ease-spring) var(--idle-delay, 0s) infinite, mascot-nod var(--motion-gesture) var(--ease-spring) 1; }
 @keyframes mascot-nod { 0% { transform:translateY(var(--mascot-lift)) translateY(-3px); } 55% { transform:translateY(var(--mascot-lift)) translateY(2px); } 100% { transform:translateY(var(--mascot-lift)); } }
 
 /* Needs you: waiting on a person is not working, so it breathes slowly instead of turning its head. */
 .assistant-message.needs-you .avatar .mascot { animation:mascot-breathe var(--motion-cycle) ease-in-out infinite; }
 @keyframes mascot-breathe { 0%,100% { transform:translateY(var(--mascot-lift)) scale(1); } 50% { transform:translateY(var(--mascot-lift)) scale(1.06); } }
 
-/* Arriving: a worker or team that was just created rises into the list once. */
+/* Arriving: a worker or team that was just created rises into the list once, and its face hops once the row has
+   settled. The picker preview hops the same way when the chosen mascot changes. */
 .tree-item.arriving { animation:row-arrive .32s var(--ease-out) 1; }
+.tree-item.arriving .mascot { animation:mascot-hop var(--motion-gesture) var(--ease-spring) .32s 1; }
+.avatar-picker-head > .avatar .mascot { animation:mascot-hop var(--motion-gesture) var(--ease-spring) 1; }
 @keyframes row-arrive { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
 
-/* Reduced motion: no loops, no gestures, no glides. A state still shows (the eyes still drop, the row still
+/* Reduced motion: no loops, no gestures, no glides. A state still shows (the eyes still drop or lift, the row still
    appears) but as a cut, and the head keeps its lift so the art never shifts. */
 @media (prefers-reduced-motion: reduce) {
-  .avatar .mascot,.avatar-face,.mascot-eyes,.mascot-choice .mascot { transition:none; }
-  .avatar.alive .mascot-eyes,.message-byline.working .mascot,.message-byline.working .mascot-eyes,.assistant-message:has(> .live-run) .message-byline.working .mascot-eyes,
-  .message-byline.landed .avatar .mascot,.assistant-message.needs-you .avatar .mascot { animation:none; }
-  .worker-row:hover .row-disclosure > .avatar .mascot,.worker-row:hover .composer-to-avatars .mascot,.assistant-message:has(> .live-run) .message-byline.working .mascot { transform:translateY(var(--mascot-lift)); filter:none; }
-  .mascot-choice:hover .mascot { transform:none; }
+  .avatar .mascot,.avatar-face,.mascot-eyes,.mascot-choice .mascot,
+  .worker-row:is(:hover, :has(.worker:focus-visible)) .row-disclosure .mascot,.mascot-choice:is(:hover, :focus-visible) .mascot { transition:none; }
+  .avatar.alive .mascot,.avatar.alive .mascot-eyes,.message-byline.working .mascot,.message-byline.working .mascot-eyes,.assistant-message:has(> .live-run) .message-byline.working .mascot-eyes,
+  .message-byline.landed .avatar .mascot,.assistant-message.needs-you .avatar .mascot,.tree-item.arriving .mascot,.avatar-picker-head > .avatar .mascot { animation:none; }
+  .worker-row:is(:hover, :has(.worker:focus-visible)) .row-disclosure .mascot,.assistant-message:has(> .live-run) .message-byline.working .mascot { transform:translateY(var(--mascot-lift)); filter:none; }
+  .mascot-choice:is(:hover, :focus-visible) .mascot { transform:none; }
   .tree-item.arriving { animation:row-arrive-quiet .32s var(--ease-out) 1; }
   @keyframes row-arrive-quiet { from { opacity:0; } to { opacity:1; } }
 }
