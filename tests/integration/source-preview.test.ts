@@ -23,3 +23,23 @@ it('preview checks task scope, snapshot hash and live revocation', async () => {
     await expect(core.command('previewSource', { taskId: task.id, id: source.id })).rejects.toThrow('thu hồi');
   } finally { store.close(); await rm(dir, { recursive: true, force: true }); }
 });
+
+it('names the file when an attached source is gone from disk', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orglet-missing-source-'));
+  const store = new Store(join(dir, 'state.sqlite'));
+  const core = new CoreService(store, () => {}, async () => { throw new Error('No provider in this test'); });
+  try {
+    const path = join(dir, 'contract.md');
+    await writeFile(path, 'Payment is due in 45 days.');
+    const [source] = await core.sources.import([path]);
+    const worker = store.all<Worker>('workers')[0];
+    const task: Task = { id: id(), brief: 'Review', workerId: worker.id, sourceIds: [source.id], consent: false, budgetMicros: 10000, createdAt: now(), status: 'queued', accepted: false };
+    store.put('tasks', task);
+
+    await rm(path);
+
+    const failure = core.command('previewSource', { taskId: task.id, id: source.id });
+    await expect(failure).rejects.toThrow('Không còn tệp nguồn contract.md ở chỗ cũ.');
+    await expect(failure).rejects.not.toThrow('ENOENT');
+  } finally { store.close(); await rm(dir, { recursive: true, force: true }); }
+});
