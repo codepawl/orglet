@@ -36,9 +36,8 @@ function Section({ icon: Icon, title, children }: { icon: typeof Users; title: s
 function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; members: readonly Worker[] }) {
   if (team) {
     return <div className="details-subject">
-      <RosterAvatars workers={members} size="sm" max={3} />
-      <div>
-        <strong>{team.name}</strong>
+      <p className="details-subject-name"><RosterAvatars workers={members} size="sm" max={3} /><strong>{team.name}</strong></p>
+      <div className="details-subject-meta">
         <p className="muted">{t('{0} nhân viên · {1}', [members.length, team.workflow === 'parallel' ? t('làm song song') : t('làm lần lượt')])}</p>
         <p className="muted">{t('Ngân sách tháng {0}', [formatMoney(team.monthlyBudgetMicros)])}</p>
       </div>
@@ -46,9 +45,11 @@ function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; 
   }
   if (!worker) return null;
   return <div className="details-subject">
-    <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="lg" />
-    <div>
+    <p className="details-subject-name">
+      <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />
       <strong>{worker.name}</strong>
+    </p>
+    <div className="details-subject-meta">
       {worker.description && <p className="muted">{worker.description}</p>}
       <p className="muted details-runs-on"><ProviderMark provider={worker.provider} size="small" decorative />{worker.provider === 'demo' ? t('Demo · không gọi API') : worker.provider}</p>
       {worker.taskBudgetMicros != null && <p className="muted">{t('Ngân sách mỗi việc {0}', [formatMoney(worker.taskBudgetMicros)])}</p>}

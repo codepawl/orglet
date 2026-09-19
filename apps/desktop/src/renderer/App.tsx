@@ -423,20 +423,19 @@ export function App() {
       </header>
       {error && <div className="error-banner" role="alert"><span>{error}</span><Button size="icon" aria-label={t('Đóng thông báo')} onClick={() => setError('')}><X size={16} /></Button></div>}
       {catchUpNotice && <div className="notice-banner" role="status"><CalendarClock size={16} aria-hidden="true" /><div><p>{singleCatchUp ? t('{0} đã bỏ qua lần chạy vì app tắt hoặc máy ngủ. Lịch không mất. Bạn có thể chạy bù một lần hoặc bỏ qua.', [singleCatchUp.name]) : t('{0} lịch đã bỏ qua lần chạy vì app tắt hoặc máy ngủ. Lịch không mất. Mỗi lịch chỉ chạy bù một lần.', [pendingCatchUp.length])}</p><div className="actions">{singleCatchUp?.enabled && <Button variant="primary" onClick={() => action(async () => openTask(await orglet.call('catchUpRoutine', { id: singleCatchUp.id })))}>{t('Chạy bù một lần')}</Button>}<Button onClick={() => openRoutines()}>{t('Xem lịch chạy')}</Button></div></div><Button size="icon" aria-label={t('Đóng thông báo lịch bị lỡ')} onClick={() => setDismissedCatchUpNotice(catchUpNoticeKey)}><X size={16} /></Button></div>}
-      {selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} action={action} showSources={openSources} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openRevision={() => setPanel('revision')} openSettings={tab => openSettings(tab ?? 'connections')} action={action} /></> : <div className="loading" role="status">{t('Đang mở cuộc trò chuyện…')}</div>}</> : (team || worker) ? <div className="team-chat">
-        <div className="thread-scroll">
-          <div className="thread-content team-chat-empty">
-            <h1 className="welcome">{chatHeadingBefore}<span className="welcome-who">{team ? <RosterAvatars workers={roster} size="sm" max={2} /> : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" /> : null}{chatName}</span>{chatHeadingAfter}</h1>
-
-            <Starters starters={starters} onPick={pickStarter}
-              canSchedule={Boolean(brief.trim())}
-              onSchedule={worker && !team ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />
+      {selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} action={action} showSources={openSources} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openRevision={() => setPanel('revision')} openSettings={tab => openSettings(tab ?? 'connections')} action={action} /></> : <div className="loading" role="status">{t('Đang mở cuộc trò chuyện…')}</div>}</> : (team || worker) ? <div className="team-chat team-chat-fresh">
+        {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
+            middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
+        <div className="fresh-chat team-chat-empty">
+          <h1 className="welcome">{chatHeadingBefore}<span className="welcome-who">{team ? <RosterAvatars workers={roster} size="sm" max={2} /> : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" /> : null}{chatName}</span>{chatHeadingAfter}</h1>
+          <div className="thread-composer">
+            {composerBar}
+            {composerHint}
+            {skippedSources.length > 0 && <details className="intake-skipped"><summary>{t('{0} mục không được thêm vào task', [skippedSources.length])}</summary><ul>{skippedSources.map((item, index) => <li key={index}>{item.name}: {item.reason}</li>)}</ul></details>}
           </div>
-        </div>
-        <div className="thread-composer">
-          {composerBar}
-          {composerHint}
-          {skippedSources.length > 0 && <details className="intake-skipped"><summary>{t('{0} mục không được thêm vào task', [skippedSources.length])}</summary><ul>{skippedSources.map((item, index) => <li key={index}>{item.name}: {item.reason}</li>)}</ul></details>}
+          <Starters starters={starters} onPick={pickStarter}
+            canSchedule={Boolean(brief.trim())}
+            onSchedule={worker && !team ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />
         </div>
       </div> : null}
       <footer className="main-footer">{t('Orglet không đảm bảo câu trả lời luôn chính xác. Hãy kiểm chứng với nguồn gốc trước khi dùng.')}</footer>

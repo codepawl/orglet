@@ -58,9 +58,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Details: plain words on the surface, machine detail in one collapsed block at the end (user, 2026-09-19). */
 .details-body { display:flex; flex-direction:column; gap:18px; }
 /* Who this chat is with, at the top and larger than anything under it. */
-.details-subject { display:flex; align-items:flex-start; gap:10px; }
-.details-subject strong { display:block; font-size:15px; font-weight:600; line-height:1.3; }
-.details-subject p { font-size:12.5px; line-height:1.45; margin-top:2px; }
+.details-subject { display:flex; flex-direction:column; gap:5px; }
+.details-subject-name { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; line-height:1.3; }
+.details-subject-meta { display:flex; flex-direction:column; gap:2px; padding-left:10px; }
+.details-subject-meta p { font-size:12.5px; line-height:1.45; }
 .details-runs-on { display:flex; align-items:center; gap:5px; }
 .details-section { display:flex; flex-direction:column; gap:7px; }
 .details-section h3 { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--muted); }
@@ -241,6 +242,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Thread: the prompt bar stays pinned under the conversation. */
 .thread-composer { width:100%; max-width:780px; margin:0 auto; padding:8px var(--page-x) 0; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
+/* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,
+   the shape people already know from other chat apps (user, 2026-09-19). Once a turn exists the thread takes
+   over and the bar goes back to the bottom. */
+.team-chat-fresh { justify-content:center; overflow:auto; }
+.fresh-chat { width:100%; max-width:768px; margin:0 auto; padding:24px var(--page-x); display:flex; flex-direction:column; }
+.fresh-chat .thread-composer { max-width:100%; padding:0; }
+.fresh-chat .suggestions { margin-top:14px; }
 /* The starters sit under a centred greeting. The block is only as wide as its widest row, so centring it
    centres what is actually drawn: a centred 440px box would leave the text hugging its left edge. */
 .team-chat-empty .suggestions { width:fit-content; max-width:min(100%, 440px); margin:12px auto 0; padding:0; text-align:left; }
