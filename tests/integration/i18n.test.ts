@@ -28,8 +28,8 @@ it('translates finished core messages, including ones with values already filled
 });
 
 it('derives British English spellings from the US text', () => {
-  expect(enGB['Tóm tắt tài liệu']).toBe('Summarise documents');
-  expect(en['Tóm tắt tài liệu']).toBe('Summarize documents');
+  expect(enGB['Tóm tắt tài liệu đã đính kèm']).toBe('Summarise the attached documents');
+  expect(en['Tóm tắt tài liệu đã đính kèm']).toBe('Summarize the attached documents');
   expect(enGB['Song song, rồi tổng hợp']).toBe('In parallel, then combine');
   expect(enGB['Giấy phép: {0}']).toBe('Licence: {0}');
   // Words that merely contain the letters stay untouched.

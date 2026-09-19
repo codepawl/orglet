@@ -1,3 +1,4 @@
+import { containsKeyword, roleWords } from '../../shared/role-words';
 import type { MascotId } from './mascots';
 
 /*
@@ -63,24 +64,7 @@ export type MascotSuggestion = { id: MascotId; score: number };
 const fields = [['name', 4], ['description', 2.5], ['skill', 2], ['instructions', 1]] as const;
 const INSTRUCTION_LIMIT = 4000;
 
-export const normalizeHint = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd').toLowerCase();
 export const seedHash = (text: string) => { let value = 0; for (const character of text) value = (value * 31 + character.codePointAt(0)!) | 0; return Math.abs(value); };
-
-const tokenize = (text: string) => ({ normal: (text.match(/[\p{L}\p{N}]+/gu) ?? []).map(normalizeHint) });
-const keywordParts = new Map(lexicon.flatMap(entry => entry.words).map(word => [word, word.split(' ')]));
-
-/** Whether `text` contains `keyword`. */
-function findKeyword(tokens: ReturnType<typeof tokenize>, keyword: string) {
-  const parts = keywordParts.get(keyword)!;
-  for (let start = 0; start + parts.length <= tokens.normal.length; start++) {
-    const matches = parts.every((part, index) => {
-      const token = tokens.normal[start + index];
-      return index === parts.length - 1 && part.length >= 4 ? token.startsWith(part) : token === part;
-    });
-    if (matches) return true;
-  }
-  return false;
-}
 
 const cache = new Map<string, MascotSuggestion[]>();
 
@@ -93,10 +77,10 @@ export function rankMascots(hints: MascotHints): MascotSuggestion[] {
   for (const [field, weight] of fields) {
     const text = field === 'instructions' ? hints.instructions?.slice(0, INSTRUCTION_LIMIT) : hints[field];
     if (!text?.trim()) continue;
-    const tokens = tokenize(text);
+    const words = roleWords(text);
     for (const entry of lexicon) {
       // One match per entry per field, so repeating a word does not add up.
-      if (!entry.words.some(word => findKeyword(tokens, word))) continue;
+      if (!entry.words.some(word => containsKeyword(words, word))) continue;
       entry.ids.forEach((id, index) => scores.set(id, (scores.get(id) ?? 0) + weight * (entry.ids.length - index)));
     }
   }
