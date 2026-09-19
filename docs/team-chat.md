@@ -22,7 +22,7 @@ Under the hood the thread is still a `tasks` row. **Chi tiết** lists internal 
 2. If there is no live thread yet, you get an empty chat (composer pinned at the bottom). The first send creates the thread.
 3. If a live thread already exists, it opens with the saved messages. Later sends are follow-ups in the same chat.
 
-The chevron next to a **team** avatar still expands or collapses the roster. Clicking the team name selects the team and keeps the roster open. **Workers have no nested task list.**
+A **team** row is one row: clicking it opens that team's chat. Its members are listed in the chat **Details** panel, not nested under it in the sidebar. **Workers have no nested task list.**
 
 Ctrl+N focuses the current worker or team chat (it does not create a new session). Search (Ctrl+K) finds chats by their text, including archived ones.
 
@@ -74,7 +74,7 @@ Cancel aborts the whole turn (plan + members + synthesis). Partial success stays
 
 ## @mentions
 
-In a **team** or **group** chat, type `@` in the composer to pick a worker, `@all`, or the team name. Tagged names highlight in the message.
+In a **team** or **group** chat, type `@` in the composer to pick a worker or `@all`. Tagged names highlight in the message. The team's own name is not offered, because tagging it means what `@all` means; typed by hand it still works, so older messages keep their meaning.
 
 - **Group chat:** only tagged assignees answer that turn. `@all`, the team name, or no tag keeps everyone.
 - **Team chat:** Demo assigns the tagged members. A live planner is told who you tagged and may still assign others. Untagged messages still assign every member.

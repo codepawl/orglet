@@ -88,10 +88,10 @@ On a team, the lead plans, assigned members work as hidden jobs, and one report 
   <img src="images/chat-light.png" alt="A team chat after a Demo turn. One report is in the thread; member jobs stay under Details." width="720">
 </p>
 
-In a **team** chat, type `@` to pick a worker, `@all`, or the team name. Tagged names highlight. Demo then asks those members. Leave it untagged, or type `@all`, to ask everyone. A 1:1 worker chat has no `@` picker.
+In a **team** chat, type `@` to pick a worker or `@all`. Tagged names highlight. Demo then asks those members. Leave it untagged, or type `@all`, to ask everyone. A 1:1 worker chat has no `@` picker.
 
 <p align="center">
-  <img src="images/mention-picker.png" alt="Typing @ in a team chat opens a list of workers, all, and the team name." width="720">
+  <img src="images/mention-picker.png" alt="Typing @ in a team chat opens a list with all and each worker." width="720">
 </p>
 
 How that works: [team-chat.md](team-chat.md).
