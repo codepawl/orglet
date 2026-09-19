@@ -174,5 +174,10 @@ export class Store {
     this.db.exec("UPDATE step_attempts SET state='unknown' WHERE state='requesting'; DELETE FROM leases;");
     for (const task of this.all<Task>('tasks')) if (task.status === 'running' || task.status === 'queued' || task.status === 'pausing') this.update('tasks', { ...task, status: 'interrupted' });
   }
-  close() { this.db.close(); }
+  close() {
+    if (!this.db.isOpen) return;
+    // Fold WAL into the main file so Windows can reopen or delete this path after close.
+    try { this.db.exec('PRAGMA wal_checkpoint(TRUNCATE);'); } catch { /* closing anyway */ }
+    this.db.close();
+  }
 }

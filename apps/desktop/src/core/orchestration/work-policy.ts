@@ -20,6 +20,7 @@ export class WorkPolicy {
     if (active.length >= (team.maxConcurrentTasks ?? 4)) throw new Error('Nhóm đã chạm giới hạn công việc chạy đồng thời.');
   }
   captureHandoffs() {
+    if (!this.store.db.isOpen) return;
     for (const task of this.store.all<Task>('tasks')) {
       if (task.pauseReason !== 'shift' || task.handoff || ['queued', 'running', 'pausing'].includes(task.status)) continue;
       const detail = this.store.detail(task.id); const complete = task.status === 'completed';
