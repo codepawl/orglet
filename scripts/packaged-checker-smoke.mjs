@@ -39,9 +39,11 @@ try {
   await page.getByRole('button', { name: 'Bỏ mục 6', exact: true }).click();
   assert.equal(await page.getByRole('combobox', { name: 'Bằng chứng cho mục 5', exact: true }).getAttribute('data-value'), 'run_audit');
   await page.getByRole('tab', { name: 'Dataset', exact: true }).click();
-  assert.equal(await page.getByLabel('Kiểm tra dataset trước khi review', { exact: true }).isChecked(), true);
+  assert.equal(await page.getByRole('switch', { name: 'Kiểm tra dataset trước khi review', exact: true }).getAttribute('aria-checked'), 'true');
   await page.getByLabel('Cột ID (không bắt buộc)', { exact: true }).fill('id');
-  await page.getByLabel('Đối chiếu schema và ID khi task có đúng hai dataset', { exact: true }).uncheck();
+  const compareTwo = page.getByRole('switch', { name: 'Đối chiếu schema và ID khi task có đúng hai dataset', exact: true });
+  await compareTwo.click();
+  assert.equal(await compareTwo.getAttribute('aria-checked'), 'false');
   await page.getByRole('button', { name: 'Lưu nhóm', exact: true }).click();
   const preflightTaskId = await page.evaluate(async sourceId => {
     const workspace = await window.orglet.call('workspace', {}); const team = workspace.teams.find(team => team.name === 'Eris Review');

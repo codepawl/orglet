@@ -6,7 +6,7 @@ import { Button, FieldLabel } from './ui';
 import { Select } from './Select';
 import { t } from '../i18n';
 import { orglet } from '../api';
-import { Checkbox } from './Checkbox';
+import { SwitchField } from './Switch';
 
 export function scopeLabel(scope: KnowledgeScope, workspace: Workspace) {
   if (scope.type === 'workspace') return t('Toàn workspace');
@@ -63,8 +63,7 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
     <label><FieldLabel icon={Tag}>Tags</FieldLabel><input value={tags} onChange={event => setTags(event.target.value)} placeholder="scoring, dataset" /></label>
     <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Nhóm'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Nhân viên'), icon: <UserRound size={16} /> }))]} />
     <p className="muted">{t('Knowledge của nhóm chỉ nạp khi chạy trong nhóm đó, kể cả khi nhân viên tham gia nhiều nhóm.')}</p>
-    <Checkbox checked={pinned} onChange={event => setPinned(event.target.checked)}>{t('Luôn nạp khi còn chỗ trong context')}</Checkbox>
-    <p className="muted">{t('Mục không ghim chỉ được nạp khi khớp từ khóa với yêu cầu. Lưu thay đổi tạo revision mới; lần chạy cũ giữ nội dung đã dùng.')}</p>
+    <SwitchField checked={pinned} onChange={setPinned} description={t('Mục không ghim chỉ được nạp khi khớp từ khóa với yêu cầu. Lưu thay đổi tạo revision mới; lần chạy cũ giữ nội dung đã dùng.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
     <div className="actions">
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       {proposed && !changed && <Button type="button" variant="primary" disabled={busy} onClick={() => void run(() => orglet.call('reviewKnowledge', { id: item.id, revision: item.revision, decision: 'approve' }))}>{t('Duyệt')}</Button>}

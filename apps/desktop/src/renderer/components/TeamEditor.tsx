@@ -14,6 +14,7 @@ import { fieldInvalid } from './fieldInvalid';
 import { t } from '../i18n';
 import { orglet } from '../api';
 import { Checkbox } from './Checkbox';
+import { SwitchField } from './Switch';
 
 type Tab = 'general' | 'instructions' | 'checklist' | 'dataset' | 'limits';
 type InvalidField = 'name' | 'members' | 'instructions' | 'checks' | 'limit' | 'taskBudget' | 'concurrency' | 'shiftZone' | 'shift';
@@ -104,19 +105,17 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
       </fieldset>)}
     </>}
     {tab === 'dataset' && <>
-      <Checkbox checked={preflight} onChange={event => setPreflight(event.target.checked)}>{t('Kiểm tra dataset trước khi review')}</Checkbox>
-      <p className="muted">{t('Kiểm tra tệp CSV/JSON trên máy trước khi nhóm review. Không gọi model.')}</p>
+      <SwitchField checked={preflight} onChange={setPreflight} description={t('Kiểm tra tệp CSV/JSON trên máy trước khi nhóm review. Không gọi model.')}>{t('Kiểm tra dataset trước khi review')}</SwitchField>
       {preflight && <>
         <label><FieldLabel icon={KeyRound}>{t('Cột ID (không bắt buộc)')}</FieldLabel><input value={idColumn} onChange={event => setIdColumn(event.target.value)} maxLength={256} placeholder={t('Ví dụ: id')} /></label>
-        <Checkbox checked={compareTwo} onChange={event => setCompareTwo(event.target.checked)}>{t('Đối chiếu schema và ID khi task có đúng hai dataset')}</Checkbox>
-        <p className="muted">{t('Khi có đúng hai tệp, so cột và ID. Để trống cột ID nếu chưa rõ.')}</p>
+        <SwitchField checked={compareTwo} onChange={setCompareTwo} description={t('Khi có đúng hai tệp, so cột và ID. Để trống cột ID nếu chưa rõ.')}>{t('Đối chiếu schema và ID khi task có đúng hai dataset')}</SwitchField>
       </>}
     </>}
     {tab === 'limits' && <>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn nhóm / tháng')}</FieldLabel><MoneyInput data-field="limit" type="number" min="0" step="any" value={limit} onChange={value => { setLimit(value); if (invalid === 'limit') clearError(); }} invalid={invalid === 'limit'} flash={flash} /></label>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="taskBudget" type="number" min="0" step="any" value={taskBudget} onChange={value => { setTaskBudget(value); if (invalid === 'taskBudget') clearError(); }} invalid={invalid === 'taskBudget'} flash={flash} /></label>
       <label><FieldLabel icon={Layers} required>{t('Số công việc chạy đồng thời')}</FieldLabel><input data-field="concurrency" type="number" min="1" max="4" step="1" value={concurrency} onChange={event => { setConcurrency(Number(event.target.value)); if (invalid === 'concurrency') clearError(); }} {...fieldInvalid(invalid === 'concurrency', flash)} /></label>
-      <Checkbox checked={shift} onChange={event => setShift(event.target.checked)}>{t('Giới hạn khung giờ làm việc')}</Checkbox>
+      <SwitchField checked={shift} onChange={setShift}>{t('Giới hạn khung giờ làm việc')}</SwitchField>
       {shift && <>
         <label><FieldLabel icon={Globe} required>{t('Timezone của ca')}</FieldLabel><input data-field="shiftZone" value={shiftZone} onChange={event => { setShiftZone(event.target.value); if (invalid === 'shiftZone') clearError(); }} maxLength={100} {...fieldInvalid(invalid === 'shiftZone', flash)} /></label>
         <label><FieldLabel icon={Clock} required>{t('Bắt đầu ca')}</FieldLabel><input data-field="shift" type="time" value={shiftStart} onChange={event => { setShiftStart(event.target.value); if (invalid === 'shift') clearError(); }} {...fieldInvalid(invalid === 'shift', flash)} /></label>
