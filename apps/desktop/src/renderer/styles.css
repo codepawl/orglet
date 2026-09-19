@@ -59,10 +59,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .brand strong { margin-right:auto; }
 .brand .button { margin-left:-4px; }
 .orglet-mark { display:inline-flex; align-items:center; justify-content:center; border:2px solid var(--text); background:var(--text); border-radius:10px 10px 10px 3px; width:29px; height:29px; font-size:0; position:relative; flex-shrink:0; }
-.orglet-mark::before { content:''; width:8px; height:8px; border:2px solid var(--bg); border-radius:50%; }
+/* The eye is a hole through a solid shape, matching the app icon and the mascots rather than a separate ring. */
+.orglet-mark::before { content:''; width:11px; height:11px; background:var(--bg); border-radius:50%; }
 .orglet-mark.large { width:42px; height:42px; border-radius:14px 14px 14px 4px; margin-bottom:24px; }
-.orglet-mark.large::before { width:13px; height:13px; }
+.orglet-mark.large::before { width:16px; height:16px; }
 .orglet-mark.small { width:25px; height:25px; border-radius:8px 8px 8px 3px; }
+.orglet-mark.small::before { width:9.5px; height:9.5px; }
 .section-heading { font-size:13px; font-weight:500; color:var(--muted); min-height:34px; display:flex; align-items:center; justify-content:space-between; padding:0 0 0 12px; }
 /* Section add buttons and row settings buttons share one class, so their icons always sit in one column. */
 .button.row-action { width:30px; height:30px; min-height:30px; padding:5px; margin-right:4px; }

@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- The bubble is solid, with the eye knocked out in the chip colour, the same way the worker mascots are
+       drawn (user, 2026-09-19). An outline at 16px collapsed into a blur; a filled shape still reads. -->
   <rect x="8" y="8" width="240" height="240" rx="56" fill="#171717"/>
-  <path d="M100 62h56a38 38 0 0 1 38 38v56a38 38 0 0 1-38 38h-80a14 14 0 0 1-14-14v-80a38 38 0 0 1 38-38z" fill="none" stroke="#fff" stroke-width="16" stroke-linejoin="round"/>
-  <circle cx="128" cy="128" r="17" fill="none" stroke="#fff" stroke-width="14"/>
+  <!-- The path is the centreline of the old 16px stroke, so it is filled and stroked to keep that footprint. -->
+  <path d="M100 62h56a38 38 0 0 1 38 38v56a38 38 0 0 1-38 38h-80a14 14 0 0 1-14-14v-80a38 38 0 0 1 38-38z" fill="#fff" stroke="#fff" stroke-width="16" stroke-linejoin="round"/>
+  <circle cx="128" cy="128" r="24" fill="#171717"/>
 </svg>
