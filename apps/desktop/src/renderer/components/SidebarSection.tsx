@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from './icons';
 
 const storageKey = (id: string) => `orglet.sidebar.${id}.collapsed`;
 function readCollapsed(id: string) {

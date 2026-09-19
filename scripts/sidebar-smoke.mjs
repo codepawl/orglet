@@ -55,7 +55,7 @@ try {
   await page.mouse.move(from.x + 40, from.y + from.height / 2); await page.mouse.down();
   await page.waitForTimeout(500);
   assert.equal(await page.locator('.tree-item.dragging').count(), 1, 'held row is lifted');
-  await page.locator('.tree-item.dragging .lucide-grip-vertical').waitFor();
+  await page.locator('.tree-item.dragging .orglet-icon-grip-vertical').waitFor();
   for (let step = 1; step <= 10; step++) await page.mouse.move(from.x + 40, from.y + from.height / 2 + (to.y - from.y - 6) * step / 10);
   await page.screenshot({ path: 'test-results/sidebar-dragging.png', clip: { x: 0, y: 0, width: 260, height: 900 } });
   await page.mouse.up();
