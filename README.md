@@ -69,12 +69,12 @@ Start here: [Getting started](docs/getting-started.md). The [docs map](docs/READ
 
 [Latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. The tag is public; Windows **Setup.exe** / **ZIP** assets on that release may still be empty. If they are missing, [build from source](#dev).
 
-Windows installers are unsigned. macOS CI can Developer ID sign when repo secrets exist; notarization is not configured yet.
+Windows installers are unsigned. macOS CI signs with Developer ID and notarizes with Apple, so a macOS build from CI opens without a Gatekeeper warning.
 
 | Platform | Status |
 |---|---|
 | Windows | Public 0.2.x target. Unsigned ZIP and Squirrel Setup from `pnpm make`. If those files are not attached to the GitHub Release, build locally. SmartScreen may warn (unknown publisher); that is expected. See [windows-release-gates.md](docs/windows-release-gates.md). |
-| macOS | ZIP of `Orglet.app` from `pnpm make` on a Mac, or the `orglet-macos-signed-zip` / `orglet-macos-unsigned-zip` CI artifact. CI signs with Developer ID when P12 secrets are set. **Not notarized** yet, and not a GitHub Release asset. Gatekeeper will still warn until Apple ID or App Store Connect API key secrets exist; right-click → Open. See [macos-packaging.md](docs/macos-packaging.md). |
+| macOS | ZIP of `Orglet.app` from `pnpm make` on a Mac, or the `orglet-macos-signed-zip` CI artifact. CI signs it with Developer ID and notarizes it with Apple, so it opens without the right-click workaround. Not a GitHub Release asset yet, and a local `pnpm make` stays unsigned. See [macos-packaging.md](docs/macos-packaging.md). |
 | Linux | Coming soon |
 | iOS and Android | Coming soon |
 
