@@ -49,6 +49,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .sidebar-resizer:hover::after,.sidebar-resizer:focus-visible::after,.app.resizing .sidebar-resizer::after { background:color-mix(in srgb, var(--text) 22%, transparent); }
 .sidebar-resizer:focus-visible { outline:none; }
 .app.resizing { cursor:col-resize; user-select:none; }
+/* The details panel drags from its left edge, the mirror of the sidebar (user, 2026-09-19). */
+.details-resizer { position:absolute; top:var(--shell-gap); bottom:var(--shell-gap); right:calc(var(--shell-gap) + var(--details-width) + var(--shell-gap) / 2); width:11px; transform:translateX(50%); padding:0; border:0; background:transparent; cursor:col-resize; touch-action:none; }
+.details-resizer::after { content:''; display:block; width:3px; height:100%; margin:0 auto; border-radius:999px; background:transparent; transition:background .12s; }
+.details-resizer:hover::after,.details-resizer:focus-visible::after,.app.resizing .details-resizer::after { background:color-mix(in srgb, var(--text) 22%, transparent); }
+.details-resizer:focus-visible { outline:none; }
 .app.sidebar-hidden { grid-template-columns:minmax(0,1fr); }
 /* Chat details are a third panel in the shell, the same card as the sidebar (user, 2026-09-19). */
 .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr) var(--details-width); }
@@ -82,6 +87,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-member-name small { font-size:11px; color:var(--muted); }
 .details-member p.muted { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .details-status { font-size:13px; font-weight:500; }
+.details-section .details-facts { padding-left:0; }
 .details-source { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .details-source svg { flex-shrink:0; }
 /* The story of the run: who spoke, then what they did, indented under them. */
@@ -90,7 +96,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-run > .avatar { margin-top:1px; }
 .details-run-who { display:flex; align-items:center; gap:6px; font-size:13px; }
 .details-run-who small { font-size:11px; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 7px; }
-.details-run p.muted { font-size:12px; line-height:1.5; display:flex; gap:7px; }
+.details-run-took { margin-left:auto; flex-shrink:0; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.details-run p.muted { font-size:12px; line-height:1.5; display:flex; gap:7px; align-items:baseline; }
+.details-run p.muted > span { min-width:0; }
 .details-run time { flex-shrink:0; font-variant-numeric:tabular-nums; opacity:.75; }
 .details-technical summary { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); cursor:pointer; }
 .details-technical > *:not(summary) { margin-top:8px; }
