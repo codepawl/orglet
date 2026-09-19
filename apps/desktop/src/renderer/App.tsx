@@ -1,6 +1,6 @@
 import { RevisionEditor } from './components/RevisionEditor';
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowLeft, ChevronRight, BookOpen, Download, FileText, PanelLeft, Pencil, Plus, Search, Settings2, SlidersHorizontal, CalendarClock, Wallet, X, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { emptyConnections, isPaidApi, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
@@ -39,6 +39,7 @@ import type { Knowledge } from '../shared/knowledge';
 import type { HarnessInfo } from '../shared/harness';
 import { readiness, settingsTabFor, setupHint } from './components/providers';
 import { workerModelLabel } from './components/workerModel';
+import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
 import { t, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
@@ -52,23 +53,8 @@ function writeSeenStorage(value: Record<string, SeenInfo>) {
   try { localStorage.setItem(seenStorageKey, JSON.stringify(value)); } catch { /* ignore quota */ }
 }
 
-const sidebarWidthKey = 'orglet.sidebar-width';
 const SIDEBAR_WIDTH = { min: 190, max: 420, default: 228, step: 16 };
-const clampSidebarWidth = (width: number) => Math.min(SIDEBAR_WIDTH.max, Math.max(SIDEBAR_WIDTH.min, Math.round(width)));
-
-/** The gap the shell leaves around its panels, so a drag can turn a pointer position into a panel width. */
-function shellGap(): number {
-  return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--shell-gap')) || 8;
-}
-
-function readSidebarWidth(): number {
-  try {
-    const stored = Number(localStorage.getItem(sidebarWidthKey));
-    return stored ? clampSidebarWidth(stored) : SIDEBAR_WIDTH.default;
-  } catch {
-    return SIDEBAR_WIDTH.default;
-  }
-}
+const DETAILS_WIDTH = { min: 280, max: 560, default: 320, step: 16 };
 
 /**
  * Ids that were not in the sidebar a moment ago. Everything present when the workspace first arrives counts as
@@ -118,32 +104,11 @@ export function App() {
   const detailsOpen = panel === 'activity';
   const detailsOpenRef = useRef(detailsOpen); detailsOpenRef.current = detailsOpen;
   const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth); const [resizing, setResizing] = useState(false);
-  const rememberSidebarWidth = (width: number) => {
-    setSidebarWidth(width);
-    try { localStorage.setItem(sidebarWidthKey, String(width)); } catch { /* ignore quota */ }
-  };
-  // Dragging tracks the pointer; the width is the distance from the window edge minus the gap the panel sits in.
-  const dragSidebar = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setResizing(true);
-  };
-  const moveSidebar = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!resizing) return;
-    rememberSidebarWidth(clampSidebarWidth(event.clientX - shellGap()));
-  };
-  const endSidebarDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!resizing) return;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    setResizing(false);
-  };
-  const resizeSidebarByKey = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    const keys: Record<string, number> = { ArrowLeft: -SIDEBAR_WIDTH.step, ArrowRight: SIDEBAR_WIDTH.step };
-    if (event.key in keys) { event.preventDefault(); rememberSidebarWidth(clampSidebarWidth(sidebarWidth + keys[event.key])); return; }
-    if (event.key === 'Home') { event.preventDefault(); rememberSidebarWidth(SIDEBAR_WIDTH.min); return; }
-    if (event.key === 'End') { event.preventDefault(); rememberSidebarWidth(SIDEBAR_WIDTH.max); }
-  };
+  // Dragging tracks the pointer; a width is the distance from the window edge minus the gap the panel sits in.
+  const sidebarPane = usePaneWidth({ storageKey: 'orglet.sidebar-width', bounds: SIDEBAR_WIDTH, widthFromPointer: clientX => clientX - shellGap(), widerKey: 'ArrowRight' });
+  const detailsPane = usePaneWidth({ storageKey: 'orglet.details-width', bounds: DETAILS_WIDTH, widthFromPointer: clientX => innerWidth - clientX - shellGap(), widerKey: 'ArrowLeft' });
+  const sidebarWidth = sidebarPane.width;
+  const resizing = sidebarPane.resizing || detailsPane.resizing;
   const [dismissedCatchUpNotice, setDismissedCatchUpNotice] = useState('');
   const composer = useRef<HTMLTextAreaElement>(null); const refreshId = useRef(0);
   const bootedLiveThread = useRef(false);
@@ -416,12 +381,10 @@ export function App() {
     trailing={composerTrailing}
     attachments={sources.length > 0 ? sources.map(source => <span className="attachment" key={source.id}><FileText size={14} /><span>{source.name}</span><button type="button" aria-label={t('Bỏ {0}', [source.name])} onClick={() => { setSources(sources.filter(s => s.id !== source.id)); }}><X size={14} /></button></span>) : undefined} />;
   const composerHint = isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}<button onClick={() => { if (team) { setEditingTeam(team); setPanel('team'); } else { setEditingWorker(worker); setPanel('worker'); } }}>{team ? t('Thiết lập nhóm') : t('Đổi model')}</button></p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p> : null;
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsPane.width}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
-    {sidebar && <button type="button" className="sidebar-resizer" role="separator" aria-orientation="vertical"
-      aria-label={t('Kéo để đổi độ rộng thanh bên')} aria-valuenow={sidebarWidth} aria-valuemin={SIDEBAR_WIDTH.min} aria-valuemax={SIDEBAR_WIDTH.max}
-      onPointerDown={dragSidebar} onPointerMove={moveSidebar} onPointerUp={endSidebarDrag} onPointerCancel={endSidebarDrag}
-      onKeyDown={resizeSidebarByKey} onDoubleClick={() => rememberSidebarWidth(SIDEBAR_WIDTH.default)} />}
+    {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
+    {detailsOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
     {sidebar && <aside className="sidebar" aria-label={t('Điều hướng')}>
       <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong><Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button><Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={() => setSidebar(false)}><PanelLeft size={18} /></Button></div>
       <div className="sidebar-scroll">

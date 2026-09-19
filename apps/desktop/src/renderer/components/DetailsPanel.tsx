@@ -1,4 +1,4 @@
-import { Clock, FileText, ListOrdered, Shuffle, Users, Wallet, Wrench, X } from 'lucide-react';
+import { Clock, Cpu, FileText, ListOrdered, MessageSquare, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
 import { t, currentLocale, tMessage } from '../i18n';
 import { Avatar, RosterAvatars } from './Avatar';
 import { ProviderMark } from './ProviderMark';
@@ -23,6 +23,19 @@ import type { Run, TaskDetail, Team, Worker, Workspace } from '../../shared/cont
 
 // Not the bare 'tổng hợp', which the dictionary already uses for the synthesizer role rather than this stage.
 const stageNames: Record<string, string> = { plan: 'phân việc', synthesis: 'gộp kết quả', member: 'phần việc', group: 'trả lời' };
+
+/** How long something took, in the shortest form that is still exact enough to be worth reading. */
+function elapsedLabel(fromIso: string, toIso: string) {
+  const seconds = Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 1000);
+  if (!Number.isFinite(seconds) || seconds < 1) return undefined;
+  if (seconds < 60) return t('{0} giây', [seconds]);
+  const minutes = Math.floor(seconds / 60);
+  return seconds % 60 ? t('{0} phút {1} giây', [minutes, seconds % 60]) : t('{0} phút', [minutes]);
+}
+
+/** When a run finished, as far as the panel can tell: the last thing that run reported. */
+const runEndedAt = (runId: string, events: { runId?: string; createdAt: string }[]) =>
+  events.filter(event => event.runId === runId).at(-1)?.createdAt;
 
 /** A section with an icon beside its title, so the panel can be scanned rather than read. */
 function Section({ icon: Icon, title, children }: { icon: typeof Users; title: string; children: React.ReactNode }) {
@@ -68,17 +81,23 @@ function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; 
   </div>;
 }
 
-/** One run as a line of the story: who spoke, what part they were doing, and when. */
+/** One run as a line of the story: who spoke, what part they were doing, how long it took and what it reported. */
 function RunEntry({ run, events }: { run: Run; events: { id: string; message: string; createdAt: string }[] }) {
   const person = run.snapshot.worker;
   const stage = run.stage && stageNames[run.stage] ? t(stageNames[run.stage]) : undefined;
+  const endedAt = events.at(-1)?.createdAt;
+  const took = endedAt && elapsedLabel(run.startedAt, endedAt);
   return <li className="details-run">
     <Avatar name={person.name} seed={person.id} mascot={person.avatar?.mascot} defaultMascot hint={person.description} color={person.avatar?.color} size="xs" />
     <div>
-      <p className="details-run-who"><strong>{person.name}</strong>{stage && <small>{stage}</small>}</p>
+      <p className="details-run-who">
+        <strong>{person.name}</strong>
+        {stage && <small>{stage}</small>}
+        {took && <time className="details-run-took" title={t('Bước này mất bao lâu')}>{took}</time>}
+      </p>
       {events.map(event => <p key={event.id} className="muted">
         <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })}</time>
-        {tMessage(event.message)}
+        <span>{tMessage(event.message)}</span>
       </p>)}
     </div>
   </li>;
@@ -97,6 +116,12 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
   const members = team ? teamRoster(team, workspace.workers) : [];
   const spent = detail ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0;
   const tokens = detail ? detail.usage.inputTokens + detail.usage.outputTokens : 0;
+  const firstRun = detail?.runs[0];
+  const lastRun = detail?.runs.at(-1);
+  // What the answers actually ran on, which used to be readable only inside the technical block (user, 2026-09-19).
+  const model = lastRun?.snapshot.model;
+  const finishedAt = lastRun && detail ? runEndedAt(lastRun.id, detail.events) : undefined;
+  const took = firstRun && finishedAt ? elapsedLabel(firstRun.startedAt, finishedAt) : undefined;
 
   return <aside className="details-pane" aria-label={t('Chi tiết')}>
     <div className="details-head">
@@ -121,14 +146,19 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
         }} />
       </Section>}
 
-      {detail && <Section icon={Wallet} title={t('Cuộc trò chuyện này')}>
+      {detail && <Section icon={MessageSquare} title={t('Cuộc trò chuyện này')}>
         <p className="details-status">{statusLabel[detail.task.status]}</p>
-        {spent > 0 && <p className="muted">{t('Đã tiêu {0}', [formatMoney(spent)])}</p>}
+        <div className="details-facts">
+          <Fact icon={Wallet} title={t('Đã tiêu cho cuộc trò chuyện này')}>{formatMoney(spent)}</Fact>
+          {took && <Fact icon={Clock} title={t('Tổng thời gian chạy')}>{took}</Fact>}
+          {tokens > 0 && <Fact icon={Cpu} title={t('Token đã dùng')}>{t('{0} token', [tokens.toLocaleString(currentLocale())])}</Fact>}
+          {model && <Fact icon={Sparkles} title={t('Model đã trả lời')}>{model}</Fact>}
+          <Fact icon={MessageSquare} title={t('Số lượt trả lời')}>{t('{0} lượt', [detail.artifacts.length])}</Fact>
+        </div>
         {detail.sources.length > 0 && <>
           <ShowMore items={detail.sources} limit={3} empty="" render={source => <p key={source.id} className="details-source"><FileText size={14} aria-hidden="true" />{source.name}</p>} />
           <Button variant="outline" onClick={onOpenSources}><FileText size={16} />{t('Xem nguồn')}</Button>
         </>}
-        {detail.sources.length === 0 && <Button variant="outline" onClick={onOpenSources}><FileText size={16} />{t('Xem nguồn')}</Button>}
       </Section>}
 
       {detail && detail.runs.length > 0 && <Section icon={Clock} title={t('Diễn biến')}>
@@ -137,9 +167,8 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
         </ol>
       </Section>}
 
-      {detail && <details className="details-technical">
+      {detail && <details className="details-technical" open>
         <summary><Wrench size={15} aria-hidden="true" />{t('Chi tiết kỹ thuật')}</summary>
-        {tokens > 0 && <p className="muted">{t('Đã dùng {0} token', [tokens.toLocaleString(currentLocale())])}</p>}
         {detail.runs.map(run => <section key={run.id}>
           <h4>{run.snapshot.worker.name} · v{run.snapshot.worker.revision}</h4>
           <p className="muted">{t('Skill v{0}', [run.snapshot.skill.revision])} · {run.snapshot.worker.provider}{run.snapshot.model ? ` · ${run.snapshot.model}` : ''}</p>
@@ -148,8 +177,8 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
             {detail.runs.find(item => item.stage === 'member' && item.snapshot.worker.id === assignment.workerId)?.snapshot.worker.name ?? assignment.workerId}: {assignment.brief}
           </li>)}</ul>}
           <ContextManifestView run={run} workspace={workspace} />
-          {detail.artifacts.filter(artifact => artifact.runId === run.id).map(artifact => <Button key={artifact.id} variant="outline" onClick={() => onExport(artifact.id)}>
-            <FileText size={16} />{t('Xuất {0}', [tMessage(artifact.report.title)])}
+          {detail.artifacts.filter(artifact => artifact.runId === run.id).map(artifact => <Button key={artifact.id} variant="outline" title={tMessage(artifact.report.title)} onClick={() => onExport(artifact.id)}>
+            <FileText size={16} />{artifact.report.format === 'chat' ? t('Xuất câu trả lời') : t('Xuất báo cáo')}
           </Button>)}
         </section>)}
       </details>}

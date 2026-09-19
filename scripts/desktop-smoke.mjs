@@ -130,10 +130,13 @@ try {
   // Each job is a line of the story, with its stage as a chip beside the worker's name.
   await page.locator('.details-run-who').filter({ hasText: 'phân việc' }).waitFor();
   await page.locator('.details-run-who').filter({ hasText: 'gộp kết quả' }).waitFor();
-  // Run ids, revisions, the context manifest, the plan's assignments and export sit under one collapsed block.
-  await page.locator('.details-technical > summary').click();
+  // Run ids, revisions, the context manifest, the plan's assignments and export sit in the technical block, which
+  // is open from the start (user, 2026-09-19) and folds away rather than opening.
+  assert.equal(await page.locator('.details-technical[open]').count(), 1);
   await page.getByText('Source researcher: Desktop smoke: team synthesis', { exact: true }).waitFor();
-  await page.getByRole('button', { name: /^Xuất / }).first().waitFor();
+  await page.getByRole('button', { name: 'Xuất câu trả lời', exact: true }).first().waitFor();
+  await page.locator('.details-technical > summary').click();
+  assert.equal(await page.locator('.details-technical[open]').count(), 0);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Researcher', exact: true }).click();
   await archiveCurrentChat(page);
