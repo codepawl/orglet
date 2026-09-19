@@ -301,6 +301,7 @@ export const en: Dictionary = {
   'Không có lần chạy để tiếp tục.': 'No run to continue.',
   'Không có mục khớp.': 'No matching items.',
   'Không có quyền đọc nguồn ngoài task này.': 'No read access to sources outside this task.',
+  'Không còn tệp nguồn {0} ở chỗ cũ. Tệp có thể đã bị đổi tên, di chuyển hoặc xóa. Đính kèm lại tệp, hoặc mở Nguồn của cuộc trò chuyện và Thu hồi quyền đọc để tiếp tục mà không có tệp này.': '{0} is no longer where it was attached from. The file may have been renamed, moved or deleted. Attach it again, or open Chat sources and revoke read access to carry on without it.',
   'Không có tỷ giá hợp lệ cho {0}.': 'No valid exchange rate for {0}.',
   'Không hoàn tất checker cho nguồn này. Kiểm tra định dạng, tên cột ID và giới hạn tài nguyên.': 'The checker did not finish for this source. Check the format, the ID column name and resource limits.',
   'Không hỗ trợ symlink hoặc junction. Chọn tệp gốc.': 'Symlinks and junctions are not supported. Choose the original file.',

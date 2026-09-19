@@ -113,7 +113,11 @@ export class Sources {
     const source = this.store.get<Source>('sources', sourceId);
     if (source.revoked) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
     const row = this.store.db.prepare('SELECT path FROM sources WHERE id=?').get(sourceId)!;
-    const bytes = await this.bytes(String(row.path), dataset);
+    const bytes = await this.bytes(String(row.path), dataset).catch((error: unknown) => {
+      // The file lived on disk when it was attached; saying which one is gone is more use than the system error.
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') throw new Error(`Không còn tệp nguồn ${source.name} ở chỗ cũ. Tệp có thể đã bị đổi tên, di chuyển hoặc xóa. Đính kèm lại tệp, hoặc mở Nguồn của cuộc trò chuyện và Thu hồi quyền đọc để tiếp tục mà không có tệp này.`);
+      throw error;
+    });
     // Recheck after IO: revocation can arrive while the file is being read.
     if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
     if (fingerprint(bytes) !== source.hash) throw new Error('Nguồn đã thay đổi. Chọn lại tệp để tạo manifest mới.');
