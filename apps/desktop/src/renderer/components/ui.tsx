@@ -38,7 +38,9 @@ export function Drawer({ open, onClose, title, actions, description, children }:
     <Dialog.Overlay className="drawer-overlay" />
     <Dialog.Content className="drawer" {...(description ? {} : { 'aria-describedby': undefined })} onEscapeKeyDown={keepOpenForPopup} onOpenAutoFocus={() => { returnFocus.current = document.activeElement as HTMLElement; }} onCloseAutoFocus={event => { event.preventDefault(); returnFocus.current?.focus(); }}>
       <div className="drawer-header"><div className="heading-text"><Dialog.Title>{title}</Dialog.Title>{description && <Dialog.Description className="heading-description">{description}</Dialog.Description>}</div>{actions && <div className="drawer-actions">{actions}</div>}<Dialog.Close asChild><Button size="icon" aria-label={t('Đóng panel')}><X size={20} /></Button></Dialog.Close></div>
-      <div className="drawer-body">{children}</div>
+      {/* The clip and the scroll are two elements on purpose: a rounded box does not clip its own scrollbar, and
+          the dialog itself cannot clip, because Select portals its menu into it and the menu may extend past it. */}
+      <div className="drawer-body"><div className="drawer-scroll">{children}</div></div>
     </Dialog.Content>
   </Dialog.Portal></Dialog.Root>;
 }
