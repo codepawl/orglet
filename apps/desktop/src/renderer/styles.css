@@ -722,11 +722,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Pointing at a row lifts its face and deepens its colour. No background: a row already tints, and a tint
    inside a tint is against the house rules. */
 .worker-row:hover .row-disclosure > .avatar .mascot,
-.worker-row:hover .composer-to-avatars .mascot { transform:translateY(-2px); filter:saturate(1.18); }
+.worker-row:hover .composer-to-avatars .mascot { transform:translateY(var(--mascot-lift)) translateY(-2px); filter:saturate(1.18); }
 
 /* One nod when a reply lands. The byline mounts with the answer, so this plays once and never repeats. */
 .message-byline .avatar .mascot { animation:mascot-nod .5s cubic-bezier(.34,1.56,.64,1) 1; }
-@keyframes mascot-nod { 0% { transform:translateY(-3px); } 55% { transform:translateY(2px); } 100% { transform:translateY(0); } }
+@keyframes mascot-nod { 0% { transform:translateY(var(--mascot-lift)) translateY(-3px); } 55% { transform:translateY(var(--mascot-lift)) translateY(2px); } 100% { transform:translateY(var(--mascot-lift)); } }
 
 /* Waiting on a person is not the same as working, so it breathes slowly instead of running an arc. */
 .assistant-message.needs-you .avatar .mascot { animation:mascot-breathe 3.2s ease-in-out infinite; }
@@ -772,13 +772,13 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .mascot-auto { font-size:16px; color:var(--muted); }
 /* Logo-style mascots: the bubble is filled with the avatar colour, the face is drawn in the page ground. */
 .avatar.has-mascot { color:color-mix(in srgb, var(--avatar-color) 78%, var(--text)); --mascot-fill:currentColor; --mascot-ink:var(--bg); }
-.avatar.has-mascot .mascot { width:100%; height:100%; margin-top:0; }
+.avatar.has-mascot .mascot { --mascot-lift:0%; width:100%; height:100%; margin-top:0; }
 .mascot-choice { color:color-mix(in srgb, var(--text) 80%, transparent); --mascot-fill:currentColor; --mascot-ink:var(--bg); }
 .mascot-choice .mascot { width:32px; height:32px; margin-top:0; }
 /* No avatar tile (user decision 2026-09-17): mascots and emoji stand on their own; letters keep a thin ring in their colour. */
 .avatar { background:transparent; }
 .avatar:not(.has-mascot):not(.emoji) { box-shadow:inset 0 0 0 1.5px color-mix(in srgb, var(--avatar-color) 55%, transparent); }
-.avatar.has-mascot .mascot { width:112%; height:112%; transform:translateY(-3%); }
+.avatar.has-mascot .mascot { --mascot-lift:-3%; width:112%; height:112%; transform:translateY(var(--mascot-lift)); }
 /* Mascots sit centred on the text line: no clipping of the enlarged art (user feedback 2026-09-17). */
 .avatar.has-mascot .avatar-face { overflow:visible; }
 /* Sidebar hierarchy: section headings sit furthest left, their rows one step in, and nested rows further in (user feedback 2026-09-17). */
@@ -963,12 +963,12 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    how long it has taken, and a way to stop. One mark, not a spinner sitting beside an avatar. */
 .thinking { display:flex; align-items:center; gap:8px; min-height:34px; }
 .working-mark { position:relative; display:grid; place-items:center; width:34px; height:34px; flex-shrink:0; }
-.working-halo { position:absolute; inset:0; width:100%; height:100%; }
-.working-track,.working-trace { fill:none; stroke-width:2; stroke-linejoin:round; }
-.working-track { stroke:color-mix(in srgb, var(--text) 9%, transparent); }
-/* A short arc of light travels the avatar's own edge, easing rather than turning at a constant rate, so it
-   reads as something alive instead of a machine spinning. pathLength=200 makes the dashes read as percent. */
-.working-trace { stroke:var(--text); stroke-dasharray:34 166; animation:working-trace 1.6s cubic-bezier(.62,0,.38,1) infinite; }
+/* Thinking is the face turning slowly from side to side, not a ring going round (user, 2026-09-19). The head
+   tilts while the eyes lead the turn, a beat ahead, which is what makes it read as looking rather than wobbling. */
+.working-mark .mascot { animation:mascot-ponder 2.6s ease-in-out infinite; }
+.working-mark .mascot-eyes { animation:mascot-glance 2.6s ease-in-out infinite; }
+@keyframes mascot-ponder { 0%,100% { transform:translateY(var(--mascot-lift)) rotate(-5deg); } 50% { transform:translateY(var(--mascot-lift)) rotate(5deg); } }
+@keyframes mascot-glance { 0%,100% { transform:translateX(-1.3px); } 50% { transform:translateX(1.3px); } }
 .working-who { font-size:14px; font-weight:600; flex-shrink:0; }
 /* The words are muted, with a band of light sweeping across them in time with the mark. */
 .thinking-text { font-size:14px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -997,5 +997,4 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 @keyframes thinking-pulse { 50% { opacity:.45; } }
 @media(max-width:1000px) { .live-run { padding-left:0; } }
 @keyframes thinking-shimmer { from { background-position:120% 0; } to { background-position:-120% 0; } }
-@keyframes working-trace { to { stroke-dashoffset:-200; } }
-@media (prefers-reduced-motion: reduce) { .working-trace { animation-duration:4s; } .thinking-text { animation:none; color:var(--muted); background:none; } .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }
+@media (prefers-reduced-motion: reduce) { .working-mark .mascot,.working-mark .mascot-eyes { animation:none; } .thinking-text { animation:none; color:var(--muted); background:none; } .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }
