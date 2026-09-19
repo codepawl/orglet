@@ -27,6 +27,8 @@ The GitHub required check name remains `test`. That job does not run the suite a
 
 `extract-zip` currently has high advisories (`GHSA-jmr9-qjv8-65gv`, `GHSA-7pqw-9j4j-h8q3`) through `@electron/packager`. That tree is a **dev/packaging** dependency, so `--prod` does not report it and this workflow does not ignore those GHSAs. Do not allowlist a production CVE.
 
+Both advisories are unpatched: 2.0.1 is the newest release of `extract-zip` and it is the affected one, so there is nothing to upgrade to. Both need an attacker-controlled archive, and the only archive this extracts is the Electron distribution that `@electron/get` downloads from Electron's own releases and checks against `SHASUMS256.txt`. Nothing `extract-zip` touches reaches a user's machine. The Dependabot alerts stay **open** on purpose rather than being dismissed: a dismissal also stops the upgrade pull request, and an open alert is how the fix will reach us if one ships. Re-check when Electron Forge next moves its dependencies.
+
 Not in this workflow: nightly extra Windows jobs, live API keys, paid provider calls, or running Squirrel Setup. The packaged job uploads unsigned Squirrel Setup and the win32 ZIP as Actions artifacts (`orglet-windows-unsigned-setup` and `orglet-windows-unsigned-zip`, 14-day retention).
 
 ## Signing decision (locked)
