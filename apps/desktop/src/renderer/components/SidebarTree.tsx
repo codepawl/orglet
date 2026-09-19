@@ -104,12 +104,12 @@ export function useReorder(ids: string[], commit: (ids: string[]) => void) {
 }
 
 /**
- * A team or worker row. The name selects: a team opens its chat and stays expanded (`expandOnSelect`);
+ * A team or worker row. The name selects and opens the list; only the chevron closes it again.
  * a worker opens its live chat. When `children` is passed (a team roster), the avatar turns into a
  * chevron on hover and toggles that list. Workers have no task pile, so they omit `children`.
  * Optional `status` is the rolled-up mark from its subset (live thread for a worker, workers for a team).
  */
-export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, expandLabel, menu, reorder, expandOnSelect, children }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; expandLabel?: string; menu: ReactNode; reorder: RowBindings; expandOnSelect?: boolean; children?: ReactNode }) {
+export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, expandLabel, menu, reorder, children }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; expandLabel?: string; menu: ReactNode; reorder: RowBindings; children?: ReactNode }) {
   const expandable = children !== undefined;
   const [open, setOpen] = useState(() => expandable && readOpen(id));
   const toggle = () => setOpen(value => {
@@ -126,7 +126,7 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
         : <span className="row-disclosure" aria-hidden="true">{mark}{avatar}</span>}
       <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} title={description ? `${description}
 ${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-        aria-expanded={expandable ? open : undefined} aria-controls={expandable ? `tree-${id}` : undefined} onClick={() => { onSelect(); if (expandable && expandOnSelect) { if (!open) toggle(); } else if (expandable) toggle(); }} onKeyDown={onMoveKey}>
+        aria-expanded={expandable ? open : undefined} aria-controls={expandable ? `tree-${id}` : undefined} onClick={() => { onSelect(); if (expandable && !open) toggle(); }} onKeyDown={onMoveKey}>
         <span>{name}</span>
       </button>
       <span data-no-drag>{menu}</span>

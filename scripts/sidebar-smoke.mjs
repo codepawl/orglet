@@ -67,9 +67,26 @@ try {
   await page.getByRole('button', { name: teams[0], exact: true }).focus(); await page.keyboard.press('Alt+ArrowDown');
   await waitFor(async () => (await workspace(page)).teams[0].name === teams[1], 'keyboard reorder');
 
+  // Dragging the handle resizes the sidebar, and the width survives a restart.
+  const sidebarWidth = () => page.locator('.sidebar').evaluate(element => Math.round(element.getBoundingClientRect().width));
+  const startWidth = await sidebarWidth();
+  const handle = page.getByRole('separator', { name: 'Kéo để đổi độ rộng thanh bên', exact: true });
+  const handleBox = await handle.boundingBox();
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(handleBox.x + 90, handleBox.y + 200, { steps: 8 });
+  await page.mouse.up();
+  const draggedWidth = await sidebarWidth();
+  assert.ok(draggedWidth > startWidth + 50, `drag widened the sidebar (${startWidth} → ${draggedWidth})`);
+
+  await handle.focus(); await page.keyboard.press('ArrowLeft');
+  assert.equal(await sidebarWidth(), draggedWidth - 16, 'arrow keys resize in steps');
+
   const saved = await workspace(page);
+  const widthBeforeRestart = await sidebarWidth();
   await app.close(); app = await launch(); page = await app.firstWindow();
   await useVietnamese(page);
+  assert.equal(await sidebarWidth(), widthBeforeRestart, 'sidebar width is remembered');
   const reopened = await workspace(page);
   assert.deepEqual(reopened.workers.map(worker => worker.id), saved.workers.map(worker => worker.id));
   assert.deepEqual(reopened.teams.map(team => team.id), saved.teams.map(team => team.id));

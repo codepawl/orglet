@@ -3,19 +3,17 @@ import type { ReactNode } from 'react';
 /*
  * Orglet mascots: little characters built from the Orglet logo itself, the rounded speech bubble with a small
  * bottom-left corner, drawn with the same round strokes. Each one changes only the expression and one small
- * accessory, so the set reads as one family. 64×64 grid, viewed 6 units lower so the bubble lines up with the text beside it; strokes use currentColor (the avatar's ink colour) and the
- * bubble fill uses --mascot-fill, so light and dark themes both work.
+ * accessory, so the set reads as one family. 64×64 grid, viewed from y -1 so a hat worn on the head fits above the bubble; strokes use currentColor (the avatar's ink colour) and the
+ * the bubble is filled with --mascot-fill (the avatar colour) and everything inside it is drawn in --mascot-ink.
  */
-const stroke = { fill: 'none', stroke: 'currentColor', strokeWidth: 3.4, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+const stroke = { fill: 'none', stroke: 'var(--mascot-ink, #fff)', strokeWidth: 3.4, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 // The logo bubble (apps/desktop/assets/icon.svg) scaled onto the 64 grid and widened slightly for a face.
 const bubble = <path d="M24 13h16a13 13 0 0 1 13 13v16a13 13 0 0 1-13 13H16a5 5 0 0 1-5-5V26a13 13 0 0 1 13-13z" fill="var(--mascot-fill, #fff)" stroke="currentColor" strokeWidth="4" strokeLinejoin="round" />;
-const dots = (y = 32, left = 26, right = 38) => <><circle cx={left} cy={y} r="2.6" fill="currentColor" /><circle cx={right} cy={y} r="2.6" fill="currentColor" /></>;
+const dots = (y = 32, left = 26, right = 38) => <><circle cx={left} cy={y} r="2.6" fill="var(--mascot-ink, #fff)" /><circle cx={right} cy={y} r="2.6" fill="var(--mascot-ink, #fff)" /></>;
 const smile = (y = 38, width = 7) => <path d={`M${32 - width / 2} ${y}q${width / 2} ${width * 0.45} ${width} 0`} {...stroke} strokeWidth={3} />;
-// A work badge in the top-right corner (the bottom-right corner is left for the provider mark): a solid disc in the
-// mascot's ink with a small glyph drawn in the bubble fill, centred on (50, 15).
-const ink = { fill: 'none', stroke: 'var(--mascot-fill, #fff)', strokeWidth: 2.6, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 const face = <>{dots(32)}{smile(38)}</>;
-const tag = (glyph: ReactNode) => <><circle cx="50" cy="15" r="10.5" fill="currentColor" stroke="var(--mascot-fill, #fff)" strokeWidth="2.5" />{glyph}</>;
+// Anything worn on the head: the shape in the mascot colour, rimmed with the page ground so it reads over the bubble.
+const worn = { fill: 'currentColor', stroke: 'var(--mascot-ink, #fff)', strokeWidth: 2, strokeLinejoin: 'round', strokeLinecap: 'round' } as const;
 const blush = (y = 38) => <><ellipse cx="20" cy={y} rx="3" ry="1.8" fill="#ff8fa3" opacity=".6" /><ellipse cx="44" cy={y} rx="3" ry="1.8" fill="#ff8fa3" opacity=".6" /></>;
 
 export const mascots = {
@@ -31,25 +29,25 @@ export const mascots = {
   headset: { name: 'Tai nghe', art: <><path d="M9 34a23 23 0 0 1 46 0" {...stroke} strokeWidth={3.2} />{bubble}<rect x="4" y="30" width="7" height="12" rx="3.5" fill="currentColor" /><rect x="53" y="30" width="7" height="12" rx="3.5" fill="currentColor" />{dots(32)}{smile(38)}</> },
   delighted: { name: 'Thích thú', art: <>{bubble}{dots(31)}<path d="M26 37h12a6 6 0 0 1-12 0z" fill="currentColor" />{blush(36)}</> },
   cool: { name: 'Ngầu', art: <>{bubble}<path d="M19 29h26v3.5a4.5 4.5 0 0 1-4.5 4.5h-3a4.5 4.5 0 0 1-4.5-4.5 4.5 4.5 0 0 1-4.5 4.5h-3A4.5 4.5 0 0 1 21 32.5z" fill="currentColor" /><path d="M29 42h7" {...stroke} strokeWidth={3} /></> },
-  // Office: something worn, or a work badge.
+  // Office and roles: a hat or accessory worn on the head.
   tie: { name: 'Cà vạt', art: <>{bubble}{dots(29)}{smile(35)}<path d="M29.5 42h5l-1.2 2.4 1.9 6.6L32 54l-3.2-3 1.9-6.6z" fill="currentColor" /></> },
   bowtie: { name: 'Nơ', art: <>{bubble}{dots(29)}{smile(35)}<path d="M23.5 41.5 31 45l-7.5 3.5zM40.5 41.5 33 45l7.5 3.5z" fill="currentColor" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /><circle cx="32" cy="45" r="2.4" fill="currentColor" /></> },
-  briefcase: { name: 'Cặp tài liệu', art: <>{bubble}{face}{tag(<><rect x="44" y="12" width="12" height="8.5" rx="2" {...ink} strokeWidth={2} /><path d="M47.5 12v-1.3a1.2 1.2 0 0 1 1.2-1.2h2.6a1.2 1.2 0 0 1 1.2 1.2V12" {...ink} strokeWidth={2} /></>)}</> },
-  calendar: { name: 'Lịch họp', art: <>{bubble}{face}{tag(<><rect x="44.5" y="10.5" width="11" height="10" rx="2.2" {...ink} strokeWidth={2} /><path d="M44.5 14.3h11M47.5 9v3M52.5 9v3" {...ink} strokeWidth={2} /></>)}</> },
-  mail: { name: 'Thư', art: <>{bubble}{face}{tag(<><rect x="44" y="10.5" width="12" height="9" rx="2" {...ink} strokeWidth={2} /><path d="M44.8 11.6 50 15.8l5.2-4.2" {...ink} strokeWidth={2} /></>)}</> },
-  finance: { name: 'Tài chính', art: <>{bubble}{face}{tag(<path d="M53 11.2h-3.8a2 2 0 0 0 0 4h1.6a2 2 0 0 1 0 4H47M50 9v12" {...ink} strokeWidth={2.2} />)}</> },
-  // Work badges for common roles.
-  search: { name: 'Tra cứu', art: <>{bubble}{face}{tag(<><circle cx="48.8" cy="13.8" r="3.8" {...ink} /><path d="m51.6 16.6 3 3" {...ink} /></>)}</> },
-  chart: { name: 'Biểu đồ', art: <>{bubble}{face}{tag(<path d="M45.5 19.5v-3M50 19.5v-8M54.5 19.5v-5" {...ink} strokeWidth={2.8} />)}</> },
-  target: { name: 'Mục tiêu', art: <>{bubble}{face}{tag(<><circle cx="50" cy="15" r="5" {...ink} strokeWidth={2.2} /><circle cx="50" cy="15" r="1.8" fill="var(--mascot-fill, #fff)" /></>)}</> },
-  writer: { name: 'Bút viết', art: <>{bubble}{face}{tag(<path d="m45.5 19.5.9-3.4 6.2-6.2a1.8 1.8 0 0 1 2.5 2.5l-6.2 6.2z" {...ink} strokeWidth={2} />)}</> },
-  notes: { name: 'Ghi chú', art: <>{bubble}{face}{tag(<path d="M45.5 11h9M45.5 15h9M45.5 19h5.5" {...ink} strokeWidth={2.4} />)}</> },
-  megaphone: { name: 'Loa', art: <>{bubble}{face}{tag(<><path d="M43.8 12.6h3.2l6.8-3.6v12l-6.8-3.6h-3.2z" fill="var(--mascot-fill, #fff)" stroke="var(--mascot-fill, #fff)" strokeWidth="1.2" strokeLinejoin="round" /><path d="m46.2 17.6 1.1 3.4" {...ink} strokeWidth={2.2} /></>)}</> },
-  checker: { name: 'Duyệt', art: <>{bubble}{face}{tag(<path d="m45.3 15.3 3 3 6.2-6.4" {...ink} strokeWidth={3} />)}</> },
-  guard: { name: 'Bảo mật', art: <>{bubble}{face}{tag(<path d="m50 9 5 2v3.6c0 3.3-2.1 5.4-5 6.6-2.9-1.2-5-3.3-5-6.6V11z" {...ink} strokeWidth={2.2} />)}</> },
-  coder: { name: 'Lập trình', art: <>{bubble}{face}{tag(<path d="m46.2 11.5-3.4 3.5 3.4 3.5M53.8 11.5l3.4 3.5-3.4 3.5M51.2 10.5l-2.4 9" {...ink} strokeWidth={2.2} />)}</> },
-  automation: { name: 'Tự động', art: <>{bubble}{face}{tag(<path d="m51.5 8.5-6 8h4.5l-1.5 6 6-8.5H50z" fill="var(--mascot-fill, #fff)" />)}</> },
-  care: { name: 'Tận tâm', art: <>{bubble}{face}{tag(<path d="M50 20.5s-5.5-3.3-5.5-6.8a2.9 2.9 0 0 1 5.5-1.3 2.9 2.9 0 0 1 5.5 1.3c0 3.5-5.5 6.8-5.5 6.8z" fill="var(--mascot-fill, #fff)" />)}</> },
+  briefcase: { name: 'Mũ phớt', art: <>{bubble}{face}<path d="M22 13.5c0-6.5 3-9 10-9s10 2.5 10 9" {...worn} /><path d="M15.5 13.5h33" {...worn} /></> },
+  calendar: { name: 'Mũ lưỡi trai', art: <>{bubble}{face}<path d="M21.5 13.5a10.5 10 0 0 1 21 0z" {...worn} /><path d="M42.5 13.5h8.5a2.2 2.2 0 0 0 0-4.4H41" {...worn} /></> },
+  mail: { name: 'Mũ giấy', art: <>{bubble}{face}<path d="M17.5 13.5 32 3l14.5 10.5z" {...worn} /><path d="M24 13.5 32 7l8 6.5" {...worn} strokeWidth={1.6} /></> },
+  finance: { name: 'Mũ chóp', art: <>{bubble}{face}<path d="M23.5 13.5V3.5h17v10z" {...worn} /><path d="M16 13.5h32" {...worn} /></> },
+  
+  search: { name: 'Mũ thám tử', art: <>{bubble}{face}<path d="M21 13.5a11 10 0 0 1 22 0z" {...worn} /><path d="M14.5 13.5h35" {...worn} /><path d="M18 8.5a4 4 0 0 0 0 5M46 8.5a4 4 0 0 1 0 5" {...worn} strokeWidth={1.8} /></> },
+  chart: { name: 'Mũ tốt nghiệp', art: <>{bubble}{face}<path d="M13.5 8.5 32 2.5l18.5 6L32 14.5z" {...worn} /><path d="M46.5 10v5.5" {...worn} strokeWidth={1.8} /></> },
+  target: { name: 'Băng đô', art: <>{bubble}{face}<path d="M18.5 13a15 12 0 0 1 27 0" {...worn} strokeWidth={2.2} /><circle cx="44" cy="7.5" r="3" {...worn} /></> },
+  writer: { name: 'Mũ nồi', art: <>{bubble}{face}<path d="M20 12.5c0-6.5 5.5-9 12-9s12 2.5 12 9z" {...worn} /><circle cx="43" cy="4" r="2.4" {...worn} /></> },
+  notes: { name: 'Mũ tai bèo', art: <>{bubble}{face}<path d="M21 11.5a11 9 0 0 1 22 0z" {...worn} /><path d="M15 11.5h34a4 3 0 0 1-4 3.5H19a4 3 0 0 1-4-3.5z" {...worn} /></> },
+  megaphone: { name: 'Mũ sinh nhật', art: <>{bubble}{face}<path d="M32 1.5 43 13.5H21z" {...worn} /><circle cx="32" cy="1.5" r="2.6" {...worn} /></> },
+  checker: { name: 'Vương miện', art: <>{bubble}{face}<path d="M20 13.5 21.5 3l6 5.5L32 1l4.5 7.5 6-5.5L44 13.5z" {...worn} /></> },
+  guard: { name: 'Mũ bảo hộ', art: <>{bubble}{face}<path d="M21 13.5a11 10.5 0 0 1 22 0z" {...worn} /><path d="M15 13.5h34" {...worn} /><path d="M32 3.5v9" {...worn} strokeWidth={1.8} /></> },
+  coder: { name: 'Mũ len', art: <>{bubble}{face}<path d="M22 12a10 9.5 0 0 1 20 0z" {...worn} /><path d="M19.5 12h25v3h-25z" {...worn} /><circle cx="32" cy="2.5" r="2.6" {...worn} /></> },
+  automation: { name: 'Mũ chong chóng', art: <>{bubble}{face}<path d="M22.5 13.5a9.5 9 0 0 1 19 0z" {...worn} /><path d="M23 5.5h18" {...worn} strokeWidth={2.2} /><path d="M32 5.5v5" {...worn} strokeWidth={1.8} /></> },
+  care: { name: 'Mũ y tá', art: <>{bubble}{face}<path d="M22 13.5v-8h20v8z" {...worn} /><path d="M29.5 9.5h5M32 7v5" {...worn} strokeWidth={2} stroke="var(--mascot-ink, #fff)" /></> },
 } satisfies Record<string, { name: string; art: ReactNode }>;
 
 export type MascotId = keyof typeof mascots;
@@ -57,5 +55,5 @@ export const mascotIds = Object.keys(mascots) as MascotId[];
 export const isMascot = (value: string | undefined): value is MascotId => !!value && Object.hasOwn(mascots, value);
 
 export function Mascot({ id }: { id: MascotId }) {
-  return <svg className="mascot" overflow="visible" viewBox="0 6 64 64" aria-hidden="true" focusable="false">{mascots[id].art}</svg>;
+  return <svg className="mascot" overflow="visible" viewBox="0 -1 64 66" aria-hidden="true" focusable="false">{mascots[id].art}</svg>;
 }
