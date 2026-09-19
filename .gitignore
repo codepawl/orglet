@@ -32,5 +32,6 @@ service-account*.json
 *.sqlite-shm
 
 # Left behind by agent worktrees that install their own dependencies.
+.claude/worktrees/
 .pnpm-store/
 .worktrees/
