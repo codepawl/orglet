@@ -13,6 +13,10 @@
   /* How far a control stays from the end of a rounded panel. At less than the radius it sits beside the corner
      curve, and two curves that close read as fighting rather than nested (user, 2026-09-19). */
   --panel-inset: var(--panel-radius);
+  /* Motion. Everything that appears uses the same short, decelerating curve: quick enough that it never
+     delays a click, long enough that nothing snaps into place. Anything over 220ms feels slow here. */
+  --motion-quick: 110ms; --motion-base: 170ms;
+  --ease-out: cubic-bezier(.2, 0, 0, 1);
 }
 :root[data-theme=dark] { color-scheme:dark; --window:#0b0b0b; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; }
 @media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#0b0b0b; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; } }
@@ -49,7 +53,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Chat details are a third panel in the shell, the same card as the sidebar (user, 2026-09-19). */
 .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr) var(--details-width); }
 .app.sidebar-hidden.with-details { grid-template-columns:56px minmax(0,1fr) var(--details-width); }
-.details-pane { display:flex; flex-direction:column; min-height:0; background:var(--sidebar); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); overflow:hidden; }
+.details-pane { display:flex; flex-direction:column; min-height:0; background:var(--sidebar); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); overflow:hidden; animation:pane-in var(--motion-base) var(--ease-out); }
+@keyframes pane-in { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
 /* The close button sits in the top-right corner, so the head starts below where the curve ends. */
 .details-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:var(--panel-inset) 10px 8px 16px; }
 .details-head h2 { font-size:15px; font-weight:600; }
@@ -131,7 +136,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
    a background reads as two stacked surfaces, so this one answers with its own detail: the icon darkens. */
 .worker-row .row-action:hover:not(:disabled),.worker-row .row-action:focus-visible,.worker-row .row-action[aria-expanded=true] { background:transparent; border-color:transparent; color:var(--text); }
 @media (hover:none) { .worker-row .row-action { opacity:1; } }
-.row-menu-popover { position:fixed; z-index:30; width:max-content; min-width:200px; max-width:280px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001f; display:flex; flex-direction:column; gap:2px; }
+.row-menu-popover { position:fixed; z-index:30; width:max-content; min-width:200px; max-width:280px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001f; display:flex; flex-direction:column; gap:2px; animation:menu-in var(--motion-quick) var(--ease-out); }
+@keyframes menu-in { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
 .row-menu-popover button { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; padding:6px 10px; border:0; border-radius:8px; background:transparent; font-size:14px; text-align:left; }
 .row-menu-popover button svg { color:var(--muted); }
 .row-menu-popover button:hover,.row-menu-popover button:focus-visible { background:var(--surface); }
@@ -264,7 +270,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .source-menu span { display:flex; flex-direction:column; }
 .source-menu strong { font-size:14px; font-weight:500; }
 .source-menu small { font-size:12px; color:var(--muted); }
-.mention-menu { position:absolute; left:8px; right:8px; bottom:calc(100% + 6px); z-index:5; max-height:240px; overflow:auto; margin:0; padding:6px; list-style:none; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001a; display:flex; flex-direction:column; gap:2px; }
+.mention-menu { position:absolute; left:8px; right:8px; bottom:calc(100% + 6px); z-index:5; max-height:240px; overflow:auto; margin:0; padding:6px; list-style:none; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001a; display:flex; flex-direction:column; gap:2px; animation:mention-in var(--motion-quick) var(--ease-out); }
+@keyframes mention-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
 /* One height for every row, so a name with a description does not make a taller row than one without. */
 .mention-menu button { display:flex; align-items:center; gap:10px; width:100%; min-height:48px; padding:6px 10px; border:0; border-radius:8px; background:transparent; text-align:left; }
 .mention-menu button.active,.mention-menu button:hover,.mention-menu button:focus-visible { background:var(--surface); }
@@ -293,6 +300,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .user-message p,.prose { white-space:pre-wrap; overflow-wrap:anywhere; }
 .user-message .button { padding-left:0; font-size:12px; color:var(--muted); margin-top:6px; }
 .assistant-message { padding-top:24px; }
+/* Each turn arrives once, on mount. Streaming re-renders do not remount the section, so this never replays. */
+.user-message,.assistant-message { animation:turn-in var(--motion-base) var(--ease-out); }
+@keyframes turn-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
 .message-byline { display:flex; align-items:center; gap:8px; margin-bottom:14px; font-size:13px; }
 .source-links { display:flex; flex-wrap:wrap; margin-top:4px; }
 .source-links .button { font-size:12px; padding:4px 8px; min-height:30px; max-width:100%; overflow-wrap:anywhere; }
@@ -317,7 +327,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .startup,.loading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:40px; flex:1; }
 .startup { height:100dvh; text-align:center; }
 /* Former side panels open as centred dialogs, matching Settings. */
-.drawer { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:11; width:min(640px, calc(100vw - 32px)); max-height:min(720px, calc(100dvh - 32px)); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; }
+.drawer { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:11; width:min(640px, calc(100vw - 32px)); max-height:min(720px, calc(100dvh - 32px)); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; animation:drawer-in var(--motion-base) var(--ease-out); }
+/* The centring translate has to be carried through the keyframes, or the dialog jumps off centre as it opens. */
+@keyframes drawer-in { from { opacity:0; transform:translate(-50%,-50%) scale(.97); } to { opacity:1; transform:translate(-50%,-50%) scale(1); } }
+@keyframes fade-in { from { opacity:0; } to { opacity:1; } }
 .drawer-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px 24px; }
 .drawer-header h2 { font-size:18px; font-weight:600; }
 .drawer-body { padding:18px 24px 24px; overflow:auto; }
@@ -343,7 +356,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .library-item { width:100%; justify-content:flex-start; }
 .library-item .badge { margin-left:auto; }
 /* Frosted backdrop shared by drawers and dialogs: the page stays visible but out of focus. */
-.modal-overlay,.drawer-overlay { position:fixed; inset:0; z-index:10; background:#0000002e; backdrop-filter:blur(6px) saturate(.9); }
+.modal-overlay,.drawer-overlay { position:fixed; inset:0; z-index:10; background:#0000002e; backdrop-filter:blur(6px) saturate(.9); animation:fade-in var(--motion-base) var(--ease-out); }
 :root[data-theme=dark] .modal-overlay,:root[data-theme=dark] .drawer-overlay { background:#00000059; }
 @media (prefers-color-scheme:dark) { :root[data-theme=system] .modal-overlay,:root[data-theme=system] .drawer-overlay { background:#00000059; } }
 .search-dialog { position:fixed; left:50%; top:16vh; transform:translateX(-50%); z-index:11; width:min(800px, calc(100vw - 32px)); max-height:min(620px, calc(100dvh - 16vh - 24px)); display:flex; flex-direction:column; background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; outline:none; overflow:hidden; }
