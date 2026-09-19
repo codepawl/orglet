@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react';
 import { expect, it } from 'vitest';
+import { mascots, mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
 import { autoMascot, mascotCategoryIds, mascotColors, rankMascots, suggestMascots, suggestedColors, suggestedMascots } from '../../apps/desktop/src/renderer/components/mascotSuggest';
 
 const all = Object.values(mascotCategoryIds).flat();
@@ -51,4 +53,41 @@ it('suggests three colours led by the colour of the face shown', () => {
   expect(new Set(colors).size).toBe(3);
   expect(suggestedColors('classic', 'w1', { name: 'Zed' })[0]).toBe(mascotColors.classic);
   expect(Object.keys(mascotColors).sort()).toEqual([...all].sort());
+});
+
+/** Every element a mascot draws, flattened out of the fragment tree, with the colours it paints with. */
+function painted(art: ReactNode): { name: string; fill?: string; stroke?: string }[] {
+  const out: { name: string; fill?: string; stroke?: string }[] = [];
+  const walk = (node: ReactNode) => {
+    if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (!node || typeof node !== 'object' || !('props' in node)) return;
+    const element = node as { type: unknown; props: Record<string, unknown> };
+    if (typeof element.type === 'string') {
+      const text = (key: string) => typeof element.props[key] === 'string' ? element.props[key] as string : undefined;
+      out.push({ name: element.type, fill: text('fill'), stroke: text('stroke') });
+    }
+    walk(element.props.children as ReactNode);
+  };
+  walk(art);
+  return out;
+}
+
+it('never fills a mascot with the colour of the body it sits on', () => {
+  // The bubble is filled with the mascot colour, so a shape filled with that same colour and nothing else simply
+  // disappears into it. That is how a wink lost its open eye, sunglasses became invisible and a tie went missing
+  // (COD-106). A worn accessory is the exception and proves the rule: it fills with the body colour but carries
+  // an ink rim, which is what lets it read over the bubble.
+  //
+  // The mirror of this bug — a part drawn outside the body in the page colour, like an antenna stem — is not
+  // caught here. Telling inside from outside needs the rendered geometry, not the source, so those are held by
+  // the `outside` helper in mascots.tsx and by looking at them.
+  const invisible: string[] = [];
+  for (const id of mascotIds) {
+    for (const shape of painted(mascots[id].art)) {
+      if (shape.fill !== 'currentColor') continue;
+      const rimmed = Boolean(shape.stroke && shape.stroke.includes('--mascot-ink'));
+      if (!rimmed) invisible.push(`${id}: a ${shape.name} is filled with the body colour and has no rim`);
+    }
+  }
+  expect(invisible).toEqual([]);
 });
