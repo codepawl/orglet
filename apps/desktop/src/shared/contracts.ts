@@ -80,7 +80,18 @@ export type TaskInput = z.infer<typeof TaskInput>;
 export const RunInput = TaskInput.pick({ brief: true, sourceIds: true, excludedSources: true }).strict();
 export type RunInput = z.infer<typeof RunInput>;
 /** Orchestrator routing for one team-chat turn (COD-25). Stored on the plan run snapshot; not a user-facing artifact. */
-export const PlanAssignment = z.object({ workerId: Id, brief: z.string().trim().min(1).max(16000) }).strict();
+export const PlanAssignment = z.object({
+  workerId: Id,
+  brief: z.string().trim().min(1).max(16000),
+  expectedOutput: z.string().trim().min(1).max(2000).optional(),
+  dependsOn: z.array(Id).max(3).refine(ids => new Set(ids).size === ids.length, 'Phụ thuộc bị trùng.').optional(),
+  writeResources: z.array(z.string().trim().min(1).max(240).refine(
+    resource => !resource.startsWith('/') && !resource.includes('\\') && !resource.includes(':')
+      && !/[<>|?*]/.test(resource)
+      && resource.split('/').every(part => part !== '' && part !== '.' && part !== '..' && !/[ .]$/.test(part)),
+    'Tài nguyên cần là đường dẫn tương đối trong workspace.',
+  )).max(20).optional(),
+}).strict();
 export const TeamPlan = z.object({
   assignments: z.array(PlanAssignment).min(1).max(4).refine(items => new Set(items.map(item => item.workerId)).size === items.length, 'Members must be unique'),
   note: z.string().trim().max(2000).optional(),
@@ -125,7 +136,7 @@ export type FolderIntake = { sources: Source[]; skipped: { name: string; reason:
 export type TaskStatus = 'queued' | 'running' | 'pausing' | 'paused' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted' | 'waiting_budget' | 'waiting_input';
 export type Task = { toolCapabilities?: ToolCapability[]; id: string; brief: string; title?: string; workerId: string; teamId?: string; teamSnapshot?: Team; assignees?: 'all' | string[]; archivedAt?: string; deletedAt?: string; status: TaskStatus; createdAt: string; budgetMicros: number; sourceIds: string[]; excludedSources?: FolderIntake['skipped']; consent: boolean; providerScopes?: ProviderScope[]; accepted: boolean; /** Stamp of the result the user last opened; unread when it differs from `taskResultStamp`. */ seenStamp?: string; /** Latest saved answer/report id, part of the result stamp. */ lastArtifactId?: string; /** When the user last opened this task. */ seenAt?: string; routineId?: string; pauseReason?: 'shift'; handoff?: Handoff; evidenceRequests?: EvidenceRequest[]; inputRevision?: number; currentInput?: RunInput };
 export type RunStage = 'plan' | 'member' | 'synthesis' | 'group';
-export type Run = { id: string; taskId: string; stage?: RunStage; status: TaskStatus; snapshot: { toolCapabilities?: ToolCapability[]; worker: Worker; skill: Skill; team?: Team; input?: RunInput; context?: RunContext; inputRevision?: number; upstreamArtifactIds?: string[]; preflightId?: string; model?: string; pricingVersion?: string; plan?: TeamPlan }; startedAt: string; error: string | null };
+export type Run = { id: string; taskId: string; stage?: RunStage; status: TaskStatus; snapshot: { assignment?: z.infer<typeof PlanAssignment>; toolCapabilities?: ToolCapability[]; worker: Worker; skill: Skill; team?: Team; input?: RunInput; context?: RunContext; inputRevision?: number; upstreamArtifactIds?: string[]; preflightId?: string; model?: string; pricingVersion?: string; plan?: TeamPlan }; startedAt: string; error: string | null };
 export type Activity = { id: string; runId: string; sequence?: number; message: string; createdAt: string };
 export type Artifact = { id: string; runId: string; report: Report; hash: string; createdAt: string };
 export type Usage = { chargedMicros: number; reservedMicros: number; uncertainCount: number; inputTokens: number; outputTokens: number };

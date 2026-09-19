@@ -95,3 +95,11 @@ Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết
 - Transcript layers: `apps/desktop/src/core/context/thread.ts`
 - Plan tool / Demo routing: `apps/desktop/src/core/orchestration/runner.ts` (`submit_plan`, `completePlan`)
 - Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`, `tests/integration/thread-context.test.ts`, `tests/integration/mentions.test.ts`
+
+## Assignment ownership and dependencies
+
+Each planned assignment names its worker, expected output, prerequisite assignments and relative resources it may edit. A SQLite transaction claims the assignment. The same assignment or overlapping resource cannot be claimed twice at once. Resource ownership never grants filesystem permission.
+
+The scheduler runs at most two independent assignments together. Failed or missing prerequisite results keep dependent work interrupted; a completed status without its artifact is not enough. A resumed or retried team retains committed prerequisite output and runs the unfinished work. Cycles and references outside the plan are rejected before dispatch.
+
+`assignments.test.ts` covers duplicate claims, path aliases, cyclic dependencies, ordering, resource serialization, failed prerequisites, budget pause and retry preservation. Model fixtures provide the plans and reports.

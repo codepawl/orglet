@@ -1,3 +1,4 @@
+import { validateDependencies } from './assignments';
 import { TeamPlan, INVALID_PLAN_ERROR, type Team } from '../../shared/contracts';
 import { mentionedPeople, type MentionPerson } from '../../shared/mentions';
 
@@ -9,7 +10,7 @@ export function defaultTeamPlan(team: Team, brief: string, members: readonly Men
   const assigned = tagged?.length ? team.memberIds.filter(workerId => tagged.some(member => member.id === workerId)) : team.memberIds;
   const workerIds = assigned.length ? assigned : team.memberIds;
   return TeamPlan.parse({
-    assignments: workerIds.map(workerId => ({ workerId, brief })),
+    assignments: workerIds.map(workerId => ({ workerId, brief, expectedOutput: brief.slice(0, 2000), dependsOn: [], writeResources: [] })),
     note: tagged?.length && workerIds.length < team.memberIds.length ? 'Giao các thành viên được gắn thẻ.' : 'Giao tất cả thành viên.',
   });
 }
@@ -20,5 +21,11 @@ export function assertTeamPlan(team: Team, plan: unknown) {
   for (const assignment of parsed.assignments) {
     if (!team.memberIds.includes(assignment.workerId)) throw new Error(INVALID_PLAN_ERROR);
   }
-  return parsed;
+  validateDependencies(parsed);
+  return { ...parsed, assignments: parsed.assignments.map(assignment => ({
+    ...assignment,
+    expectedOutput: assignment.expectedOutput ?? assignment.brief.slice(0, 2000),
+    dependsOn: assignment.dependsOn ?? [],
+    writeResources: assignment.writeResources ?? [],
+  })) };
 }
