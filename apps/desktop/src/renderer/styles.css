@@ -6,7 +6,7 @@
   font-family: var(--font); font-size: 14px; line-height: 1.5; color-scheme: light;
   --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
-  --primary:#171717; --primary-text:#fff; --error:#a82626; --success:#2e7a32; --working:#9a7b2f; --row-hover:#efeff0; --row-active:#e5e5e7; --focus:#576b99;
+  --primary:#171717; --primary-text:#fff; --error:#a82626; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
   --control-height: 34px; --icon-size: 32px; --radius: 9px; --page-x: 20px; --chrome-y: 12px; --sidebar-width: 228px;
   /* Panels are rounded cards sitting apart on the window background (user, 2026-09-19). */
   --window:#e3e3e6; --panel-radius: 16px; --shell-gap: 8px; --details-width: 320px; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
@@ -14,8 +14,8 @@
      curve, and two curves that close read as fighting rather than nested (user, 2026-09-19). */
   --panel-inset: var(--panel-radius);
 }
-:root[data-theme=dark] { color-scheme:dark; --window:#0b0b0b; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#222222; --row-active:#2e2e2e; --focus:#a6c1ff; }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#0b0b0b; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#222222; --row-active:#2e2e2e; --focus:#a6c1ff; } }
+:root[data-theme=dark] { color-scheme:dark; --window:#0b0b0b; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#0b0b0b; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; } }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
 button,input,textarea,select { font:inherit; color:inherit; }
@@ -85,15 +85,19 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .history .section-items { gap:4px; }
 .worker-row { display:flex; align-items:center; gap:1px; border-radius:10px; }
 .worker-row > .status-mark { margin-left:10px; margin-right:4px; }
-/* One pill per row: the settings action lives inside it and appears on hover, focus or selection. */
+/* One pill per row: the settings action lives inside it and appears on hover or focus. */
 /* Sidebar rows: hover is a lighter tint than the selected row, so the current choice stays readable. */
 .worker-row:hover { background:var(--row-hover); }
 .worker-row:has(.worker.active) { background:var(--row-active); }
 .worker-row .worker:hover,.worker-row .worker.active { background:transparent; }
-/* Row options appear on hover, keyboard focus or while their menu is open; the selected row keeps them visible. */
-.worker-row .row-action { opacity:0; }
-.worker-row:hover .row-action,.worker-row:focus-within .row-action,.worker-row:has(.worker.active) .row-action,.row-action[aria-expanded=true] { opacity:1; }
-.worker-row .row-action:hover:not(:disabled),.worker-row .row-action[aria-expanded=true] { background:var(--bg); }
+/* Row options appear on hover, keyboard focus or while their menu is open. Selecting a row does not pin them
+   open (user, 2026-09-19): the row you are reading should not carry a control you did not reach for. A mouse
+   click leaves focus on the row, so this asks for a visible focus ring rather than focus-within. */
+.worker-row .row-action { opacity:0; color:var(--muted); }
+.worker-row:hover .row-action,.worker-row:has(:focus-visible) .row-action,.row-action[aria-expanded=true] { opacity:1; }
+/* A control inside a row that already tints on hover does not tint again (user, 2026-09-19). A background inside
+   a background reads as two stacked surfaces, so this one answers with its own detail: the icon darkens. */
+.worker-row .row-action:hover:not(:disabled),.worker-row .row-action:focus-visible,.worker-row .row-action[aria-expanded=true] { background:transparent; border-color:transparent; color:var(--text); }
 @media (hover:none) { .worker-row .row-action { opacity:1; } }
 .row-menu-popover { position:fixed; z-index:30; width:max-content; min-width:200px; max-width:280px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001f; display:flex; flex-direction:column; gap:2px; }
 .row-menu-popover button { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; padding:6px 10px; border:0; border-radius:8px; background:transparent; font-size:14px; text-align:left; }
@@ -772,8 +776,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .task-row.active { background:var(--row-active); }
 .task-row .history-item { flex:1; min-width:0; background:transparent; }
 .task-row .history-item:hover,.task-row .history-item.active { background:transparent; }
-.task-row .row-action { opacity:0; }
-.task-row:hover .row-action,.task-row:focus-within .row-action,.task-row.active .row-action,.task-row .row-action[aria-expanded=true] { opacity:1; }
+/* Same as a worker row: reached for, not pinned open by selection, and it answers with its icon, not a background. */
+.task-row .row-action { opacity:0; color:var(--muted); }
+.task-row:hover .row-action,.task-row:has(:focus-visible) .row-action,.task-row .row-action[aria-expanded=true] { opacity:1; }
+.task-row .row-action:hover:not(:disabled),.task-row .row-action:focus-visible,.task-row .row-action[aria-expanded=true] { background:transparent; border-color:transparent; color:var(--text); }
 
 /* Tasks under a worker are links only; they show a background on hover, never a selected state. */
 .task-link .task-link-arrow { margin-left:auto; }
