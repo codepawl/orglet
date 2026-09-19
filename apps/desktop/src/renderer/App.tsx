@@ -1,7 +1,7 @@
 import { RevisionEditor } from './components/RevisionEditor';
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, ChevronRight, BookOpen, Download, FileText, PanelLeft, Pencil, Plus, Search, Settings2, SlidersHorizontal, Sparkles, CalendarClock, Wallet, X, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, BookOpen, Download, FileText, PanelLeft, Pencil, Plus, Search, Settings2, SlidersHorizontal, CalendarClock, Wallet, X, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { emptyConnections, isPaidApi, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
@@ -21,6 +21,8 @@ import { SourcePicker } from './components/SourcePicker';
 import { Composer, FollowUpComposer } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
+import { Starters } from './components/Starters';
+import { suggestStarters } from '../shared/starters';
 import { ProviderMark } from './components/ProviderMark';
 import { ShowMore, SidebarTreeRow, useReorder, statusMarkLabel } from './components/SidebarTree';
 import { SearchDialog } from './components/SearchDialog';
@@ -359,6 +361,16 @@ export function App() {
   const catchUpNotice = pendingCatchUp.length > 0 && dismissedCatchUpNotice !== catchUpNoticeKey && panel !== 'routines';
   const singleCatchUp = pendingCatchUp.length === 1 ? pendingCatchUp[0] : undefined;
   const roster = team ? teamRoster(team, workspace.workers) : [];
+  // Openers for the empty chat, read from this workspace rather than a fixed list (COD-48).
+  const chatTasks = workspace.tasks.filter(task => team ? task.teamId === team.id : !task.teamId && task.workerId === workerId);
+  const starters = suggestStarters({ worker, team, members: roster, skills: workspace.skills, tasks: chatTasks, hasSources: sources.length > 0 });
+  const pickStarter = (prompt: string) => {
+    setBrief(prompt);
+    const textarea = composer.current;
+    if (!textarea) return;
+    // The caret belongs at the end: most openers stop at a colon for the person to keep typing.
+    setTimeout(() => { textarea.focus(); textarea.setSelectionRange(prompt.length, prompt.length); }, 0);
+  };
   const chatName = team?.name ?? worker?.name ?? 'Orglet';
   const [chatHeadingBefore = '', chatHeadingAfter = ''] = t('Đang nhắn với {0}').split('{0}');
   const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với nhóm…') : t('Nhắn với {0}…', [worker?.name ?? t('Nhân viên')])} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={!isDemo && missingConnections.length > 0} mentions={team ? { people: executionWorkers, allNames: [team.name] } : undefined}
@@ -412,11 +424,9 @@ export function App() {
           <div className="thread-content team-chat-empty">
             <h1 className="welcome">{chatHeadingBefore}<span className="welcome-who">{team ? <RosterAvatars workers={roster} size="sm" max={2} /> : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" /> : null}{chatName}</span>{chatHeadingAfter}</h1>
 
-            {worker && !team && <ul className="suggestions" aria-label={t('Gợi ý')}>
-              <li><button type="button" onClick={() => { setBrief(t('Đọc các tài liệu đã chọn, tóm tắt những điểm chính và chỉ rõ phần còn thiếu bằng chứng.')); composer.current?.focus(); }}><BookOpen size={18} />{t('Tóm tắt tài liệu')}</button></li>
-              <li><button type="button" onClick={() => { setBrief(t('Review các tệp đã chọn. Tìm vấn đề có bằng chứng, nêu phạm vi đã kiểm tra và các giới hạn. Không thực thi code.')); composer.current?.focus(); }}><Sparkles size={18} />{t('Review có bằng chứng')}</button></li>
-              <li><button type="button" disabled={!brief.trim()} title={brief.trim() ? undefined : t('Viết tin nhắn trước')} onClick={() => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); }}><CalendarClock size={18} />{t('Lên lịch cho tin này')}</button></li>
-            </ul>}
+            <Starters starters={starters} onPick={pickStarter}
+              canSchedule={Boolean(brief.trim())}
+              onSchedule={worker && !team ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />
           </div>
         </div>
         <div className="thread-composer">

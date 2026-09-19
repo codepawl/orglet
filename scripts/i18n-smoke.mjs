@@ -37,7 +37,9 @@ try {
   await page.keyboard.press('Escape');
 
   await page.getByRole('heading', { name: 'Chatting with Researcher' }).waitFor();
-  await page.getByRole('button', { name: 'Summarize documents', exact: true }).waitFor();
+  // The starters themselves come from the worker's role, so this checks the one stable row in that list.
+  await page.getByRole('button', { name: 'Schedule this message', exact: true }).waitFor();
+  assert.ok(await page.locator('.suggestions button').count() > 1, 'the empty chat offers starters');
   for (const name of ['New team', 'New worker']) await page.getByRole('button', { name, exact: true }).first().waitFor();
   assert.equal(await page.getByRole('button', { name: 'New task', exact: true }).count(), 0);
   assert.equal(await page.getByRole('navigation', { name: 'All tasks' }).count(), 0);
@@ -64,7 +66,11 @@ try {
   await page.waitForFunction(() => document.documentElement.lang === 'en-GB');
   await page.screenshot({ path: 'test-results/i18n-settings-gb.png' });
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Summarise documents', exact: true }).waitFor();
+  // A UK check needs a word the two spellings differ on. The starters under the greeting come from the worker's
+  // role and none of them carry one, so this uses the avatar picker's Customise, which is always there.
+  await page.getByRole('button', { name: 'New worker', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Customise', exact: true }).waitFor();
+  await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: /^Settings/ }).click();
   await page.getByRole('combobox', { name: 'Language', exact: true }).click();
