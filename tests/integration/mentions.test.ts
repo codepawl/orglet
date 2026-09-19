@@ -34,7 +34,8 @@ it('reads the @query at the cursor and inserts a chosen name', () => {
 });
 
 it('filters picker options including @all and a team name', () => {
-  expect(mentionOptions('', people, ['Research Review']).map(option => option.name)).toEqual(['all', 'Research Review', 'Researcher', 'Kế toán', 'Source researcher']);
-  expect(mentionOptions('source', people, ['Research Review']).map(option => option.name)).toEqual(['Source researcher']);
+  // The team's own name is not offered: it means what @all means, so two entries would do the same thing.
+  expect(mentionOptions('', people).map(option => option.name)).toEqual(['all', 'Researcher', 'Kế toán', 'Source researcher']);
+  expect(mentionOptions('source', people).map(option => option.name)).toEqual(['Source researcher']);
   expect(mentionOptions('al', people).map(option => option.name)).toEqual(['all']);
 });

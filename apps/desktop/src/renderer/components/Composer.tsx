@@ -30,7 +30,7 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
   const hasAttachments = Boolean(attachments);
   const mentionable = Boolean(mentions && (mentions.people.length > 1 || mentions.allNames?.length));
   const query = mentionable && !disabled ? mentionQueryAt(value, cursor) : undefined;
-  const options = query && query.start !== dismissed ? mentionOptions(query.query, mentions!.people, mentions!.allNames) : [];
+  const options = query && query.start !== dismissed ? mentionOptions(query.query, mentions!.people) : [];
   const menuOpen = options.length > 0;
   const selected = options[Math.min(active, Math.max(0, options.length - 1))];
   useLayoutEffect(() => { setActive(0); }, [query?.start, query?.query]);
@@ -83,7 +83,7 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
             {worker
               ? <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />
               : <span className="mention-all" aria-hidden="true">@</span>}
-            <span><strong>@{option.name}</strong>{(option.kind === 'all' || worker?.description) && <small>{option.kind === 'all' ? (option.name === 'all' ? t('Tất cả trong cuộc trò chuyện này') : t('Cả nhóm')) : worker?.description}</small>}</span>
+            <span><strong>@{option.name}</strong>{(option.kind === 'all' || worker?.description) && <small>{option.kind === 'all' ? t('Tất cả trong cuộc trò chuyện này') : worker?.description}</small>}</span>
           </button>
         </li>;
       })}

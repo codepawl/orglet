@@ -67,14 +67,18 @@ export function mentionQueryAt(text: string, cursor: number): MentionQuery | und
   return { start: at, query };
 }
 
-export function mentionOptions(query: string, people: readonly MentionPerson[], allNames: readonly string[] = []): MentionOption[] {
+/**
+ * What the `@` menu offers: everyone, then each member.
+ *
+ * The team's own name is deliberately not on the list (user, 2026-09-19). Tagging it means exactly what `@all`
+ * means, so offering both put two entries that do the same thing next to each other. `parseMentions` still accepts
+ * it, because messages already written that way must keep their meaning.
+ */
+export function mentionOptions(query: string, people: readonly MentionPerson[]): MentionOption[] {
   const needle = query.trim().toLocaleLowerCase();
   const options: MentionOption[] = [];
   if (!needle || ALL_ALIASES.some(alias => alias.toLocaleLowerCase().startsWith(needle))) {
     options.push({ id: ALL_MENTION, name: 'all', kind: 'all' });
-  }
-  for (const name of allNames) {
-    if (!needle || name.toLocaleLowerCase().includes(needle)) options.push({ id: ALL_MENTION, name, kind: 'all' });
   }
   for (const person of people) {
     if (!needle || person.name.toLocaleLowerCase().includes(needle)) options.push({ id: person.id, name: person.name, kind: 'worker' });
