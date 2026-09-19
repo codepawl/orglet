@@ -1,0 +1,45 @@
+name: Linux desktop
+# Dogfood packaging, like the macOS workflow. This is not the required Windows `test` aggregator.
+# Pull requests are checked once; pushes to other branches wait for their pull request.
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  linux:
+    name: typecheck, test and make
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6
+        with:
+          version: '11.19.0'
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24.19.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm make
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orglet-linux-zip
+          path: out/make/zip/linux/**/*.zip
+          if-no-files-found: error
+          retention-days: 14
+      # The runner has no screen, and Ubuntu 24.04 blocks the unprivileged user namespaces
+      # Electron's sandbox needs. Both are runner facts, so neither is worked around in the app.
+      - name: Let Electron start on a headless runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes xvfb
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Smoke the app
+        run: xvfb-run --auto-servernum pnpm test:desktop

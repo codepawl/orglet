@@ -14,6 +14,11 @@ export function packagedExecutable() {
       resolve('out/Orglet-darwin-arm64/Orglet.app/Contents/MacOS/Orglet'),
       resolve('out/Orglet-darwin-x64/Orglet.app/Contents/MacOS/Orglet'),
     ],
+    linux: [
+      resolve(`out/Orglet-linux-${arch}/Orglet`),
+      resolve('out/Orglet-linux-x64/Orglet'),
+      resolve('out/Orglet-linux-arm64/Orglet'),
+    ],
   }[process.platform];
   if (!lookup) throw new Error(`Packaged smoke has no executable path for ${process.platform}.`);
   const found = lookup.find(path => existsSync(path));

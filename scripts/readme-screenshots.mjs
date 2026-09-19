@@ -18,10 +18,7 @@ function launchTarget() {
   try {
     return { executablePath: packagedExecutable(), args: [] };
   } catch (error) {
-    const linuxBinary = resolve(`out/Orglet-linux-${process.arch}/Orglet`);
-    const linuxX64 = resolve('out/Orglet-linux-x64/Orglet');
-    if (existsSync(linuxBinary)) return { executablePath: linuxBinary, args: [] };
-    if (existsSync(linuxX64)) return { executablePath: linuxX64, args: [] };
+    // No packaged binary: a prior Vite compile is enough to run unpackaged Electron.
     if (existsSync(resolve('.vite/build/main.js'))) {
       return { executablePath: electronPath, args: ['.'] };
     }
