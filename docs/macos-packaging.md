@@ -36,10 +36,10 @@ There is no DMG maker in this milestone.
 3. `pnpm test`
 4. Import Developer ID P12 into a job-local keychain when secrets exist (`scripts/ci-macos-import-signing.sh`)
 5. `pnpm make` with `APPLE_SIGNING_ENABLED=true` after a successful import
-6. `codesign --verify --deep --strict` on the packaged app when signed
+6. `codesign --verify --deep --strict`, then `stapler validate` and `spctl --assess --type execute` on the packaged app. The runner is a real Mac, so these fail the job when a build would warn on download
 7. Upload the darwin ZIP as `orglet-macos-signed-zip` or `orglet-macos-unsigned-zip` (14-day retention)
 
-It does **not** run packaged Playwright smokes. Those still belong to the Windows `packaged` job. It does **not** publish a GitHub Release. It does **not** staple or run `spctl --assess` as a pass/fail gate until notarization credentials exist.
+It does **not** run packaged Playwright smokes. Those still belong to the Windows `packaged` job. It does **not** publish a GitHub Release. Fork pull requests get no secrets, so they package unsigned and the Gatekeeper gate is skipped.
 
 Fork pull requests do not receive repository secrets, so those runs stay unsigned.
 
@@ -124,7 +124,7 @@ Record the Mac model, macOS version, commit SHA, whether the ZIP came from Actio
 
 ## What this does not claim
 
-- No `spctl --assess` or `stapler validate` run on a real Mac yet; CI checks `codesign` and reads the staple from the packaged app
+- No launch of the app itself: CI checks the signature, the staple and Gatekeeper assessment, not that the window opens
 - No universal (`arm64` + `x64`) binary; each make is the runner's arch
 - No public macOS GitHub Release; Windows 0.2.x remains the only release platform
 - Linux packaging is still coming later
