@@ -24,6 +24,7 @@ import { Avatar, RosterAvatars } from './components/Avatar';
 import { Starters } from './components/Starters';
 import { DetailsPanel } from './components/DetailsPanel';
 import { suggestStarters } from '../shared/starters';
+import { DEFAULT_MENTION_COLOR } from '../shared/mentions';
 import { ProviderMark } from './components/ProviderMark';
 import { SidebarTreeRow, useReorder } from './components/SidebarTree';
 import { SearchDialog } from './components/SearchDialog';
@@ -180,6 +181,8 @@ export function App() {
     if (teamId && !workspace.teams.some(team => team.id === teamId)) setTeamId('');
   }, [workspace, workerId, teamId]);
   useEffect(() => { document.documentElement.dataset.theme = workspace?.theme ?? 'system'; }, [workspace?.theme]);
+  // The colour of @name tags is the user's to pick, so it rides on the root rather than being baked into the sheet.
+  useEffect(() => { document.documentElement.style.setProperty('--mention', workspace?.mentionColor ?? DEFAULT_MENTION_COLOR); }, [workspace?.mentionColor]);
   useEffect(() => {
     const media = matchMedia('(max-width: 780px)');
     const collapse = () => { if (media.matches) setSidebar(false); };

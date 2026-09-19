@@ -1,6 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Check, Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy } from 'lucide-react';
+import { avatarPalette } from './Avatar';
+import { DEFAULT_MENTION_COLOR } from '../../shared/mentions';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type ProviderScope, type Workspace } from '../../shared/contracts';
 import type { HarnessInfo } from '../../shared/harness';import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
@@ -104,8 +106,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     finally { setBusy(false); }
   };
   // Settings apply as soon as they change; the command always carries the full current set.
-  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[] }>) => act(async () => {
-    await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], ...patch });
+  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; mentionColor: string }>) => act(async () => {
+    await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], mentionColor: workspace.mentionColor, ...patch });
     return t('Đã lưu.');
   });
   const commitLimit = () => {
@@ -144,6 +146,16 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'chat' && <>
+              <Row title={t('Màu thẻ @tên')} description={t('Màu của @tên và @all trong tin nhắn, để chúng không lẫn với chữ thường.')}>
+                <div className="setting-swatches" role="radiogroup" aria-label={t('Màu thẻ @tên')}>
+                  {avatarPalette.map(color => {
+                    const checked = (workspace.mentionColor ?? DEFAULT_MENTION_COLOR).toLowerCase() === color.toLowerCase();
+                    return <button key={color} type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1} disabled={busy}
+                      className="avatar-swatch" style={{ '--avatar-color': color } as CSSProperties} aria-label={color} title={color}
+                      onClick={() => void save({ mentionColor: color })}>{checked && <Check size={12} strokeWidth={3} aria-hidden="true" />}</button>;
+                  })}
+                </div>
+              </Row>
               <Row id="auto-title-label" title={t('Tự đặt tên cuộc trò chuyện')} description={t('Sau câu trả lời đầu tiên, nhân viên đặt một tên ngắn. Tên bạn tự đổi luôn được giữ.')}>
                 <Switch checked={workspace.autoTitles} disabled={busy} labelledBy="auto-title-label" onChange={value => void save({ autoTitles: value })} />
               </Row>
