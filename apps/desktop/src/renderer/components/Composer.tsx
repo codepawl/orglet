@@ -1,5 +1,5 @@
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { ArrowUp, Plus } from 'lucide-react';
+import { ArrowUp, Plus, Square } from 'lucide-react';
 import type { TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
 import { Button } from './ui';
@@ -18,7 +18,13 @@ export type MentionRoster = { people: readonly Worker[]; allNames?: readonly str
  * so the layout does not flip back and forth at the wrap point.
  * Team and group chats can pass `mentions` so `@` opens a worker picker.
  */
-export function Composer({ value, onChange, onSubmit, label, placeholder, sendLabel, leading, trailing, attachments, disabled, sendDisabled, textareaRef, mentions }: { value: string; onChange: (value: string) => void; onSubmit: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: ReactNode; disabled?: boolean; sendDisabled?: boolean; textareaRef?: RefObject<HTMLTextAreaElement | null>; mentions?: MentionRoster }) {
+export function Composer({ value, onChange, onSubmit, label, placeholder, sendLabel, leading, trailing, attachments, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: ReactNode; disabled?: boolean; sendDisabled?: boolean; textareaRef?: RefObject<HTMLTextAreaElement | null>; mentions?: MentionRoster;
+  /**
+   * Set while a run is in progress: the send button becomes the stop button, turning a ring so the eye lands on
+   * it (user, 2026-09-19). Stop belongs where send was, because that is where the hand already is, and nothing
+   * can be sent while the worker is still answering.
+   */
+  onStop?: () => void }) {
   const ownRef = useRef<HTMLTextAreaElement>(null);
   const textarea = textareaRef ?? ownRef;
   const listId = useId();
@@ -96,7 +102,12 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
       onKeyUp={event => syncCursor(event.currentTarget)} onClick={event => syncCursor(event.currentTarget)} onSelect={event => syncCursor(event.currentTarget)}
       onKeyDown={onKeyDown} />
     {trailing && <div className="composer-trailing">{trailing}</div>}
-    <Button type="submit" variant="primary" size="icon" className="send" aria-label={sendLabel} disabled={!canSend}><ArrowUp size={19} /></Button>
+    {onStop
+      ? <Button type="button" variant="primary" size="icon" className="send stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}>
+        <span className="send-spin" aria-hidden="true" />
+        <Square size={11} fill="currentColor" />
+      </Button>
+      : <Button type="submit" variant="primary" size="icon" className="send" aria-label={sendLabel} disabled={!canSend}><ArrowUp size={19} /></Button>}
   </form>;
 }
 
@@ -117,6 +128,7 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   };
   return <div className="thread-composer">
     <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={busy ? t('Đang làm việc…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={blocked}
+      onStop={busy ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
       leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Đính kèm tệp')} title={t('Đính kèm tệp')} disabled={busy} onClick={openRevision}><Plus size={20} /></Button>} />
     {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}

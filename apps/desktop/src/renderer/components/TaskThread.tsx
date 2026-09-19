@@ -76,8 +76,8 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
             {latest && busy && thinkingRun && (liveUpdate
-              ? <LiveRun update={liveUpdate} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />
-              : <Thinking worker={thinkingRun.snapshot.worker} stage={thinkingRun.stage} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />)}
+              ? <LiveRun update={liveUpdate} pausing={detail.task.status === 'pausing'} />
+              : <Thinking worker={thinkingRun.snapshot.worker} stage={thinkingRun.stage} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} />)}
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
@@ -103,7 +103,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
  * Work in progress, kept visual (user decision 2026-09-17): the provider's mark inside a spinning ring, one short phrase
  * for what is happening, and a quiet stop button. Details (versions, paths, costs) stay in Chi tiết.
  */
-function Thinking({ worker, stage, message, pausing, onStop }: { worker: Run['snapshot']['worker']; stage?: Run['stage']; message?: string; pausing: boolean; onStop: () => void }) {
+function Thinking({ worker, stage, message, pausing }: { worker: Run['snapshot']['worker']; stage?: Run['stage']; message?: string; pausing: boolean }) {
   const read = message?.match(/^Đã đọc (.+)$/);
   const label = pausing ? t('Đang dừng sau bước này…')
     : stage === 'plan' || message === 'Đang phân việc.' ? t('Đang phân việc…')
@@ -113,7 +113,7 @@ function Thinking({ worker, stage, message, pausing, onStop }: { worker: Run['sn
     : message?.startsWith('Đang chờ lượt') ? t('Đang chờ lượt…')
     : message === 'Model đang trả kết quả…' ? t('Đang viết câu trả lời…')
     : t('Đang suy nghĩ…');
-  return <WorkingLine label={label} onStop={onStop} />;
+  return <WorkingLine label={label} />;
 }
 
 /** A normal chat answer: the message, with copy and export tucked into a quiet row. */

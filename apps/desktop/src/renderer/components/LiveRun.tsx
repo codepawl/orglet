@@ -54,7 +54,7 @@ function useElapsedSeconds(since: number) {
  * searches (open while it works, folded into one line once it writes), a timer while it thinks, and the answer
  * appearing as it is written.
  */
-export function LiveRun({ update, pausing, onStop }: { update: RunProgressUpdate; pausing: boolean; onStop: () => void }) {
+export function LiveRun({ update, pausing }: { update: RunProgressUpdate; pausing: boolean }) {
   const progress = update.progress!;
   const answering = progress.answer.length > 0;
 
@@ -66,7 +66,6 @@ export function LiveRun({ update, pausing, onStop }: { update: RunProgressUpdate
       startedAt={update.startedAt}
       label={pausing ? t('Đang dừng sau bước này…') : progress.writing ? t('Đang viết câu trả lời…') : t('Đang suy nghĩ…')}
       thinking={progress.thinking}
-      onStop={onStop}
     />
   </div>;
 }
@@ -110,13 +109,13 @@ export function ActivityGroup({ steps, folded }: { steps: ActivityStep[]; folded
   </div>;
 }
 
-function WorkingRow({ startedAt, label, thinking, onStop }: { startedAt: number; label: string; thinking: string; onStop: () => void }) {
+function WorkingRow({ startedAt, label, thinking }: { startedAt: number; label: string; thinking: string }) {
   const seconds = useElapsedSeconds(startedAt);
   const [showThinking, setShowThinking] = useState(false);
 
   return <div className="live-working">
     <WorkingLine label={label} seconds={seconds} expanded={showThinking}
-      onToggleThinking={thinking ? () => setShowThinking(!showThinking) : undefined} onStop={onStop} />
+      onToggleThinking={thinking ? () => setShowThinking(!showThinking) : undefined} />
     {thinking && showThinking && <p className="thinking-notes">{thinking}</p>}
   </div>;
 }
