@@ -725,7 +725,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .worker-row:hover .composer-to-avatars .mascot { transform:translateY(var(--mascot-lift)) translateY(-2px); filter:saturate(1.18); }
 
 /* One nod when a reply lands. The byline mounts with the answer, so this plays once and never repeats. */
-.message-byline .avatar .mascot { animation:mascot-nod .5s cubic-bezier(.34,1.56,.64,1) 1; }
+.message-byline:not(.working) .avatar .mascot { animation:mascot-nod .5s cubic-bezier(.34,1.56,.64,1) 1; }
 @keyframes mascot-nod { 0% { transform:translateY(var(--mascot-lift)) translateY(-3px); } 55% { transform:translateY(var(--mascot-lift)) translateY(2px); } 100% { transform:translateY(var(--mascot-lift)); } }
 
 /* Waiting on a person is not the same as working, so it breathes slowly instead of running an arc. */
@@ -959,17 +959,15 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .row-menu-popover { color:var(--text); }
 
 /* Working indicator: the provider mark inside a spinning ring and one short phrase. */
-/* Waiting is one line (user, 2026-09-19): the worker's face with a light running round it, what it is doing,
-   how long it has taken, and a way to stop. One mark, not a spinner sitting beside an avatar. */
-.thinking { display:flex; align-items:center; gap:8px; min-height:34px; }
-.working-mark { position:relative; display:grid; place-items:center; width:34px; height:34px; flex-shrink:0; }
+/* The status line under a turn: words, a timer and a stop button. Who is working is said by the byline above,
+   so this line carries no face and no name (user, 2026-09-19). */
+.thinking { display:flex; align-items:center; gap:8px; min-height:30px; }
 /* Thinking is the face turning slowly from side to side, not a ring going round (user, 2026-09-19). The head
    tilts while the eyes lead the turn, a beat ahead, which is what makes it read as looking rather than wobbling. */
-.working-mark .mascot { animation:mascot-ponder 2.6s ease-in-out infinite; }
-.working-mark .mascot-eyes { animation:mascot-glance 2.6s ease-in-out infinite; }
+.message-byline.working .mascot { animation:mascot-ponder 2.6s ease-in-out infinite; }
+.message-byline.working .mascot-eyes { animation:mascot-glance 2.6s ease-in-out infinite; }
 @keyframes mascot-ponder { 0%,100% { transform:translateY(var(--mascot-lift)) rotate(-5deg); } 50% { transform:translateY(var(--mascot-lift)) rotate(5deg); } }
 @keyframes mascot-glance { 0%,100% { transform:translateX(-1.3px); } 50% { transform:translateX(1.3px); } }
-.working-who { font-size:14px; font-weight:600; flex-shrink:0; }
 /* The words are muted, with a band of light sweeping across them in time with the mark. */
 .thinking-text { font-size:14px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   background:linear-gradient(100deg, var(--muted) 38%, var(--text) 50%, var(--muted) 62%); background-size:220% 100%;
@@ -977,7 +975,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .thinking-stop { width:28px; height:28px; min-height:28px; margin-left:4px; border-radius:50%; background:var(--surface); color:var(--text); }
 .thinking-seconds { font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .thinking-toggle { padding:0; border:0; cursor:pointer; }
-.thinking-notes { margin:4px 0 0 42px; max-height:220px; overflow-y:auto; font-size:13px; line-height:1.6; color:var(--muted); white-space:pre-wrap; }
+.thinking-notes { margin:4px 0 0; max-height:220px; overflow-y:auto; font-size:13px; line-height:1.6; color:var(--muted); white-space:pre-wrap; }
 /* Live run: preamble, activity steps and the answer as it streams. Groups are separated by space only. */
 .live-run { display:flex; flex-direction:column; gap:12px; padding-left:35px; }
 .live-run .prose { line-height:1.65; }
@@ -997,4 +995,4 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 @keyframes thinking-pulse { 50% { opacity:.45; } }
 @media(max-width:1000px) { .live-run { padding-left:0; } }
 @keyframes thinking-shimmer { from { background-position:120% 0; } to { background-position:-120% 0; } }
-@media (prefers-reduced-motion: reduce) { .working-mark .mascot,.working-mark .mascot-eyes { animation:none; } .thinking-text { animation:none; color:var(--muted); background:none; } .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }
+@media (prefers-reduced-motion: reduce) { .message-byline.working .mascot,.message-byline.working .mascot-eyes { animation:none; } .thinking-text { animation:none; color:var(--muted); background:none; } .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }

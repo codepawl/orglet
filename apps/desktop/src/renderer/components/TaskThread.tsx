@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText, Check, RotateCcw } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus } from '../../shared/contracts';
-import type { RunProgressUpdate } from '../../shared/progress';
 import { Button } from './ui';
 import { formatMoney } from './money';
 import type { SourceTarget } from './SourcePanel';
@@ -31,9 +30,6 @@ type Turn = { revision: number; runs: Run[]; brief: string; sourceCount: number;
  * worker's answer. Answers are normal messages; a structured report is shown only when one was asked for or a team
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
-/** Whether a streaming run has already put something on screen worth putting a name above. */
-const liveShowsContent = (update: RunProgressUpdate) =>
-  Boolean(update.progress && (update.progress.preamble || update.progress.activity.length > 0 || update.progress.answer.length > 0));
 
 export function TaskThread({ detail, action, showSources, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
@@ -52,7 +48,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
   const liveLength = Object.values(liveRuns).reduce((total, update) => total + (update.progress ? update.progress.preamble.length + update.progress.answer.length + update.progress.activity.length : 0), 0);
   useEffect(() => { if (atBottom.current && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; }, [detail.events.length, detail.artifacts.length, turns.length, liveLength]);
 
-  const byline = (author?: Run) => <div className="message-byline">{/* Agent marks sit left of the name. */}{author ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} /> : <span className="orglet-mark small">o</span>}<strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author?.snapshot.worker.provider === 'demo' && <span className="badge">Demo</span>}</div>;
+  const byline = (author?: Run, working = false) => <div className={working ? 'message-byline working' : 'message-byline'}>{/* Agent marks sit left of the name. */}{author ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} /> : <span className="orglet-mark small">o</span>}<strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author?.snapshot.worker.provider === 'demo' && <span className="badge">Demo</span>}</div>;
 
   return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
     <div className="thread-content">
@@ -76,11 +72,11 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
               : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
           </section>)}
           {(!turn.replies.length || (latest && (busy || headline?.error || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
-            {liveUpdate ? (liveShowsContent(liveUpdate) && byline(thinkingRun)) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
+            {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
             {latest && busy && thinkingRun && (liveUpdate
-              ? <LiveRun update={liveUpdate} worker={thinkingRun.snapshot.worker} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />
+              ? <LiveRun update={liveUpdate} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />
               : <Thinking worker={thinkingRun.snapshot.worker} stage={thinkingRun.stage} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} onStop={() => action(() => orglet.call('cancel', { id: detail.task.id }))} />)}
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
@@ -117,7 +113,7 @@ function Thinking({ worker, stage, message, pausing, onStop }: { worker: Run['sn
     : message?.startsWith('Đang chờ lượt') ? t('Đang chờ lượt…')
     : message === 'Model đang trả kết quả…' ? t('Đang viết câu trả lời…')
     : t('Đang suy nghĩ…');
-  return <WorkingLine worker={worker} label={label} onStop={onStop} />;
+  return <WorkingLine label={label} onStop={onStop} />;
 }
 
 /** A normal chat answer: the message, with copy and export tucked into a quiet row. */
