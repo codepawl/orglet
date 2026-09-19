@@ -30,3 +30,7 @@ service-account*.json
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+
+# Left behind by agent worktrees that install their own dependencies.
+.pnpm-store/
+.worktrees/

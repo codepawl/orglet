@@ -4,6 +4,7 @@ import type { TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
 import { Button } from './ui';
 import { Avatar } from './Avatar';
+import { MentionText } from './mentions';
 import { providerLabel, settingsTabFor, type Readiness } from './providers';
 import { t } from '../i18n';import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
@@ -27,6 +28,7 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
   onStop?: () => void }) {
   const ownRef = useRef<HTMLTextAreaElement>(null);
   const textarea = textareaRef ?? ownRef;
+  const highlight = useRef<HTMLDivElement>(null);
   const listId = useId();
   const [expanded, setExpanded] = useState(false);
   const [cursor, setCursor] = useState(0);
@@ -96,7 +98,11 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
     </ul>}
     {attachments && <div className="composer-attachments">{attachments}</div>}
     <div className="composer-leading">{leading}</div>
-    <textarea ref={textarea} aria-label={label} placeholder={placeholder} value={value} disabled={disabled} rows={1} maxLength={16000}
+    {/* The same string, painted above the box, so a tag is coloured while it is typed. The trailing newline gives
+        the overlay the extra line a textarea shows for a trailing Enter, so the two never disagree on height. */}
+    {mentionable && <div className="composer-highlight" ref={highlight} aria-hidden="true"><MentionText text={value} people={mentions!.people} allNames={mentions!.allNames} />{'\n'}</div>}
+    <textarea ref={textarea} className={mentionable ? 'has-highlight' : undefined} aria-label={label} placeholder={placeholder} value={value} disabled={disabled} rows={1} maxLength={16000}
+      onScroll={event => { if (highlight.current) highlight.current.scrollTop = event.currentTarget.scrollTop; }}
       aria-autocomplete={mentionable ? 'list' : undefined} aria-controls={menuOpen ? listId : undefined} aria-expanded={mentionable ? menuOpen : undefined} aria-activedescendant={menuOpen && selected ? `${listId}-${selected.kind}-${selected.name}` : undefined}
       onChange={event => { onChange(event.target.value); syncCursor(event.target); setDismissed(undefined); }}
       onKeyUp={event => syncCursor(event.currentTarget)} onClick={event => syncCursor(event.currentTarget)} onSelect={event => syncCursor(event.currentTarget)}
