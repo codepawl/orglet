@@ -696,6 +696,39 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .avatar.lg.emoji { font-size:19px; }
 .avatar.xl.emoji { font-size:30px; }
 .avatar-face { font-family: var(--font); }
+
+/* A worker's face answers what is happening to it, and never moves for decoration (user, 2026-09-19).
+   Everything here is CSS: no timer runs per avatar, and a still face costs nothing. */
+.avatar .mascot,.avatar-face { transition:transform .16s ease, filter .16s ease; }
+
+/* Blinking. Only faces marked alive blink — the few in the chat you are reading, never a whole sidebar. The
+   delay is negative and seeded per face, so they start mid-cycle and never blink in chorus. */
+.avatar.alive .mascot-eyes { transform-box:fill-box; transform-origin:center; animation:mascot-blink 7s var(--blink-delay, 0s) infinite; }
+@keyframes mascot-blink { 0%,95%,100% { transform:scaleY(1); } 97.5% { transform:scaleY(.12); } }
+
+/* Pointing at a row lifts its face and deepens its colour. No background: a row already tints, and a tint
+   inside a tint is against the house rules. */
+.worker-row:hover .row-disclosure > .avatar .mascot,
+.worker-row:hover .composer-to-avatars .mascot { transform:translateY(-2px); filter:saturate(1.18); }
+
+/* One nod when a reply lands. The byline mounts with the answer, so this plays once and never repeats. */
+.message-byline .avatar .mascot { animation:mascot-nod .5s cubic-bezier(.34,1.56,.64,1) 1; }
+@keyframes mascot-nod { 0% { transform:translateY(-3px); } 55% { transform:translateY(2px); } 100% { transform:translateY(0); } }
+
+/* Waiting on a person is not the same as working, so it breathes slowly instead of running an arc. */
+.assistant-message.needs-you .avatar .mascot { animation:mascot-breathe 3.2s ease-in-out infinite; }
+@keyframes mascot-breathe { 0%,100% { transform:scale(1); } 50% { transform:scale(1.07); } }
+
+/* A worker or team that was just created rises into the list once. Rows present at startup do not. */
+.tree-item.arriving { animation:row-arrive .32s ease-out 1; }
+@keyframes row-arrive { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar.alive .mascot-eyes,.message-byline .avatar .mascot,.assistant-message.needs-you .avatar .mascot { animation:none; }
+  .worker-row:hover .row-disclosure > .avatar .mascot,.worker-row:hover .composer-to-avatars .mascot { transform:none; }
+  .tree-item.arriving { animation:row-arrive-quiet .32s ease-out 1; }
+  @keyframes row-arrive-quiet { from { opacity:0; } to { opacity:1; } }
+}
 .avatar.xl .avatar-badge { width:20px; height:20px; right:-5px; bottom:-5px; }
 .avatar.xl .avatar-badge .provider-mark svg { width:13px; height:13px; }
 /* Avatar picker: preview left, letter/emoji and colour choices right. */
