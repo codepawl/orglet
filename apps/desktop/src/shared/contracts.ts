@@ -87,7 +87,7 @@ export type TeamPlan = z.infer<typeof TeamPlan>;
 /** Queued member run skipped because the orchestrator did not assign that worker this turn. */
 export const UNASSIGNED_PLAN_ERROR = 'Không được phân việc cho lượt này.';
 export const MISSING_PLAN_ERROR = 'Phân việc không có kết quả. Không chạy thành viên và không bịa báo cáo.';
-export const INVALID_PLAN_ERROR = 'Phân việc không hợp lệ: nhân viên không thuộc nhóm.';
+export const INVALID_PLAN_ERROR = 'Phân việc không hợp lệ: Tí không thuộc hội.';
 export const RoutineInput = z.object({ id: Id.optional(), name: z.string().trim().min(1).max(80), enabled: z.boolean(), schedule: Schedule, task: TaskInput }).strict();
 export const Routine = RoutineInput.extend({ id: Id, revision: z.number().int().positive(), approvedConfig: z.string(), nextDueAt: z.iso.datetime(), pending: z.object({ dueAt: z.iso.datetime(), reason: z.string() }).strict().nullable(), lastTaskId: Id.optional() }).strict();
 export type Routine = z.infer<typeof Routine>;

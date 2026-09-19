@@ -133,7 +133,7 @@ try {
 
   await model.click(); await page.getByRole('option', { name: /^Claude Code/ }).click();
   await page.getByText('Dùng bản Claude Code đã cài', { exact: false }).waitFor();
-  await page.getByRole('button', { name: 'Lưu nhân viên', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu Tí', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Harness send gate');
   const send = page.getByRole('button', { name: 'Gửi tin nhắn', exact: true });
@@ -152,7 +152,7 @@ try {
   const authFailModel = await editResearcher();
   await authFailModel.click(); await page.getByRole('option', { name: /^Codex/ }).click();
   await page.getByText('Dùng bản Codex đã cài', { exact: false }).waitFor();
-  await page.getByRole('button', { name: 'Lưu nhân viên', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu Tí', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await noDemo(page);
   assert.equal(await page.getByText('Giới hạn task', { exact: false }).count(), 0);

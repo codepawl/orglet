@@ -33,7 +33,7 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
 // Section notes sit under the section title.
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
   connections: 'Bật provider cần dùng rồi dán key hoặc chọn tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu. Ollama chỉ cần bật công tắc — không cần key.',
-  harness: 'Chưa cài, đã thấy trên máy, và đã đăng nhập sẵn sàng chạy là ba trạng thái khác nhau. Lỗi đăng nhập hiện lệnh sửa; Orglet không chuyển sang Demo. Chọn harness ở mục Model khi thiết lập nhân viên.',
+  harness: 'Chưa cài, đã thấy trên máy, và đã đăng nhập sẵn sàng chạy là ba trạng thái khác nhau. Lỗi đăng nhập hiện lệnh sửa; Orglet không chuyển sang Demo. Chọn harness ở mục Model khi thiết lập Tí.',
   usage: 'Chỉ tính request qua Orglet, không phải tổng hóa đơn API key. Harness trên máy dùng gói của chính nó nên không nằm trong các số này. Input cached được tính theo giá thường.',
 };
 
@@ -156,7 +156,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                   })}
                 </div>
               </Row>
-              <Row id="auto-title-label" title={t('Tự đặt tên cuộc trò chuyện')} description={t('Sau câu trả lời đầu tiên, nhân viên đặt một tên ngắn. Tên bạn tự đổi luôn được giữ.')}>
+              <Row id="auto-title-label" title={t('Tự đặt tên cuộc trò chuyện')} description={t('Sau câu trả lời đầu tiên, Tí đặt một tên ngắn. Tên bạn tự đổi luôn được giữ.')}>
                 <Switch checked={workspace.autoTitles} disabled={busy} labelledBy="auto-title-label" onChange={value => void save({ autoTitles: value })} />
               </Row>
               <Row title={t('Định dạng khi sao chép')} description={t('Chọn sẵn để bấm một lần là sao chép, không hiện menu.')}>
@@ -165,7 +165,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Định dạng khi tải xuống')} description={t('Chọn sẵn để bấm một lần là tải, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi tải xuống')} className="setting-select" value={workspace.downloadFormat} disabled={busy} onChange={value => void save({ downloadFormat: value as Workspace['downloadFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản (.txt)') }, { value: 'markdown', label: 'Markdown (.md)' }]} />
               </Row>
-              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Áp dụng cho cuộc trò chuyện, nhân viên và nhóm, tính từ lúc lưu trữ. Cuộc trò chuyện đã tốn phí chỉ giữ lại số liệu chi phí.')}>
+              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Áp dụng cho cuộc trò chuyện, Tí và hội, tính từ lúc lưu trữ. Cuộc trò chuyện đã tốn phí chỉ giữ lại số liệu chi phí.')}>
                 <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
               </Row>
               <Row title={t('Request đồng thời mỗi provider')} description={t('Bước vượt giới hạn sẽ xếp hàng và chưa giữ ngân sách.')}>
@@ -288,7 +288,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'data' && <>
-              <Row title={t('Sao lưu')} description={t('Nhân viên, nhóm, lịch sử, báo cáo và chi phí vào một tệp JSON. Không gồm API key hay nội dung tệp nguồn; báo cáo có thể chứa trích dẫn.')}>
+              <Row title={t('Sao lưu')} description={t('Tí, hội, lịch sử, báo cáo và chi phí vào một tệp JSON. Không gồm API key hay nội dung tệp nguồn; báo cáo có thể chứa trích dẫn.')}>
                 <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.backup()) ? t('Đã lưu bản sao lưu') : undefined)}><Download size={14} />{t('Lưu bản sao lưu')}</Button>
               </Row>
               <Row title={t('Khôi phục')} description={t('Bổ sung các mục còn thiếu, giữ nguyên dữ liệu và cài đặt hiện tại. Nguồn khôi phục cần được chọn lại để cấp quyền đọc.')}>

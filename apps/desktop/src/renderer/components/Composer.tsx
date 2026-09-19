@@ -81,7 +81,7 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); if (canSend) onSubmit(); }
   };
   return <form className={`composer${expanded ? ' expanded' : ''}${trailing ? ' has-trailing' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) onSubmit(); }}>
-    {menuOpen && <ul id={listId} className="mention-menu" role="listbox" aria-label={t('Gắn thẻ nhân viên')}>
+    {menuOpen && <ul id={listId} className="mention-menu" role="listbox" aria-label={t('Gắn thẻ Tí')}>
       {options.map((option, index) => {
         const worker = option.kind === 'worker' ? mentions!.people.find(item => item.id === option.id) : undefined;
         const optionId = `${listId}-${option.kind}-${option.name}`;

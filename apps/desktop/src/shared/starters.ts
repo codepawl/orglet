@@ -115,7 +115,7 @@ const genericStarters: StarterTemplate[] = [
 
 // A team chat opens on the whole team, not on one member.
 const teamStarters: StarterTemplate[] = [
-  { id: 'team-split', icon: 'plan', label: 'Giao việc này cho cả nhóm', prompt: 'Việc sau cần cả nhóm. Chia ra ai làm phần nào, rồi gộp lại thành một kết quả: ' },
+  { id: 'team-split', icon: 'plan', label: 'Giao việc này cho cả hội', prompt: 'Việc sau cần cả hội. Chia ra ai làm phần nào, rồi gộp lại thành một kết quả: ' },
 ];
 
 /** Shown as a row: a long brief is cut at a word so the list stays one line per starter. */

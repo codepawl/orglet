@@ -16,7 +16,7 @@ export class TeamRunner {
     for (const run of latest.values()) if (run.status !== 'completed') this.runner.assertResumable(run);
   }
   async run(task: Task, team: Team, resume = false) {
-    if (this.active.has(task.id)) throw new Error('Nhóm đang chạy task này.');
+    if (this.active.has(task.id)) throw new Error('Hội đang chạy task này.');
     const control = { cancelled: false, paused: false, controller: new AbortController() }; this.active.set(task.id, control);
     this.store.update('tasks', { ...task, status: 'running', accepted: false }); this.notify();
     task = { ...task, ...(task.currentInput ?? {}) };
@@ -92,7 +92,7 @@ export class TeamRunner {
       this.finish(task, control.cancelled ? 'cancelled' : result.status === 'paused' ? 'paused' : result.status === 'completed' ? failures.length ? 'partial' : 'completed' : 'partial');
     } catch (error) {
       const last = this.store.detail(task.id).runs.at(-1);
-      if (last && last.status !== 'completed') this.store.update('runs', { ...last, error: error instanceof PreflightError ? error.message : 'Nhóm bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.' });
+      if (last && last.status !== 'completed') this.store.update('runs', { ...last, error: error instanceof PreflightError ? error.message : 'Hội bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.' });
       this.finish(task, control.cancelled ? 'cancelled' : error instanceof PreflightError ? 'failed' : 'interrupted');
     } finally { this.active.delete(task.id); this.notify(); }
   }
@@ -101,8 +101,8 @@ export class TeamRunner {
    * that already answered this message are skipped, so resume and retry only run the rest.
    */
   async chat(task: Task, workers: Worker[], resume = false) {
-    if (this.active.has(task.id)) throw new Error('Nhóm đang chạy task này.');
-    if (!workers.length) throw new Error('Chưa có nhân viên để giao việc.');
+    if (this.active.has(task.id)) throw new Error('Hội đang chạy task này.');
+    if (!workers.length) throw new Error('Chưa có Tí nào để giao việc.');
     const control = { cancelled: false, paused: false, controller: new AbortController() }; this.active.set(task.id, control);
     this.store.update('tasks', { ...task, status: 'running', accepted: false }); this.notify();
     task = { ...task, ...(task.currentInput ?? {}) };

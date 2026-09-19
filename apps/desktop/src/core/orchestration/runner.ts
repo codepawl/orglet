@@ -223,18 +223,18 @@ export class Runner {
         signal.throwIfAborted();
         if (control.paused || !this.canDispatch(task)) throw new Paused();
         if (run.stage === 'plan') {
-          if (!run.snapshot.team) throw new Error('Phân việc cần snapshot nhóm.');
+          if (!run.snapshot.team) throw new Error('Phân việc cần snapshot hội.');
           this.event(run.id, 'Demo: đang phân việc, không gọi model.');
           this.completePlan(run, defaultTeamPlan(run.snapshot.team, input.brief, run.snapshot.team.memberIds.map(id => this.store.get<Worker>('workers', id))));
           return;
         }
         if (!needsReport(run)) {
           this.event(run.id, 'Demo: đang trả lời mẫu, không gọi model.');
-          this.commit(task, run, chatReport('Mình là nhân viên demo nên chưa đọc tệp hay gọi model thật. Chọn OpenAI, Anthropic hoặc harness trên máy (Claude Code, Codex) trong thiết lập nhân viên để trò chuyện và làm việc thật nhé.'), options.keepTaskOpen);
+          this.commit(task, run, chatReport('Mình là Tí demo nên chưa đọc tệp hay gọi model thật. Chọn OpenAI, Anthropic hoặc harness trên máy (Claude Code, Codex) trong thiết lập Tí để trò chuyện và làm việc thật nhé.'), options.keepTaskOpen);
           return;
         }
         this.event(run.id, 'Demo: đang tạo báo cáo mẫu, không gọi model.');
-        this.commit(task, run, { title: 'Báo cáo mẫu', summary: 'Đây là dữ liệu demo để thử giao việc, lịch sử và xuất báo cáo. Chưa có phân tích từ model.', findings: [], limitations: ['Báo cáo mẫu không chứa phân tích từ model. Kết quả checker local, nếu có, được hiển thị riêng.', 'Chọn OpenAI, Anthropic hoặc harness trên máy (Claude Code, Codex) trong thiết lập nhân viên để chạy phân tích bằng model.', ...preflightLimits, ...(options.limitations ?? [])] }, options.keepTaskOpen);
+        this.commit(task, run, { title: 'Báo cáo mẫu', summary: 'Đây là dữ liệu demo để thử giao việc, lịch sử và xuất báo cáo. Chưa có phân tích từ model.', findings: [], limitations: ['Báo cáo mẫu không chứa phân tích từ model. Kết quả checker local, nếu có, được hiển thị riêng.', 'Chọn OpenAI, Anthropic hoặc harness trên máy (Claude Code, Codex) trong thiết lập Tí để chạy phân tích bằng model.', ...preflightLimits, ...(options.limitations ?? [])] }, options.keepTaskOpen);
         return;
       }
       if (!task.consent || !(task.providerScopes ?? ['openai']).includes(run.snapshot.worker.provider)) throw new Error('Task chưa có quyền gửi dữ liệu đến provider này. Tạo task mới và xác nhận provider đã chọn.');
@@ -336,7 +336,7 @@ export class Runner {
         const call = reply.calls[0];
         messages.push({ role: 'assistant', tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
         if (call.name === 'reply') {
-          if (needsReport(run)) throw new Error('Nhóm có checklist bắt buộc cần báo cáo đầy đủ, không phải tin nhắn.');
+          if (needsReport(run)) throw new Error('Hội có checklist bắt buộc cần báo cáo đầy đủ, không phải tin nhắn.');
           const { message, title, knowledgeProposals } = ChatReply.parse(JSON.parse(call.arguments));
           for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
           this.commit(task, run, chatReport(message), options.keepTaskOpen, knowledgeProposals, title); return;
@@ -502,11 +502,11 @@ export class Runner {
   /** Saves orchestrator routing on the plan run. No user-facing artifact — members and synthesis remain the reports. */
   private completePlan(run: Run, plan: unknown) {
     const team = run.snapshot.team;
-    if (!team) throw new Error('Phân việc cần snapshot nhóm.');
+    if (!team) throw new Error('Phân việc cần snapshot hội.');
     const parsed = assertTeamPlan(team, plan);
     this.store.transaction(() => {
       this.store.put('runs', { ...run, status: 'completed', error: null, snapshot: { ...run.snapshot, plan: parsed } }, { column: 'task_id', value: run.taskId });
-      this.store.event(run.id, parsed.note?.trim() ? `Đã phân việc: ${parsed.note.trim()}` : `Đã phân việc cho ${parsed.assignments.length} nhân viên.`);
+      this.store.event(run.id, parsed.note?.trim() ? `Đã phân việc: ${parsed.note.trim()}` : `Đã phân việc cho ${parsed.assignments.length} Tí.`);
       this.store.db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);
       this.store.db.prepare("UPDATE step_attempts SET state='committed' WHERE run_id=? AND state='received'").run(run.id);
     });

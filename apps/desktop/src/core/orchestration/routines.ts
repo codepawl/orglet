@@ -76,7 +76,7 @@ export class Routines {
     if (this.dispatching.has(routine.id)) throw new Error('Lịch đang được xử lý.');
     this.dispatching.add(routine.id);
     try {
-      if (routine.approvedConfig !== this.configuration(routine.task)) throw new Error('Nhân viên, skill, nhóm hoặc model đã đổi. Mở lịch, kiểm tra và lưu lại quyền chạy.');
+      if (routine.approvedConfig !== this.configuration(routine.task)) throw new Error('Tí, skill, hội hoặc model đã đổi. Mở lịch, kiểm tra và lưu lại quyền chạy.');
       if (routine.lastTaskId && ['queued', 'running', 'pausing', 'paused', 'interrupted', 'waiting_budget', 'waiting_input'].includes(this.store.get<Task>('tasks', routine.lastTaskId).status)) throw new Error('Lần trước chưa kết thúc. Xử lý công việc đó trước khi chạy bù.');
       for (const sourceId of routine.task.sourceIds) await this.sources.verify(sourceId, routine.task.sourceIds);
       const current = this.store.get<Routine>('routines', routine.id);

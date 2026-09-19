@@ -44,7 +44,7 @@ export function SearchDialog({ open, onClose, tasks, teams, onOpenTask }: { open
         <Dialog.Title className="sr-only">{t('Tìm cuộc trò chuyện')}</Dialog.Title>
         <div className="search-dialog-input">
           <Search size={20} aria-hidden="true" />
-          <input autoFocus role="combobox" aria-expanded={results.length > 0} aria-controls="search-results" aria-activedescendant={results[active] ? `search-result-${results[active].id}` : undefined} aria-autocomplete="list" aria-label={t('Tìm cuộc trò chuyện')} placeholder={t('Tìm cuộc trò chuyện và nhóm')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+          <input autoFocus role="combobox" aria-expanded={results.length > 0} aria-controls="search-results" aria-activedescendant={results[active] ? `search-result-${results[active].id}` : undefined} aria-autocomplete="list" aria-label={t('Tìm cuộc trò chuyện')} placeholder={t('Tìm cuộc trò chuyện và hội')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
             if (event.key === 'ArrowDown') { event.preventDefault(); setActive(index => Math.min(index + 1, results.length - 1)); }
             if (event.key === 'ArrowUp') { event.preventDefault(); setActive(index => Math.max(index - 1, 0)); }
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); choose(active); }

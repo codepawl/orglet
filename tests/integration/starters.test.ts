@@ -11,7 +11,7 @@ const task = (over: Partial<Task> & { id: string; brief: string }): Task => ({
   sourceIds: [], consent: true, accepted: true, ...over,
 });
 const team = (over: Partial<Team> & { id: string; name: string }): Team => ({
-  instructions: 'Nhóm làm việc cùng nhau.', memberIds: ['w1'], synthesizerId: 'w1', workflow: 'sequential',
+  instructions: 'Hội làm việc cùng nhau.', memberIds: ['w1'], synthesizerId: 'w1', workflow: 'sequential',
   monthlyBudgetMicros: 100_000, revision: 1, ...over,
 });
 

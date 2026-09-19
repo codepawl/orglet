@@ -286,7 +286,7 @@ export class CoreService {
         for (const workerId of workerIds ?? []) this.assertAssignable('worker', workerId);
         if (team) this.assertAssignable('team', team.id);
         const first = team?.synthesizerId ?? workerIds?.[0] ?? this.store.workspace().workers[0]?.id;
-        if (!first) throw new Error('Chưa có nhân viên để giao việc.');
+        if (!first) throw new Error('Chưa có Tí nào để giao việc.');
         const { teamId: _teamId, teamSnapshot: _snapshot, assignees: _assignees, ...rest } = task;
         const updated: Task = { ...rest, workerId: first, ...(team ? { teamId: team.id, teamSnapshot: team } : {}), ...(assignee.kind === 'all' ? { assignees: 'all' as const } : workerIds && workerIds.length > 1 ? { assignees: workerIds } : {}), budgetMicros: input.budgetMicros };
         const titles = { ...this.store.setting<Record<string, string>>('taskTitles', {}) };
@@ -463,9 +463,9 @@ export class CoreService {
     const workspace = this.store.workspace();
     const name = found.row.name;
     if (kind === 'worker') {
-      if (!found.archived && workspace.workers.length <= 1) throw new Error('Cần giữ ít nhất một nhân viên.');
+      if (!found.archived && workspace.workers.length <= 1) throw new Error('Cần giữ ít nhất một Tí.');
       const team = workspace.teams.find(item => [...item.memberIds, item.synthesizerId].includes(entityId));
-      if (team) throw new Error(`Bỏ ${name} khỏi nhóm ${team.name} trước.`);
+      if (team) throw new Error(`Bỏ ${name} khỏi hội ${team.name} trước.`);
     }
     const uses = (task: { workerId: string; teamId?: string; assignees?: 'all' | string[] }) => kind === 'team' ? task.teamId === entityId : !task.teamId && (task.workerId === entityId || (Array.isArray(task.assignees) && task.assignees.includes(entityId)));
     const routine = workspace.routines.find(item => item.enabled && uses(item.task));
@@ -479,7 +479,7 @@ export class CoreService {
   /** Workers and teams chosen for new work must be active. */
   private assertAssignable(kind: 'worker' | 'team', entityId: string) {
     const found = this.entity(kind, entityId);
-    if (!found || found.archived) throw new Error(`${found?.row.name ?? (kind === 'worker' ? 'Nhân viên' : 'Nhóm')} đã được lưu trữ hoặc xóa. Đổi người nhận trong Thiết lập công việc.`);
+    if (!found || found.archived) throw new Error(`${found?.row.name ?? (kind === 'worker' ? 'Tí' : 'Hội')} đã được lưu trữ hoặc xóa. Đổi người nhận trong Thiết lập công việc.`);
   }
   private liveTask(taskId: string) {
     const task = this.store.get<Task>('tasks', taskId);

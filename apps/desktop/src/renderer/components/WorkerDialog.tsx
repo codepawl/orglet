@@ -60,7 +60,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   });
 
   const submit = async () => {
-    if (!name.trim()) return fail('general', t('Nhập tên nhân viên.'), 'name');
+    if (!name.trim()) return fail('general', t('Nhập tên Tí.'), 'name');
     if (!instructions.trim()) return fail('instructions', t('Hướng dẫn không được để trống.'), 'instructions');
     const taskBudgetMicros = toMicros(budget);
     if (!Number.isFinite(taskBudgetMicros) || taskBudgetMicros < 0) return fail('general', t('Giới hạn mỗi task phải là số không âm.'), 'budget');
@@ -69,14 +69,14 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     setBusy(true); clearError();
     try {
       await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}) });
-      toast(worker ? t('Đã lưu nhân viên') : t('Đã tạo nhân viên')); onClose();
+      toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí')); onClose();
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập nhân viên') : t('Nhân viên mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'instructions' ? t('Mỗi lần lưu tạo một revision mới. Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.') : tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu nhân viên')} busy={busy} error={error}>
+  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'instructions' ? t('Mỗi lần lưu tạo một revision mới. Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.') : tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
     {tab === 'general' && <>
       <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error'))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
-      <label><FieldLabel icon={UserRound} required>{t('Tên nhân viên')}</FieldLabel><input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} {...fieldInvalid(invalid === 'name', flash)} /></label>
+      <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} {...fieldInvalid(invalid === 'name', flash)} /></label>
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
       <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} value={provider} onChange={value => { const next = value as Worker['provider']; setProvider(next); if (next !== provider) setModelId(''); }} options={[
         modelOption('demo', 'Demo', t('không gọi API'), t('Thử nghiệm'), true),

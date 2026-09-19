@@ -182,18 +182,18 @@ async function start() {
     if (result.canceled) return false;
     const content = await readBoundedText(result.filePaths[0], 50 * 1024 * 1024);
     const summary = await request('backupPreview', content) as BackupSummary;
-    const confirmation = await dialog.showMessageBox(window, { type: 'question', title: tr('Khôi phục bản sao lưu'), message: tr('Bổ sung các mục còn thiếu?'), detail: tr('Bản sao lưu chứa {0} nhân viên, {1} nhóm, {2} công việc và {3} báo cáo.\nDữ liệu, cài đặt và chi phí hiện tại được giữ lại. Nguồn khôi phục không được cấp quyền đọc; công việc đang chạy trong bản sao lưu sẽ chuyển sang gián đoạn.', [summary.workers, summary.teams, summary.tasks, summary.reports]), buttons: [tr('Hủy'), tr('Khôi phục')], defaultId: 0, cancelId: 0, noLink: true });
+    const confirmation = await dialog.showMessageBox(window, { type: 'question', title: tr('Khôi phục bản sao lưu'), message: tr('Bổ sung các mục còn thiếu?'), detail: tr('Bản sao lưu chứa {0} Tí, {1} hội, {2} công việc và {3} báo cáo.\nDữ liệu, cài đặt và chi phí hiện tại được giữ lại. Nguồn khôi phục không được cấp quyền đọc; công việc đang chạy trong bản sao lưu sẽ chuyển sang gián đoạn.', [summary.workers, summary.teams, summary.tasks, summary.reports]), buttons: [tr('Hủy'), tr('Khôi phục')], defaultId: 0, cancelId: 0, noLink: true });
     if (confirmation.response !== 1) return false;
     await request('backupRestore', summary.token); return true;
   });
   handle('orglet:template-export', async raw => {
     const template = await request('templateExport', Id.parse(raw));
-    const result = await dialog.showSaveDialog(window, { title: tr('Xuất template nhóm'), defaultPath: 'orglet-team.json', filters: [{ name: 'Orglet team template', extensions: ['json'] }] });
+    const result = await dialog.showSaveDialog(window, { title: tr('Xuất template hội'), defaultPath: 'orglet-team.json', filters: [{ name: 'Orglet team template', extensions: ['json'] }] });
     if (result.canceled || !result.filePath) return false;
     await writeAtomicText(result.filePath, String(template)); return true;
   });
   handle('orglet:template-import', async () => {
-    const result = await dialog.showOpenDialog(window, { title: tr('Nhập template nhóm'), properties: ['openFile'], filters: [{ name: 'Orglet team template', extensions: ['json'] }] });
+    const result = await dialog.showOpenDialog(window, { title: tr('Nhập template hội'), properties: ['openFile'], filters: [{ name: 'Orglet team template', extensions: ['json'] }] });
     if (result.canceled) return null;
     return request('templateImport', await readBoundedText(result.filePaths[0], 2 * 1024 * 1024));
   });

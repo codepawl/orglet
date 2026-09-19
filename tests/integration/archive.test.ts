@@ -95,13 +95,13 @@ it('archives, restores and deletes workers and teams without breaking history, a
   // The last active worker stays.
   await core.command('archiveEntity', { kind: 'worker', id: helper.id, archived: true });
   expect((await workspace()).archivedWorkers.map(worker => worker.id)).toEqual([helper.id]);
-  await expect(core.command('archiveEntity', { kind: 'worker', id: researcher.id, archived: true })).rejects.toThrow('ít nhất một nhân viên');
+  await expect(core.command('archiveEntity', { kind: 'worker', id: researcher.id, archived: true })).rejects.toThrow('ít nhất một Tí');
   await core.command('archiveEntity', { kind: 'worker', id: helper.id, archived: false });
   expect((await workspace()).workers.map(worker => worker.id)).toContain(helper.id);
 
   // A worker in a team is removed from the team first; the team itself can go.
-  const team = await core.command('saveTeam', { name: 'Nhóm thử', instructions: 'Work together.', memberIds: [helper.id], synthesizerId: helper.id, workflow: 'sequential', monthlyBudgetMicros: 1_000_000 }) as { id: string };
-  await expect(core.command('deleteEntity', { kind: 'worker', id: helper.id })).rejects.toThrow('Nhóm thử');
+  const team = await core.command('saveTeam', { name: 'Hội thử', instructions: 'Work together.', memberIds: [helper.id], synthesizerId: helper.id, workflow: 'sequential', monthlyBudgetMicros: 1_000_000 }) as { id: string };
+  await expect(core.command('deleteEntity', { kind: 'worker', id: helper.id })).rejects.toThrow('Hội thử');
   await core.command('deleteEntity', { kind: 'team', id: team.id });
   expect((await workspace()).teams).toHaveLength(0);
   await core.command('deleteEntity', { kind: 'worker', id: helper.id });

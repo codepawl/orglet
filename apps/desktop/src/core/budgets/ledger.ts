@@ -18,7 +18,7 @@ export class BudgetLedger {
       const month = new Date().toISOString().slice(0, 7);
       const used = (clause: string, args: string[]) => Number(this.store.db.prepare(`SELECT COALESCE(SUM(CASE WHEN r.state='settled' THEN COALESCE(l.amount,0) ELSE r.amount END),0) AS total FROM reservations r LEFT JOIN ledger l ON l.reservation_id=r.id WHERE ${clause}`).get(...args)!.total);
       if (used('r.task_id=?', [taskId]) + amount > taskLimit || used('r.provider=? AND (r.month=? OR r.state!=\'settled\')', [provider, month]) + amount > connectionLimit) throw new BudgetError('Ngân sách còn lại không đủ cho request kế tiếp.');
-      if (team && used("r.task_id IN (SELECT id FROM tasks WHERE json_extract(data,'$.teamId')=?) AND (r.month=? OR r.state!='settled')", [team.id, month]) + amount > team.limit) throw new BudgetError('Nhóm đã chạm giới hạn ngân sách tháng.');
+      if (team && used("r.task_id IN (SELECT id FROM tasks WHERE json_extract(data,'$.teamId')=?) AND (r.month=? OR r.state!='settled')", [team.id, month]) + amount > team.limit) throw new BudgetError('Hội đã chạm giới hạn ngân sách tháng.');
       const reservation = id();
       this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?)').run(reservation, runId, taskId, provider, month, amount, 'held');
       journal?.(reservation);
