@@ -15,18 +15,21 @@ describe('forge packaging', () => {
   const makers = config.makers ?? [];
   const packager = config.packagerConfig ?? {};
 
-  it('zips Windows and macOS, and squirrels Windows only', () => {
+  it('zips every desktop platform, and squirrels Windows only', () => {
     const zip = makers.find(maker => maker instanceof MakerZIP);
     const squirrel = makers.find(maker => maker instanceof MakerSquirrel);
-    expect(zip?.platforms).toEqual(['win32', 'darwin']);
+    expect(zip?.platforms).toEqual(['win32', 'darwin', 'linux']);
     expect(squirrel?.platforms).toEqual(['win32']);
   });
 
-  it('packs DuckDB addons for Windows and macOS and leaves signing off by default', () => {
+  it('packs DuckDB addons for every desktop platform and leaves signing off by default', () => {
     const ignore = packager.ignore as (path: string) => boolean;
     expect(ignore('/node_modules/@duckdb/node-bindings-darwin-arm64/duckdb.node')).toBe(false);
     expect(ignore('/node_modules/@duckdb/node-bindings-darwin-x64/duckdb.node')).toBe(false);
     expect(ignore('/node_modules/@duckdb/node-bindings-win32-x64/duckdb.node')).toBe(false);
+    expect(ignore('/node_modules/@duckdb/node-bindings-linux-x64/duckdb.node')).toBe(false);
+    // A musl distribution needs its own addon, so the glibc one alone is not enough.
+    expect(ignore('/node_modules/@duckdb/node-bindings-linux-x64-musl/duckdb.node')).toBe(false);
     expect(ignore('/node_modules/left-pad')).toBe(true);
     expect(packager.osxSign).toBeUndefined();
     expect(packager.osxNotarize).toBeUndefined();

@@ -75,12 +75,12 @@ Windows installers are unsigned. macOS CI signs with Developer ID and notarizes 
 |---|---|
 | Windows | Public 0.2.x target. Unsigned ZIP and Squirrel Setup from `pnpm make`. If those files are not attached to the GitHub Release, build locally. SmartScreen may warn (unknown publisher); that is expected. See [windows-release-gates.md](docs/windows-release-gates.md). |
 | macOS | ZIP of `Orglet.app` from `pnpm make` on a Mac, or the `orglet-macos-signed-zip` CI artifact. CI signs it with Developer ID and notarizes it with Apple, so it opens without the right-click workaround. Not a GitHub Release asset yet, and a local `pnpm make` stays unsigned. See [macos-packaging.md](docs/macos-packaging.md). |
-| Linux | Coming soon |
+| Linux | ZIP from `pnpm make` on Linux, or the `orglet-linux-zip` CI artifact. CI builds it and starts it headless on every pull request, but nobody has used it on a real Linux desktop yet, so treat it as untested. See [linux-packaging.md](docs/linux-packaging.md). |
 | iOS and Android | Coming soon |
 
 ## Dev
 
-You need Windows or macOS, Node 24.19 or newer and pnpm 11.19.0.
+You need Windows, macOS or Linux, Node 24.19 or newer and pnpm 11.19.0.
 
 ```
 pnpm install --frozen-lockfile

@@ -16,6 +16,12 @@ const included = [
   '/node_modules/@duckdb/node-bindings-win32-arm64',
   '/node_modules/@duckdb/node-bindings-darwin-arm64',
   '/node_modules/@duckdb/node-bindings-darwin-x64',
+  // Both libc flavours: pnpm installs the one the build machine uses, and glibc and musl
+  // builds of the same distribution need different addons.
+  '/node_modules/@duckdb/node-bindings-linux-x64',
+  '/node_modules/@duckdb/node-bindings-linux-x64-musl',
+  '/node_modules/@duckdb/node-bindings-linux-arm64',
+  '/node_modules/@duckdb/node-bindings-linux-arm64-musl',
   '/node_modules/detect-libc',
 ];
 
@@ -38,7 +44,8 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    new MakerZIP({}, ['win32', 'darwin']),
+    // Linux ships as a ZIP for now: no deb or AppImage until someone is actually running it.
+    new MakerZIP({}, ['win32', 'darwin', 'linux']),
     new MakerSquirrel({ name: 'orglet', setupIcon: 'apps/desktop/assets/icon.ico' }),
   ],
   plugins: [new VitePlugin({

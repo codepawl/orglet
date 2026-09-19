@@ -10,7 +10,7 @@ Windows remains first: the required GitHub check is still the **Windows desktop*
 
 | Maker | Platforms | Output |
 |---|---|---|
-| `@electron-forge/maker-zip` | `win32`, `darwin` | ZIP under `out/make/zip/<platform>/<arch>/` |
+| `@electron-forge/maker-zip` | `win32`, `darwin`, `linux` | ZIP under `out/make/zip/<platform>/<arch>/` |
 | `@electron-forge/maker-squirrel` | Windows only (Forge skips it on a Mac) | Setup under `out/make/squirrel.windows/` |
 
 On a Mac, `pnpm make` packages `Orglet.app` for the current architecture (`darwin-arm64` on Apple Silicon, `darwin-x64` on Intel) and zips that `.app`. Typical path:
