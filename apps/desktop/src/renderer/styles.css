@@ -55,6 +55,38 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-head h2 { font-size:15px; font-weight:600; }
 .details-body { flex:1; min-height:0; overflow:auto; padding:0 16px 16px; }
 .details-body .form { gap:14px; }
+/* Details: plain words on the surface, machine detail in one collapsed block at the end (user, 2026-09-19). */
+.details-body { display:flex; flex-direction:column; gap:18px; }
+/* Who this chat is with, at the top and larger than anything under it. */
+.details-subject { display:flex; flex-direction:column; gap:5px; }
+.details-subject-name { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; line-height:1.3; }
+.details-subject-meta { display:flex; flex-direction:column; gap:2px; padding-left:10px; }
+.details-subject-meta p { font-size:12.5px; line-height:1.45; }
+.details-runs-on { display:flex; align-items:center; gap:5px; }
+.details-section { display:flex; flex-direction:column; gap:7px; }
+.details-section h3 { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--muted); }
+.details-section h3 svg { color:var(--muted); }
+/* A member reads as a person: face, name, and what they are here for. */
+.details-member { display:flex; align-items:flex-start; gap:8px; padding:3px 0; }
+.details-member > .avatar { margin-top:1px; }
+.details-member-name { font-size:13px; display:flex; align-items:center; gap:6px; }
+.details-member-name small { font-size:11px; color:var(--muted); }
+.details-member p.muted { font-size:12px; line-height:1.4; }
+.details-status { font-size:13px; font-weight:500; }
+.details-source { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.details-source svg { flex-shrink:0; }
+/* The story of the run: who spoke, then what they did, indented under them. */
+.details-runs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+.details-run { display:flex; align-items:flex-start; gap:8px; }
+.details-run > .avatar { margin-top:1px; }
+.details-run-who { display:flex; align-items:center; gap:6px; font-size:13px; }
+.details-run-who small { font-size:11px; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 7px; }
+.details-run p.muted { font-size:12px; line-height:1.5; display:flex; gap:7px; }
+.details-run time { flex-shrink:0; font-variant-numeric:tabular-nums; opacity:.75; }
+.details-technical summary { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); cursor:pointer; }
+.details-technical > *:not(summary) { margin-top:8px; }
+.details-technical h4 { font-size:12.5px; font-weight:600; }
+.details-technical .hash { font-size:11px; }
 @media(max-width:1000px) { .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr); } .details-pane { display:none; } }
 .sidebar-rail { display:flex; flex-direction:column; align-items:center; gap:6px; padding:17px 0 16px; background:transparent; }
 /* Top and bottom clear the corner curve, because the brand row and the footer buttons sit right in it. */
@@ -210,6 +242,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Thread: the prompt bar stays pinned under the conversation. */
 .thread-composer { width:100%; max-width:780px; margin:0 auto; padding:8px var(--page-x) 0; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
+/* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,
+   the shape people already know from other chat apps (user, 2026-09-19). Once a turn exists the thread takes
+   over and the bar goes back to the bottom. */
+.team-chat-fresh { justify-content:center; overflow:auto; }
+.fresh-chat { width:100%; max-width:768px; margin:0 auto; padding:24px var(--page-x); display:flex; flex-direction:column; }
+.fresh-chat .thread-composer { max-width:100%; padding:0; }
+.fresh-chat .suggestions { margin-top:14px; }
 /* The starters sit under a centred greeting. The block is only as wide as its widest row, so centring it
    centres what is actually drawn: a centred 440px box would leave the text hugging its left edge. */
 .team-chat-empty .suggestions { width:fit-content; max-width:min(100%, 440px); margin:12px auto 0; padding:0; text-align:left; }
@@ -276,8 +315,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .startup { height:100dvh; text-align:center; }
 /* Former side panels open as centred dialogs, matching Settings. */
 .drawer { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:11; width:min(640px, calc(100vw - 32px)); max-height:min(720px, calc(100dvh - 32px)); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; }
-.details-roster h3 { margin-bottom:6px; font-size:14px; }
-.details-roster .tree-leaf { padding-left:0; }
 .drawer-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px 24px; }
 .drawer-header h2 { font-size:18px; font-weight:600; }
 .drawer-body { padding:18px 24px 24px; overflow:auto; }

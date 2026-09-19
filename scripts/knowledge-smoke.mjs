@@ -68,6 +68,8 @@ try {
   for (const run of detail.runs) assert.deepEqual(run.snapshot.context.knowledge.map(item => [item.id, item.revision]), [[approved.id, 2]]);
   await openThreadByBrief(page, 'Knowledge context fixture');
   await page.getByRole('button', { name: 'Chi tiết', exact: true }).click();
+  // The context manifest is machine detail, so it sits inside the collapsed technical block.
+  await page.locator('.details-technical > summary').click();
   await page.getByText(/Context đã nạp/).first().click();
   await page.getByText('Knowledge: Evidence limits · v2', { exact: false }).first().waitFor();
   // Templates reuse the same text for team instructions and the skill; the manifest shows the duplicate was dropped.
