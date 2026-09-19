@@ -1094,6 +1094,8 @@ export const en: Dictionary = {
   'Mặc định': 'Default',
   // Chat details panel (components/DetailsPanel.tsx).
   'Bước này mất bao lâu': 'How long this step took',
+  'Skill {0}': 'Skill {0}',
+  'Số liệu để dò lỗi hoặc đối chiếu một lần chạy.': 'Numbers for chasing a bug or checking a run against its record.',
   'Xuất câu trả lời': 'Export reply',
   'Xuất báo cáo': 'Export report',
   'Model đã trả lời': 'Model that answered',
@@ -1123,7 +1125,6 @@ export const en: Dictionary = {
   'gộp kết quả': 'combining',
   'phần việc': 'their part',
   'trả lời': 'reply',
-  'Skill v{0}': 'Skill v{0}',
   // Chat starters (shared/starters.ts): the row label and the text it puts in the composer.
   'Tìm hiểu chủ đề này': 'Look into a topic',
   'Tìm hiểu chủ đề sau và tóm tắt những gì đã biết, kèm nguồn cho từng ý: ': 'Look into the following and summarize what is already known, with a source for each point: ',

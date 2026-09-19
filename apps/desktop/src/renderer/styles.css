@@ -100,7 +100,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-subject { display:flex; flex-direction:column; gap:5px; }
 .details-subject-name { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:15px; font-weight:600; line-height:1.3; }
 .details-subject-name .details-fact { font-weight:400; }
-.details-subject-note { padding-left:10px; font-size:12.5px; line-height:1.45; color:var(--muted); }
+.details-subject-note { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; padding-left:10px; font-size:12.5px; line-height:1.45; color:var(--muted); }
 /* Short facts with an icon each, wrapping onto as many rows as they need. */
 .details-facts { display:flex; flex-wrap:wrap; gap:6px 12px; padding-left:10px; }
 .details-fact { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; color:var(--muted); white-space:nowrap; }
@@ -130,10 +130,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-run p.muted { font-size:12px; line-height:1.5; display:flex; gap:7px; align-items:baseline; }
 .details-run p.muted > span { min-width:0; }
 .details-run time { flex-shrink:0; font-variant-numeric:tabular-nums; opacity:.75; }
-.details-technical summary { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--muted); cursor:pointer; }
-.details-technical > *:not(summary) { margin-top:8px; }
-.details-technical h4 { font-size:12.5px; font-weight:600; }
-.details-technical .hash { font-size:11px; }
+/* Machine detail is a dialog now, not a block in the panel: it is for chasing a bug, and it was crowding out the
+   plain facts around it (user, 2026-09-20). What stays behind is one quiet control. */
+.details-technical-open { align-self:flex-start; color:var(--muted); }
+.technical-run + .technical-run { margin-top:18px; }
+.technical-run h4 { font-size:13px; font-weight:600; }
+.technical-run .hash { display:block; margin:6px 0; font-size:11px; }
+.technical-run > *:not(:first-child) { margin-top:6px; }
 @media(max-width:1000px) { .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr); } .details-pane { display:none; } }
 /* Collapsed sidebar: the two buttons live in the main panel, not on the window behind it (user, 2026-09-19). */
 .topbar-rail { display:flex; align-items:center; gap:2px; margin-right:6px; flex-shrink:0; }
@@ -155,6 +158,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .orglet-mark.large { width:42px; height:42px; margin-bottom:24px; }
 .orglet-mark.small { width:25px; height:25px; }
 .section-heading { font-size:13px; font-weight:500; color:var(--muted); min-height:34px; display:flex; align-items:center; justify-content:space-between; padding:0 0 0 12px; }
+.section-heading .button:hover:not(:disabled),.section-heading .button:focus-visible { background:transparent; color:var(--text); }
 /* Section add buttons and row settings buttons share one class, so their icons always sit in one column. */
 .button.row-action { width:30px; height:30px; min-height:30px; padding:5px; margin-right:4px; }
 .sidebar-section { display:flex; flex-direction:column; gap:4px; }
@@ -200,15 +204,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .history-item svg { color:var(--muted); }
 .history-item .status-mark svg { color:inherit; }
 /* Status mark: a glyph, not a coloured dot, so a row says what its state is (user, 2026-09-19).
-   Only a state carrying news gets a tinted disc; an idle row stays plain so a long list is quiet. */
+   A mark is a glyph and a colour; only the busy spinner keeps a disc, to spin against (user, 2026-09-20). */
 .status-mark { --status-mark-size:15px; display:grid; place-items:center; width:var(--status-mark-size); height:var(--status-mark-size); border-radius:50%; flex-shrink:0; box-sizing:border-box; color:var(--muted); }
 .status-mark svg { width:100%; height:100%; }
 .status-mark.success { color:var(--success); }
 .status-mark.error { color:var(--error); }
 .status-mark.working { color:var(--working); }
 .status-mark.empty { color:color-mix(in srgb, var(--muted) 55%, transparent); }
-.status-mark.filled, .status-mark.busy { background:color-mix(in srgb, currentColor 13%, transparent); }
-.status-mark.busy { color:var(--working); }
+.status-mark.busy { background:color-mix(in srgb, currentColor 13%, transparent); color:var(--working); }
 .status-mark.busy svg { animation:status-mark-spin .75s linear infinite; }
 @keyframes status-mark-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion:reduce) { .status-mark.busy svg { animation:none; } }
