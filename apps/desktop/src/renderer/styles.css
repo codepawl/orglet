@@ -682,6 +682,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .avatar.xs .avatar-badge .provider-mark svg { width:8px; height:8px; }
 /* Tree rows: the chevron slides in left of the avatar on hover and stays while the row is open; closed rows keep the avatar in place. */
 .row-disclosure { display:flex; align-items:center; gap:0; height:34px; margin-left:2px; padding:0 2px; border:0; border-radius:8px; background:transparent; color:var(--muted); flex-shrink:0; }
+/* A worker row carries one face, so it sits a little smaller than a normal avatar and matches the size the
+   members of a team cluster end up at beside it (user, 2026-09-19). */
+.worker-row .row-disclosure > .avatar.sm { width:21px; height:21px; border-radius:6px; font-size:10px; }
 .row-disclosure .disclosure-chevron { flex-shrink:0; width:0; margin-right:0; opacity:0; transition:width .15s ease, margin-right .15s ease, opacity .12s, transform .15s; }
 .worker-row:hover .disclosure-chevron,.row-disclosure:focus-visible .disclosure-chevron,.tree-item.open .disclosure-chevron,.tree-item.dragging .disclosure-chevron { width:14px; margin-right:4px; opacity:1; }
 .tree-leaf .avatar { margin-right:2px; }
