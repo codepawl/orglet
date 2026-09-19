@@ -10,6 +10,9 @@
   --control-height: 34px; --icon-size: 32px; --radius: 9px; --page-x: 20px; --chrome-y: 12px; --sidebar-width: 228px;
   /* Panels are rounded cards sitting apart on the window background (user, 2026-09-19). */
   --window:#e3e3e6; --panel-radius: 16px; --shell-gap: 8px; --details-width: 320px; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
+  /* How far a control stays from the end of a rounded panel. At less than the radius it sits beside the corner
+     curve, and two curves that close read as fighting rather than nested (user, 2026-09-19). */
+  --panel-inset: var(--panel-radius);
 }
 :root[data-theme=dark] { color-scheme:dark; --window:#0b0b0b; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#222222; --row-active:#2e2e2e; --focus:#a6c1ff; }
 @media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#0b0b0b; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#222222; --row-active:#2e2e2e; --focus:#a6c1ff; } }
@@ -47,13 +50,15 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr) var(--details-width); }
 .app.sidebar-hidden.with-details { grid-template-columns:56px minmax(0,1fr) var(--details-width); }
 .details-pane { display:flex; flex-direction:column; min-height:0; background:var(--sidebar); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); overflow:hidden; }
-.details-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 10px 8px 16px; }
+/* The close button sits in the top-right corner, so the head starts below where the curve ends. */
+.details-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:var(--panel-inset) 10px 8px 16px; }
 .details-head h2 { font-size:15px; font-weight:600; }
 .details-body { flex:1; min-height:0; overflow:auto; padding:0 16px 16px; }
 .details-body .form { gap:14px; }
 @media(max-width:1000px) { .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr); } .details-pane { display:none; } }
 .sidebar-rail { display:flex; flex-direction:column; align-items:center; gap:6px; padding:17px 0 16px; background:transparent; }
-.sidebar { background:var(--sidebar); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); padding:14px 10px 10px; display:flex; flex-direction:column; overflow:hidden; }
+/* Top and bottom clear the corner curve, because the brand row and the footer buttons sit right in it. */
+.sidebar { background:var(--sidebar); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); padding:var(--panel-inset) 10px; display:flex; flex-direction:column; overflow:hidden; }
 .brand { display:flex; align-items:center; gap:8px; padding:0 6px 14px; }
 .brand strong { font-size:18px; font-weight:600; letter-spacing:-.5px; }
 .brand strong { margin-right:auto; }
@@ -165,8 +170,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .send { grid-area:send; border-radius:50%; }
 .send:disabled { opacity:.35; }
 /* Compact recipient Select left of send — pill trigger like ChatGPT’s model chip. */
+/* Shorter than the send button: it is the secondary control, and at the send button's height its pill crowded
+   the prompt bar's own corner curve (user, 2026-09-19). */
 .composer-trailing .composer-to-select.select-trigger {
-  width:auto; max-width:100%; min-height:36px; padding:3px 8px 3px 4px; gap:6px;
+  width:auto; max-width:100%; min-height:30px; padding:3px 10px; gap:6px;
   border:0; border-radius:999px; background:transparent; box-shadow:none;
 }
 .composer-trailing .composer-to-select.select-trigger:hover:not(:disabled),
