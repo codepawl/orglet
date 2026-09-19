@@ -16,7 +16,7 @@ import type { Worker } from '../../shared/contracts';
 /** The worker's avatar with a short arc of light running around its edge while it works. */
 export function WorkingMark({ worker }: { worker: Worker }) {
   return <span className="working-mark">
-    <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" />
+    <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" alive />
     {/* pathLength normalises the outline to 200 units, so the dash lengths below read as percentages of it. */}
     <svg className="working-halo" viewBox="0 0 34 34" aria-hidden="true" focusable="false">
       <rect className="working-track" x="2" y="2" width="30" height="30" rx="10" pathLength="200" />

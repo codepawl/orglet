@@ -69,6 +69,22 @@ function readSidebarWidth(): number {
   }
 }
 
+/**
+ * Ids that were not in the sidebar a moment ago. Everything present when the workspace first arrives counts as
+ * already known, so launching does not animate every row at once — only a worker or team you just created rises in.
+ */
+function useArrivals(ids: readonly string[], ready: boolean): (id: string) => boolean {
+  const known = useRef<Set<string> | null>(null);
+  const arrived = useRef(new Set<string>());
+  // Both refs are read before this, so the hook count never changes while the workspace is still loading.
+  if (!ready) return () => false;
+  if (known.current === null) known.current = new Set(ids);
+  const seen = known.current;
+  arrived.current = new Set(ids.filter(id => !seen.has(id)));
+  for (const id of ids) seen.add(id);
+  return (id: string) => arrived.current.has(id);
+}
+
 type Panel = 'task' | 'revision' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | 'sources' | null;
 export function App() {
   useLanguage();
@@ -297,6 +313,9 @@ export function App() {
     toast(archived ? t('Đã lưu trữ cuộc trò chuyện.') : t('Đã khôi phục cuộc trò chuyện.'));
   });
   setDisplayCurrency(workspace?.currency);
+  // Phase 5 of the avatar animations: a row that was just created rises into the list once. This sits above the
+  // loading return, because a hook must run on every render and the workspace arrives after the first one.
+  const isArriving = useArrivals(workspace ? [...workspace.teams.map(item => `team-${item.id}`), ...workspace.workers.map(item => `worker-${item.id}`)] : [], Boolean(workspace));
   if (!workspace) return <div className="startup"><span className="orglet-mark">o</span><h1>Orglet</h1><p role={error ? 'alert' : 'status'}>{error || t('Đang mở workspace…')}</p>{error && window.orglet && <Button onClick={() => void refresh()}>{t('Thử lại')}</Button>}</div>;
   const recipientOptions = [
     ...workspace.workers.map(item => {
@@ -397,13 +416,13 @@ export function App() {
       <div className="sidebar-scroll">
       
       <SidebarSection id="teams" title={t('Nhóm')} action={<Button size="icon" className="row-action" aria-label={t('Tạo nhóm')} onClick={() => { setEditingTeam(undefined); setPanel('team'); }}><Plus size={16} /></Button>}>
-        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} name={item.name} avatar={<RosterAvatars workers={teamRoster(item, workspace.workers)} size="sm" max={3} />} active={teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id)} status={teamStatus(item)} onSelect={() => openTeam(item.id)} reorder={teamOrder.bind(item.id)}
+        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} arriving={isArriving(`team-${item.id}`)} name={item.name} avatar={<RosterAvatars workers={teamRoster(item, workspace.workers)} size="sm" max={3} />} active={teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id)} status={teamStatus(item)} onSelect={() => openTeam(item.id)} reorder={teamOrder.bind(item.id)}
           menu={<RowMenu label={t('Tùy chọn nhóm {0}', [item.name])} items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingTeam(item); setPanel('team'); } }, { label: t('Xuất template'), icon: Download, onSelect: () => action(() => orglet.exportTemplate(item.id)) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('team', item.id, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEntity('team', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />} />
         )}{!workspace.teams.length && <p className="empty-history">{t('Chưa có nhóm.')}</p>}
         <ArchivedList count={workspace.archivedTeams.length}>{workspace.archivedTeams.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('team', item.id, false)} onDelete={() => deleteEntity('team', item.id)} />)}</ArchivedList>
       </SidebarSection>
       <SidebarSection id="workers" title={t('Nhân viên')} action={<Button size="icon" className="row-action" aria-label={t('Tạo nhân viên')} onClick={() => { setEditingWorker(undefined); setPanel('worker'); }}><Plus size={16} /></Button>}>
-        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => openWorker(item.id)}
+        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => openWorker(item.id)}
           menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có nhân viên.')}</p>}
         <ArchivedList count={workspace.archivedWorkers.length}>{workspace.archivedWorkers.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('worker', item.id, false)} onDelete={() => deleteEntity('worker', item.id)} />)}</ArchivedList>
       </SidebarSection>
@@ -430,7 +449,7 @@ export function App() {
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">
-          <h1 className="welcome">{chatHeadingBefore}<span className="welcome-who">{team ? <RosterAvatars workers={roster} size="sm" max={2} /> : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" /> : null}{chatName}</span>{chatHeadingAfter}</h1>
+          <h1 className="welcome">{chatHeadingBefore}<span className="welcome-who">{team ? <RosterAvatars workers={roster} size="sm" max={2} alive /> : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" alive /> : null}{chatName}</span>{chatHeadingAfter}</h1>
           <div className="thread-composer">
             {composerBar}
             {composerHint}

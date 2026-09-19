@@ -103,10 +103,10 @@ export function useReorder(ids: string[], commit: (ids: string[]) => void) {
  * (user, 2026-09-19), so no row expands here.
  * Optional `status` is the rolled-up mark from its subset (live thread for a worker, workers for a team).
  */
-export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, menu, reorder }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; menu?: ReactNode; reorder: RowBindings }) {
+export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, menu, reorder, arriving }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; menu?: ReactNode; reorder: RowBindings; arriving?: boolean }) {
   const { ref, style, dragging, onMoveKey, ...pointer } = reorder;
   const mark = dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : null;
-  return <div ref={ref} style={style} className={`tree-item ${dragging ? 'dragging' : ''}`} {...pointer} data-row-id={id}>
+  return <div ref={ref} style={style} className={`tree-item ${dragging ? 'dragging' : ''}${arriving ? ' arriving' : ''}`} {...pointer} data-row-id={id}>
     <div className="worker-row">
       {status && <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />}
       <span className="row-disclosure" aria-hidden="true">{mark}{avatar}</span>

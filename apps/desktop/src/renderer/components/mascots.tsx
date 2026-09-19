@@ -9,7 +9,9 @@ import type { ReactNode } from 'react';
 const stroke = { fill: 'none', stroke: 'var(--mascot-ink, #fff)', strokeWidth: 3.4, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 // The logo bubble (apps/desktop/assets/icon.svg) scaled onto the 64 grid and widened slightly for a face.
 const bubble = <path d="M24 13h16a13 13 0 0 1 13 13v16a13 13 0 0 1-13 13H16a5 5 0 0 1-5-5V26a13 13 0 0 1 13-13z" fill="var(--mascot-fill, #fff)" stroke="currentColor" strokeWidth="4" strokeLinejoin="round" />;
-const dots = (y = 32, left = 26, right = 38) => <><circle cx={left} cy={y} r="2.6" fill="var(--mascot-ink, #fff)" /><circle cx={right} cy={y} r="2.6" fill="var(--mascot-ink, #fff)" /></>;
+// The pair is one group so a blink can squash both together. Mascots that draw their own eyes — glasses, a wink,
+// closed sleepy eyes — keep them and simply never blink, which is what you would want of them anyway.
+const dots = (y = 32, left = 26, right = 38) => <g className="mascot-eyes"><circle cx={left} cy={y} r="2.6" fill="var(--mascot-ink, #fff)" /><circle cx={right} cy={y} r="2.6" fill="var(--mascot-ink, #fff)" /></g>;
 const smile = (y = 38, width = 7) => <path d={`M${32 - width / 2} ${y}q${width / 2} ${width * 0.45} ${width} 0`} {...stroke} strokeWidth={3} />;
 const face = <>{dots(32)}{smile(38)}</>;
 // Anything worn on the head: the shape in the mascot colour, rimmed with the page ground so it reads over the bubble.

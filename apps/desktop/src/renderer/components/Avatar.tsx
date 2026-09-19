@@ -21,26 +21,34 @@ const colorPresets = [...avatarPalette, '#2f4b7c', '#3d4451', '#2e7d5b', '#9b3d5
  * Decorative: the name is always shown next to it, so it is hidden from assistive technology.
  * `seed` should be a stable id so renaming does not change an automatic choice among equals.
  */
-export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, badge, size = 'md', shape = 'rounded' }: {
+export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, badge, size = 'md', shape = 'rounded', alive }: {
   name: string; seed?: string; emoji?: string; mascot?: string; letter?: boolean; defaultMascot?: boolean; hint?: string; color?: string; badge?: ReactNode; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'; shape?: 'rounded' | 'circle';
+  /** Blinks now and then. Only for the handful of faces in the chat you are reading, never a whole list at once. */
+  alive?: boolean;
 }) {
   const letter = [...name.trim()][0]?.toLocaleUpperCase() ?? '?';
   // Workers only use mascots (user decision 2026-09-17), so emoji or letter values saved earlier are ignored there.
   const face = defaultMascot ? (isMascot(mascot) ? mascot : autoMascot(mascotIds, seed ?? name, { name, description: hint })) : emoji ? 'emoji' : isMascot(mascot) ? mascot : undefined;
   const ink = color ?? (defaultMascot && face && face !== 'emoji' ? mascotColors[face] : avatarColor(seed ?? name));
-  return <span className={`avatar ${size} ${shape} ${face === 'emoji' ? 'emoji' : face ? 'has-mascot' : ''}`} style={{ '--avatar-color': ink } as CSSProperties} aria-hidden="true">
+  // Each face waits its own share of the cycle before blinking, so two of them never blink together.
+  const blinkDelay = `-${seedHash(seed ?? name) % BLINK_SECONDS}s`;
+  return <span className={`avatar ${size} ${shape} ${face === 'emoji' ? 'emoji' : face ? 'has-mascot' : ''}${alive ? ' alive' : ''}`}
+    style={{ '--avatar-color': ink, '--blink-delay': blinkDelay } as CSSProperties} aria-hidden="true">
     <span className="avatar-face">{face === 'emoji' ? emoji : face ? <Mascot id={face} /> : letter}</span>
     {badge && <span className="avatar-badge">{badge}</span>}
   </span>;
 }
 
+/** One blink cycle, matching the `mascot-blink` keyframes; the delay is spread across it. */
+const BLINK_SECONDS = 7;
+
 /** Overlapping worker faces for a team chat header or empty thread. */
-export function RosterAvatars({ workers, size = 'xs', max = 4 }: { workers: readonly Worker[]; size?: 'xs' | 'sm'; max?: number }) {
+export function RosterAvatars({ workers, size = 'xs', max = 4, alive }: { workers: readonly Worker[]; size?: 'xs' | 'sm'; max?: number; alive?: boolean }) {
   if (!workers.length) return null;
   const shown = workers.slice(0, max);
   const rest = workers.length - shown.length;
   return <span className="composer-to-avatars">
-    {shown.map(worker => <Avatar key={worker.id} name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />)}
+    {shown.map(worker => <Avatar key={worker.id} name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} alive={alive} />)}
     {rest > 0 && <span className="roster-more" aria-hidden="true">+{rest}</span>}
   </span>;
 }
