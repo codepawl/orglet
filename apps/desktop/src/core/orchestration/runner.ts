@@ -16,7 +16,7 @@ import { Review } from '../../shared/review';
 import { applyReviewPolicy, validateReview } from '../review';
 import { KnowledgeProposal } from '../../shared/knowledge';
 import { KnowledgeBase } from '../context/knowledge';
-import { compileContext } from '../context/compiler';
+import { compileContext, type Colleague } from '../context/compiler';
 import { applyThreadManifest, compactThread, fitThread, threadMessages } from '../context/thread';
 import { ProviderSlots } from './slots';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -133,6 +133,21 @@ export class Runner {
     if (checkpoint.phase === 'requesting') throw new Error('Request bị gián đoạn chưa rõ kết quả. Không gửi lại tự động; kiểm tra chi phí rồi chọn thử lại nếu cần.');
   }
   async shutdown() { for (const item of this.active.values()) item.controller.abort(); }
+  /** Workers answering alongside this run: the team roster, or the other workers of a group chat. */
+  private colleaguesOf(task: Task, run: Run): Colleague[] {
+    const team = run.snapshot.team;
+    const workers = this.store.all<Worker>('workers');
+    const describe = (worker: Worker): Colleague => ({ id: worker.id, name: worker.name, description: worker.description });
+
+    if (team) {
+      const memberIds = new Set([...team.memberIds, team.synthesizerId]);
+      return workers.filter(worker => memberIds.has(worker.id)).map(describe);
+    }
+    // A group chat sends the message to named workers, or to everyone in the workspace.
+    if (task.assignees === 'all') return workers.map(describe);
+    if (Array.isArray(task.assignees)) return workers.filter(worker => task.assignees!.includes(worker.id)).map(describe);
+    return [];
+  }
   private event(runId: string, message: string) { this.store.event(runId, message); this.notify(); }
   /**
    * Saves the reads and searches a streaming harness made as run activity, so the answer keeps its folded
@@ -170,9 +185,9 @@ export class Runner {
         }
       }
       // Freeze knowledge and transcript layers before any dispatch; later edits only affect new runs.
-      const context = run.snapshot.context ?? compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, brief: input.brief, candidates: new KnowledgeBase(this.store).candidates(run.snapshot.worker.id, run.snapshot.team?.id) }).context;
+      const context = run.snapshot.context ?? compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: new KnowledgeBase(this.store).candidates(run.snapshot.worker.id, run.snapshot.team?.id) }).context;
       run = { ...run, snapshot: { ...run.snapshot, context } };
-      const compiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, brief: input.brief, candidates: context.knowledge });
+      const compiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge });
       this.store.update('runs', { ...run, status: 'running' });
       if (!options.keepTaskOpen) this.store.status(task.id, run.id, 'running');
       this.notify();
