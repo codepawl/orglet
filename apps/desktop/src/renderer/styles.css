@@ -265,11 +265,18 @@ svg { flex-shrink:0; stroke-width:1.7; }
 }
 .composer-to:hover { background:var(--surface); }
 /* A team's members read as one mark, not a row of separate faces (user, 2026-09-19): smaller than a worker's own
-   avatar and overlapping, with the panel showing through the overlap so two filled mascots stay separate shapes.
-   The later face sits on top, so the stack reads left to right like the roster it stands for. */
+   avatar and overlapping, the later face on top, so the stack reads left to right like the roster it stands for.
+
+   The pull has to beat the gap the .85 scale leaves inside each box, which the first version did not: a 24px box
+   holding a 20.4px face has 1.8px of air on each side, so -6px left barely 2px of overlap and the faces read as
+   separate squares (user, 2026-09-19). About a quarter of a face now sits under the next one, and each face
+   carries a hairline so two filled mascots stay separate shapes. The hairline is a translucent tint rather than
+   the surface colour, because this stack appears on four different backgrounds and a solid cut-out would show as a
+   wrong-coloured halo on three of them. */
 .composer-to-avatars { display:flex; align-items:center; flex-shrink:0; }
-.composer-to-avatars .avatar { transform:scale(.85); }
-.composer-to-avatars .avatar + .avatar { margin-left:-6px; }
+.composer-to-avatars .avatar { transform:scale(.85); box-shadow:0 0 0 1.5px color-mix(in srgb, var(--text) 10%, transparent); }
+.composer-to-avatars .avatar + .avatar { margin-left:-9px; }
+.composer-to-avatars .avatar.xs + .avatar.xs { margin-left:-7px; }
 .roster-more { margin-left:1px; font-size:11px; font-weight:500; color:var(--muted); }
 .composer-to-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:500; color:var(--muted); }
 .composer-to:hover .composer-to-name { color:var(--text); }
