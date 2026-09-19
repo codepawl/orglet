@@ -35,10 +35,13 @@ export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, 
 }
 
 /** Overlapping worker faces for a team chat header or empty thread. */
-export function RosterAvatars({ workers, size = 'xs' }: { workers: readonly Worker[]; size?: 'xs' | 'sm' }) {
+export function RosterAvatars({ workers, size = 'xs', max = 4 }: { workers: readonly Worker[]; size?: 'xs' | 'sm'; max?: number }) {
   if (!workers.length) return null;
+  const shown = workers.slice(0, max);
+  const rest = workers.length - shown.length;
   return <span className="composer-to-avatars">
-    {workers.map(worker => <Avatar key={worker.id} name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />)}
+    {shown.map(worker => <Avatar key={worker.id} name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />)}
+    {rest > 0 && <span className="roster-more" aria-hidden="true">+{rest}</span>}
   </span>;
 }
 

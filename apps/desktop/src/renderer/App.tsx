@@ -1,6 +1,6 @@
 import { RevisionEditor } from './components/RevisionEditor';
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowLeft, ChevronRight, BookOpen, Download, FileText, PanelLeft, Pencil, Plus, Search, Settings2, SlidersHorizontal, Sparkles, CalendarClock, Wallet, X, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { emptyConnections, isPaidApi, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
@@ -47,6 +47,24 @@ function writeSeenStorage(value: Record<string, SeenInfo>) {
   try { localStorage.setItem(seenStorageKey, JSON.stringify(value)); } catch { /* ignore quota */ }
 }
 
+const sidebarWidthKey = 'orglet.sidebar-width';
+const SIDEBAR_WIDTH = { min: 190, max: 420, default: 228, step: 16 };
+const clampSidebarWidth = (width: number) => Math.min(SIDEBAR_WIDTH.max, Math.max(SIDEBAR_WIDTH.min, Math.round(width)));
+
+/** The gap the shell leaves around its panels, so a drag can turn a pointer position into a panel width. */
+function shellGap(): number {
+  return Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--shell-gap')) || 8;
+}
+
+function readSidebarWidth(): number {
+  try {
+    const stored = Number(localStorage.getItem(sidebarWidthKey));
+    return stored ? clampSidebarWidth(stored) : SIDEBAR_WIDTH.default;
+  } catch {
+    return SIDEBAR_WIDTH.default;
+  }
+}
+
 type Panel = 'task' | 'revision' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | 'sources' | null;
 export function App() {
   useLanguage();
@@ -66,6 +84,8 @@ export function App() {
     routineDirty.current = false; then();
   };
   const [sourceTarget, setSourceTarget] = useState<SourceTarget>();
+  // Chat details list the team behind a team chat; a worker chat has none.
+  const detailTeam = detail ? workspace?.teams.find(team => team.id === detail.task.teamId) : undefined;
   const openSources = (target?: SourceTarget) => { setSourceTarget(target); setPanel('sources'); };
   
   const [panel, setPanel] = useState<Panel>(null); const [editingWorker, setEditingWorker] = useState<Worker>(); const [editingTask, setEditingTask] = useState<string>(); const [editingSkill, setEditingSkill] = useState<Skill>();
@@ -73,7 +93,36 @@ export function App() {
   const openKnowledge = (item?: Knowledge) => { setEditingKnowledge(item); setPanel('knowledge'); };
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
   const openSettings = (tab: SettingsTab = 'general') => { setSettingsTab(tab); setPanel('settings'); };
+  // Chat details sit in the shell next to the conversation, not over it.
+  const detailsOpen = panel === 'activity';
+  const detailsOpenRef = useRef(detailsOpen); detailsOpenRef.current = detailsOpen;
   const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth); const [resizing, setResizing] = useState(false);
+  const rememberSidebarWidth = (width: number) => {
+    setSidebarWidth(width);
+    try { localStorage.setItem(sidebarWidthKey, String(width)); } catch { /* ignore quota */ }
+  };
+  // Dragging tracks the pointer; the width is the distance from the window edge minus the gap the panel sits in.
+  const dragSidebar = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setResizing(true);
+  };
+  const moveSidebar = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!resizing) return;
+    rememberSidebarWidth(clampSidebarWidth(event.clientX - shellGap()));
+  };
+  const endSidebarDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!resizing) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    setResizing(false);
+  };
+  const resizeSidebarByKey = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const keys: Record<string, number> = { ArrowLeft: -SIDEBAR_WIDTH.step, ArrowRight: SIDEBAR_WIDTH.step };
+    if (event.key in keys) { event.preventDefault(); rememberSidebarWidth(clampSidebarWidth(sidebarWidth + keys[event.key])); return; }
+    if (event.key === 'Home') { event.preventDefault(); rememberSidebarWidth(SIDEBAR_WIDTH.min); return; }
+    if (event.key === 'End') { event.preventDefault(); rememberSidebarWidth(SIDEBAR_WIDTH.max); }
+  };
   const [dismissedCatchUpNotice, setDismissedCatchUpNotice] = useState('');
   const composer = useRef<HTMLTextAreaElement>(null); const refreshId = useRef(0);
   const bootedLiveThread = useRef(false);
@@ -180,6 +229,8 @@ export function App() {
         else if (workerId) openWorker(workerId);
       }
       if (event.ctrlKey && event.key.toLowerCase() === 'k') { event.preventDefault(); setSearchOpen(true); }
+      // The details panel is part of the page, not a dialog, so Escape has to close it here.
+      if (event.key === 'Escape' && detailsOpenRef.current) { event.preventDefault(); setPanel(null); }
     };
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
   }, [teamId, workerId, workspace]);
@@ -261,7 +312,7 @@ export function App() {
         label: item.name,
         detail: t('{0} nhân viên', [members.length]),
         group: t('Nhóm'),
-        icon: <Avatar name={item.name} seed={item.id} size="xs" />,
+        icon: <RosterAvatars workers={members} max={3} />,
         ...(available ? {} : { dimmed: true, badge: unavailable }),
       };
     }),
@@ -315,20 +366,20 @@ export function App() {
     trailing={recipientOptions.length > 0 ? <Select className="composer-to-select" ariaLabel={t('Đang nhắn với {0}', [team?.name ?? worker?.name ?? t('Nhân viên')])} value={recipientValue} onChange={pickRecipient} showDetail={false} menuMinWidth={280} options={recipientOptions} /> : undefined}
     attachments={sources.length > 0 ? sources.map(source => <span className="attachment" key={source.id}><FileText size={14} /><span>{source.name}</span><button type="button" aria-label={t('Bỏ {0}', [source.name])} onClick={() => { setSources(sources.filter(s => s.id !== source.id)); }}><X size={14} /></button></span>) : undefined} />;
   const composerHint = isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}<button onClick={() => { if (team) { setEditingTeam(team); setPanel('team'); } else { setEditingWorker(worker); setPanel('worker'); } }}>{team ? t('Thiết lập nhóm') : t('Đổi model')}</button></p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p> : null;
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}`}>
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
+    {sidebar && <button type="button" className="sidebar-resizer" role="separator" aria-orientation="vertical"
+      aria-label={t('Kéo để đổi độ rộng thanh bên')} aria-valuenow={sidebarWidth} aria-valuemin={SIDEBAR_WIDTH.min} aria-valuemax={SIDEBAR_WIDTH.max}
+      onPointerDown={dragSidebar} onPointerMove={moveSidebar} onPointerUp={endSidebarDrag} onPointerCancel={endSidebarDrag}
+      onKeyDown={resizeSidebarByKey} onDoubleClick={() => rememberSidebarWidth(SIDEBAR_WIDTH.default)} />}
     {sidebar && <aside className="sidebar" aria-label={t('Điều hướng')}>
       <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong><Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button><Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={() => setSidebar(false)}><PanelLeft size={18} /></Button></div>
       <div className="sidebar-scroll">
       
       <SidebarSection id="teams" title={t('Nhóm')} action={<Button size="icon" className="row-action" aria-label={t('Tạo nhóm')} onClick={() => { setEditingTeam(undefined); setPanel('team'); }}><Plus size={16} /></Button>}>
-        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} name={item.name} avatar={<Avatar name={item.name} seed={item.id} size="sm" />} active={teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id)} status={teamStatus(item)} onSelect={() => openTeam(item.id)} expandOnSelect reorder={teamOrder.bind(item.id)} expandLabel={t('Xem nhân viên của {0}', [item.name])}
-          menu={<RowMenu label={t('Tùy chọn nhóm {0}', [item.name])} items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingTeam(item); setPanel('team'); } }, { label: t('Xuất template'), icon: Download, onSelect: () => action(() => orglet.exportTemplate(item.id)) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('team', item.id, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEntity('team', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}>
-          <ShowMore items={teamRoster(item, workspace.workers)} empty={t('Nhóm chưa có nhân viên.')} render={member => {
-            const mark = workerStatus(member.id);
-            return <div key={member.id} className="tree-leaf roster"><StatusMark variant={mark.variant} tone={mark.tone} label={statusMarkLabel(mark)} decorative /><Avatar name={member.name} seed={member.id} emoji={member.avatar?.emoji} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xs" badge={member.provider === 'demo' ? undefined : <ProviderMark provider={member.provider} size="small" decorative />} /><span className="row-name">{member.name}</span>{member.id === item.synthesizerId && <small>{t('tổng hợp')}</small>}</div>;
-          }} />
-        </SidebarTreeRow>)}{!workspace.teams.length && <p className="empty-history">{t('Chưa có nhóm.')}</p>}
+        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} name={item.name} avatar={<RosterAvatars workers={teamRoster(item, workspace.workers)} size="sm" max={2} />} active={teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id)} status={teamStatus(item)} onSelect={() => openTeam(item.id)} reorder={teamOrder.bind(item.id)}
+          menu={<RowMenu label={t('Tùy chọn nhóm {0}', [item.name])} items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingTeam(item); setPanel('team'); } }, { label: t('Xuất template'), icon: Download, onSelect: () => action(() => orglet.exportTemplate(item.id)) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('team', item.id, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteEntity('team', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />} />
+        )}{!workspace.teams.length && <p className="empty-history">{t('Chưa có nhóm.')}</p>}
         <ArchivedList count={workspace.archivedTeams.length}>{workspace.archivedTeams.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('team', item.id, false)} onDelete={() => deleteEntity('team', item.id)} />)}</ArchivedList>
       </SidebarSection>
       <SidebarSection id="workers" title={t('Nhân viên')} action={<Button size="icon" className="row-action" aria-label={t('Tạo nhân viên')} onClick={() => { setEditingWorker(undefined); setPanel('worker'); }}><Plus size={16} /></Button>}>
@@ -345,7 +396,7 @@ export function App() {
       <header className="topbar">
         <div>
           <span>{selected ? (detail && assigneeLabel(detail.task, workspace, { all: t('Toàn bộ nhân viên'), many: count => t('{0} nhân viên', [count]) })) ?? team?.name ?? t('Công việc') : team?.name ?? worker?.name ?? 'Orglet'}</span>
-          {team && <span className="topbar-roster" title={roster.map(member => member.name).join(', ')}><RosterAvatars workers={roster} /></span>}
+          {team && <span className="topbar-roster" title={roster.map(member => member.name).join(', ')}><RosterAvatars workers={roster} max={2} /></span>}
           {(selected ? detail?.runs.every(run => run.snapshot.worker.provider === 'demo') : isDemo) && <span className="badge">Demo</span>}
         </div>
         <div className="topbar-actions">
@@ -359,8 +410,8 @@ export function App() {
       {selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} action={action} showSources={openSources} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openRevision={() => setPanel('revision')} openSettings={tab => openSettings(tab ?? 'connections')} action={action} /></> : <div className="loading" role="status">{t('Đang mở cuộc trò chuyện…')}</div>}</> : (team || worker) ? <div className="team-chat">
         <div className="thread-scroll">
           <div className="thread-content team-chat-empty">
-            <h1 className="welcome">{chatHeadingBefore}<span className="welcome-who">{team ? <RosterAvatars workers={roster} size="sm" /> : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" /> : null}{chatName}</span>{chatHeadingAfter}</h1>
-            {team && <p className="muted" aria-label={t('Nhân viên của {0}', [team.name])}>{roster.map(member => member.name).join(', ')}</p>}
+            <h1 className="welcome">{chatHeadingBefore}<span className="welcome-who">{team ? <RosterAvatars workers={roster} size="sm" max={2} /> : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" /> : null}{chatName}</span>{chatHeadingAfter}</h1>
+
             {worker && !team && <ul className="suggestions" aria-label={t('Gợi ý')}>
               <li><button type="button" onClick={() => { setBrief(t('Đọc các tài liệu đã chọn, tóm tắt những điểm chính và chỉ rõ phần còn thiếu bằng chứng.')); composer.current?.focus(); }}><BookOpen size={18} />{t('Tóm tắt tài liệu')}</button></li>
               <li><button type="button" onClick={() => { setBrief(t('Review các tệp đã chọn. Tìm vấn đề có bằng chứng, nêu phạm vi đã kiểm tra và các giới hạn. Không thực thi code.')); composer.current?.focus(); }}><Sparkles size={18} />{t('Review có bằng chứng')}</button></li>
@@ -376,7 +427,20 @@ export function App() {
       </div> : null}
       <footer className="main-footer">{t('Orglet không đảm bảo câu trả lời luôn chính xác. Hãy kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
     </main>
-    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở. Máy tắt không làm lịch biến mất: các lần lỡ gộp thành một lần chạy bù.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được. Gói nhập từ thư mục cần được review trước khi gắn cho nhân viên.') : t('Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><CalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><Button size="icon" aria-label={t('Quay lại danh sách lịch')} onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}><ArrowLeft size={18} /></Button><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? editingSkill?.package ? 'Review skill' : t('Chỉnh skill') : panel === 'knowledge' ? editingKnowledge ? 'Knowledge' : t('Knowledge mới') : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
+    {detailsOpen && detail && <aside className="details-pane" aria-label={t('Chi tiết')}>
+      <div className="details-head"><h2>{t('Chi tiết')}</h2><Button size="icon" aria-label={t('Đóng panel')} onClick={close}><X size={18} /></Button></div>
+      <div className="details-body">
+        <div className="form">
+          {detailTeam && <section className="details-roster"><h3>{t('Thành viên')}</h3>
+            <ShowMore items={teamRoster(detailTeam, workspace.workers)} empty={t('Nhóm chưa có nhân viên.')} render={member => {
+              const mark = workerStatus(member.id);
+              return <div key={member.id} className="tree-leaf roster"><StatusMark variant={mark.variant} tone={mark.tone} label={statusMarkLabel(mark)} decorative /><Avatar name={member.name} seed={member.id} emoji={member.avatar?.emoji} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xs" badge={member.provider === 'demo' ? undefined : <ProviderMark provider={member.provider} size="small" decorative />} /><span className="row-name">{member.name}</span>{member.id === detailTeam.synthesizerId && <small>{t('tổng hợp')}</small>}</div>;
+            }} />
+          </section>}
+          <p>{statusLabel[detail.task.status]}</p>{detail.usage.inputTokens + detail.usage.outputTokens > 0 && <p className="muted">{t('Đã dùng {0} token', [(detail.usage.inputTokens + detail.usage.outputTokens).toLocaleString(currentLocale())])}</p>}{detail.runs.map(run => <section key={run.id}><h3>{run.snapshot.worker.name}{run.stage === 'plan' ? t(' (phân việc)') : run.stage === 'synthesis' ? t(' (tổng hợp)') : ''} · v{run.snapshot.worker.revision}</h3><p className="muted">Skill v{run.snapshot.skill.revision} · {run.snapshot.worker.provider}</p><code className="hash">{run.id}</code><p className="muted">{run.snapshot.model}</p>{run.snapshot.plan && <ul>{run.snapshot.plan.assignments.map(assignment => <li key={assignment.workerId}>{detail.runs.find(item => item.stage === 'member' && item.snapshot.worker.id === assignment.workerId)?.snapshot.worker.name ?? assignment.workerId}: {assignment.brief}</li>)}</ul>}{detail.artifacts.filter(artifact => artifact.runId === run.id).map(artifact => <details key={artifact.id}><summary>{t('{0} · xem báo cáo', [tMessage(artifact.report.title)])}</summary><p className="prose">{tMessage(artifact.report.summary)}</p>{artifact.report.findings.map((finding, index) => <section key={index}><h4>{finding.title}</h4><p className="prose">{finding.detail}</p><p className="muted">{finding.coverage}</p></section>)}<ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul><Button onClick={() => action(() => orglet.exportArtifact(artifact.id))}>{t('Xuất báo cáo này')}</Button></details>)}<ContextManifestView run={run} workspace={workspace} /><ol className="activity">{detail.events.filter(event => event.runId === run.id).map(event => <li key={event.id}><time>{new Date(event.createdAt).toLocaleTimeString(currentLocale())}</time><span>{tMessage(event.message)}</span></li>)}</ol></section>)}<Button variant="outline" onClick={() => openSources()}><FileText size={16} />{t('Xem nguồn')}</Button></div>
+      </div>
+    </aside>}
+    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở. Máy tắt không làm lịch biến mất: các lần lỡ gộp thành một lần chạy bù.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được. Gói nhập từ thư mục cần được review trước khi gắn cho nhân viên.') : t('Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><CalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><Button size="icon" aria-label={t('Quay lại danh sách lịch')} onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}><ArrowLeft size={18} /></Button><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? editingSkill?.package ? 'Review skill' : t('Chỉnh skill') : panel === 'knowledge' ? editingKnowledge ? 'Knowledge' : t('Knowledge mới') : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
       {panel === 'revision' && detail && <RevisionEditor key={`${detail.task.id}:${detail.task.inputRevision ?? 0}`} detail={detail} workspace={workspace} connections={ready} done={close} />}
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
@@ -387,7 +451,6 @@ export function App() {
         <div id="library-panel" role="tabpanel" aria-labelledby={`library-tab-${libraryTab}`}>{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} onOpen={skill => { setEditingSkill(skill); setPanel('skill'); }} /> : <KnowledgeLibrary workspace={workspace} onOpen={openKnowledge} />}</div>
       </div>}
       {panel === 'knowledge' && <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={close} />}
-      {panel === 'activity' && detail && <div className="form"><p>{statusLabel[detail.task.status]}</p>{detail.runs.map(run => <section key={run.id}><h3>{run.snapshot.worker.name}{run.stage === 'plan' ? t(' (phân việc)') : run.stage === 'synthesis' ? t(' (tổng hợp)') : ''} · v{run.snapshot.worker.revision}</h3><p className="muted">Skill v{run.snapshot.skill.revision} · {run.snapshot.worker.provider}</p><code className="hash">{run.id}</code><p className="muted">{run.snapshot.model}</p>{run.snapshot.plan && <ul>{run.snapshot.plan.assignments.map(assignment => <li key={assignment.workerId}>{detail.runs.find(item => item.stage === 'member' && item.snapshot.worker.id === assignment.workerId)?.snapshot.worker.name ?? assignment.workerId}: {assignment.brief}</li>)}</ul>}{detail.artifacts.filter(artifact => artifact.runId === run.id).map(artifact => <details key={artifact.id}><summary>{t('{0} · xem báo cáo', [tMessage(artifact.report.title)])}</summary><p className="prose">{tMessage(artifact.report.summary)}</p>{artifact.report.findings.map((finding, index) => <section key={index}><h4>{finding.title}</h4><p className="prose">{finding.detail}</p><p className="muted">{finding.coverage}</p></section>)}<ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul><Button onClick={() => action(() => orglet.exportArtifact(artifact.id))}>{t('Xuất báo cáo này')}</Button></details>)}<ContextManifestView run={run} workspace={workspace} /><ol className="activity">{detail.events.filter(event => event.runId === run.id).map(event => <li key={event.id}><time>{new Date(event.createdAt).toLocaleTimeString(currentLocale())}</time><span>{tMessage(event.message)}</span></li>)}</ol></section>)}<Button variant="outline" onClick={() => openSources()}><FileText size={16} />{t('Xem nguồn')}</Button></div>}
       {panel === 'sources' && detail && <SourcePanel detail={detail} target={sourceTarget} refresh={() => void refresh()} />}
     </Drawer>
     <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}`} open={panel === 'worker'} worker={editingWorker} workspace={workspace} connections={connections} harnesses={harnesses} onClose={close} />

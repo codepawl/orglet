@@ -45,8 +45,9 @@ try {
   const taskId = state.tasks[0].id; assert.equal(state.tasks[0].accepted, false);
   await page.screenshot({ path: join(output, 'desktop-report.png') });
   await page.getByRole('button', { name: 'Chi tiết', exact: true }).click();
-  await page.getByRole('dialog').waitFor(); await page.keyboard.press('Escape');
-  assert.equal(await page.getByRole('dialog').count(), 0);
+  const details = page.getByRole('complementary', { name: 'Chi tiết' });
+  await details.waitFor(); await page.keyboard.press('Escape');
+  assert.equal(await details.count(), 0);
   await page.waitForFunction(() => document.activeElement?.textContent === 'Chi tiết');
   await page.getByRole('button', { name: '1 nguồn', exact: true }).click();
   await page.getByRole('button', { name: 'Đọc nội dung', exact: true }).click();

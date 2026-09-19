@@ -8,9 +8,11 @@
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
   --primary:#171717; --primary-text:#fff; --error:#a82626; --success:#2e7a32; --working:#9a7b2f; --row-hover:#efeff0; --row-active:#e5e5e7; --focus:#576b99;
   --control-height: 34px; --icon-size: 32px; --radius: 9px; --page-x: 20px; --chrome-y: 12px; --sidebar-width: 228px;
+  /* Panels are rounded cards sitting apart on the window background (user, 2026-09-19). */
+  --window:#e3e3e6; --panel-radius: 16px; --shell-gap: 8px; --details-width: 320px; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
 }
-:root[data-theme=dark] { color-scheme:dark; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#222222; --row-active:#2e2e2e; --focus:#a6c1ff; }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#222222; --row-active:#2e2e2e; --focus:#a6c1ff; } }
+:root[data-theme=dark] { color-scheme:dark; --window:#0b0b0b; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#222222; --row-active:#2e2e2e; --focus:#a6c1ff; }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#0b0b0b; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#222222; --row-active:#2e2e2e; --focus:#a6c1ff; } }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
 button,input,textarea,select { font:inherit; color:inherit; }
@@ -33,16 +35,31 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .button-primary:hover:not(:disabled) { background:var(--primary); opacity:.85; }
 .button-outline { border-color:var(--border); }
 .button-icon { width:var(--icon-size); height:var(--icon-size); min-height:var(--icon-size); padding:6px; flex-shrink:0; }
-.app { display:grid; grid-template-columns:var(--sidebar-width) minmax(0,1fr); grid-template-rows:minmax(0,1fr); height:100dvh; overflow:hidden; }
+.app { position:relative; display:grid; grid-template-columns:var(--sidebar-width) minmax(0,1fr); grid-template-rows:minmax(0,1fr); gap:var(--shell-gap); height:100dvh; padding:var(--shell-gap); background:var(--window); overflow:hidden; }
+/* Drag handle in the gap between the panels; the bar only shows on hover, on focus and while dragging. */
+.sidebar-resizer { position:absolute; top:var(--shell-gap); bottom:var(--shell-gap); left:calc(var(--shell-gap) + var(--sidebar-width) + var(--shell-gap) / 2); width:11px; transform:translateX(-50%); padding:0; border:0; background:transparent; cursor:col-resize; touch-action:none; }
+.sidebar-resizer::after { content:''; display:block; width:3px; height:100%; margin:0 auto; border-radius:999px; background:transparent; transition:background .12s; }
+.sidebar-resizer:hover::after,.sidebar-resizer:focus-visible::after,.app.resizing .sidebar-resizer::after { background:color-mix(in srgb, var(--text) 22%, transparent); }
+.sidebar-resizer:focus-visible { outline:none; }
+.app.resizing { cursor:col-resize; user-select:none; }
 .app.sidebar-hidden { grid-template-columns:56px minmax(0,1fr); }
+/* Chat details are a third panel in the shell, the same card as the sidebar (user, 2026-09-19). */
+.app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr) var(--details-width); }
+.app.sidebar-hidden.with-details { grid-template-columns:56px minmax(0,1fr) var(--details-width); }
+.details-pane { display:flex; flex-direction:column; min-height:0; background:var(--sidebar); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); overflow:hidden; }
+.details-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:12px 10px 8px 16px; }
+.details-head h2 { font-size:15px; font-weight:600; }
+.details-body { flex:1; min-height:0; overflow:auto; padding:0 16px 16px; }
+.details-body .form { gap:14px; }
+@media(max-width:1000px) { .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr); } .details-pane { display:none; } }
 .sidebar-rail { display:flex; flex-direction:column; align-items:center; gap:6px; padding:17px 0 16px; background:transparent; }
-.sidebar { background:var(--sidebar); padding:14px 10px 10px; display:flex; flex-direction:column; overflow:hidden; }
+.sidebar { background:var(--sidebar); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); padding:14px 10px 10px; display:flex; flex-direction:column; overflow:hidden; }
 .brand { display:flex; align-items:center; gap:8px; padding:0 6px 14px; }
 .brand strong { font-size:18px; font-weight:600; letter-spacing:-.5px; }
 .brand strong { margin-right:auto; }
 .brand .button { margin-left:-4px; }
-.orglet-mark { display:inline-flex; align-items:center; justify-content:center; border:2px solid var(--text); border-radius:10px 10px 10px 3px; width:29px; height:29px; font-size:0; position:relative; flex-shrink:0; }
-.orglet-mark::before { content:''; width:8px; height:8px; border:2px solid var(--text); border-radius:50%; }
+.orglet-mark { display:inline-flex; align-items:center; justify-content:center; border:2px solid var(--text); background:var(--text); border-radius:10px 10px 10px 3px; width:29px; height:29px; font-size:0; position:relative; flex-shrink:0; }
+.orglet-mark::before { content:''; width:8px; height:8px; border:2px solid var(--bg); border-radius:50%; }
 .orglet-mark.large { width:42px; height:42px; border-radius:14px 14px 14px 4px; margin-bottom:24px; }
 .orglet-mark.large::before { width:13px; height:13px; }
 .orglet-mark.small { width:25px; height:25px; border-radius:8px 8px 8px 3px; }
@@ -108,7 +125,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .sidebar-scroll .history:has(>.section-items[hidden]) { min-height:0; }
 .sidebar-footer>.button { justify-content:flex-start; }
 .sidebar-footer .status-mark { margin-left:auto; }
-.main-pane { min-width:0; min-height:0; display:flex; flex-direction:column; position:relative; }
+.main-pane { min-width:0; min-height:0; display:flex; flex-direction:column; position:relative; background:var(--bg); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); overflow:hidden; }
 .topbar { display:flex; align-items:center; justify-content:space-between; padding:var(--chrome-y) var(--page-x); min-height:56px; gap:10px; }
 .topbar>div { display:flex; align-items:center; gap:10px; min-width:0; }
 .topbar>div>span:first-of-type { font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; }
@@ -126,7 +143,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .welcome { text-align:center; font-size:1.5rem; font-weight:400; letter-spacing:-.3px; margin-bottom:22px; }
 /* Empty chat: avatar sits with the worker/team name, not in front of the whole heading. */
 .team-chat-empty .welcome { text-box:trim-both cap alphabetic; }
-.welcome-who { display:inline-flex; align-items:safe center; gap:8px; vertical-align:middle; }
+/* The line box sits lower than the cap height of the heading, so lift the faces onto the text centre. */
+.welcome-who { position:relative; top:-0.1em; display:inline-flex; align-items:safe center; gap:8px; vertical-align:middle; }
 /* Prompt bar: a one-line pill (add · input · [who] · send) that grows into a box when the text wraps or sources are attached. */
 .composer { position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"lead input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--border-subtle); border-radius:24px; background:var(--bg); box-shadow:0 2px 12px #00000008; }
 .composer.has-trailing { grid-template-columns:auto minmax(0,1fr) auto auto; grid-template-areas:"lead input trail send"; }
@@ -166,7 +184,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 }
 .composer-to:hover { background:var(--surface); }
 .composer-to-avatars { display:flex; align-items:center; flex-shrink:0; }
-.composer-to-avatars .avatar + .avatar { margin-left:-7px; box-shadow:0 0 0 1.5px var(--bg); }
+/* Filled mascots read on their own, so members sit side by side instead of overlapping behind a ring. */
+.composer-to-avatars .avatar + .avatar { margin-left:3px; }
+.roster-more { margin-left:3px; font-size:11px; font-weight:500; color:var(--muted); }
 .composer-to-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:500; color:var(--muted); }
 .composer-to:hover .composer-to-name { color:var(--text); }
 .suggestions { list-style:none; margin:22px 0 0; padding:0 8px; display:flex; flex-direction:column; gap:2px; }
@@ -241,6 +261,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .startup { height:100dvh; text-align:center; }
 /* Former side panels open as centred dialogs, matching Settings. */
 .drawer { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:11; width:min(640px, calc(100vw - 32px)); max-height:min(720px, calc(100dvh - 32px)); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; }
+.details-roster h3 { margin-bottom:6px; font-size:14px; }
+.details-roster .tree-leaf { padding-left:0; }
 .drawer-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px 24px; }
 .drawer-header h2 { font-size:18px; font-weight:600; }
 .drawer-body { padding:18px 24px 24px; overflow:auto; }
@@ -476,7 +498,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 10px 21px; padding-left:8px; }
 .tree-children[hidden] { display:none; }
 .tree-leaf { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; padding:6px 10px; border:0; border-radius:10px; background:transparent; font-size:13px; text-align:left; }
-.tree-leaf svg { color:var(--muted); flex-shrink:0; }
+/* Row icons are muted, but an avatar keeps its own colour. */
+.tree-leaf svg:not(.mascot) { color:var(--muted); }
+.tree-leaf svg { flex-shrink:0; }
 .tree-leaf .status-mark svg { color:inherit; }
 .tree-leaf .row-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .tree-leaf small { margin-left:auto; color:var(--muted); font-size:11px; white-space:nowrap; }
@@ -606,7 +630,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .row-disclosure { display:flex; align-items:center; gap:0; height:34px; margin-left:2px; padding:0 2px; border:0; border-radius:8px; background:transparent; color:var(--muted); flex-shrink:0; }
 .row-disclosure .disclosure-chevron { flex-shrink:0; width:0; margin-right:0; opacity:0; transition:width .15s ease, margin-right .15s ease, opacity .12s, transform .15s; }
 .worker-row:hover .disclosure-chevron,.row-disclosure:focus-visible .disclosure-chevron,.tree-item.open .disclosure-chevron,.tree-item.dragging .disclosure-chevron { width:14px; margin-right:4px; opacity:1; }
-.tree-item.open .disclosure-chevron { transform:rotate(90deg); }
 .tree-leaf .avatar { margin-right:2px; }
 .tree-item.dragging .disclosure-chevron { transform:none; }
 .avatar.xl { width:56px; height:56px; border-radius:16px; font-size:22px; }
@@ -642,15 +665,15 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .mascot-choice { width:40px; height:40px; background:color-mix(in srgb, var(--row-hover) 70%, transparent); }
 .mascot-choice .mascot { width:34px; height:34px; margin-top:4px; }
 .mascot-auto { font-size:16px; color:var(--muted); }
-/* Logo-style mascots: ink in the avatar colour, bubble filled with the page ground. */
-.avatar.has-mascot { color:color-mix(in srgb, var(--avatar-color) 78%, var(--text)); --mascot-fill:var(--bg); }
+/* Logo-style mascots: the bubble is filled with the avatar colour, the face is drawn in the page ground. */
+.avatar.has-mascot { color:color-mix(in srgb, var(--avatar-color) 78%, var(--text)); --mascot-fill:currentColor; --mascot-ink:var(--bg); }
 .avatar.has-mascot .mascot { width:100%; height:100%; margin-top:0; }
-.mascot-choice { color:color-mix(in srgb, var(--text) 80%, transparent); --mascot-fill:var(--bg); }
+.mascot-choice { color:color-mix(in srgb, var(--text) 80%, transparent); --mascot-fill:currentColor; --mascot-ink:var(--bg); }
 .mascot-choice .mascot { width:32px; height:32px; margin-top:0; }
 /* No avatar tile (user decision 2026-09-17): mascots and emoji stand on their own; letters keep a thin ring in their colour. */
 .avatar { background:transparent; }
 .avatar:not(.has-mascot):not(.emoji) { box-shadow:inset 0 0 0 1.5px color-mix(in srgb, var(--avatar-color) 55%, transparent); }
-.avatar.has-mascot .mascot { width:112%; height:112%; }
+.avatar.has-mascot .mascot { width:112%; height:112%; transform:translateY(-3%); }
 /* Mascots sit centred on the text line: no clipping of the enlarged art (user feedback 2026-09-17). */
 .avatar.has-mascot .avatar-face { overflow:visible; }
 /* Sidebar hierarchy: section headings sit furthest left, their rows one step in, and nested rows further in (user feedback 2026-09-17). */

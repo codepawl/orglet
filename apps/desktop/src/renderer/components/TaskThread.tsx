@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FileText, Check, RotateCcw, Square } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus } from '../../shared/contracts';
 import { Button } from './ui';
@@ -27,7 +27,7 @@ type Turn = { revision: number; runs: Run[]; brief: string; sourceCount: number;
 /**
  * A task shown as one chat (user decision 2026-09-17): every message the user sent, oldest first, each followed by the
  * worker's answer. Answers are normal messages; a structured report is shown only when one was asked for or a team
- * checklist requires it. Run controls and token usage belong to the latest turn only; dollar cost sits next to Chi tiết.
+ * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 export function TaskThread({ detail, action, showSources, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
@@ -62,12 +62,12 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
         const failedNames = [...new Set(turn.runs.filter(item => item.stage === 'member' && item.error && item.error !== UNASSIGNED_PLAN_ERROR).map(item => item.snapshot.worker.name))];
         return <div className="chat-turn" key={turn.revision}>
           <div className="user-message"><p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>{turn.sourceCount > 0 && <Button onClick={() => showSources()}><FileText size={16} />{t('{0} nguồn', [turn.sourceCount])}</Button>}</div>
-          {turn.replies.map((reply, index) => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
+          {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
             <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />
             {reply.artifact.report.format === 'chat'
-              ? <ChatReply artifact={reply.artifact} action={action} usage={latest && index === turn.replies.length - 1 ? <TaskUsage detail={detail} /> : undefined} />
-              : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} usage={latest && index === turn.replies.length - 1 ? <TaskUsage detail={detail} className="message-usage thread-usage" /> : undefined} />}
+              ? <ChatReply artifact={reply.artifact} action={action} />
+              : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
           </section>)}
           {(!turn.replies.length || (latest && (busy || headline?.error || detail.task.status !== 'completed'))) && <section className="assistant-message" aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
             {liveUpdate ? byline(thinkingRun) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
@@ -82,11 +82,10 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
             {!turn.artifact && !turn.replies.length && !(latest && busy) && !(latest && headline?.error) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
             {turn.artifact && !turn.replies.length && <FinishedActivity steps={savedSteps(detail.events, turn.artifact.runId)} />}
             {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
-              ? <ChatReply artifact={turn.artifact} action={action} usage={latest ? <TaskUsage detail={detail} /> : undefined} />
-              : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} usage={latest ? <TaskUsage detail={detail} className="message-usage thread-usage" /> : undefined} />)}
+              ? <ChatReply artifact={turn.artifact} action={action} />
+              : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
-            {latest && headline?.error && detail.task.status !== 'paused' && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{headline.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(headline.error)]) : tMessage(headline.error)}</p></div>}
-            {latest && !turn.replies.length && !turn.artifact && <TaskUsage detail={detail} className="message-usage thread-usage" />}
+            {latest && headline?.error && detail.task.status !== 'paused' && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{headline.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(headline.error)]) : tMessage(headline.error)}</p></div>}
             {latest && <div className="actions">
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
               {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}
@@ -126,18 +125,11 @@ function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
   return <div className="finished-activity"><ActivityGroup steps={steps} folded /></div>;
 }
 
-function ChatReply({ artifact, action, usage }: { artifact: Artifact; action: (fn: () => Promise<unknown>) => void; usage?: ReactNode }) {
+function ChatReply({ artifact, action }: { artifact: Artifact; action: (fn: () => Promise<unknown>) => void }) {
   return <div className="chat-reply">
     <Markdown className="prose" text={tMessage(artifact.report.summary)} />
-    <div className="message-actions"><ArtifactActions artifactId={artifact.id} action={action} />{usage}</div>
+    <div className="message-actions"><ArtifactActions artifactId={artifact.id} action={action} /></div>
   </div>;
-}
-
-/** Token usage for the latest turn — dollars stay next to Chi tiết, not here. */
-function TaskUsage({ detail, className = 'message-usage' }: { detail: TaskDetail; className?: string }) {
-  const tokens = detail.usage.inputTokens + detail.usage.outputTokens;
-  if (tokens <= 0) return null;
-  return <span className={className} role="status">{t('Đã dùng {0} token', [tokens.toLocaleString(currentLocale())])}</span>;
 }
 
 /** Copy and download for an answer or document, in the format the user picks or saved as default. */
@@ -152,7 +144,7 @@ function ArtifactActions({ artifactId, action }: { artifactId: string; action: (
  * A structured report is sent like a file a colleague attaches (user decision 2026-09-17): a quiet file card in the chat
  * that opens in a macOS-style document viewer. The Demo sample has no summary worth showing, only its limits.
  */
-function ReportView({ artifact, author, latest, busy, detail, action, showSources, usage }: { artifact: Artifact; author?: Run; latest: boolean; busy: boolean; detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; usage?: ReactNode }) {
+function ReportView({ artifact, author, latest, busy, detail, action, showSources }: { artifact: Artifact; author?: Run; latest: boolean; busy: boolean; detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void }) {
   const [open, setOpen] = useState(false);
   const report = artifact.report;
   const sample = author?.snapshot.worker.provider === 'demo';
@@ -162,8 +154,7 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   // Evidence links leave the document for the sources panel.
   const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
   return <>
-    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
-    {usage}
+    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}
       <ArtifactActions artifactId={artifact.id} action={action} />
