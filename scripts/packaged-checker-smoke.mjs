@@ -27,14 +27,14 @@ try {
   });
   assert.equal(result.profile.datasets[0].rows, 3); assert.equal(result.profile.datasets[0].id.duplicateNonNull, 1);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
-  await page.getByRole('button', { name: 'Tùy chọn nhóm Eris Review', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Tùy chọn nhóm Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
+  await page.getByRole('button', { name: 'Tùy chọn hội Eris Review', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Tùy chọn hội Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
   await page.getByRole('tab', { name: 'Checklist', exact: true }).click();
   assert.equal(await page.getByLabel(/^Tên mục \d+$/).count(), 5);
   await page.getByLabel('Tên mục 1', { exact: true }).fill('Mục tiêu và GPU relevance');
   await page.getByRole('button', { name: 'Thêm mục kiểm tra', exact: true }).click();
   await page.getByLabel('Tên mục 6', { exact: true }).fill('Mục tiêu và GPU relevance');
-  await page.getByRole('button', { name: 'Lưu nhóm', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu hội', exact: true }).click();
   await page.getByRole('alert').filter({ hasText: 'không để trống hoặc trùng tên' }).waitFor();
   await page.getByRole('button', { name: 'Bỏ mục 6', exact: true }).click();
   assert.equal(await page.getByRole('combobox', { name: 'Bằng chứng cho mục 5', exact: true }).getAttribute('data-value'), 'run_audit');
@@ -44,7 +44,7 @@ try {
   const compareTwo = page.getByRole('switch', { name: 'Đối chiếu schema và ID khi task có đúng hai dataset', exact: true });
   await compareTwo.click();
   assert.equal(await compareTwo.getAttribute('aria-checked'), 'false');
-  await page.getByRole('button', { name: 'Lưu nhóm', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu hội', exact: true }).click();
   const preflightTaskId = await page.evaluate(async sourceId => {
     const workspace = await window.orglet.call('workspace', {}); const team = workspace.teams.find(team => team.name === 'Eris Review');
     return window.orglet.call('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Packaged automatic preflight', sourceIds: [sourceId], consent: false, budgetMicros: 1000 });
@@ -71,7 +71,7 @@ try {
   await page.locator('.doc-viewer').waitFor({ state: 'detached' });
   const templatePath = join(directory, 'team-template.json');
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, templatePath);
-  await page.getByRole('button', { name: 'Tùy chọn nhóm Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
+  await page.getByRole('button', { name: 'Tùy chọn hội Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
   await page.getByRole('button', { name: 'Xuất template đã lưu', exact: true }).click();
   await page.getByText('Đã xuất template', { exact: true }).waitFor();
   const template = JSON.parse(await readFile(templatePath, 'utf8'));
@@ -81,9 +81,9 @@ try {
   template.team.name = 'Imported review'; await writeFile(templatePath, JSON.stringify(template));
   await page.keyboard.press('Escape');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, templatePath);
-  await page.getByRole('button', { name: 'Tạo nhóm', exact: true }).click();
+  await page.getByRole('button', { name: 'Tạo hội', exact: true }).click();
   await page.getByRole('button', { name: 'Nhập template', exact: true }).click();
-  await page.getByRole('button', { name: 'Tùy chọn nhóm Imported review', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Tùy chọn hội Imported review', exact: true }).waitFor();
   const importedWorkspace = await page.evaluate(() => window.orglet.call('workspace', {}));
   assert.equal(importedWorkspace.teams.length, 2); assert.equal(importedWorkspace.tasks.length, 2);
   assert.notDeepEqual(importedWorkspace.teams[0].memberIds, importedWorkspace.teams[1].memberIds);

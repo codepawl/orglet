@@ -32,7 +32,7 @@ try {
   await page.getByRole('button', { name: 'Researcher', exact: true }).dblclick();
   assert.equal(await page.locator('.row-rename').count(), 0);
   await page.getByRole('button', { name: 'Tùy chọn Researcher', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
-  await page.getByLabel('Tên nhân viên').fill('Lead researcher'); await page.getByRole('button', { name: 'Lưu nhân viên', exact: true }).click();
+  await page.getByLabel('Tên Tí').fill('Lead researcher'); await page.getByRole('button', { name: 'Lưu Tí', exact: true }).click();
   await waitFor(async () => (await workspace(page)).workers.some(worker => worker.name === 'Lead researcher'), 'worker rename');
 
   const box = page.getByRole('textbox', { name: 'Tin nhắn' });

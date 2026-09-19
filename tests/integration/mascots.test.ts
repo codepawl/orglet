@@ -9,7 +9,7 @@ const top = (name: string, description?: string) => suggestMascots({ name, descr
 it('suggests mascots from Vietnamese and English roles', () => {
   expect(top('Researcher')).toBe('search');
   expect(top('Kế toán trưởng')).toBe('finance');
-  expect(top('Nhân viên chăm sóc khách hàng')).toBe('headset');
+  expect(top('Tí chăm sóc khách hàng')).toBe('headset');
   expect(top('Lập trình viên backend')).toBe('coder');
   expect(top('Trợ lý', 'Sắp xếp lịch họp cho sếp')).toBe('calendar');
   expect(top('Data analyst')).toBe('chart');

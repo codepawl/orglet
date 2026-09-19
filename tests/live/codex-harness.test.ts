@@ -31,7 +31,7 @@ describe.runIf(authorized)('live Codex streaming', () => {
         executable,
         cwd: directory,
         // Long enough that the model reasons before it answers; short enough to stay well inside the budget.
-        prompt: 'Ba người góp 300 nghìn mua một món đồ, mỗi người 100 nghìn. Người bán giảm còn 250 nghìn và đưa lại 50 nghìn cho nhân viên. Nhân viên giữ 20 nghìn và trả lại mỗi người 10 nghìn. Vậy mỗi người trả 90 nghìn, ba người là 270 nghìn, cộng 20 nghìn nhân viên giữ là 290 nghìn. Mười nghìn còn lại đi đâu? Phân tích chỗ sai rồi lập bảng dòng tiền.',
+        prompt: 'Ba người góp 300 nghìn mua một món đồ, mỗi người 100 nghìn. Người bán giảm còn 250 nghìn và đưa lại 50 nghìn cho Tí. Tí giữ 20 nghìn và trả lại mỗi người 10 nghìn. Vậy mỗi người trả 90 nghìn, ba người là 270 nghìn, cộng 20 nghìn Tí giữ là 290 nghìn. Mười nghìn còn lại đi đâu? Phân tích chỗ sai rồi lập bảng dòng tiền.',
         schema: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'], additionalProperties: false },
         signal: AbortSignal.timeout(300_000),
         maxBudgetUsd: 0.3,

@@ -45,7 +45,7 @@ function validateRelations(data: Payload) {
   const workers = map(data.workers); const skills = map(data.skills); const teams = map(data.teams);
   const tasks = map(data.tasks); const runs = map(data.runs); const sources = map(data.sources); const artifacts = map(data.artifacts);
   const routines = map(data.routines ?? []);
-  for (const routine of routines.values()) if (!workers.has(routine.task.workerId) || (routine.task.teamId && !teams.has(routine.task.teamId)) || routine.task.sourceIds.some(id => !sources.has(id)) || (routine.lastTaskId && tasks.get(routine.lastTaskId)?.routineId !== routine.id)) fail('Lịch thiếu nhân viên, nhóm, nguồn hoặc task.');
+  for (const routine of routines.values()) if (!workers.has(routine.task.workerId) || (routine.task.teamId && !teams.has(routine.task.teamId)) || routine.task.sourceIds.some(id => !sources.has(id)) || (routine.lastTaskId && tasks.get(routine.lastTaskId)?.routineId !== routine.id)) fail('Lịch thiếu Tí, hội, nguồn hoặc task.');
   for (const task of tasks.values()) {
     if (task.currentInput?.sourceIds.some(id => !task.sourceIds.includes(id))) fail('Đầu vào hiện tại tham chiếu nguồn ngoài task.');
     const requests = task.evidenceRequests ?? [];
@@ -69,15 +69,15 @@ function validateRelations(data: Payload) {
     preflightScopes.add(scope);
   }
   for (const run of runs.values()) if (run.snapshot.preflightId && preflights.get(run.snapshot.preflightId)?.taskId !== run.taskId) fail('Run thiếu preflight.');
-  for (const worker of workers.values()) if (!skills.has(worker.skillId)) fail('Nhân viên thiếu skill.');
-  for (const team of teams.values()) if ([...team.memberIds, team.synthesizerId].some(id => !workers.has(id))) fail('Nhóm thiếu nhân viên.');
-  for (const task of tasks.values()) if (!workers.has(task.workerId) || task.sourceIds.some(id => !sources.has(id)) || (task.teamId && (!teams.has(task.teamId) || task.teamSnapshot?.id !== task.teamId))) fail('Task thiếu nhân viên, nhóm hoặc nguồn.');
+  for (const worker of workers.values()) if (!skills.has(worker.skillId)) fail('Tí thiếu skill.');
+  for (const team of teams.values()) if ([...team.memberIds, team.synthesizerId].some(id => !workers.has(id))) fail('Hội thiếu Tí.');
+  for (const task of tasks.values()) if (!workers.has(task.workerId) || task.sourceIds.some(id => !sources.has(id)) || (task.teamId && (!teams.has(task.teamId) || task.teamSnapshot?.id !== task.teamId))) fail('Task thiếu Tí, hội hoặc nguồn.');
   for (const run of runs.values()) if (!tasks.has(run.taskId) || run.snapshot.worker.skillId !== run.snapshot.skill.id || run.snapshot.upstreamArtifactIds?.some(id => !artifacts.has(id))) fail('Snapshot hoặc task của run không hợp lệ.');
   for (const run of runs.values()) {
     const plan = run.snapshot.plan;
     if (!plan) continue;
     if (run.stage !== 'plan' || !run.snapshot.team) fail('Phân việc không thuộc lần chạy trưởng phòng.');
-    if (plan.assignments.some(assignment => !run.snapshot.team!.memberIds.includes(assignment.workerId))) fail('Phân việc tham chiếu nhân viên ngoài nhóm.');
+    if (plan.assignments.some(assignment => !run.snapshot.team!.memberIds.includes(assignment.workerId))) fail('Phân việc tham chiếu Tí ngoài hội.');
   }
   // Validate the whole join graph, including runs that never committed an artifact.
   // Kahn's traversal avoids recursive stack growth on a large imported history.
@@ -156,7 +156,7 @@ function validateRelations(data: Payload) {
     knowledgeRevisions.set(key, row.data);
   }
   for (const item of [...map(data.knowledge ?? []).values(), ...knowledgeRevisions.values()]) {
-    if ((item.scope.type === 'team' && !teams.has(item.scope.id)) || (item.scope.type === 'worker' && !workers.has(item.scope.id))) fail('Knowledge tham chiếu nhóm/nhân viên không tồn tại.');
+    if ((item.scope.type === 'team' && !teams.has(item.scope.id)) || (item.scope.type === 'worker' && !workers.has(item.scope.id))) fail('Knowledge tham chiếu hội/Tí không tồn tại.');
     const origin = item.provenance.kind === 'run' ? item.provenance : undefined;
     if (origin && (runs.get(origin.runId)?.taskId !== origin.taskId || artifacts.get(origin.artifactId)?.runId !== origin.runId)) fail('Knowledge tham chiếu lần chạy ngoài lịch sử.');
   }

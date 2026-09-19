@@ -61,7 +61,7 @@ function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; 
     return <div className="details-subject">
       <p className="details-subject-name"><RosterAvatars workers={members} size="sm" max={3} /><strong>{team.name}</strong></p>
       <div className="details-facts">
-        <Fact icon={Users} title={t('Số nhân viên trong nhóm')}>{members.length}</Fact>
+        <Fact icon={Users} title={t('Số Tí trong hội')}>{members.length}</Fact>
         <Fact icon={team.workflow === 'parallel' ? Shuffle : ListOrdered} title={team.workflow === 'parallel' ? t('làm song song') : t('làm lần lượt')}>
           {team.workflow === 'parallel' ? t('song song') : t('lần lượt')}
         </Fact>
@@ -142,7 +142,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
       <ChatSubject team={team} worker={worker} members={members} />
 
       {team && <Section icon={Users} title={t('Thành viên')}>
-        <ShowMore items={members} empty={t('Nhóm chưa có nhân viên.')} render={member => {
+        <ShowMore items={members} empty={t('Hội chưa có Tí nào.')} render={member => {
           const mark = workerStatus(member.id);
           return <div key={member.id} className="details-member">
             <StatusMark variant={mark.variant} tone={mark.tone} label={statusMarkLabel(mark)} decorative />

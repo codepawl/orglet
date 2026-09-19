@@ -111,7 +111,7 @@ it('lets several workers, or all of them, answer each message in turn, each seei
   const skillId = store.all<Worker>('workers')[0].skillId;
   const second = await core.command('saveWorker', { name: 'Kế toán', instructions: 'Help with accounting.', provider: 'openai', skillId, taskBudgetMicros: 100_000 }) as Worker;
   replies.push(answer('Chào từ Researcher.'));
-  const taskId = await core.command('createTask', { workerId, brief: 'Chào cả nhóm', ...scope }) as string;
+  const taskId = await core.command('createTask', { workerId, brief: 'Chào cả hội', ...scope }) as string;
   await until(() => store.detail(taskId).task.status === 'completed');
 
   await core.command('updateTask', { id: taskId, title: '', assignee: { kind: 'workers', workerIds: [workerId, second.id] }, budgetMicros: 100_000 });
@@ -141,7 +141,7 @@ it('lets @tags in a group chat limit who answers that turn', async () => {
   const skillId = store.all<Worker>('workers')[0].skillId;
   const second = await core.command('saveWorker', { name: 'Kế toán', instructions: 'Help with accounting.', provider: 'openai', skillId, taskBudgetMicros: 100_000 }) as Worker;
   replies.push(answer('Chào từ Researcher.'));
-  const taskId = await core.command('createTask', { workerId, brief: 'Chào cả nhóm', ...scope }) as string;
+  const taskId = await core.command('createTask', { workerId, brief: 'Chào cả hội', ...scope }) as string;
   await until(() => store.detail(taskId).task.status === 'completed');
   await core.command('updateTask', { id: taskId, title: '', assignee: { kind: 'workers', workerIds: [workerId, second.id] }, budgetMicros: 100_000 });
   replies.push(answer('Kế toán đây.'));

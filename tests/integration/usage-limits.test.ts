@@ -50,7 +50,7 @@ it('tells the user when Codex is out of usage', () => {
 
 it('translates the limit messages into English', () => {
   const english = translateMessage(en, usageLimitMessage('Codex', { kind: 'quota', resetsAt: null }));
-  expect(english).toBe('Codex has run out of plan usage or credits. Wait for the plan to reset or add credits, or pick another model for this worker from its Edit menu.');
+  expect(english).toBe('Codex has run out of plan usage or credits. Wait for the plan to reset or add credits, or pick another model for this orglet from its Edit menu.');
   expect(translateMessage(en, usageLimitMessage('OpenAI', { kind: 'rate', resetsAt: null }))).toBe('OpenAI is limiting requests because too many were sent. Try again in a few minutes.');
 });
 

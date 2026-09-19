@@ -49,9 +49,9 @@ export function claudeLimitWarning(info: ClaudeRateLimitInfo | null): string | n
 export function usageLimitMessage(providerName: string, limit: UsageLimit): string {
   if (limit.kind === 'rate') return `${providerName} đang tạm giới hạn vì có quá nhiều yêu cầu. Thử lại sau ít phút.`;
   if (limit.resetsAt) {
-    return `${providerName} đã hết lượt dùng của gói, làm mới lúc ${formatResetTime(limit.resetsAt)}. Chờ đến lúc đó, hoặc đổi model của nhân viên trong menu Chỉnh sửa.`;
+    return `${providerName} đã hết lượt dùng của gói, làm mới lúc ${formatResetTime(limit.resetsAt)}. Chờ đến lúc đó, hoặc đổi model của Tí trong menu Chỉnh sửa.`;
   }
-  return `${providerName} đã hết lượt dùng của gói hoặc hết tín dụng. Chờ gói làm mới hay nạp thêm, hoặc đổi model của nhân viên trong menu Chỉnh sửa.`;
+  return `${providerName} đã hết lượt dùng của gói hoặc hết tín dụng. Chờ gói làm mới hay nạp thêm, hoặc đổi model của Tí trong menu Chỉnh sửa.`;
 }
 
 /** Local time as "2026-09-18 17:30", which reads the same in every interface language. */

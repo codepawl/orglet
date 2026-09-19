@@ -80,14 +80,14 @@ try {
   assert.deepEqual(await page.evaluate(() => window.orglet.connections()), { openai: false, anthropic: false, xai: false, openrouter: false, ollama: false });
   // Work-hour configuration uses ordinary native form controls.
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
-  await page.getByRole('button', { name: 'Tùy chọn nhóm Research Review', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Tùy chọn nhóm Research Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
+  await page.getByRole('button', { name: 'Tùy chọn hội Research Review', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Tùy chọn hội Research Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
   await page.getByRole('tab', { name: 'Giới hạn & ca', exact: true }).click();
   await page.getByLabel('Số công việc chạy đồng thời', { exact: true }).fill('1');
   await page.getByRole('switch', { name: 'Giới hạn khung giờ làm việc', exact: true }).click();
   await page.getByLabel('Timezone của ca', { exact: true }).fill('UTC');
   await page.getByLabel('Bắt đầu ca', { exact: true }).fill('09:00'); await page.getByLabel('Kết thúc ca', { exact: true }).fill('17:00');
-  await page.getByRole('button', { name: 'Lưu nhóm', exact: true }).click();
+  await page.getByRole('button', { name: 'Lưu hội', exact: true }).click();
   const team = (await page.evaluate(() => window.orglet.call('workspace', {}))).teams[0];
   assert.equal(team.maxConcurrentTasks, 1); assert.deepEqual(team.workHours, { timeZone: 'UTC', start: '09:00', end: '17:00', days: [1, 2, 3, 4, 5] });
   const handoffTaskId = await page.evaluate(async team => {
@@ -106,7 +106,7 @@ try {
   const handoff = await page.evaluate(id => window.orglet.call('task', { id }), handoffTaskId);
   assert.equal(handoff.task.pauseReason, 'shift'); assert.ok(handoff.task.handoff);
   await page.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).click();
-  await page.getByRole('alert').filter({ hasText: 'Nhóm đang ngoài khung giờ' }).waitFor();
+  await page.getByRole('alert').filter({ hasText: 'Hội đang ngoài khung giờ' }).waitFor();
   await page.screenshot({ path: join(output, 'shift-handoff.png') });
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(780, 640));
   await page.getByRole('button', { name: 'Mở sidebar', exact: true }).click(); await page.getByRole('button', { name: /Lịch chạy/ }).click();

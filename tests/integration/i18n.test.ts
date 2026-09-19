@@ -23,7 +23,7 @@ it('translates finished core messages, including ones with values already filled
   expect(translateMessage(null, 'Không tìm thấy công việc.')).toBe('Không tìm thấy công việc.');
   expect(translateMessage(en, 'Không tìm thấy công việc.')).toBe('Task not found.');
   expect(translateMessage(en, 'Run-log dòng 12: completed cần score hợp lệ.')).toBe('Run log row 12: completed rows need a valid score.');
-  expect(translateMessage(en, 'Bản sao lưu không hợp lệ: Nhóm thiếu nhân viên.')).toBe('Invalid backup: Nhóm thiếu nhân viên.');
+  expect(translateMessage(en, 'Bản sao lưu không hợp lệ: Hội thiếu Tí.')).toBe('Invalid backup: Hội thiếu Tí.');
   expect(translateMessage(en, 'Something the core never says.')).toBe('Something the core never says.');
 });
 

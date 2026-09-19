@@ -10,10 +10,10 @@ import { SwitchField } from './Switch';
 
 export function scopeLabel(scope: KnowledgeScope, workspace: Workspace) {
   if (scope.type === 'workspace') return t('Toàn workspace');
-  if (scope.type === 'team') return t('Nhóm {0}', [workspace.teams.find(team => team.id === scope.id)?.name ?? scope.id]);
-  return t('Nhân viên {0}', [workspace.workers.find(worker => worker.id === scope.id)?.name ?? scope.id]);
+  if (scope.type === 'team') return t('Hội {0}', [workspace.teams.find(team => team.id === scope.id)?.name ?? scope.id]);
+  return t('Tí {0}', [workspace.workers.find(worker => worker.id === scope.id)?.name ?? scope.id]);
 }
-const provenanceLabel = (item: Knowledge) => item.provenance.kind === 'run' ? t('Đề xuất từ một lần chạy') : item.provenance.kind === 'template' ? t('Nhập từ template nhóm') : t('Bạn tạo');
+const provenanceLabel = (item: Knowledge) => item.provenance.kind === 'run' ? t('Đề xuất từ một lần chạy') : item.provenance.kind === 'template' ? t('Nhập từ template hội') : t('Bạn tạo');
 
 export function KnowledgeLibrary({ workspace, onOpen }: { workspace: Workspace; onOpen: (item?: Knowledge) => void }) {
   const [query, setQuery] = useState('');
@@ -61,8 +61,8 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
     <label><FieldLabel icon={Type} required>{t('Tiêu đề')}</FieldLabel><input value={title} onChange={event => setTitle(event.target.value)} required maxLength={200} /></label>
     <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><textarea rows={8} value={content} onChange={event => setContent(event.target.value)} required maxLength={8000} /></label>
     <label><FieldLabel icon={Tag}>Tags</FieldLabel><input value={tags} onChange={event => setTags(event.target.value)} placeholder="scoring, dataset" /></label>
-    <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Nhóm'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Nhân viên'), icon: <UserRound size={16} /> }))]} />
-    <p className="muted">{t('Knowledge của nhóm chỉ nạp khi chạy trong nhóm đó, kể cả khi nhân viên tham gia nhiều nhóm.')}</p>
+    <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
+    <p className="muted">{t('Knowledge của hội chỉ nạp khi chạy trong hội đó, kể cả khi Tí tham gia nhiều hội.')}</p>
     <SwitchField checked={pinned} onChange={setPinned} description={t('Mục không ghim chỉ được nạp khi khớp từ khóa với yêu cầu. Lưu thay đổi tạo revision mới; lần chạy cũ giữ nội dung đã dùng.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
     <div className="actions">
       {error ? <p className="form-error" role="alert">{error}</p> : null}
@@ -76,7 +76,7 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
 export function ContextManifestView({ run, workspace }: { run: { snapshot: { context?: RunContext } }; workspace: Workspace }) {
   const context = run.snapshot.context;
   if (!context) return null;
-  const names: Record<string, string> = { platform: t('Chính sách Orglet'), team: t('Hướng dẫn nhóm'), worker: t('Hướng dẫn nhân viên'), skill: t('Kỹ năng'), knowledge: 'Knowledge', summary: t('Tóm tắt hội thoại'), memory: t('Ghi nhớ hội thoại'), turn: t('Lượt cũ') };
+  const names: Record<string, string> = { platform: t('Chính sách Orglet'), team: t('Hướng dẫn hội'), worker: t('Hướng dẫn Tí'), skill: t('Kỹ năng'), knowledge: 'Knowledge', summary: t('Tóm tắt hội thoại'), memory: t('Ghi nhớ hội thoại'), turn: t('Lượt cũ') };
   const reasons: Record<string, string> = { duplicate: t('trùng nội dung đã nạp'), context_limit: t('vượt giới hạn context'), not_relevant: t('không khớp yêu cầu'), summarized: t('đã tóm tắt'), truncated: t('bị cắt') };
   const knowledgeTitle = (id?: string) => context.knowledge.find(entry => entry.id === id)?.title ?? workspace.knowledge.find(entry => entry.id === id)?.title;
   return <details><summary>{t('Context đã nạp · {0} phần', [context.manifest.loaded.length])}</summary>

@@ -20,7 +20,7 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const action = async (fn: () => Promise<unknown>) => { setBusy(true); setError(''); try { await fn(); } catch (err) { setError((err as Error).message); } finally { setBusy(false); } };
   if (view.editing) return <RoutineEditor key={view.routine?.id ?? 'new'} routine={view.routine} draft={view.routine ? undefined : draft} workspace={workspace} saved={() => { onDirty(false); onView({ editing: false }); }} back={onBack} onDirty={onDirty} />;
-  const assignee = (item: Routine) => item.task.teamId ? workspace.teams.find(team => team.id === item.task.teamId)?.name ?? t('Nhóm đã xóa') : workspace.workers.find(worker => worker.id === item.task.workerId)?.name ?? t('Nhân viên đã xóa');
+  const assignee = (item: Routine) => item.task.teamId ? workspace.teams.find(team => team.id === item.task.teamId)?.name ?? t('Hội đã xóa') : workspace.workers.find(worker => worker.id === item.task.workerId)?.name ?? t('Tí đã xóa');
   return <div className="form">
           {!workspace.routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p></div>}
     <div className="routine-list">
@@ -107,7 +107,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       <h4 id="routine-group-job">{t('Công việc')}</h4>
       <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><input value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
       <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><textarea rows={4} value={brief} onChange={event => setBrief(event.target.value)} required maxLength={16000} /></label>
-      <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Nhân viên'), icon: <UserRound size={16} /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Nhóm'), icon: <Users size={16} /> }))]} />
+      <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> }))]} />
       <div className="routine-sources">
         <PanelHeading level={3} title={<FieldLabel icon={FileText}>{t('Nguồn ({0}/20)', [sources.length])}</FieldLabel>}>
           <Button type="button" variant="outline" disabled={busy} onClick={async () => {
@@ -140,7 +140,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       {/* Where the data goes is worth saying; it just is not worth asking about twice, since saving is the
           permission (user, 2026-09-19). It stays as a plain line rather than a tick. */}
       {enabled && <p className="muted">{t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo')])}</p>}
-      <p className="muted">{t('Đổi nhân viên, skill, nhóm hoặc model thì phải mở lịch và lưu lại. Tắt lịch không hủy task đang chạy.')}</p>
+      <p className="muted">{t('Đổi Tí, skill, hội hoặc model thì phải mở lịch và lưu lại. Tắt lịch không hủy task đang chạy.')}</p>
     </section>
     <div className="sticky-actions">{error && !zoneError ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
   </form>;

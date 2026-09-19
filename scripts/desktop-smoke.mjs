@@ -65,7 +65,7 @@ try {
   // The export is written asynchronously after the save dialog resolves.
   for (let attempt = 0; attempt < 50 && !(await readFile(exported, 'utf8').catch(() => '')); attempt++) await new Promise(resolve => setTimeout(resolve, 100));
   // A chat answer downloads as the message itself.
-  assert.match(await readFile(exported, 'utf8'), /nhân viên demo/);
+  assert.match(await readFile(exported, 'utf8'), /Tí demo/);
   const fakeKeyPath = join(data, 'fixture-key.txt'); const fakeKey = 'sk-orglet-fixture-not-a-real-api-key'; await writeFile(fakeKeyPath, fakeKey);
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, fakeKeyPath);
   await page.getByRole('button', { name: 'Cài đặt', exact: true }).click();
@@ -107,9 +107,9 @@ try {
   await page.getByRole('button', { name: 'Research Review', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Research Review', exact: true }).click();
   await page.getByRole('heading', { name: 'Đang nhắn với Research Review' }).waitFor();
-  await page.getByRole('button', { name: 'Thiết lập nhóm', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Thiết lập nhóm' }).waitFor();
-  assert.equal(await page.getByLabel('Tên nhóm', { exact: true }).inputValue(), 'Research Review');
+  await page.getByRole('button', { name: 'Thiết lập hội', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Thiết lập hội' }).waitFor();
+  assert.equal(await page.getByLabel('Tên hội', { exact: true }).inputValue(), 'Research Review');
   await page.keyboard.press('Escape');
   await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: team synthesis');
   await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();

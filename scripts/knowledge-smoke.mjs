@@ -40,7 +40,7 @@ try {
   await page.getByRole('button', { name: /Thư viện\s*Cần duyệt/ }).waitFor();
   await page.getByRole('button', { name: /Thư viện/ }).click();
   await page.getByRole('region', { name: 'Chờ duyệt' }).getByRole('button', { name: /Evidence limits/ }).click();
-  await page.getByText('Nhập từ template nhóm · v1 · Chờ duyệt').waitFor();
+  await page.getByText('Nhập từ template hội · v1 · Chờ duyệt').waitFor();
   await page.getByRole('button', { name: 'Duyệt', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   const approved = (await workspace(page)).knowledge.find(item => item.scope.type === 'team' && item.scope.id === imported.id);

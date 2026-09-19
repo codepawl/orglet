@@ -42,7 +42,7 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
 
   const submit = async () => {
     const budgetMicros = toMicros(budget);
-    if (mode === 'workers' && !chosen.length) return fail('general', t('Chọn ít nhất một nhân viên.'), 'assignees');
+    if (mode === 'workers' && !chosen.length) return fail('general', t('Chọn ít nhất một Tí.'), 'assignees');
     if (!Number.isFinite(budgetMicros) || budgetMicros < 1000 || budgetMicros > 100_000_000) return fail('limits', t('Nhập từ {0} đến {1}.', [formatMoney(1000), formatMoney(100_000_000)]), 'budget');
     const assignee = mode === 'all' ? { kind: 'all' as const } : mode.startsWith('team:') ? { kind: 'team' as const, teamId: mode.slice(5) } : { kind: 'workers' as const, workerIds: workspace.workers.map(worker => worker.id).filter(id => chosen.includes(id)) };
     setBusy(true); clearError();
@@ -56,11 +56,11 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
     {tab === 'general' && <>
       <label><FieldLabel icon={Type}>{t('Tên công việc')}</FieldLabel><input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} placeholder={task.brief.split('\n')[0].slice(0, 120)} /></label>
       <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={mode} onChange={value => { setMode(value); if (invalid === 'assignees') clearError(); }} invalid={invalid === 'assignees'} flash={flash} options={[
-        { value: 'all', label: t('Toàn bộ nhân viên'), detail: t('{0} nhân viên, gồm cả người thêm sau', [workspace.workers.length]), icon: <UsersRound size={16} /> },
-        { value: 'workers', label: t('Chọn nhân viên'), detail: t('Một hoặc nhiều người'), icon: <UserRound size={16} /> },
-        ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Nhóm'), icon: <Users size={16} /> })),
+        { value: 'all', label: t('Toàn bộ Tí'), detail: t('{0} Tí, gồm cả người thêm sau', [workspace.workers.length]), icon: <UsersRound size={16} /> },
+        { value: 'workers', label: t('Chọn Tí'), detail: t('Một hoặc nhiều người'), icon: <UserRound size={16} /> },
+        ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })),
       ]} />
-      {mode === 'workers' && <fieldset className="assignee-list"><legend className="visually-hidden">{t('Chọn nhân viên')}</legend>
+      {mode === 'workers' && <fieldset className="assignee-list"><legend className="visually-hidden">{t('Chọn Tí')}</legend>
         {workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} checked={chosen.includes(worker.id)} onChange={event => { setChosen(current => event.target.checked ? [...current, worker.id] : current.filter(id => id !== worker.id)); if (invalid === 'assignees') clearError(); }} {...fieldInvalid(invalid === 'assignees', flash)}>
           <span className="inline-mark"><Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />{worker.name}</span>
         </Checkbox>)}

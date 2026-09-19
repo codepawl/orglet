@@ -15,9 +15,9 @@ export class WorkPolicy {
   assertStart(teamId?: string, taskId?: string) {
     if (!teamId) return;
     const team = this.store.get<Team>('teams', teamId);
-    if (!inWorkHours(team.workHours, this.clock())) throw new Error('Nhóm đang ngoài khung giờ làm việc. Tiếp tục trong ca hoặc sửa khung giờ của nhóm.');
+    if (!inWorkHours(team.workHours, this.clock())) throw new Error('Hội đang ngoài khung giờ làm việc. Tiếp tục trong ca hoặc sửa khung giờ của hội.');
     const active = this.store.all<Task>('tasks').filter(task => task.teamId === teamId && task.id !== taskId && ['queued', 'running', 'pausing'].includes(task.status));
-    if (active.length >= (team.maxConcurrentTasks ?? 4)) throw new Error('Nhóm đã chạm giới hạn công việc chạy đồng thời.');
+    if (active.length >= (team.maxConcurrentTasks ?? 4)) throw new Error('Hội đã chạm giới hạn công việc chạy đồng thời.');
   }
   captureHandoffs() {
     for (const task of this.store.all<Task>('tasks')) {
