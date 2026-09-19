@@ -62,6 +62,11 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
           ?? turn.runs.filter(item => item.stage === 'member' && item.error && item.error !== UNASSIGNED_PLAN_ERROR).at(-1)
           ?? turn.runs.findLast(item => item.error && item.error !== UNASSIGNED_PLAN_ERROR);
         const failedNames = [...new Set(turn.runs.filter(item => item.stage === 'member' && item.error && item.error !== UNASSIGNED_PLAN_ERROR).map(item => item.snapshot.worker.name))];
+        // A run that failed and was then superseded is not news. The task finished, the answer is on screen, and
+        // there is nothing to act on, so its error stays out of the thread: it used to surface as a card headed
+        // "Hoàn tất" carrying a line of internal validation text (user, 2026-09-19). A paused task keeps its own
+        // explanation just below, so it is quiet here too.
+        const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
         return <div className="chat-turn" key={turn.revision}>
           <div className="user-message"><p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>{turn.sourceCount > 0 && <Button onClick={() => showSources()}><FileText size={16} />{t('{0} nguồn', [turn.sourceCount])}</Button>}</div>
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
@@ -71,7 +76,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
               ? <ChatReply artifact={reply.artifact} action={action} />
               : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
           </section>)}
-          {(!turn.replies.length || (latest && (busy || headline?.error || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
+          {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
             {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
@@ -81,13 +86,13 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
-            {!turn.artifact && !turn.replies.length && !(latest && busy) && !(latest && headline?.error) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
+            {!turn.artifact && !turn.replies.length && !(latest && busy) && !unresolvedError && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
             {turn.artifact && !turn.replies.length && <FinishedActivity steps={savedSteps(detail.events, turn.artifact.runId)} />}
             {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
               ? <ChatReply artifact={turn.artifact} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
-            {latest && headline?.error && detail.task.status !== 'paused' && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{headline.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(headline.error)]) : tMessage(headline.error)}</p></div>}
+            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
             {latest && <div className="actions">
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
               {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}
