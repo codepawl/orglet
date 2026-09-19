@@ -30,7 +30,10 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
           <div className="routine-title"><h3>{item.name}</h3><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}><StatusMark variant={item.enabled ? 'filled' : 'empty'} tone={item.enabled ? 'success' : 'muted'} label={item.enabled ? t('Đang bật') : t('Đã tắt')} decorative />{item.enabled ? t('Đang bật') : t('Đã tắt')}</span></div>
           <div className="routine-actions">
             <Button size="icon" aria-label={t('Sửa lịch {0}', [item.name])} title={t('Sửa lịch')} disabled={busy} onClick={() => onView({ editing: true, routine: item })}><Pencil size={16} /></Button>
-            {item.enabled && <Button size="icon" aria-label={t('Tắt lịch')} title={t('Tắt lịch')} disabled={busy} onClick={() => void action(() => orglet.call('saveRoutine', { id: item.id, name: item.name, enabled: false, schedule: item.schedule, task: item.task }))}><Power size={16} /></Button>}
+            {/* One button both ways. It used to render only while the schedule was on, so turning one off left
+                no way to turn it back on from the card (user, 2026-09-19). */}
+            <Button size="icon" className={item.enabled ? undefined : 'routine-off'} aria-label={item.enabled ? t('Tắt lịch') : t('Bật lịch')} title={item.enabled ? t('Tắt lịch') : t('Bật lịch')} disabled={busy}
+              onClick={() => void action(() => orglet.call('saveRoutine', { id: item.id, name: item.name, enabled: !item.enabled, schedule: item.schedule, task: item.task }))}><Power size={16} /></Button>
           </div>
         </div>
         <ul className="routine-meta">
@@ -67,10 +70,10 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const [weekday, setWeekday] = useState(routine?.schedule.weekday ?? 1);
   const [time, setTime] = useState(routine?.schedule.time ?? '09:00');
   const [timeZone, setTimeZone] = useState(routine?.schedule.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const [enabled, setEnabled] = useState(routine?.enabled ?? true); const [approved, setApproved] = useState(false);
+  const [enabled, setEnabled] = useState(routine?.enabled ?? true);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  const zoneInput = useRef<HTMLInputElement>(null); const approvalInput = useRef<HTMLInputElement>(null);
-  const zoneError = error.startsWith('Timezone'); const approvalError = error === t('Cần xác nhận quyền tự chạy cho lịch này.');
+  const zoneInput = useRef<HTMLInputElement>(null);
+  const zoneError = error.startsWith('Timezone');
   const team = workspace.teams.find(team => `team:${team.id}` === target);
   useEffect(() => {
     let cancelled = false;
@@ -86,13 +89,16 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const initialSnapshot = useRef(snapshot);
   useEffect(() => { onDirty(snapshot !== initialSnapshot.current); }, [snapshot, onDirty]);
   useEffect(() => () => onDirty(false), [onDirty]);
-  return <form className="form routine-editor" onChange={() => setApproved(false)} onSubmit={async event => {
+  return <form className="form routine-editor" onSubmit={async event => {
     event.preventDefault(); setError('');
     if (!TimeZone.safeParse(timeZone).success) { setError(t('Timezone không hợp lệ. Dùng tên như Asia/Ho_Chi_Minh hoặc UTC.')); zoneInput.current?.focus(); return; }
-    if (enabled && !approved) { setError(t('Cần xác nhận quyền tự chạy cho lịch này.')); approvalInput.current?.focus(); return; }
     setBusy(true);
     try {
-      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { frequency, weekday, time, timeZone }, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: approved && providers.length > 0, providerScopes: approved ? providers : [] } });
+      // Saving is the permission (user, 2026-09-19). The tick that used to ask again said nothing the act of
+      // writing a brief, picking a worker, setting a limit and turning it on had not already said. What guards an
+      // unattended run is still there: the core stores this exact setup as approvedConfig and refuses to run when
+      // the worker, skill, team or model has changed since, and a restored backup comes back off and unapproved.
+      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { frequency, weekday, time, timeZone }, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers } });
       saved();
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }}>
@@ -101,16 +107,16 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       <h4 id="routine-group-job">{t('Công việc')}</h4>
       <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><input value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
       <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><textarea rows={4} value={brief} onChange={event => setBrief(event.target.value)} required maxLength={16000} /></label>
-      <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); setApproved(false); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Nhân viên'), icon: <UserRound size={16} /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Nhóm'), icon: <Users size={16} /> }))]} />
+      <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Nhân viên'), icon: <UserRound size={16} /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Nhóm'), icon: <Users size={16} /> }))]} />
       <div className="routine-sources">
         <PanelHeading level={3} title={<FieldLabel icon={FileText}>{t('Nguồn ({0}/20)', [sources.length])}</FieldLabel>}>
           <Button type="button" variant="outline" disabled={busy} onClick={async () => {
             setBusy(true); setError('');
-            try { const picked = await orglet.pickSources(); if (picked.length + sources.length > 20) throw new Error(t('Lịch có tối đa 20 nguồn. Bỏ bớt nguồn rồi chọn lại.')); setSources([...sources, ...picked]); setApproved(false); }
+            try { const picked = await orglet.pickSources(); if (picked.length + sources.length > 20) throw new Error(t('Lịch có tối đa 20 nguồn. Bỏ bớt nguồn rồi chọn lại.')); setSources([...sources, ...picked]); }
             catch (err) { setError((err as Error).message); } finally { setBusy(false); }
           }}><FilePlus size={15} />{t('Chọn nguồn cho lịch')}</Button>
         </PanelHeading>
-        {sources.length > 0 ? <div className="attachment-list">{sources.map(source => <span className="attachment" key={source.id}><FileText size={14} /><span>{source.name}</span><button type="button" aria-label={t('Bỏ nguồn {0}', [source.name])} onClick={() => { setSources(sources.filter(item => item.id !== source.id)); setApproved(false); }}><X size={14} /></button></span>)}</div> : <p className="muted">{t('Chưa chọn nguồn. Lịch vẫn chạy được chỉ với brief.')}</p>}
+        {sources.length > 0 ? <div className="attachment-list">{sources.map(source => <span className="attachment" key={source.id}><FileText size={14} /><span>{source.name}</span><button type="button" aria-label={t('Bỏ nguồn {0}', [source.name])} onClick={() => { setSources(sources.filter(item => item.id !== source.id)); }}><X size={14} /></button></span>)}</div> : <p className="muted">{t('Chưa chọn nguồn. Lịch vẫn chạy được chỉ với brief.')}</p>}
         <p className="muted">{t('Chỉ dùng các tệp đã chọn với nội dung hiện tại. Tệp thay đổi hoặc bị thu hồi sẽ chặn lần chạy; chọn lại nguồn và lưu lịch để cấp quyền mới.')}</p>
       </div>
     </section>
@@ -118,8 +124,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
     <section className="routine-group" aria-labelledby="routine-group-time">
       <h4 id="routine-group-time">{t('Thời gian')}</h4>
       <div className="field-grid">
-        <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as typeof frequency); setApproved(false); }} options={[{ value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> }, { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> }]} />
-        {frequency === 'weekly' && <Select label={<FieldLabel icon={CalendarDays} required>{t('Ngày trong tuần')}</FieldLabel>} value={String(weekday)} onChange={value => { setWeekday(Number(value)); setApproved(false); }} options={weekdays.map((day, index) => ({ value: String(index), label: day }))} />}
+        <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as typeof frequency); }} options={[{ value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> }, { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> }]} />
+        {frequency === 'weekly' && <Select label={<FieldLabel icon={CalendarDays} required>{t('Ngày trong tuần')}</FieldLabel>} value={String(weekday)} onChange={value => { setWeekday(Number(value)); }} options={weekdays.map((day, index) => ({ value: String(index), label: day }))} />}
         <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>
         <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError || undefined} aria-describedby={zoneError ? 'routine-zone-error' : undefined} data-flash={zoneError ? 1 : undefined} /></label>
       </div>
@@ -131,9 +137,10 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       <h4 id="routine-group-limits">{t('Giới hạn & quyền')}</h4>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} required /></label>
       <Checkbox checked={enabled} onChange={event => setEnabled(event.target.checked)}>{t('Bật lịch')}</Checkbox>
-      {enabled && <Checkbox required ref={approvalInput} checked={approved} aria-invalid={approvalError} aria-describedby={approvalError ? 'routine-approval-error' : undefined} data-flash={approvalError ? 1 : undefined} onChange={event => { setApproved(event.target.checked); if (approvalError) setError(''); }} labelProps={{ onChange: event => event.stopPropagation() }}>{t('Cho phép tự chạy brief và {0} nguồn này với cấu hình hiện tại{1}, trong giới hạn đã đặt.', [sources.length, providers.length ? t(', gửi dữ liệu đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t(' ở chế độ Demo')])}</Checkbox>}
-      {approvalError && <span className="visually-hidden" id="routine-approval-error">{error}</span>}
-      <p className="muted">{t('Đổi nhân viên, skill, nhóm hoặc model sẽ yêu cầu lưu lại quyền chạy. Tắt lịch không hủy task đang chạy.')}</p>
+      {/* Where the data goes is worth saying; it just is not worth asking about twice, since saving is the
+          permission (user, 2026-09-19). It stays as a plain line rather than a tick. */}
+      {enabled && <p className="muted">{t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo')])}</p>}
+      <p className="muted">{t('Đổi nhân viên, skill, nhóm hoặc model thì phải mở lịch và lưu lại. Tắt lịch không hủy task đang chạy.')}</p>
     </section>
     <div className="sticky-actions">{error && !zoneError ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
   </form>;

@@ -29,12 +29,13 @@ try {
   const due = new Date(Date.now() + 20_000); due.setUTCMinutes(due.getUTCMinutes() + 1, 0, 0);
   await page.getByLabel('Giờ chạy', { exact: true }).fill(due.toISOString().slice(11, 16));
   await page.getByRole('button', { name: 'Lưu lịch', exact: true }).click();
-  await page.getByRole('alert').filter({ hasText: 'Cần xác nhận quyền tự chạy' }).waitFor();
-  await page.getByRole('checkbox', { name: /^Cho phép tự chạy brief/ }).check();
-  await page.getByRole('button', { name: 'Lưu lịch', exact: true }).click();
   const region = page.getByRole('region', { name: 'Lịch Morning routine', exact: true }); await region.waitFor();
   const routine = (await page.evaluate(() => window.orglet.call('workspace', {}))).routines[0];
   assert.equal(routine.nextDueAt, due.toISOString());
+  // Saving is the permission: the routine carries the setup it was approved with. Demo needs no provider scope.
+  assert.ok(routine.approvedConfig, 'saving records the approved configuration');
+  assert.deepEqual(routine.task.providerScopes, []);
+  assert.equal(routine.task.consent, false);
   console.log(JSON.stringify({ waitingForScheduledDemo: routine.nextDueAt, directory }));
   await region.getByRole('button', { name: 'Mở lần chạy gần nhất', exact: true }).waitFor({ timeout: 100_000 });
   await region.getByRole('button', { name: 'Mở lần chạy gần nhất', exact: true }).click();
@@ -42,6 +43,12 @@ try {
   const completed = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks;
   assert.equal(completed.length, 1); assert.equal(completed[0].routineId, routine.id);
   await page.getByRole('button', { name: /Lịch chạy/ }).click();
+  await region.getByRole('button', { name: 'Tắt lịch', exact: true }).click();
+  await region.getByText(/Đã tắt/).waitFor();
+  // Turning one off must leave a way to turn it back on: the card used to drop the button entirely.
+  await region.getByRole('button', { name: 'Bật lịch', exact: true }).click();
+  await region.getByText(/Đang bật/).waitFor();
+  assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).routines[0].enabled, true);
   await region.getByRole('button', { name: 'Tắt lịch', exact: true }).click();
   await region.getByText(/Đã tắt/).waitFor();
   await page.screenshot({ path: join(output, 'routine-completed.png') });
