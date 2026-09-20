@@ -78,6 +78,8 @@ When a worker or team lead needs a material choice before continuing, it can pau
 
 An API worker or team lead can also record how it understands the current turn: the goal, constraints stated by the user, assumptions it has made, and checks it plans to run. The latest goal appears in chat; the full record is in Details. Planned checks are intentions, not evidence that a check passed.
 
+You can send a changed request while a worker or team is running. Orglet saves it as the next revision immediately, cancels the older run, and waits until that run has stopped before dispatching the new one. Already integrated files stay in history; uncertain effects and conflicts still need inspection. If the app closes while switching, the saved request waits for an explicit resume rather than replaying an unknown action.
+
 ## Install
 
 [Latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. The tag is public; Windows **Setup.exe** / **ZIP** assets on that release may still be empty. If they are missing, [build from source](#dev).

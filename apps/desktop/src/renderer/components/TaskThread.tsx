@@ -118,6 +118,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
               }}>{option}</Button>)}</div>
             </div>}
             {latest && detail.task.status === 'waiting_input' && !pendingDecision && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
+            {latest && detail.task.pendingStart && <p role="status">{t('Đã lưu yêu cầu mới. Đang dừng lượt cũ rồi sẽ bắt đầu.')}</p>}
             {latest && detail.task.status !== 'completed' && <div className="team-progress" role="status">
               {teamProgress(turn.runs, detail.artifacts).map(({ run, waitingFor }) => {
                 const brief = run.snapshot.assignment!.brief;

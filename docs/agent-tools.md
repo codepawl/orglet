@@ -8,6 +8,8 @@ The core keeps tool declarations, argument schemas, required capabilities and ex
 
 `record_work_frame` lets a solo worker or team planner save one short goal, constraints the user stated, unconfirmed assumptions, and intended checks in the run snapshot. Details displays these separately; planned checks do not count as completed checks or evidence. A second record for the same run is rejected. The record does not change grants, assignments, or the user request. It is available through the API and tool-loop CLI paths, but source-only CLI sessions cannot call it.
 
+When a user revises a running chat, core validates and saves the new revision before signalling cancellation to the old run. The new revision waits for the old run to stop; cancelling it while it waits prevents dispatch. Restart recovery leaves that saved revision interrupted for the user to inspect and resume. It never replays an uncertain prior tool call. Existing workspace integration, hash checks, and grant checks still govern effects of both revisions.
+
 Assigned team members also have send, read and acknowledge tools for the [team mailbox](team-chat.md#worker-messages). These validate membership and the current turn at execution. They do not grant file or network access. API workers and the CLI tool bridge use the same mailbox handlers.
 
 If a worker mistypes a team-message recipient ID, core returns the current assignment's valid recipients as a tool error. The worker can correct the call in the same run; the rejected message creates no mailbox event or new agent. Core still checks the recipient again when it saves a valid message.
