@@ -222,6 +222,9 @@ export const en: Dictionary = {
   'Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.': 'Reusable notes. Only approved items are loaded into context, and only within their chosen scope.',
   'Ghi nhận giới hạn': 'Acknowledge limit',
   'Giao diện': 'Appearance',
+  'Màu nhấn': 'Accent color',
+  'Dùng cho thẻ @tên, nút chính và công tắc đang bật.': 'Used for @name tags, primary buttons and a switch that is on.',
+  'Chọn màu khác': 'Pick another color',
   'Giấy phép: {0}': 'License: {0}',
   'Giới hạn & ca': 'Limits & shifts',
   'Giới hạn & quyền': 'Limits & permissions',
@@ -1091,8 +1094,6 @@ export const en: Dictionary = {
   'Độ lệch chuẩn mẫu tính trong cùng solution/split. Khác biệt giữa các solutions không phải nhiễu rerun.': 'Sample standard deviation within each solution/split. Differences between solutions are not rerun noise.',
   'Đợi lần chạy kết thúc trước khi ghi nhận giới hạn.': 'Wait for the run to finish before acknowledging the limit.',
   'Đợi lần chạy và checker kết thúc trước khi tạo revision.': 'Wait for the run and checkers to finish before creating a revision.',
-  'Màu thẻ @tên': '@name tag color',
-  'Màu của @tên và @all trong tin nhắn, để chúng không lẫn với chữ thường.': 'The color of @name and @all in messages, so they do not read as ordinary words.',
   '{0}s': '{0}s',
   // Schedule editor: saving is the permission, so the data note is a line rather than a tick.
   'Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.': 'Each run sends this brief and its {0} sources {1}, within the limit above.',
