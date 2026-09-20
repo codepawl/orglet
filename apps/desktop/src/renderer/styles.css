@@ -389,6 +389,15 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .suggestions button:hover:not(:disabled) { background:var(--surface); color:var(--text); }
 .suggestions button:disabled { opacity:.55; }
 /* Thread: the prompt bar stays pinned under the conversation. */
+/* What is being replied to, above the bar: who said it and enough of it to recognise, with a way out. It is a
+   quote, so it is set apart by a soft surface rather than by the quote bar a border would draw. */
+.composer-reply { display:flex; align-items:center; gap:10px; margin-bottom:6px; padding:8px 10px 8px 12px; border-radius:12px; background:var(--surface); color:var(--muted); font-size:12.5px; }
+.composer-reply > svg { flex-shrink:0; }
+.composer-reply p { display:flex; gap:8px; min-width:0; flex:1; }
+.composer-reply strong { flex-shrink:0; color:var(--text); font-weight:600; }
+.composer-reply span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* A thumb that has been pressed keeps the accent, so the mark is visible without a second colour. */
+.message-actions .button.marked { color:var(--accent); }
 .thread-composer { width:100%; max-width:780px; margin:0 auto; padding:8px var(--page-x) 0; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
 /* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,

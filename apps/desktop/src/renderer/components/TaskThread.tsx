@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Check, RotateCcw } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, ThumbsUp, ThumbsDown } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -16,6 +16,7 @@ import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Markdown } from './Markdown';
+import { replyToAnswer, toggleReaction, useReaction } from './messageMarks';
 import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
@@ -92,7 +93,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
             {byline(reply.run)}
             <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />
             {reply.artifact.report.format === 'chat'
-              ? <ChatReply artifact={reply.artifact} action={action} />
+              ? <ChatReply artifact={reply.artifact} author={reply.run.snapshot.worker.name} action={action} />
               : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
           </section>)}
           {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
@@ -108,10 +109,10 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
             {!turn.artifact && !turn.replies.length && !(latest && busy) && !unresolvedError && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
             {turn.artifact && !turn.replies.length && <FinishedActivity steps={savedSteps(detail.events, turn.artifact.runId)} />}
             {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
-              ? <ChatReply artifact={turn.artifact} action={action} />
+              ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
-            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
+            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
             {latest && <div className="actions">
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
               {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}
@@ -147,11 +148,29 @@ function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
   return <div className="finished-activity"><ActivityGroup steps={steps} folded /></div>;
 }
 
-function ChatReply({ artifact, action }: { artifact: Artifact; action: (fn: () => Promise<unknown>) => void }) {
+function ChatReply({ artifact, author, action }: { artifact: Artifact; author: string; action: (fn: () => Promise<unknown>) => void }) {
+  const summary = tMessage(artifact.report.summary);
   return <div className="chat-reply">
-    <Markdown className="prose" text={tMessage(artifact.report.summary)} />
-    <div className="message-actions"><ArtifactActions artifactId={artifact.id} action={action} /></div>
+    <Markdown className="prose" text={summary} />
+    <div className="message-actions">
+      <ArtifactActions artifactId={artifact.id} action={action} />
+      <AnswerMarks artifactId={artifact.id} author={author} text={summary} />
+    </div>
   </div>;
+}
+
+/**
+ * Reply to this answer, or mark it. Both ride in the next message to the worker, so neither is decoration: the
+ * quote tells a crew which of them is being answered, and a thumb tells the next run whether to keep going that
+ * way. They sit with copy and download because they are all things you do to one answer.
+ */
+function AnswerMarks({ artifactId, author, text }: { artifactId: string; author: string; text: string }) {
+  const reaction = useReaction(artifactId);
+  return <>
+    <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(artifactId, author, text)}><Reply size={15} /></Button>
+    <Button size="icon" className={reaction === 'up' ? 'marked' : undefined} aria-pressed={reaction === 'up'} aria-label={t('Đúng hướng')} title={t('Đúng hướng')} onClick={() => toggleReaction(artifactId, 'up')}><ThumbsUp size={14} /></Button>
+    <Button size="icon" className={reaction === 'down' ? 'marked' : undefined} aria-pressed={reaction === 'down'} aria-label={t('Chưa ổn')} title={t('Chưa ổn')} onClick={() => toggleReaction(artifactId, 'down')}><ThumbsDown size={14} /></Button>
+  </>;
 }
 
 /** Copy and download for an answer or document, in the format the user picks or saved as default. */
@@ -176,7 +195,7 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   // Evidence links leave the document for the sources panel.
   const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
   return <>
-    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}
       <ArtifactActions artifactId={artifact.id} action={action} />
