@@ -479,6 +479,27 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .notice-banner .actions { margin-top:8px; }
 .startup,.loading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:40px; flex:1; }
 .startup { height:100dvh; text-align:center; }
+/* Opening the workspace is the one moment the app has nothing to show, so the logo does the waiting: the same
+   three shapes it is built from, the bubble breathing and its eye looking around (user, 2026-09-20). Reduced
+   motion slows it rather than stopping it, the way the stop button ring does. */
+.startup .orglet-mark { animation:orglet-breathe 2.6s ease-in-out infinite; }
+.startup .orglet-mark::after { animation:orglet-look 2.6s ease-in-out infinite; }
+@keyframes orglet-breathe { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-3px) scale(1.05); } }
+@keyframes orglet-look { 0%,100% { transform:translate(0,0); } 22% { transform:translate(-55%,6%); } 58% { transform:translate(55%,6%); } }
+@media(prefers-reduced-motion:reduce) { .startup .orglet-mark,.startup .orglet-mark::after { animation-duration:7s; } }
+/* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */
+.thread-skeleton { display:flex; flex-direction:column; gap:26px; width:100%; max-width:768px; margin:0 auto; padding:28px var(--page-x); }
+.thread-skeleton span { display:block; border-radius:8px; background:var(--surface); animation:skeleton-pulse 1.6s ease-in-out infinite; }
+.thread-skeleton-ask { display:flex; justify-content:flex-end; }
+.thread-skeleton-ask span { width:min(58%,360px); height:44px; border-radius:16px; }
+.thread-skeleton-reply { display:flex; gap:11px; }
+.thread-skeleton-reply > div { flex:1; display:flex; flex-direction:column; gap:9px; }
+.thread-skeleton-reply > div span:nth-child(1) { width:92%; height:13px; }
+.thread-skeleton-reply > div span:nth-child(2) { width:78%; height:13px; animation-delay:.18s; }
+.thread-skeleton-reply > div span:nth-child(3) { width:46%; height:13px; animation-delay:.36s; }
+.thread-skeleton-face { width:26px; height:26px; border-radius:50%; flex-shrink:0; }
+@keyframes skeleton-pulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
+@media(prefers-reduced-motion:reduce) { .thread-skeleton span { animation-duration:4.5s; } }
 /* Former side panels open as centred dialogs, matching Settings. */
 .drawer { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:11; width:min(640px, calc(100vw - 32px)); max-height:min(720px, calc(100dvh - 32px)); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; animation:drawer-in var(--motion-base) var(--ease-out); }
 /* The centring translate has to be carried through the keyframes, or the dialog jumps off centre as it opens. */
