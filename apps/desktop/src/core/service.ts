@@ -145,13 +145,15 @@ export class CoreService {
       case 'reviseTask': {
         const input = commands.reviseTask.parse(args);
         const task = this.store.get<Task>('tasks', input.taskId);
-        if (this.runner.isActive(task.id) || this.teams.isActive(task.id) || this.sources.isChecking()) throw new Error('Đợi lần chạy và checker kết thúc trước khi tạo revision.');
-        if (['queued', 'running', 'pausing'].includes(task.status)) throw new Error('Task chưa dừng ở ranh giới an toàn.');
+        if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
+        if (this.sources.isChecking()) throw new Error('Đợi checker kết thúc trước khi tạo revision.');
+        const active = this.runner.isActive(task.id) || this.teams.isActive(task.id);
+        if (!active && ['queued', 'running', 'pausing'].includes(task.status)) throw new Error('Task chưa dừng ở ranh giới an toàn.');
         const prepared = this.prepareTask({ ...input, workerId: task.workerId, ...(task.teamId ? { teamId: task.teamId } : {}), ...(task.assignees ? { assignees: task.assignees } : {}) });
         const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
         if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
         this.policy.assertStart(task.teamId, task.id);
-        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: 'queued', pauseReason: undefined, handoff: undefined,
+        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
           decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
             ? { ...request, interruptedAt: now() } : request) };
         this.store.transaction(() => {
@@ -159,6 +161,7 @@ export class CoreService {
           for (const run of this.store.detail(task.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources } } });
           this.store.update('tasks', revised);
         });
+        if (active) { this.teams.cancel(task.id); this.runner.cancel(task.id); this.notify(); return; }
         this.start(revised, true); return;
       }
       case 'answerDecision': {
@@ -191,7 +194,13 @@ export class CoreService {
       }
       case 'dismissRoutine': this.routines.dismiss((args as { id: string }).id); return;
       case 'catchUpRoutine': return this.routines.catchUp((args as { id: string }).id);
-      case 'cancel': this.teams.cancel((args as { id: string }).id); this.runner.cancel((args as { id: string }).id); return;
+      case 'cancel': {
+        const taskId = (args as { id: string }).id;
+        this.teams.cancel(taskId); this.runner.cancel(taskId);
+        const task = this.store.get<Task>('tasks', taskId);
+        if (task.pendingStart) this.store.update('tasks', { ...task, pendingStart: undefined, status: 'cancelled' });
+        this.notify(); return;
+      }
       case 'pause': {
         const task = this.store.get<Task>('tasks', (args as { id: string }).id);
         if (!this.runner.isActive(task.id) && !this.teams.isActive(task.id)) throw new Error('Task không đang chạy.');
@@ -201,6 +210,17 @@ export class CoreService {
       case 'resume': {
         const task = this.store.get<Task>('tasks', (args as { id: string }).id);
         if (this.runner.isActive(task.id) || this.teams.isActive(task.id)) throw new Error('Task đang chạy.');
+        if (task.pendingStart) {
+          if (task.status !== 'interrupted') throw new Error('Yêu cầu mới đang chờ lượt trước dừng.');
+          if (this.store.detail(task.id).runs.some(run => (run.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0))) {
+            this.store.update('tasks', { ...task, pendingStart: undefined });
+            return this.command('resume', { id: task.id });
+          }
+          this.prepareTask({ ...task, ...(task.currentInput ?? {}), workerId: task.workerId });
+          this.policy.assertStart(task.teamId, task.id);
+          this.dispatchPendingRevision(task);
+          return;
+        }
         if (!['paused', 'interrupted', 'waiting_budget'].includes(task.status)) throw new Error('Task không ở trạng thái có thể tiếp tục.');
         this.policy.assertStart(task.teamId, task.id);
         if (task.teamSnapshot) {
@@ -675,6 +695,21 @@ export class CoreService {
     return packageForExport(skill);
   }
   async tick() {
+    for (const task of this.store.all<Task>('tasks')) {
+      if (!task.pendingStart || task.status === 'interrupted' || this.runner.isActive(task.id) || this.teams.isActive(task.id)) continue;
+      const previous = this.store.detail(task.id).runs.filter(run => (run.snapshot.inputRevision ?? 0) < (task.inputRevision ?? 0));
+      if (previous.some(run => ['running', 'queued', 'pausing'].includes(run.status))) continue;
+      try {
+        this.prepareTask({ ...task, ...(task.currentInput ?? {}), workerId: task.workerId });
+        this.policy.assertStart(task.teamId, task.id);
+        this.dispatchPendingRevision(task);
+      } catch (error) {
+        this.store.update('tasks', { ...this.store.get<Task>('tasks', task.id), status: 'interrupted' });
+        const lastRun = previous.at(-1);
+        if (lastRun) this.store.event(lastRun.id, error instanceof Error ? error.message : 'Không thể bắt đầu yêu cầu mới.');
+        this.notify();
+      }
+    }
     let changed = false;
     // Archived tasks past the retention period are deleted; a task that cannot be deleted right now is tried again later.
     const retention = this.store.setting<number>('archiveRetentionDays', 30);
@@ -713,6 +748,19 @@ export class CoreService {
     void this.runner.run(task, run).catch(() => {
       this.store.status(task.id, run.id, 'interrupted', 'Core không thể hoàn tất ghi trạng thái.'); this.notify();
     });
+  }
+  private dispatchPendingRevision(task: Task) {
+    if (!task.pendingStart) return;
+    const currentRuns = this.store.detail(task.id).runs.filter(run => (run.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0));
+    if (currentRuns.length) {
+      this.store.update('tasks', { ...task, pendingStart: undefined });
+      this.notify();
+      return;
+    }
+    this.start({ ...task, status: 'queued' }, true);
+    const started = this.store.get<Task>('tasks', task.id);
+    this.store.update('tasks', { ...started, pendingStart: undefined });
+    this.notify();
   }
   exportMarkdown(artifactId: string): string {
     const artifact = this.store.get<Artifact>('artifacts', artifactId);

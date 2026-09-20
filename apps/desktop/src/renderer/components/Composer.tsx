@@ -168,7 +168,11 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
       onKeyUp={event => syncCursor(event.currentTarget)} onClick={event => syncCursor(event.currentTarget)} onSelect={event => syncCursor(event.currentTarget)}
       onKeyDown={onKeyDown} />
     {trailing && <div className="composer-trailing">{trailing}</div>}
-    {onStop
+    {onStop && canSend && <Button type="button" variant="primary" size="icon" className="send stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}>
+        <span className="send-spin" aria-hidden="true" />
+        <Square size={11} fill="currentColor" />
+      </Button>}
+    {onStop && !canSend
       ? <Button type="button" variant="primary" size="icon" className="send stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}>
         <span className="send-spin" aria-hidden="true" />
         <Square size={11} fill="currentColor" />
@@ -180,6 +184,7 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
 /** Follow-up bar under a task: the text becomes an extra instruction for a new review of the same sources. */
 export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, action }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: (tab?: 'connections' | 'harness') => void; action: (fn: () => Promise<unknown>) => void }) {
   const [text, setText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const input = detail.task.currentInput ?? detail.task;
   const workers = taskWorkers(detail.task, workspace);
   const team = detail.task.teamId ? workspace.teams.find(item => item.id === detail.task.teamId) : undefined;
@@ -193,17 +198,15 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   const blocked = missing.length > 0;
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt);
   const send = () => {
-    const extra = text.trim(); if (!extra || busy || blocked) return;
-    setText('');
+    const extra = text.trim(); if (!extra || blocked || detail.task.pendingStart || submitting) return;
+    setSubmitting(true);
     if (detail.task.status === 'waiting_input' && pendingDecision) {
-      clearReplyTarget();
-      action(() => orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: extra }));
+      action(async () => { try { await orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: extra }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
       return;
     }
     // A quote and a reaction steer the next turn, so they belong in its brief.
     const brief = briefWithMarks(extra, reply, reaction);
-    clearReplyTarget();
-    action(() => orglet.call('reviseTask', { taskId: detail.task.id, brief, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }));
+    action(async () => { try { await orglet.call('reviseTask', { taskId: detail.task.id, brief, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
   };
   return <div className="thread-composer">
     {reply && !pendingDecision && <div className="composer-reply">
@@ -211,8 +214,8 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
       <p><strong>{reply.author}</strong><span>{reply.text}</span></p>
       <Button type="button" size="icon" aria-label={t('Bỏ trả lời')} title={t('Bỏ trả lời')} onClick={clearReplyTarget}><X size={14} /></Button>
     </div>}
-    <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={busy ? t('Đang làm việc…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={blocked}
-      onStop={busy ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
+    <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(detail.task.pendingStart) || submitting} sendDisabled={blocked}
+      onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
       leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Đính kèm tệp')} title={t('Đính kèm tệp')} disabled={busy} onClick={openRevision}><Plus size={20} /></Button>} />
     {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
