@@ -28,6 +28,7 @@ const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), messag
 const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime() }).strict();
 const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional() }).strict();
 const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: z.iso.datetime(), sourceHashes: z.record(Id, Hash), result: DatasetProfile }).strict();
+const ProcessEvidence = z.object({ id: Id, runId: Id, exitCode: z.number().int() }).strict();
 const Reservation = z.object({ id: Id, run_id: Id, task_id: Id, provider: z.enum(['openai', 'anthropic', 'xai', 'openrouter']), month: z.string().regex(/^\d{4}-\d{2}$/), amount: Integer, state: z.enum(['held', 'unknown', 'settled']) }).strict();
 const Ledger = z.object({ id: Id, reservation_id: Id, amount: Integer, input_tokens: Integer, output_tokens: Integer, pricing_version: z.string() }).strict();
 const RevisionRow = z.object({ entity_id: Id, revision: Revision, data: z.union([Worker, Skill, Team]) }).strict();
@@ -36,7 +37,7 @@ const KnowledgeRevision = z.object({ id: Id, revision: Revision, data: Knowledge
 const Payload = z.object({
   routines: z.array(Routine).max(100).optional(),
   knowledge: z.array(Knowledge).max(10_000).optional(), knowledgeRevisions: z.array(KnowledgeRevision).max(100_000).optional(),
-  workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), settings: Settings,
+  workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), settings: Settings,
 }).strict();
 type Payload = z.infer<typeof Payload>;
 const Envelope = z.object({ format: z.literal('orglet-backup'), version: z.literal(1), createdAt: z.iso.datetime(), checksum: Hash, payload: Payload }).strict();
@@ -63,7 +64,8 @@ function validateRelations(data: Payload) {
     if (task.routineId && !routines.has(task.routineId)) fail('Task thiếu lịch.');
     if (task.handoff?.artifactIds.some(id => runs.get(artifacts.get(id)?.runId ?? '')?.taskId !== task.id)) fail('Handoff tham chiếu báo cáo ngoài task.');
   }
-  map(data.events); map(data.profiles); const reservations = map(data.reservations); map(data.ledger);
+  map(data.events); map(data.profiles); const processEvidence = map(data.processEvidence ?? []); const reservations = map(data.reservations); map(data.ledger);
+  for (const process of processEvidence.values()) if (!runs.has(process.runId)) fail('Bằng chứng tiến trình tham chiếu run không tồn tại.');
   const preflights = map(data.preflights ?? []);
   const preflightScopes = new Set<string>();
   for (const record of preflights.values()) {
@@ -205,6 +207,11 @@ function validateRelations(data: Payload) {
     validateReview(artifact.report, upstream, new Set(artifactSourceIds), (id, sourceIds) => {
       const profile = data.profiles.find(item => item.id === id);
       if (!profile || profile.taskId !== task.id || (profile.runId !== owner.id && !(owner.snapshot.preflightId && preflights.get(owner.snapshot.preflightId)?.profileIds.includes(id))) || !sourceIds.some(sourceId => Object.hasOwn(profile.sourceHashes, sourceId))) fail('Review tham chiếu checker ngoài phạm vi.');
+    }, (id, status) => {
+      const process = processEvidence.get(id);
+      if (!owner.snapshot.workspaceGrant || !process || process.runId !== owner.id
+        || (status === 'pass' && process.exitCode !== 0)
+        || (status === 'fail' && process.exitCode === 0)) fail('Review tham chiếu tiến trình ngoài phạm vi hoặc không khớp kết quả.');
     });
     if (artifact.report.findings.some(finding => finding.sourceIds.some(id => !artifactSourceIds.includes(id)))) fail('Artifact trích nguồn ngoài task.');
     for (const finding of artifact.report.findings) {
@@ -252,7 +259,8 @@ function snapshot(store: Store): Payload {
     routines: store.all('routines'),
     knowledge: store.all('knowledge'),
     knowledgeRevisions: store.db.prepare('SELECT * FROM knowledge_revisions ORDER BY rowid').all().map(row => ({ id: row.id, revision: row.revision, data: JSON.parse(String(row.data)) })),
-    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs: store.all('runs'), events: store.all('events'), artifacts: store.all('artifacts'), sources: store.all('sources'), profiles: store.all('profiles'), preflights: store.all('preflights'),
+    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs: store.all('runs'), events: store.all('events'), artifacts: store.all('artifacts'), sources: store.all('sources'), profiles: store.all('profiles'),
+    processEvidence: store.db.prepare('SELECT id,run_id AS runId,exit_code AS exitCode FROM process_evidence').all(), preflights: store.all('preflights'),
     revisions: store.db.prepare('SELECT * FROM revisions ORDER BY rowid').all().map(row => ({ ...row, data: JSON.parse(String(row.data)) })),
     reservations: store.db.prepare('SELECT * FROM reservations ORDER BY rowid').all(), ledger: store.db.prepare('SELECT * FROM ledger ORDER BY rowid').all(),
     // Keys, reviewedSkills and modelLists stay on this machine; they are derived from local credentials/CLIs.
@@ -313,6 +321,7 @@ export class Backups {
         workers: merge(current.workers, incoming.workers), skills: merge(current.skills, incoming.skills), teams: merge(current.teams, incoming.teams),
         tasks: merge(current.tasks, restoredTasks), runs: merge(current.runs, restoredRuns), sources: merge(current.sources, restoredSources),
         events: merge(current.events, incoming.events, true), artifacts: merge(current.artifacts, incoming.artifacts, true), profiles: merge(current.profiles, incoming.profiles, true),
+        processEvidence: merge(current.processEvidence ?? [], incoming.processEvidence ?? [], true),
         preflights: merge(current.preflights ?? [], incoming.preflights ?? []),
         ledger: merge(current.ledger, incoming.ledger, true), reservations: merge(current.reservations, incoming.reservations),
       };
@@ -341,6 +350,7 @@ export class Backups {
       for (const event of merged.events) this.store.put('events', event, { column: 'run_id', value: event.runId });
       for (const artifact of merged.artifacts) this.store.put('artifacts', artifact, { column: 'run_id', value: artifact.runId });
       for (const profile of merged.profiles) this.store.put('profiles', profile, { column: 'task_id', value: profile.taskId });
+      for (const process of merged.processEvidence ?? []) this.store.db.prepare('INSERT OR IGNORE INTO process_evidence(id,run_id,exit_code) VALUES(?,?,?)').run(process.id, process.runId, process.exitCode);
       for (const record of merged.preflights ?? []) this.store.put('preflights', record, { column: 'task_id', value: record.taskId });
       for (const row of merged.revisions) this.store.db.prepare('INSERT OR IGNORE INTO revisions VALUES(?,?,?)').run(row.entity_id, row.revision, JSON.stringify(row.data));
       for (const row of merged.reservations) this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state').run(row.id, row.run_id, row.task_id, row.provider, row.month, row.amount, row.state);

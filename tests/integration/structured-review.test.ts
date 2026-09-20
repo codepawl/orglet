@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Report, type Artifact } from '../../apps/desktop/src/shared/contracts';
-import { applyReviewPolicy, validateReview } from '../../apps/desktop/src/core/review';
+import { applyReviewPolicy, downgradeUncitedWorkspaceChecks, validateReview } from '../../apps/desktop/src/core/review';
 
 const source = randomUUID();
 const finding = () => ({ title: 'Observed issue', severity: 'warning' as const, detail: 'Evidence differs.', coverage: 'Selected source', sourceIds: [source], provenance: { findingId: randomUUID(), writerId: randomUUID(), runId: randomUUID() } });
@@ -10,6 +10,27 @@ const report = () => Report.parse({ title: 'Review', summary: 'Summary', finding
 const validate = (value: Report, upstream: Artifact[] = []) => validateReview(value, upstream, new Set([source]), () => { throw new Error('Unknown checker'); });
 
 describe('structured review gates', () => {
+  it('keeps a workspace report while downgrading an uncited command check', () => {
+    const value = report();
+    value.review!.checks[0].sourceIds = [];
+    downgradeUncitedWorkspaceChecks(value);
+    expect(value.review!.checks[0].status).toBe('not_assessed');
+    expect(value.review!.recommendation).toBe('insufficient_evidence');
+    expect(value.limitations).toContain('Chưa xác minh độc lập check: Schema.');
+    validate(value);
+  });
+  it('accepts only a same-run completed process as command evidence', () => {
+    const value = report();
+    const processId = randomUUID();
+    value.review!.checks[0].sourceIds = [];
+    value.review!.checks[0].processIds = [processId];
+    expect(() => validate(value)).toThrow('tiến trình');
+    validateReview(value, [], new Set(), () => {}, (id, status) => {
+      expect(id).toBe(processId);
+      expect(status).toBe('pass');
+    });
+    expect(value.review!.checks[0].status).toBe('pass');
+  });
   it('retains a legacy report without manufacturing review metadata', () => {
     const value = Report.parse({ title: 'Old', summary: 'Old report', findings: [], limitations: [] });
     validate(value); expect(value.review).toBeUndefined();

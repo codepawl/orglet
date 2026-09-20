@@ -29,6 +29,26 @@ const resign = (text: string, mutate: (payload: any) => void) => {
 };
 
 describe('workspace backup and additive restore', () => {
+  it('keeps scoped command evidence without exporting command text or output', () => {
+    const original = create(); const f = fixture(original);
+    const run = { ...f.run, stage: 'member' as const, status: 'completed' as const, snapshot: { ...f.run.snapshot,
+      workspaceGrant: { id: id(), taskId: f.task.id, revision: 1, permissions: ['read', 'write', 'execute'] as const } } };
+    original.update('runs', run);
+    const processId = id();
+    const report = { title: 'Syntax check', summary: 'Checked app.js', findings: [], limitations: [],
+      review: { checks: [{ name: 'JavaScript syntax', status: 'pass', coverage: 'node --check app.js exited 0', sourceIds: [], checkerIds: [], processIds: [processId] }],
+        recommendation: 'ready_for_human_review', draftFeedback: 'Syntax check passed.', upstreamFindingIds: [], conflicts: [] } };
+    original.db.prepare('INSERT INTO process_evidence(id,run_id,exit_code) VALUES(?,?,?)').run(processId, run.id, 0);
+    original.put('artifacts', { id: id(), runId: run.id, report,
+      hash: createHash('sha256').update(JSON.stringify(report)).digest('hex'), createdAt: now() }, { column: 'run_id', value: run.id });
+    const text = backups(original).export();
+    expect(text).not.toContain('private\\never-export');
+    expect(text).not.toContain('stdout');
+    const restored = create(); const manager = backups(restored);
+    manager.restore(manager.preview(text).token);
+    expect(restored.detail(f.task.id).artifacts[0].report.review?.checks[0].processIds).toEqual([processId]);
+    expect(() => manager.preview(resign(text, payload => { payload.processEvidence[0].exitCode = 1; }))).toThrow('không khớp');
+  });
   it('freezes newly restored legacy runs before merging an expanded task source history', () => {
     const store = create(); const f = fixture(store); const manager = backups(store);
     const missingRun = { ...f.run, id: id() };

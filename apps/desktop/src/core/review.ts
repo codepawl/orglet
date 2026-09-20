@@ -31,8 +31,21 @@ export function applyReviewPolicy(report: Report, policy: ReviewPolicy | undefin
   return result;
 }
 
+/** Workspace command output has no source ID yet. Keep the work, but never publish an uncited pass. */
+export function downgradeUncitedWorkspaceChecks(report: Report) {
+  if (!report.review) return;
+  for (const check of report.review.checks) {
+    if (check.status === 'not_assessed' || check.sourceIds.length || check.processIds?.length) continue;
+    check.status = 'not_assessed';
+    check.coverage += '\nKết quả công cụ workspace chưa có mã bằng chứng để trích dẫn trong báo cáo.';
+    report.limitations.push(`Chưa xác minh độc lập check: ${check.name}.`);
+  }
+  if (report.review.checks.some(check => check.status === 'not_assessed')) report.review.recommendation = 'insufficient_evidence';
+}
+
 // Structural evidence gates cannot establish that a model's interpretation is correct.
-export function validateReview(report: Report, upstream: Artifact[], sourceIds: ReadonlySet<string>, validateChecker: (id: string, sources: string[]) => void) {
+export function validateReview(report: Report, upstream: Artifact[], sourceIds: ReadonlySet<string>, validateChecker: (id: string, sources: string[]) => void,
+  validateProcess: (id: string, status: 'pass' | 'fail' | 'not_assessed') => void = () => { throw new Error('Check tham chiếu tiến trình chưa được cung cấp cho lần chạy.'); }) {
   const review = report.review;
   if (!review) return; // Historical reports have no structured review contract.
   const available = new Set(upstream.flatMap(artifact => [...artifact.report.findings.flatMap(finding => finding.provenance ? [finding.provenance.findingId] : []), ...(artifact.report.review?.upstreamFindingIds ?? [])]));
@@ -43,8 +56,9 @@ export function validateReview(report: Report, upstream: Artifact[], sourceIds: 
     const name = check.name.trim().toLowerCase();
     if (names.has(name)) throw new Error('Review có check bị trùng.');
     names.add(name);
-    if (check.sourceIds.some(id => !sourceIds.has(id)) || (check.status !== 'not_assessed' && !check.sourceIds.length)) throw new Error('Check đã đánh giá cần nguồn được cung cấp cho lần chạy.');
+    if (check.sourceIds.some(id => !sourceIds.has(id)) || (check.status !== 'not_assessed' && !check.sourceIds.length && !check.processIds?.length)) throw new Error('Check đã đánh giá cần nguồn được cung cấp cho lần chạy.');
     for (const id of check.checkerIds) validateChecker(id, check.sourceIds);
+    for (const id of check.processIds ?? []) validateProcess(id, check.status);
   }
   for (const conflict of review.conflicts) {
     const ids = new Set(conflict.findingIds);
