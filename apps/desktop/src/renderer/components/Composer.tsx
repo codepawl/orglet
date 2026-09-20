@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { ArrowUp, Plus, Square } from 'lucide-react';
+import { ArrowUp, Plus, Reply, Square, X } from 'lucide-react';
 import type { TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
 import { Button } from './ui';
@@ -9,6 +9,7 @@ import { MentionText } from './mentions';
 import { providerLabel, settingsTabFor, type Readiness } from './providers';
 import { t } from '../i18n';import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
+import { briefWithMarks, clearReplyTarget, useReaction, useReplyTarget } from './messageMarks';
 
 const SINGLE_LINE = 40;
 
@@ -184,14 +185,26 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   const team = detail.task.teamId ? workspace.teams.find(item => item.id === detail.task.teamId) : undefined;
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
   const missing = providers.filter(provider => !ready[provider]);
+  const reply = useReplyTarget();
+  // Only the newest answer can be marked as the one to keep going from; an older thumb is history, not an instruction.
+  const latestAnswer = detail.artifacts.at(-1)?.id;
+  const reaction = useReaction(latestAnswer ?? '');
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0;
   const send = () => {
     const extra = text.trim(); if (!extra || busy || blocked) return;
+    // A quote and a thumb are worth nothing if only the screen hears them, so they go in ahead of what was typed.
+    const brief = briefWithMarks(extra, reply, reaction);
     setText('');
-    action(() => orglet.call('reviseTask', { taskId: detail.task.id, brief: extra, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }));
+    clearReplyTarget();
+    action(() => orglet.call('reviseTask', { taskId: detail.task.id, brief, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }));
   };
   return <div className="thread-composer">
+    {reply && <div className="composer-reply">
+      <Reply size={14} aria-hidden="true" />
+      <p><strong>{reply.author}</strong><span>{reply.text}</span></p>
+      <Button type="button" size="icon" aria-label={t('Bỏ trả lời')} title={t('Bỏ trả lời')} onClick={clearReplyTarget}><X size={14} /></Button>
+    </div>}
     <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={busy ? t('Đang làm việc…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={blocked}
       onStop={busy ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
