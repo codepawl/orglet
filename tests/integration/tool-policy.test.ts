@@ -142,7 +142,8 @@ describe('tool policy boundary', () => {
         executed = true;
         expect(await readdir(join(request.cwd, 'sources'))).toEqual([]);
         expect(request.prompt).not.toContain('unique-private-bytes');
-        return { output: { message: 'No source access', title: null, report: null }, costUsd: null };
+        const answer = { message: 'No source access', title: null, report: null };
+        return { output: provider === 'codex' ? { payload: JSON.stringify(answer) } : answer, costUsd: null };
       },
     });
     const sourcePath = join(directory, 'note.txt');

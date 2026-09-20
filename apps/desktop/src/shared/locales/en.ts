@@ -328,6 +328,7 @@ export const en: Dictionary = {
   'Claude Code trên máy này': 'Claude Code on this computer',
   'Codex báo lỗi: {0}': 'Codex reported an error: {0}',
   'Codex không trả về báo cáo đúng schema.': 'Codex did not return a report matching the schema.',
+  'Codex trả payload không phải JSON hợp lệ.': 'Codex returned a payload that is not valid JSON.',
   'Codex kết thúc mà không có báo cáo.': 'Codex finished without a report.',
   'Codex nhận nội dung nguồn văn bản trong prompt và không có tool đọc tệp hay chạy lệnh.': 'Codex receives text source content in the prompt and has no tools to read files or run commands.',
   'Codex trên máy này': 'Codex on this computer',

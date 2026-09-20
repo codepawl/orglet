@@ -42,6 +42,7 @@ import { mentionedPeople } from '../../shared/mentions';
 import { reportValidationMessage, sanitizeReportReply } from '../tools/report-validation';
 import { savedArtifactContext, savedAssignmentAttempts } from './artifact-provenance';
 import { WorkspaceProcess } from '../../shared/workspace-processes';
+import { codexOutputSchema, decodeCodexOutput } from '../harness/codex-output';
 
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = { detect(): Promise<HarnessInfo[]>; execute: HarnessExecutor };
@@ -62,7 +63,7 @@ function sourceNameForCopy(files: { name: string; file: string }[], copyName: st
   return copy ? copy.name : copyName;
 }
 
-function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false) {
+function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false) {
   return [
     'You are running inside Orglet as a read-only worker chatting with your user. When you describe what you can or cannot do, use everyday words about the work: you read the files the user attaches and write answers, and you cannot open links, run programs or change files. Do not mention tools, modes, sandboxes or providers unless the user asks about them. Write like a colleague messaging back, in the language and formality the user writes in, and ask one short question when the request is unclear or could go two sensible ways.',
     inline
@@ -72,6 +73,7 @@ function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId
     plan
       ? `Your final answer must be only JSON matching the provided schema. Assign work with submit_plan fields: assignments of listed member ids plus briefs. Do not invent workers or missing results.`
       : `Your final answer must be only JSON matching the provided schema. Put your answer to the user in message, written as a normal chat reply (Markdown allowed). Set title to a short name for this chat (2 to 6 words, the user's language) when the latest message has nameChat true, otherwise null. Set report to null unless the user asked for a report or review document, or required review checks are given; then fill report following these rules: ${SUBMIT_REPORT_DESCRIPTION}`,
+    codex ? 'The output schema has one payload string. Put the JSON text of the requested answer object inside payload, with message/title/report or the plan fields as instructed. Do not put Markdown around that JSON text.' : '',
     files.length || inline?.length ? `Source manifest: ${JSON.stringify(files)}` : NO_SOURCES_INSTRUCTION,
     ...messages.map(message => typeof message.content === 'string' ? message.content : ''),
   ].filter(Boolean).join('\n\n');
@@ -712,8 +714,8 @@ export class Runner {
           harness: provider,
           executable: tool.executable,
           cwd: directory,
-          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan'),
-          schema: z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema
+          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex'),
+          schema: provider === 'codex' ? codexOutputSchema : z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema
             : run.stage === 'member' ? HarnessAnswerSchema.extend({ report: MemberReportSchema }) : HarnessAnswerSchema, { target: 'draft-7' }),
           signal,
           maxBudgetUsd: remainingUsd,
@@ -732,17 +734,18 @@ export class Runner {
       const limitations = [provider === 'codex'
         ? `Chạy bằng ${tool.name} ${tool.version} trên máy này. Nội dung nguồn văn bản được gửi trực tiếp trong prompt; Codex không có tool đọc tệp hay chạy lệnh.`
         : `Chạy bằng ${tool.name} ${tool.version} trên máy này. Harness tự đọc bản sao nguồn; Orglet kiểm tra nguồn trích dẫn, checker và vị trí dòng nhưng không xác minh tệp nào đã thực sự được mở.`];
+      const output = provider === 'codex' ? decodeCodexOutput(result.output) : result.output;
       if (run.stage === 'plan') {
-        this.completePlan(run, result.output);
+        this.completePlan(run, output);
         return;
       }
       // Older harness prompts (and team reports) return the report object itself.
-      const answer = needsReport(run) ? undefined : HarnessAnswer.safeParse(result.output);
+      const answer = needsReport(run) ? undefined : HarnessAnswer.safeParse(output);
       if (answer?.success && answer.data.report === null) {
         if (run.stage === 'member') throw new Error('Phần việc cần báo cáo kết quả hoặc blocker, không thể hoàn tất bằng tin nhắn.');
         for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
         this.commit(task, run, { ...chatReport(answer.data.message), limitations: [...(options.limitations ?? [])] }, options.keepTaskOpen, [], answer.data.title);
-      } else await this.finalize(task, run, answer?.success ? answer.data.report : result.output, readIds, scope, options, limitations);
+      } else await this.finalize(task, run, answer?.success ? answer.data.report : output, readIds, scope, options, limitations);
     } catch (error) {
       retainDirectory = error instanceof HarnessTerminationError;
       throw error;
