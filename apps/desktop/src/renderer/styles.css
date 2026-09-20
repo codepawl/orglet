@@ -521,6 +521,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .setting-connection.inactive .provider-mark,
 .setting-connection.inactive .setting-text { opacity:.5; }
 .setting-connection.inactive .setting-text .text-link { pointer-events:auto; opacity:1; }
+/* The key field is a row of its own under the connection, not a strip squeezed into the text column beside the
+   switch: a key is long, and in a 460px row it had 254px left after the file and save buttons (user, 2026-09-20). */
+.setting-connection { flex-wrap:wrap; }
+.setting-connection > .setting-key-form { flex:1 0 100%; order:1; margin-top:8px; }
 .setting-key-form { display:flex; flex-wrap:nowrap; align-items:center; gap:6px; margin-top:2px; max-width:100%; }
 .setting-key-form .setting-key-file {
   width:34px; height:34px; min-height:34px; padding:0; border-radius:50%; color:var(--muted); flex-shrink:0;

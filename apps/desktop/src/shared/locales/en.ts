@@ -390,7 +390,7 @@ export const en: Dictionary = {
   'Model tùy chỉnh chưa có giá đã xác minh trong Orglet. Chi phí được giữ chỗ chưa rõ.': 'This custom model has no verified Orglet price. The cost is held as unknown.',
   'Model đang trả kết quả…': 'The model is responding…',
   'Mã lỗi và trạng thái không hoàn tất': 'Error codes and incomplete statuses',
-  'Mọi cuộc trò chuyện, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet.': 'All chats, reports and settings stay on this computer. There is no Orglet account.',
+  'Mọi cuộc trò chuyện, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet, và không một bí mật nào bị tổn hại trong quá trình làm ra app này.': 'Every chat, report and setting stays on this computer. There is no Orglet account, and no secrets were harmed in the making of this app.',
   'Mỗi lần lưu tạo một revision mới. Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.': 'Each save creates a new revision. Earlier runs keep the instructions and skill they used.',
   'Mỗi mục kiểm tra cần tên riêng, tối đa 200 ký tự; không để trống hoặc trùng tên.': 'Each check needs its own name, up to 200 characters; no empty or duplicate names.',
   'Mỗi {0}': 'Every {0}',
