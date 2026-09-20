@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Routine, TaskInput, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
-import { CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, FilePlus, FileText, Globe, MessageSquare, MessageSquareText, Pencil, Repeat, UserRound, Wallet, X } from 'lucide-react';
+import { Attachment } from './Attachment';
+import { CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, FilePlus, FileText, Globe, MessageSquare, MessageSquareText, Pencil, Repeat, UserRound, Wallet } from 'lucide-react';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
 import { TimeZone } from '../../shared/schedule';
@@ -116,7 +117,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
             catch (err) { setError((err as Error).message); } finally { setBusy(false); }
           }}><FilePlus size={15} />{t('Chọn nguồn cho lịch')}</Button>
         </PanelHeading>
-        {sources.length > 0 ? <div className="attachment-list">{sources.map(source => <span className="attachment" key={source.id}><FileText size={14} /><span>{source.name}</span><button type="button" aria-label={t('Bỏ nguồn {0}', [source.name])} onClick={() => { setSources(sources.filter(item => item.id !== source.id)); }}><X size={14} /></button></span>)}</div> : <p className="muted">{t('Chưa chọn nguồn. Lịch vẫn chạy được chỉ với brief.')}</p>}
+        {sources.length > 0 ? <ul className="attachment-list">{sources.map(source => <Attachment key={source.id} name={source.name} removeLabel={t('Bỏ nguồn {0}', [source.name])} onRemove={() => { setSources(sources.filter(item => item.id !== source.id)); }} />)}</ul> : <p className="muted">{t('Chưa chọn nguồn. Lịch vẫn chạy được chỉ với brief.')}</p>}
         <p className="muted">{t('Chỉ dùng các tệp đã chọn với nội dung hiện tại. Tệp thay đổi hoặc bị thu hồi sẽ chặn lần chạy; chọn lại nguồn và lưu lịch để cấp quyền mới.')}</p>
       </div>
     </section>

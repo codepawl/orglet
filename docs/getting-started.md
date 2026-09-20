@@ -104,6 +104,8 @@ A worker only reads the files you attach to **that** chat.
 2. Choose **Files** (specific files) or **Folder** (up to 20 supported files).
 3. Write what you want done, then send.
 
+Attached files sit in a row of cards above your message, each with an icon for what it is (spreadsheet, document, data, code, plain text), its name and its size. The row scrolls sideways when there are many. Hover a card to remove it.
+
 Demo cannot analyze files. Switch **Model** off Demo first. Reports can open like a document: copy as plain text or Markdown, or download them.
 
 ## What this page does not cover
