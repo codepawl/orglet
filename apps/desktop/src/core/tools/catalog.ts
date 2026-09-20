@@ -23,9 +23,10 @@ export const Proposals = z.array(KnowledgeProposal).max(3);
 const Locations = z.array(SourceLocation).max(20);
 const ModelFindingSchema = Finding.omit({ provenance: true }).extend({ category: FindingCategory, recommendation: Recommendation, checkerIds: CheckerIds, locations: Locations });
 export const ModelReportSchema = Report.omit({ format: true }).extend({ review: Review, findings: z.array(ModelFindingSchema).max(50), limitations: z.array(z.string().min(1).max(2000)).max(30), knowledgeProposals: Proposals });
+export const MemberReportSchema = ModelReportSchema.extend({ assignmentOutcome: z.enum(['completed', 'blocked']) });
 // Old persisted replies predate these fields. Defaults do not fabricate a recommendation or evidence.
 const ModelFinding = ModelFindingSchema.extend({ category: FindingCategory.default('other'), recommendation: Recommendation.default(null), checkerIds: CheckerIds.default([]), locations: Locations.default([]) });
-export const ModelReport = ModelReportSchema.extend({ review: Review.nullable().optional(), findings: z.array(ModelFinding).max(50), knowledgeProposals: Proposals.default([]) });
+export const ModelReport = ModelReportSchema.extend({ review: Review.nullable().optional(), findings: z.array(ModelFinding).max(50), knowledgeProposals: Proposals.default([]), assignmentOutcome: z.enum(['completed', 'blocked']).optional() });
 
 /**
  * A finding has to cite a source that was read, which `finalize` enforces. With nothing attached, every finding
@@ -98,6 +99,7 @@ export function toolsFor(run: Run, task: Task): ChatCompletionTool[] {
     if (['resolve_team_messages', 'reassign_team_work'].includes(name) && (run.stage !== 'synthesis'
       || run.snapshot.worker.id !== run.snapshot.team?.synthesizerId)) return false;
     if (name === 'reassign_team_work' && run.snapshot.worker.provider === 'demo') return false;
+    if (name === 'reply' && run.stage === 'member') return false;
     if (definition.workspacePermission) {
       return run.snapshot.worker.provider !== 'demo'
         && run.snapshot.workspaceGrant?.taskId === task.id
@@ -108,7 +110,12 @@ export function toolsFor(run: Run, task: Task): ChatCompletionTool[] {
     }
     if (name === 'submit_plan' || (name === 'reply' && needsReport(run))) return false;
     return !definition.capability || hasCapability(run, task, definition.capability);
-  }).map(([, definition]) => definition.model);
+  }).map(([name, definition]) => name === 'submit_report' && run.stage === 'member' && definition.model.type === 'function'
+    ? { ...definition.model, function: { ...definition.model.function,
+      description: `${SUBMIT_REPORT_DESCRIPTION} Set assignmentOutcome to blocked when the required deliverable is missing or cannot be completed; submitting a report alone does not complete the assignment.`,
+      parameters: z.toJSONSchema(MemberReportSchema, { target: 'draft-7' }),
+    } }
+    : definition.model);
 }
 
 export function assertToolCall(run: Run, task: Task, name: string, argumentsText: string): void {

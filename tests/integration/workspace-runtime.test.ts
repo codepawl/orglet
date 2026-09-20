@@ -137,6 +137,22 @@ it('lets a planner inspect the granted workspace without write, command or web t
   await expect(runtime.execute(planRun, id(), { operation: 'read', path: 'note.txt', offset: 0 }, signal())).rejects.toThrow();
 });
 
+it('does not complete a file assignment when its report claims success without any file changes', async () => {
+  const memberRun: Run = { ...run, stage: 'member', snapshot: { ...run.snapshot, assignment: {
+    workerId: run.snapshot.worker.id, brief: 'Update note.txt', expectedOutput: 'Changed note.txt', dependsOn: [], writeResources: ['note.txt'],
+  } } };
+  store.update('runs', memberRun);
+  const adapter: ModelAdapter = { request: async () => ({ calls: [{ id: 'report', name: 'submit_report', arguments: JSON.stringify({
+    title: 'Done', summary: 'I updated the note.', findings: [], limitations: [], assignmentOutcome: 'completed',
+  }) }], usage: { input: 20, output: 20 } }) };
+  const core = new CoreService(store, () => {}, async () => adapter, undefined, undefined, undefined, undefined, undefined, fixture());
+  await core.runner.run(task, memberRun, { keepTaskOpen: true });
+  const detail = store.detail(task.id);
+  expect(detail.runs[0].status).toBe('failed');
+  expect(detail.artifacts[0].report.limitations).toContain('Phần việc được giao sửa tệp nhưng không tạo hoặc thay đổi tệp nào.');
+  expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('original');
+});
+
 it.each(['claude-code', 'codex', 'cursor'] as const)('blocks cached workspace context after revocation for %s', async provider => {
   run.snapshot.worker.provider = provider;
   task.providerScopes = [provider];
