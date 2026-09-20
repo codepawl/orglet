@@ -23,7 +23,7 @@ import type { Run, TaskDetail, Team, Worker, Workspace } from '../../shared/cont
  * and token counts live in one collapsed block, so the panel reads like a person wrote it.
  */
 
-// Not the bare 'tổng hợp', which the dictionary already uses for the synthesizer role rather than this stage.
+// Not the bare 'tí trưởng', which the dictionary already uses for the synthesizer role rather than this stage.
 const stageNames: Record<string, string> = { plan: 'phân việc', synthesis: 'gộp kết quả', member: 'phần việc', group: 'trả lời' };
 
 /** How long something took, in the shortest form that is still exact enough to be worth reading. */
@@ -149,7 +149,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
             <Avatar name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xs"
               badge={member.provider === 'demo' ? undefined : <ProviderMark provider={member.provider} size="small" decorative />} />
             <div>
-              <p className="details-member-name">{member.name}{member.id === team.synthesizerId && <small>{t('tổng hợp')}</small>}</p>
+              <p className="details-member-name">{member.name}{member.id === team.synthesizerId && <small>{t('tí trưởng')}</small>}</p>
               {member.description && <p className="muted">{member.description}</p>}
             </div>
           </div>;

@@ -144,6 +144,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The side panels have no ground of their own: they sit straight on the window, and the chat is the one card
    (user, 2026-09-19). The radius stays so a hovered row still rounds inside the corner. */
 .sidebar { background:transparent; border-radius:var(--panel-radius); padding:var(--panel-inset) 10px; display:flex; flex-direction:column; overflow:hidden; }
+/* The sidebar lost its own ground, so its rows now sit on the window. --row-hover and --row-active were mixed
+   against the old #f7f7f8 panel and all but vanish on the lighter window (user, 2026-09-20: hovering the footer
+   showed nothing). The sidebar gets its own pair, tinted from the text colour rather than named as a flat value,
+   so it reads over the wash whichever blob is behind it, and in dark mode too. */
+.sidebar { --row-hover:color-mix(in srgb, var(--text) 7%, transparent); --row-active:color-mix(in srgb, var(--text) 12%, transparent); }
+.sidebar .button:hover:not(:disabled) { background:var(--row-hover); }
 .brand { display:flex; align-items:center; gap:8px; padding:0 6px 14px; }
 .brand strong { font-size:18px; font-weight:600; letter-spacing:-.5px; }
 .brand strong { margin-right:auto; }
