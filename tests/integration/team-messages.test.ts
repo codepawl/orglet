@@ -39,6 +39,45 @@ it('isolates the mailbox by task, turn, membership and recipient', () => {
   expect(() => mailbox.read(runs[1])).toThrow('lượt đang chạy');
 });
 
+it('offers only assigned recipients after a mistyped handoff without storing a message', () => {
+  const { task, runs, mailbox } = fixture();
+  const typo = { recipientId: id(), kind: 'handoff', body: 'Styles are ready', replyTo: null };
+  expect(mailbox.recipientError(runs[0], typo)).toEqual({ error: 'Người nhận không thuộc phần việc trong lượt này.',
+    validRecipientIds: [runs[2].snapshot.worker.id, runs[1].snapshot.worker.id] });
+  expect(store.detail(task.id).events).toHaveLength(0);
+  const corrected = { ...typo, recipientId: runs[1].snapshot.worker.id };
+  expect(mailbox.recipientError(runs[0], corrected)).toBeNull();
+  expect(mailbox.send(runs[0], 'corrected', corrected).teamMessage.recipientId).toBe(runs[1].snapshot.worker.id);
+});
+
+it('lets a worker correct a mistyped recipient in the same run', async () => {
+  let senderId = '';
+  let recipientId = '';
+  let sendStep = 0;
+  const core = new CoreService(store, () => {}, async () => ({ request: async (messages, tools) => {
+    let name = 'submit_report';
+    let argumentsValue: unknown = { title: 'Done', summary: 'Completed', findings: [], limitations: [] };
+    if (isPlanRequest(tools)) {
+      [senderId, recipientId] = memberIdsFromPlanPrompt(messages);
+      name = 'submit_plan';
+      argumentsValue = { assignments: [{ workerId: senderId, brief: 'send-handoff' },
+        { workerId: recipientId, brief: 'receive-handoff', dependsOn: [senderId] }] };
+    } else if (messages.some(message => typeof message.content === 'string' && message.content.includes('"assignment":"send-handoff')) && sendStep < 2) {
+      name = 'send_team_message';
+      argumentsValue = { recipientId: sendStep++ === 0 ? id() : recipientId, kind: 'handoff', body: 'The work is ready', replyTo: null };
+    }
+    return { calls: [{ id: id(), name, arguments: JSON.stringify(argumentsValue) }], usage: { input: 10, output: 10 } };
+  } }));
+  const team = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
+  const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Coordinate', sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
+  for (let attempt = 0; attempt < 300 && core.teams.isActive(taskId); attempt++) await new Promise(resolve => setTimeout(resolve, 10));
+  const detail = store.detail(taskId);
+  expect(detail.task.status).toBe('completed');
+  expect(detail.events.filter(event => event.teamMessage)).toHaveLength(1);
+  expect(detail.runs.find(run => run.snapshot.worker.id === senderId && run.stage === 'member')?.status).toBe('completed');
+  expect(sendStep).toBe(2);
+});
+
 it('replays a persisted send once and retains acknowledged handoffs on resume', () => {
   const { runs, mailbox } = fixture();
   const input = { recipientId: runs[1].snapshot.worker.id, kind: 'handoff', body: 'Committed result', replyTo: null };

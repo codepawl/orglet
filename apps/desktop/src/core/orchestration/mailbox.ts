@@ -10,6 +10,14 @@ export type MessageEvent = Activity & { teamMessage: TeamMessage };
 export class TeamMailbox {
   constructor(private store: Store) {}
 
+  recipientError(run: Run, raw: unknown): { error: string; validRecipientIds: string[] } | null {
+    const input = SendTeamMessage.parse(raw);
+    const { current, participants } = this.scope(run);
+    if (participants.has(input.recipientId) && input.recipientId !== current.snapshot.worker.id) return null;
+    return { error: 'Người nhận không thuộc phần việc trong lượt này.',
+      validRecipientIds: [...participants].filter(workerId => workerId !== current.snapshot.worker.id) };
+  }
+
   private scope(run: Run) {
     const current = this.store.get<Run>('runs', run.id);
     const task = this.store.get<Task>('tasks', run.taskId);
