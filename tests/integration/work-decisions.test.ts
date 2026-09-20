@@ -113,6 +113,32 @@ it('waits at the team plan boundary without starting members, then uses the save
   expect(detail.artifacts).toHaveLength(2);
 });
 
+it('records an abandoned question when a new message replaces the waiting turn', async () => {
+  let calls = 0;
+  core = new CoreService(store, () => {}, async () => ({
+    async request() {
+      calls++;
+      return calls === 1
+        ? response('request_user_decision', { question: 'Đổi phần nào?', options: ['Giao diện', 'Billing'] })
+        : response('reply', { message: 'Đã nhận yêu cầu mới.', title: null, knowledgeProposals: [] });
+    },
+  }));
+  const worker = store.all<Worker>('workers')[0];
+  await core.command('saveWorker', { ...worker, provider: 'openai' });
+  const scope = { sourceIds: [], consent: true, providerScopes: ['openai'], budgetMicros: 100_000 };
+  const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Giảm giá', ...scope }) as string;
+  await until(() => store.detail(taskId).task.status === 'waiting_input' && !core.runner.isActive(taskId));
+  const requestId = store.detail(taskId).task.decisionRequests![0].id;
+  await core.command('reviseTask', { taskId, brief: 'Thôi, chỉ giải thích giá hiện tại', ...scope });
+  await until(() => store.detail(taskId).task.status === 'completed');
+  const detail = store.detail(taskId);
+  expect(detail.task.inputRevision).toBe(1);
+  expect(detail.task.decisionRequests![0].interruptedAt).toBeDefined();
+  expect(detail.task.decisionRequests![0].answer).toBeUndefined();
+  expect(detail.artifacts[0].report.summary).toBe('Đã nhận yêu cầu mới.');
+  await expect(core.command('answerDecision', { taskId, requestId, answer: 'Billing' })).rejects.toThrow();
+});
+
 it('keeps a backed-up pending question but does not pretend its absent checkpoint can resume', async () => {
   core = new CoreService(store, () => {}, async () => ({
     async request() {
