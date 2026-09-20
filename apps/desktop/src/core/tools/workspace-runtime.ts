@@ -205,6 +205,11 @@ export class WorkspaceRuntime {
 
   async stopRun(runId: string) { await this.processes?.stopRun(runId); }
 
+  integratedChangeCount(runId: string): number {
+    const copy = this.saved(runId);
+    return copy?.state === 'integrated' ? copy.changes.filter(change => change.status === 'applied').length : 0;
+  }
+
   private async bytes(directory: string, file: z.infer<typeof WorkspaceFile>, signal: AbortSignal): Promise<Buffer> {
     const chunks: Buffer[] = [];
     let offset = 0;

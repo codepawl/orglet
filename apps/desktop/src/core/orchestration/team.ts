@@ -92,7 +92,7 @@ export class TeamRunner {
         const resultStatus = result.runs.find(candidate => candidate.id === run.id)?.status;
         if (resultStatus === 'paused' || resultStatus === 'waiting_budget') control.paused = true;
         const artifact = result.artifacts.find(a => a.runId === run.id);
-        if (artifact) {
+        if (artifact && resultStatus === 'completed') {
           memberArtifacts.push(artifact);
           successful.add(workerId);
         } else {

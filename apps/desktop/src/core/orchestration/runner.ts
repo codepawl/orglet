@@ -2,7 +2,7 @@ import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { WebTools } from '../tools/web-tools';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
-import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswerSchema, HarnessAnswer, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
+import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, MemberReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswerSchema, HarnessAnswer, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
 import { z } from 'zod';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { API_PROVIDER_NAMES, isLocalApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
@@ -546,7 +546,7 @@ export class Runner {
     control.signal.throwIfAborted();
   }
   private async finalize(task: Task, run: Run, raw: unknown, readIds: ReadonlySet<string>, scope: { manifest: Source[]; preflight?: PreflightRecord; preflightLimits: string[] }, options: { keepTaskOpen?: boolean; upstream?: Artifact[]; limitations?: string[] }, runnerLimitations: string[] = []) {
-    const { knowledgeProposals, ...submitted } = ModelReport.parse(raw);
+    const { knowledgeProposals, assignmentOutcome, ...submitted } = ModelReport.parse(raw);
     const { preflight } = scope;
     const policy = run.stage === 'synthesis' ? run.snapshot.team?.reviewPolicy : undefined;
     const profiles = this.store.all<ProfileRecord>('profiles').filter(profile => profile.taskId === task.id && (profile.runId === run.id || preflight?.profileIds.includes(profile.id)));
@@ -572,7 +572,12 @@ export class Runner {
     for (const source of scope.manifest.filter(source => !readIds.has(source.id))) report.limitations.push(`Nguồn chưa được đọc: ${source.name.slice(0, 300)} (${source.id}). Không xem đây là đánh giá đầy đủ tệp này.`);
     report.limitations.push(...runnerLimitations, ...scope.preflightLimits, ...(options.limitations ?? []));
     await this.finishWorkspace(run);
-    this.commit(task, run, report, options.keepTaskOpen, knowledgeProposals);
+    const expectedFileChanges = run.stage === 'member' && !!run.snapshot.assignment?.writeResources?.length;
+    const missingFileChanges = expectedFileChanges && !this.workspace?.integratedChangeCount(run.id);
+    if (missingFileChanges) report.limitations.push('Phần việc được giao sửa tệp nhưng không tạo hoặc thay đổi tệp nào.');
+    const memberBlocked = run.stage === 'member' && (assignmentOutcome === 'blocked'
+      || (expectedFileChanges && (assignmentOutcome !== 'completed' || missingFileChanges)));
+    this.commit(task, run, report, options.keepTaskOpen, knowledgeProposals, null, memberBlocked);
   }
   /**
    * Runs a locally installed agent CLI as one opaque step over a throwaway copy of the selected sources.
@@ -629,7 +634,8 @@ export class Runner {
           executable: tool.executable,
           cwd: directory,
           prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan'),
-          schema: z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema : HarnessAnswerSchema, { target: 'draft-7' }),
+          schema: z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema
+            : run.stage === 'member' ? HarnessAnswerSchema.extend({ report: MemberReportSchema }) : HarnessAnswerSchema, { target: 'draft-7' }),
           signal,
           maxBudgetUsd: remainingUsd,
           ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
@@ -654,6 +660,7 @@ export class Runner {
       // Older harness prompts (and team reports) return the report object itself.
       const answer = needsReport(run) ? undefined : HarnessAnswer.safeParse(result.output);
       if (answer?.success && answer.data.report === null) {
+        if (run.stage === 'member') throw new Error('Phần việc cần báo cáo kết quả hoặc blocker, không thể hoàn tất bằng tin nhắn.');
         for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
         this.commit(task, run, { ...chatReport(answer.data.message), limitations: [...(options.limitations ?? [])] }, options.keepTaskOpen, [], answer.data.title);
       } else await this.finalize(task, run, answer?.success ? answer.data.report : result.output, readIds, scope, options, limitations);
@@ -682,7 +689,7 @@ export class Runner {
     });
     this.notify();
   }
-  private commit(task: Task, run: Run, report: Report, keepTaskOpen = false, proposals: z.infer<typeof Proposals> = [], suggestedTitle: string | null = null) {
+  private commit(task: Task, run: Run, report: Report, keepTaskOpen = false, proposals: z.infer<typeof Proposals> = [], suggestedTitle: string | null = null, memberBlocked = false) {
     this.active.get(run.id)?.signal.throwIfAborted();
     if (run.stage === 'synthesis' && run.snapshot.team) {
       const unresolved = new TeamMailbox(this.store).read(run).filter(event => ['question', 'blocker'].includes(event.teamMessage.kind));
@@ -710,8 +717,8 @@ export class Runner {
         lastArtifactId: artifact.id,
         ...(!keepTaskOpen ? { status: (missing.length ? 'waiting_input' : 'completed') as Task['status'] } : {}),
       });
-      this.store.put('runs', { ...run, status: 'completed', error: null }, { column: 'task_id', value: task.id });
-      this.store.event(run.id, report.format === 'chat' ? 'Đã lưu câu trả lời.' : 'Đã lưu báo cáo và nguồn tham chiếu.');
+      this.store.put('runs', { ...run, status: memberBlocked ? 'failed' : 'completed', error: memberBlocked ? 'Phần việc bị chặn; xem báo cáo đã lưu.' : null }, { column: 'task_id', value: task.id });
+      this.store.event(run.id, memberBlocked ? 'Đã lưu báo cáo blocker; phần việc chưa hoàn tất.' : report.format === 'chat' ? 'Đã lưu câu trả lời.' : 'Đã lưu báo cáo và nguồn tham chiếu.');
       this.store.db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);
       this.store.db.prepare("UPDATE step_attempts SET state='committed' WHERE run_id=? AND state='received'").run(run.id);
     });
