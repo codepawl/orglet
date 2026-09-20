@@ -1,0 +1,139 @@
+import { createHash } from 'node:crypto';
+import { StartWorkspaceProcess, WorkspaceProcess } from '../../shared/workspace-processes';
+import { Store, id } from '../storage/database';
+import { ToolCalls } from '../storage/tool-calls';
+import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
+
+type ActiveProcess = { runId: string; controller: AbortController; done: Promise<void> };
+
+/** A saved start result is a process handle, not proof that the command finished. */
+export class WorkspaceProcesses {
+  private active = new Map<string, ActiveProcess>();
+  constructor(private store: Store, private files: Pick<WorkspaceFilesRuntime, 'runCommand'>,
+    private notify: () => void = () => {}) {}
+
+  private save(process: WorkspaceProcess) {
+    this.store.put('workspace_processes', WorkspaceProcess.parse(process), { column: 'run_id', value: process.runId });
+    this.notify();
+  }
+
+  private get(runId: string, processId: string): WorkspaceProcess {
+    const process = WorkspaceProcess.parse(this.store.get('workspace_processes', processId));
+    if (process.runId !== runId) throw new Error('Tiến trình không thuộc lần chạy này.');
+    return process;
+  }
+
+  private records(taskId: string): WorkspaceProcess[] {
+    return this.store.db.prepare(`SELECT processes.data FROM workspace_processes processes
+      JOIN runs ON runs.id=processes.run_id WHERE runs.task_id=? ORDER BY processes.rowid`).all(taskId)
+      .map(row => WorkspaceProcess.parse(JSON.parse(String(row.data))));
+  }
+
+  assertKnown(taskId: string) {
+    if (this.records(taskId).some(process => process.state === 'uncertain' && !this.store.setting(`workspace-retired:${process.runId}`, null))) {
+      throw new Error('Tiến trình bị gián đoạn chưa rõ kết quả; cần kiểm tra bản làm việc.');
+    }
+  }
+
+  assertIdle(runId: string) {
+    const running = this.store.db.prepare(`SELECT id FROM workspace_processes WHERE run_id=?
+      AND json_extract(data,'$.state')='running' LIMIT 1`).get(runId);
+    if (running) throw new Error('Tiến trình còn chạy; chờ hoặc hủy trước khi thao tác trên bản làm việc.');
+  }
+
+  assertSuccessful(runId: string) {
+    this.assertIdle(runId);
+    const records = this.store.db.prepare('SELECT data FROM workspace_processes WHERE run_id=? ORDER BY rowid').all(runId);
+    const latest = new Map<string, WorkspaceProcess>();
+    for (const row of records) {
+      const process = WorkspaceProcess.parse(JSON.parse(String(row.data)));
+      const key = createHash('sha256').update(JSON.stringify([process.command.program, process.command.arguments])).digest('hex');
+      latest.set(key, process);
+    }
+    if ([...latest.values()].some(process => process.state !== 'exited' || process.exitCode !== 0)) {
+      throw new Error('Có lệnh chưa hoàn tất thành công. Xem đầu ra và kiểm tra lại trước khi tích hợp.');
+    }
+  }
+
+  async start(options: { runId: string; callId: string; directory: string; command: unknown;
+    signal: AbortSignal; authorize: () => void }): Promise<{ processId: string }> {
+    const command = StartWorkspaceProcess.parse(options.command);
+    return new ToolCalls(this.store).execute({
+      runId: options.runId, callId: options.callId, name: 'workspace_start_process', arguments: command, replay: 'never',
+      authorize: options.authorize,
+      perform: () => {
+        this.assertIdle(options.runId);
+        options.signal.throwIfAborted();
+        const process: WorkspaceProcess = { id: id(), runId: options.runId, command, state: 'running',
+          exitCode: null, stdout: '', stderr: '' };
+        this.save(process);
+        const controller = new AbortController();
+        const lifetime = AbortSignal.any([options.signal, controller.signal]);
+        let lastSaved = 0;
+        const done = Promise.resolve().then(() => {
+          options.authorize();
+          lifetime.throwIfAborted();
+          return this.files.runCommand(options.directory, command, lifetime, output => {
+            Object.assign(process, output);
+            if (Date.now() - lastSaved >= 250) { lastSaved = Date.now(); this.save(process); }
+          });
+        }).then(result => {
+          this.save({ id: process.id, runId: process.runId, command, state: result.termination,
+            exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr });
+          this.store.event(options.runId, `Tiến trình đã dừng: ${result.termination}, mã thoát ${result.exitCode ?? 'unknown'}`);
+        }).catch(error => {
+          const uncertain: WorkspaceProcess = { id: process.id, runId: process.runId, command,
+            state: 'uncertain', exitCode: null, stdout: process.stdout, stderr: process.stderr,
+            error: (error instanceof Error ? error.message : 'Không nhận được kết quả tiến trình.').slice(0, 4000) };
+          // If storage itself failed, the durable running record becomes uncertain on restart.
+          try { this.save(uncertain); } catch { /* Keep the start record; never report a completed command. */ }
+        }).finally(() => { this.active.delete(process.id); });
+        this.active.set(process.id, { runId: options.runId, controller, done });
+        return { processId: process.id };
+      },
+    });
+  }
+
+  async status(runId: string, processId: string, waitMs: number, signal: AbortSignal, authorize: () => void) {
+    authorize();
+    this.get(runId, processId);
+    const active = this.active.get(processId);
+    if (active && waitMs > 0) {
+      await new Promise<void>((resolve, reject) => {
+        const finish = () => { clearTimeout(timer); signal.removeEventListener('abort', abort); resolve(); };
+        const abort = () => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(signal.reason); };
+        const timer = setTimeout(finish, waitMs);
+        signal.addEventListener('abort', abort, { once: true });
+        if (signal.aborted) abort();
+        void active.done.then(finish);
+      });
+    }
+    signal.throwIfAborted();
+    authorize();
+    const process = this.get(runId, processId);
+    return { processId, state: process.state, exitCode: process.exitCode,
+      stdoutBytes: Buffer.byteLength(process.stdout), stderrBytes: Buffer.byteLength(process.stderr), error: process.error ?? null };
+  }
+
+  output(runId: string, processId: string, stream: 'stdout' | 'stderr', offset: number) {
+    const process = this.get(runId, processId);
+    const characters = Array.from(process[stream]);
+    const end = Math.min(characters.length, offset + 16000);
+    return { processId, stream, state: process.state, content: characters.slice(offset, end).join(''),
+      nextOffset: end < characters.length ? end : null };
+  }
+
+  async cancel(runId: string, processId: string) {
+    this.get(runId, processId);
+    const active = this.active.get(processId);
+    if (active) { active.controller.abort(); await active.done; }
+    const process = this.get(runId, processId);
+    return { processId, state: process.state, exitCode: process.exitCode };
+  }
+
+  async stopRun(runId: string) {
+    const running = [...this.active.values()].filter(process => process.runId === runId);
+    for (const process of running) process.controller.abort();
+    await Promise.all(running.map(process => process.done));
+  }
+}
