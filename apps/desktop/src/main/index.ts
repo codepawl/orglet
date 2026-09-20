@@ -212,6 +212,13 @@ async function start() {
     const text = await request('feedbackText', Id.parse(raw));
     clipboard.writeText(z.string().min(1).max(8000).parse(text));
   });
+  /**
+   * Copying a string the renderer already has, such as a command shown in Settings. It cannot do this itself:
+   * the window is served from `file://`, where Chromium refuses `navigator.clipboard.writeText` with
+   * `NotAllowedError: Write permission denied`, and the `execCommand` fallback is deprecated. Electron's own
+   * clipboard has no such restriction.
+   */
+  handle('orglet:copy-text', async raw => { clipboard.writeText(z.string().min(1).max(8000).parse(raw)); });
   const artifactText = async (raw: unknown) => {
     const input = z.object({ id: Id, format: TextFormat.default('markdown') }).strict().parse(typeof raw === 'string' ? { id: raw } : raw);
     const markdown = String(await request('exportArtifact', input.id));

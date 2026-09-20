@@ -48,6 +48,15 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .button-primary:hover:not(:disabled) { background:var(--primary); opacity:.85; }
 .button-outline { border-color:var(--border); }
 .button-icon { width:var(--icon-size); height:var(--icon-size); min-height:var(--icon-size); padding:6px; flex-shrink:0; }
+/* An icon-only button answers the pointer with its icon and nothing else (user, 2026-09-20). A tile lighting up
+   behind a 20px glyph reads as a second surface arriving; the glyph going from muted to full text colour says the
+   same thing and adds nothing to the screen. This needs one resting colour to work: half of these buttons sat at
+   --text, where a hover has nowhere to go. A button carrying a label keeps its background, which is part of what
+   makes a label look pressable, and the filled primary keeps its own treatment. Naming .button twice is deliberate:
+   the sidebar and the routine actions tint their buttons on hover with exactly the weight this rule would otherwise
+   carry, and source order would hand the argument to them. */
+.button.button-icon:not(.button-primary) { color:var(--muted); }
+.button.button-icon:not(.button-primary):hover:not(:disabled) { background:transparent; color:var(--text); }
 /* A quiet wash across the window behind everything, so the ground is not a flat grey once the side panels stop
    covering it. Three wide radial tints at low strength, and a grain laid over them: a gradient this soft bands
    into visible steps on an 8-bit display, and the grain is what breaks the steps up rather than decoration.

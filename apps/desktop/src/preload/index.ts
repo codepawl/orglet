@@ -17,6 +17,7 @@ const bridge: Bridge = {
   exportArtifact: (id, format = 'markdown') => invoke('orglet:export', { id, format }),
   copyArtifact: (id, format) => invoke('orglet:copy', { id, format }),
   copyFeedback: id => invoke('orglet:copy-feedback', id),
+  copyText: text => invoke('orglet:copy-text', text),
   exportTemplate: id => invoke('orglet:template-export', id),
   importTemplate: () => invoke('orglet:template-import'),
   importSkill: () => invoke('orglet:skill-import'),
