@@ -61,7 +61,7 @@ Each API or harness worker can use a model ID from **that provider's own list** 
 
 API keys are encrypted with your system's secure storage and never reach the app's interface.
 
-Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, using attached files and workspace folders you explicitly grant.
+Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, using attached files and workspace folders you explicitly grant. If a worker submits a malformed report, Details shows the invalid field and Orglet allows one report-only correction without repeating completed file operations.
 
 Start here: [Getting started](docs/getting-started.md). The [docs map](docs/README.md) lists how-it-works pages, product decisions, and ship records. Product fit is [product.md](docs/product.md). How to run and test is [technical-guide.md](docs/technical-guide.md).
 

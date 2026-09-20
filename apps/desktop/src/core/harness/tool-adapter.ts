@@ -51,6 +51,10 @@ export function harnessToolAdapter(options: {
     const { call } = ToolResponse.parse(result.output);
     if (!tools.some(tool => tool.type === 'function' && tool.function.name === call.name)
       || !Object.hasOwn(toolDefinitions, call.name)) throw new Error('Tool không được policy cho phép.');
+    // The runner validates submit_report and can request one correction without
+    // persisting the invalid report body or replaying completed workspace tools.
+    if (call.name === 'submit_report') return { calls: [{ id: randomUUID(), name: call.name,
+      arguments: typeof call.arguments === 'string' ? call.arguments : JSON.stringify(call.arguments) }] };
     const argumentsValue = typeof call.arguments === 'string' ? JSON.parse(call.arguments) as unknown : call.arguments;
     toolDefinitions[call.name].schema.parse(argumentsValue);
     return { calls: [{ id: randomUUID(), name: call.name, arguments: JSON.stringify(argumentsValue) }] };

@@ -37,6 +37,7 @@ import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 import { detectUsageLimit, usageLimitMessage } from '../usageLimits';
 import { assertTeamPlan, defaultTeamPlan } from './plan';
 import { mentionedPeople } from '../../shared/mentions';
+import { reportValidationMessage, sanitizeReportReply } from '../tools/report-validation';
 
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = { detect(): Promise<HarnessInfo[]>; execute: HarnessExecutor };
@@ -336,7 +337,9 @@ export class Runner {
         }
         for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Quyền nguồn đã bị thu hồi; dừng gửi context.');
         // UTF-8 byte count bounds byte-fallback tokens; extra allowance covers chat framing/schema overhead.
-        const upperInput = Buffer.byteLength(JSON.stringify({ messages, tools }), 'utf8') + 8192;
+        const requestTools = checkpoint.reportCorrections
+          ? tools.filter(tool => tool.type === 'function' && tool.function.name === 'submit_report') : tools;
+        const upperInput = Buffer.byteLength(JSON.stringify({ messages, tools: requestTools }), 'utf8') + 8192;
         if (upperInput > 200_000) throw new Error('Context quá lớn cho chế độ giới hạn chi phí.');
         let reply = checkpoint.phase === 'replied' ? checkpoint.reply : undefined;
         if (!reply) {
@@ -353,12 +356,14 @@ export class Runner {
               harnessRemainingUsd = Math.floor(remainingMicros / 100) / 10_000;
               if (harnessRemainingUsd < 0.0001) throw new BudgetError('Ngân sách còn lại không đủ cho request kế tiếp.');
               this.checkpoints.save({ ...checkpoint, phase: 'requesting' });
-              reply = await model.request(messages, tools, AbortSignal.any([signal, AbortSignal.timeout(900000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+              reply = await model.request(messages, requestTools, AbortSignal.any([signal, AbortSignal.timeout(900000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+              reply = sanitizeReportReply(run, reply);
               this.checkpoints.received(checkpoint, reply);
             } else if (isLocalApi(provider)) {
               this.event(run.id, `Đang gọi model · bước ${step + 1}/${maxSteps}`);
               try {
-                reply = await model.request(messages, tools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+                reply = await model.request(messages, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+                reply = sanitizeReportReply(run, reply);
                 this.checkpoints.received(checkpoint, reply);
               } catch {
                 throw new Error('Request model không hoàn tất. Kiểm tra Ollama đang chạy trên máy này trước khi thử lại.');
@@ -374,7 +379,8 @@ export class Runner {
               const reservation = ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, reservationId => this.checkpoints.requested(checkpoint, reservationId));
               this.event(run.id, `Đang gọi model · bước ${step + 1}/${maxSteps}`);
               try {
-                reply = await model.request(messages, tools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation);
+                reply = await model.request(messages, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation);
+                reply = sanitizeReportReply(run, reply);
                 if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
                 else ledger.unknown(reservation);
                 this.checkpoints.received(checkpoint, reply);
@@ -386,8 +392,21 @@ export class Runner {
           } finally { release(); }
         }
         signal.throwIfAborted();
+        reply = sanitizeReportReply(run, reply);
+        if (reply.validationFailure) {
+          const diagnostic = reportValidationMessage(reply.validationFailure);
+          this.event(run.id, diagnostic);
+          if (checkpoint.reportCorrections) throw new Error(`${diagnostic} Đã hết một lần sửa báo cáo trong lượt này.`);
+          messages.push({ role: 'user', content: JSON.stringify({ reportValidation: reply.validationFailure.issues,
+            instruction: 'Correct submit_report using the completed tool outputs already in this conversation. Do not repeat workspace actions. Only submit_report is available for this correction.' }) });
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages,
+            readIds: [...readIds], reportCorrections: 1 };
+          this.checkpoints.committed(checkpoint);
+          continue;
+        }
         if (reply.calls.length !== 1) throw new Error('Model không trả về đúng một tool call hợp lệ.');
         const call = reply.calls[0];
+        if (checkpoint.reportCorrections && call.name !== 'submit_report') throw new Error('Lần sửa báo cáo chỉ được nộp submit_report.');
         assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
         messages.push({ role: 'assistant', tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
         if (call.name === 'reassign_team_work') {
