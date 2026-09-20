@@ -23,6 +23,7 @@ import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { DecisionQuestion } from '../../shared/work-decisions';
+import { WorkFrame } from '../../shared/work-frame';
 import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, type Colleague } from '../context/compiler';
@@ -224,6 +225,7 @@ export class Runner {
         next.push(...threadMessages(layer));
         if (!manifest.length) next.push({ role: 'user', content: JSON.stringify({ instruction: NO_SOURCES_INSTRUCTION }) });
         next.push({ role: 'user', content: JSON.stringify({ brief: task.brief, sources: manifest, excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
+          ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'record_work_frame') ? { workFrameInstruction: 'Before assigning team work or editing workspace files, record one short goal, constraints actually stated by the user, your unconfirmed assumptions, and checks you intend to run. Keep assumptions separate from user statements. Planned checks are not completed checks.' } : {}),
           ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'request_user_decision') ? { decisionInstruction: 'For work you can do within the current grant, proceed without asking. If a material choice has two sensible interpretations, a new permission is needed, or an action is hard to undo, use request_user_decision before making the dependent change. Inspect available evidence first. The answer resumes this same turn.' } : {}) }) });
         if (run.snapshot.workspaceGrant) next.push({ role: 'user', content: JSON.stringify({
           workspacePermissions: run.stage === 'plan' ? ['read'] : run.snapshot.workspaceGrant.permissions,
@@ -418,6 +420,16 @@ export class Runner {
         if (checkpoint.reportCorrections && call.name !== 'submit_report') throw new Error('Lần sửa báo cáo chỉ được nộp submit_report.');
         assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
         messages.push({ role: 'assistant', tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
+        if (call.name === 'record_work_frame') {
+          const frame = WorkFrame.parse(JSON.parse(call.arguments));
+          const recorded = Boolean(run.snapshot.workFrame);
+          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(recorded ? { error: 'Work frame already recorded for this run.' } : { recorded: true }) });
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
+          if (!recorded) run = { ...run, snapshot: { ...run.snapshot, workFrame: frame } };
+          this.checkpoints.committed(checkpoint, false, () => { if (!recorded) this.store.update('runs', run); });
+          this.notify();
+          continue;
+        }
         if (call.name === 'request_user_decision') {
           const question = DecisionQuestion.parse(JSON.parse(call.arguments));
           const current = this.store.get<Task>('tasks', task.id);

@@ -76,6 +76,8 @@ Workspace-only QA observations without a source citation remain visible as unver
 
 When a worker or team lead needs a material choice before continuing, it can pause the current chat turn with a short question. Choosing an option or answering in the composer resumes that same run; the decision stays visible in Details. Answering does not extend workspace or network permissions. A restored backup retains the question history but cannot resume its excluded checkpoint.
 
+An API worker or team lead can also record how it understands the current turn: the goal, constraints stated by the user, assumptions it has made, and checks it plans to run. The latest goal appears in chat; the full record is in Details. Planned checks are intentions, not evidence that a check passed.
+
 ## Install
 
 [Latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. The tag is public; Windows **Setup.exe** / **ZIP** assets on that release may still be empty. If they are missing, [build from source](#dev).

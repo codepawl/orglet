@@ -95,6 +95,8 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
     <div className="thread-content">
       {turns.map(turn => {
         const latest = turn.revision === current;
+        const workFrame = turn.runs.find(run => run.stage === 'plan' && run.snapshot.workFrame)?.snapshot.workFrame
+          ?? turn.runs.find(run => run.snapshot.workFrame)?.snapshot.workFrame;
         const activeRun = turn.runs.find(item => item.status === 'running') ?? turn.runs.find(item => item.status === 'queued');
         const live = latest && busy ? liveRunOf(turn.runs, liveRuns) : undefined;
         const liveUpdate = live?.update;
@@ -110,6 +112,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
         const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
         return <div className="chat-turn" key={turn.revision}>
           <div className="user-message"><p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>{turn.sources.length > 0 && <ul className="attachment-list message-files">{turn.sources.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}</ul>}</div>
+          {latest && workFrame && <p className="muted" role="status">{t('Mục tiêu Tí hiểu: {0}', [workFrame.goal])}</p>}
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
             <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />
@@ -157,7 +160,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
               ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
-            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
+            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
             {latest && <div className="actions">
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
               {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}
@@ -265,7 +268,7 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   // Evidence links leave the document for the sources panel.
   const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
   return <>
-    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}
       <ArtifactActions artifactId={artifact.id} action={action} />

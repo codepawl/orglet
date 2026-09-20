@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { DecisionRequest } from './work-decisions';
+import type { WorkFrame } from './work-frame';
 import { ToolCapabilities, type ToolCapability } from './tool-policy';
 import type { WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermission } from './workspace-access';
 import type { WorkspaceRecoveryView } from './workspace-recovery';
@@ -140,7 +141,7 @@ export type FolderIntake = { sources: Source[]; skipped: { name: string; reason:
 export type TaskStatus = 'queued' | 'running' | 'pausing' | 'paused' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted' | 'waiting_budget' | 'waiting_input';
 export type Task = { toolCapabilities?: ToolCapability[]; id: string; brief: string; title?: string; workerId: string; teamId?: string; teamSnapshot?: Team; assignees?: 'all' | string[]; archivedAt?: string; deletedAt?: string; status: TaskStatus; createdAt: string; budgetMicros: number; sourceIds: string[]; excludedSources?: FolderIntake['skipped']; consent: boolean; providerScopes?: ProviderScope[]; accepted: boolean; /** Stamp of the result the user last opened; unread when it differs from `taskResultStamp`. */ seenStamp?: string; /** Latest saved answer/report id, part of the result stamp. */ lastArtifactId?: string; /** When the user last opened this task. */ seenAt?: string; routineId?: string; pauseReason?: 'shift'; handoff?: Handoff; evidenceRequests?: EvidenceRequest[]; decisionRequests?: DecisionRequest[]; inputRevision?: number; currentInput?: RunInput };
 export type RunStage = 'plan' | 'member' | 'synthesis' | 'group';
-export type Run = { id: string; taskId: string; stage?: RunStage; status: TaskStatus; snapshot: { workspaceGrant?: WorkspaceGrantSnapshot; assignment?: z.infer<typeof PlanAssignment>; reassignment?: import('./team-messages').TeamReassignment; toolCapabilities?: ToolCapability[]; worker: Worker; skill: Skill; team?: Team; input?: RunInput; context?: RunContext; inputRevision?: number; upstreamArtifactIds?: string[]; preflightId?: string; model?: string; pricingVersion?: string; plan?: TeamPlan }; startedAt: string; error: string | null };
+export type Run = { id: string; taskId: string; stage?: RunStage; status: TaskStatus; snapshot: { workspaceGrant?: WorkspaceGrantSnapshot; assignment?: z.infer<typeof PlanAssignment>; reassignment?: import('./team-messages').TeamReassignment; toolCapabilities?: ToolCapability[]; worker: Worker; skill: Skill; team?: Team; input?: RunInput; context?: RunContext; workFrame?: WorkFrame; inputRevision?: number; upstreamArtifactIds?: string[]; preflightId?: string; model?: string; pricingVersion?: string; plan?: TeamPlan }; startedAt: string; error: string | null };
 export type Activity = { id: string; runId: string; sequence?: number; message: string; createdAt: string; teamMessage?: import('./team-messages').TeamMessage };
 export type Artifact = { id: string; runId: string; report: Report; hash: string; createdAt: string };
 export type Usage = { chargedMicros: number; reservedMicros: number; uncertainCount: number; inputTokens: number; outputTokens: number };
