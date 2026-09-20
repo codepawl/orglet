@@ -65,7 +65,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const [name, setName] = useState(routine?.name ?? '');
   const [brief, setBrief] = useState(initial?.brief ?? '');
   const [target, setTarget] = useState(initial?.teamId ? `team:${initial.teamId}` : initial?.workerId ?? workspace.workers[0].id);
-  const [sources, setSources] = useState<{ id: string; name: string }[]>((initial?.sourceIds ?? []).map(id => ({ id, name: t('Nguồn {0}', [id.slice(0, 8)]) })));
+  const [sources, setSources] = useState<{ id: string; name: string; bytes?: number }[]>((initial?.sourceIds ?? []).map(id => ({ id, name: t('Nguồn {0}', [id.slice(0, 8)]) })));
   const [budget, setBudget] = useState(toAmount(initial?.budgetMicros ?? 500_000));
   const [frequency, setFrequency] = useState(routine?.schedule.frequency ?? 'daily');
   const [weekday, setWeekday] = useState(routine?.schedule.weekday ?? 1);
@@ -79,7 +79,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   useEffect(() => {
     let cancelled = false;
     void orglet.call('sourceMetadata', { ids: initial?.sourceIds ?? [] }).then(metadata => {
-      if (!cancelled) setSources(current => current.map(source => ({ ...source, name: metadata.find(item => item.id === source.id)?.name ?? source.name })));
+      if (!cancelled) setSources(current => current.map(source => { const found = metadata.find(item => item.id === source.id); return { ...source, name: found?.name ?? source.name, bytes: found?.bytes ?? source.bytes }; }));
     }).catch(err => { if (!cancelled) setError((err as Error).message); });
     return () => { cancelled = true; };
   }, [initial]);
@@ -117,7 +117,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
             catch (err) { setError((err as Error).message); } finally { setBusy(false); }
           }}><FilePlus size={15} />{t('Chọn nguồn cho lịch')}</Button>
         </PanelHeading>
-        {sources.length > 0 ? <ul className="attachment-list">{sources.map(source => <Attachment key={source.id} name={source.name} removeLabel={t('Bỏ nguồn {0}', [source.name])} onRemove={() => { setSources(sources.filter(item => item.id !== source.id)); }} />)}</ul> : <p className="muted">{t('Chưa chọn nguồn. Lịch vẫn chạy được chỉ với brief.')}</p>}
+        {sources.length > 0 ? <ul className="attachment-list">{sources.map(source => <Attachment key={source.id} name={source.name} bytes={source.bytes} removeLabel={t('Bỏ nguồn {0}', [source.name])} onRemove={() => { setSources(sources.filter(item => item.id !== source.id)); }} />)}</ul> : <p className="muted">{t('Chưa chọn nguồn. Lịch vẫn chạy được chỉ với brief.')}</p>}
         <p className="muted">{t('Chỉ dùng các tệp đã chọn với nội dung hiện tại. Tệp thay đổi hoặc bị thu hồi sẽ chặn lần chạy; chọn lại nguồn và lưu lịch để cấp quyền mới.')}</p>
       </div>
     </section>

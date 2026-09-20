@@ -267,7 +267,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
    text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
-.composer-attachments { grid-area:attach; display:flex; gap:8px; margin:0; padding:0 0 2px; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; }
+.composer-attachments { grid-area:attach; display:flex; gap:8px; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; }
+/* The one place a scrollbar is hidden rather than styled: the global 12px bar is a quarter of the strip and sits
+   inside the prompt pill, where it reads as chrome the bar does not carry anywhere else. The card clipped at the
+   edge says there is more, and Composer.tsx turns a vertical wheel here into sideways scrolling so a plain mouse
+   still reaches every card. Nothing sets scrollbar-width or scrollbar-color, which would drop this subtree back
+   to Chromium's plain bar. */
+.composer-attachments::-webkit-scrollbar { width:0; height:0; }
 .composer-leading { grid-area:lead; display:flex; align-items:center; }
 .composer-trailing { grid-area:trail; display:flex; align-items:center; align-self:center; max-width:min(220px,42vw); }
 .composer>textarea { grid-area:input; display:block; width:100%; resize:none; min-height:36px; max-height:250px; border:0; outline:none; background:transparent; padding:7px 6px; font-size:inherit; line-height:22px; }
@@ -799,11 +805,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Tab row: tabs on the left, the current tab's actions on the right. */
 .tab-row { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 .tab-row-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-/* A count beside a tab label is just the number: the pill behind it read as a second control, and its own
-   line-height pushed it off the label’s centre line (user, 2026-09-20). The button is already a centred flex
-   row, so removing the box is what centres it. */
-.tab-count { color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
-.tabs .button { gap:6px; }
+/* A count beside a tab label is just the number; the pill behind it read as a second control (user, 2026-09-20).
+   Label and count sit in one inline context (.tab-label) rather than as two flex items, because centring two
+   boxes of different font sizes left the number 0.76px above the label baseline — measured, and visible. */
+.tab-label { display:inline; }
+.tab-count { margin-left:6px; color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
 
 /* Checkbox: native input kept for keyboard, forms and assistive tech; the box is drawn. */
 .checkbox { position:relative; display:flex; align-items:flex-start; gap:10px; margin:6px 0; font-size:14px; font-weight:400; cursor:pointer; }
