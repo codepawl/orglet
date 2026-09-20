@@ -63,7 +63,7 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
     <label><FieldLabel icon={Tag}>Tags</FieldLabel><input value={tags} onChange={event => setTags(event.target.value)} placeholder="scoring, dataset" /></label>
     <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
     <p className="muted">{t('Knowledge của hội chỉ nạp khi chạy trong hội đó, kể cả khi Tí tham gia nhiều hội.')}</p>
-    <SwitchField checked={pinned} onChange={setPinned} description={t('Mục không ghim chỉ được nạp khi khớp từ khóa với yêu cầu. Lưu thay đổi tạo revision mới; lần chạy cũ giữ nội dung đã dùng.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
+    <SwitchField checked={pinned} onChange={setPinned} description={t('Không ghim thì chỉ nạp khi yêu cầu có từ khóa khớp. Sửa xong, lần chạy cũ vẫn giữ nội dung nó đã đọc.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
     <div className="actions">
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       {proposed && !changed && <Button type="button" variant="primary" disabled={busy} onClick={() => void run(() => orglet.call('reviewKnowledge', { id: item.id, revision: item.revision, decision: 'approve' }))}>{t('Duyệt')}</Button>}

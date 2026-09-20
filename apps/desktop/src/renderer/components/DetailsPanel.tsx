@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Cpu, FileText, ListOrdered, MessageSquare, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
+import { Clock, Copy, Cpu, FileText, ListOrdered, MessageSquare, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
 import { t, currentLocale, tMessage } from '../i18n';
 import { Avatar, RosterAvatars } from './Avatar';
 import { ProviderMark } from './ProviderMark';
@@ -12,6 +12,8 @@ import { formatMoney } from './money';
 import { providerName } from './workerModel';
 import { Button, Drawer } from './ui';
 import { teamRoster } from '../assignees';
+import { orglet } from '../api';
+import { toast } from './toast';
 import type { Run, TaskDetail, Team, Worker, Workspace } from '../../shared/contracts';
 
 /*
@@ -112,6 +114,46 @@ function RunEntry({ run, events }: { run: Run; events: { id: string; message: st
   </li>;
 }
 
+/**
+ * One run in the technical dialog. The list numbers them, because when the same orglet answers twice the only
+ * thing that told two blocks apart used to be reading their ids (user, 2026-09-20). The id itself is what you
+ * take somewhere else to match a log, so it sits quietly on one line with a button that copies it, rather than
+ * in the padded box that used to be the loudest thing on screen.
+ */
+function TechnicalRun({ run, detail, workspace, onExport }: { run: Run; detail: TaskDetail; workspace: Workspace; onExport: (artifactId: string) => void }) {
+  const stage = run.stage && stageNames[run.stage] ? t(stageNames[run.stage]) : undefined;
+  const setup = [t('Skill {0}', [run.snapshot.skill.name]), providerName(run.snapshot.worker.provider), run.snapshot.model].filter(Boolean).join(' · ');
+  const artifacts = detail.artifacts.filter(artifact => artifact.runId === run.id);
+  return <li className="technical-run">
+    <p className="technical-run-who">
+      <strong>{run.snapshot.worker.name}</strong>
+      {stage && <small>{stage}</small>}
+    </p>
+    <p className="technical-run-setup">{setup}</p>
+    <p className="technical-run-id">
+      <code>{run.id}</code>
+      <Button size="icon" aria-label={t('Sao chép mã lần chạy')} title={t('Sao chép mã lần chạy')} onClick={() => void copyRunId(run.id)}><Copy size={13} /></Button>
+    </p>
+    {run.snapshot.plan && <ul className="technical-run-plan">{run.snapshot.plan.assignments.map(assignment => <li key={assignment.workerId}>
+      <strong>{detail.runs.find(item => item.stage === 'member' && item.snapshot.worker.id === assignment.workerId)?.snapshot.worker.name ?? assignment.workerId}</strong>
+      {assignment.brief}
+    </li>)}</ul>}
+    <ContextManifestView run={run} workspace={workspace} />
+    {artifacts.map(artifact => <Button key={artifact.id} variant="outline" title={tMessage(artifact.report.title)} onClick={() => onExport(artifact.id)}>
+      <FileText size={16} />{artifact.report.format === 'chat' ? t('Xuất câu trả lời') : t('Xuất báo cáo')}
+    </Button>)}
+  </li>;
+}
+
+async function copyRunId(id: string) {
+  try {
+    await orglet.copyText(id);
+    toast(t('Đã sao chép mã'));
+  } catch {
+    toast(t('Không sao chép được mã'), 'error');
+  }
+}
+
 export function DetailsPanel({ workspace, team, worker, detail, workerStatus, onClose, onOpenSources, onExport }: {
   workspace: Workspace;
   team?: Team;
@@ -181,19 +223,10 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
         <Wrench size={16} />{t('Chi tiết kỹ thuật')}
       </Button>}
 
-      {detail && technical && <Drawer open onClose={() => setTechnical(false)} title={t('Chi tiết kỹ thuật')} description={t('Số liệu để dò lỗi hoặc đối chiếu một lần chạy.')}>
-        {detail.runs.map(run => <section key={run.id} className="technical-run">
-          <h4>{run.snapshot.worker.name}</h4>
-          <p className="muted">{t('Skill {0}', [run.snapshot.skill.name])} · {run.snapshot.worker.provider}{run.snapshot.model ? ` · ${run.snapshot.model}` : ''}</p>
-          <code className="hash">{run.id}</code>
-          {run.snapshot.plan && <ul>{run.snapshot.plan.assignments.map(assignment => <li key={assignment.workerId}>
-            {detail.runs.find(item => item.stage === 'member' && item.snapshot.worker.id === assignment.workerId)?.snapshot.worker.name ?? assignment.workerId}: {assignment.brief}
-          </li>)}</ul>}
-          <ContextManifestView run={run} workspace={workspace} />
-          {detail.artifacts.filter(artifact => artifact.runId === run.id).map(artifact => <Button key={artifact.id} variant="outline" title={tMessage(artifact.report.title)} onClick={() => onExport(artifact.id)}>
-            <FileText size={16} />{artifact.report.format === 'chat' ? t('Xuất câu trả lời') : t('Xuất báo cáo')}
-          </Button>)}
-        </section>)}
+      {detail && technical && <Drawer open onClose={() => setTechnical(false)} title={t('Chi tiết kỹ thuật')} description={t('Từng lần chạy: ai trả lời, đọc những gì, và mã để đối chiếu khi có gì đó sai.')}>
+        <ol className="technical-runs">
+          {detail.runs.map(run => <TechnicalRun key={run.id} run={run} detail={detail} workspace={workspace} onExport={onExport} />)}
+        </ol>
       </Drawer>}
     </div>
   </aside>;

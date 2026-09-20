@@ -142,10 +142,31 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Machine detail is a dialog now, not a block in the panel: it is for chasing a bug, and it was crowding out the
    plain facts around it (user, 2026-09-20). What stays behind is one quiet control. */
 .details-technical-open { align-self:flex-start; color:var(--muted); }
-.technical-run + .technical-run { margin-top:18px; }
-.technical-run h4 { font-size:13px; font-weight:600; }
-.technical-run .hash { display:block; margin:6px 0; font-size:11px; }
-.technical-run > *:not(:first-child) { margin-top:6px; }
+/* The technical dialog: one numbered entry per run. The number does the work the two identical headings used to
+   fail at, which is saying which run you are looking at (user, 2026-09-20). Entries are separated by space and by
+   the number in the margin, never by a line. */
+.technical-runs { counter-reset:technical-run; margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:22px; }
+.technical-run { counter-increment:technical-run; position:relative; padding-left:30px; }
+.technical-run::before { content:counter(technical-run); position:absolute; left:0; top:1px; width:20px; height:20px; display:grid; place-items:center; border-radius:50%; background:var(--surface); color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+.technical-run > * + * { margin-top:6px; }
+.technical-run-who { display:flex; align-items:baseline; gap:8px; font-size:13px; }
+.technical-run-who small { color:var(--muted); font-size:11px; }
+.technical-run-setup { color:var(--muted); font-size:12px; }
+/* The id is something you carry to a log, so it reads as a value with a copy button, not as a filled box. */
+.technical-run-id { display:flex; align-items:center; gap:4px; }
+.technical-run-id code { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:11px; }
+.technical-run-id .button-icon { width:26px; height:26px; min-height:26px; padding:0; }
+.technical-run-plan { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; font-size:12px; }
+.technical-run-plan strong { margin-right:6px; font-weight:600; }
+/* The context manifest keeps the browser's disclosure behaviour and drops its default triangle for the app's own. */
+.technical-run details > summary { display:flex; align-items:center; gap:6px; width:fit-content; color:var(--muted); font-size:12px; cursor:pointer; }
+.technical-run details > summary::-webkit-details-marker { display:none; }
+.technical-run details > summary::before { content:''; width:0; height:0; border:4px solid transparent; border-left-color:currentColor; transition:transform var(--motion-quick) var(--ease-out); }
+.technical-run details[open] > summary::before { transform:rotate(90deg) translateX(1px); }
+.technical-run details > summary:hover { color:var(--text); }
+.technical-run details ul { margin:6px 0 0; padding-left:18px; color:var(--muted); font-size:12px; }
+.technical-run details h4 { margin-top:8px; font-size:12px; font-weight:600; }
+@media(prefers-reduced-motion:reduce) { .technical-run details > summary::before { transition:none; } }
 @media(max-width:1000px) { .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr); } .details-pane { display:none; } }
 /* Collapsed sidebar: the two buttons live in the main panel, not on the window behind it (user, 2026-09-19). */
 .topbar-rail { display:flex; align-items:center; gap:2px; margin-right:6px; flex-shrink:0; }

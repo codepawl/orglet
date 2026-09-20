@@ -133,7 +133,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Ngôn ngữ')} description={t('Áp dụng cho toàn bộ giao diện và thông báo.')}>
                 <Select ariaLabel={t('Ngôn ngữ')} className="setting-select" value={workspace.language ?? DEFAULT_LANGUAGE} disabled={busy} onChange={value => void save({ language: value as Workspace['language'] })} options={[{ value: 'en', label: 'English (US)', icon: <CurrencyFlag code="USD" /> }, { value: 'en-GB', label: 'English (UK)', icon: <CurrencyFlag code="GBP" /> }, { value: 'vi', label: 'Tiếng Việt', icon: <CurrencyFlag code="VND" /> }]} />
               </Row>
-              <Row title={t('Giao diện')} description={t('Theo hệ thống dùng chế độ sáng/tối của Windows.')}>
+              <Row title={t('Giao diện')} description={t('Sáng, tối, hoặc đi theo Windows.')}>
                 <Select ariaLabel={t('Giao diện')} className="setting-select" value={workspace.theme} disabled={busy} onChange={value => void save({ theme: value as Workspace['theme'] })} options={[{ value: 'system', label: t('Theo hệ thống'), icon: <Monitor size={16} /> }, { value: 'light', label: t('Sáng'), icon: <Sun size={16} /> }, { value: 'dark', label: t('Tối'), icon: <Moon size={16} /> }]} />
               </Row>
             </>}
@@ -161,7 +161,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Áp dụng cho cuộc trò chuyện, Tí và hội, tính từ lúc lưu trữ. Cuộc trò chuyện đã tốn phí chỉ giữ lại số liệu chi phí.')}>
                 <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
               </Row>
-              <Row title={t('Request đồng thời mỗi provider')} description={t('Bước vượt giới hạn sẽ xếp hàng và chưa giữ ngân sách.')}>
+              <Row title={t('Request đồng thời mỗi provider')} description={t('Vượt giới hạn thì bước đó xếp hàng chờ, chưa trừ ngân sách.')}>
                 <Select ariaLabel={t('Request đồng thời mỗi provider')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={[1, 2, 3, 4].map(value => ({ value: String(value), label: `${value} request`, detail: value === 1 ? t('tuần tự') : undefined }))} />
               </Row>
             </>}
@@ -269,7 +269,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'usage' && <>
-              <Row title={t('Đã đối soát')} description={t('Chi phí request đi qua Orglet đã có số liệu từ provider.')}><span className="setting-value">{formatMoney(workspace.usage.chargedMicros)}</span></Row>
+              <Row title={t('Đã đối soát')} description={t('Phần provider đã chốt số và tính tiền.')}><span className="setting-value">{formatMoney(workspace.usage.chargedMicros)}</span></Row>
               <Row title={t('Đang giữ chỗ')} description={workspace.usage.uncertainCount > 0 ? <span className="error">{t('{0} request chưa rõ chi phí, vẫn được tính vào giới hạn.', [workspace.usage.uncertainCount])}</span> : t('Request đang chạy hoặc chưa rõ chi phí.')}><span className="setting-value">{formatMoney(workspace.usage.reservedMicros)}</span></Row>
               <Row id="limit-label" title={t('Giới hạn mỗi connection / tháng')} description={limitError ? <span className="error" id="limit-error">{limitError}</span> : t('Tháng tính theo UTC. Áp dụng riêng cho từng API provider.')}>
                 <span className={`money-input ${limitError ? 'invalid' : ''}`}><span aria-hidden>{moneySymbol()}</span><input aria-labelledby="limit-label" aria-invalid={Boolean(limitError)} aria-describedby={limitError ? 'limit-error' : undefined} inputMode="decimal" value={limit} disabled={busy} onChange={event => setLimit(event.target.value)} onBlur={commitLimit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitLimit(); } }} /></span>
