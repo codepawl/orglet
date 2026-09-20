@@ -732,6 +732,8 @@ export const en: Dictionary = {
   'Sao chép': 'Copy',
   'Trả lời tin này': 'Reply to this',
   'Thả react': 'React',
+  '{0} đã đọc tới đây': '{0} has read this far',
+  'Đã đọc tới đây: {0}': 'Read this far: {0}',
   'Mình vừa thả {0} cho câu trả lời trước. {1}': 'I just reacted {0} to that answer. {1}',
   'Mình thấy ổn, giữ hướng này.': 'That works for me, keep going this way.',
   'Đúng cái mình cần, làm tiếp kiểu này.': 'Exactly what I needed, more like that.',

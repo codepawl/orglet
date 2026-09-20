@@ -407,12 +407,26 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Reactions: the row opens on demand, because six faces under every answer is noise. A picked one stays on the
    message as the face itself, which is what anyone reading the thread is looking for. */
 .reaction-bar { position:relative; display:flex; align-items:center; }
-.reaction-picked { display:grid; place-items:center; width:30px; height:30px; padding:0; border:0; border-radius:50%; background:color-mix(in srgb, var(--accent) 16%, var(--bg)); font-size:17px; line-height:1; cursor:pointer; }
-.reaction-picked:hover { background:color-mix(in srgb, var(--accent) 26%, var(--bg)); }
-.reaction-row { position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:4px; padding:7px 9px; border-radius:999px; background:var(--bg); box-shadow:0 10px 28px #00000026, 0 0 0 1px #0000000f; animation:menu-in var(--motion-quick) var(--ease-out); }
-.reaction-row button { display:grid; place-items:center; width:40px; height:40px; padding:0; border:0; border-radius:50%; background:none; font-size:23px; line-height:1; cursor:pointer; transition:transform var(--motion-quick) var(--ease-out), background var(--motion-quick); }
-.reaction-row button:hover,.reaction-row button:focus-visible { background:var(--surface); transform:scale(1.22); }
-@media(prefers-reduced-motion:reduce) { .reaction-row { animation:none; } .reaction-row button { transition:none; } .reaction-row button:hover { transform:none; } }
+/* The row centres itself with a transform, so it cannot borrow menu-in, whose own transform would replace that
+   and drop the row to the right for the length of the animation before it snapped back (user, 2026-09-20). */
+.reaction-row { position:absolute; bottom:calc(100% + 6px); left:50%; z-index:5; display:flex; gap:2px; padding:4px 6px; border-radius:999px; background:var(--bg); box-shadow:0 8px 22px #00000024, 0 0 0 1px #0000000f; animation:reaction-row-in var(--motion-quick) var(--ease-out); transform:translateX(-50%); }
+/* Opacity and a nudge only: scaling a centred box moves its edges while it grows, which is the jump again in
+   miniature — measured at 4px. */
+@keyframes reaction-row-in { from { opacity:0; transform:translateX(-50%) translateY(3px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+.reaction-row button { display:grid; place-items:center; width:30px; height:30px; padding:0; border:0; border-radius:50%; background:none; font-size:17px; line-height:1; cursor:pointer; transition:transform var(--motion-quick) var(--ease-out), background var(--motion-quick); }
+.reaction-row button:hover,.reaction-row button:focus-visible { background:var(--surface); transform:scale(1.18); }
+/* The picked reaction rides on the lower edge of the message it belongs to, the way a messenger wears one
+   (user, 2026-09-20). It overlaps the bubble rather than sitting under it, so it reads as attached. */
+.reaction-chip { position:absolute; right:12px; bottom:-11px; z-index:2; display:grid; place-items:center; width:24px; height:24px; padding:0; border:0; border-radius:50%; background:var(--bg); box-shadow:0 1px 3px #00000026; font-size:13px; line-height:1; cursor:pointer; transition:transform var(--motion-quick) var(--ease-out); }
+.reaction-chip:hover { transform:scale(1.12); }
+/* The wrapper is only as wide as the bubble, so a chip anchored to its corner lands on the bubble. */
+.chat-bubble { position:relative; width:fit-content; max-width:100%; }
+.user-message { position:relative; }
+.chat-reply:has(.reaction-chip) { padding-bottom:12px; }
+/* Who has read this far: small faces under the last message each orglet worked from. */
+.read-receipts { display:flex; justify-content:flex-end; gap:3px; margin:6px 2px 0; }
+.read-receipts .avatar { width:16px; height:16px; box-shadow:0 0 0 1.5px var(--bg); }
+@media(prefers-reduced-motion:reduce) { .reaction-row { animation:none; } .reaction-row button { transition:none; } .reaction-row button:hover { transform:none; } .reaction-chip { transition:none; } .reaction-chip:hover { transform:none; } }
 .thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) 0; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
 /* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,

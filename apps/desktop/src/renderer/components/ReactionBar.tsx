@@ -13,10 +13,9 @@ import { t } from '../i18n';
  * Knows nothing about where reactions are stored or what they mean to a worker; it takes the set to offer, what
  * is picked, and a callback.
  */
-export function ReactionBar<Name extends string>({ options, picked, onPick, label }: {
+export function ReactionBar<Name extends string>({ options, onPick, label }: {
   /** What can be thrown, in the order shown. `name` is what is stored; `emoji` is what is drawn. */
   options: readonly { name: Name; emoji: string; meaning: string }[];
-  picked?: Name;
   /** Called with the picked name, or with the same name again to take it off. */
   onPick: (name: Name) => void;
   /** Names the trigger and the row for assistive technology. */
@@ -31,14 +30,27 @@ export function ReactionBar<Name extends string>({ options, picked, onPick, labe
     return () => document.removeEventListener('pointerdown', outside);
   }, [open]);
   const name = label ?? t('Thả react');
-  const current = picked ? options.find(option => option.name === picked) : undefined;
   return <div className="reaction-bar" ref={root} onKeyDown={event => { if (event.key === 'Escape' && open) { event.stopPropagation(); setOpen(false); } }}>
-    {current
-      ? <button type="button" className="reaction-picked" aria-label={t('Bỏ {0}', [current.meaning])} title={current.meaning} onClick={() => onPick(current.name)}>{current.emoji}</button>
-      : <Button size="icon" aria-label={name} title={name} aria-haspopup="true" aria-expanded={open} onClick={() => setOpen(value => !value)}><SmilePlus size={15} /></Button>}
+    <Button size="icon" aria-label={name} title={name} aria-haspopup="true" aria-expanded={open} onClick={() => setOpen(value => !value)}><SmilePlus size={15} /></Button>
     {open && <div className="reaction-row" role="group" aria-label={name}>
       {options.map(option => <button key={option.name} type="button" aria-label={option.meaning} title={option.meaning}
         onClick={() => { onPick(option.name); setOpen(false); }}>{option.emoji}</button>)}
     </div>}
   </div>;
+}
+
+/**
+ * The reaction that was picked, worn on the message itself rather than listed with the actions below it — the
+ * shape every messenger uses, and the one the owner asked for (2026-09-20). Sits on the bubble's lower edge, so
+ * it belongs to that message and to no other. The parent bubble needs `position:relative`.
+ */
+export function ReactionChip<Name extends string>({ options, picked, onClear }: {
+  options: readonly { name: Name; emoji: string; meaning: string }[];
+  picked: Name;
+  /** Clicking the chip takes the reaction off, the way clicking it again in the row does. */
+  onClear: () => void;
+}) {
+  const current = options.find(option => option.name === picked);
+  if (!current) return null;
+  return <button type="button" className="reaction-chip" aria-label={t('Bỏ {0}', [current.meaning])} title={current.meaning} onClick={onClear}>{current.emoji}</button>;
 }

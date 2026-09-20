@@ -18,7 +18,7 @@ import { orglet } from '../api';
 import { Markdown } from './Markdown';
 import { Attachment } from './Attachment';
 import { reactionEmoji, reactionMeanings, reactionOrder, replyToAnswer, toggleReaction, useReaction } from './messageMarks';
-import { ReactionBar } from './ReactionBar';
+import { ReactionBar, ReactionChip } from './ReactionBar';
 import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
@@ -59,6 +59,22 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
     const replies = runs.filter(run => run.stage === 'group').flatMap(run => { const reply = detail.artifacts.find(item => item.runId === run.id); return reply ? [{ run, artifact: reply }] : []; });
     return { revision, runs, brief: input.brief, sources: input.sourceIds.map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
   });
+  /**
+   * How far each orglet has got, the way a messenger shows it: a face under the last message that orglet has
+   * actually worked from (user, 2026-09-20). Nothing new is recorded for this — a run carries the revision of
+   * the message it was given, so the highest one a worker has run is exactly how far they have read.
+   */
+  const readersByRevision = new Map<number, Run[]>();
+  const furthest = new Map<string, Run>();
+  for (const run of detail.runs) {
+    const revision = run.snapshot.inputRevision ?? 0;
+    const known = furthest.get(run.snapshot.worker.id);
+    if (!known || (known.snapshot.inputRevision ?? 0) < revision) furthest.set(run.snapshot.worker.id, run);
+  }
+  for (const run of furthest.values()) {
+    const revision = run.snapshot.inputRevision ?? 0;
+    readersByRevision.set(revision, [...(readersByRevision.get(revision) ?? []), run]);
+  }
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const liveRuns = useRunProgress(detail.task.id);
   // Changes whenever streamed text or steps grow, so the view keeps following the newest output.
@@ -128,12 +144,13 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
               ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
-            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
+            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
             {latest && <div className="actions">
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
               {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}
             </div>}
           </section>}
+          <ReadReceipts readers={readersByRevision.get(turn.revision) ?? []} />
         </div>;
       })}
     </div>
@@ -166,7 +183,7 @@ function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
 
 function ChatReply({ artifact, author, action }: { artifact: Artifact; author: string; action: (fn: () => Promise<unknown>) => void }) {
   return <div className="chat-reply">
-    <Markdown className="prose" text={tMessage(artifact.report.summary)} />
+    <div className="chat-bubble"><Markdown className="prose" text={tMessage(artifact.report.summary)} /><AnswerChip messageId={artifact.id} /></div>
     {artifact.report.limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
@@ -186,11 +203,33 @@ function AnswerMarks({ artifactId, author, text }: { artifactId: string; author:
   </>;
 }
 
+/**
+ * Who has read this far. Faces sit under the last message each orglet has worked from, the way a messenger
+ * shows a reader's avatar at the message they reached (user, 2026-09-20). Only the newest message an orglet
+ * has got to carries its face, so the column shows progress rather than repeating the same faces all the way
+ * down. The name is spelled out for anyone who cannot see the picture.
+ */
+function ReadReceipts({ readers }: { readers: readonly Run[] }) {
+  if (!readers.length) return null;
+  return <p className="read-receipts" aria-label={t('Đã đọc tới đây: {0}', [readers.map(run => run.snapshot.worker.name).join(', ')])}>
+    {readers.map(run => <span key={run.id} title={t('{0} đã đọc tới đây', [run.snapshot.worker.name])}>
+      <Avatar name={run.snapshot.worker.name} seed={run.snapshot.worker.id} mascot={run.snapshot.worker.avatar?.mascot} defaultMascot hint={run.snapshot.worker.description} color={run.snapshot.worker.avatar?.color} size="xs" />
+    </span>)}
+  </p>;
+}
+
+/** The picked reaction, worn on the answer it belongs to. */
+function AnswerChip({ messageId }: { messageId: string }) {
+  const picked = useReaction(messageId);
+  if (!picked) return null;
+  const options = reactionOrder.map(name => ({ name, emoji: reactionEmoji[name], meaning: reactionMeanings[name] }));
+  return <ReactionChip options={options} picked={picked} onClear={() => toggleReaction(messageId, picked)} />;
+}
+
 /** The thread's own wiring of the shared bar: where a reaction is kept, and what each face means to a worker. */
 function AnswerReaction({ messageId }: { messageId: string }) {
-  const picked = useReaction(messageId);
   const options = reactionOrder.map(name => ({ name, emoji: reactionEmoji[name], meaning: reactionMeanings[name] }));
-  return <ReactionBar options={options} picked={picked} onPick={name => toggleReaction(messageId, name)} />;
+  return <ReactionBar options={options} onPick={name => toggleReaction(messageId, name)} />;
 }
 
 /** Copy and download for an answer or document, in the format the user picks or saved as default. */
@@ -215,7 +254,7 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   // Evidence links leave the document for the sources panel.
   const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
   return <>
-    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}
       <ArtifactActions artifactId={artifact.id} action={action} />
