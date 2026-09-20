@@ -228,7 +228,13 @@ try {
   const recoveryPanel = page.locator('.workspace-recovery');
   await recoveryPanel.getByRole('heading', { name: 'File và tiến trình', exact: true }).waitFor();
   await recoveryPanel.getByRole('button', { name: 'Xem bản sửa riêng', exact: true }).click();
-  await recoveryPanel.locator('pre').filter({ hasText: 'Private edit for inspection' }).waitFor();
+  const privateEdit = recoveryPanel.locator('pre').filter({ hasText: 'Private edit for inspection' });
+  const privateEditError = recoveryPanel.getByRole('alert');
+  const previewOutcome = await Promise.race([
+    privateEdit.waitFor().then(() => null),
+    privateEditError.waitFor().then(() => privateEditError.innerText()),
+  ]);
+  assert.equal(previewOutcome, null, `Private edit preview failed: ${previewOutcome}`);
   assert.equal(await readFile(join(taskWorkspace, 'note.txt'), 'utf8'), 'Current user file');
   await recoveryPanel.locator('summary').filter({ hasText: 'Chưa rõ kết quả' }).click();
   await recoveryPanel.getByRole('button', { name: 'Xem đầu ra', exact: true }).click();
