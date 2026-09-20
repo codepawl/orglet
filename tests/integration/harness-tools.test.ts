@@ -26,7 +26,7 @@ it.each(['claude-code', 'codex', 'cursor'] as const)('translates a %s structured
   let notices = 0;
   const adapter = harnessToolAdapter({ request: { harness, executable: 'fixture', cwd: 'fixture', maxBudgetUsd: 1 },
     execute: async request => {
-      expect(request.schema).toEqual(harnessToolSchema(tools));
+      expect(request.schema).toEqual(harnessToolSchema(tools, harness));
       expect(request.prompt).toContain('Orglet executes');
       return { output: { call: { name: 'workspace_read', arguments: { path: 'note.txt', offset: 0 } } }, costUsd: null };
     }, onResult: () => { notices++; },
@@ -36,6 +36,20 @@ it.each(['claude-code', 'codex', 'cursor'] as const)('translates a %s structured
   expect(response.calls[0].name).toBe('workspace_read');
   expect(response.usage).toBeUndefined();
   expect(notices).toBe(1);
+});
+
+it('gives Codex a strict schema even when a tool has optional fields, then validates its JSON arguments', async () => {
+  const tools = [toolDefinitions.submit_plan.model];
+  const schema = harnessToolSchema(tools, 'codex') as { properties: { call: { properties: { arguments: { type: string } }; required: string[] } } };
+  expect(schema.properties.call.required).toEqual(['name', 'arguments']);
+  expect(schema.properties.call.properties.arguments.type).toBe('string');
+  const adapter = harnessToolAdapter({ request: { harness: 'codex', executable: 'fixture', cwd: 'fixture', maxBudgetUsd: 1 },
+    execute: async () => ({ output: { call: { name: 'submit_plan', arguments: JSON.stringify({ assignments: [{ workerId: '00000000-0000-4000-8000-000000000000', brief: 'Check figures' }] }) } }, costUsd: null }),
+    onResult: () => {},
+  });
+  const response = await adapter.request([], tools, new AbortController().signal, () => {});
+  expect(response.calls[0].name).toBe('submit_plan');
+  expect(JSON.parse(response.calls[0].arguments)).toEqual({ assignments: [{ workerId: '00000000-0000-4000-8000-000000000000', brief: 'Check figures' }] });
 });
 
 it.each([
