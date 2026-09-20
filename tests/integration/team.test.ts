@@ -197,7 +197,10 @@ it('demo team plan assigns only @tagged members', async () => {
   const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: `@${tagged.name} hãy đọc nguồn`, sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
   await done(taskId);
   const detail = store.detail(taskId);
-  expect(detail.runs.find(run => run.stage === 'plan')!.snapshot.plan).toEqual({ assignments: [{ workerId: tagged.id, brief: `@${tagged.name} hãy đọc nguồn` }], note: 'Giao các thành viên được gắn thẻ.' });
+  expect(detail.runs.find(run => run.stage === 'plan')!.snapshot.plan).toEqual({ assignments: [{
+    workerId: tagged.id, brief: `@${tagged.name} hãy đọc nguồn`, expectedOutput: `@${tagged.name} hãy đọc nguồn`,
+    dependsOn: [], writeResources: [],
+  }], note: 'Giao các thành viên được gắn thẻ.' });
   const members = detail.runs.filter(run => run.stage === 'member');
   expect(members.filter(run => run.status === 'completed').map(run => run.snapshot.worker.id)).toEqual([tagged.id]);
   expect(members.find(run => run.status === 'cancelled')!.error).toBe(UNASSIGNED_PLAN_ERROR);

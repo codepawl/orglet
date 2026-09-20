@@ -114,3 +114,5 @@ For a commercial license without those terms, contact legal@codepawl.com.
 Copyright (C) 2026 Nguyen Xuan An (CodePawl).
 
 Tool access is checked by core against both the run's frozen permissions and the task's current permissions. Reducing permissions cancels active work; restored backups do not restore tool grants. See [tool permissions](docs/agent-tools.md).
+
+Team assignments record an expected output, dependencies and editable resources. Independent work can run in parallel; overlapping resources are serialized, and a dependent worker waits for a committed prerequisite result.

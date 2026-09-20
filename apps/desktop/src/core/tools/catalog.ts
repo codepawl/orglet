@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import { Finding, FindingCategory, Id, Report, SourceLocation, TeamPlan, type Run, type Task } from '../../shared/contracts';
+import { Finding, FindingCategory, Id, Report, SourceLocation, TeamPlan, PlanAssignment, type Run, type Task } from '../../shared/contracts';
 import { ProfileArgs } from '../../shared/profiles';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { Review } from '../../shared/review';
 import { KnowledgeProposal } from '../../shared/knowledge';
 import type { ToolCapability } from '../../shared/tool-policy';
 import { hasCapability } from './policy';
-const ModelTeamPlan = TeamPlan;
+const ModelTeamPlan = TeamPlan.extend({ assignments: z.array(PlanAssignment.required({ expectedOutput: true, dependsOn: true, writeResources: true })).min(1).max(4) });
 
 export const needsReport = (run: Run) => run.stage === 'synthesis' && !!run.snapshot.team?.reviewPolicy?.requiredChecks.length;
 const Recommendation = z.string().min(1).max(2000).nullable();
@@ -28,7 +28,7 @@ export const ModelReport = ModelReportSchema.extend({ review: Review.nullable().
  */
 export const NO_SOURCES_INSTRUCTION = 'No sources are attached to this chat. A finding must cite a source you read, so no finding can be supported here. Answer as a normal chat message; produce a report only if the user clearly wants a written document, and then with an empty findings array.';
 export const SUBMIT_REPORT_DESCRIPTION = 'Finish with an evidence-backed report. Classify findings, provide a supported recommendation or null, and cite profile IDs returned by your checker calls or the provided preflight. Use no checker IDs for text-only findings. locations give 1-based inclusive line ranges inside text sources you read with read_source and cite; use an empty array when a finding has no specific lines. Never claim unperformed checks. Use recommendation ready_for_human_review only when review.checks is non-empty, every check passes, there are no conflicts and no critical findings; otherwise choose revision_required, rerun_required or insufficient_evidence. Finding identities and authorship are assigned by the app. knowledgeProposals may suggest at most three reusable, general lessons (no task-specific facts or secrets); they are stored for user review and never apply automatically. Use an empty array when nothing qualifies.';
-const SUBMIT_PLAN_DESCRIPTION = 'Assign this user message to one or more listed team members. Use only those member ids. You may assign a subset. Each assignment brief is that worker\'s job for this turn. Do not invent workers or missing results.';
+const SUBMIT_PLAN_DESCRIPTION = 'Assign this user message to one or more listed team members. Use only those member ids. You may assign a subset. Each assignment brief is that worker\'s job for this turn. Each assignment should state expectedOutput, dependsOn (assigned worker ids whose committed results are required), and writeResources (relative workspace files or directories, empty for read-only work). Use empty dependencies for independent work. Ownership never grants file permissions. Do not invent workers or missing results.';
 const REPLY_DESCRIPTION = 'Send your answer to the user as a normal chat message (Markdown allowed). Use this for questions, discussion and ordinary requests. Mention the sources you relied on by name. title: when the latest message has nameChat true, a short name for this chat (2 to 6 words, in the user\'s language, no quotes or trailing period); otherwise null. knowledgeProposals may suggest at most three reusable, general lessons for user review; use an empty array when nothing qualifies.';
 const ChatTitle = z.string().trim().min(1).max(80).nullable();
 const ChatReplySchema = z.object({ message: z.string().min(1).max(16000), title: ChatTitle, knowledgeProposals: Proposals }).strict();

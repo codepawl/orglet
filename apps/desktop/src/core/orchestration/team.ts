@@ -1,3 +1,4 @@
+import { assignmentKey, claimAssignment, resourcesOverlap } from './assignments';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import type { Artifact, Run, Skill, Task, Team, Worker } from '../../shared/contracts';
 import { MISSING_PLAN_ERROR, UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
@@ -60,28 +61,66 @@ export class TeamRunner {
         if (run.status === 'queued') this.store.update('runs', { ...run, status: 'cancelled', error: UNASSIGNED_PLAN_ERROR });
       }
       const memberArtifacts: Artifact[] = [];
+      const successful = new Set<string>();
       const failures: string[] = [];
       const execute = async (workerId: string) => {
         if (!this.canDispatch(task)) control.paused = true;
         if (control.cancelled || control.paused) return;
         const existing = this.store.detail(task.id);
-        const finished = existing.runs.findLast(r => (r.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0) && r.stage === 'member' && r.snapshot.worker.id === workerId && r.status === 'completed');
+        const finished = existing.runs.findLast(r => (r.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0) && r.stage === 'member' && assignmentKey(r) === workerId && r.status === 'completed');
         const retained = finished && existing.artifacts.find(a => a.runId === finished.id);
-        if (retained) { memberArtifacts.push(retained); return; }
-        const assignment = plannedNow.snapshot.plan!.assignments.find(item => item.workerId === workerId)?.brief;
-        const run = this.join(planned.members.get(workerId)!, team.workflow === 'sequential' ? memberArtifacts : [], preflightId);
-        await this.runner.run(task, run, { keepTaskOpen: true, upstream: team.workflow === 'sequential' ? [...memberArtifacts] : [], assignment });
+        if (retained) {
+          if (!memberArtifacts.some(artifact => artifact.id === retained.id)) memberArtifacts.push(retained);
+          successful.add(workerId);
+          return;
+        }
+        const assignment = plannedNow.snapshot.plan!.assignments.find(item => item.workerId === workerId)!;
+        const upstream = team.workflow === 'sequential' ? [...memberArtifacts] : memberArtifacts.filter(artifact => {
+          const writerRun = existing.runs.find(candidate => candidate.id === artifact.runId);
+          const writer = writerRun && assignmentKey(writerRun);
+          return writer && assignment.dependsOn?.includes(writer);
+        });
+        const prepared = this.join(planned.members.get(workerId)!, upstream, preflightId);
+        const run = claimAssignment(this.store, prepared, assignment);
+        await this.runner.run(task, run, { keepTaskOpen: true, upstream,
+          assignment: assignment.expectedOutput ? assignment.brief + '\nExpected output: ' + assignment.expectedOutput : assignment.brief });
         const result = this.store.detail(task.id);
-        if (result.runs.find(r => r.id === run.id)?.status === 'paused') control.paused = true;
+        const resultStatus = result.runs.find(candidate => candidate.id === run.id)?.status;
+        if (resultStatus === 'paused' || resultStatus === 'waiting_budget') control.paused = true;
         const artifact = result.artifacts.find(a => a.runId === run.id);
-        if (artifact) memberArtifacts.push(artifact);
-        else failures.push(`${run.snapshot.worker.name}: ${result.runs.find(r => r.id === run.id)?.error ?? 'chưa hoàn tất'}`);
+        if (artifact) {
+          memberArtifacts.push(artifact);
+          successful.add(workerId);
+        } else {
+          failures.push(`${run.snapshot.worker.name}: ${result.runs.find(r => r.id === run.id)?.error ?? 'chưa hoàn tất'}`);
+        }
       };
-      const assignedIds = team.memberIds.filter(workerId => assigned.has(workerId));
-      if (team.workflow === 'parallel') {
-        // At most two native executions at once. This is a fixed workflow, not a free-form swarm.
-        for (let i = 0; i < assignedIds.length && !control.cancelled && !control.paused; i += 2) await Promise.all(assignedIds.slice(i, i + 2).map(execute));
-      } else for (const workerId of assignedIds) { if (control.cancelled || control.paused) break; await execute(workerId); }
+      const orderedAssignments = team.memberIds.map(workerId => plannedNow.snapshot.plan!.assignments.find(assignment => assignment.workerId === workerId)).filter(assignment => assignment !== undefined);
+      const pending = new Map(orderedAssignments.map(assignment => [assignment.workerId, assignment]));
+      const drain = async () => {
+        while (pending.size && !control.cancelled && !control.paused) {
+          const ready = [...pending.values()].filter(assignment => (assignment.dependsOn ?? []).every(workerId => successful.has(workerId)));
+          const batch: typeof ready = [];
+          for (const assignment of ready) {
+            if (batch.every(selected => !resourcesOverlap(selected, assignment))) batch.push(assignment);
+            if (batch.length === (team.workflow === 'parallel' ? 2 : 1)) break;
+          }
+          if (!batch.length) {
+            for (const assignment of pending.values()) {
+              const blocked = planned.members.get(assignment.workerId)!;
+              const error = 'Phần việc đang chờ kết quả từ phần việc chưa hoàn tất.';
+              this.store.update('runs', { ...blocked, status: 'interrupted', error });
+              failures.push(blocked.snapshot.worker.name + ': ' + error);
+            }
+            break;
+          }
+          for (const assignment of batch) pending.delete(assignment.workerId);
+          const results = await Promise.allSettled(batch.map(assignment => execute(assignment.workerId)));
+          const rejected = results.find(result => result.status === 'rejected');
+          if (rejected?.status === 'rejected') throw rejected.reason;
+        }
+      };
+      await drain();
       if (control.cancelled) { this.finish(task, 'cancelled'); return; }
       if (control.paused) { this.finish(task, 'paused'); return; }
       if (!memberArtifacts.length) { this.finish(task, 'failed'); return; }
