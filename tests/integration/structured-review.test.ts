@@ -136,6 +136,31 @@ it('passes submission alignment only with a cited two-dataset profile showing ma
   const oneSource = claimed(); oneSource.review!.checks[0].sourceIds = [source];
   expect(applyReviewPolicy(oneSource, policy, [profile({})]).review).toMatchObject({ recommendation: 'insufficient_evidence', checks: [{ status: 'not_assessed' }] });
 });
+it('allows an exact-match evidence check only with a complete cited score for both selected files', () => {
+  const answers = randomUUID();
+  const checker = randomUUID();
+  const policy = { requiredChecks: [{ name: 'Recompute exact match', checker: 'exact_match_accuracy' as const }] };
+  const claimed = () => {
+    const value = report();
+    value.review!.checks[0] = { name: 'Recompute exact match', status: 'pass', coverage: 'Exact match 1/2', sourceIds: [source, answers], checkerIds: [checker] };
+    return value;
+  };
+  const profile = (status: 'complete' | 'incomplete') => ({
+    id: checker, taskId: randomUUID(), createdAt: '2026-09-15T00:00:00.000Z',
+    sourceHashes: { [source]: 'a'.repeat(64), [answers]: 'b'.repeat(64) },
+    result: { engine: 'fixture', coverage: 'full' as const, checks: ['exact_match_accuracy'], limitations: [],
+      datasets: [{ sourceId: source, rows: 2, columns: [], id: null }, { sourceId: answers, rows: 2, columns: [], id: null }], comparison: null,
+      exactMatch: { version: 'orglet-exact-match-v1' as const, predictionSourceId: source, answerSourceId: answers,
+        idColumn: 'id', predictionColumn: 'prediction', answerColumn: 'answer', status,
+        reason: status === 'complete' ? null : 'duplicate_id' as const, matched: status === 'complete' ? 1 : null,
+        total: 2, accuracy: status === 'complete' ? 0.5 : null } },
+  });
+  expect(applyReviewPolicy(claimed(), policy, [profile('complete')]).review!.checks[0].status).toBe('pass');
+  expect(applyReviewPolicy(claimed(), policy, [profile('incomplete')]).review!.checks[0].status).toBe('not_assessed');
+  const oneSource = claimed();
+  oneSource.review!.checks[0].sourceIds = [source];
+  expect(applyReviewPolicy(oneSource, policy, [profile('complete')]).review!.recommendation).toBe('insufficient_evidence');
+});
 it('creates conservative structured metadata for a legacy reply under a new required policy', () => {
   const value = report(); delete value.review;
   const checked = applyReviewPolicy(value, { requiredChecks: [{ name: 'Objective', checker: 'none' }] }, []);

@@ -26,6 +26,14 @@ export function applyReviewPolicy(report: Report, policy: ReviewPolicy | undefin
     if (required.checker === 'pair_alignment' && check.status === 'pass' && !profiles.some(profile => check!.checkerIds.includes(profile.id) && alignedPair(profile) && profile.result.datasets.every(dataset => check!.sourceIds.includes(dataset.sourceId)))) {
       check.status = 'not_assessed'; check.coverage += '\nChưa có kết quả đối chiếu hai dataset (cột, số dòng, tập ID không trùng/thiếu) cho mục này.';
     }
+    if (required.checker === 'exact_match_accuracy' && check.status === 'pass' && !profiles.some(profile => {
+      const score = profile.result.exactMatch;
+      return check!.checkerIds.includes(profile.id) && score?.status === 'complete'
+        && check!.sourceIds.includes(score.predictionSourceId) && check!.sourceIds.includes(score.answerSourceId)
+        && Object.hasOwn(profile.sourceHashes, score.predictionSourceId) && Object.hasOwn(profile.sourceHashes, score.answerSourceId);
+    })) {
+      check.status = 'not_assessed'; check.coverage += '\nChưa có exact-match accuracy từ cặp predictions/answers và các cột đã chọn. Không suy ra metric chính thức.';
+    }
   }
   if (review.checks.some(check => check.status === 'not_assessed')) review.recommendation = 'insufficient_evidence';
   return result;

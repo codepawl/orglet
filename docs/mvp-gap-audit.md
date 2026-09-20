@@ -15,7 +15,7 @@ This is an implementation gap audit, not a completion certificate. The contract 
 | §8.1: conservative concurrency | Team task/role limits plus workspace provider request limit | None known |
 | §9.2, M3: local harness backends (user decision 2026-09-16: Claude Code, Codex and other installed harnesses first) | Per-machine detection, read-only execution of `claude -p` and `codex exec` over source copies, same report gate, consent, cancellation; matrix in `docs/capabilities.md` Live reviews through both Claude Code and Codex verified 2026-09-16. Other harnesses (Gemini CLI, OpenCode) not added until one is installed to test against |
 | §10.2: subscription quota and internal allocation | Hidden; neither CLI reports quota windows headlessly | Revisit if a harness exposes quota data |
-| §11: data/scoring review | Profiling, run-log audit, two-file column/row/ID-set comparison and gate | Metric recomputation from predictions/answers is not implemented; arbitrary scoring code stays prohibited |
+| §11: data/scoring review | Profiling, run-log audit, two-file column/row/ID-set comparison and gate; bounded exact-match accuracy on an explicitly selected predictions/answers pair | Custom challenge metrics and official score equivalence remain unverified; arbitrary scoring code stays prohibited |
 | §5, starter constraint 3: core utility process | Implemented | Keep packaged-process proof after changes |
 | §8.4, M4: routines and recovery | Implemented and tested | None beyond native re-checks |
 | M0/M5: install and clean Windows | Setup.exe built, unsigned | Run installer, startup and uninstall on a clean Windows test machine |

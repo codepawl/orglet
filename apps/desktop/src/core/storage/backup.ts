@@ -25,11 +25,13 @@ const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPack
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
 const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), pendingStart: z.boolean().optional(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(100).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
-const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), workFrame: WorkFrame.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
+const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), workFrame: WorkFrame.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), scoreProfileIds: z.array(Id).max(20).optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
 const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime(), teamMessage: TeamMessage.optional() }).strict();
 const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime() }).strict();
 const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional() }).strict();
 const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: z.iso.datetime(), sourceHashes: z.record(Id, Hash), result: DatasetProfile }).strict();
+const manualScoreAvailable = (profile: z.infer<typeof Profile>, run: z.infer<typeof Run>) => !profile.runId && !!profile.result.exactMatch && profile.createdAt <= run.startedAt
+  && !!run.snapshot.scoreProfileIds?.includes(profile.id) && Object.keys(profile.sourceHashes).every(sourceId => run.snapshot.input?.sourceIds.includes(sourceId));
 const ProcessEvidence = z.object({ id: Id, runId: Id, exitCode: z.number().int() }).strict();
 const Reservation = z.object({ id: Id, run_id: Id, task_id: Id, provider: z.enum(['openai', 'anthropic', 'xai', 'openrouter']), month: z.string().regex(/^\d{4}-\d{2}$/), amount: Integer, state: z.enum(['held', 'unknown', 'settled']) }).strict();
 const Ledger = z.object({ id: Id, reservation_id: Id, amount: Integer, input_tokens: Integer, output_tokens: Integer, pricing_version: z.string() }).strict();
@@ -52,6 +54,13 @@ function validateRelations(data: Payload) {
   const map = <T extends { id: string }>(rows: T[]) => { const result = new Map(rows.map(row => [row.id, row])); if (result.size !== rows.length) fail('ID bị trùng.'); return result; };
   const workers = map(data.workers); const skills = map(data.skills); const teams = map(data.teams);
   const tasks = map(data.tasks); const runs = map(data.runs); const sources = map(data.sources); const artifacts = map(data.artifacts);
+  for (const run of runs.values()) {
+    const scoreIds = run.snapshot.scoreProfileIds ?? [];
+    if (new Set(scoreIds).size !== scoreIds.length || scoreIds.some(id => {
+      const profile = data.profiles.find(item => item.id === id);
+      return !profile || profile.taskId !== run.taskId || !manualScoreAvailable(profile, run);
+    })) fail('Checker accuracy không thuộc lượt chạy.');
+  }
   const routines = map(data.routines ?? []);
   for (const routine of routines.values()) if (!workers.has(routine.task.workerId) || (routine.task.teamId && !teams.has(routine.task.teamId)) || routine.task.sourceIds.some(id => !sources.has(id)) || (routine.lastTaskId && tasks.get(routine.lastTaskId)?.routineId !== routine.id)) fail('Lịch thiếu Tí, hội, nguồn hoặc task.');
   for (const task of tasks.values()) {
@@ -210,13 +219,13 @@ function validateRelations(data: Payload) {
     const artifactSourceIds = owner.snapshot.input?.sourceIds ?? task.sourceIds;
     const upstream = (owner.snapshot.upstreamArtifactIds ?? []).map(id => artifacts.get(id)!);
     if (owner.stage === 'synthesis' && owner.snapshot.team?.reviewPolicy) {
-      const profiles = data.profiles.filter(profile => profile.taskId === task.id && (profile.runId === owner.id || (owner.snapshot.preflightId && preflights.get(owner.snapshot.preflightId)?.profileIds.includes(profile.id))));
+      const profiles = data.profiles.filter(profile => profile.taskId === task.id && (profile.runId === owner.id || (owner.snapshot.preflightId && preflights.get(owner.snapshot.preflightId)?.profileIds.includes(profile.id)) || manualScoreAvailable(profile, owner)));
       if (JSON.stringify(applyReviewPolicy(artifact.report, owner.snapshot.team.reviewPolicy, profiles, upstream)) !== JSON.stringify(artifact.report)) fail('Review bỏ qua checklist bắt buộc của snapshot.');
     }
     if (upstream.some(item => item.runId === owner.id || runs.get(item.runId)?.taskId !== task.id)) fail('Join tham chiếu artifact ngoài task hoặc chính nó.');
     validateReview(artifact.report, upstream, new Set(artifactSourceIds), (id, sourceIds) => {
       const profile = data.profiles.find(item => item.id === id);
-      if (!profile || profile.taskId !== task.id || (profile.runId !== owner.id && !(owner.snapshot.preflightId && preflights.get(owner.snapshot.preflightId)?.profileIds.includes(id))) || !sourceIds.some(sourceId => Object.hasOwn(profile.sourceHashes, sourceId))) fail('Review tham chiếu checker ngoài phạm vi.');
+      if (!profile || profile.taskId !== task.id || (profile.runId !== owner.id && !(owner.snapshot.preflightId && preflights.get(owner.snapshot.preflightId)?.profileIds.includes(id)) && !manualScoreAvailable(profile, owner)) || !sourceIds.some(sourceId => Object.hasOwn(profile.sourceHashes, sourceId))) fail('Review tham chiếu checker ngoài phạm vi.');
     }, (id, status) => {
       const process = processEvidence.get(id);
       if (!owner.snapshot.workspaceGrant || !process || process.runId !== owner.id
@@ -234,7 +243,7 @@ function validateRelations(data: Payload) {
       for (const checkerId of finding.checkerIds ?? []) {
         const profile = data.profiles.find(item => item.id === checkerId);
         const preflightId = runs.get(artifact.runId)!.snapshot.preflightId;
-        if (!profile || profile.taskId !== task.id || (profile.runId !== artifact.runId && !(preflightId && preflights.get(preflightId)?.profileIds.includes(checkerId))) || !finding.sourceIds.some(id => Object.hasOwn(profile.sourceHashes, id))) fail('Finding tham chiếu checker ngoài phạm vi.');
+        if (!profile || profile.taskId !== task.id || (profile.runId !== artifact.runId && !(preflightId && preflights.get(preflightId)?.profileIds.includes(checkerId)) && !manualScoreAvailable(profile, owner)) || !finding.sourceIds.some(id => Object.hasOwn(profile.sourceHashes, id))) fail('Finding tham chiếu checker ngoài phạm vi.');
       }
     }
     artifactRuns.add(artifact.runId);
