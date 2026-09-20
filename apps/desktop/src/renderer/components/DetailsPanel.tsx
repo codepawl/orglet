@@ -223,7 +223,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
       </Section>}
 
       {detail && <section className="details-section details-chat">
-        <p className="details-status">{statusLabel[detail.task.status]}</p>
+        <p className="details-status">{detail.task.status === 'waiting_input' && detail.task.decisionRequests?.some(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt) ? t('Chờ quyết định') : statusLabel[detail.task.status]}</p>
         <div className="details-facts">
           <Fact icon={Wallet} title={t('Đã tiêu cho cuộc trò chuyện này')}>{formatMoney(spent)}</Fact>
           {took && <Fact icon={Clock} title={t('Tổng thời gian chạy')}>{took}</Fact>}
@@ -240,6 +240,15 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
       {detail && tools && <TaskTools key={detail.task.id} {...tools} />}
       {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs}
         busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} readOutput={readProcessOutput} readFile={readPrivateFile} />}
+
+      {detail && Boolean(detail.task.decisionRequests?.length) && <Section icon={MessageSquare} title={t('Quyết định trong chat')}>
+        {detail.task.decisionRequests!.map(request => <div key={request.id} className="details-run">
+          <div>
+            <p><strong>{request.question}</strong></p>
+            <p className="muted">{request.answer ?? (request.interruptedAt ? t('Không thể tiếp tục từ bản sao lưu') : t('Đang chờ trả lời'))}</p>
+          </div>
+        </div>)}
+      </Section>}
 
       {detail && detail.runs.length > 0 && <Section icon={Clock} title={t('Diễn biến')}>
         <ol className="details-runs">

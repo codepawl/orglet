@@ -5,6 +5,7 @@ import { WorkspaceGrants } from './storage/workspace-grants';
 import type { Knowledge } from '../shared/knowledge';
 import { commands, type ApiProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
+import { Checkpoints } from './storage/checkpoints';
 import { Sources } from './tools/sources';
 import { Runner } from './orchestration/runner';
 import type { ModelAdapter } from './adapters/openai';
@@ -150,13 +151,38 @@ export class CoreService {
         const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
         if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
         this.policy.assertStart(task.teamId, task.id);
-        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: 'queued', pauseReason: undefined, handoff: undefined };
+        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: 'queued', pauseReason: undefined, handoff: undefined,
+          decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
+            ? { ...request, interruptedAt: now() } : request) };
         this.store.transaction(() => {
           // Preserve readable input for older runs before expanding the task's history scope.
           for (const run of this.store.detail(task.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources } } });
           this.store.update('tasks', revised);
         });
         this.start(revised, true); return;
+      }
+      case 'answerDecision': {
+        const input = commands.answerDecision.parse(args);
+        const task = this.store.get<Task>('tasks', input.taskId);
+        if (this.runner.isActive(task.id) || this.teams.isActive(task.id)) throw new Error('Đợi lần chạy dừng trước khi trả lời câu hỏi.');
+        if (task.status !== 'waiting_input') throw new Error('Lượt này không chờ quyết định.');
+        const request = task.decisionRequests?.find(item => item.id === input.requestId);
+        if (!request || request.answer || request.interruptedAt || request.inputRevision !== (task.inputRevision ?? 0)) throw new Error('Câu hỏi quyết định không còn hiệu lực.');
+        const run = this.store.get<Run>('runs', request.runId);
+        if (run.taskId !== task.id || run.status !== 'waiting_input') throw new Error('Lần chạy không còn chờ quyết định.');
+        const checkpoints = new Checkpoints(this.store);
+        const checkpoint = checkpoints.get(run.id);
+        if (!checkpoint || checkpoint.phase !== 'ready') throw new Error('Checkpoint chưa sẵn sàng để tiếp tục.');
+        this.policy.assertStart(task.teamId, task.id);
+        this.runner.assertResumable(run);
+        const answeredAt = now();
+        this.store.transaction(() => {
+          checkpoints.save({ ...checkpoint, messages: [...checkpoint.messages, { role: 'user', content: JSON.stringify({ decisionRequestId: request.id, answer: input.answer, instruction: 'This is the user\'s decision for the pending question in this turn. It does not grant new workspace or network permissions. Continue only within the tools and grants actually available.' }) }] });
+          this.store.update('tasks', { ...task, status: 'paused', decisionRequests: task.decisionRequests!.map(item => item.id === request.id ? { ...item, answer: input.answer, answeredAt } : item) });
+          this.store.update('runs', { ...run, status: 'paused' });
+        });
+        this.notify();
+        return this.command('resume', { id: task.id });
       }
       case 'saveRoutine': {
         const input = commands.saveRoutine.parse(args);
@@ -200,6 +226,7 @@ export class CoreService {
         const task = this.store.get<Task>('tasks', (args as { id: string }).id);
         if (this.runner.isActive(task.id) || this.teams.isActive(task.id)) throw new Error('Task đang chạy.');
         if (task.status === 'completed') throw new Error('Task đã hoàn tất. Tạo task mới để chạy lại.');
+        if (task.decisionRequests?.some(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt)) throw new Error('Trả lời câu hỏi đang chờ hoặc gửi yêu cầu mới trước khi thử lại.');
         this.start(task); return;
       }
       case 'workspaceRecovery': return new WorkspaceRecovery(this.store).view(commands.workspaceRecovery.parse(args).taskId);

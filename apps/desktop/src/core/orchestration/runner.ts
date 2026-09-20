@@ -22,6 +22,7 @@ import { ToolCalls } from '../storage/tool-calls';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
+import { DecisionQuestion } from '../../shared/work-decisions';
 import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, type Colleague } from '../context/compiler';
@@ -222,7 +223,8 @@ export class Runner {
         if (compiled.knowledgeMessage) next.push({ role: 'user', content: compiled.knowledgeMessage });
         next.push(...threadMessages(layer));
         if (!manifest.length) next.push({ role: 'user', content: JSON.stringify({ instruction: NO_SOURCES_INSTRUCTION }) });
-        next.push({ role: 'user', content: JSON.stringify({ brief: task.brief, sources: manifest, excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run) }) });
+        next.push({ role: 'user', content: JSON.stringify({ brief: task.brief, sources: manifest, excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
+          ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'request_user_decision') ? { decisionInstruction: 'For work you can do within the current grant, proceed without asking. If a material choice has two sensible interpretations, a new permission is needed, or an action is hard to undo, use request_user_decision before making the dependent change. Inspect available evidence first. The answer resumes this same turn.' } : {}) }) });
         if (run.snapshot.workspaceGrant) next.push({ role: 'user', content: JSON.stringify({
           workspacePermissions: run.stage === 'plan' ? ['read'] : run.snapshot.workspaceGrant.permissions,
           writeResources: run.snapshot.assignment?.writeResources ?? (run.snapshot.team ? [] : ['entire granted workspace']),
@@ -416,6 +418,23 @@ export class Runner {
         if (checkpoint.reportCorrections && call.name !== 'submit_report') throw new Error('Lần sửa báo cáo chỉ được nộp submit_report.');
         assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
         messages.push({ role: 'assistant', tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
+        if (call.name === 'request_user_decision') {
+          const question = DecisionQuestion.parse(JSON.parse(call.arguments));
+          const current = this.store.get<Task>('tasks', task.id);
+          const decisions = current.decisionRequests ?? [];
+          const turnDecisions = decisions.filter(request => request.inputRevision === (run.snapshot.inputRevision ?? 0) && !request.interruptedAt);
+          if (turnDecisions.length >= 2 || turnDecisions.some(request => !request.answer)) throw new Error('Lượt này đã có câu hỏi quyết định đang chờ hoặc đã hỏi quá hai lần.');
+          const request = { ...question, id: id(), runId: run.id, inputRevision: run.snapshot.inputRevision ?? 0, requestedAt: now() };
+          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ state: 'waiting_for_user', requestId: request.id }) });
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
+          this.checkpoints.committed(checkpoint, false, () => {
+            this.store.update('tasks', { ...current, decisionRequests: [...decisions, request],
+              ...(!options.keepTaskOpen ? { status: 'waiting_input' as const } : {}) });
+            this.store.update('runs', { ...run, status: 'waiting_input' });
+          });
+          this.notify();
+          return;
+        }
         if (call.name === 'reassign_team_work') {
           if (!options.reassign) throw new Error('Chỉ trưởng nhóm đang điều phối lượt này được giao lại việc.');
           const recoverySignal = AbortSignal.any([signal, AbortSignal.timeout(toolDefinitions[call.name].timeoutMs)]);
