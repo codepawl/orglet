@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CircleAlert, CircleCheck } from 'lucide-react';
 // Shown text is re-translated on render, so a toast raised just before a language switch follows the new language.
 import { tMessage } from '../i18n';
+import { recordNotice } from './notifications';
 
 type Toast = { id: number; text: string; tone: 'success' | 'error' };
 let toasts: Toast[] = [];
@@ -13,6 +14,8 @@ const emit = () => { for (const listener of listeners) listener(); };
 /** Short-lived confirmation or failure message shown above everything, instead of text left inside a panel. */
 export function toast(text: string, tone: Toast['tone'] = 'success') {
   const id = nextId++;
+  // Every toast is also kept, so a message missed while looking elsewhere can still be found (user, 2026-09-20).
+  recordNotice(text, tone === 'error' ? 'error' : 'done');
   // A repeated message replaces its older copy; at most three are visible.
   toasts = [...toasts.filter(item => item.text !== text), { id, text, tone }].slice(-3);
   emit();

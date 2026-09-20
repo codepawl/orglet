@@ -159,6 +159,12 @@ export const CalendarClock = defineIcon('calendar-clock', <>
   <path d="M13.5 11.2v2.3l1.7 1" />
 </>);
 
+/* A bell drawn as the bubble's cousin: one shoulder line, a flat lip and a clapper, inside the 3..17 box. */
+export const Bell = defineIcon('bell', <>
+  <path d="M6 8.5a4 4 0 0 1 8 0c0 3 .8 4.4 1.5 5.2.3.4 0 .8-.4.8H4.9c-.4 0-.7-.4-.4-.8C5.2 12.9 6 11.5 6 8.5Z" />
+  <path d="M8.4 17h3.2" />
+</>);
+
 export const BookOpen = defineIcon('book-open', <>
   <path d="M10 6C8.6 4.6 6.6 4 3.5 4v11.5c3.1 0 5.1.6 6.5 2 1.4-1.4 3.4-2 6.5-2V4c-3.1 0-5.1.6-6.5 2Z" />
   <path d="M10 6v11.5" />

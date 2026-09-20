@@ -43,10 +43,21 @@ export function fileSize(bytes: number): string {
  * button keeps its place and only shows on hover or a visible focus, so nothing shifts when the pointer arrives.
  * Renders a list item; the parent is the list (the composer strip, or a wrapping `.attachment-list`).
  */
-export function Attachment({ name, bytes, onRemove, removeLabel }: { name: string; bytes?: number; onRemove?: () => void; removeLabel?: string }) {
+export function Attachment({ name, bytes, onRemove, onOpen, removeLabel }: { name: string; bytes?: number; onRemove?: () => void; onOpen?: () => void; removeLabel?: string }) {
   const kind = fileKind(name);
   const KindIcon = kindIcons[kind];
   const meta = bytes !== undefined ? `${kindLabels[kind]} · ${fileSize(bytes)}` : kindLabels[kind];
+  // A card in a sent message opens the file rather than removing it; the whole card is the target, so the hand
+  // does not have to find a link inside it.
+  if (onOpen) return <li className={`attachment kind-${kind}`}>
+    <button type="button" className="attachment-open" title={name} onClick={onOpen}>
+      <span className="attachment-icon" aria-hidden="true"><KindIcon size={20} /></span>
+      <span className="attachment-text">
+        <span className="attachment-name">{name}</span>
+        <span className="attachment-meta">{meta}</span>
+      </span>
+    </button>
+  </li>;
   return <li className={`attachment kind-${kind}`} title={name}>
     <span className="attachment-icon" aria-hidden="true"><KindIcon size={20} /></span>
     <span className="attachment-text">

@@ -2,7 +2,7 @@ import { RevisionEditor } from './components/RevisionEditor';
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
-import { Archive, BookOpen, CalendarClock, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash } from './components/icons';
+import { Bell, Archive, BookOpen, CalendarClock, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash } from './components/icons';
 import { ArrowLeft, ChevronRight, Pencil as LucidePencil, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { emptyConnections, isPaidApi, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
@@ -37,6 +37,8 @@ import { RowMenu } from './components/RowMenu';
 import { Select } from './components/Select';
 import { setDisplayCurrency, formatMoney } from './components/money';
 import { Toaster, toast } from './components/toast';
+import { NoticeCentre } from './components/NoticeCentre';
+import { recordNotice, useUnreadNotices } from './components/notifications';
 import { KnowledgeEditor, KnowledgeLibrary } from './components/KnowledgeLibrary';
 import type { Knowledge } from '../shared/knowledge';
 import type { HarnessInfo } from '../shared/harness';
@@ -127,6 +129,8 @@ export function App() {
   // Chat details sit in the shell next to the conversation, not over it.
   const detailsOpen = panel === 'activity';
   const detailsOpenRef = useRef(detailsOpen); detailsOpenRef.current = detailsOpen;
+  const [noticesOpen, setNoticesOpen] = useState(false);
+  const unreadNotices = useUnreadNotices();
   const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   // Dragging tracks the pointer; a width is the distance from the window edge minus the gap the panel sits in.
   const sidebarPane = usePaneWidth({ storageKey: 'orglet.sidebar-width', bounds: SIDEBAR_WIDTH, widthFromPointer: clientX => clientX - shellGap(), widerKey: 'ArrowRight' });
@@ -197,6 +201,8 @@ export function App() {
     if (workerId && !workspace.workers.some(worker => worker.id === workerId)) setWorkerId(workspace.workers[0]?.id ?? '');
     if (teamId && !workspace.teams.some(team => team.id === teamId)) setTeamId('');
   }, [workspace, workerId, teamId]);
+  // An error shown in the banner is also kept, so dismissing it does not lose it (user, 2026-09-20).
+  useEffect(() => { if (error) recordNotice(error, 'error'); }, [error]);
   useEffect(() => { document.documentElement.dataset.theme = workspace?.theme ?? 'system'; }, [workspace?.theme]);
   // The accent is the user's to pick, so it rides on the root rather than being baked into the sheet. What sits on
   // top of it comes with it: a pale accent needs dark ink, or the send arrow disappears into its own button.
@@ -464,7 +470,7 @@ export function App() {
         <ArchivedList count={workspace.archivedWorkers.length}>{workspace.archivedWorkers.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('worker', item.id, false)} onDelete={() => deleteEntity('worker', item.id)} />)}</ArchivedList>
       </SidebarSection>
       </div>
-      <div className="sidebar-footer"><Button onClick={() => openRoutines()}><CalendarClock size={18} />{t('Lịch chạy')}{workspace.routines.some(item => item.pending) && <span className="badge">{t('Cần xem')}</span>}</Button><Button onClick={() => { if (workspace.knowledge.some(item => item.status === 'proposed')) setLibraryTab('knowledge'); setPanel('library'); }}><BookOpen size={18} />{t('Thư viện')}{workspace.knowledge.some(item => item.status === 'proposed') && <span className="badge">{t('Cần duyệt')}</span>}</Button><Button onClick={() => openSettings()}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${Object.values(connections).some(Boolean) ? 'connected' : ''}`} /></Button></div>
+      <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)}><Bell size={18} />{t('Thông báo')}{unreadNotices > 0 && <span className="badge">{unreadNotices}</span>}</Button><Button onClick={() => openRoutines()}><CalendarClock size={18} />{t('Lịch chạy')}{workspace.routines.some(item => item.pending) && <span className="badge">{t('Cần xem')}</span>}</Button><Button onClick={() => { if (workspace.knowledge.some(item => item.status === 'proposed')) setLibraryTab('knowledge'); setPanel('library'); }}><BookOpen size={18} />{t('Thư viện')}{workspace.knowledge.some(item => item.status === 'proposed') && <span className="badge">{t('Cần duyệt')}</span>}</Button><Button onClick={() => openSettings()}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${Object.values(connections).some(Boolean) ? 'connected' : ''}`} /></Button></div>
     </aside>
     {/* Collapsed sidebar keeps its two most used actions in a narrow rail, stacked like ChatGPT. */}
 
@@ -550,6 +556,7 @@ export function App() {
     <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}`} open={panel === 'worker'} worker={editingWorker} workspace={workspace} connections={connections} harnesses={harnesses} onClose={close} />
     <TeamDialog key={`team:${panel === 'team'}:${editingTeam?.id ?? 'new'}`} open={panel === 'team'} team={editingTeam} workspace={workspace} onClose={close} />
     <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />
+    <NoticeCentre open={noticesOpen} onClose={() => setNoticesOpen(false)} />
     <Toaster />
     <Confirmer />
     <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} tasks={workspace.tasks} teams={workspace.teams} onOpenTask={openTask} />
