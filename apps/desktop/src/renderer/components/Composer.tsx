@@ -4,6 +4,7 @@ import type { TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
 import { Button } from './ui';
 import { Avatar } from './Avatar';
+import { Attachment } from './Attachment';
 import { MentionText } from './mentions';
 import { providerLabel, settingsTabFor, type Readiness } from './providers';
 import { t } from '../i18n';import { taskWorkers } from '../assignees';
@@ -13,13 +14,17 @@ const SINGLE_LINE = 40;
 
 export type MentionRoster = { people: readonly Worker[]; allNames?: readonly string[] };
 
+/** A file attached to the message being written. `bytes` shows as the size on the card. */
+export type ComposerAttachment = { id: string; name: string; bytes?: number };
+
 /**
  * ChatGPT-style prompt bar: a one-line pill with the add button, input and send button on one row.
  * It grows into a multi-line box once the text wraps or attachments appear, and stays grown until cleared
- * so the layout does not flip back and forth at the wrap point.
+ * so the layout does not flip back and forth at the wrap point. Grown, it reads as three zones from the top:
+ * the attached files as a strip of cards that scrolls sideways, the text, and the controls (add, who, send).
  * Team and group chats can pass `mentions` so `@` opens a worker picker.
  */
-export function Composer({ value, onChange, onSubmit, label, placeholder, sendLabel, leading, trailing, attachments, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: ReactNode; disabled?: boolean; sendDisabled?: boolean; textareaRef?: RefObject<HTMLTextAreaElement | null>; mentions?: MentionRoster;
+export function Composer({ value, onChange, onSubmit, label, placeholder, sendLabel, leading, trailing, attachments, onRemoveAttachment, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: readonly ComposerAttachment[]; onRemoveAttachment?: (id: string) => void; disabled?: boolean; sendDisabled?: boolean; textareaRef?: RefObject<HTMLTextAreaElement | null>; mentions?: MentionRoster;
   /**
    * Set while a run is in progress: the send button becomes the stop button, turning a ring so the eye lands on
    * it (user, 2026-09-19). Stop belongs where send was, because that is where the hand already is, and nothing
@@ -29,13 +34,26 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
   const ownRef = useRef<HTMLTextAreaElement>(null);
   const textarea = textareaRef ?? ownRef;
   const highlight = useRef<HTMLDivElement>(null);
+  const strip = useRef<HTMLUListElement>(null);
   const listId = useId();
   const [expanded, setExpanded] = useState(false);
   const [cursor, setCursor] = useState(0);
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState<number>();
   const canSend = !disabled && !sendDisabled && value.trim().length > 0;
-  const hasAttachments = Boolean(attachments);
+  const attachmentCount = attachments?.length ?? 0;
+  const hasAttachments = attachmentCount > 0;
+  // A file just added lands at the end of the strip, which may already be scrolled away; bring it into view so
+  // the person sees what they attached. Removing one leaves the strip where it is.
+  const previousAttachmentCount = useRef(attachmentCount);
+  useLayoutEffect(() => {
+    const grew = attachmentCount > previousAttachmentCount.current;
+    previousAttachmentCount.current = attachmentCount;
+    const element = strip.current;
+    if (!grew || !element) return;
+    const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    element.scrollTo({ left: element.scrollWidth, behavior: instant ? 'auto' : 'smooth' });
+  }, [attachmentCount]);
   const mentionable = Boolean(mentions && (mentions.people.length > 1 || mentions.allNames?.length));
   const query = mentionable && !disabled ? mentionQueryAt(value, cursor) : undefined;
   const options = query && query.start !== dismissed ? mentionOptions(query.query, mentions!.people) : [];
@@ -96,7 +114,9 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
         </li>;
       })}
     </ul>}
-    {attachments && <div className="composer-attachments">{attachments}</div>}
+    {attachments && hasAttachments && <ul className="composer-attachments" ref={strip} aria-label={t('Tệp đính kèm')}>
+      {attachments.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onRemove={onRemoveAttachment ? () => onRemoveAttachment(item.id) : undefined} />)}
+    </ul>}
     <div className="composer-leading">{leading}</div>
     {/* The same string, painted above the box, so a tag is coloured while it is typed. The trailing newline gives
         the overlay the extra line a textarea shows for a trailing Enter, so the two never disagree on height. */}

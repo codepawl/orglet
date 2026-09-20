@@ -254,14 +254,20 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .team-chat-empty .welcome { text-box:trim-both cap alphabetic; }
 /* The line box sits lower than the cap height of the heading, so lift the faces onto the text centre. */
 .welcome-who { position:relative; top:-0.1em; display:inline-flex; align-items:safe center; gap:8px; vertical-align:middle; }
-/* Prompt bar: a one-line pill (add · input · [who] · send) that grows into a box when the text wraps or sources are attached. */
+/* Prompt bar: a one-line pill (add · input · [who] · send) that grows into a box when the text wraps or sources are attached.
+   Grown, it is three zones stacked: the attached files, the text, then the controls. The zones are told apart by
+   what they are made of (cards on a surface, bare text, round buttons) and by spacing, never by a line. */
 .composer { position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"lead input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--border-subtle); border-radius:24px; background:var(--bg); box-shadow:0 2px 12px #00000008; }
 .composer.has-trailing { grid-template-columns:auto minmax(0,1fr) auto auto; grid-template-areas:"lead input trail send"; }
-.composer.expanded { grid-template-areas:"attach attach attach" "input input input" "lead . send"; row-gap:5px; border-radius:22px; padding:7px; }
+/* The controls row holds a 36px add button, a shorter chip and the 36px send button, so it centres them explicitly. */
+.composer.expanded { grid-template-areas:"attach attach attach" "input input input" "lead . send"; align-items:center; row-gap:6px; border-radius:22px; padding:7px; }
 .composer.expanded.has-trailing { grid-template-areas:"attach attach attach attach" "input input input input" "lead . trail send"; }
 /* Focus shows as a slightly stronger outline of the whole bar, plus the caret. */
 .composer:focus-within { border-color:color-mix(in srgb, var(--muted) 42%, var(--bg)); }
-.composer-attachments { grid-area:attach; display:flex; flex-wrap:wrap; gap:6px; }
+/* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
+   text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
+   with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
+.composer-attachments { grid-area:attach; display:flex; gap:8px; margin:0; padding:0 0 2px; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; }
 .composer-leading { grid-area:lead; display:flex; align-items:center; }
 .composer-trailing { grid-area:trail; display:flex; align-items:center; align-self:center; max-width:min(220px,42vw); }
 .composer>textarea { grid-area:input; display:block; width:100%; resize:none; min-height:36px; max-height:250px; border:0; outline:none; background:transparent; padding:7px 6px; font-size:inherit; line-height:22px; }
@@ -381,10 +387,20 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .mention { font-weight:600; color:var(--mention); background:color-mix(in srgb, var(--mention) 14%, transparent); border-radius:4px; padding:0 3px; }
 .composer-note { margin:10px 0 0; text-align:center; color:var(--muted); font-size:12px; }
 .composer-note button { border:0; background:transparent; color:var(--text); text-decoration:underline; margin-left:6px; }
-.attachment { display:flex; align-items:center; gap:6px; font-size:12px; padding:6px 8px; border-radius:8px; background:var(--surface); max-width:100%; }
-.attachment>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:230px; }
-.attachment button { display:flex; padding:3px; border:0; background:none; }
-.attachment button { min-width:24px; min-height:24px; align-items:center; justify-content:center; }
+/* Attachment (Attachment.tsx): a card for one attached file — the kind's icon, the name, a line with the kind and
+   size, and a remove button that keeps its place and only shows on hover or a visible focus, so nothing shifts when
+   the pointer arrives. Same width for every card, so a strip of them reads as a row and not as a ragged line of tags. */
+.attachment { position:relative; display:flex; align-items:center; gap:8px; flex:0 0 auto; width:212px; min-height:46px; padding:6px 6px 6px 8px; border-radius:14px; background:var(--surface); scroll-snap-align:start; animation:attachment-in var(--motion-base) var(--ease-out); }
+@keyframes attachment-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+.attachment-icon { display:grid; place-items:center; flex-shrink:0; width:28px; height:28px; color:var(--text); }
+.attachment-text { display:flex; flex-direction:column; flex:1; min-width:0; }
+.attachment-name { font-size:13px; font-weight:500; line-height:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.attachment-meta { font-size:11.5px; line-height:15px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* The remove control answers the card's hover with its own detail (muted to text), never a background of its own. */
+.attachment-remove { display:flex; align-items:center; justify-content:center; flex-shrink:0; width:26px; height:26px; padding:0; border:0; border-radius:50%; background:none; color:var(--muted); opacity:0; transition:opacity var(--motion-quick) var(--ease-out), color var(--motion-quick); }
+.attachment:hover .attachment-remove,.attachment:has(:focus-visible) .attachment-remove { opacity:1; }
+.attachment-remove:hover { color:var(--text); }
+@media(prefers-reduced-motion:reduce) { .attachment { animation:none; } .attachment-remove { transition:none; } }
 .consent { display:flex; flex-direction:column; gap:12px; padding:16px 8px 0; font-size:12px; color:var(--muted); }
 .consent>label { display:flex; gap:8px; align-items:flex-start; }
 .consent input[type=checkbox] { margin-top:3px; accent-color:var(--primary); }
@@ -674,7 +690,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .form .routine-group input:not([type=checkbox]),.form .routine-group select,.form .routine-group textarea,.form .routine-group .money-input { background:var(--bg); }
 .routine-sources { display:flex; flex-direction:column; gap:8px; }
 .routine-sources .panel-heading h3 { font-size:13px; font-weight:500; }
-.attachment-list { display:flex; flex-wrap:wrap; gap:6px; }
+.attachment-list { display:flex; flex-wrap:wrap; gap:8px; margin:0; padding:0; list-style:none; }
 .routine-group .attachment { background:var(--bg); }
 .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 .routine-editor-actions { justify-content:flex-end; margin-top:0; }

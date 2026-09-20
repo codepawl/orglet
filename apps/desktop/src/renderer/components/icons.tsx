@@ -171,6 +171,57 @@ export const Settings = defineIcon('settings', <>
   <path d="M3 13.5h7.7" />
 </>);
 
+// Files attached to a message
+
+/**
+ * A page: 12 by 14, so its corners get 2.5 (a fifth of the shorter side), with the top-right corner folded
+ * over 4 units. Only the kinds that are "a file the app holds" (any file, a document, an archive) sit on the
+ * page; a kind with a shape of its own (a picture frame, a grid, a cylinder, chevrons, lines of text) is drawn
+ * as that shape, because at 16 to 20 pixels a glyph inside a page is too small to tell apart.
+ */
+const page = <>
+  <path d="M12 3H6.5A2.5 2.5 0 0 0 4 5.5v9A2.5 2.5 0 0 0 6.5 17h7a2.5 2.5 0 0 0 2.5-2.5V7Z" />
+  <path d="M12 3v3a1 1 0 0 0 1 1h3" />
+</>;
+
+export const File = defineIcon('file', page);
+
+export const FileDocument = defineIcon('file-document', <>
+  {page}
+  <path d="M7.5 10.5h5M7.5 13.5h3.5" />
+</>);
+
+/** A zipper down the left third of the page: three short dashes. */
+export const FileArchive = defineIcon('file-archive', <>
+  {page}
+  <path d="M8 3.5v1M8 8v1M8 12.5v1" />
+</>);
+
+export const FileImage = defineIcon('file-image', <>
+  <rect x="3" y="4" width="14" height="12" rx="2.5" />
+  {dot(7, 7.5)}
+  <path d="m3.5 14.5 3.5-3.5 3 3 2.5-2.5 4 3.5" />
+</>);
+
+export const FileSpreadsheet = defineIcon('file-spreadsheet', <>
+  <rect x="3" y="3" width="14" height="14" rx="3" />
+  <path d="M3 7.5h14M3 12.5h14M8 3v14" />
+</>);
+
+export const FileData = defineIcon('file-data', <>
+  <ellipse cx="10" cy="5.5" rx="6.5" ry="2.2" />
+  <path d="M3.5 5.5v9c0 1.2 2.9 2.2 6.5 2.2s6.5-1 6.5-2.2v-9" />
+  <path d="M3.5 10c0 1.2 2.9 2.2 6.5 2.2s6.5-1 6.5-2.2" />
+</>);
+
+export const FileCode = defineIcon('file-code', <>
+  <path d="m6.5 6.5-3.5 3.5 3.5 3.5" />
+  <path d="m13.5 6.5 3.5 3.5-3.5 3.5" />
+  <path d="m11.5 4.5-3 11" />
+</>);
+
+export const FileText = defineIcon('file-text', <path d="M3.5 6h13M3.5 10h13M3.5 14h8" />);
+
 // The bubble
 
 export const Message = defineIcon('message', <path d="M7 3h6a4 4 0 0 1 4 4v6a4 4 0 0 1-4 4H4.5A1.5 1.5 0 0 1 3 15.5V7a4 4 0 0 1 4-4Z" />);
