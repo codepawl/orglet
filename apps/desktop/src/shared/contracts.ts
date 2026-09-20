@@ -195,6 +195,8 @@ export interface Bridge {
   exportArtifact(id: string, format?: TextFormat): Promise<boolean>;
   copyArtifact(id: string, format: TextFormat): Promise<void>;
   copyFeedback(id: string): Promise<void>;
+  /** Copy a string the renderer already holds; the renderer cannot reach the clipboard from file://. */
+  copyText(text: string): Promise<void>;
   exportTemplate(teamId: string): Promise<boolean>;
   importTemplate(): Promise<Team | null>;
   importSkill(): Promise<Skill | null>;

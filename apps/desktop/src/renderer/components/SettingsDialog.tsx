@@ -52,24 +52,17 @@ function statusPill(item: HarnessInfo) {
   return { className: 'logged_in', label: t('Đã đăng nhập') };
 }
 
+/**
+ * The clipboard is written in the main process. This window is served from `file://`, where Chromium answers
+ * `navigator.clipboard.writeText` with `NotAllowedError: Write permission denied`, so the button had never once
+ * copied anything (user, 2026-09-20); the `execCommand` fallback behind it was deprecated and no more reliable.
+ */
 async function copyCommand(command: string) {
   try {
-    await navigator.clipboard.writeText(command);
+    await orglet.copyText(command);
     toast(t('Đã sao chép lệnh'));
   } catch {
-    try {
-      const field = document.createElement('textarea');
-      field.value = command;
-      field.setAttribute('readonly', '');
-      field.style.cssText = 'position:fixed;left:-9999px';
-      document.body.appendChild(field);
-      field.select();
-      if (!document.execCommand('copy')) throw new Error('copy');
-      field.remove();
-      toast(t('Đã sao chép lệnh'));
-    } catch {
-      toast(t('Không sao chép được lệnh'), 'error');
-    }
+    toast(t('Không sao chép được lệnh'), 'error');
   }
 }
 
