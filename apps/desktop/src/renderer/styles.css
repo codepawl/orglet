@@ -104,9 +104,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-body { flex:1; min-height:0; overflow:auto; padding:0 16px 16px; }
 .details-body .form { gap:14px; }
 /* Details: plain words on the surface, machine detail in one collapsed block at the end (user, 2026-09-19). */
-.details-body { display:flex; flex-direction:column; gap:18px; }
+.details-body { display:flex; flex-direction:column; gap:24px; }
 /* Who this chat is with, at the top and larger than anything under it. */
-.details-subject { display:flex; flex-direction:column; gap:5px; }
+.details-subject { display:flex; flex-direction:column; gap:7px; }
 .details-subject-name { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-size:15px; font-weight:600; line-height:1.3; }
 .details-subject-name .details-fact { font-weight:400; }
 .details-subject-note { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; padding-left:10px; font-size:12.5px; line-height:1.45; color:var(--muted); }
@@ -116,7 +116,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-fact svg { flex-shrink:0; color:var(--muted); }
 
 .details-runs-on { display:flex; align-items:center; gap:5px; }
-.details-section { display:flex; flex-direction:column; gap:7px; }
+.details-section { display:flex; flex-direction:column; gap:8px; }
 .details-section h3 { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--muted); }
 .details-section h3 svg { color:var(--muted); }
 /* A member reads as a person: face, name, and what they are here for. */
@@ -130,7 +130,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-source { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .details-source svg { flex-shrink:0; }
 /* The story of the run: who spoke, then what they did, indented under them. */
-.details-runs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+.details-runs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:18px; }
 .details-run { display:flex; align-items:flex-start; gap:8px; }
 .details-run > .avatar { margin-top:1px; }
 .details-run-who { display:flex; align-items:center; gap:6px; font-size:13px; }
@@ -297,6 +297,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
    text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
+/* Proximity, not mandatory: under mandatory Chromium insists the last card be reachable, so at the end it clamps
+   to the very edge and lands mid-card — the exact thing Composer.tsx computes a resting place to avoid. */
 .composer-attachments { grid-area:attach; display:flex; gap:8px; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; }
 /* The one place a scrollbar is hidden rather than styled: the global 12px bar is a quarter of the strip and sits
    inside the prompt pill, where it reads as chrome the bar does not carry anywhere else. The card clipped at the
@@ -426,7 +428,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Attachment (Attachment.tsx): a card for one attached file — the kind's icon, the name, a line with the kind and
    size, and a remove button that keeps its place and only shows on hover or a visible focus, so nothing shifts when
    the pointer arrives. Same width for every card, so a strip of them reads as a row and not as a ragged line of tags. */
-.attachment { position:relative; display:flex; align-items:center; gap:8px; flex:0 0 auto; width:212px; min-height:46px; padding:6px 6px 6px 8px; border-radius:14px; background:var(--surface); scroll-snap-align:start; animation:attachment-in var(--motion-base) var(--ease-out); }
+.attachment { position:relative; display:flex; align-items:center; gap:8px; flex:0 0 auto; width:212px; min-height:46px; padding:6px 6px 6px 8px; border-radius:14px; background:var(--surface); scroll-snap-align:start; scroll-snap-stop:always; animation:attachment-in var(--motion-base) var(--ease-out); }
 @keyframes attachment-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
 .attachment-icon { display:grid; place-items:center; flex-shrink:0; width:28px; height:28px; color:var(--text); }
 .attachment-text { display:flex; flex-direction:column; flex:1; min-width:0; }
