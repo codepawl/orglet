@@ -115,7 +115,10 @@ it('pauses before a dependent request when the connection budget is exhausted', 
 it('serializes overlapping write ownership while preserving parallel independent work', async () => {
   const result = await executeTeam({ sharedResource: true });
   expect(result.peak).toBe(1);
-  expect(result.detail.task.status).toBe('completed');
+  // This scheduling fixture offers write ownership but deliberately supplies no workspace or file edits.
+  // The new delivery gate keeps those reports without claiming the file assignments succeeded.
+  expect(result.detail.task.status).toBe('failed');
+  expect(result.detail.runs.filter(run => run.stage === 'member').every(run => run.status === 'failed')).toBe(true);
 });
 
 it('does not dispatch a dependent worker when its prerequisite fails', async () => {

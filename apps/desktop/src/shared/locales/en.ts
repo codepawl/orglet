@@ -5,6 +5,10 @@ import type { Dictionary } from '../i18n';
  * Keep keys in sync with `node scripts/i18n-keys.cjs` (it lists missing and unused entries).
  */
 export const en: Dictionary = {
+  'Phần việc bị chặn; xem báo cáo đã lưu.': 'Assignment blocked; see the saved report.',
+  'Phần việc cần báo cáo kết quả hoặc blocker, không thể hoàn tất bằng tin nhắn.': 'An assignment needs a result or blocker report; a chat message cannot complete it.',
+  'Phần việc được giao sửa tệp nhưng không tạo hoặc thay đổi tệp nào.': 'The assignment required file changes, but no file was created or changed.',
+  'Đã lưu báo cáo blocker; phần việc chưa hoàn tất.': 'Blocker report saved; the assignment remains unfinished.',
   'Trang tiếp theo': 'Next page',
   'Xem bản sửa riêng': 'View private changes',
   'File trống.': 'Empty file.',
