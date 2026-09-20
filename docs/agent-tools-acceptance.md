@@ -13,9 +13,9 @@ This records the COD-98 implementation against its six child issues. It is a loc
 
 ## Verification boundaries
 
-- Latest full suite: 411 passed, 34 skipped, including parallel question/response and uncertain CLI termination regressions. Typecheck passed.
+- Latest full suite on COD-104: 418 passed, 34 skipped, including parallel question/response and uncertain CLI termination regressions. Typecheck passed.
 - Latest packaged isolation run: 69 passed across six files. The separate native sandbox run passed seven tests. Their model responses are fixtures; filesystem helpers, process isolation and integration broker are real executables.
-- Latest Windows package and packaged UI smoke passed. No installer, live-provider authentication or live CLI tool-policy enforcement is established by those checks.
+- Latest Windows package and packaged UI smoke passed on a host with BaseContainer. On the GitHub Windows runner, the packaged smoke accepts only the explicit fail-closed sandbox-probe error for private-file preview, then still checks output paging, retirement, current-file preservation and backup/restore. A green CI run alone does not prove native isolation. No installer, live-provider authentication or live CLI tool-policy enforcement is established by those checks.
 - Claude Code receives an empty native tool list in controlled mode. Codex disables shell, apps, browser, computer, web search and image tools and excludes automatic project instructions. Cursor receives project deny rules. These launch contracts have fixtures; installed CLI behavior still needs separate live evidence.
 - CLI-reported cost estimates persist across steps and resume. Unknown costs stay unknown. This does not establish a hard shared billing cap across external subscription harnesses.
 - DuckDuckGo challenges fail explicitly. Search availability on this host has not been established by a successful live search.
@@ -23,9 +23,9 @@ This records the COD-98 implementation against its six child issues. It is a loc
 
 ## Local delivery
 
-The implementation is split into six local changes in dependency order: COD-99 (098a7ba), COD-101 (77861b6), COD-100 (e4a44b1), COD-102 (d448143), COD-103 (71640d4), and COD-104 (this change). The final stack is on codex/agent-tools-workspace. Earlier layers supply the policy, backend and coordination contracts; COD-103 connects the controlled tool dispatcher and guarded integration, and COD-104 exposes the desktop controls. Acceptance applies to the complete stack.
+The implementation is split into six review changes in dependency order: COD-99, COD-101, COD-100, COD-102, COD-103 and COD-104. Earlier layers supply the policy, backend and coordination contracts; COD-103 connects the controlled tool dispatcher and guarded integration, and COD-104 exposes the desktop controls. Acceptance applies to the complete stack.
 
-The stack has not been pushed or merged. The separate full-reference worktree remains available with its original uncommitted implementation. The main checkout was not modified. External issue status and the subsequent follow-up are recorded separately from this code verification.
+The stack is pushed as dependent pull requests and has not been merged. The main checkout was not modified. External issue status and subsequent follow-ups are recorded separately from this code verification.
 
 Final UI checks: packaged permissions, native grant bridge, assignment descriptions and dependency labels, keyboard disclosure, interrupted-attempt recovery with preserved failure history, and backup/restore all passed. Translation checking reports zero missing keys. No screenshot, live-provider session, installer or narrow-screen visual audit is claimed.
 
