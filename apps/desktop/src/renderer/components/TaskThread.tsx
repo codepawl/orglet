@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Check, RotateCcw } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -16,6 +16,8 @@ import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Markdown } from './Markdown';
+import { reactionEmoji, reactionMeanings, reactionOrder, replyToAnswer, toggleReaction, useReaction } from './messageMarks';
+import { ReactionBar } from './ReactionBar';
 import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
@@ -95,7 +97,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
             {byline(reply.run)}
             <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />
             {reply.artifact.report.format === 'chat'
-              ? <ChatReply artifact={reply.artifact} action={action} />
+              ? <ChatReply artifact={reply.artifact} author={reply.run.snapshot.worker.name} action={action} />
               : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
           </section>)}
           {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
@@ -135,7 +137,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
             {!turn.artifact && !turn.replies.length && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
             {turn.artifact && !turn.replies.length && <FinishedActivity steps={savedSteps(detail.events, turn.artifact.runId)} />}
             {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
-              ? <ChatReply artifact={turn.artifact} action={action} />
+              ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
             {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
@@ -174,15 +176,33 @@ function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
   return <div className="finished-activity"><ActivityGroup steps={steps} folded /></div>;
 }
 
-function ChatReply({ artifact, action }: { artifact: Artifact; action: (fn: () => Promise<unknown>) => void }) {
+function ChatReply({ artifact, author, action }: { artifact: Artifact; author: string; action: (fn: () => Promise<unknown>) => void }) {
   return <div className="chat-reply">
     <Markdown className="prose" text={tMessage(artifact.report.summary)} />
     {artifact.report.limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
     </div>}
-    <div className="message-actions"><ArtifactActions artifactId={artifact.id} action={action} /></div>
+    <div className="message-actions"><ArtifactActions artifactId={artifact.id} action={action} /><AnswerMarks artifactId={artifact.id} author={author} text={tMessage(artifact.report.summary)} /></div>
   </div>;
+}
+
+/**
+ * Reply to this answer, or react to it. Both ride in the next message to the worker, so neither is decoration:
+ * the quote tells a crew which of them is being answered, and a reaction says how the last one landed.
+ */
+function AnswerMarks({ artifactId, author, text }: { artifactId: string; author: string; text: string }) {
+  return <>
+    <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(artifactId, author, text)}><Reply size={15} /></Button>
+    <AnswerReaction messageId={artifactId} />
+  </>;
+}
+
+/** The thread's own wiring of the shared bar: where a reaction is kept, and what each face means to a worker. */
+function AnswerReaction({ messageId }: { messageId: string }) {
+  const picked = useReaction(messageId);
+  const options = reactionOrder.map(name => ({ name, emoji: reactionEmoji[name], meaning: reactionMeanings[name] }));
+  return <ReactionBar options={options} picked={picked} onPick={name => toggleReaction(messageId, name)} />;
 }
 
 /** Copy and download for an answer or document, in the format the user picks or saved as default. */
