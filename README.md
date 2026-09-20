@@ -71,6 +71,8 @@ Team progress shows who is doing each unfinished assignment, a short description
 
 API team leads can inspect a granted workspace read-only before assigning paths, record blocker resolutions, and reassign unfinished work within the turn's existing permissions. Reassignment retains dependencies and file ownership, with at most two attempts per assignment. A blocker report is saved for review but does not unlock dependent work; file assignments with no changes remain unfinished. Saved runs identify who actually completed a reassigned result.
 
+A mistyped team-message recipient gets an error with the valid participants so the worker can correct it in the same run. Structured reports can cite completed workspace process IDs for command checks; unsupported checks stay unassessed instead of discarding completed files.
+
 ## Install
 
 [Latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. The tag is public; Windows **Setup.exe** / **ZIP** assets on that release may still be empty. If they are missing, [build from source](#dev).

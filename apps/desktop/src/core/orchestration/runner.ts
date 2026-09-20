@@ -22,7 +22,7 @@ import { ToolCalls } from '../storage/tool-calls';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
-import { applyReviewPolicy, validateReview } from '../review';
+import { applyReviewPolicy, downgradeUncitedWorkspaceChecks, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, type Colleague } from '../context/compiler';
 import { applyThreadManifest, compactThread, fitThread, threadMessages } from '../context/thread';
@@ -39,6 +39,7 @@ import { assertTeamPlan, defaultTeamPlan } from './plan';
 import { mentionedPeople } from '../../shared/mentions';
 import { reportValidationMessage, sanitizeReportReply } from '../tools/report-validation';
 import { savedArtifactContext, savedAssignmentAttempts } from './artifact-provenance';
+import { WorkspaceProcess } from '../../shared/workspace-processes';
 
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = { detect(): Promise<HarnessInfo[]>; execute: HarnessExecutor };
@@ -583,12 +584,23 @@ export class Runner {
     const policy = run.stage === 'synthesis' ? run.snapshot.team?.reviewPolicy : undefined;
     const profiles = this.store.all<ProfileRecord>('profiles').filter(profile => profile.taskId === task.id && (profile.runId === run.id || preflight?.profileIds.includes(profile.id)));
     const report: Report = applyReviewPolicy(submitted, policy, profiles, options.upstream);
+    if (run.stage === 'member' && run.snapshot.workspaceGrant) downgradeUncitedWorkspaceChecks(report);
     const validateChecker = (checkerId: string, sourceIds: string[]) => {
       const profile = this.store.get<ProfileRecord>('profiles', checkerId);
       if (profile.taskId !== task.id || (profile.runId !== run.id && !preflight?.profileIds.includes(checkerId))) throw new Error('Finding tham chiếu checker chưa được cung cấp cho lần chạy này.');
       if (!sourceIds.some(sourceId => Object.hasOwn(profile.sourceHashes, sourceId))) throw new Error('Checker không kiểm tra nguồn được trích trong finding.');
     };
-    validateReview(report, options.upstream ?? [], readIds, validateChecker);
+    validateReview(report, options.upstream ?? [], readIds, validateChecker, (processId, status) => {
+      if (!run.snapshot.workspaceGrant) throw new Error('Check tham chiếu tiến trình ngoài workspace được cấp quyền.');
+      const process = WorkspaceProcess.parse(this.store.get('workspace_processes', processId));
+      if (process.runId !== run.id || process.state !== 'exited' || process.exitCode === null
+        || (status === 'pass' && process.exitCode !== 0)
+        || (status === 'fail' && process.exitCode === 0)) {
+        throw new Error('Check tham chiếu tiến trình chưa hoàn tất hoặc không khớp kết quả.');
+      }
+      this.store.db.prepare('INSERT OR IGNORE INTO process_evidence(id,run_id,exit_code) VALUES(?,?,?)')
+        .run(process.id, run.id, process.exitCode);
+    });
     const lineCounts = new Map<string, number>();
     for (const finding of report.findings) {
       if (!finding.sourceIds.length || finding.sourceIds.some(sourceId => !readIds.has(sourceId))) throw new Error('Finding chưa có nguồn đã đọc để đối chiếu.');
