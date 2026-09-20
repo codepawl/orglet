@@ -1,3 +1,4 @@
+import { ToolCapabilities } from '../../shared/tool-policy';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { Store, now, id } from './database';
@@ -19,7 +20,7 @@ const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPack
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
 const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
-const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
+const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
 const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime() }).strict();
 const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime() }).strict();
 const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional() }).strict();
@@ -221,8 +222,8 @@ export class Backups {
         return [...rows.values()];
       };
       const restoredSources = incoming.sources.map(source => ({ ...source, revoked: true }));
-      const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, task: { ...routine.task, consent: false, providerScopes: [] } }));
-      const restoredTasks = incoming.tasks.map(task => ({ ...task, consent: false, providerScopes: [], status: ['running', 'queued', 'pausing', 'paused'].includes(task.status) ? 'interrupted' as const : task.status }));
+      const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, task: { ...routine.task, toolCapabilities: [], consent: false, providerScopes: [] } }));
+      const restoredTasks = incoming.tasks.map(task => ({ ...task, toolCapabilities: [], consent: false, providerScopes: [], status: ['running', 'queued', 'pausing', 'paused'].includes(task.status) ? 'interrupted' as const : task.status }));
       const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: comparableSnapshot(run, incoming), status: ['running', 'queued', 'pausing', 'paused'].includes(run.status) ? 'interrupted' as const : run.status }));
       const merged: Payload = { ...current,
         routines: merge(current.routines ?? [], restoredRoutines),
