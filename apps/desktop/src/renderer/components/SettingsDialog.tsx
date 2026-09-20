@@ -8,6 +8,7 @@ import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type Pro
 import type { HarnessInfo } from '../../shared/harness';import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
+import { BudgetReconciliation } from './BudgetReconciliation';
 import { formatMoney, moneySymbol, toAmount, toMicros } from './money';
 import { currencies, CurrencyCode, usdCurrency } from '../../shared/currency';
 import { ProviderMark } from './ProviderMark';
@@ -291,6 +292,18 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               {currency.code !== 'USD' && <Row title={t('Tỷ giá')} description={currency.error ? <span className="error">{t('{0} Đang dùng tỷ giá gần nhất.', [currency.error])}</span> : t('Tự làm mới mỗi 12 giờ từ open.er-api.com. Request không kèm dữ liệu của bạn.')}>
                 <Button disabled={busy} onClick={() => void act(async () => { await orglet.call('refreshCurrency', {}); return t('Đã cập nhật tỷ giá'); })}><RefreshCw size={14} />{t('Cập nhật')}</Button>
               </Row>}
+              <BudgetReconciliation workspace={workspace} busy={busy} onReconcile={async (reservationId, amountMicros, source) => {
+                setBusy(true);
+                try {
+                  await orglet.call('reconcileBudget', { reservationId, amountMicros, source });
+                  toast(t('Đã lưu đối soát ngân sách.'));
+                } catch (error) {
+                  toast((error as Error).message, 'error');
+                  throw error;
+                } finally {
+                  setBusy(false);
+                }
+              }} />
             </>}
 
             {tab === 'data' && <>

@@ -23,9 +23,9 @@ export function PanelHeading({ title, description, level = 2, children }: { titl
 export function keepOpenForPopup(event: KeyboardEvent) {
   if (document.activeElement?.closest('[aria-expanded="true"], [data-popup-open]')) event.preventDefault();
 }
-/** Money entry in the chosen display currency; callers convert to USD micros with toMicros before saving. */
-export function MoneyInput({ value, onChange, invalid, flash, ...props }: Omit<ComponentProps<'input'>, 'value' | 'onChange'> & { value: string; onChange: (value: string) => void; invalid?: boolean; flash?: number }) {
-  return <span className={cn('money-input', invalid && 'invalid')} data-flash={invalid ? flash : undefined}><span aria-hidden="true">{moneySymbol()}</span><input {...props} inputMode="decimal" value={value} aria-invalid={invalid || undefined} onChange={event => onChange(event.target.value)} /><span className="money-currency" aria-hidden="true">{displayCurrency().code}</span></span>;
+/** Money entry in the chosen display currency, or explicit USD for provider bill reconciliation. */
+export function MoneyInput({ value, onChange, invalid, flash, currencyCode, ...props }: Omit<ComponentProps<'input'>, 'value' | 'onChange'> & { value: string; onChange: (value: string) => void; invalid?: boolean; flash?: number; currencyCode?: 'USD' }) {
+  return <span className={cn('money-input', invalid && 'invalid')} data-flash={invalid ? flash : undefined}><span aria-hidden="true">{currencyCode === 'USD' ? '$' : moneySymbol()}</span><input {...props} inputMode="decimal" value={value} aria-invalid={invalid || undefined} onChange={event => onChange(event.target.value)} /><span className="money-currency" aria-hidden="true">{currencyCode ?? displayCurrency().code}</span></span>;
 }
 /** Field title with a small leading icon; the icon is decorative so the accessible name stays the text. */
 export function FieldLabel({ icon: Icon, required, children }: { icon: LucideIcon; required?: boolean; children: ReactNode }) {

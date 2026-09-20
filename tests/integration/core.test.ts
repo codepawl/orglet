@@ -84,6 +84,7 @@ describe('durable task runtime', () => {
   it('keeps unknown usage reserved', async () => {
     const { task, run } = fixtureRun(); const reply = call('submit_report', report([])); delete reply.usage; replies.push(reply);
     await core.runner.run(task, run); expect(store.detail(task.id).usage.uncertainCount).toBe(1); expect(store.detail(task.id).usage.reservedMicros).toBeGreaterThan(0);
+    expect(store.budgetReservations()).toMatchObject([{ taskId: task.id, runId: run.id, reason: 'missing_usage', actualMicros: null }]);
   });
   it('cancel prevents subsequent dispatch and preserves uncertain request cost', async () => {
     const { task, run } = fixtureRun();
@@ -91,6 +92,7 @@ describe('durable task runtime', () => {
     core = new CoreService(store, () => {}, async () => slow);
     const running = core.runner.run(task, run); await new Promise(resolve => setTimeout(resolve, 10)); core.runner.cancel(task.id); await running;
     expect(dispatches).toBe(1); expect(store.detail(task.id).task.status).toBe('cancelled'); expect(store.detail(task.id).usage.uncertainCount).toBe(1);
+    expect(store.budgetReservations()).toMatchObject([{ taskId: task.id, reason: 'request_failed', actualMicros: null }]);
   });
   it('revocation between read and next request is enforced', async () => {
     const path = join(directory, 'source.txt'); await writeFile(path, 'Evidence'); const [source] = await core.sources.import([path]);
@@ -106,6 +108,7 @@ describe('durable task runtime', () => {
     const { task, run } = fixtureRun(); const ledger = new BudgetLedger(store); ledger.reserve(run.id, task.id, 'openai', 100, 1000, 1000);
     store.close(); store = new Store(join(directory, 'test.sqlite'));
     expect(store.detail(task.id).task.status).toBe('interrupted'); expect(store.detail(task.id).usage.uncertainCount).toBe(1); expect(dispatches).toBe(0);
+    expect(store.budgetReservations()).toMatchObject([{ taskId: task.id, reason: 'interrupted', actualMicros: null }]);
   });
   it('enforces the shared connection cap under competing reservations', async () => {
     const a = fixtureRun(); const b = fixtureRun(); const ledger = new BudgetLedger(store);

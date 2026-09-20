@@ -5,6 +5,7 @@ import { WorkspaceGrants } from './storage/workspace-grants';
 import type { Knowledge } from '../shared/knowledge';
 import { commands, type ApiProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
+import { BudgetLedger } from './budgets/ledger';
 import { Checkpoints } from './storage/checkpoints';
 import { Sources } from './tools/sources';
 import { Runner } from './orchestration/runner';
@@ -89,6 +90,12 @@ export class CoreService {
         const id = (args as { id: string }).id;
         this.markTaskSeen(id);
         return this.store.detail(this.liveTask(id).id);
+      }
+      case 'reconcileBudget': {
+        const input = commands.reconcileBudget.parse(args);
+        new BudgetLedger(this.store).reconcile(input.reservationId, input.amountMicros, input.source);
+        this.notify();
+        return;
       }
       case 'saveWorker': {
         const input = commands.saveWorker.parse(args);
