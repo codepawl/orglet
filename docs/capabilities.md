@@ -1,5 +1,18 @@
 # Capability catalog
 
+## What a worker can do
+
+Worker setup previews actions in plain language. Chat Details shows each worker's current connection, attachment, task-capability and workspace-grant status for the next turn. The execution layer still checks both the frozen run snapshot and current task policy; a newly enabled capability does not upgrade a resumed run, while revocation blocks it. A folder grant is a separate task-scoped permission. Imported sources remain read-only, and skill packages or knowledge are instructions, never grants. Team roles and routines decide who works and when, not what tools can bypass policy.
+
+| Action | API workers | Claude Code / Codex / Cursor | OpenCode |
+|---|---|---|---|
+| Read attached source; inspect selected data | Core tool, subject to task capability and attachment; dataset checks are separate | Core tool loop supports both when enabled; source-only review uses a restricted copy/prompt; CLI fixtures cover the bridge | Not integrated; no support claim |
+| Read, edit, run checks in a folder | Task folder grant with read/write/execute modes; isolated copy and core integration | Same core tools and grant; CLI native controls differ, so fixture parity is not proof of every installed version | Not integrated |
+| Read/search public web | Separate task capability; bounded, untrusted results | Same core web tool in structured loop, never a native browser permission | Not integrated |
+| Skill resource / knowledge | Reviewed text; no permission or script execution | Same rule | Not integrated |
+
+Connection readiness comes from stored API/Ollama settings or a detected signed-in CLI. The view says Demo is unavailable for these actions. A missing source or grant is reported as setup needed, not as a model limitation. For teams the view does not merge unlike members into a misleading single “ready” badge. Live CLI evidence and unverified native controls remain identified below.
+
 | Path | Enabled | Limits |
 |---|---|---|
 | Demo | Yes | Deterministic sample report; no model or source analysis |

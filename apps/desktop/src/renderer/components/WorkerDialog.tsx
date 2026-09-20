@@ -12,6 +12,7 @@ import { isMascot, mascotIds } from './mascots';
 import { autoMascot } from './mascotSuggest';
 import { TabbedFormDialog } from './DialogTabs';
 import { readiness } from './providers';
+import { CapabilityView } from './CapabilityView';
 import { fieldInvalid } from './fieldInvalid';
 import { toAmount, toMicros } from './money';
 import { toast } from './toast';
@@ -96,7 +97,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         }),
       ]} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} />}
-      {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. {1} Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider], provider === 'codex' ? t('Codex nhận nội dung nguồn văn bản trong prompt và không có tool đọc tệp hay chạy lệnh.') : provider === 'cursor' ? t('Cursor Agent chạy ở chế độ ask với sandbox; chỉ đọc bản sao nguồn của task, không dùng --force.') : t('Claude Code chỉ đọc bản sao nguồn của task, không chạy lệnh.')])}</p>}
+      <CapabilityView provider={provider} connected={provider === 'demo' || ready[provider]} sourceCount={0} grant={null} setup />
+      {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
       {provider === 'ollama' && <p className="muted">{t('Gọi Ollama trên máy này tại 127.0.0.1:11434. Cài Ollama và kéo model trước. Orglet không giữ ngân sách cho lần chạy local.')}</p>}
       {paid && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
     </>}

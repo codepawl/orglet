@@ -59,6 +59,8 @@ The following settings describe that source-only path. Workspace, team, web and 
 - Orglet cannot see which files Claude Code or Cursor Agent actually opened, so its reports carry that limitation.
 For a workspace, team, web or dataset-tool run, each CLI invocation returns one structured tool request. Core validates the request against the tool catalog and current grants before executing it. Claude Code has an empty native tool list; Codex uses the restrictions above; Cursor gets native-tool deny rules in a fresh call directory. Pausing between tool steps saves a checkpoint. Reported CLI cost estimates reduce subsequent call allowances and survive resume, but remain separate from API billing; missing costs remain unknown. Fixtures cover all three bridges, while live enforcement inside the CLIs remains unverified. See [agent tools](agent-tools.md) for the supported operations and test boundaries.
 
+The worker setup and chat Details derive their capability preview from the same task-capability defaults and workspace grant contract used by core. Provider readiness is supplied by main's connection and CLI probes; the renderer does not inspect credentials. A preview describes the next turn, whereas `toolsFor`, `hasCapability` and `WorkspaceGrants.assert` enforce the frozen run plus current policy at every tool call. Dataset and web switches update the task policy; revocation takes effect immediately. See [capability catalog](capabilities.md#what-a-worker-can-do) for the provider matrix and verification limits.
+
 ## Teams
 
 Click a **worker** or a **team** in the sidebar to open that chat. How find-or-create, Chi tiết jobs, and the orchestrator work: [team-chat.md](team-chat.md).

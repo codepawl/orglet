@@ -298,6 +298,13 @@ export function App() {
       finally { setToolPolicyBusy(false); }
     })();
   };
+  const changeTaskCapability = (taskDetail: TaskDetail, capability: ToolCapability, enabled: boolean) => toolAction(() => {
+    const provider = taskWorkers(taskDetail.task, workspace!)[0]?.provider ?? 'demo';
+    const previous = taskDetail.task.toolCapabilities ?? snapshotCapabilities(provider);
+    const capabilities = previous.filter(item => item !== capability);
+    if (enabled) capabilities.push(capability);
+    return orglet.call('setToolCapabilities', { taskId: taskDetail.task.id, capabilities });
+  });
   const worker = workspace?.workers.find(item => item.id === workerId);
   const team = workspace?.teams.find(item => item.id === teamId);
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : worker ? [worker] : [];
@@ -526,18 +533,20 @@ export function App() {
         if (confirmed) await orglet.call('retireWorkspaceAttempt', { taskId: detail.task.id, runId, reviewToken, keepCurrentFiles: true });
       }) : undefined}
       tools={detail ? {
+        workers: taskWorkers(detail.task, workspace),
+        connectedProviders: (Object.keys(ready) as Worker['provider'][]).filter(provider => ready[provider as keyof typeof ready]),
+        onConfigure: provider => openSettings(settingsTabFor([provider])),
         grant: workspaceAccess?.taskId === detail.task.id ? workspaceAccess.grant : undefined,
+        sourceEnabled: (detail.task.toolCapabilities ?? snapshotCapabilities(taskWorkers(detail.task, workspace)[0]?.provider ?? 'demo')).includes('source.read'),
         networkEnabled: detail.task.toolCapabilities?.includes('network.web') ?? false,
-        supported: taskWorkers(detail.task, workspace).length > 0 && taskWorkers(detail.task, workspace).every(person => person.provider !== 'demo'),
+        datasetEnabled: (detail.task.toolCapabilities ?? snapshotCapabilities(taskWorkers(detail.task, workspace)[0]?.provider ?? 'demo')).includes('dataset.check'),
+        supported: taskWorkers(detail.task, workspace).some(person => person.provider !== 'demo'),
         busy: toolPolicyBusy,
         onGrant: permissions => toolAction(() => orglet.pickWorkspace(detail.task.id, permissions)),
         onRevoke: () => toolAction(() => orglet.call('revokeWorkspace', { taskId: detail.task.id })),
-        onNetworkChange: enabled => toolAction(() => {
-          const previous = detail.task.toolCapabilities ?? snapshotCapabilities(taskWorkers(detail.task, workspace)[0]?.provider ?? 'demo');
-          const capabilities: ToolCapability[] = previous.filter(capability => capability !== 'network.web');
-          if (enabled) capabilities.push('network.web');
-          return orglet.call('setToolCapabilities', { taskId: detail.task.id, capabilities });
-        }),
+        onSourceChange: enabled => changeTaskCapability(detail, 'source.read', enabled),
+        onNetworkChange: enabled => changeTaskCapability(detail, 'network.web', enabled),
+        onDatasetChange: enabled => changeTaskCapability(detail, 'dataset.check', enabled),
       } : undefined}
       workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
     <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lỡ thì chạy bù một lần') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được. Gói nhập từ thư mục cần được review trước khi gắn cho Tí.') : t('Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><Button size="icon" aria-label={t('Quay lại danh sách lịch')} onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}><ArrowLeft size={18} /></Button><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? editingSkill?.package ? 'Review skill' : t('Chỉnh skill') : panel === 'knowledge' ? editingKnowledge ? 'Knowledge' : t('Knowledge mới') : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
