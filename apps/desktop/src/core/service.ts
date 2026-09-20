@@ -33,6 +33,7 @@ import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './mod
 import { canStoreModelListRow, dropProviderRow, readModelListCache, writeModelListCache } from './models/cache';
 import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
 import { mentionedPeople } from '../shared/mentions';
+import { MessageInteractions } from './orchestration/message-interactions';
 
 export class CoreService {
   feedbackText(artifactId: string): string {
@@ -149,9 +150,14 @@ export class CoreService {
         this.notify(); return team;
       }
       case 'createTask': return this.createTask(commands.createTask.parse(args));
+      case 'setMessageReaction': {
+        new MessageInteractions(this.store).userReaction(commands.setMessageReaction.parse(args));
+        this.notify(); return;
+      }
       case 'reviseTask': {
         const input = commands.reviseTask.parse(args);
         const task = this.store.get<Task>('tasks', input.taskId);
+        if (input.replyTo) new MessageInteractions(this.store).target(task.id, input.replyTo);
         if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
         if (this.sources.isChecking()) throw new Error('Đợi checker kết thúc trước khi tạo revision.');
         const active = this.runner.isActive(task.id) || this.teams.isActive(task.id);
@@ -160,7 +166,7 @@ export class CoreService {
         const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
         if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
         this.policy.assertStart(task.teamId, task.id);
-        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
+        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
           decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
             ? { ...request, interruptedAt: now() } : request) };
         this.store.transaction(() => {
@@ -648,8 +654,10 @@ export class CoreService {
       db.prepare('DELETE FROM workspace_grants WHERE task_id=?').run(task.id);
       for (const item of proposed) for (const table of ['knowledge', 'knowledge_revisions', 'knowledge_search']) db.prepare(`DELETE FROM ${table} WHERE id=?`).run(item.id);
       if (tombstone) {
-        for (const run of runs) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, ...(run.snapshot.input ? { input: { ...run.snapshot.input, brief: removed } } : {}), context: undefined, preflightId: undefined, upstreamArtifactIds: undefined } });
-        const { currentInput: _input, handoff: _handoff, evidenceRequests: _requests, archivedAt: _archived, ...rest } = task;
+        for (const run of runs) this.store.update('runs', { ...run, snapshot: { ...run.snapshot,
+          ...(run.snapshot.input ? { input: { ...run.snapshot.input, brief: removed, replyTo: undefined } } : {}),
+          context: undefined, preflightId: undefined, upstreamArtifactIds: undefined } });
+        const { currentInput: _input, messageReactions: _reactions, handoff: _handoff, evidenceRequests: _requests, archivedAt: _archived, ...rest } = task;
         this.store.update('tasks', { ...rest, brief: removed, deletedAt: this.clock().toISOString() });
       } else {
         for (const run of runs) db.prepare('DELETE FROM step_attempts WHERE run_id=?').run(run.id);

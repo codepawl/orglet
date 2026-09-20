@@ -52,7 +52,7 @@ describe('tool policy boundary', () => {
     task.toolCapabilities = [];
     expect(hasCapability(run, task, 'source.read')).toBe(false);
     expect(() => assertToolCall(run, task, 'read_source', JSON.stringify({ sourceId: id() }))).toThrow('policy');
-    expect(toolsFor(run, task).map(tool => tool.type === 'function' && tool.function.name)).toEqual(['record_work_frame', 'request_user_decision', 'submit_report', 'reply']);
+    expect(toolsFor(run, task).map(tool => tool.type === 'function' && tool.function.name)).toEqual(['record_work_frame', 'request_user_decision', 'react_to_message', 'submit_report', 'reply']);
   });
 
   it('rejects invalid arguments and calls outside the run stage', () => {

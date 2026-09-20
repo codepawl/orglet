@@ -27,6 +27,8 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
 
 Click a **team** or **worker** in the sidebar to open that chat. One live conversation each; a new message is a turn, not a new task. Team chats plan, run members as hidden jobs, and bring one report back. Internal jobs stay under **Details**. [How it works](docs/team-chat.md).
 
+Reply to a saved user or worker message to give the next turn a precise reference, or react without starting a run. Team messages appear in Details with the same actions. Reactions and reply links stay with the local chat and its backup; a reaction alone does not change permissions or dispatch work.
+
 > Orglet is early. Expect rough edges, and check answers against your own sources before you rely on them.
 
 | | |

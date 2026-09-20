@@ -43,6 +43,14 @@ try {
   await page.getByRole('button', { name: 'Sao chép', exact: true }).waitFor();
   const state = await page.evaluate(() => window.orglet.call('workspace', {}));
   const taskId = state.tasks[0].id; assert.equal(state.tasks[0].accepted, false);
+  const answer = page.locator('.chat-reply').first();
+  await answer.getByRole('button', { name: 'Thả react' }).click();
+  await answer.getByRole('button', { name: 'Mình thấy ổn, giữ hướng này.' }).click();
+  const reacted = await page.evaluate(id => window.orglet.call('task', { id }), taskId);
+  assert.equal(reacted.task.messageReactions?.[0].emoji, 'agree');
+  await answer.getByRole('button', { name: 'Trả lời tin này' }).click();
+  await page.locator('.composer-reply').waitFor();
+  await page.getByRole('button', { name: 'Bỏ trả lời' }).click();
   await page.screenshot({ path: join(output, 'desktop-report.png') });
   await page.locator('.topbar-actions .thread-menu').click();
   await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
@@ -205,6 +213,7 @@ try {
   const restoredFolders = await reopened.evaluate(id => window.orglet.call('task', { id }), folderTask.id);
   assert.deepEqual(restoredFolders.task.excludedSources, folderTask.excludedSources);
   assert.equal(restored.artifacts.length, 1); assert.equal(restored.artifacts[0].report.format, 'chat'); assert.equal(restored.task.status, 'completed');
+  assert.equal(restored.task.messageReactions?.[0].emoji, 'agree');
   if (await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).count()) await reopened.getByRole('button', { name: 'Mở sidebar', exact: true }).click();
   await openThreadByBrief(reopened, 'Desktop smoke: pause and resume');
   await reopened.getByRole('button', { name: 'Tiếp tục từ checkpoint', exact: true }).click();

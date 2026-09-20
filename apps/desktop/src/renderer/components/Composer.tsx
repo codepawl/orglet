@@ -9,7 +9,7 @@ import { MentionText } from './mentions';
 import { providerLabel, settingsTabFor, type Readiness } from './providers';
 import { t } from '../i18n';import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
-import { briefWithMarks, clearReplyTarget, useReaction, useReplyTarget } from './messageMarks';
+import { briefWithReaction, clearReplyTarget, useReplyTarget } from './messageMarks';
 
 const SINGLE_LINE = 40;
 
@@ -190,10 +190,11 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   const team = detail.task.teamId ? workspace.teams.find(item => item.id === detail.task.teamId) : undefined;
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
   const missing = providers.filter(provider => !ready[provider]);
-  const reply = useReplyTarget();
+  const selectedReply = useReplyTarget();
+  const reply = selectedReply?.taskId === detail.task.id ? selectedReply : undefined;
   // Only the newest answer can be marked as the one to keep going from; an older thumb is history, not an instruction.
   const latestAnswer = detail.artifacts.at(-1)?.id;
-  const reaction = useReaction(latestAnswer ?? '');
+  const reaction = detail.task.messageReactions?.findLast(item => item.messageId === latestAnswer && item.actor === 'user')?.emoji;
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0;
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt);
@@ -204,9 +205,8 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
       action(async () => { try { await orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: extra }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
       return;
     }
-    // A quote and a reaction steer the next turn, so they belong in its brief.
-    const brief = briefWithMarks(extra, reply, reaction);
-    action(async () => { try { await orglet.call('reviseTask', { taskId: detail.task.id, brief, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
+    const brief = briefWithReaction(extra, reaction);
+    action(async () => { try { await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
   };
   return <div className="thread-composer">
     {reply && !pendingDecision && <div className="composer-reply">

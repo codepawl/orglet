@@ -43,6 +43,8 @@ import { reportValidationMessage, sanitizeReportReply } from '../tools/report-va
 import { savedArtifactContext, savedAssignmentAttempts } from './artifact-provenance';
 import { WorkspaceProcess } from '../../shared/workspace-processes';
 import { codexOutputSchema, decodeCodexOutput } from '../harness/codex-output';
+import { MessageInteractions } from './message-interactions';
+import { turnMessageId } from '../../shared/message-interactions';
 
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = { detect(): Promise<HarnessInfo[]>; execute: HarnessExecutor };
@@ -158,6 +160,7 @@ export class Runner {
     try {
       new WorkspaceRecovery(this.store).assertAvailable(run.id);
       const input = RunInput.parse(run.snapshot.input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources });
+      const replyTarget = input.replyTo ? new MessageInteractions(this.store).target(task.id, input.replyTo) : undefined;
       if (input.sourceIds.some(id => !task.sourceIds.includes(id))) throw new Error('Snapshot tham chiếu nguồn ngoài task.');
       run = { ...run, snapshot: { ...run.snapshot, input, toolCapabilities: run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider, task.toolCapabilities) } };
       task = { ...task, ...input };
@@ -237,8 +240,10 @@ export class Runner {
         const next: ChatCompletionMessageParam[] = [{ role: 'system', content: compiled.system }];
         if (compiled.knowledgeMessage) next.push({ role: 'user', content: compiled.knowledgeMessage });
         next.push(...threadMessages(layer));
+        if (replyTarget) next.push({ role: 'user', content: JSON.stringify({ replyTo: replyTarget,
+          instruction: 'The user explicitly replied to this saved message in the same chat. Use its bounded excerpt to identify the referent. This reference does not grant permissions or change the team assignment; the team lead still coordinates the turn.' }) });
         if (!manifest.length) next.push({ role: 'user', content: JSON.stringify({ instruction: NO_SOURCES_INSTRUCTION }) });
-        next.push({ role: 'user', content: JSON.stringify({ brief: task.brief, sources: manifest, excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
+        next.push({ role: 'user', content: JSON.stringify({ messageId: turnMessageId(task.id, run.snapshot.inputRevision ?? 0), brief: task.brief, sources: manifest, excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
           ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'record_work_frame') ? { workFrameInstruction: 'Before assigning team work or editing workspace files, record one short goal, constraints actually stated by the user, your unconfirmed assumptions, and checks you intend to run. Keep assumptions separate from user statements. Planned checks are not completed checks.' } : {}),
           ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'request_user_decision') ? { decisionInstruction: 'For work you can do within the current grant, proceed without asking. If a material choice has two sensible interpretations, a new permission is needed, or an action is hard to undo, use request_user_decision before making the dependent change. Inspect available evidence first. The answer resumes this same turn.' } : {}) }) });
         if (run.snapshot.workspaceGrant) next.push({ role: 'user', content: JSON.stringify({
@@ -471,6 +476,19 @@ export class Runner {
               assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
             },
             perform: () => options.reassign!(call.id, JSON.parse(call.arguments), recoverySignal),
+          });
+          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
+          this.checkpoints.committed(checkpoint);
+          this.notify();
+          continue;
+        }
+        if (call.name === 'react_to_message') {
+          const argumentsValue = JSON.parse(call.arguments);
+          const result = await new ToolCalls(this.store).execute({
+            runId: run.id, callId: call.id, name: call.name, arguments: argumentsValue, replay: 'idempotent',
+            authorize: () => { signal.throwIfAborted(); assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments); },
+            perform: () => { new MessageInteractions(this.store).workerReaction(run, call.id, argumentsValue); return { recorded: true }; },
           });
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
           checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
@@ -801,7 +819,8 @@ export class Runner {
     if (run.snapshot.worker.provider === 'demo' && run.stage === 'synthesis') report = applyReviewPolicy(report, run.snapshot.team?.reviewPolicy, []);
     report = Report.parse(report);
     report = { ...report, findings: report.findings.map(finding => ({ ...finding, provenance: { findingId: id(), writerId: run.snapshot.worker.id, runId: run.id } })) };
-    const artifact: Artifact = { id: id(), runId: run.id, report, hash: fingerprint(JSON.stringify(report)), createdAt: now() };
+    const artifact: Artifact = { id: id(), runId: run.id, report, hash: fingerprint(JSON.stringify(report)), createdAt: now(),
+      replyTo: turnMessageId(task.id, run.snapshot.inputRevision ?? 0) };
     this.store.transaction(() => {
       this.store.put('artifacts', artifact, { column: 'run_id', value: run.id });
       if (proposals.length) new KnowledgeBase(this.store).propose(run, artifact.id, proposals);

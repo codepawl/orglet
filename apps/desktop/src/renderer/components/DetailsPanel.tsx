@@ -19,6 +19,7 @@ import type { WorkspaceGrantView, WorkspacePermission } from '../../shared/works
 import { TaskTools } from './TaskTools';
 import { WorkspaceRecovery, type ReadProcessOutput, type ReadPrivateFile } from './WorkspaceRecovery';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
+import { MessageActions } from './MessageActions';
 
 /*
  * The panel beside a chat: who you are talking to, what this conversation has cost, and what happened in it.
@@ -262,6 +263,22 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
             <p className="muted">{request.answer ?? (request.interruptedAt ? t('Không thể tiếp tục từ bản sao lưu') : t('Đang chờ trả lời'))}</p>
           </div>
         </div>)}
+      </Section>}
+
+      {detail && detail.events.some(event => event.teamMessage) && <Section icon={MessageSquare} title={t('Tin nhắn giữa các Tí')}>
+        {detail.events.filter(event => event.teamMessage).map(event => {
+          const message = event.teamMessage!;
+          const sender = detail.runs.find(run => run.snapshot.worker.id === message.senderId)?.snapshot.worker.name ?? message.senderId;
+          const recipient = detail.runs.find(run => run.snapshot.worker.id === message.recipientId)?.snapshot.worker.name ?? message.recipientId;
+          const parent = detail.events.find(item => item.id === message.replyTo)?.teamMessage;
+          return <div className="details-team-message" key={event.id} id={`message-${event.id}`}>
+            <p><strong>{sender}</strong> → {recipient} · {t(message.kind === 'question' ? 'Câu hỏi' : message.kind === 'response' ? 'Phản hồi' : message.kind === 'blocker' ? 'Điểm chặn' : 'Bàn giao')}</p>
+            {parent && <p className="muted">{t('Trả lời tin: {0}', [parent.body.slice(0, 140)])}</p>}
+            <p>{message.body}</p>
+            <MessageActions taskId={detail.task.id} messageId={event.id} author={sender} text={message.body}
+              reactions={detail.task.messageReactions ?? []} action={fn => { void fn().catch(error => toast(tMessage(String(error)), 'error')); }} />
+          </div>;
+        })}
       </Section>}
 
       {detail && detail.runs.length > 0 && <Section icon={Clock} title={t('Diễn biến')}>

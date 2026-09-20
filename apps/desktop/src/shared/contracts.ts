@@ -16,6 +16,7 @@ import type { HarnessInfo } from './harness';
 import { CurrencyCode, type CurrencyState } from './currency';
 import { Language } from './i18n';
 import { CustomModelId, type ModelListResult } from './models';
+import { SetUserReaction, type MessageReaction } from './message-interactions';
 
 export const Id = z.string().uuid();
 export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'openrouter', 'ollama', 'claude-code', 'codex', 'cursor']);
@@ -82,7 +83,7 @@ export const TaskInput = z.object({
   budgetMicros: z.number().int().min(1000).max(100_000_000),
 });
 export type TaskInput = z.infer<typeof TaskInput>;
-export const RunInput = TaskInput.pick({ brief: true, sourceIds: true, excludedSources: true }).strict();
+export const RunInput = TaskInput.pick({ brief: true, sourceIds: true, excludedSources: true }).extend({ replyTo: Id.optional() }).strict();
 export type RunInput = z.infer<typeof RunInput>;
 /** Orchestrator routing for one team-chat turn (COD-25). Stored on the plan run snapshot; not a user-facing artifact. */
 export const PlanAssignment = z.object({
@@ -140,11 +141,11 @@ export type Skill = z.infer<typeof SkillInput> & { id: string; revision: number;
 export type Source = { id: string; name: string; bytes: number; hash: string; revoked: boolean; format?: DataFormat };
 export type FolderIntake = { sources: Source[]; skipped: { name: string; reason: string }[] };
 export type TaskStatus = 'queued' | 'running' | 'pausing' | 'paused' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted' | 'waiting_budget' | 'waiting_input';
-export type Task = { toolCapabilities?: ToolCapability[]; id: string; brief: string; title?: string; workerId: string; teamId?: string; teamSnapshot?: Team; assignees?: 'all' | string[]; archivedAt?: string; deletedAt?: string; status: TaskStatus; createdAt: string; budgetMicros: number; sourceIds: string[]; excludedSources?: FolderIntake['skipped']; consent: boolean; providerScopes?: ProviderScope[]; accepted: boolean; /** A new input was saved while an older run was stopping; dispatch only after it settles. */ pendingStart?: boolean; /** Stamp of the result the user last opened; unread when it differs from `taskResultStamp`. */ seenStamp?: string; /** Latest saved answer/report id, part of the result stamp. */ lastArtifactId?: string; /** When the user last opened this task. */ seenAt?: string; routineId?: string; pauseReason?: 'shift'; handoff?: Handoff; evidenceRequests?: EvidenceRequest[]; decisionRequests?: DecisionRequest[]; inputRevision?: number; currentInput?: RunInput };
+export type Task = { toolCapabilities?: ToolCapability[]; messageReactions?: MessageReaction[]; id: string; brief: string; title?: string; workerId: string; teamId?: string; teamSnapshot?: Team; assignees?: 'all' | string[]; archivedAt?: string; deletedAt?: string; status: TaskStatus; createdAt: string; budgetMicros: number; sourceIds: string[]; excludedSources?: FolderIntake['skipped']; consent: boolean; providerScopes?: ProviderScope[]; accepted: boolean; /** A new input was saved while an older run was stopping; dispatch only after it settles. */ pendingStart?: boolean; /** Stamp of the result the user last opened; unread when it differs from `taskResultStamp`. */ seenStamp?: string; /** Latest saved answer/report id, part of the result stamp. */ lastArtifactId?: string; /** When the user last opened this task. */ seenAt?: string; routineId?: string; pauseReason?: 'shift'; handoff?: Handoff; evidenceRequests?: EvidenceRequest[]; decisionRequests?: DecisionRequest[]; inputRevision?: number; currentInput?: RunInput };
 export type RunStage = 'plan' | 'member' | 'synthesis' | 'group';
 export type Run = { id: string; taskId: string; stage?: RunStage; status: TaskStatus; snapshot: { workspaceGrant?: WorkspaceGrantSnapshot; assignment?: z.infer<typeof PlanAssignment>; reassignment?: import('./team-messages').TeamReassignment; toolCapabilities?: ToolCapability[]; worker: Worker; skill: Skill; team?: Team; input?: RunInput; context?: RunContext; workFrame?: WorkFrame; inputRevision?: number; upstreamArtifactIds?: string[]; preflightId?: string; scoreProfileIds?: string[]; model?: string; pricingVersion?: string; plan?: TeamPlan }; startedAt: string; error: string | null };
 export type Activity = { id: string; runId: string; sequence?: number; message: string; createdAt: string; teamMessage?: import('./team-messages').TeamMessage };
-export type Artifact = { id: string; runId: string; report: Report; hash: string; createdAt: string };
+export type Artifact = { id: string; runId: string; report: Report; hash: string; createdAt: string; replyTo?: string };
 export type Usage = { chargedMicros: number; reservedMicros: number; uncertainCount: number; inputTokens: number; outputTokens: number };
 export type BudgetReservationView = {
   id: string;
@@ -169,6 +170,7 @@ export const commands = {
   task: z.object({ id: Id }),
   createTask: TaskInput,
   reviseTask: RunInput.extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(4), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
+  setMessageReaction: SetUserReaction,
   answerDecision: z.object({ taskId: Id, requestId: Id, answer: z.string().trim().min(1).max(2000) }).strict(),
   saveWorker: WorkerInput,
   saveTeam: TeamInput,
@@ -224,7 +226,7 @@ export const commands = {
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { reconcileBudget: void; recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
+export type Results = { reconcileBudget: void; recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;
