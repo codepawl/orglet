@@ -18,6 +18,21 @@ export type MentionRoster = { people: readonly Worker[]; allNames?: readonly str
 export type ComposerAttachment = { id: string; name: string; bytes?: number };
 
 /**
+ * Where the strip should come to rest: as far along as it can go while a card still starts exactly at its left
+ * edge (user, 2026-09-20). Scrolling to the very end lands mid-card, and the part left showing is a card's tail,
+ * which is blank past the meta line — it reads as an empty tile rather than as "there is more this way". Stopping
+ * on a whole number of cards puts the clipping on the right instead, where a card's icon and name are what peek.
+ */
+function restingScrollLeft(strip: HTMLUListElement) {
+  const furthest = strip.scrollWidth - strip.clientWidth;
+  const [first, second] = strip.children;
+  if (!(first instanceof HTMLElement) || furthest <= 0) return Math.max(furthest, 0);
+  const pitch = second instanceof HTMLElement ? second.offsetLeft - first.offsetLeft : first.offsetWidth;
+  if (pitch <= 0) return furthest;
+  return Math.floor(furthest / pitch) * pitch;
+}
+
+/**
  * ChatGPT-style prompt bar: a one-line pill with the add button, input and send button on one row.
  * It grows into a multi-line box once the text wraps or attachments appear, and stays grown until cleared
  * so the layout does not flip back and forth at the wrap point. Grown, it reads as three zones from the top:
@@ -51,8 +66,13 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
     previousAttachmentCount.current = attachmentCount;
     const element = strip.current;
     if (!grew || !element) return;
-    const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    element.scrollTo({ left: element.scrollWidth, behavior: instant ? 'auto' : 'smooth' });
+    // The bar grows to its expanded width in a later render than this one, so wait a frame before measuring:
+    // a resting place worked out against the width the strip is about to stop having lands mid-card.
+    const frame = requestAnimationFrame(() => {
+      const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      element.scrollTo({ left: restingScrollLeft(element), behavior: instant ? 'auto' : 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [attachmentCount]);
   // The strip scrolls sideways and hides its scrollbar, which leaves a plain mouse with no way to reach the files
   // scrolled off the edge. Take the wheel over the strip and scroll it sideways instead, but only while it has
