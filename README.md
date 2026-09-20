@@ -82,6 +82,8 @@ You can send a changed request while a worker or team is running. Orglet saves i
 
 When workspace commands run, chat shows a short count from their saved exit states: exit code 0, failed, or unfinished. File conflicts and uncertain tool calls remain visible beside that count; Details retains the commands, output and recovery controls. A planned check in the turn goal is still only a plan until evidence is recorded.
 
+If an API request fails or its provider omits usage, Orglet keeps the budget reservation and shows it under **Settings → Cost & limits**. After checking the provider's usage page or invoice, you can record the actual USD charge, including zero only when confirmed. The original hold and adjustment remain in local history and backups; Orglet never guesses that a failed request was free.
+
 ## Install
 
 [Latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. The tag is public; Windows **Setup.exe** / **ZIP** assets on that release may still be empty. If they are missing, [build from source](#dev).

@@ -33,13 +33,14 @@ const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: 
 const ProcessEvidence = z.object({ id: Id, runId: Id, exitCode: z.number().int() }).strict();
 const Reservation = z.object({ id: Id, run_id: Id, task_id: Id, provider: z.enum(['openai', 'anthropic', 'xai', 'openrouter']), month: z.string().regex(/^\d{4}-\d{2}$/), amount: Integer, state: z.enum(['held', 'unknown', 'settled']) }).strict();
 const Ledger = z.object({ id: Id, reservation_id: Id, amount: Integer, input_tokens: Integer, output_tokens: Integer, pricing_version: z.string() }).strict();
+const ReservationReview = z.object({ reservation_id: Id, reason: z.enum(['missing_usage', 'request_failed', 'interrupted', 'legacy']), noted_at: z.iso.datetime(), actual_amount: Integer.nullable(), verified_source: z.enum(['provider_dashboard', 'invoice']).nullable(), resolved_at: z.iso.datetime().nullable() }).strict();
 const RevisionRow = z.object({ entity_id: Id, revision: Revision, data: z.union([Worker, Skill, Team]) }).strict();
 const Settings = z.object({ theme: z.enum(['system', 'light', 'dark']), connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000) }).strict();
 const KnowledgeRevision = z.object({ id: Id, revision: Revision, data: Knowledge }).strict();
 const Payload = z.object({
   routines: z.array(Routine).max(100).optional(),
   knowledge: z.array(Knowledge).max(10_000).optional(), knowledgeRevisions: z.array(KnowledgeRevision).max(100_000).optional(),
-  workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), settings: Settings,
+  workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), reservationReviews: z.array(ReservationReview).optional(), settings: Settings,
 }).strict();
 type Payload = z.infer<typeof Payload>;
 const Envelope = z.object({ format: z.literal('orglet-backup'), version: z.literal(1), createdAt: z.iso.datetime(), checksum: Hash, payload: Payload }).strict();
@@ -247,6 +248,21 @@ function validateRelations(data: Payload) {
   const settled = new Set<string>();
   for (const entry of data.ledger) { if (!reservations.has(entry.reservation_id) || settled.has(entry.reservation_id)) fail('Ledger thiếu reservation hoặc bị trùng.'); settled.add(entry.reservation_id); }
   for (const reservation of reservations.values()) if (runs.get(reservation.run_id)?.taskId !== reservation.task_id || (reservation.state === 'settled') !== settled.has(reservation.id)) fail('Reservation không khớp run/ledger.');
+  const reviewed = new Set<string>();
+  for (const review of data.reservationReviews ?? []) {
+    const reservation = reservations.get(review.reservation_id);
+    const entry = data.ledger.find(item => item.reservation_id === review.reservation_id);
+    if (!reservation) fail('Đối soát ngân sách thiếu reservation.');
+    if (reviewed.has(review.reservation_id)) fail('Đối soát ngân sách bị trùng.');
+    const reservationState = reservation?.state;
+    if (review.actual_amount === null) {
+      if (review.verified_source !== null || review.resolved_at !== null || reservationState === 'settled') fail('Đối soát ngân sách chưa hoàn tất không hợp lệ.');
+    } else if (review.verified_source === null || review.resolved_at === null || reservationState !== 'settled'
+      || entry?.amount !== review.actual_amount || entry.pricing_version !== 'manual-reconciliation') {
+      fail('Đối soát ngân sách không khớp ledger.');
+    }
+    reviewed.add(review.reservation_id);
+  }
   const revisions = new Set<string>();
   for (const row of data.revisions) { const key = `${row.entity_id}:${row.revision}`; if (row.entity_id !== row.data.id || row.revision !== row.data.revision || revisions.has(key)) fail('Revision không hợp lệ.'); revisions.add(key); }
   const knowledgeRevisions = new Map<string, z.infer<typeof Knowledge>>();
@@ -272,6 +288,7 @@ function snapshot(store: Store): Payload {
     processEvidence: store.db.prepare('SELECT id,run_id AS runId,exit_code AS exitCode FROM process_evidence').all(), preflights: store.all('preflights'),
     revisions: store.db.prepare('SELECT * FROM revisions ORDER BY rowid').all().map(row => ({ ...row, data: JSON.parse(String(row.data)) })),
     reservations: store.db.prepare('SELECT * FROM reservations ORDER BY rowid').all(), ledger: store.db.prepare('SELECT * FROM ledger ORDER BY rowid').all(),
+    reservationReviews: store.db.prepare('SELECT * FROM reservation_reviews ORDER BY rowid').all(),
     // Keys, reviewedSkills and modelLists stay on this machine; they are derived from local credentials/CLIs.
     settings: { theme: store.setting('theme', 'system'), connectionLimitMicros: store.setting('connectionLimitMicros', 5_000_000) },
   });
@@ -349,6 +366,20 @@ export class Backups {
         if (existing && digest({ ...existing, state: '' }) !== digest({ ...row, state: '' })) fail('Reservation xung đột.');
       }
       for (const row of merged.reservations) row.state = merged.ledger.some(entry => entry.reservation_id === row.id) ? 'settled' : 'unknown';
+      const reviews = new Map((incoming.reservationReviews ?? []).map(review => [review.reservation_id, review]));
+      for (const review of current.reservationReviews ?? []) {
+        const imported = reviews.get(review.reservation_id);
+        if (!imported || review.actual_amount !== null) {
+          if (imported?.actual_amount !== null && imported && digest(imported) !== digest(review)) fail('Đối soát ngân sách xung đột.');
+          reviews.set(review.reservation_id, review);
+        }
+      }
+      for (const reservation of merged.reservations) {
+        if (reservation.state === 'unknown' && !reviews.has(reservation.id)) {
+          reviews.set(reservation.id, { reservation_id: reservation.id, reason: 'legacy', noted_at: now(), actual_amount: null, verified_source: null, resolved_at: null });
+        }
+      }
+      merged.reservationReviews = [...reviews.values()];
       const revisions = new Map(incoming.revisions.map(row => [`${row.entity_id}:${row.revision}`, row]));
       for (const row of current.revisions) { const key = `${row.entity_id}:${row.revision}`; if (revisions.has(key) && digest(revisions.get(key)) !== digest(row)) fail('Revision xung đột.'); revisions.set(key, row); }
       merged.revisions = [...revisions.values()];
@@ -373,6 +404,11 @@ export class Backups {
       for (const row of merged.revisions) this.store.db.prepare('INSERT OR IGNORE INTO revisions VALUES(?,?,?)').run(row.entity_id, row.revision, JSON.stringify(row.data));
       for (const row of merged.reservations) this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state').run(row.id, row.run_id, row.task_id, row.provider, row.month, row.amount, row.state);
       for (const row of merged.ledger) this.store.db.prepare('INSERT OR IGNORE INTO ledger VALUES(?,?,?,?,?,?)').run(row.id, row.reservation_id, row.amount, row.input_tokens, row.output_tokens, row.pricing_version);
+      for (const row of merged.reservationReviews ?? []) this.store.db.prepare(`INSERT INTO reservation_reviews
+        (reservation_id,reason,noted_at,actual_amount,verified_source,resolved_at) VALUES(?,?,?,?,?,?)
+        ON CONFLICT(reservation_id) DO UPDATE SET actual_amount=excluded.actual_amount,
+        verified_source=excluded.verified_source,resolved_at=excluded.resolved_at`)
+        .run(row.reservation_id, row.reason, row.noted_at, row.actual_amount, row.verified_source, row.resolved_at);
       for (const row of merged.knowledgeRevisions ?? []) this.store.db.prepare('INSERT OR IGNORE INTO knowledge_revisions VALUES(?,?,?)').run(row.id, row.revision, JSON.stringify(row.data));
       const knowledge = new KnowledgeBase(this.store);
       for (const item of merged.knowledge ?? []) { this.store.put('knowledge', item); knowledge.index(item); }

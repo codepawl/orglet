@@ -1,4 +1,4 @@
-import { Store, id } from '../storage/database';
+import { Store, id, now } from '../storage/database';
 import { modelConfig } from '../adapters/catalog';
 import type { ModelRates } from '../models/resolve';
 
@@ -34,5 +34,29 @@ export class BudgetLedger {
       this.store.db.prepare("UPDATE reservations SET state='settled' WHERE id=?").run(reservation);
     });
   }
-  unknown(reservation: string) { this.store.db.prepare("UPDATE reservations SET state='unknown' WHERE id=? AND state='held'").run(reservation); }
+  unknown(reservation: string, reason: 'missing_usage' | 'request_failed') {
+    this.store.transaction(() => {
+      const changed = this.store.db.prepare("UPDATE reservations SET state='unknown' WHERE id=? AND state='held'").run(reservation);
+      if (!changed.changes) return;
+      this.store.db.prepare('INSERT INTO reservation_reviews (reservation_id,reason,noted_at) VALUES(?,?,?)')
+        .run(reservation, reason, now());
+    });
+  }
+
+  reconcile(reservation: string, amount: number, source: 'provider_dashboard' | 'invoice') {
+    if (!Number.isSafeInteger(amount) || amount < 0) throw new BudgetError('Chi phí đối soát không hợp lệ.');
+    if (source !== 'provider_dashboard' && source !== 'invoice') throw new BudgetError('Nguồn đối soát không hợp lệ.');
+    this.store.transaction(() => {
+      const row = this.store.db.prepare('SELECT state FROM reservations WHERE id=?').get(reservation);
+      const review = this.store.db.prepare('SELECT actual_amount,verified_source FROM reservation_reviews WHERE reservation_id=?').get(reservation);
+      if (!row || !review) throw new BudgetError('Không tìm thấy khoản giữ chỗ chưa rõ chi phí.');
+      if (row.state === 'settled' && review.actual_amount === amount && review.verified_source === source) return;
+      if (row.state !== 'unknown') throw new BudgetError('Khoản giữ chỗ đã được đối soát hoặc vẫn đang chạy.');
+      this.store.db.prepare('INSERT INTO ledger VALUES(?,?,?,?,?,?)')
+        .run(id(), reservation, amount, 0, 0, 'manual-reconciliation');
+      this.store.db.prepare('UPDATE reservation_reviews SET actual_amount=?,verified_source=?,resolved_at=? WHERE reservation_id=?')
+        .run(amount, source, now(), reservation);
+      this.store.db.prepare("UPDATE reservations SET state='settled' WHERE id=?").run(reservation);
+    });
+  }
 }

@@ -395,10 +395,10 @@ export class Runner {
                 reply = await model.request(messages, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation);
                 reply = sanitizeReportReply(run, reply);
                 if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
-                else ledger.unknown(reservation);
+                else ledger.unknown(reservation, 'missing_usage');
                 this.checkpoints.received(checkpoint, reply);
               } catch {
-                ledger.unknown(reservation);
+                ledger.unknown(reservation, 'request_failed');
                 throw new Error('Request model không hoàn tất. Chi phí chưa rõ vẫn được giữ chỗ; kiểm tra kết nối hoặc quota trước khi thử lại.');
               }
             }

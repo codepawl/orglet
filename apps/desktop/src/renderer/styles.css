@@ -688,6 +688,22 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The copy button is 32px and the command block 26px; centred, or they sit on different lines. */
 .setting-repair-row { display:flex; align-items:center; gap:4px; max-width:100%; }
 .setting-repair-row .button { flex-shrink:0; }
+.budget-reviews { display:flex; flex-direction:column; gap:10px; margin-top:22px; }
+.budget-reviews h3 { margin:0; font-size:15px; }
+.budget-reviews>p { margin:0; }
+.budget-review-list,.budget-review-history ul { display:flex; flex-direction:column; gap:10px; padding:0; margin:0; list-style:none; }
+.budget-review-item { padding:12px; border-radius:12px; background:var(--row-hover); }
+.budget-review-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.budget-review-heading strong,.budget-review-history strong { font-size:13px; font-weight:600; }
+.budget-review-heading p { margin:4px 0 0; font-size:12px; }
+.budget-review-form { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin-top:12px; }
+.budget-review-form label:not(.checkbox) { display:flex; flex-direction:column; gap:5px; }
+.budget-review-form .checkbox { width:100%; }
+.budget-review-form .error { width:100%; margin:0; }
+.budget-review-form .money-input,.budget-review-form .select { width:210px; }
+.budget-review-history summary { cursor:pointer; font-size:13px; }
+.budget-review-history ul { margin-top:10px; }
+.budget-review-history li { display:flex; flex-wrap:wrap; gap:5px 10px; font-size:12px; color:var(--muted); }
 .harness-row { display:flex; gap:10px; align-items:flex-start; }
 .harness-row>.provider-mark { margin-top:1px; }
 .harness-row>.setting-text { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
