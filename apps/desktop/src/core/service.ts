@@ -1,3 +1,4 @@
+import { WorkspaceGrants } from './storage/workspace-grants';
 import { snapshotCapabilities } from '../shared/tool-policy';
 import type { Knowledge } from '../shared/knowledge';
 import { commands, type ApiProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
@@ -37,6 +38,7 @@ export class CoreService {
     return text;
   }
   readonly sources: Sources;
+  readonly workspaceGrants: WorkspaceGrants;
   readonly runner: Runner;
   readonly teams: TeamRunner;
   readonly backups: Backups;
@@ -55,12 +57,20 @@ export class CoreService {
     this.knowledge = new KnowledgeBase(store);
     this.notify = () => { if (!this.store.db.isOpen) return; this.policy.captureHandoffs(); notify(); };
     this.sources = new Sources(store, profiler);
+    this.workspaceGrants = new WorkspaceGrants(store);
     this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute });
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.routines.isBusy() || this.sources.isChecking() || store.all<Task>('tasks').some(task => this.runner.isActive(task.id) || this.teams.isActive(task.id)), this.notify);
     this.templates = new TeamTemplates(store, this.notify);
     this.routines = new Routines(store, this.sources, this.notify, (input, next) => this.createTask(input, next), clock);
     this.policy.captureHandoffs();
+  }
+  async grantWorkspace(raw: unknown) {
+    const grant = await this.workspaceGrants.grant(raw);
+    this.teams.cancel(grant.taskId);
+    this.runner.cancel(grant.taskId);
+    this.notify();
+    return grant;
   }
   async command(command: Command, raw: unknown): Promise<unknown> {
     if (!Object.hasOwn(commands, command)) throw new Error('IPC command không được phép.');
@@ -189,6 +199,15 @@ export class CoreService {
         if (this.runner.isActive(task.id) || this.teams.isActive(task.id)) throw new Error('Task đang chạy.');
         if (task.status === 'completed') throw new Error('Task đã hoàn tất. Tạo task mới để chạy lại.');
         this.start(task); return;
+      }
+      case 'workspaceAccess': return this.workspaceGrants.view(commands.workspaceAccess.parse(args).taskId);
+      case 'revokeWorkspace': {
+        const { taskId } = commands.revokeWorkspace.parse(args);
+        this.workspaceGrants.revoke(taskId);
+        this.teams.cancel(taskId);
+        this.runner.cancel(taskId);
+        this.notify();
+        return;
       }
       case 'setToolCapabilities': {
         const input = commands.setToolCapabilities.parse(args);
@@ -543,8 +562,10 @@ export class CoreService {
         db.prepare('DELETE FROM events WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM artifacts WHERE run_id=? AND id NOT IN (SELECT value FROM json_each(?))').run(run.id, JSON.stringify([...keepArtifacts]));
         db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);
+        for (const table of ['tool_calls', 'workspace_copies', 'workspace_processes']) db.prepare(`DELETE FROM ${table} WHERE run_id=?`).run(run.id);
         db.prepare('DELETE FROM leases WHERE run_id=?').run(run.id);
       }
+      db.prepare('DELETE FROM workspace_grants WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM profiles WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM preflights WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM task_search WHERE id=?').run(task.id);

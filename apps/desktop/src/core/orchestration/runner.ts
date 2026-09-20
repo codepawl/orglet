@@ -1,3 +1,5 @@
+import { WebTools } from '../tools/web-tools';
+import { ToolCalls } from '../storage/tool-calls';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
 import { assertToolCall, toolDefinitions, toolsFor, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswerSchema, HarnessAnswer, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
@@ -300,6 +302,27 @@ export class Runner {
         const call = reply.calls[0];
         assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
         messages.push({ role: 'assistant', tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
+        if (call.name === 'web_read_url' || call.name === 'web_search') {
+          const web = new WebTools();
+          const input = JSON.parse(call.arguments);
+          const result = await executeReadTool({ signal, timeoutMs: toolDefinitions[call.name].timeoutMs,
+            authorize: () => assertCapability(run, this.store.get<Task>('tasks', task.id), 'network.web'),
+            execute: toolSignal => new ToolCalls(this.store).execute({
+              runId: run.id, callId: call.id, name: call.name, arguments: input, replay: 'read',
+              authorize: () => {
+                toolSignal.throwIfAborted();
+                assertCapability(run, this.store.get<Task>('tasks', task.id), 'network.web');
+              },
+              perform: async () => call.name === 'web_search' ? await web.search(input, toolSignal) : await web.read(input, toolSignal),
+            }),
+          });
+          this.event(run.id, call.name === 'web_search' ? 'Đã tìm kiếm web; kết quả chưa được xác minh.' : 'Đã đọc trang web dưới dạng dữ liệu không đáng tin.');
+          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
+          this.checkpoints.committed(checkpoint);
+          this.notify();
+          continue;
+        }
         if (call.name === 'reply') {
           if (needsReport(run)) throw new Error('Hội có checklist bắt buộc cần báo cáo đầy đủ, không phải tin nhắn.');
           const { message, title, knowledgeProposals } = ChatReply.parse(JSON.parse(call.arguments));

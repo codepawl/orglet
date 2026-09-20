@@ -3,6 +3,7 @@ import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { resolveOsxNotarize, resolveOsxSign } from './forge.macos';
+import { join } from 'node:path';
 
 // Ship only the Vite build plus DuckDB's native addon tree. pnpm installs the
 // current platform's optional bindings; listing every OS here means a Mac make
@@ -27,6 +28,11 @@ const included = [
 
 const config: ForgeConfig = {
   packagerConfig: {
+    extraResource: process.platform === 'win32' && process.arch === 'x64' ? [
+      join(__dirname, 'node_modules/@microsoft/mxc-sdk/bin/x64/wxc-exec.exe'),
+      join(__dirname, 'node_modules/@microsoft/mxc-sdk/LICENSE.md'),
+      join(__dirname, '.vite/build/workspace-helper.cjs'),
+    ] : [],
     asar: { unpack: '**/*.{node,dll,dylib,so}' },
     executableName: 'Orglet',
     appBundleId: 'com.codepawl.orglet',
@@ -54,6 +60,7 @@ const config: ForgeConfig = {
       { entry: 'apps/desktop/src/preload/index.ts', config: 'vite.preload.config.ts', target: 'preload' },
       { entry: 'apps/desktop/src/core/entry.ts', config: 'vite.core.config.ts' },
       { entry: 'apps/desktop/src/profiler/entry.ts', config: 'vite.profiler.config.ts' },
+      { entry: 'apps/desktop/src/core/tools/workspace-helper.ts', config: 'vite.workspace.config.ts' },
     ],
     renderer: [{ name: 'main_window', config: 'vite.renderer.config.ts' }],
   })],
