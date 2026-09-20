@@ -5,7 +5,7 @@ import { ToolCapabilities, type ToolCapability } from './tool-policy';
 import type { WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermission } from './workspace-access';
 import type { WorkspaceRecoveryView } from './workspace-recovery';
 import { ReadRecoveryFile, type RecoveryFile, ReadRecoveryOutput, RetireWorkspaceAttempt, type RecoveryOutput } from './workspace-recovery';
-import { ProfileArgs, type DataFormat, type DatasetProfile, type ProfileRecord } from './profiles';
+import { ExactMatchRequest, ProfileArgs, type DataFormat, type DatasetProfile, type ProfileRecord } from './profiles';
 import { PreflightPolicy, type PreflightRecord } from './preflight';
 import { Schedule, WorkHours } from './schedule';
 import { SkillPackage, type PackageReview } from './skill-package';
@@ -141,7 +141,7 @@ export type FolderIntake = { sources: Source[]; skipped: { name: string; reason:
 export type TaskStatus = 'queued' | 'running' | 'pausing' | 'paused' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted' | 'waiting_budget' | 'waiting_input';
 export type Task = { toolCapabilities?: ToolCapability[]; id: string; brief: string; title?: string; workerId: string; teamId?: string; teamSnapshot?: Team; assignees?: 'all' | string[]; archivedAt?: string; deletedAt?: string; status: TaskStatus; createdAt: string; budgetMicros: number; sourceIds: string[]; excludedSources?: FolderIntake['skipped']; consent: boolean; providerScopes?: ProviderScope[]; accepted: boolean; /** A new input was saved while an older run was stopping; dispatch only after it settles. */ pendingStart?: boolean; /** Stamp of the result the user last opened; unread when it differs from `taskResultStamp`. */ seenStamp?: string; /** Latest saved answer/report id, part of the result stamp. */ lastArtifactId?: string; /** When the user last opened this task. */ seenAt?: string; routineId?: string; pauseReason?: 'shift'; handoff?: Handoff; evidenceRequests?: EvidenceRequest[]; decisionRequests?: DecisionRequest[]; inputRevision?: number; currentInput?: RunInput };
 export type RunStage = 'plan' | 'member' | 'synthesis' | 'group';
-export type Run = { id: string; taskId: string; stage?: RunStage; status: TaskStatus; snapshot: { workspaceGrant?: WorkspaceGrantSnapshot; assignment?: z.infer<typeof PlanAssignment>; reassignment?: import('./team-messages').TeamReassignment; toolCapabilities?: ToolCapability[]; worker: Worker; skill: Skill; team?: Team; input?: RunInput; context?: RunContext; workFrame?: WorkFrame; inputRevision?: number; upstreamArtifactIds?: string[]; preflightId?: string; model?: string; pricingVersion?: string; plan?: TeamPlan }; startedAt: string; error: string | null };
+export type Run = { id: string; taskId: string; stage?: RunStage; status: TaskStatus; snapshot: { workspaceGrant?: WorkspaceGrantSnapshot; assignment?: z.infer<typeof PlanAssignment>; reassignment?: import('./team-messages').TeamReassignment; toolCapabilities?: ToolCapability[]; worker: Worker; skill: Skill; team?: Team; input?: RunInput; context?: RunContext; workFrame?: WorkFrame; inputRevision?: number; upstreamArtifactIds?: string[]; preflightId?: string; scoreProfileIds?: string[]; model?: string; pricingVersion?: string; plan?: TeamPlan }; startedAt: string; error: string | null };
 export type Activity = { id: string; runId: string; sequence?: number; message: string; createdAt: string; teamMessage?: import('./team-messages').TeamMessage };
 export type Artifact = { id: string; runId: string; report: Report; hash: string; createdAt: string };
 export type Usage = { chargedMicros: number; reservedMicros: number; uncertainCount: number; inputTokens: number; outputTokens: number };
@@ -195,6 +195,7 @@ export const commands = {
   sourceMetadata: z.object({ ids: z.array(Id).max(20) }),
   profileSources: ProfileArgs.extend({ taskId: Id }),
   auditRunLog: RunAuditArgs.extend({ taskId: Id }),
+  scoreExactMatch: ExactMatchRequest.safeExtend({ taskId: Id }),
   cancelCheckers: z.object({ id: Id }),
   accept: z.object({ id: Id }),
   markTaskSeen: z.object({ id: Id }),
@@ -222,7 +223,7 @@ export const commands = {
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { reconcileBudget: void; recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
+export type Results = { reconcileBudget: void; recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;

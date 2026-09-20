@@ -318,6 +318,13 @@ export class CoreService {
         const result = await this.sources.profile([input.sourceId], task.sourceIds, null, undefined, { taskId: task.id }, { direction: input.direction });
         this.notify(); return result;
       }
+      case 'scoreExactMatch': {
+        const { taskId, ...request } = commands.scoreExactMatch.parse(args);
+        const task = this.store.get<Task>('tasks', taskId);
+        const result = await this.sources.profile([request.predictionSourceId, request.answerSourceId], task.sourceIds,
+          request.idColumn, undefined, { taskId: task.id }, undefined, request);
+        this.notify(); return result;
+      }
       case 'cancelCheckers': this.sources.cancelChecks((args as { id: string }).id); return;
       case 'accept': {
         const task = this.store.get<Task>('tasks', (args as { id: string }).id);

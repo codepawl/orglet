@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const ReferenceIds = z.array(z.string().uuid()).max(200);
 export const ReviewPolicy = z.object({
-  requiredChecks: z.array(z.object({ name: z.string().trim().min(1).max(200), checker: z.enum(['none', 'run_audit', 'pair_alignment']) }).strict()).min(1).max(20).refine(checks => new Set(checks.map(check => check.name.toLowerCase())).size === checks.length, 'Required checks must be unique'),
+  requiredChecks: z.array(z.object({ name: z.string().trim().min(1).max(200), checker: z.enum(['none', 'run_audit', 'pair_alignment', 'exact_match_accuracy']) }).strict()).min(1).max(20).refine(checks => new Set(checks.map(check => check.name.toLowerCase())).size === checks.length, 'Required checks must be unique'),
 }).strict();
 export type ReviewPolicy = z.infer<typeof ReviewPolicy>;
 export const EvidenceRequest = z.object({

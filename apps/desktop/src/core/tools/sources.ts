@@ -3,7 +3,7 @@ import { basename, dirname, resolve, extname, join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Store, id, now } from '../storage/database';
 import type { Source, FolderIntake } from '../../shared/contracts';
-import { DataFormat, type ProfileExecutor, type DatasetProfile, type ProfileInput } from '../../shared/profiles';
+import { DataFormat, type ExactMatchRequest, type ProfileExecutor, type DatasetProfile, type ProfileInput } from '../../shared/profiles';
 
 const MAX_BYTES = 256 * 1024;
 export const fingerprint = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
@@ -123,18 +123,18 @@ export class Sources {
     if (fingerprint(bytes) !== source.hash) throw new Error('Nguồn đã thay đổi. Chọn lại tệp để tạo manifest mới.');
     return bytes;
   }
-  async profile(sourceIds: string[], allowedIds: string[], idColumn: string | null, signal?: AbortSignal, owner?: { id?: string; taskId: string; runId?: string }, runAudit?: ProfileInput['runAudit']): Promise<DatasetProfile> {
+  async profile(sourceIds: string[], allowedIds: string[], idColumn: string | null, signal?: AbortSignal, owner?: { id?: string; taskId: string; runId?: string }, runAudit?: ProfileInput['runAudit'], exactMatch?: ExactMatchRequest): Promise<DatasetProfile> {
     const controller = new AbortController();
     if (owner) {
       const checks = this.checks.get(owner.taskId) ?? new Set<AbortController>();
       checks.add(controller); this.checks.set(owner.taskId, checks);
     }
-    try { return await this.profileOnce(sourceIds, allowedIds, idColumn, signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, owner, runAudit); }
+    try { return await this.profileOnce(sourceIds, allowedIds, idColumn, signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, owner, runAudit, exactMatch); }
     finally { if (owner) { this.checks.get(owner.taskId)?.delete(controller); if (!this.checks.get(owner.taskId)?.size) this.checks.delete(owner.taskId); } }
   }
   isChecking() { return this.checks.size > 0; }
   cancelChecks(taskId: string) { for (const controller of this.checks.get(taskId) ?? []) controller.abort(); }
-  private async profileOnce(sourceIds: string[], allowedIds: string[], idColumn: string | null, signal?: AbortSignal, owner?: { id?: string; taskId: string; runId?: string }, runAudit?: ProfileInput['runAudit']): Promise<DatasetProfile> {
+  private async profileOnce(sourceIds: string[], allowedIds: string[], idColumn: string | null, signal?: AbortSignal, owner?: { id?: string; taskId: string; runId?: string }, runAudit?: ProfileInput['runAudit'], exactMatch?: ExactMatchRequest): Promise<DatasetProfile> {
     if (!this.executor) throw new Error('Checker chưa sẵn sàng.');
     const files = [];
     for (const sourceId of sourceIds) {
@@ -145,7 +145,7 @@ export class Sources {
       files.push({ sourceId, format, base64: (await this.readBytes(sourceId, allowedIds, true)).toString('base64') });
     }
     signal?.throwIfAborted();
-    const result = await this.executor({ files, idColumn, ...(runAudit ? { runAudit } : {}) }, signal);
+    const result = await this.executor({ files, idColumn, ...(runAudit ? { runAudit } : {}), ...(exactMatch ? { exactMatch } : {}) }, signal);
     signal?.throwIfAborted();
     for (const sourceId of sourceIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
     if (owner) this.store.put('profiles', { id: id(), ...owner, createdAt: now(), sourceHashes: Object.fromEntries(sourceIds.map(sourceId => [sourceId, this.store.get<Source>('sources', sourceId).hash])), result }, { column: 'task_id', value: owner.taskId });
