@@ -124,6 +124,19 @@ it('isolates writes until integration and refuses injected internal operations',
   await expect(runtime.execute(run, id(), { operation: 'blob', path: 'note.txt', offset: 0 }, signal())).rejects.toThrow('policy');
 });
 
+it('lets a planner inspect the granted workspace without write, command or web tools', async () => {
+  const planRun: Run = { ...run, stage: 'plan' };
+  store.update('runs', planRun);
+  const names = toolsFor(planRun, task).map(tool => tool.type === 'function' ? tool.function.name : '');
+  expect(names).toEqual(expect.arrayContaining(['submit_plan', 'workspace_list', 'workspace_read', 'workspace_search']));
+  expect(names).not.toEqual(expect.arrayContaining(['workspace_write', 'workspace_start_process', 'web_search']));
+  const runtime = fixture();
+  const content = await runtime.execute(planRun, id(), { operation: 'read', path: 'note.txt', offset: 0 }, signal());
+  expect(content).toMatchObject({ content: 'original' });
+  grants.revoke(task.id);
+  await expect(runtime.execute(planRun, id(), { operation: 'read', path: 'note.txt', offset: 0 }, signal())).rejects.toThrow();
+});
+
 it.each(['claude-code', 'codex', 'cursor'] as const)('blocks cached workspace context after revocation for %s', async provider => {
   run.snapshot.worker.provider = provider;
   task.providerScopes = [provider];

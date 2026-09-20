@@ -89,7 +89,12 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
 
 export function toolsFor(run: Run, task: Task): ChatCompletionTool[] {
   return Object.entries(toolDefinitions).filter(([name, definition]) => {
-    if (run.stage === 'plan') return name === 'submit_plan';
+    if (run.stage === 'plan') {
+      return name === 'submit_plan' || (['workspace_list', 'workspace_read', 'workspace_search'].includes(name)
+        && run.snapshot.worker.provider !== 'demo'
+        && run.snapshot.workspaceGrant?.taskId === task.id
+        && run.snapshot.workspaceGrant.permissions.includes('read'));
+    }
     if (['resolve_team_messages', 'reassign_team_work'].includes(name) && (run.stage !== 'synthesis'
       || run.snapshot.worker.id !== run.snapshot.team?.synthesizerId)) return false;
     if (name === 'reassign_team_work' && run.snapshot.worker.provider === 'demo') return false;
