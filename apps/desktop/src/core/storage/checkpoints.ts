@@ -5,6 +5,7 @@ import { Store, now } from './database';
 export type Checkpoint = {
   id: string; step: number; phase: 'ready' | 'requesting' | 'replied' | 'done';
   messages: ChatCompletionMessageParam[]; readIds: string[]; reply?: ModelReply;
+  reportCorrections?: number;
   /** CLI-reported estimates, separate from settled API charges. */
   harnessCostMicros?: number;
 };

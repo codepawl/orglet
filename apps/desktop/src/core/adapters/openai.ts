@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import { modelCatalog, type CatalogProvider } from './catalog';
 
-export type ModelReply = { calls: { id: string; name: string; arguments: string }[]; usage?: { input: number; output: number } };
+export type ModelReply = { calls: { id: string; name: string; arguments: string }[]; usage?: { input: number; output: number };
+  validationFailure?: { toolName: 'submit_report'; issues: { path: string; code: string; expected?: string }[] } };
 export interface ModelAdapter {
   request(messages: ChatCompletionMessageParam[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply>;
 }

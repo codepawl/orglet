@@ -153,6 +153,56 @@ it('does not complete a file assignment when its report claims success without a
   expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('original');
 });
 
+it('lets Codex correct an invalid report without repeating a committed workspace write', async () => {
+  run = { ...run, stage: 'member', snapshot: { ...run.snapshot,
+    worker: { ...run.snapshot.worker, provider: 'codex' },
+    assignment: { workerId: run.snapshot.worker.id, brief: 'Update note.txt', expectedOutput: 'Changed note.txt',
+      dependsOn: [], writeResources: ['note.txt'] },
+  } };
+  task = { ...task, providerScopes: ['codex'] };
+  store.update('runs', run);
+  store.update('tasks', task);
+  let requests = 0;
+  const runtime = fixture(async options => {
+    options.authorize();
+    const current = await readFile(join(options.root, options.path));
+    const hash = createHash('sha256').update(current).digest('hex');
+    if (hash !== options.expectedHash) return { status: 'conflict', hash, backupPath: '', created: false };
+    await writeFile(join(options.root, options.path), options.bytes);
+    return { status: 'applied', hash: createHash('sha256').update(options.bytes).digest('hex'), backupPath: '', created: false };
+  });
+  const core = new CoreService(store, () => {}, async () => { throw new Error('Unexpected API dispatch'); },
+    undefined, undefined, {
+      detect: async () => [{ ...missingHarness('codex', 'win32'), executable: 'fixture', auth: 'logged_in', status: 'signed_in', version: 'fixture' }],
+      execute: async request => {
+        requests++;
+        const context = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf('\n\n') + 2));
+        if (requests === 1) return { output: { call: { name: 'workspace_read', arguments: JSON.stringify({ path: 'note.txt', offset: 0 }) } }, costUsd: null };
+        if (requests === 2) {
+          const read = JSON.parse(context.messages.at(-1).content);
+          return { output: { call: { name: 'workspace_write', arguments: JSON.stringify({ path: 'note.txt', expectedHash: read.hash, content: 'updated' }) } }, costUsd: null };
+        }
+        if (requests === 3) return { output: { call: { name: 'submit_report', arguments: JSON.stringify({
+          title: 'UNSAFE_INVALID_BODY', findings: [], limitations: [], assignmentOutcome: 'completed',
+        }) } }, costUsd: null };
+        expect(context.tools.map((tool: { function: { name: string } }) => tool.function.name)).toEqual(['submit_report']);
+        expect(request.prompt).not.toContain('UNSAFE_INVALID_BODY');
+        expect(String(store.db.prepare('SELECT data FROM checkpoints WHERE id=?').get(run.id)!.data)).not.toContain('UNSAFE_INVALID_BODY');
+        return { output: { call: { name: 'submit_report', arguments: JSON.stringify({
+          title: 'Updated note', summary: 'Updated note.txt.', findings: [], limitations: [], assignmentOutcome: 'completed',
+        }) } }, costUsd: null };
+      },
+    }, undefined, undefined, runtime);
+  await core.runner.run(task, run);
+  const detail = store.detail(task.id);
+  expect(requests).toBe(4);
+  expect(detail.task.status).toBe('completed');
+  expect(detail.events.some(event => event.message.includes('summary (invalid_type'))).toBe(true);
+  expect(JSON.stringify(detail.events)).not.toContain('UNSAFE_INVALID_BODY');
+  expect(store.db.prepare("SELECT COUNT(*) AS count FROM tool_calls WHERE run_id=? AND replay='never'").get(run.id)!.count).toBe(1);
+  expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('updated');
+});
+
 it.each(['claude-code', 'codex', 'cursor'] as const)('blocks cached workspace context after revocation for %s', async provider => {
   run.snapshot.worker.provider = provider;
   task.providerScopes = [provider];
