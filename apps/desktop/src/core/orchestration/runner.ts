@@ -435,6 +435,13 @@ export class Runner {
         if (['send_team_message', 'read_team_messages', 'acknowledge_team_messages', 'resolve_team_messages'].includes(call.name)) {
           const mailbox = new TeamMailbox(this.store);
           const argumentsValue = JSON.parse(call.arguments);
+          const recipientError = call.name === 'send_team_message' ? mailbox.recipientError(run, argumentsValue) : null;
+          if (recipientError) {
+            messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(recipientError) });
+            checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
+            this.checkpoints.committed(checkpoint);
+            continue;
+          }
           const result = await new ToolCalls(this.store).execute({
             runId: run.id, callId: call.id, name: call.name, arguments: argumentsValue,
             replay: call.name === 'read_team_messages' ? 'read' : 'idempotent',
