@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { Store } from './database';
+import { WorkspaceRecovery } from './workspace-recovery';
 
 const RecordedCall = z.object({
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
@@ -13,6 +14,7 @@ export class ToolCalls {
   constructor(private store: Store) {}
 
   assertEffectsResolved(runId: string) {
+    new WorkspaceRecovery(this.store).assertAvailable(runId);
     // A retry creates a new run and call id. Neither makes a previous unknown effect safe.
     const unresolved = this.store.db.prepare(`
       SELECT previous.call_id FROM tool_calls previous
@@ -34,6 +36,7 @@ export class ToolCalls {
     authorize: () => void;
     perform: () => Promise<Result> | Result;
   }): Promise<Result> {
+    new WorkspaceRecovery(this.store).assertAvailable(options.runId);
     options.authorize();
     const fingerprint = createHash('sha256').update(JSON.stringify([options.name, options.replay, options.arguments])).digest('hex');
     const retained = this.store.transaction(() => {

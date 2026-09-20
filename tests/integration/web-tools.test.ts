@@ -199,7 +199,7 @@ describe('web execution permission', () => {
       task.toolCapabilities = [];
       expect(() => assertToolCall(run, task, 'web_read_url', '{"url":"https://example.com"}')).toThrow('policy');
       for (const provider of ['claude-code', 'codex', 'cursor']) {
-        expect(() => snapshotCapabilities(provider, ['network.web'])).toThrow('chưa hỗ trợ');
+        expect(snapshotCapabilities(provider, ['network.web'])).toEqual(['network.web']);
         expect(snapshotCapabilities(provider)).not.toContain('network.web');
       }
     } finally { store.close(); }

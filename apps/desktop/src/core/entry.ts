@@ -8,6 +8,10 @@ import { ApiProvider, Id, type Command } from '../shared/contracts';
 import { CATALOG_HINT_IDS } from '../shared/models';
 import { MODEL_LIST_ENDPOINTS } from './models/fetch';
 import { DatasetProfile, type ProfileExecutor } from '../shared/profiles';
+import { WindowsSandbox } from './tools/sandbox';
+import { WorkspaceFilesRuntime } from './tools/workspace-files-runtime';
+import { WorkspaceIntegration } from './tools/workspace-integration';
+import { WorkspaceRuntime } from './tools/workspace-runtime';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
@@ -35,6 +39,17 @@ const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject
   port.postMessage({ type: 'profile', id, input });
 });
 const store = new Store(join(process.argv[2], 'orglet.sqlite'));
+const runtimePaths = z.object({ sandboxExecutable: z.string(), helperPath: z.string(), integrationExecutable: z.string(), gitExecutable: z.string() })
+  .strict().parse(JSON.parse(process.argv[3]));
+const workspaceDirectory = join(process.argv[2], 'workspaces');
+const workspaceFiles = new WorkspaceFilesRuntime({
+  sandbox: new WindowsSandbox(runtimePaths.sandboxExecutable), helperPath: runtimePaths.helperPath,
+  stateDirectory: workspaceDirectory, runtimeExecutable: process.execPath,
+  gitExecutable: runtimePaths.gitExecutable,
+});
+const workspaceRuntime = new WorkspaceRuntime(store, workspaceFiles,
+  new WorkspaceIntegration(store, runtimePaths.integrationExecutable, workspaceDirectory),
+  () => port.postMessage({ type: 'changed' }), workspaceFiles);
 const core = new CoreService(store, () => port.postMessage({ type: 'changed' }), async (provider, model) => {
   if (!ApiProvider.safeParse(provider).success) throw new Error('Provider chưa được hỗ trợ.');
   const key = await requestKey(provider);
@@ -49,7 +64,7 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   return new OpenAIAdapter(key, { model });
 }, profile, undefined, undefined, undefined, {
   readKey: provider => requestKey(provider),
-});
+}, workspaceRuntime);
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
 port.on('message', async ({ data }) => {
   const envelope = z.object({ id: z.string(), command: z.string(), args: z.unknown() }).safeParse(data);
@@ -63,6 +78,7 @@ port.on('message', async ({ data }) => {
     const value = command === 'importSources'
       ? await core.sources.import(z.array(z.string().min(1).max(32768)).max(20).parse(args))
       : command === 'importFolder' ? await core.sources.importFolder(z.string().min(1).max(32768).parse(args))
+      : command === 'grantWorkspace' ? await core.grantWorkspace(args)
       : command === 'exportArtifact' ? core.exportMarkdown(Id.parse(args))
       : command === 'feedbackText' ? core.feedbackText(Id.parse(args))
       : command === 'backupExport' ? core.backups.export()

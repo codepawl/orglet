@@ -6,6 +6,7 @@ import { WorkspaceManifest, WorkspaceOperation } from '../../shared/workspace-to
 import { WindowsSandbox } from './sandbox';
 import type { SandboxRequest, SandboxResult } from './sandbox';
 import { StartWorkspaceProcess } from '../../shared/workspace-processes';
+import { prepareGitWorktree } from './workspace-git';
 
 const HelperReply = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), value: z.unknown() }).strict(),
@@ -29,7 +30,16 @@ export class WorkspaceFilesRuntime {
     const seed = join(session, 'seed');
     await mkdir(seed, { recursive: true });
     const manifest = WorkspaceManifest.parse(await this.execute(seed, { operation: 'snapshot', source }, signal, [source]));
-    return { directory: seed, manifest, kind: 'copy' as const };
+    if (!manifest.omitted.some(path => path.toLowerCase() === '.git')) {
+      return { directory: seed, manifest, kind: 'copy' as const };
+    }
+    if (!this.options.gitExecutable) throw new Error('Cần Git cho Windows để tạo worktree riêng cho repository này.');
+    const executable = await realpath(this.options.gitExecutable).catch(() => {
+      throw new Error('Cần Git cho Windows để tạo worktree riêng cho repository này.');
+    });
+    const preparationSignal = AbortSignal.any([signal, AbortSignal.timeout(120000)]);
+    await prepareGitWorktree(session, { operation: 'prepare_git', executable }, preparationSignal);
+    return { directory: join(session, 'worktree'), manifest, kind: 'git-worktree' as const };
   }
 
   async execute(directory: string, raw: unknown, signal: AbortSignal, readOnlyPaths: string[] = []): Promise<unknown> {

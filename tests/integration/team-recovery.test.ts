@@ -6,6 +6,7 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import { ToolCalls } from '../../apps/desktop/src/core/storage/tool-calls';
 import { toolDefinitions } from '../../apps/desktop/src/core/tools/catalog';
+import { isHarness, missingHarness } from '../../apps/desktop/src/shared/harness';
 import type { ModelAdapter } from '../../apps/desktop/src/core/adapters/openai';
 import { isPlanRequest, memberIdsFromPlanPrompt } from './team-plan';
 import type { Run, Skill, Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
@@ -93,7 +94,7 @@ it.each(['queued', 'completed'] as const)('recovers the same decision after an i
   await expect(new ToolCalls(store).execute({ ...operation, perform: () => { throw new Error('Must use committed journal output'); } })).resolves.toEqual(resumed);
 });
 
-it.each((['openai'] as const).flatMap(provider =>
+it.each((['openai', 'claude-code', 'codex', 'cursor'] as const).flatMap(provider =>
   (['complete', 'pause', 'timeout'] as const).map(mode => ({ provider, mode }))))('recovers a prerequisite with $provider (mode=$mode)', async ({ provider, mode }) => {
   if (mode === 'timeout') toolDefinitions.reassign_team_work.timeoutMs = 200;
   let firstId = '';
@@ -143,7 +144,16 @@ it.each((['openai'] as const).flatMap(provider =>
     }
     return respond('submit_report', { title: 'Complete', summary: 'Both assignments completed', findings: [], limitations: [] });
   } };
-  const core = new CoreService(store, () => {}, async () => adapter);
+  const core = new CoreService(store, () => {}, async () => adapter, undefined, undefined, {
+    detect: async () => isHarness(provider) ? [{ ...missingHarness(provider, 'win32'), executable: 'fixture', auth: 'logged_in', status: 'signed_in' }] : [],
+    execute: async request => {
+      expect(request.coreToolsOnly).toBe(true);
+      const context = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf('\n\n') + 2));
+      const response = await adapter.request(context.messages, context.tools, request.signal, () => {});
+      const call = response.calls[0];
+      return { output: { call: { name: call.name, arguments: JSON.parse(call.arguments) } }, costUsd: null };
+    },
+  });
   const team = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
   for (const workerId of [...team.memberIds, team.synthesizerId]) {
     await core.command('saveWorker', { ...store.get<Worker>('workers', workerId), provider });

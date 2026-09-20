@@ -1,5 +1,7 @@
-import { WorkspaceGrants } from './storage/workspace-grants';
+import { WorkspaceRecovery } from './storage/workspace-recovery';
+import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { snapshotCapabilities } from '../shared/tool-policy';
+import { WorkspaceGrants } from './storage/workspace-grants';
 import type { Knowledge } from '../shared/knowledge';
 import { commands, type ApiProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
@@ -52,13 +54,13 @@ export class CoreService {
   private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
   private modelListEpoch = new Map<ModelListProviderId, number>();
   private modelListFailed = new Set<ModelListProviderId>();
-  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = { detect: () => detectHarnesses(), execute: executeHarness }, private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}) {
+  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = { detect: () => detectHarnesses(), execute: executeHarness }, private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
     this.notify = () => { if (!this.store.db.isOpen) return; this.policy.captureHandoffs(); notify(); };
     this.sources = new Sources(store, profiler);
     this.workspaceGrants = new WorkspaceGrants(store);
-    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute });
+    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.routines.isBusy() || this.sources.isChecking() || store.all<Task>('tasks').some(task => this.runner.isActive(task.id) || this.teams.isActive(task.id)), this.notify);
     this.templates = new TeamTemplates(store, this.notify);
@@ -199,6 +201,17 @@ export class CoreService {
         if (this.runner.isActive(task.id) || this.teams.isActive(task.id)) throw new Error('Task đang chạy.');
         if (task.status === 'completed') throw new Error('Task đã hoàn tất. Tạo task mới để chạy lại.');
         this.start(task); return;
+      }
+      case 'workspaceRecovery': return new WorkspaceRecovery(this.store).view(commands.workspaceRecovery.parse(args).taskId);
+      case 'recoveryFile': {
+        if (!this.workspaceRuntime) throw new Error('Workspace runtime chưa được cấu hình.');
+        return this.workspaceRuntime.inspectFile(args, taskId => this.runner.isActive(taskId) || this.teams.isActive(taskId));
+      }
+      case 'recoveryProcessOutput': return new WorkspaceRecovery(this.store).output(args);
+      case 'retireWorkspaceAttempt': {
+        new WorkspaceRecovery(this.store).retire(args, taskId => this.runner.isActive(taskId) || this.teams.isActive(taskId));
+        this.notify();
+        return;
       }
       case 'workspaceAccess': return this.workspaceGrants.view(commands.workspaceAccess.parse(args).taskId);
       case 'revokeWorkspace': {
@@ -562,13 +575,16 @@ export class CoreService {
         db.prepare('DELETE FROM events WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM artifacts WHERE run_id=? AND id NOT IN (SELECT value FROM json_each(?))').run(run.id, JSON.stringify([...keepArtifacts]));
         db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);
-        for (const table of ['tool_calls', 'workspace_copies', 'workspace_processes']) db.prepare(`DELETE FROM ${table} WHERE run_id=?`).run(run.id);
+        db.prepare('DELETE FROM tool_calls WHERE run_id=?').run(run.id);
+        db.prepare('DELETE FROM workspace_copies WHERE run_id=?').run(run.id);
+        db.prepare('DELETE FROM workspace_processes WHERE run_id=?').run(run.id);
+        db.prepare('DELETE FROM settings WHERE id=?').run(`workspace-retired:${run.id}`);
         db.prepare('DELETE FROM leases WHERE run_id=?').run(run.id);
       }
-      db.prepare('DELETE FROM workspace_grants WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM profiles WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM preflights WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM task_search WHERE id=?').run(task.id);
+      db.prepare('DELETE FROM workspace_grants WHERE task_id=?').run(task.id);
       for (const item of proposed) for (const table of ['knowledge', 'knowledge_revisions', 'knowledge_search']) db.prepare(`DELETE FROM ${table} WHERE id=?`).run(item.id);
       if (tombstone) {
         for (const run of runs) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, ...(run.snapshot.input ? { input: { ...run.snapshot.input, brief: removed } } : {}), context: undefined, preflightId: undefined, upstreamArtifactIds: undefined } });
@@ -664,7 +680,7 @@ export class CoreService {
     if (group) { void this.teams.chat(task, group); return; }
     const worker = this.store.get<Worker>('workers', task.workerId);
     const skill = this.store.get<Skill>('skills', worker.skillId);
-    const run: Run = { id: id(), taskId: task.id, status: 'queued', snapshot: { toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, inputRevision: task.inputRevision ?? 0, input: task.currentInput ?? { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };
+    const run: Run = { id: id(), taskId: task.id, status: 'queued', snapshot: { workspaceGrant: this.workspaceGrants.snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, inputRevision: task.inputRevision ?? 0, input: task.currentInput ?? { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };
     this.store.put('runs', run, { column: 'task_id', value: task.id });
     // Runner records terminal failures itself; never launch an unobserved provider promise.
     void this.runner.run(task, run).catch(() => {
@@ -677,7 +693,8 @@ export class CoreService {
     const task = this.store.get<Task>('tasks', run.taskId);
     const report = artifact.report;
     // A chat answer exports as the message itself.
-    if (report.format === 'chat') return report.summary;
+    if (report.format === 'chat') return [report.summary,
+      ...(report.limitations.length ? ['## Limitations', ...report.limitations.map(limitation => `- ${limitation}`)] : [])].join('\n\n');
     const findings = report.findings.map(finding => [
       `## ${finding.title}`, `${finding.severity} — ${finding.detail}`, `Coverage: ${finding.coverage}`,
       finding.category ? `Category: ${finding.category}` : '',

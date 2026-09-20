@@ -38,7 +38,7 @@ describe('tool policy boundary', () => {
     expect(ToolCapabilities.safeParse(['shell']).success).toBe(false);
     expect(ToolCapabilities.safeParse(['source.read', 'source.read']).success).toBe(false);
     for (const provider of ['claude-code', 'codex', 'cursor']) {
-      expect(() => snapshotCapabilities(provider, ['dataset.check'])).toThrow('chưa hỗ trợ');
+      expect(snapshotCapabilities(provider, ['dataset.check'])).toEqual(['dataset.check']);
       expect(snapshotCapabilities(provider)).toEqual(['source.read', 'skill.read']);
     }
   });
