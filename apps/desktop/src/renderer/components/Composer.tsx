@@ -191,21 +191,27 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   const reaction = useReaction(latestAnswer ?? '');
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0;
+  const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt);
   const send = () => {
     const extra = text.trim(); if (!extra || busy || blocked) return;
-    // A quote and a thumb are worth nothing if only the screen hears them, so they go in ahead of what was typed.
-    const brief = briefWithMarks(extra, reply, reaction);
     setText('');
+    if (detail.task.status === 'waiting_input' && pendingDecision) {
+      clearReplyTarget();
+      action(() => orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: extra }));
+      return;
+    }
+    // A quote and a reaction steer the next turn, so they belong in its brief.
+    const brief = briefWithMarks(extra, reply, reaction);
     clearReplyTarget();
     action(() => orglet.call('reviseTask', { taskId: detail.task.id, brief, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }));
   };
   return <div className="thread-composer">
-    {reply && <div className="composer-reply">
+    {reply && !pendingDecision && <div className="composer-reply">
       <Reply size={14} aria-hidden="true" />
       <p><strong>{reply.author}</strong><span>{reply.text}</span></p>
       <Button type="button" size="icon" aria-label={t('Bỏ trả lời')} title={t('Bỏ trả lời')} onClick={clearReplyTarget}><X size={14} /></Button>
     </div>}
-    <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={busy ? t('Đang làm việc…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={blocked}
+    <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={busy ? t('Đang làm việc…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={blocked}
       onStop={busy ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
       leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Đính kèm tệp')} title={t('Đính kèm tệp')} disabled={busy} onClick={openRevision}><Plus size={20} /></Button>} />

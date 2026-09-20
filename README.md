@@ -74,6 +74,8 @@ API team leads can inspect a granted workspace read-only before assigning paths,
 A mistyped team-message recipient gets an error with the valid participants so the worker can correct it in the same run. Structured reports can cite completed workspace process IDs for command checks; unsupported checks stay unassessed instead of discarding completed files.
 Workspace-only QA observations without a source citation remain visible as unverified limitations, and blocked QA work stays blocked for the lead to repair.
 
+When a worker or team lead needs a material choice before continuing, it can pause the current chat turn with a short question. Choosing an option or answering in the composer resumes that same run; the decision stays visible in Details. Answering does not extend workspace or network permissions. A restored backup retains the question history but cannot resume its excluded checkpoint.
+
 ## Install
 
 [Latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. The tag is public; Windows **Setup.exe** / **ZIP** assets on that release may still be empty. If they are missing, [build from source](#dev).

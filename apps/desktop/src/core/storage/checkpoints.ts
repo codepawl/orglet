@@ -32,10 +32,11 @@ export class Checkpoints {
       this.store.db.prepare("UPDATE step_attempts SET state='received' WHERE run_id=? AND step=?").run(checkpoint.id, checkpoint.step);
     });
   }
-  committed(checkpoint: Checkpoint, done = false) {
+  committed(checkpoint: Checkpoint, done = false, persist?: () => void) {
     this.store.transaction(() => {
       this.save({ ...checkpoint, phase: done ? 'done' : 'ready', reply: undefined });
       this.store.db.prepare("UPDATE step_attempts SET state='committed' WHERE run_id=? AND step=?").run(checkpoint.id, checkpoint.step - 1);
+      persist?.();
     });
   }
 }
