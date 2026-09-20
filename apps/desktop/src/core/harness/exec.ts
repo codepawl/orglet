@@ -1,5 +1,5 @@
 import { spawn, execFile } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HarnessId } from '../../shared/harness';
 import { cleanEnv, commandLine } from './detect';
@@ -18,6 +18,8 @@ export type HarnessRequest = {
   maxBudgetUsd: number;
   /** Exact `--model` / `-m` slug. Omitted so the CLI keeps its own default. */
   model?: string;
+  /** Tool selection is returned as JSON; native file tools must not bypass core authorization. */
+  coreToolsOnly?: boolean;
   /** Called as a streaming harness thinks, uses tools and writes. Harnesses that do not stream never call it. */
   onProgress?: (progress: HarnessProgress) => void;
 };
@@ -29,6 +31,11 @@ export type HarnessResult = {
 };
 export type HarnessExecutor = (request: HarnessRequest) => Promise<HarnessResult>;
 export class HarnessError extends Error {}
+export class HarnessTerminationError extends HarnessError {
+  constructor() {
+    super('Không xác nhận được harness đã dừng. Kiểm tra và dừng CLI trong Task Manager trước khi thử lại.');
+  }
+}
 
 export const HARNESS_TIMEOUT_MS = 15 * 60_000;
 // Streamed output repeats the answer as small events, so it is larger than the answer itself.
@@ -52,15 +59,15 @@ function modelFlag(harness: HarnessId, model?: string) {
   return harness === 'codex' ? ['-m', model] : ['--model', model];
 }
 
-export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model'>): string[] {
+export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly'>): string[] {
   const model = modelFlag(request.harness, request.model);
   if (request.harness === 'claude-code') {
-    return ['-p', ...model, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', '--max-budget-usd', request.maxBudgetUsd.toFixed(4)];
+    return ['-p', ...model, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', request.coreToolsOnly ? '' : 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', '--max-budget-usd', request.maxBudgetUsd.toFixed(4)];
   }
   if (request.harness === 'cursor') {
     return ['-p', ...model, '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', request.cwd, '--output-format', 'json'];
   }
-  return ['exec', ...model, '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), '--json', '-'];
+  return ['exec', ...model, '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'tools.view_image=false', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), '--json', '-'];
 }
 
 const authHint = (harness: HarnessId) => {
@@ -155,13 +162,46 @@ export function parseCodexOutput(jsonl: string, lastMessage: string | null): Har
   }
 }
 
-function killTree(pid: number | undefined) {
+async function killTree(pid: number | undefined): Promise<void> {
   if (!pid) return;
-  if (process.platform === 'win32') execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true }, () => {});
+  if (process.platform === 'win32') await new Promise<void>((resolve, reject) => {
+    execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true, timeout: 10_000 }, error => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
   else { try { process.kill(pid, 'SIGTERM'); } catch { /* already exited */ } }
 }
 
+export async function prepareHarnessToolPolicy(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'coreToolsOnly'>) {
+  if (request.harness !== 'cursor' || !request.coreToolsOnly) return;
+  // This directory is a fresh core-owned call directory, never the user's workspace.
+  const configurationDirectory = join(request.cwd, '.cursor');
+  await mkdir(configurationDirectory, { recursive: true });
+  await writeFile(join(configurationDirectory, 'cli.json'), JSON.stringify({ permissions: {
+    allow: [], deny: ['Shell(*)', 'Read(**)', 'Write(**)', 'WebFetch(*)', 'Mcp(*:*)'],
+  } }), { flag: 'wx' });
+}
+
+export async function stopHarnessProcess(pid: number | undefined, closed: Promise<void>, terminate = killTree, timeoutMs = 15_000): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      terminate(pid).then(() => closed),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new HarnessTerminationError()), timeoutMs);
+      }),
+    ]);
+  } catch {
+    throw new HarnessTerminationError();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const executeHarness: HarnessExecutor = async request => {
+  request.signal.throwIfAborted();
+  await prepareHarnessToolPolicy(request);
   if (request.harness === 'codex') await writeFile(join(request.cwd, SCHEMA_FILE), JSON.stringify(request.schema));
   // Both harnesses print events as they work; each parser turns them into live progress for the window.
   const claudeStream = request.harness === 'claude-code' ? new ClaudeStreamParser(request.onProgress) : null;
@@ -178,6 +218,8 @@ export const executeHarness: HarnessExecutor = async request => {
     let collected = '';
     let errorOutput = '';
     let settled = false;
+    let stopping = false;
+    const closed = new Promise<void>(resolveClosed => child.once('close', () => resolveClosed()));
 
     const finish = (settle: () => void) => {
       if (settled) return;
@@ -186,22 +228,28 @@ export const executeHarness: HarnessExecutor = async request => {
       request.signal.removeEventListener('abort', abort);
       settle();
     };
-    const abort = () => {
-      killTree(child.pid);
-      finish(() => reject(request.signal.reason));
+    const stop = async (reason: unknown) => {
+      if (stopping || settled) return;
+      stopping = true;
+      try {
+        await stopHarnessProcess(child.pid, closed);
+        finish(() => reject(reason));
+      } catch (error) {
+        finish(() => reject(error));
+      }
     };
+    const abort = () => { void stop(request.signal.reason); };
     const timer = setTimeout(() => {
-      killTree(child.pid);
-      finish(() => reject(new HarnessError('Harness chạy quá 15 phút và đã bị dừng.')));
+      void stop(new HarnessError('Harness chạy quá 15 phút và đã bị dừng.'));
     }, HARNESS_TIMEOUT_MS);
     request.signal.addEventListener('abort', abort, { once: true });
 
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
+      if (stopping) return;
       outputBytes += Buffer.byteLength(chunk);
       if (outputBytes > OUTPUT_LIMIT) {
-        killTree(child.pid);
-        finish(() => reject(new HarnessError('Output của harness vượt giới hạn.')));
+        void stop(new HarnessError('Output của harness vượt giới hạn.'));
         return;
       }
       if (claudeStream) claudeStream.push(chunk);
@@ -209,10 +257,18 @@ export const executeHarness: HarnessExecutor = async request => {
       else collected += chunk;
     });
     child.stderr.on('data', chunk => {
+      if (stopping) return;
+      outputBytes += Buffer.byteLength(chunk);
+      if (outputBytes > OUTPUT_LIMIT) {
+        void stop(new HarnessError('Output của harness vượt giới hạn.'));
+        return;
+      }
       if (errorOutput.length < 64_000) errorOutput += chunk;
     });
     child.on('error', error => finish(() => reject(new HarnessError(`Không chạy được harness: ${error.message}`))));
-    child.on('close', code => finish(() => {
+    child.on('close', code => {
+      if (stopping) return;
+      finish(() => {
       if (claudeStream) {
         const output = claudeStream.finish();
         if (code !== 0 && !output.trim()) {
@@ -232,7 +288,8 @@ export const executeHarness: HarnessExecutor = async request => {
         return;
       }
       resolve(collected);
-    }));
+      });
+    });
     child.stdin.end(prompt);
   });
 

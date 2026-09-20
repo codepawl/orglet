@@ -8,8 +8,8 @@ export const ToolCapabilities = z.array(ToolCapability).max(4).refine(
   'Quyền công cụ bị trùng.',
 );
 
-export function supportedCapabilities(provider: string): ToolCapability[] {
-  return ['claude-code', 'codex', 'cursor'].includes(provider) ? ['source.read', 'skill.read'] : ['source.read', 'dataset.check', 'skill.read', 'network.web'];
+export function supportedCapabilities(_provider: string): ToolCapability[] {
+  return ['source.read', 'dataset.check', 'skill.read', 'network.web'];
 }
 
 export function snapshotCapabilities(provider: string, requested?: ToolCapability[]): ToolCapability[] {

@@ -5,6 +5,8 @@ import { Store, now } from './database';
 export type Checkpoint = {
   id: string; step: number; phase: 'ready' | 'requesting' | 'replied' | 'done';
   messages: ChatCompletionMessageParam[]; readIds: string[]; reply?: ModelReply;
+  /** CLI-reported estimates, separate from settled API charges. */
+  harnessCostMicros?: number;
 };
 // Context may contain selected source text. It stays in core storage, outside renderer IPC and backups.
 export class Checkpoints {

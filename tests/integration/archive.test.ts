@@ -53,7 +53,10 @@ it('archives and restores a task, and deletes archived tasks after the chosen nu
 
 it('deletes a free task completely, and empties a paid one while keeping its cost and a valid backup', async () => {
   const free = await task('demo');
+  const retiredRunId = store.detail(free).runs[0].id;
+  store.setSetting(`workspace-retired:${retiredRunId}`, { taskId: free, runId: retiredRunId });
   await core.command('deleteTask', { id: free });
+  expect(store.setting(`workspace-retired:${retiredRunId}`, null)).toBeNull();
   expect(store.db.prepare('SELECT COUNT(*) AS count FROM runs WHERE task_id=?').get(free)!.count).toBe(0);
   await expect(core.command('task', { id: free })).rejects.toThrow();
 

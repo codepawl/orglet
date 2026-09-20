@@ -1,6 +1,8 @@
-import type { WorkspaceGrantSnapshot, WorkspaceGrantView } from './workspace-access';
-import { ToolCapabilities, type ToolCapability } from './tool-policy';
 import { z } from 'zod';
+import { ToolCapabilities, type ToolCapability } from './tool-policy';
+import type { WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermission } from './workspace-access';
+import type { WorkspaceRecoveryView } from './workspace-recovery';
+import { ReadRecoveryFile, type RecoveryFile, ReadRecoveryOutput, RetireWorkspaceAttempt, type RecoveryOutput } from './workspace-recovery';
 import { ProfileArgs, type DataFormat, type DatasetProfile, type ProfileRecord } from './profiles';
 import { PreflightPolicy, type PreflightRecord } from './preflight';
 import { Schedule, WorkHours } from './schedule';
@@ -165,9 +167,13 @@ export const commands = {
   resume: z.object({ id: Id }),
   retry: z.object({ id: Id }),
   revoke: z.object({ id: Id }),
-  workspaceAccess: z.object({ taskId: Id }).strict(),
-  revokeWorkspace: z.object({ taskId: Id }).strict(),
   setToolCapabilities: z.object({ taskId: Id, capabilities: ToolCapabilities }).strict(),
+  workspaceAccess: z.object({ taskId: Id }).strict(),
+  workspaceRecovery: z.object({ taskId: Id }).strict(),
+  retireWorkspaceAttempt: RetireWorkspaceAttempt,
+  recoveryProcessOutput: ReadRecoveryOutput,
+  recoveryFile: ReadRecoveryFile,
+  revokeWorkspace: z.object({ taskId: Id }).strict(),
   previewSource: z.object({ taskId: Id, id: Id }),
   sourceMetadata: z.object({ ids: z.array(Id).max(20) }),
   profileSources: ProfileArgs.extend({ taskId: Id }),
@@ -199,12 +205,13 @@ export const commands = {
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
+export type Results = { recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;
   pickSources(): Promise<Source[]>;
   pickFolder(): Promise<FolderIntake>;
+  pickWorkspace(taskId: string, permissions: WorkspacePermission[]): Promise<WorkspaceGrantView | null>;
   /** Save an API key from typed input, or omit `key` to pick a .txt file. The key never comes back to the renderer. */
   connect(provider: ApiProvider, key?: string): Promise<Connections>;
   disconnect(provider: ApiProvider): Promise<Connections>;

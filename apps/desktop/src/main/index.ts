@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
 import { en, enGB } from '../shared/locales/en';
 import { commands, Id, ApiProvider, type Reply, type Command, TextFormat } from '../shared/contracts';
+import { PickWorkspace } from '../shared/workspace-access';
 import { markdownToPlain } from '../shared/plainText';
 import { Credentials, OLLAMA_LOCAL_TOKEN } from './credentials';
 import { readBoundedText, writeAtomicText } from './files';
@@ -53,7 +54,18 @@ function useSpellCheckerLanguage(next: Language) {
 async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
   credentials = new Credentials(directory);
-  core = utilityProcess.fork(join(__dirname, 'core.js'), [directory], { serviceName: 'Orglet Core', stdio: 'pipe', env: { ...process.env, ELECTRON_RUN_AS_NODE: '' } });
+  const workspaceRuntimePaths = app.isPackaged ? {
+    sandboxExecutable: join(process.resourcesPath, 'wxc-exec.exe'),
+    helperPath: join(process.resourcesPath, 'workspace-helper.cjs'),
+    integrationExecutable: join(process.resourcesPath, 'WorkspaceIntegrate.exe'),
+    gitExecutable: join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'cmd', 'git.exe'),
+  } : {
+    sandboxExecutable: join(app.getAppPath(), 'node_modules/@microsoft/mxc-sdk/bin/x64/wxc-exec.exe'),
+    helperPath: join(__dirname, 'workspace-helper.cjs'),
+    integrationExecutable: join(app.getAppPath(), 'out/native-tools/WorkspaceIntegrate.exe'),
+    gitExecutable: join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'cmd', 'git.exe'),
+  };
+  core = utilityProcess.fork(join(__dirname, 'core.js'), [directory, JSON.stringify(workspaceRuntimePaths)], { serviceName: 'Orglet Core', stdio: 'pipe', env: { ...process.env, ELECTRON_RUN_AS_NODE: '' } });
   // Do not forward provider errors/environment to renderer logs.
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Core startup timed out.')), 15_000);
@@ -142,6 +154,17 @@ async function start() {
     return result.canceled ? [] : request('importSources', result.filePaths);
   });
   handle('orglet:connections', async () => credentials.status());
+  handle('orglet:pick-workspace', async raw => {
+    const input = PickWorkspace.parse(raw);
+    await request('workspaceAccess', { taskId: input.taskId });
+    const title = input.permissions.includes('execute') ? tr('Chọn workspace: đọc, sửa file và chạy lệnh')
+      : input.permissions.includes('write') ? tr('Chọn workspace: đọc và sửa file') : tr('Chọn workspace: chỉ đọc');
+    const result = await dialog.showOpenDialog(window, {
+      title, properties: ['openDirectory'],
+      buttonLabel: tr('Cấp quyền workspace'),
+    });
+    return result.canceled ? null : request('grantWorkspace', { ...input, directory: result.filePaths[0] });
+  });
   handle('orglet:pick-folder', async () => {
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn thư mục nguồn (tối đa 20 tệp, bỏ qua tệp không hỗ trợ)'), properties: ['openDirectory'] });
     return result.canceled ? { sources: [], skipped: [] } : request('importFolder', result.filePaths[0]);

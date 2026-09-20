@@ -4,6 +4,7 @@ import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { resolveOsxNotarize, resolveOsxSign } from './forge.macos';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 // Ship only the Vite build plus DuckDB's native addon tree. pnpm installs the
 // current platform's optional bindings; listing every OS here means a Mac make
@@ -27,11 +28,17 @@ const included = [
 ];
 
 const config: ForgeConfig = {
+  hooks: {
+    generateAssets: async () => {
+      execFileSync(process.execPath, [join(__dirname, 'scripts/build-workspace-native.mjs')], { windowsHide: true, stdio: 'inherit' });
+    },
+  },
   packagerConfig: {
     extraResource: process.platform === 'win32' && process.arch === 'x64' ? [
       join(__dirname, 'node_modules/@microsoft/mxc-sdk/bin/x64/wxc-exec.exe'),
       join(__dirname, 'node_modules/@microsoft/mxc-sdk/LICENSE.md'),
       join(__dirname, '.vite/build/workspace-helper.cjs'),
+      join(__dirname, 'out/native-tools/WorkspaceIntegrate.exe'),
     ] : [],
     asar: { unpack: '**/*.{node,dll,dylib,so}' },
     executableName: 'Orglet',
