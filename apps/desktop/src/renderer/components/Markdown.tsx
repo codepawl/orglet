@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 
 /**
- * Renders the Markdown that workers write in chat replies: paragraphs, headings, lists, quotes, code and inline
+ * Renders the Markdown that workers write in chat replies: paragraphs, headings, lists, tables, quotes, code and inline
  * emphasis. It builds React elements rather than HTML, so nothing in a reply can inject markup or scripts.
  * Links show their text and address but do not navigate, because a click would replace the app window.
  * A thematic break (---) becomes extra space, not a drawn line.
@@ -17,6 +17,7 @@ type Block =
   | { kind: 'paragraph'; lines: string[] }
   | { kind: 'heading'; level: number; text: string }
   | { kind: 'list'; ordered: boolean; start: number; items: string[][] }
+  | { kind: 'table'; headers: string[]; alignments: Array<'left' | 'center' | 'right'>; rows: string[][] }
   | { kind: 'quote'; lines: string[] }
   | { kind: 'code'; code: string }
   | { kind: 'break' };
@@ -28,6 +29,42 @@ const unorderedItemPattern = /^\s{0,3}[-*+]\s+(.*)$/;
 const orderedItemPattern = /^\s{0,3}(\d{1,9})[.)]\s+(.*)$/;
 const quotePattern = /^\s*>\s?(.*)$/;
 const continuationPattern = /^\s{2,}\S/;
+
+function tableCells(line: string): string[] {
+  const trimmed = line.trim();
+  const content = trimmed.replace(/^\|/, '').replace(/(?<!\\)\|$/, '');
+  const cells: string[] = [];
+  let cell = '';
+  let inCode = false;
+  for (let index = 0; index < content.length; index++) {
+    const character = content[index];
+    if (character === '\\' && content[index + 1] === '|') {
+      cell += '|';
+      index++;
+    } else if (character === '`') {
+      inCode = !inCode;
+      cell += character;
+    } else if (character === '|' && !inCode) {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += character;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+function tableHeader(lines: string[], index: number) {
+  if (index + 1 >= lines.length || !lines[index].includes('|')) return null;
+  const headers = tableCells(lines[index]);
+  const separators = tableCells(lines[index + 1]);
+  if (headers.length < 2 || separators.length !== headers.length
+    || !separators.every(cell => /^:?-{3,}:?$/.test(cell))) return null;
+  const alignments = separators.map((cell): 'left' | 'center' | 'right' =>
+    cell.startsWith(':') && cell.endsWith(':') ? 'center' : cell.endsWith(':') ? 'right' : 'left');
+  return { headers, alignments };
+}
 
 function parseBlocks(text: string): Block[] {
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
@@ -51,6 +88,19 @@ function parseBlocks(text: string): Block[] {
       }
       index += 1;
       blocks.push({ kind: 'code', code: codeLines.join('\n') });
+      continue;
+    }
+
+    const table = tableHeader(lines, index);
+    if (table) {
+      index += 2;
+      const rows: string[][] = [];
+      while (index < lines.length && lines[index].trim() && lines[index].includes('|')) {
+        const cells = tableCells(lines[index]);
+        rows.push(table.headers.map((_, column) => cells[column] ?? ''));
+        index++;
+      }
+      blocks.push({ kind: 'table', ...table, rows });
       continue;
     }
 
@@ -107,7 +157,7 @@ function parseBlocks(text: string): Block[] {
     }
 
     const paragraphLines: string[] = [];
-    while (index < lines.length && lines[index].trim() !== '' && !startsNewBlock(lines[index])) {
+    while (index < lines.length && lines[index].trim() !== '' && !startsNewBlock(lines[index]) && !tableHeader(lines, index)) {
       paragraphLines.push(lines[index].trim());
       index += 1;
     }
@@ -136,6 +186,11 @@ function BlockView({ block }: { block: Block }) {
       const items = block.items.map((lines, index) => <li key={index}><Lines lines={lines} /></li>);
       return block.ordered ? <ol start={block.start}>{items}</ol> : <ul>{items}</ul>;
     }
+    case 'table':
+      return <div className="markdown-table-wrap"><table>
+        <thead><tr>{block.headers.map((header, index) => <th key={index} scope="col" style={{ textAlign: block.alignments[index] }}>{renderInline(header)}</th>)}</tr></thead>
+        <tbody>{block.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, column) => <td key={column} style={{ textAlign: block.alignments[column] }}>{renderInline(cell)}</td>)}</tr>)}</tbody>
+      </table></div>;
     case 'quote':
       return <blockquote><Lines lines={block.lines} /></blockquote>;
     case 'code':
