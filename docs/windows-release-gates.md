@@ -1,6 +1,6 @@
 # Windows release gates (Orglet 0.2)
 
-This page is the Windows ship checklist: required pull-request CI, the locked unsigned-installer decision for public 0.2.x, the human installer smoke, and the GitHub Release procedure.
+This page is the Windows ship checklist: required pull-request CI, the locked unsigned-installer decision for public 0.2.x, optional human installer validation, and the GitHub Release procedure. [Orglet 0.2.2](https://github.com/codepawl/orglet/releases/tag/v0.2.2) is already public with Windows Setup and ZIP assets.
 
 It does **not** record that a smoke already ran. It does **not** create tags or Releases.
 
@@ -8,10 +8,11 @@ It does **not** record that a smoke already ran. It does **not** create tags or 
 |---|---|---|
 | Windows desktop CI (table below) | GitHub Actions on every PR | Merge |
 | Public Setup stays unsigned | Locked product decision for 0.2.x | Do not add a signing pipeline |
-| Installer smoke on a clean machine | A human, once before a tag | GitHub Release |
+| Packaged Windows smoke | GitHub Actions on the release commit | GitHub Release |
+| Installer smoke on a clean machine | Optional human validation | Does not block public 0.2.x |
 | Git tag + GitHub Release | Maintainer, after they approve | Public 0.2.x ship |
 
-Required pull-request CI is the **Windows desktop** workflow (`.github/workflows/desktop.yml`). It runs on `windows-latest`. A separate **macOS desktop** workflow runs typecheck, tests and `pnpm make` on `macos-latest` for dogfood packaging (Developer ID sign when secrets exist; not notarized yet); it is **not** the required merge check and must not replace the Windows `test` aggregator. See [macos-packaging.md](macos-packaging.md). There is no Linux packaging workflow.
+Required pull-request CI is the **Windows desktop** workflow (`.github/workflows/desktop.yml`). It runs on `windows-latest`. Separate **macOS desktop** and **Linux desktop** workflows run typecheck, tests and `pnpm make` for dogfood packaging; Linux also starts the packaged app headlessly. macOS signs when Developer ID credentials exist and notarizes only when Apple credentials exist. Neither workflow replaces the required Windows `test` aggregator. See [macos-packaging.md](macos-packaging.md) and [linux-packaging.md](linux-packaging.md).
 
 ## CI gates
 
@@ -43,11 +44,11 @@ Put this in the GitHub Release notes, in plain language:
 
 Signed builds are a later milestone, only after a code-signing certificate exists. Until then, keep shipping unsigned Setup and ZIP.
 
-## Installer smoke (human gate)
+## Installer smoke (optional human validation)
 
 CI builds the installer (`pnpm make`) and runs packaged Playwright smokes against that build with an isolated `--user-data-dir`. It does **not** run Squirrel Setup, does not install like a user, and does not uninstall. After `pnpm make`, it uploads unsigned Setup and ZIP as Actions artifacts.
 
-Run the steps below **once on a clean Windows machine or VM** before tagging a GitHub Release. Packaged CI smokes are not this checklist. A maintainer may later write that they accept CI as enough for a given tag; until they do, a human still has to run Setup.
+The maintainer decision in [COD-12](https://linear.app/codepawl/issue/COD-12/release-gate-windows-installer-smoke-checklist-ship) makes green Windows packaged CI sufficient for a public 0.2.x tag. The steps below are useful additional validation on a clean Windows machine or VM; they do not block the tag. Packaged CI smokes are not a Setup installation or uninstall test.
 
 This page is the procedure, not a completed tick. Do not treat the existence of this list as evidence that someone already installed Setup.
 
@@ -61,7 +62,7 @@ This page is the procedure, not a completed tick. Do not treat the existence of 
 
 `pnpm test:harness` never starts a harness run and never calls a paid provider. It is not an installer test.
 
-### What a human must still do
+### Optional clean-machine checklist
 
 Use Windows 10 or 11 on a machine or VM that does not already have Orglet installed. Prefer a throwaway VM so leftover `%APPDATA%\orglet` data and Start Menu shortcuts are easy to discard.
 
@@ -93,23 +94,23 @@ Copy this list into the release issue or tag notes and tick a step only after yo
 
 When a human has actually done these steps, record the VM/machine, OS, commit SHA and date on the Linear issue or in the Release draft. This document is not that record.
 
-## Blocked without user input
+## Validation not covered by release CI
 
 - Key file path for live OpenAI / xAI acceptance (`pnpm test:live`)
-- Clean Windows VM or spare machine for the installer smoke above
+- Clean Windows VM or spare machine for the optional installer smoke above
 - Code-signing certificate (optional for 0.2.x; locked unsigned for public ship — required before claiming a signed release)
 
 ## GitHub Release tag
 
-There is **no** GitHub Release on this repository yet. Creating one is a maintainer step after they approve. Do not push a git tag or open a GitHub Release from a docs or CI pull request.
+The repository already has public Windows releases, including [v0.2.2](https://github.com/codepawl/orglet/releases/tag/v0.2.2). New tags and Releases remain maintainer actions. Do not push a git tag or open a GitHub Release from a docs or CI pull request.
 
 When a maintainer is ready to ship public 0.2.x:
 
 1. Confirm required Windows CI is green on the commit you will tag (the `test` aggregator).
-2. Confirm the human installer smoke above has been run on that same commit, **or** the maintainer has written that they accept CI packaged smokes as enough for this tag.
+2. Confirm the Windows packaged CI job and required `test` aggregator passed on that commit. If a human ran the optional Setup checklist, record its machine, commit and result; never present CI as a clean-machine install.
 3. Set `package.json` `version` to the 0.2.x you are shipping if it is not already, and land that on `main`.
-4. Create an annotated tag on that commit, for example `git tag -a v0.2.0 -m "Orglet 0.2.0"` then `git push origin v0.2.0`. Only a maintainer does this.
+4. Create an annotated tag on that commit for the new version, then push it. Only a maintainer does this; do not reuse an existing release tag.
 5. On GitHub: **Releases → Draft a new release**, choose that tag, and attach the unsigned `Setup.exe` and the ZIP from that commit's `orglet-windows-unsigned-setup` / `orglet-windows-unsigned-zip` artifacts (or a local `pnpm make`).
-6. Put the SmartScreen / unsigned paragraph in the release notes (see [Signing decision](#signing-decision-locked)). Link this page. State AGPL-3.0 and that the public GitHub Release ships Windows only. macOS ZIP packaging exists for dogfood (see [macos-packaging.md](macos-packaging.md); Developer ID when secrets exist, not notarized yet) and is not a Release asset.
+6. Put the SmartScreen / unsigned paragraph in the release notes (see [Signing decision](#signing-decision-locked)). Link this page. State AGPL-3.0 and that the public GitHub Release ships Windows only. macOS and Linux ZIP packaging exist for dogfood and are not Release assets; macOS signing and notarization depend on available credentials.
 
 Do not attach builds from a different commit. Do not upload signing certificates or private keys.
