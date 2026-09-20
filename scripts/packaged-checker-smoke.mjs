@@ -228,7 +228,17 @@ try {
   const recoveryPanel = page.locator('.workspace-recovery');
   await recoveryPanel.getByRole('heading', { name: 'File và tiến trình', exact: true }).waitFor();
   await recoveryPanel.getByRole('button', { name: 'Xem bản sửa riêng', exact: true }).click();
-  await recoveryPanel.locator('pre').filter({ hasText: 'Private edit for inspection' }).waitFor();
+  const privateEdit = recoveryPanel.locator('pre').filter({ hasText: 'Private edit for inspection' });
+  const privateEditError = recoveryPanel.getByRole('alert');
+  const previewOutcome = await Promise.race([
+    privateEdit.waitFor().then(() => null),
+    privateEditError.waitFor().then(() => privateEditError.innerText()),
+  ]);
+  const sandboxUnavailable = process.env.CI === 'true'
+    && previewOutcome === 'Không xác minh được sandbox Windows. Chưa cho phép chạy lệnh.';
+  assert.ok(previewOutcome === null || sandboxUnavailable, `Private edit preview failed: ${previewOutcome}`);
+  if (sandboxUnavailable) assert.equal(await privateEdit.count(), 0, 'An unavailable sandbox must not expose private file content');
+  console.log(JSON.stringify({ privateFilePreview: sandboxUnavailable ? 'sandbox-unavailable' : 'passed' }));
   assert.equal(await readFile(join(taskWorkspace, 'note.txt'), 'utf8'), 'Current user file');
   await recoveryPanel.locator('summary').filter({ hasText: 'Chưa rõ kết quả' }).click();
   await recoveryPanel.getByRole('button', { name: 'Xem đầu ra', exact: true }).click();
