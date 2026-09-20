@@ -65,9 +65,14 @@ export function loginCommand(id: HarnessCatalogId, executable: string | undefine
   return quoteLoginCommand(executable, args, platform);
 }
 
-/** Documented Cursor CLI install one-liners. Claude Code and Codex have no single official one-liner we reuse. */
+/**
+ * The install line each vendor documents. Claude Code and Codex publish first-party npm packages whose binaries
+ * are the very names `candidates()` looks for, and a global npm install lands in %APPDATA%\npm, one of the
+ * folders it already searches — so the command shown here is one the detector will find afterwards.
+ */
 export function installCommand(id: HarnessCatalogId, platform: NodeJS.Platform): string | undefined {
-  if (id !== 'cursor') return undefined;
+  if (id === 'claude-code') return 'npm install -g @anthropic-ai/claude-code';
+  if (id === 'codex') return 'npm install -g @openai/codex';
   return platform === 'win32' ? "irm 'https://cursor.com/install?win32=true' | iex" : 'curl https://cursor.com/install -fsS | bash';
 }
 

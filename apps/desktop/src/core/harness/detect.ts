@@ -116,9 +116,8 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
   if (versionResult.code !== 0 || !/\d+\.\d+/.test(version)) return null;
 
   const name = harnessNames[id];
-  const command = loginCommand(id, executable, platform);
-  const signedOut = `Đã thấy ${name} trên máy, nhưng chưa đăng nhập nên chưa sẵn sàng chạy. Dán lệnh này vào terminal: ${command}`;
-  const unread = `${name} có trên máy nhưng không đọc được trạng thái đăng nhập. Chạy ${command} rồi bấm Dò lại. Orglet không chuyển sang Demo.`;
+  const signedOut = `Đã thấy ${name} trên máy, nhưng chưa đăng nhập nên chưa sẵn sàng chạy. Chạy lệnh bên dưới trong terminal.`;
+  const unread = `${name} có trên máy nhưng không đọc được trạng thái đăng nhập. Chạy lệnh bên dưới rồi bấm Dò lại. Orglet không chuyển sang Demo.`;
   let info: Omit<HarnessInfo, 'version'>;
   if (id === 'claude-code') {
     const status = await run(executable, ['auth', 'status']);
