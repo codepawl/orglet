@@ -25,6 +25,8 @@ import { MentionText } from './mentions';
 import { WorkingLine } from './Working';
 import type { MentionPerson } from '../../shared/mentions';
 import { teamProgress } from '../../shared/team-progress';
+import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
+import { workOutcomes } from '../../shared/work-outcomes';
 
 /**
  * What this worker was doing for the team on this turn: assigning the work, doing a share of it, or combining the
@@ -48,7 +50,7 @@ type Turn = { revision: number; runs: Run[]; brief: string; sources: TaskDetail[
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, action, showSources, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
+export function TaskThread({ detail, recovery, action, showSources, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   const current = detail.task.inputRevision ?? 0;
@@ -97,6 +99,14 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
         const latest = turn.revision === current;
         const workFrame = turn.runs.find(run => run.stage === 'plan' && run.snapshot.workFrame)?.snapshot.workFrame
           ?? turn.runs.find(run => run.snapshot.workFrame)?.snapshot.workFrame;
+        const outcomes = workOutcomes(recovery, new Set(turn.runs.map(run => run.id)));
+        const outcomeText = outcomes ? [
+          outcomes.passedCommands + outcomes.failedCommands + outcomes.unfinishedCommands > 0
+            ? t('Lệnh: {0} thoát 0, {1} lỗi, {2} chưa hoàn tất.', [outcomes.passedCommands, outcomes.failedCommands, outcomes.unfinishedCommands]) : '',
+          outcomes.fileConflicts ? t('{0} bản file xung đột hoặc chưa rõ.', [outcomes.fileConflicts]) : '',
+          outcomes.uncertainCalls ? t('{0} thao tác chưa rõ kết quả.', [outcomes.uncertainCalls]) : '',
+          outcomes.truncated ? t('Chỉ tính bản ghi gần đây.') : '',
+        ].filter(Boolean).join(' ') : '';
         const activeRun = turn.runs.find(item => item.status === 'running') ?? turn.runs.find(item => item.status === 'queued');
         const live = latest && busy ? liveRunOf(turn.runs, liveRuns) : undefined;
         const liveUpdate = live?.update;
@@ -113,6 +123,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
         return <div className="chat-turn" key={turn.revision}>
           <div className="user-message"><p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>{turn.sources.length > 0 && <ul className="attachment-list message-files">{turn.sources.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}</ul>}</div>
           {latest && workFrame && <p className="muted" role="status">{t('Mục tiêu Tí hiểu: {0}', [workFrame.goal])}</p>}
+          {latest && outcomeText && <p className="muted" role="status">{outcomeText}</p>}
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
             <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />

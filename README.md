@@ -80,6 +80,8 @@ An API worker or team lead can also record how it understands the current turn: 
 
 You can send a changed request while a worker or team is running. Orglet saves it as the next revision immediately, cancels the older run, and waits until that run has stopped before dispatching the new one. Already integrated files stay in history; uncertain effects and conflicts still need inspection. If the app closes while switching, the saved request waits for an explicit resume rather than replaying an unknown action.
 
+When workspace commands run, chat shows a short count from their saved exit states: exit code 0, failed, or unfinished. File conflicts and uncertain tool calls remain visible beside that count; Details retains the commands, output and recovery controls. A planned check in the turn goal is still only a plan until evidence is recorded.
+
 ## Install
 
 [Latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. The tag is public; Windows **Setup.exe** / **ZIP** assets on that release may still be empty. If they are missing, [build from source](#dev).
