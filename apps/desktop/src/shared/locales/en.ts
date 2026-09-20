@@ -14,6 +14,7 @@ export const en: Dictionary = {
   'Phần việc cần báo cáo kết quả hoặc blocker, không thể hoàn tất bằng tin nhắn.': 'An assignment needs a result or blocker report; a chat message cannot complete it.',
   'Phần việc được giao sửa tệp nhưng không tạo hoặc thay đổi tệp nào.': 'The assignment required file changes, but no file was created or changed.',
   'Đã lưu báo cáo blocker; phần việc chưa hoàn tất.': 'Blocker report saved; the assignment remains unfinished.',
+  'Nhận lại phần việc của {0}': 'Took over {0}’s assignment',
   'Trang tiếp theo': 'Next page',
   'Xem bản sửa riêng': 'View private changes',
   'File trống.': 'Empty file.',

@@ -45,6 +45,12 @@ function elapsedLabel(fromIso: string, toIso: string) {
 const runEndedAt = (runId: string, events: { runId?: string; createdAt: string }[]) =>
   events.filter(event => event.runId === runId).at(-1)?.createdAt;
 
+function originalAssignmentOwner(detail: TaskDetail, run: Run): string {
+  const originalWorkerId = run.snapshot.reassignment?.assignmentWorkerId;
+  return detail.runs.find(candidate => candidate.stage === 'member' && !candidate.snapshot.reassignment
+    && candidate.snapshot.worker.id === originalWorkerId)?.snapshot.worker.name ?? originalWorkerId ?? '';
+}
+
 /** A section with an icon beside its title, so the panel can be scanned rather than read. */
 function Section({ icon: Icon, title, children }: { icon: typeof Users; title: string; children: React.ReactNode }) {
   return <section className="details-section">
@@ -134,6 +140,7 @@ function TechnicalRun({ run, detail, workspace, onExport }: { run: Run; detail: 
       {stage && <small>{stage}</small>}
     </p>
     <p className="technical-run-setup">{setup}</p>
+    {run.snapshot.reassignment && <p className="muted">{t('Nhận lại phần việc của {0}', [originalAssignmentOwner(detail, run)])}</p>}
     <p className="technical-run-id">
       <code>{run.id}</code>
       <Button size="icon" aria-label={t('Sao chép mã lần chạy')} title={t('Sao chép mã lần chạy')} onClick={() => void copyRunId(run.id)}><Copy size={13} /></Button>
