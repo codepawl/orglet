@@ -1,6 +1,6 @@
-# Release review (v0.2.0 candidate)
+# Release review (historical v0.2.0 candidate)
 
-Local review updated 2026-09-18 for the Windows 0.2.0 branch stack. It records what was checked and what is still open; it is not a release approval.
+Local review updated 2026-09-18 for the Windows 0.2.0 branch stack. It records what was checked then; it is not a current release approval. [v0.2.2](https://github.com/codepawl/orglet/releases/tag/v0.2.2) is now public with Windows Setup and ZIP. The [Windows release gates](windows-release-gates.md) record the later COD-12 decision that green packaged CI is sufficient for a public 0.2.x tag; the clean-machine Setup checklist remains optional and has not been claimed as run here.
 
 ## Dependencies
 
@@ -27,11 +27,11 @@ Checked by reading `apps/desktop/src`:
 - Stored locally unencrypted: SQLite workspace (reports, knowledge, checkpoints that can contain source text until the report commits), pre-upgrade database copies, exported backups and Markdown. Backups can contain source excerpts in reports.
 - Knowledge proposals come from model output and wait for user review before they can enter any prompt. Template imports also arrive as proposals.
 
-## Release gates still open
+## Checks not proven by this historical review
 
 | Gate | Status |
 |---|---|
-| Installer on a clean Windows machine, startup, uninstall | Not run. Human checklist (install, first launch, Settings harness tab, Demo worker/task, uninstall) is in [windows-release-gates.md](windows-release-gates.md). CI packaged smokes do not run Setup.exe. Installing from a development session on an MSIX-packaged host would also be virtualized |
+| Installer on a clean Windows machine, startup, uninstall | Not run in this review. The optional human checklist is in [windows-release-gates.md](windows-release-gates.md). CI packaged smokes do not run Setup.exe. Installing from a development session on an MSIX-packaged host would also be virtualized |
 | Code signing | Locked for public 0.2.x: unsigned. SmartScreen is expected. Signed builds wait for a certificate; do not add a signing pipeline. See [windows-release-gates.md](windows-release-gates.md) |
 | Live OpenAI acceptance ($0.05 cap) | Script ready: set `ORGLET_LIVE_KEY_FILE` (+ optional `ORGLET_LIVE_PROVIDER=openai`) and run `pnpm test:live`. Waiting for the user's key file path |
 | Live xAI (Grok) acceptance ($0.05 cap) | Same script with `ORGLET_LIVE_PROVIDER=xai`. Waiting for the user's key file path |

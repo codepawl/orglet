@@ -86,14 +86,14 @@ If an API request fails or its provider omits usage, Orglet keeps the budget res
 
 ## Install
 
-[Latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. The tag is public; Windows **Setup.exe** / **ZIP** assets on that release may still be empty. If they are missing, [build from source](#dev).
+[Latest GitHub Release](https://github.com/codepawl/orglet/releases/latest) includes an unsigned Windows **Setup.exe** and **ZIP**. The release page shows the version and assets available now; [build from source](#dev) if you need the current `main` branch instead.
 
-Windows installers are unsigned. macOS CI signs with Developer ID and notarizes with Apple, so a macOS build from CI opens without a Gatekeeper warning.
+Windows installers are unsigned. macOS CI signs when Developer ID credentials are available and notarizes only when Apple credentials are also available; check that artifact's CI run before relying on Gatekeeper approval.
 
 | Platform | Status |
 |---|---|
-| Windows | Public 0.2.x target. Unsigned ZIP and Squirrel Setup from `pnpm make`. If those files are not attached to the GitHub Release, build locally. SmartScreen may warn (unknown publisher); that is expected. See [windows-release-gates.md](docs/windows-release-gates.md). |
-| macOS | ZIP of `Orglet.app` from `pnpm make` on a Mac, or the `orglet-macos-signed-zip` CI artifact. CI signs it with Developer ID and notarizes it with Apple, so it opens without the right-click workaround. Not a GitHub Release asset yet, and a local `pnpm make` stays unsigned. See [macos-packaging.md](docs/macos-packaging.md). |
+| Windows | Public 0.2.x target. Unsigned ZIP and Squirrel Setup are on the [latest release](https://github.com/codepawl/orglet/releases/latest). SmartScreen may warn (unknown publisher); that is expected. See [windows-release-gates.md](docs/windows-release-gates.md). |
+| macOS | ZIP of `Orglet.app` from `pnpm make` on a Mac, or a signed/unsigned ZIP from macOS CI depending on available credentials. A signed build needs notarization credentials too before Gatekeeper approval is verified. Not a GitHub Release asset yet. See [macos-packaging.md](docs/macos-packaging.md). |
 | Linux | ZIP from `pnpm make` on Linux, or the `orglet-linux-zip` CI artifact. CI builds it and starts it headless on every pull request, but nobody has used it on a real Linux desktop yet, so treat it as untested. See [linux-packaging.md](docs/linux-packaging.md). |
 | iOS and Android | Not started. The shape under discussion is a companion to a desktop workspace, not a port: a phone cannot run a worker. See [mobile.md](docs/mobile.md). |
 

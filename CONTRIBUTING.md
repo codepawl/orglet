@@ -22,18 +22,19 @@ AI-assisted code is welcome. Unstructured dumps that ignore this repo's layout, 
 
 User-facing text goes through the translation files: Vietnamese source strings, with English in `apps/desktop/src/shared/locales/en.ts`.
 
-Do not push release tags from a pull request. Shipping a public Windows GitHub Release is a maintainer checklist in [docs/windows-release-gates.md](docs/windows-release-gates.md) (unsigned 0.2.x, human installer smoke, then tag).
+Do not push release tags from a pull request. Shipping a public Windows GitHub Release follows the maintainer checklist in [docs/windows-release-gates.md](docs/windows-release-gates.md): unsigned 0.2.x, green Windows packaged CI, then a tag. A human Setup install check is optional validation, not a release gate.
 
 ## CI
 
-Pull requests run two GitHub Actions workflows. Docs-only changes still trigger them.
+Pull requests run three GitHub Actions workflows. Docs-only changes still trigger them.
 
 | Workflow | File | What it runs | Merge gate |
 |---|---|---|---|
 | Windows desktop | [`.github/workflows/desktop.yml`](.github/workflows/desktop.yml) | Fail-fast `pnpm audit --prod --audit-level=high`, `pnpm typecheck`, `pnpm test`; then `pnpm make` and packaged smokes | **Required** — check name `test` |
 | macOS desktop | [`.github/workflows/macos.yml`](.github/workflows/macos.yml) | `pnpm typecheck`, `pnpm test`, Developer ID import when secrets exist, `pnpm make` (signed or unsigned ZIP artifact) | Runs on PRs; **not** the required `test` check |
+| Linux desktop | [`.github/workflows/linux.yml`](.github/workflows/linux.yml) | `pnpm typecheck`, `pnpm test`, `pnpm make`, and a headless packaged desktop smoke | Runs on PRs; **not** the required `test` check |
 
-There is no Linux workflow. A green macOS job does not replace the Windows aggregator. Details: [windows-release-gates.md](docs/windows-release-gates.md), [macos-packaging.md](docs/macos-packaging.md).
+A green macOS or Linux job does not replace the Windows aggregator. Details: [windows-release-gates.md](docs/windows-release-gates.md), [macos-packaging.md](docs/macos-packaging.md), [linux-packaging.md](docs/linux-packaging.md).
 
 ## License and CLA
 
