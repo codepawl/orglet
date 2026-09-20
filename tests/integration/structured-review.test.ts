@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Report, type Artifact } from '../../apps/desktop/src/shared/contracts';
-import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, validateReview } from '../../apps/desktop/src/core/review';
+import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../../apps/desktop/src/core/review';
 
 const source = randomUUID();
 const finding = () => ({ title: 'Observed issue', severity: 'warning' as const, detail: 'Evidence differs.', coverage: 'Selected source', sourceIds: [source], provenance: { findingId: randomUUID(), writerId: randomUUID(), runId: randomUUID() } });
@@ -41,6 +41,21 @@ describe('structured review gates', () => {
     expect(value.review!.recommendation).toBe('insufficient_evidence');
     expect(value.limitations).toContain('Báo cáo đầu vào còn mục chưa đủ bằng chứng; chưa thể khuyến nghị sẵn sàng review.');
     validate(value, upstream);
+  });
+  it('retains an uncited workspace warning as an unverified limitation', () => {
+    const value = report();
+    value.findings.push({ title: 'CSS class mismatch', detail: 'The card class differs.', severity: 'warning',
+      sourceIds: [], coverage: 'Workspace files', category: 'other', recommendation: 'Align selectors.', checkerIds: [], locations: [] });
+    value.review!.recommendation = 'revision_required';
+    downgradeUncitedWorkspaceFindings(value);
+    expect(value.findings).toHaveLength(0);
+    expect(value.limitations[0]).toContain('CSS class mismatch');
+    validate(value);
+    const forged = report();
+    forged.findings.push({ title: 'Forged', detail: 'Claim', severity: 'warning',
+      sourceIds: [randomUUID()], coverage: 'Other file', category: 'other', recommendation: null, checkerIds: [], locations: [] });
+    downgradeUncitedWorkspaceFindings(forged);
+    expect(forged.findings).toHaveLength(1);
   });
   it('retains a legacy report without manufacturing review metadata', () => {
     const value = Report.parse({ title: 'Old', summary: 'Old report', findings: [], limitations: [] });
