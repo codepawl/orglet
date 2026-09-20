@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { ArrowUp, Plus, Square } from 'lucide-react';
 import type { TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
@@ -54,6 +54,25 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
     const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
     element.scrollTo({ left: element.scrollWidth, behavior: instant ? 'auto' : 'smooth' });
   }, [attachmentCount]);
+  // The strip scrolls sideways and hides its scrollbar, which leaves a plain mouse with no way to reach the files
+  // scrolled off the edge. Take the wheel over the strip and scroll it sideways instead, but only while it has
+  // somewhere to go, so an ordinary scroll of the page is never swallowed. The listener cannot be passive: it has
+  // to stop the page from scrolling under the gesture it just consumed.
+  useEffect(() => {
+    const element = strip.current;
+    if (!element) return;
+    const onWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      const furthest = element.scrollWidth - element.clientWidth;
+      if (furthest < 1) return;
+      const next = Math.min(Math.max(element.scrollLeft + event.deltaY, 0), furthest);
+      if (next === element.scrollLeft) return;
+      event.preventDefault();
+      element.scrollLeft = next;
+    };
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, [hasAttachments]);
   const mentionable = Boolean(mentions && (mentions.people.length > 1 || mentions.allNames?.length));
   const query = mentionable && !disabled ? mentionQueryAt(value, cursor) : undefined;
   const options = query && query.start !== dismissed ? mentionOptions(query.query, mentions!.people) : [];
