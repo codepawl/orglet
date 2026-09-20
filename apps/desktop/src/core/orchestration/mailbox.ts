@@ -84,7 +84,7 @@ export class TeamMailbox {
         throw new Error('Chỉ phản hồi được liên kết với câu hỏi.');
       }
       const event: MessageEvent = {
-        id: id(), runId: run.id, createdAt: now(),
+        id: id(), runId: run.id, sequence: this.store.nextEventSequence(run.id), createdAt: now(),
         message: `Trao đổi team: ${current.snapshot.worker.name} → ${recipientId}`,
         teamMessage: TeamMessage.parse({ ...input, kind, recipientId, body, teamId: team.id, inputRevision: revision,
           senderId: current.snapshot.worker.id, assignmentWorkerId, callId, requestHash, state: 'pending' }),

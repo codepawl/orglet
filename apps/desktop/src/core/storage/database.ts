@@ -138,8 +138,11 @@ export class Store {
       this.put(table, value);
     }
   }
+  nextEventSequence(runId: string): number {
+    return Number(this.db.prepare('SELECT COUNT(*)+1 AS sequence FROM events WHERE run_id=?').get(runId)!.sequence);
+  }
   event(runId: string, message: string) {
-    const sequence = Number(this.db.prepare('SELECT COUNT(*)+1 AS sequence FROM events WHERE run_id=?').get(runId)!.sequence);
+    const sequence = this.nextEventSequence(runId);
     this.put('events', { id: id(), runId, sequence, message, createdAt: now() } as Activity, { column: 'run_id', value: runId });
   }
   /** Read-merge-write so concurrent fields like seenStamp are not dropped by a stale copy. */
