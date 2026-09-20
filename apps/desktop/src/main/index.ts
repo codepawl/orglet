@@ -37,6 +37,19 @@ function request(command: string, args: unknown): Promise<unknown> {
 // Workspace language for native dialogs: read once when the core is ready, then updated whenever settings are saved.
 let language: Language = DEFAULT_LANGUAGE;
 const tr = (key: string, params?: readonly unknown[]) => translate(language === 'en' ? en : language === 'en-GB' ? enGB : null, key, params);
+const spellCheckerDictionaries: Record<Language, string> = { vi: 'vi', en: 'en-US', 'en-GB': 'en-GB' };
+/**
+ * Point Chromium's spellchecker at the interface language. It keeps its own list and never reads the document's
+ * `lang`, so left at the default it underlined every word of a Vietnamese message in the composer as a mistake
+ * (user, 2026-09-20). macOS is skipped because the OS spellchecker owns the list there and detects the language
+ * itself, and a language Chromium has no dictionary for is left alone rather than set to nothing.
+ */
+function useSpellCheckerLanguage(next: Language) {
+  if (process.platform === 'darwin') return;
+  const dictionary = spellCheckerDictionaries[next];
+  if (!session.defaultSession.availableSpellCheckerLanguages.includes(dictionary)) return;
+  session.defaultSession.setSpellCheckerLanguages([dictionary]);
+}
 async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
   credentials = new Credentials(directory);
@@ -71,6 +84,7 @@ async function start() {
     });
   });
   language = await request('workspace', {}).then(workspace => (workspace as { language?: Language }).language ?? DEFAULT_LANGUAGE).catch(() => DEFAULT_LANGUAGE);
+  useSpellCheckerLanguage(language);
   const rendererRoot = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
   const url = MAIN_WINDOW_VITE_DEV_SERVER_URL ? preferLoopbackIpv4(MAIN_WINDOW_VITE_DEV_SERVER_URL) : pathToFileURL(join(rendererRoot, 'index.html')).href;
   const expected = new URL(url);
@@ -117,7 +131,10 @@ async function start() {
     const command = envelope.command as Command;
     const args = commands[command].parse(envelope.args);
     const result = await request(command, args);
-    if (command === 'settings' && (args as { language?: Language }).language) language = (args as { language: Language }).language;
+    if (command === 'settings' && (args as { language?: Language }).language) {
+      language = (args as { language: Language }).language;
+      useSpellCheckerLanguage(language);
+    }
     return result;
   });
   handle('orglet:pick', async () => {
