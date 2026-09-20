@@ -11,8 +11,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  # Fail-fast on Windows so a typecheck, unit/integration, or production CVE failure
-  # does not wait for Forge make. The required check name stays `test` (see aggregator).
+  # Runners are free on a public repository and run in parallel, so packaging starts at the same moment as this
+  # job rather than after it: a green pull request finishes about two minutes sooner, and a failing typecheck
+  # still reports here at the same moment it always did. The required check name stays `test` (see aggregator).
   checks:
     name: typecheck and test
     runs-on: windows-latest
@@ -32,7 +33,6 @@ jobs:
       - run: pnpm test
   packaged:
     name: packaged
-    needs: checks
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
