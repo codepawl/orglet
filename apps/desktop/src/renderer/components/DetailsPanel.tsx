@@ -61,7 +61,7 @@ function Fact({ icon: Icon, children, title }: { icon: typeof Users; children: R
 function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; members: readonly Worker[] }) {
   if (team) {
     return <div className="details-subject">
-      <p className="details-subject-name"><RosterAvatars workers={members} size="sm" max={3} /><strong>{team.name}</strong></p>
+      <p className="details-subject-name"><RosterAvatars workers={members} size="sm" max={2} /><strong>{team.name}</strong></p>
       <div className="details-facts">
         <Fact icon={Users} title={t('Số Tí trong hội')}>{members.length}</Fact>
         <Fact icon={team.workflow === 'parallel' ? Shuffle : ListOrdered} title={team.workflow === 'parallel' ? t('làm song song') : t('làm lần lượt')}>
