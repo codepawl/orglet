@@ -6,6 +6,8 @@ The core keeps tool declarations, argument schemas, required capabilities and ex
 
 `request_user_decision` is available to a team planner and a solo worker in the tool loop. It pauses the current run with one question and two or three choices; the answer enters the saved checkpoint and resumes that same run. Core stores the question and answer with the chat turn, allows at most two questions per turn, and rechecks the original permissions on resume. The answer itself never grants a tool. A backup keeps the decision history but excludes the checkpoint, so a pending question restored from backup is marked interrupted rather than offered as resumable.
 
+`record_work_frame` lets a solo worker or team planner save one short goal, constraints the user stated, unconfirmed assumptions, and intended checks in the run snapshot. Details displays these separately; planned checks do not count as completed checks or evidence. A second record for the same run is rejected. The record does not change grants, assignments, or the user request. It is available through the API and tool-loop CLI paths, but source-only CLI sessions cannot call it.
+
 Assigned team members also have send, read and acknowledge tools for the [team mailbox](team-chat.md#worker-messages). These validate membership and the current turn at execution. They do not grant file or network access. API workers and the CLI tool bridge use the same mailbox handlers.
 
 If a worker mistypes a team-message recipient ID, core returns the current assignment's valid recipients as a tool error. The worker can correct the call in the same run; the rejected message creates no mailbox event or new agent. Core still checks the recipient again when it saves a valid message.

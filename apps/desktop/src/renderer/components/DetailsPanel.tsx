@@ -241,6 +241,20 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
       {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs}
         busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} readOutput={readProcessOutput} readFile={readPrivateFile} />}
 
+      {detail && detail.runs.some(run => run.snapshot.workFrame) && <Section icon={MessageSquare} title={t('Mục tiêu của lượt')}>
+        {detail.runs.filter(run => run.snapshot.workFrame).map(run => {
+          const frame = run.snapshot.workFrame!;
+          return <div key={run.id} className="details-run">
+            <div>
+              <p><strong>{frame.goal}</strong></p>
+              {frame.statedConstraints.length > 0 && <p className="muted">{t('Tí hiểu là ràng buộc được nói rõ: {0}', [frame.statedConstraints.join('; ')])}</p>}
+              {frame.assumptions.length > 0 && <p className="muted">{t('Giả định chưa xác nhận: {0}', [frame.assumptions.join('; ')])}</p>}
+              {frame.plannedChecks.length > 0 && <p className="muted">{t('Dự định kiểm tra, chưa phải kết quả: {0}', [frame.plannedChecks.join('; ')])}</p>}
+            </div>
+          </div>;
+        })}
+      </Section>}
+
       {detail && Boolean(detail.task.decisionRequests?.length) && <Section icon={MessageSquare} title={t('Quyết định trong chat')}>
         {detail.task.decisionRequests!.map(request => <div key={request.id} className="details-run">
           <div>

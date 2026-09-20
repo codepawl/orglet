@@ -78,6 +78,8 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
     <div className="thread-content">
       {turns.map(turn => {
         const latest = turn.revision === current;
+        const workFrame = turn.runs.find(run => run.stage === 'plan' && run.snapshot.workFrame)?.snapshot.workFrame
+          ?? turn.runs.find(run => run.snapshot.workFrame)?.snapshot.workFrame;
         const activeRun = turn.runs.find(item => item.status === 'running') ?? turn.runs.find(item => item.status === 'queued');
         const live = latest && busy ? liveRunOf(turn.runs, liveRuns) : undefined;
         const liveUpdate = live?.update;
@@ -93,6 +95,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
         const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
         return <div className="chat-turn" key={turn.revision}>
           <div className="user-message"><p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>{turn.sourceCount > 0 && <Button onClick={() => showSources()}><FileText size={16} />{t('{0} nguồn', [turn.sourceCount])}</Button>}</div>
+          {latest && workFrame && <p className="muted" role="status">{t('Mục tiêu Tí hiểu: {0}', [workFrame.goal])}</p>}
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
             <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />
