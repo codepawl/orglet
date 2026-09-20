@@ -190,31 +190,6 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       : active
                         ? (connections[provider] ? t('Đã lưu API key') : t('Nhập key để kích hoạt'))
                         : t('Tắt · bật công tắc để nhập key')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); })}>{local ? t('Tài liệu') : t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
-                    {active && !local && <form className="setting-key-form" onSubmit={event => {
-                      event.preventDefault();
-                      const key = draft.trim();
-                      if (!key || key === SAVED_KEY_MASK) return;
-                      void act(async () => {
-                        onConnections(await orglet.connect(provider, key));
-                        setKeyDrafts(current => ({ ...current, [provider]: '' }));
-                        setEditing(current => ({ ...current, [provider]: false }));
-                        setReplacing(current => ({ ...current, [provider]: false }));
-                        return t('Đã lưu API key {0}', [name]);
-                      });
-                    }}>
-                      <Button type="button" size="icon" variant="ghost" className="setting-key-file" disabled={busy} aria-label={t('Từ tệp')} onClick={() => void act(async () => {
-                        const next = await orglet.connect(provider);
-                        onConnections(next);
-                        if (next[provider]) {
-                          setKeyDrafts(current => ({ ...current, [provider]: '' }));
-                          setEditing(current => ({ ...current, [provider]: false }));
-                          setReplacing(current => ({ ...current, [provider]: false }));
-                          return t('Đã lưu API key {0}', [name]);
-                        }
-                      })}><FileKey size={15} /></Button>
-                      <input type="password" name={`${provider}-api-key`} autoComplete="off" spellCheck={false} disabled={busy} value={showMask ? SAVED_KEY_MASK : draft} placeholder={connections[provider] ? t('Nhập key mới để thay') : t('Dán hoặc nhập API key')} aria-label={t('API key {0}', [name])} onFocus={() => { if (connections[provider] && !draft) setReplacing(current => ({ ...current, [provider]: true })); }} onBlur={() => { if (!draft) setReplacing(current => ({ ...current, [provider]: false })); }} onChange={event => setKeyDrafts(current => ({ ...current, [provider]: event.target.value }))} />
-                      <Button type="submit" variant="outline" disabled={busy || !draft.trim()}>{t('Lưu key')}</Button>
-                    </form>}
                   </div>
                   <div className="setting-control">
                     <Switch checked={active} disabled={busy} labelledBy={titleId} onChange={on => {
@@ -240,6 +215,33 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       }
                     }} />
                   </div>
+                  {/* A key is long and this row is narrow, so the field takes a line of its own below the
+                      switch rather than sharing the text column with it (user, 2026-09-20). */}
+                    {active && !local && <form className="setting-key-form" onSubmit={event => {
+                      event.preventDefault();
+                      const key = draft.trim();
+                      if (!key || key === SAVED_KEY_MASK) return;
+                      void act(async () => {
+                        onConnections(await orglet.connect(provider, key));
+                        setKeyDrafts(current => ({ ...current, [provider]: '' }));
+                        setEditing(current => ({ ...current, [provider]: false }));
+                        setReplacing(current => ({ ...current, [provider]: false }));
+                        return t('Đã lưu API key {0}', [name]);
+                      });
+                    }}>
+                      <Button type="button" size="icon" variant="ghost" className="setting-key-file" disabled={busy} aria-label={t('Từ tệp')} onClick={() => void act(async () => {
+                        const next = await orglet.connect(provider);
+                        onConnections(next);
+                        if (next[provider]) {
+                          setKeyDrafts(current => ({ ...current, [provider]: '' }));
+                          setEditing(current => ({ ...current, [provider]: false }));
+                          setReplacing(current => ({ ...current, [provider]: false }));
+                          return t('Đã lưu API key {0}', [name]);
+                        }
+                      })}><FileKey size={15} /></Button>
+                      <input type="password" name={`${provider}-api-key`} autoComplete="off" spellCheck={false} disabled={busy} value={showMask ? SAVED_KEY_MASK : draft} placeholder={connections[provider] ? t('Nhập key mới để thay') : t('Dán hoặc nhập API key')} aria-label={t('API key {0}', [name])} onFocus={() => { if (connections[provider] && !draft) setReplacing(current => ({ ...current, [provider]: true })); }} onBlur={() => { if (!draft) setReplacing(current => ({ ...current, [provider]: false })); }} onChange={event => setKeyDrafts(current => ({ ...current, [provider]: event.target.value }))} />
+                      <Button type="submit" variant="outline" disabled={busy || !draft.trim()}>{t('Lưu key')}</Button>
+                    </form>}
                 </div>;
               })}
             </>}
@@ -295,7 +297,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.restore()) ? t('Đã khôi phục các mục còn thiếu') : undefined)}><ArchiveRestore size={14} />{t('Khôi phục từ tệp')}</Button>
               </Row>
               <Row title={t('Phiên bản')} description={`Orglet ${appVersion} · SQLite ${workspace.sqliteVersion}`} />
-              <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi cuộc trò chuyện, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet.')} />
+              <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi cuộc trò chuyện, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet, và không một bí mật nào bị tổn hại trong quá trình làm ra app này.')} />
             </>}
           </section>
         </div>
