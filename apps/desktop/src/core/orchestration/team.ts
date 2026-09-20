@@ -1,4 +1,6 @@
+import { WorkspaceGrants } from '../storage/workspace-grants';
 import { assignmentKey, claimAssignment, resourcesOverlap } from './assignments';
+import { TeamRecovery } from './team-recovery';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import type { Artifact, Run, Skill, Task, Team, Worker } from '../../shared/contracts';
 import { MISSING_PLAN_ERROR, UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
@@ -14,7 +16,8 @@ export class TeamRunner {
   pause(taskId: string) { const control = this.active.get(taskId); if (control) control.paused = true; this.runner.pause(taskId); }
   assertResumable(taskId: string) {
     const detail = this.store.detail(taskId);
-    const latest = new Map(detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === (detail.task.inputRevision ?? 0)).map(run => [`${run.stage}:${run.snapshot.worker.id}`, run]));
+    const latest = new Map(detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === (detail.task.inputRevision ?? 0))
+      .map(run => [`${run.stage}:${run.stage === 'member' ? assignmentKey(run) : run.snapshot.worker.id}`, run]));
     for (const run of latest.values()) if (run.status !== 'completed') this.runner.assertResumable(run);
   }
   async run(task: Task, team: Team, resume = false) {
@@ -29,7 +32,7 @@ export class TeamRunner {
       const planned = this.store.transaction(() => {
         const plan = prior.runs.findLast(r => r.stage === 'plan' && (resume || r.status === 'completed')) || this.createRun(task, team, team.synthesizerId, 'plan', []);
         const members = new Map(team.memberIds.map(workerId => {
-          const saved = prior.runs.findLast(r => r.stage === 'member' && r.snapshot.worker.id === workerId && (resume || r.status === 'completed'));
+          const saved = prior.runs.findLast(r => r.stage === 'member' && assignmentKey(r) === workerId && (resume || r.status === 'completed'));
           return [workerId, saved ?? this.createRun(task, team, workerId, 'member', [])];
         }));
         const synthesis = (resume && prior.runs.findLast(r => r.stage === 'synthesis')) || this.createRun(task, team, team.synthesizerId, 'synthesis', []);
@@ -63,7 +66,8 @@ export class TeamRunner {
       const memberArtifacts: Artifact[] = [];
       const successful = new Set<string>();
       const failures: string[] = [];
-      const execute = async (workerId: string) => {
+      const execute = async (workerId: string, signal?: AbortSignal) => {
+        signal?.throwIfAborted();
         if (!this.canDispatch(task)) control.paused = true;
         if (control.cancelled || control.paused) return;
         const existing = this.store.detail(task.id);
@@ -82,7 +86,7 @@ export class TeamRunner {
         });
         const prepared = this.join(planned.members.get(workerId)!, upstream, preflightId);
         const run = claimAssignment(this.store, prepared, assignment);
-        await this.runner.run(task, run, { keepTaskOpen: true, upstream,
+        await this.runner.run(task, run, { keepTaskOpen: true, upstream, signal,
           assignment: assignment.expectedOutput ? assignment.brief + '\nExpected output: ' + assignment.expectedOutput : assignment.brief });
         const result = this.store.detail(task.id);
         const resultStatus = result.runs.find(candidate => candidate.id === run.id)?.status;
@@ -97,8 +101,9 @@ export class TeamRunner {
       };
       const orderedAssignments = team.memberIds.map(workerId => plannedNow.snapshot.plan!.assignments.find(assignment => assignment.workerId === workerId)).filter(assignment => assignment !== undefined);
       const pending = new Map(orderedAssignments.map(assignment => [assignment.workerId, assignment]));
-      const drain = async () => {
+      const drain = async (signal?: AbortSignal) => {
         while (pending.size && !control.cancelled && !control.paused) {
+          signal?.throwIfAborted();
           const ready = [...pending.values()].filter(assignment => (assignment.dependsOn ?? []).every(workerId => successful.has(workerId)));
           const batch: typeof ready = [];
           for (const assignment of ready) {
@@ -115,7 +120,7 @@ export class TeamRunner {
             break;
           }
           for (const assignment of batch) pending.delete(assignment.workerId);
-          const results = await Promise.allSettled(batch.map(assignment => execute(assignment.workerId)));
+          const results = await Promise.allSettled(batch.map(assignment => execute(assignment.workerId, signal)));
           const rejected = results.find(result => result.status === 'rejected');
           if (rejected?.status === 'rejected') throw rejected.reason;
         }
@@ -123,13 +128,41 @@ export class TeamRunner {
       await drain();
       if (control.cancelled) { this.finish(task, 'cancelled'); return; }
       if (control.paused) { this.finish(task, 'paused'); return; }
-      if (!memberArtifacts.length) { this.finish(task, 'failed'); return; }
       // Freeze a deterministic join input from committed member artifacts only. Do not invent missing roles.
       memberArtifacts.sort((a, b) => a.id.localeCompare(b.id));
-      const synthesis = this.join(planned.synthesis, memberArtifacts, preflightId);
-      await this.runner.run(task, synthesis, { keepTaskOpen: true, upstream: memberArtifacts, limitations: failures.map(failure => `Role chưa hoàn tất: ${failure}`) });
+      // A resumed lead already received recovery results in its checkpointed tool messages.
+      // Keep its original join immutable even when those decisions produced more artifacts.
+      const leadDispatched = this.hasDispatch(planned.synthesis.id);
+      const originalJoin = resume && leadDispatched
+        ? memberArtifacts.filter(artifact => planned.synthesis.snapshot.upstreamArtifactIds?.includes(artifact.id)) : memberArtifacts;
+      const synthesis = this.join(planned.synthesis, originalJoin, preflightId);
+      const limitations = failures.map(failure => `Role chưa hoàn tất: ${failure}`);
+      await this.runner.run(task, synthesis, { keepTaskOpen: true, upstream: memberArtifacts, limitations,
+        reassign: async (callId, input, signal) => {
+          signal.throwIfAborted();
+          if (control.cancelled || control.paused) throw new Error('Hội bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.');
+          const attempt = new TeamRecovery(this.store).prepare(synthesis, callId, input);
+          if (attempt.status !== 'completed') this.runner.assertResumable(attempt);
+          planned.members.set(assignmentKey(attempt), attempt);
+          pending.delete(assignmentKey(attempt));
+          await execute(assignmentKey(attempt), signal);
+          await drain(signal);
+          signal.throwIfAborted();
+          const detail = this.store.detail(task.id);
+          failures.splice(0, failures.length);
+          for (const assignment of orderedAssignments) {
+            if (successful.has(assignment.workerId)) continue;
+            const latest = detail.runs.findLast(candidate => candidate.stage === 'member'
+              && (candidate.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0) && assignmentKey(candidate) === assignment.workerId);
+            failures.push(`${latest?.snapshot.worker.name ?? assignment.workerId}: ${latest?.error ?? 'chưa hoàn tất'}`);
+          }
+          limitations.splice(0, limitations.length, ...failures.map(failure => `Role chưa hoàn tất: ${failure}`));
+          return { attemptId: attempt.id, status: this.store.get<Run>('runs', attempt.id).status,
+            results: memberArtifacts.map(artifact => ({ id: artifact.id, runId: artifact.runId, report: artifact.report })), failures };
+        },
+      });
       const result = this.store.get<Run>('runs', synthesis.id);
-      this.finish(task, control.cancelled ? 'cancelled' : result.status === 'paused' ? 'paused' : result.status === 'completed' ? failures.length ? 'partial' : 'completed' : 'partial');
+      this.finish(task, control.cancelled ? 'cancelled' : result.status === 'paused' ? 'paused' : !memberArtifacts.length ? 'failed' : result.status === 'completed' ? failures.length ? 'partial' : 'completed' : 'partial');
     } catch (error) {
       const last = this.store.detail(task.id).runs.at(-1);
       if (last && last.status !== 'completed') this.store.update('runs', { ...last, error: error instanceof PreflightError ? error.message : 'Hội bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.' });
@@ -157,7 +190,7 @@ export class TeamRunner {
         if (runs.some(run => run.status === 'completed' && detail.artifacts.some(artifact => artifact.runId === run.id))) { answered++; continue; }
         let run = resume ? runs.findLast(item => ['paused', 'interrupted', 'waiting_budget', 'queued'].includes(item.status)) : undefined;
         if (!run) {
-          run = { id: id(), taskId: task.id, stage: 'group', status: 'queued', snapshot: { toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill: this.store.get<Skill>('skills', worker.skillId), inputRevision: revision, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };
+          run = { id: id(), taskId: task.id, stage: 'group', status: 'queued', snapshot: { workspaceGrant: new WorkspaceGrants(this.store).snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill: this.store.get<Skill>('skills', worker.skillId), inputRevision: revision, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };
           this.store.put('runs', run, { column: 'task_id', value: task.id });
         }
         await this.runner.run(task, run, { keepTaskOpen: true });
@@ -174,17 +207,20 @@ export class TeamRunner {
   private createRun(task: Task, team: Team, workerId: string, stage: 'plan' | 'member' | 'synthesis', upstream: Artifact[]) {
     const worker = this.store.get<Worker>('workers', workerId);
     const skill = this.store.get<Skill>('skills', worker.skillId);
-    const run: Run = { id: id(), taskId: task.id, stage, status: 'queued', snapshot: { toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, team, inputRevision: task.inputRevision ?? 0, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources }, upstreamArtifactIds: upstream.map(a => a.id) }, startedAt: now(), error: null };
+    const run: Run = { id: id(), taskId: task.id, stage, status: 'queued', snapshot: { workspaceGrant: new WorkspaceGrants(this.store).snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, team, inputRevision: task.inputRevision ?? 0, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources }, upstreamArtifactIds: upstream.map(a => a.id) }, startedAt: now(), error: null };
     this.store.put('runs', run, { column: 'task_id', value: task.id });
     this.store.event(run.id, stage === 'plan' ? 'Đang phân việc.' : stage === 'synthesis' ? `Đang tổng hợp ${upstream.length} kết quả đã lưu.` : `Bắt đầu role ${worker.name}.`);
     return run;
   }
   private join(run: Run, upstream: Artifact[], preflightId?: string) {
     const ids = upstream.map(artifact => artifact.id);
-    const dispatched = this.store.db.prepare('SELECT COUNT(*) AS count FROM reservations WHERE run_id=?').get(run.id)!.count;
+    const dispatched = this.hasDispatch(run.id);
     if (dispatched && (JSON.stringify(run.snapshot.upstreamArtifactIds ?? []) !== JSON.stringify(ids) || run.snapshot.preflightId !== preflightId)) throw new Error('Join input đã thay đổi; cần tạo lần chạy mới.');
     const prepared = { ...run, snapshot: { ...run.snapshot, upstreamArtifactIds: ids, ...(preflightId ? { preflightId } : {}) } };
     this.store.update('runs', prepared); return prepared;
+  }
+  private hasDispatch(runId: string): boolean {
+    return !!this.store.db.prepare('SELECT 1 FROM reservations WHERE run_id=? UNION ALL SELECT 1 FROM checkpoints WHERE id=? LIMIT 1').get(runId, runId);
   }
   private deferQueued(planned: { members: Map<string, Run>; synthesis: Run }, error: string) {
     for (const run of [...planned.members.values(), planned.synthesis]) {
@@ -194,11 +230,17 @@ export class TeamRunner {
   private finish(task: Task, status: Task['status']) {
     this.store.transaction(() => {
       const detail = this.store.detail(task.id);
+      if (status === 'completed' && this.unresolvedMessages(task).length) status = 'partial';
       const final = detail.artifacts.findLast(artifact => detail.runs.some(run => run.id === artifact.runId && run.stage === 'synthesis' && (run.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0)));
       if (['completed', 'partial'].includes(status) && final?.report.review?.checks.some(check => check.status === 'not_assessed')) status = 'waiting_input';
       for (const run of this.store.detail(task.id).runs) if (run.status === 'queued') this.store.update('runs', { ...run, status: status === 'paused' ? 'paused' : status === 'cancelled' ? 'cancelled' : 'interrupted' });
       this.store.update('tasks', { ...this.store.get<Task>('tasks', task.id), status });
     });
     this.notify();
+  }
+  private unresolvedMessages(task: Task) {
+    return this.store.detail(task.id).events.filter(event => event.teamMessage?.inputRevision === (task.inputRevision ?? 0)
+      && event.teamMessage.teamId === task.teamId && event.teamMessage.state === 'pending'
+      && ['question', 'blocker'].includes(event.teamMessage.kind));
   }
 }

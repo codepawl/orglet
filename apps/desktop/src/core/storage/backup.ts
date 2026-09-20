@@ -1,7 +1,8 @@
 import { WorkspaceGrantSnapshot } from '../../shared/workspace-access';
 import { assertTeamPlan } from '../orchestration/plan';
-import { ToolCapabilities } from '../../shared/tool-policy';
 import { z } from 'zod';
+import { ToolCapabilities, snapshotCapabilities } from '../../shared/tool-policy';
+import { TeamMessage, TeamReassignment } from '../../shared/team-messages';
 import { createHash } from 'node:crypto';
 import { Store, now, id } from './database';
 import { Id, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput, TeamPlan, PlanAssignment } from '../../shared/contracts';
@@ -22,8 +23,8 @@ const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPack
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
 const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
-const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
-const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime() }).strict();
+const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
+const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime(), teamMessage: TeamMessage.optional() }).strict();
 const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime() }).strict();
 const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional() }).strict();
 const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: z.iso.datetime(), sourceHashes: z.record(Id, Hash), result: DatasetProfile }).strict();
@@ -77,6 +78,57 @@ function validateRelations(data: Payload) {
   for (const task of tasks.values()) if (!workers.has(task.workerId) || task.sourceIds.some(id => !sources.has(id)) || (task.teamId && (!teams.has(task.teamId) || task.teamSnapshot?.id !== task.teamId))) fail('Task thiếu Tí, hội hoặc nguồn.');
   for (const run of runs.values()) if (!tasks.has(run.taskId) || run.snapshot.worker.skillId !== run.snapshot.skill.id || run.snapshot.upstreamArtifactIds?.some(id => !artifacts.has(id))) fail('Snapshot hoặc task của run không hợp lệ.');
   for (const run of runs.values()) {
+    if (run.snapshot.assignment && (run.stage !== 'member' || (!run.snapshot.reassignment && run.snapshot.assignment.workerId !== run.snapshot.worker.id))) {
+      fail('Người nhận không khớp phần việc.');
+    }
+    const reassignment = run.snapshot.reassignment;
+    if (reassignment) {
+      const source = runs.get(reassignment.sourceRunId);
+      const decision = runs.get(reassignment.decisionRunId);
+      const team = run.snapshot.team;
+      const revision = run.snapshot.inputRevision ?? 0;
+      if (!source || !decision || !team || run.stage !== 'member' || !run.snapshot.assignment
+        || source.id === run.id || source.stage !== 'member' || source.taskId !== run.taskId || decision.taskId !== run.taskId
+        || source.snapshot.team?.id !== team.id || decision.snapshot.team?.id !== team.id
+        || (source.snapshot.inputRevision ?? 0) !== revision || (decision.snapshot.inputRevision ?? 0) !== revision
+        || decision.stage !== 'synthesis' || decision.snapshot.worker.id !== team.synthesizerId
+        || reassignment.newWorkerId !== run.snapshot.worker.id || !team.memberIds.includes(reassignment.newWorkerId)
+        || reassignment.assignmentWorkerId !== run.snapshot.assignment.workerId
+        || (source.snapshot.assignment?.workerId ?? source.snapshot.worker.id) !== reassignment.assignmentWorkerId
+        || (source.snapshot.assignment && digest(source.snapshot.assignment) !== digest(run.snapshot.assignment))) {
+        fail('Quyết định giao lại việc không hợp lệ.');
+      }
+      const peers = [...runs.values()].filter(candidate => candidate.taskId === run.taskId
+        && (candidate.snapshot.inputRevision ?? 0) === revision && candidate.snapshot.reassignment);
+      if (peers.filter(candidate => candidate.snapshot.reassignment!.assignmentWorkerId === reassignment.assignmentWorkerId).length > 2
+        || peers.filter(candidate => candidate.snapshot.reassignment!.decisionRunId === reassignment.decisionRunId
+          && candidate.snapshot.reassignment!.callId === reassignment.callId).length !== 1) fail('Quyết định giao lại việc không hợp lệ.');
+      const ancestry = new Set([run.id]);
+      let ancestor = source;
+      while (ancestor) {
+        if (ancestry.has(ancestor.id)) fail('Quyết định giao lại việc không hợp lệ.');
+        ancestry.add(ancestor.id);
+        ancestor = ancestor.snapshot.reassignment ? runs.get(ancestor.snapshot.reassignment.sourceRunId) : undefined;
+      }
+      const recipient = [...runs.values()].find(candidate => candidate.taskId === run.taskId && candidate.stage === 'member'
+        && (candidate.snapshot.inputRevision ?? 0) === revision && candidate.snapshot.team?.id === team!.id
+        && !candidate.snapshot.reassignment && candidate.snapshot.worker.id === reassignment.newWorkerId);
+      const plan = [...runs.values()].findLast(candidate => candidate.taskId === run.taskId && candidate.stage === 'plan'
+        && candidate.status === 'completed' && (candidate.snapshot.inputRevision ?? 0) === revision && candidate.snapshot.team?.id === team!.id)?.snapshot.plan;
+      const assignment = plan?.assignments.find(candidate => candidate.workerId === reassignment.assignmentWorkerId);
+      if (!recipient || !assignment || digest(assignment) !== digest(run.snapshot.assignment)) fail('Quyết định giao lại việc không hợp lệ.');
+      const capabilities = run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider);
+      for (const original of [source!, recipient!]) {
+        const allowed = original.snapshot.toolCapabilities ?? snapshotCapabilities(original.snapshot.worker.provider);
+        if (capabilities.some(capability => !allowed.includes(capability))) fail('Quyết định giao lại việc không hợp lệ.');
+        const grant = run.snapshot.workspaceGrant;
+        const originalGrant = original.snapshot.workspaceGrant;
+        if (grant && (!originalGrant || grant.id !== originalGrant.id || grant.taskId !== originalGrant.taskId
+          || grant.revision !== originalGrant.revision || grant.permissions.some(permission => !originalGrant.permissions.includes(permission)))) {
+          fail('Quyết định giao lại việc không hợp lệ.');
+        }
+      }
+    }
     const plan = run.snapshot.plan;
     if (!plan) continue;
     if (run.stage !== 'plan' || !run.snapshot.team) fail('Phân việc không thuộc lần chạy trưởng phòng.');
@@ -107,7 +159,36 @@ function validateRelations(data: Payload) {
   }
   if (ready.length !== runs.size) fail('Join có vòng lặp giữa các báo cáo.');
   for (const run of runs.values()) if (run.snapshot.input?.sourceIds.some(id => !tasks.get(run.taskId)!.sourceIds.includes(id))) fail('Snapshot tham chiếu nguồn ngoài task.');
-  for (const event of data.events) if (!runs.has(event.runId)) fail('Event thiếu run.');
+  const events = new Map(data.events.map(event => [event.id, event]));
+  for (const event of data.events) {
+    const run = runs.get(event.runId);
+    if (!run) fail('Event thiếu run.');
+    const message = event.teamMessage;
+    if (!message) continue;
+    const team = run!.snapshot.team;
+    if (!team || message.teamId !== team.id || message.senderId !== run!.snapshot.worker.id
+      || message.inputRevision !== (run!.snapshot.inputRevision ?? 0)
+      || ![...team.memberIds, team.synthesizerId].includes(message.recipientId)) fail('Thông điệp không khớp team hoặc lượt.');
+    if (message.assignmentWorkerId && message.assignmentWorkerId !== (run!.snapshot.assignment?.workerId ?? run!.snapshot.worker.id)) {
+      fail('Thông điệp không khớp phần việc.');
+    }
+    if ((message.state === 'resolved') !== !!message.resolution) fail('Thông điệp thiếu quyết định xử lý hợp lệ.');
+    if (message.resolution) {
+      const decision = runs.get(message.resolution.runId);
+      if (!decision || decision.stage !== 'synthesis' || decision.taskId !== run!.taskId
+        || decision.snapshot.team?.id !== team!.id || decision.snapshot.worker.id !== team!.synthesizerId
+        || (decision.snapshot.inputRevision ?? 0) !== message.inputRevision
+        || !['question', 'blocker'].includes(message.kind)) fail('Quyết định xử lý không thuộc trưởng nhóm trong lượt.');
+    }
+    if (message.replyTo) {
+      const parent = events.get(message.replyTo);
+      const parentRun = parent && runs.get(parent.runId);
+      if (!parent?.teamMessage || parentRun?.taskId !== run!.taskId || parent.teamMessage.teamId !== message.teamId
+        || parent.teamMessage.inputRevision !== message.inputRevision || parent.teamMessage.kind !== 'question'
+        || parent.teamMessage.senderId !== message.recipientId || parent.teamMessage.recipientId !== message.senderId
+        || message.kind !== 'response') fail('Phản hồi không khớp thông điệp gốc.');
+    } else if (message.kind === 'response') fail('Phản hồi thiếu thông điệp gốc.');
+  }
   const artifactRuns = new Set<string>();
   const findingIds = new Set<string>();
   for (const artifact of artifacts.values()) {

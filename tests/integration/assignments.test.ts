@@ -120,8 +120,7 @@ it('serializes overlapping write ownership while preserving parallel independent
 
 it('does not dispatch a dependent worker when its prerequisite fails', async () => {
   const result = await executeTeam({ dependencies: true, failFirst: true });
-  // Lead recovery is added by COD-102; this layer stops when no member has an output.
-  expect(result.calls).toEqual(['first']);
+  expect(result.calls).toEqual(['first', 'synthesis']);
   expect(result.detail.task.status).toBe('failed');
   expect(result.detail.runs.some(run => run.error?.includes('đang chờ kết quả'))).toBe(true);
 });

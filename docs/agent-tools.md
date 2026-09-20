@@ -23,3 +23,11 @@ API workers can use `web_read_url` and `web_search` only with an explicit `netwo
 This change supplies the workspace execution backend and core grant services. Workspace tool dispatch and desktop grant controls are connected by the following integration changes. It does not claim that the current desktop UI exposes file editing yet.
 
 Verification includes file/path fixtures, grant revocation and backup boundaries, process handles, web permission/provenance tests, and packaged isolation through `pnpm test:isolation --packaged`. Native tests are separate from model/provider fixtures.
+
+## Team coordination
+
+Each message belongs to one team, turn and assignment. Questions require a response; acknowledging a message cannot silently close a question or blocker. Processed responses and handoffs remain acknowledged after resume. Two questions per assignment are allowed; further questions become blockers for the lead. The turn also has a bounded message count.
+
+The lead can record a resolution or reassign an unfinished assignment to a member frozen into the current turn. Reassignment preserves resources and dependencies and intersects both workers' original grants. At most two reassignment attempts are allowed per assignment. Dispatch alone never counts as success: dependents wait for committed output, and unresolved blockers keep the final result partial.
+
+The API orchestration tests cover parallel question/response exchange, durable acknowledgements, cross-team rejection, failed prerequisite recovery, pause/resume and cancellation on a recovery deadline. CLI fixtures are connected with the controlled harness bridge in the integration layer; these tests do not establish live provider behavior.
