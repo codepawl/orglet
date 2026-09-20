@@ -1174,6 +1174,13 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .markdown pre { padding:12px 14px; border-radius:10px; background:var(--surface); overflow-x:auto; white-space:pre; }
 .markdown pre code { padding:0; background:none; }
 .markdown blockquote { padding:10px 14px; border-radius:10px; background:var(--surface); color:var(--muted); }
+.markdown-table-wrap { max-width:100%; overflow-x:auto; }
+.markdown table { border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; font-variant-numeric:tabular-nums; }
+.markdown th,.markdown td { padding:6px 10px; vertical-align:top; }
+.markdown th { background:var(--surface); font-weight:600; }
+.markdown th:first-child,.markdown td:first-child { padding-left:0; }
+.markdown th:first-child { padding-left:10px; border-radius:7px 0 0 7px; }
+.markdown th:last-child { border-radius:0 7px 7px 0; }
 .markdown .markdown-break { height:6px; }
 .markdown-link { text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:2px; }
 .markdown-link-address { color:var(--muted); font-size:.9em; }
