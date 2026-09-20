@@ -43,6 +43,17 @@ export function downgradeUncitedWorkspaceChecks(report: Report) {
   if (report.review.checks.some(check => check.status === 'not_assessed')) report.review.recommendation = 'insufficient_evidence';
 }
 
+export function upstreamNeedsReview(upstream: Artifact[]) {
+  return upstream.some(artifact => artifact.report.findings.some(finding => finding.severity === 'critical')
+    || (artifact.report.review && artifact.report.review.recommendation !== 'ready_for_human_review'));
+}
+
+export function downgradePrematureRecommendation(report: Report, upstream: Artifact[]) {
+  if (report.review?.recommendation !== 'ready_for_human_review' || !upstreamNeedsReview(upstream)) return;
+  report.review.recommendation = 'insufficient_evidence';
+  report.limitations.push('Báo cáo đầu vào còn mục chưa đủ bằng chứng; chưa thể khuyến nghị sẵn sàng review.');
+}
+
 // Structural evidence gates cannot establish that a model's interpretation is correct.
 export function validateReview(report: Report, upstream: Artifact[], sourceIds: ReadonlySet<string>, validateChecker: (id: string, sources: string[]) => void,
   validateProcess: (id: string, status: 'pass' | 'fail' | 'not_assessed') => void = () => { throw new Error('Check tham chiếu tiến trình chưa được cung cấp cho lần chạy.'); }) {
@@ -68,6 +79,5 @@ export function validateReview(report: Report, upstream: Artifact[], sourceIds: 
   for (const conflict of upstream.flatMap(artifact => artifact.report.review?.conflicts ?? [])) {
     if (!review.conflicts.some(item => conflict.findingIds.every(id => item.findingIds.includes(id)))) throw new Error('Review đã bỏ mất bất đồng chưa được phân xử.');
   }
-  const upstreamNeedsReview = upstream.some(artifact => artifact.report.findings.some(finding => finding.severity === 'critical') || (artifact.report.review && artifact.report.review.recommendation !== 'ready_for_human_review'));
-  if (review.recommendation === 'ready_for_human_review' && (!review.checks.length || review.checks.some(check => check.status !== 'pass') || review.conflicts.length || report.findings.some(finding => finding.severity === 'critical') || upstreamNeedsReview)) throw new Error('Chưa thể khuyến nghị sẵn sàng khi còn check thiếu/lỗi, bất đồng hoặc finding nghiêm trọng.');
+  if (review.recommendation === 'ready_for_human_review' && (!review.checks.length || review.checks.some(check => check.status !== 'pass') || review.conflicts.length || report.findings.some(finding => finding.severity === 'critical') || upstreamNeedsReview(upstream))) throw new Error('Chưa thể khuyến nghị sẵn sàng khi còn check thiếu/lỗi, bất đồng hoặc finding nghiêm trọng.');
 }
