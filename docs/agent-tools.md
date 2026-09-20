@@ -2,7 +2,7 @@
 
 Workers can read attached sources and reviewed skill resources. With a separate workspace grant, they can list, search, read and edit files in a private working copy, and run commands when granted execution permission. Details contains the workspace controls and a separate web permission. Demo does not execute these tools.
 
-The core keeps tool declarations, argument schemas, required capabilities and execution limits in one catalog. Every model call is checked against the tools allowed for its run stage and permissions. A planner cannot skip planning by calling the normal reply tool. Instructions and imported skills cannot grant permissions.
+The core keeps tool declarations, argument schemas, required capabilities and execution limits in one catalog. Every model call is checked against the tools allowed for its run stage and permissions. A planner with a granted workspace can list, search and read its private copy before assigning file ownership, but cannot write, run commands or use the web at that stage. A planner cannot skip planning by calling the normal reply tool. Instructions and imported skills cannot grant permissions.
 
 Assigned team members also have send, read and acknowledge tools for the [team mailbox](team-chat.md#worker-messages). These validate membership and the current turn at execution. They do not grant file or network access. API workers and the CLI tool bridge use the same mailbox handlers.
 
