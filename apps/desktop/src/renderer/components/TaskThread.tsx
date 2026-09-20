@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Check, RotateCcw, Reply, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -16,7 +16,8 @@ import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Markdown } from './Markdown';
-import { replyToAnswer, toggleReaction, useReaction } from './messageMarks';
+import { reactionEmoji, reactionMeanings, reactionOrder, replyToAnswer, toggleReaction, useReaction } from './messageMarks';
+import { ReactionBar } from './ReactionBar';
 import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
@@ -165,12 +166,17 @@ function ChatReply({ artifact, author, action }: { artifact: Artifact; author: s
  * way. They sit with copy and download because they are all things you do to one answer.
  */
 function AnswerMarks({ artifactId, author, text }: { artifactId: string; author: string; text: string }) {
-  const reaction = useReaction(artifactId);
   return <>
     <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(artifactId, author, text)}><Reply size={15} /></Button>
-    <Button size="icon" className={reaction === 'up' ? 'marked' : undefined} aria-pressed={reaction === 'up'} aria-label={t('Đúng hướng')} title={t('Đúng hướng')} onClick={() => toggleReaction(artifactId, 'up')}><ThumbsUp size={14} /></Button>
-    <Button size="icon" className={reaction === 'down' ? 'marked' : undefined} aria-pressed={reaction === 'down'} aria-label={t('Chưa ổn')} title={t('Chưa ổn')} onClick={() => toggleReaction(artifactId, 'down')}><ThumbsDown size={14} /></Button>
+    <AnswerReaction messageId={artifactId} />
   </>;
+}
+
+/** The thread's own wiring of the shared bar: where a reaction is kept, and what each face means to a worker. */
+function AnswerReaction({ messageId }: { messageId: string }) {
+  const picked = useReaction(messageId);
+  const options = reactionOrder.map(name => ({ name, emoji: reactionEmoji[name], meaning: reactionMeanings[name] }));
+  return <ReactionBar options={options} picked={picked} onPick={name => toggleReaction(messageId, name)} />;
 }
 
 /** Copy and download for an answer or document, in the format the user picks or saved as default. */

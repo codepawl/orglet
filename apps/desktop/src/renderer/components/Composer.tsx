@@ -194,7 +194,7 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   const send = () => {
     const extra = text.trim(); if (!extra || busy || blocked) return;
     // A quote and a thumb are worth nothing if only the screen hears them, so they go in ahead of what was typed.
-    const brief = briefWithMarks(extra, reply, reaction, latestAnswer);
+    const brief = briefWithMarks(extra, reply, reaction);
     setText('');
     clearReplyTarget();
     action(() => orglet.call('reviseTask', { taskId: detail.task.id, brief, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }));

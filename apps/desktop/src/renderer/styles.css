@@ -397,7 +397,15 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer-reply strong { flex-shrink:0; color:var(--text); font-weight:600; }
 .composer-reply span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* A thumb that has been pressed keeps the accent, so the mark is visible without a second colour. */
-.message-actions .button.marked { color:var(--accent); }
+/* Reactions: the row opens on demand, because six faces under every answer is noise. A picked one stays on the
+   message as the face itself, which is what anyone reading the thread is looking for. */
+.reaction-bar { position:relative; display:flex; align-items:center; }
+.reaction-picked { display:grid; place-items:center; width:30px; height:30px; padding:0; border:0; border-radius:50%; background:color-mix(in srgb, var(--accent) 16%, var(--bg)); font-size:17px; line-height:1; cursor:pointer; }
+.reaction-picked:hover { background:color-mix(in srgb, var(--accent) 26%, var(--bg)); }
+.reaction-row { position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%); z-index:5; display:flex; gap:4px; padding:7px 9px; border-radius:999px; background:var(--bg); box-shadow:0 10px 28px #00000026, 0 0 0 1px #0000000f; animation:menu-in var(--motion-quick) var(--ease-out); }
+.reaction-row button { display:grid; place-items:center; width:40px; height:40px; padding:0; border:0; border-radius:50%; background:none; font-size:23px; line-height:1; cursor:pointer; transition:transform var(--motion-quick) var(--ease-out), background var(--motion-quick); }
+.reaction-row button:hover,.reaction-row button:focus-visible { background:var(--surface); transform:scale(1.22); }
+@media(prefers-reduced-motion:reduce) { .reaction-row { animation:none; } .reaction-row button { transition:none; } .reaction-row button:hover { transform:none; } }
 .thread-composer { width:100%; max-width:780px; margin:0 auto; padding:8px var(--page-x) 0; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
 /* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,
