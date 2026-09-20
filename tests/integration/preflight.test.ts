@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { Preflight } from '../../apps/desktop/src/core/orchestration/preflight';
+import { WorkPolicy } from '../../apps/desktop/src/core/orchestration/work-policy';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { analyze } from '../../apps/desktop/src/profiler/analyze';
@@ -14,7 +15,7 @@ import { isPlanRequest, planReply } from './team-plan';
 
 let directory: string; let store: Store; let core: CoreService; let calls: number; let contexts: string[];
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-preflight-')); store = new Store(join(directory, 'state.sqlite')); calls = 0; contexts = []; });
-afterEach(async () => { store.close(); await rm(directory, { recursive: true, force: true }); });
+afterEach(async () => { await core?.runner.shutdown(); store.close(); await rm(directory, { recursive: true, force: true }); });
 function service(executor: ProfileExecutor) {
   return new CoreService(store, () => {}, async () => ({ async request(messages, tools) {
     if (isPlanRequest(tools)) return planReply(messages);
@@ -24,8 +25,8 @@ function service(executor: ProfileExecutor) {
   } }), executor);
 }
 async function idle(taskId: string) {
-  for (let i = 0; i < 300 && core.teams.isActive(taskId); i++) await new Promise(resolve => setTimeout(resolve, 10));
-  expect(core.teams.isActive(taskId)).toBe(false);
+  for (let i = 0; i < 300 && (core.teams.isActive(taskId) || core.runner.isActive(taskId)); i++) await new Promise(resolve => setTimeout(resolve, 10));
+  expect(core.teams.isActive(taskId) || core.runner.isActive(taskId)).toBe(false);
 }
 async function setup(files: { name: string; content: string }[], idColumn: string | null = 'id', excludedSources: { name: string; reason: string }[] = []) {
   const paths = [];
@@ -119,9 +120,18 @@ it('retains separate checker scopes and only reuses matching sources and policy'
   expect(store.detail(taskId).preflights[0]).toEqual(first);
   expect(() => core.backups.preview(core.backups.export())).not.toThrow();
 });
+it('does not capture handoffs after the store is closed', () => {
+  core = service(input => analyze(input));
+  store.close();
+  expect(() => core.policy.captureHandoffs()).not.toThrow();
+  expect(() => new WorkPolicy(store, () => new Date()).captureHandoffs()).not.toThrow();
+  store.close();
+});
 it('migrates the v4 unique-task preflight table without altering retained records', async () => {
   core = service(input => analyze(input)); const { taskId } = await setup(pair); await idle(taskId);
-  const retained = store.detail(taskId).preflights[0]; store.close();
+  const retained = store.detail(taskId).preflights[0];
+  await core.runner.shutdown();
+  store.close();
   const legacy = new DatabaseSync(join(directory, 'state.sqlite'));
   legacy.exec('BEGIN; CREATE TABLE old_preflights (id TEXT PRIMARY KEY, task_id TEXT NOT NULL UNIQUE REFERENCES tasks(id), data TEXT NOT NULL); INSERT INTO old_preflights SELECT id,task_id,data FROM preflights; DROP TABLE preflights; ALTER TABLE old_preflights RENAME TO preflights; DELETE FROM migrations WHERE version=5; COMMIT;');
   legacy.close(); store = new Store(join(directory, 'state.sqlite'));
