@@ -22,7 +22,7 @@ import { ToolCalls } from '../storage/tool-calls';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
-import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, validateReview } from '../review';
+import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, type Colleague } from '../context/compiler';
 import { applyThreadManifest, compactThread, fitThread, threadMessages } from '../context/thread';
@@ -586,6 +586,7 @@ export class Runner {
     const report: Report = applyReviewPolicy(submitted, policy, profiles, options.upstream);
     if (run.stage === 'member' && run.snapshot.workspaceGrant) {
       downgradeUncitedWorkspaceChecks(report);
+      downgradeUncitedWorkspaceFindings(report);
       downgradePrematureRecommendation(report, options.upstream ?? []);
     }
     const validateChecker = (checkerId: string, sourceIds: string[]) => {

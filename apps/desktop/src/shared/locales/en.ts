@@ -149,6 +149,8 @@ export const en: Dictionary = {
   'Đã tích hợp': 'Integrated',
   'Đã áp dụng': 'Applied',
   'Nhân viên Demo chưa dùng được tools workspace và web. Chọn kết nối API hoặc harness đã đăng nhập.': 'Demo workers cannot use workspace or web tools. Choose an API connection or a signed-in harness.',
+  'Nhận xét workspace chưa có trích dẫn ({0}): {1}. {2}': 'Uncited workspace observation ({0}): {1}. {2}',
+  'Quá nhiều nhận xét workspace chưa có trích dẫn để lưu an toàn.': 'Too many uncited workspace observations to save safely.',
   'Chỉ giao lại phần việc chưa hoàn tất cho thành viên đã có trong lượt.': 'Only unfinished work can be reassigned to a member already included in this turn.',
   'Chỉ trưởng nhóm đang điều phối lượt này được giao lại việc.': 'Only the lead coordinating this turn can reassign work.',
   'Quyết định giao lại việc không hợp lệ.': 'The reassignment decision is invalid.',

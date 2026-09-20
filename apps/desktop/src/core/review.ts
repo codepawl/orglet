@@ -43,6 +43,19 @@ export function downgradeUncitedWorkspaceChecks(report: Report) {
   if (report.review.checks.some(check => check.status === 'not_assessed')) report.review.recommendation = 'insufficient_evidence';
 }
 
+/** Workspace file reads lack a portable source ID; preserve their warning without claiming verified provenance. */
+export function downgradeUncitedWorkspaceFindings(report: Report) {
+  const uncited = report.findings.filter(finding => !finding.sourceIds.length
+    && !(finding.checkerIds?.length) && !(finding.locations?.length));
+  if (!uncited.length) return;
+  if (report.limitations.length + uncited.length > 30) throw new Error('Quá nhiều nhận xét workspace chưa có trích dẫn để lưu an toàn.');
+  for (const finding of uncited) {
+    report.limitations.push(`Nhận xét workspace chưa có trích dẫn (${finding.severity}): ${finding.title}. ${finding.detail}`.slice(0, 2000));
+  }
+  report.findings = report.findings.filter(finding => !uncited.includes(finding));
+  if (report.review?.recommendation === 'ready_for_human_review') report.review.recommendation = 'insufficient_evidence';
+}
+
 export function upstreamNeedsReview(upstream: Artifact[]) {
   return upstream.some(artifact => artifact.report.findings.some(finding => finding.severity === 'critical')
     || (artifact.report.review && artifact.report.review.recommendation !== 'ready_for_human_review'));
