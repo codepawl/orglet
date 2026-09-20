@@ -464,7 +464,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Each turn arrives once, on mount. Streaming re-renders do not remount the section, so this never replays. */
 .user-message,.assistant-message { animation:turn-in var(--motion-base) var(--ease-out); }
 @keyframes turn-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
-.message-byline { display:flex; align-items:center; gap:8px; margin-bottom:14px; font-size:13px; }
+/* The name sits as close to its bubble as the bubble sits to its buttons (user, 2026-09-20): 14px above and 6px
+   below read as two different groupings, when the three are one message. */
+.message-byline { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:13px; }
 .source-links { display:flex; flex-wrap:wrap; margin-top:4px; }
 .source-links .button { font-size:12px; padding:4px 8px; min-height:30px; max-width:100%; overflow-wrap:anywhere; }
 .actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:16px; }
