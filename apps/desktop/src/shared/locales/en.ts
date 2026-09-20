@@ -219,6 +219,7 @@ export const en: Dictionary = {
   'Bỏ thay đổi của lịch này?': 'Discard changes to this schedule?',
   'Bỏ {0}': 'Remove {0}',
   'Bằng chứng tiến trình tham chiếu run không tồn tại.': 'Process evidence refers to a run that does not exist.',
+  'Báo cáo đầu vào còn mục chưa đủ bằng chứng; chưa thể khuyến nghị sẵn sàng review.': 'An upstream report still lacks evidence, so this result cannot be recommended as ready for review.',
   'Bổ sung các mục còn thiếu, giữ nguyên dữ liệu và cài đặt hiện tại. Nguồn khôi phục cần được chọn lại để cấp quyền đọc.': 'Adds missing items and keeps current data and settings. Restored sources must be picked again to grant read access.',
   'Bổ sung các mục còn thiếu?': 'Add the missing items?',
   'Bổ sung tệp': 'Add files',

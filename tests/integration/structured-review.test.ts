@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Report, type Artifact } from '../../apps/desktop/src/shared/contracts';
-import { applyReviewPolicy, downgradeUncitedWorkspaceChecks, validateReview } from '../../apps/desktop/src/core/review';
+import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, validateReview } from '../../apps/desktop/src/core/review';
 
 const source = randomUUID();
 const finding = () => ({ title: 'Observed issue', severity: 'warning' as const, detail: 'Evidence differs.', coverage: 'Selected source', sourceIds: [source], provenance: { findingId: randomUUID(), writerId: randomUUID(), runId: randomUUID() } });
@@ -30,6 +30,17 @@ describe('structured review gates', () => {
       expect(status).toBe('pass');
     });
     expect(value.review!.checks[0].status).toBe('pass');
+  });
+  it('retains a member deliverable when its upstream report is not ready', () => {
+    const value = report();
+    const upstream = [member()];
+    upstream[0].report.review = { checks: [], recommendation: 'insufficient_evidence', draftFeedback: 'Needs review', upstreamFindingIds: [], conflicts: [] };
+    value.review!.upstreamFindingIds = upstream.map(item => item.report.findings[0].provenance!.findingId);
+    expect(() => validate(value, upstream)).toThrow('Chưa thể');
+    downgradePrematureRecommendation(value, upstream);
+    expect(value.review!.recommendation).toBe('insufficient_evidence');
+    expect(value.limitations).toContain('Báo cáo đầu vào còn mục chưa đủ bằng chứng; chưa thể khuyến nghị sẵn sàng review.');
+    validate(value, upstream);
   });
   it('retains a legacy report without manufacturing review metadata', () => {
     const value = Report.parse({ title: 'Old', summary: 'Old report', findings: [], limitations: [] });

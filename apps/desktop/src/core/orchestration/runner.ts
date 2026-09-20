@@ -22,7 +22,7 @@ import { ToolCalls } from '../storage/tool-calls';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
-import { applyReviewPolicy, downgradeUncitedWorkspaceChecks, validateReview } from '../review';
+import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, type Colleague } from '../context/compiler';
 import { applyThreadManifest, compactThread, fitThread, threadMessages } from '../context/thread';
@@ -584,7 +584,10 @@ export class Runner {
     const policy = run.stage === 'synthesis' ? run.snapshot.team?.reviewPolicy : undefined;
     const profiles = this.store.all<ProfileRecord>('profiles').filter(profile => profile.taskId === task.id && (profile.runId === run.id || preflight?.profileIds.includes(profile.id)));
     const report: Report = applyReviewPolicy(submitted, policy, profiles, options.upstream);
-    if (run.stage === 'member' && run.snapshot.workspaceGrant) downgradeUncitedWorkspaceChecks(report);
+    if (run.stage === 'member' && run.snapshot.workspaceGrant) {
+      downgradeUncitedWorkspaceChecks(report);
+      downgradePrematureRecommendation(report, options.upstream ?? []);
+    }
     const validateChecker = (checkerId: string, sourceIds: string[]) => {
       const profile = this.store.get<ProfileRecord>('profiles', checkerId);
       if (profile.taskId !== task.id || (profile.runId !== run.id && !preflight?.profileIds.includes(checkerId))) throw new Error('Finding tham chiếu checker chưa được cung cấp cho lần chạy này.');
