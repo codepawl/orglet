@@ -7,6 +7,7 @@ import { MISSING_PLAN_ERROR, UNASSIGNED_PLAN_ERROR } from '../../shared/contract
 import { Store, id, now } from '../storage/database';
 import { Runner } from './runner';
 import { Preflight, PreflightError } from './preflight';
+import { savedArtifactContext } from './artifact-provenance';
 
 export class TeamRunner {
   private active = new Map<string, { cancelled: boolean; paused: boolean; controller: AbortController }>();
@@ -158,7 +159,7 @@ export class TeamRunner {
           }
           limitations.splice(0, limitations.length, ...failures.map(failure => `Role chưa hoàn tất: ${failure}`));
           return { attemptId: attempt.id, status: this.store.get<Run>('runs', attempt.id).status,
-            results: memberArtifacts.map(artifact => ({ id: artifact.id, runId: artifact.runId, report: artifact.report })), failures };
+            results: savedArtifactContext(memberArtifacts, detail.runs), failures };
         },
       });
       const result = this.store.get<Run>('runs', synthesis.id);

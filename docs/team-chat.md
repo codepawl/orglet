@@ -20,6 +20,8 @@ Work is a **chat**, not a pile of tasks or sessions.
 
 Under the hood the thread is still a `tasks` row. **Chi tiết** lists internal `runs` (plan, members, synthesis, or the single worker job) for retry, cost and cancel. Dollars sit next to **Chi tiết**.
 
+For a reassigned member, Chi tiết names the worker who actually ran the attempt and its original assignment owner. Lead context and recovery results carry both identities from saved runs and artifacts, plus failed attempt history; the original owner is never treated as the file author merely because the plan named them.
+
 ## Click a worker or team → that chat
 
 1. Click a **name** in **Nhân viên** or **Nhóm**. The main pane opens that conversation.

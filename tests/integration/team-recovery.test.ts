@@ -138,6 +138,10 @@ it.each((['openai', 'claude-code', 'codex', 'cursor'] as const).flatMap(provider
       return respond('reassign_team_work', { assignmentWorkerId: firstId, newWorkerId: secondId, reason: 'Retry with another member' });
     }
     expect(context).toContain('committed-recovery-evidence');
+    if (mode !== 'timeout') {
+      expect(context).toContain(`"completedBy":{"workerId":"${secondId}"`);
+      expect(context).not.toContain(`"completedBy":{"workerId":"${firstId}"`);
+    }
     if (mode === 'pause' && decisions === 2) {
       core.teams.pause(store.all<Task>('tasks').find(task => task.status === 'running')!.id);
       return respond('read_team_messages', {});

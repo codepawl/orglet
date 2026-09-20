@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import type { Run, Skill, Worker } from '../../apps/desktop/src/shared/contracts';
 import { teamProgress } from '../../apps/desktop/src/shared/team-progress';
+import { savedArtifactContext, savedAssignmentAttempts } from '../../apps/desktop/src/core/orchestration/artifact-provenance';
 
 let store: Store;
 beforeEach(() => { store = new Store(':memory:'); });
@@ -35,6 +36,26 @@ it('uses the reassigned worker and does not reuse the old attempt output', () =>
   replacement.status = 'completed';
   expect(teamProgress(runs, [{ runId: failed.id }])[0].waitingFor).toEqual(['Replacement']);
   expect(teamProgress(runs, [{ runId: replacement.id }])[0].waitingFor).toEqual([]);
+});
+
+it('credits an artifact to the successful reassigned attempt and retains earlier failures', () => {
+  const original = member('QA reviewer', 'failed');
+  const firstRetry = member('Product strategist', 'failed');
+  const successfulRetry = member('Visual designer', 'completed');
+  firstRetry.snapshot.assignment = original.snapshot.assignment;
+  successfulRetry.snapshot.assignment = original.snapshot.assignment;
+  const artifact = { id: id(), runId: successfulRetry.id, hash: 'fixture', createdAt: now(),
+    report: { title: 'QA report', summary: 'Created qa-report.md', findings: [], limitations: [] } };
+  const runs = [original, firstRetry, successfulRetry];
+  expect(savedArtifactContext([artifact], runs)[0]).toMatchObject({
+    assignmentWorkerId: original.snapshot.worker.id,
+    completedBy: { workerId: successfulRetry.snapshot.worker.id, workerName: 'Visual designer' },
+  });
+  expect(savedAssignmentAttempts(original.snapshot.worker.id, runs, [artifact]).map(attempt => [attempt.workerName, attempt.status, attempt.artifactId])).toEqual([
+    ['QA reviewer', 'failed', null],
+    ['Product strategist', 'failed', null],
+    ['Visual designer', 'completed', artifact.id],
+  ]);
 });
 
 it('excludes planning and synthesis from assignment progress', () => {
