@@ -291,7 +291,8 @@ describe('runner integration', () => {
         const files: Record<string, string> = {};
         for (const name of await readdir(join(request.cwd, 'sources'))) files[name] = await readFile(join(request.cwd, 'sources', name), 'utf8');
         requests.push({ ...request, files });
-        return { output: await reply(request), costUsd: 0.003 };
+        const output = await reply(request);
+        return { output: request.harness === 'codex' ? { payload: JSON.stringify(output) } : output, costUsd: 0.003 };
       },
     });
     const note = join(directory, 'note.txt'); await writeFile(note, 'line one\nline two: the answer is 42');
