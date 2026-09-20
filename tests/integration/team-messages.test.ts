@@ -52,6 +52,15 @@ it('replays a persisted send once and retains acknowledged handoffs on resume', 
   expect(store.detail(runs[0].taskId).events).toHaveLength(1);
 });
 
+it('orders mailbox messages with other saved run events', () => {
+  const { runs, mailbox } = fixture();
+  store.event(runs[0].id, 'Before handoff');
+  const sent = mailbox.send(runs[0], 'ordered', { recipientId: runs[1].snapshot.worker.id, kind: 'handoff', body: 'Result', replyTo: null });
+  store.event(runs[0].id, 'After handoff');
+  expect(sent.sequence).toBe(2);
+  expect(store.detail(runs[0].taskId).events.filter(event => event.runId === runs[0].id).map(event => event.sequence)).toEqual([1, 2, 3]);
+});
+
 it('permits two questions and escalates the third to the lead without dispatching agents', () => {
   const { runs, mailbox } = fixture();
   const count = store.all('runs').length;
