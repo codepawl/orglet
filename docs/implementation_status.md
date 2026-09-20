@@ -209,3 +209,18 @@ Workers store optional `modelId`. The worker dialog lists the cached models for 
 ## Deprecated model chip (COD-30)
 
 The model picker chips a selected or suggested ID when the cached list has `deprecated: true`. A sunset day is shown only from native `sunsetAt` (OpenAI `shutdown_date`). Anthropic, xAI and harness lists omit dates; Orglet does not scrape HTML or guess them. Codex `replacementId` is a quiet “prefer” line, not an automatic switch. Opening the dialog does not toast. Tests: `tests/integration/model-deprecation.test.ts`.
+
+## COD-98 tools and team coordination: implementation under verification
+
+The worktree now contains a shared tool catalog and permission checks, workspace grants, isolated Windows execution, private copies and Git worktrees, guarded file integration, durable tool/process journals, assignment ownership and dependencies, a bounded mailbox, and lead-controlled reassignment. These extend the existing orchestrator and checkpoints.
+
+Details exposes folder/web permissions and interrupted-attempt recovery. Chat shows unfinished assignments, their descriptions and waiting dependencies; long descriptions expand with keyboard-accessible native disclosures. Recovery can read saved process output and retire an old attempt while preserving its failed or uncertain history. It does not restore backups or apply pending private-copy changes.
+
+Verification so far:
+
+- Latest full suite: 411 passed, 34 skipped. Typecheck passed. The skipped native cases run separately.
+- Windows native sandbox: 7 passed. Packaged helper/broker isolation suites: 68 passed across six files, including conflict, crash, process and Git fixtures. One complete team request covers planning, editing, a native check, handoff, integration, dependent review and synthesis through API and all three CLI fixture adapters.
+- Windows package and packaged smoke passed: permission controls, dependency progress, output paging after restart, private-copy inspection without changing the original, cancelled/confirmed retirement, backup and restore. This smoke build includes the plan-schema, Codex launch-policy and CLI checkpoint allowance changes.
+- API and all three CLI adapters have fixture coverage. No successful live provider/harness execution is claimed by this milestone. Codex help confirms the launch flags; Cursor project deny configuration is fixture-tested but its live enforcement remains unverified.
+
+The epic is not complete. Remaining work includes the end-to-end permission audit for each harness, review of budget/pause and cancellation edges, recovery inspection completeness, documentation consistency and issue-separated delivery. DuckDuckGo search reports its challenge explicitly; successful search availability is not proven on this host. These are tracked as unfinished original work, not transferred to a follow-up issue.

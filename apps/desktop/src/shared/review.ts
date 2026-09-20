@@ -19,6 +19,7 @@ export const Review = z.object({
     coverage: z.string().min(1).max(2000),
     sourceIds: z.array(z.string().uuid()).max(20),
     checkerIds: z.array(z.string().uuid()).max(20),
+    processIds: z.array(z.string().uuid()).max(20).optional(),
   }).strict()).max(50),
   recommendation: z.enum(['ready_for_human_review', 'revision_required', 'rerun_required', 'insufficient_evidence']),
   draftFeedback: z.string().min(1).max(8000),

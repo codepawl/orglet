@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
+import { Store, id, now, SCHEMA_VERSION } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { Checkpoints } from '../../apps/desktop/src/core/storage/checkpoints';
 import { BudgetLedger } from '../../apps/desktop/src/core/budgets/ledger';
@@ -92,10 +92,10 @@ it('does not send cached context after a source changes while paused', async () 
 });
 it('migrates a v1 workspace without losing reports and refuses a newer database version', () => {
   const { task } = fixture();
-  store.db.exec('DROP TABLE routines; DROP TABLE preflights; DROP TABLE step_attempts; DROP TABLE leases; DROP TABLE checkpoints; DELETE FROM migrations WHERE version>1;');
+  store.db.exec('DROP TABLE tool_calls; DROP TABLE routines; DROP TABLE preflights; DROP TABLE step_attempts; DROP TABLE leases; DROP TABLE checkpoints; DELETE FROM migrations WHERE version>1;');
   store.close(); store = new Store(join(directory, 'state.sqlite'));
   expect(store.detail(task.id).task.brief).toBe('Recovery');
-  expect(store.db.prepare('SELECT MAX(version) AS version FROM migrations').get()?.version).toBe(6);
+  expect(store.db.prepare('SELECT MAX(version) AS version FROM migrations').get()?.version).toBe(SCHEMA_VERSION);
   store.db.exec('INSERT INTO migrations VALUES(99)');
   expect(() => new Store(join(directory, 'state.sqlite'))).toThrow('mới hơn');
 });
@@ -131,8 +131,11 @@ it('honors a lowered live team cap and refuses acceptance without a synthesis ar
   const team = await core.command('saveTeam', { ...template, workflow: 'sequential' }) as Team;
   const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Lower budget during run', sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
   await idle(taskId);
-  expect(calls).toBe(1); expect(store.detail(taskId).task.status).toBe('partial');
+  expect(calls).toBe(1); expect(store.detail(taskId).task.status).toBe('paused');
   expect(store.detail(taskId).artifacts).toHaveLength(1);
+  await expect(core.command('accept', { id: taskId })).rejects.toThrow('Chỉ chấp nhận báo cáo');
+  expect(store.detail(taskId).runs.some(run => run.stage === 'synthesis' && run.status === 'completed')).toBe(false);
+  store.update('tasks', { ...store.get<Task>('tasks', taskId), status: 'partial' });
   await expect(core.command('accept', { id: taskId })).rejects.toThrow('tổng hợp');
   expect(store.detail(taskId).task.accepted).toBe(false);
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Report, type Artifact } from '../../apps/desktop/src/shared/contracts';
-import { applyReviewPolicy, validateReview } from '../../apps/desktop/src/core/review';
+import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../../apps/desktop/src/core/review';
 
 const source = randomUUID();
 const finding = () => ({ title: 'Observed issue', severity: 'warning' as const, detail: 'Evidence differs.', coverage: 'Selected source', sourceIds: [source], provenance: { findingId: randomUUID(), writerId: randomUUID(), runId: randomUUID() } });
@@ -10,6 +10,53 @@ const report = () => Report.parse({ title: 'Review', summary: 'Summary', finding
 const validate = (value: Report, upstream: Artifact[] = []) => validateReview(value, upstream, new Set([source]), () => { throw new Error('Unknown checker'); });
 
 describe('structured review gates', () => {
+  it('keeps a workspace report while downgrading an uncited command check', () => {
+    const value = report();
+    value.review!.checks[0].sourceIds = [];
+    downgradeUncitedWorkspaceChecks(value);
+    expect(value.review!.checks[0].status).toBe('not_assessed');
+    expect(value.review!.recommendation).toBe('insufficient_evidence');
+    expect(value.limitations).toContain('Chưa xác minh độc lập check: Schema.');
+    validate(value);
+  });
+  it('accepts only a same-run completed process as command evidence', () => {
+    const value = report();
+    const processId = randomUUID();
+    value.review!.checks[0].sourceIds = [];
+    value.review!.checks[0].processIds = [processId];
+    expect(() => validate(value)).toThrow('tiến trình');
+    validateReview(value, [], new Set(), () => {}, (id, status) => {
+      expect(id).toBe(processId);
+      expect(status).toBe('pass');
+    });
+    expect(value.review!.checks[0].status).toBe('pass');
+  });
+  it('retains a member deliverable when its upstream report is not ready', () => {
+    const value = report();
+    const upstream = [member()];
+    upstream[0].report.review = { checks: [], recommendation: 'insufficient_evidence', draftFeedback: 'Needs review', upstreamFindingIds: [], conflicts: [] };
+    value.review!.upstreamFindingIds = upstream.map(item => item.report.findings[0].provenance!.findingId);
+    expect(() => validate(value, upstream)).toThrow('Chưa thể');
+    downgradePrematureRecommendation(value, upstream);
+    expect(value.review!.recommendation).toBe('insufficient_evidence');
+    expect(value.limitations).toContain('Báo cáo đầu vào còn mục chưa đủ bằng chứng; chưa thể khuyến nghị sẵn sàng review.');
+    validate(value, upstream);
+  });
+  it('retains an uncited workspace warning as an unverified limitation', () => {
+    const value = report();
+    value.findings.push({ title: 'CSS class mismatch', detail: 'The card class differs.', severity: 'warning',
+      sourceIds: [], coverage: 'Workspace files', category: 'other', recommendation: 'Align selectors.', checkerIds: [], locations: [] });
+    value.review!.recommendation = 'revision_required';
+    downgradeUncitedWorkspaceFindings(value);
+    expect(value.findings).toHaveLength(0);
+    expect(value.limitations[0]).toContain('CSS class mismatch');
+    validate(value);
+    const forged = report();
+    forged.findings.push({ title: 'Forged', detail: 'Claim', severity: 'warning',
+      sourceIds: [randomUUID()], coverage: 'Other file', category: 'other', recommendation: null, checkerIds: [], locations: [] });
+    downgradeUncitedWorkspaceFindings(forged);
+    expect(forged.findings).toHaveLength(1);
+  });
   it('retains a legacy report without manufacturing review metadata', () => {
     const value = Report.parse({ title: 'Old', summary: 'Old report', findings: [], limitations: [] });
     validate(value); expect(value.review).toBeUndefined();

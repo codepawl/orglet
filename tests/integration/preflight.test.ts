@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { Preflight } from '../../apps/desktop/src/core/orchestration/preflight';
 import { WorkPolicy } from '../../apps/desktop/src/core/orchestration/work-policy';
-import { Store } from '../../apps/desktop/src/core/storage/database';
+import { Store, SCHEMA_VERSION } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { analyze } from '../../apps/desktop/src/profiler/analyze';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
@@ -136,7 +136,7 @@ it('migrates the v4 unique-task preflight table without altering retained record
   legacy.exec('BEGIN; CREATE TABLE old_preflights (id TEXT PRIMARY KEY, task_id TEXT NOT NULL UNIQUE REFERENCES tasks(id), data TEXT NOT NULL); INSERT INTO old_preflights SELECT id,task_id,data FROM preflights; DROP TABLE preflights; ALTER TABLE old_preflights RENAME TO preflights; DELETE FROM migrations WHERE version=5; COMMIT;');
   legacy.close(); store = new Store(join(directory, 'state.sqlite'));
   expect(store.detail(taskId).preflights[0]).toEqual(retained);
-  expect(store.db.prepare('SELECT MAX(version) AS version FROM migrations').get()!.version).toBe(6);
+  expect(store.db.prepare('SELECT MAX(version) AS version FROM migrations').get()!.version).toBe(SCHEMA_VERSION);
   store.put('preflights', { ...retained, id: crypto.randomUUID() }, { column: 'task_id', value: taskId });
   expect(store.detail(taskId).preflights).toHaveLength(2);
 });

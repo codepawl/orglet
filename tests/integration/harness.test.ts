@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { candidates, detectHarnesses, type Probe } from '../../apps/desktop/src/core/harness/detect';
-import { executeHarness, harnessArgs, HarnessError, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
+import { executeHarness, harnessArgs, HarnessError, HarnessTerminationError, stopHarnessProcess, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import { harnessReady, harnessStatus, loginCommand, missingHarness, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
@@ -169,6 +169,8 @@ describe('command contract', () => {
     expect(codex).toEqual(expect.arrayContaining(['--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check', 'apps', 'browser_use', 'computer_use', 'shell_tool', 'unified_exec']));
     // Without this the CLI emits no reasoning items, and a run shows nothing until it finishes.
     expect(codex[codex.indexOf('-c') + 1]).toBe('model_reasoning_summary=detailed');
+    const overrides = codex.flatMap((argument, index) => argument === '-c' ? [codex[index + 1]] : []);
+    expect(overrides).toEqual(expect.arrayContaining(['web_search="disabled"', 'project_doc_max_bytes=0', 'tools.view_image=false']));
     expect(codex.join(' ')).not.toMatch(/danger|workspace-write|approve-for-me/);
     const cursor = harnessArgs({ harness: 'cursor', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 1 });
     expect(cursor).toEqual(expect.arrayContaining(['-p', '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', directory, '--output-format', 'json']));
@@ -208,6 +210,60 @@ describe('command contract', () => {
     expect(output.schema).toEqual(schema); expect(output.stdin).toBe('Review "this" & that\nsecond line');
     expect(output.args).toContain('--restricted'); expect(result.costUsd).toBe(0.002);
   });
+});
+
+it.runIf(process.platform === 'win32')('waits for a cancelled CLI and its descendant to exit before returning', async () => {
+  const script = join(directory, 'cancel-fixture.cjs');
+  const pidFile = join(directory, 'pids.json');
+  await writeFile(script, `
+    const { spawn } = require('node:child_process');
+    const { writeFileSync } = require('node:fs');
+    const descendant = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { windowsHide: true, stdio: 'ignore' });
+    writeFileSync(${JSON.stringify(pidFile)}, JSON.stringify([process.pid, descendant.pid]));
+    process.stdin.resume();
+    setInterval(() => {}, 1000);
+  `);
+  const shim = join(directory, 'cancel-fixture.cmd');
+  await writeFile(shim, `@"${process.execPath}" "${script}" %*\r\n`);
+  const controller = new AbortController();
+  const execution = executeHarness({ harness: 'claude-code', executable: shim, cwd: directory,
+    prompt: 'fixture', schema: {}, signal: controller.signal, maxBudgetUsd: 1 });
+  const outcome = execution.catch(error => error);
+  try {
+    for (let attempt = 0; attempt < 200 && !existsSync(pidFile); attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    expect(existsSync(pidFile)).toBe(true);
+    const pids: number[] = JSON.parse(await readFile(pidFile, 'utf8'));
+    controller.abort(new Error('Fixture cancellation'));
+    expect(await outcome).toMatchObject({ message: 'Fixture cancellation' });
+    for (const pid of pids) expect(() => process.kill(pid, 0)).toThrow();
+  } finally {
+    controller.abort();
+    await outcome;
+  }
+});
+
+it.runIf(process.platform === 'win32')('bounds stderr output and waits for the offending process to stop', async () => {
+  const script = join(directory, 'stderr-fixture.cjs');
+  const pidFile = join(directory, 'stderr-pid.json');
+  await writeFile(script, `
+    require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, JSON.stringify(process.pid));
+    process.stdin.resume();
+    const chunk = Buffer.alloc(1024 * 1024, 120);
+    function flood() {
+      if (process.stderr.write(chunk)) setImmediate(flood);
+      else process.stderr.once('drain', flood);
+    }
+    flood();
+  `);
+  const shim = join(directory, 'stderr-fixture.cmd');
+  await writeFile(shim, `@"${process.execPath}" "${script}" %*\r\n`);
+  await expect(executeHarness({ harness: 'claude-code', executable: shim, cwd: directory,
+    prompt: 'fixture', schema: {}, signal: new AbortController().signal, maxBudgetUsd: 1 }))
+    .rejects.toThrow('Output của harness vượt giới hạn.');
+  const pid = JSON.parse(await readFile(pidFile, 'utf8')) as number;
+  expect(() => process.kill(pid, 0)).toThrow();
 });
 
 const fixture = (item: Pick<HarnessInfo, 'id' | 'executable' | 'version' | 'auth' | 'authDetail'>): HarnessInfo => ({
@@ -308,4 +364,11 @@ describe('runner integration', () => {
     await core.command('cancel', { id: taskId }); await idle();
     expect(store.detail(taskId).task.status).toBe('cancelled'); expect(store.detail(taskId).artifacts).toEqual([]);
   });
+});
+
+it('reports uncertain termination when the kill command fails or the process never closes', async () => {
+  await expect(stopHarnessProcess(123, Promise.resolve(), async () => { throw new Error('Access denied'); }))
+    .rejects.toBeInstanceOf(HarnessTerminationError);
+  await expect(stopHarnessProcess(123, new Promise<void>(() => {}), async () => {}, 5))
+    .rejects.toBeInstanceOf(HarnessTerminationError);
 });

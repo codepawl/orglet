@@ -31,8 +31,45 @@ export function applyReviewPolicy(report: Report, policy: ReviewPolicy | undefin
   return result;
 }
 
+/** Workspace command output has no source ID yet. Keep the work, but never publish an uncited pass. */
+export function downgradeUncitedWorkspaceChecks(report: Report) {
+  if (!report.review) return;
+  for (const check of report.review.checks) {
+    if (check.status === 'not_assessed' || check.sourceIds.length || check.processIds?.length) continue;
+    check.status = 'not_assessed';
+    check.coverage += '\nKết quả công cụ workspace chưa có mã bằng chứng để trích dẫn trong báo cáo.';
+    report.limitations.push(`Chưa xác minh độc lập check: ${check.name}.`);
+  }
+  if (report.review.checks.some(check => check.status === 'not_assessed')) report.review.recommendation = 'insufficient_evidence';
+}
+
+/** Workspace file reads lack a portable source ID; preserve their warning without claiming verified provenance. */
+export function downgradeUncitedWorkspaceFindings(report: Report) {
+  const uncited = report.findings.filter(finding => !finding.sourceIds.length
+    && !(finding.checkerIds?.length) && !(finding.locations?.length));
+  if (!uncited.length) return;
+  if (report.limitations.length + uncited.length > 30) throw new Error('Quá nhiều nhận xét workspace chưa có trích dẫn để lưu an toàn.');
+  for (const finding of uncited) {
+    report.limitations.push(`Nhận xét workspace chưa có trích dẫn (${finding.severity}): ${finding.title}. ${finding.detail}`.slice(0, 2000));
+  }
+  report.findings = report.findings.filter(finding => !uncited.includes(finding));
+  if (report.review?.recommendation === 'ready_for_human_review') report.review.recommendation = 'insufficient_evidence';
+}
+
+export function upstreamNeedsReview(upstream: Artifact[]) {
+  return upstream.some(artifact => artifact.report.findings.some(finding => finding.severity === 'critical')
+    || (artifact.report.review && artifact.report.review.recommendation !== 'ready_for_human_review'));
+}
+
+export function downgradePrematureRecommendation(report: Report, upstream: Artifact[]) {
+  if (report.review?.recommendation !== 'ready_for_human_review' || !upstreamNeedsReview(upstream)) return;
+  report.review.recommendation = 'insufficient_evidence';
+  report.limitations.push('Báo cáo đầu vào còn mục chưa đủ bằng chứng; chưa thể khuyến nghị sẵn sàng review.');
+}
+
 // Structural evidence gates cannot establish that a model's interpretation is correct.
-export function validateReview(report: Report, upstream: Artifact[], sourceIds: ReadonlySet<string>, validateChecker: (id: string, sources: string[]) => void) {
+export function validateReview(report: Report, upstream: Artifact[], sourceIds: ReadonlySet<string>, validateChecker: (id: string, sources: string[]) => void,
+  validateProcess: (id: string, status: 'pass' | 'fail' | 'not_assessed') => void = () => { throw new Error('Check tham chiếu tiến trình chưa được cung cấp cho lần chạy.'); }) {
   const review = report.review;
   if (!review) return; // Historical reports have no structured review contract.
   const available = new Set(upstream.flatMap(artifact => [...artifact.report.findings.flatMap(finding => finding.provenance ? [finding.provenance.findingId] : []), ...(artifact.report.review?.upstreamFindingIds ?? [])]));
@@ -43,8 +80,9 @@ export function validateReview(report: Report, upstream: Artifact[], sourceIds: 
     const name = check.name.trim().toLowerCase();
     if (names.has(name)) throw new Error('Review có check bị trùng.');
     names.add(name);
-    if (check.sourceIds.some(id => !sourceIds.has(id)) || (check.status !== 'not_assessed' && !check.sourceIds.length)) throw new Error('Check đã đánh giá cần nguồn được cung cấp cho lần chạy.');
+    if (check.sourceIds.some(id => !sourceIds.has(id)) || (check.status !== 'not_assessed' && !check.sourceIds.length && !check.processIds?.length)) throw new Error('Check đã đánh giá cần nguồn được cung cấp cho lần chạy.');
     for (const id of check.checkerIds) validateChecker(id, check.sourceIds);
+    for (const id of check.processIds ?? []) validateProcess(id, check.status);
   }
   for (const conflict of review.conflicts) {
     const ids = new Set(conflict.findingIds);
@@ -54,6 +92,5 @@ export function validateReview(report: Report, upstream: Artifact[], sourceIds: 
   for (const conflict of upstream.flatMap(artifact => artifact.report.review?.conflicts ?? [])) {
     if (!review.conflicts.some(item => conflict.findingIds.every(id => item.findingIds.includes(id)))) throw new Error('Review đã bỏ mất bất đồng chưa được phân xử.');
   }
-  const upstreamNeedsReview = upstream.some(artifact => artifact.report.findings.some(finding => finding.severity === 'critical') || (artifact.report.review && artifact.report.review.recommendation !== 'ready_for_human_review'));
-  if (review.recommendation === 'ready_for_human_review' && (!review.checks.length || review.checks.some(check => check.status !== 'pass') || review.conflicts.length || report.findings.some(finding => finding.severity === 'critical') || upstreamNeedsReview)) throw new Error('Chưa thể khuyến nghị sẵn sàng khi còn check thiếu/lỗi, bất đồng hoặc finding nghiêm trọng.');
+  if (review.recommendation === 'ready_for_human_review' && (!review.checks.length || review.checks.some(check => check.status !== 'pass') || review.conflicts.length || report.findings.some(finding => finding.severity === 'critical') || upstreamNeedsReview(upstream))) throw new Error('Chưa thể khuyến nghị sẵn sàng khi còn check thiếu/lỗi, bất đồng hoặc finding nghiêm trọng.');
 }

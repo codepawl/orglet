@@ -121,6 +121,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-section { display:flex; flex-direction:column; gap:8px; }
 .details-section h3 { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--muted); }
 .details-section h3 svg { color:var(--muted); }
+/* Permission controls stay grouped inside chat Details. */
+.task-tools { gap:12px; }
+.task-tool-group { display:flex; flex-direction:column; gap:7px; min-width:0; }
+.task-tool-folder, .task-tools .switch-field-title { display:flex; align-items:center; gap:7px; overflow-wrap:anywhere; }
+.task-tool-folder svg { flex-shrink:0; }
+.task-tool-actions { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.task-tools .muted { font-size:12px; }
 /* A member reads as a person: face, name, and what they are here for. */
 .details-member { display:flex; align-items:center; gap:8px; min-height:34px; }
 .details-member > div { min-width:0; }
@@ -1199,6 +1206,18 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    is picked and in dark mode too. */
 .chat-reply .markdown th { background:color-mix(in srgb, var(--text) 9%, transparent); }
 .chat-reply .prose { line-height:1.65; }
+.chat-limitations { margin-top:16px; overflow-wrap:anywhere; }
+.chat-limitations ul { margin:8px 0 0; padding-left:20px; }
+.team-progress { overflow-wrap:anywhere; }
+.team-progress details p { white-space:pre-wrap; }
+/* Workspace recovery stays in Details, with long paths and commands wrapping. */
+.workspace-recovery details { margin-top:12px; }
+.workspace-recovery code { white-space:pre-wrap; overflow-wrap:anywhere; }
+.workspace-recovery ul { padding-left:20px; }
+.workspace-recovery-action { margin-top:12px; display:flex; align-items:center; }
+.workspace-recovery-action .button { white-space:normal; }
+.workspace-process-output { margin-top:12px; display:flex; flex-direction:column; align-items:stretch; gap:8px; }
+.workspace-process-output pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:320px; overflow:auto; }
 /* Markdown in worker replies. Spacing and soft backgrounds separate blocks; no rules or side borders. */
 .markdown { white-space:normal; }
 .markdown>* { margin:0; }

@@ -23,6 +23,7 @@ import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
 import { WorkingLine } from './Working';
 import type { MentionPerson } from '../../shared/mentions';
+import { teamProgress } from '../../shared/team-progress';
 
 /**
  * What this worker was doing for the team on this turn: assigning the work, doing a share of it, or combining the
@@ -101,6 +102,19 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
             {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
+            {latest && detail.task.status !== 'completed' && <div className="team-progress" role="status">
+              {teamProgress(turn.runs, detail.artifacts).map(({ run, waitingFor }) => {
+                const brief = run.snapshot.assignment!.brief;
+                const characters = Array.from(brief.replace(/\s+/g, ' ').trim());
+                const description = characters.length > 160 ? `${characters.slice(0, 160).join('')}…` : characters.join('');
+                const status = <span>{run.snapshot.worker.name} · {statusLabel[run.status]}
+                  {waitingFor.length > 0 ? ` · ${t('Chờ {0}', [waitingFor.join(', ')])}` : ''}</span>;
+                return characters.length > 160 ? <details className="muted" key={run.id}>
+                  <summary>{status} · {description}</summary>
+                  <p>{brief}</p>
+                </details> : <p className="muted" key={run.id}>{status} · {description}</p>;
+              })}
+            </div>}
             {latest && busy && thinkingRun && (liveUpdate
               ? <LiveRun update={liveUpdate} pausing={detail.task.status === 'pausing'} />
               : <Thinking worker={thinkingRun.snapshot.worker} stage={thinkingRun.stage} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} />)}
@@ -113,7 +127,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
               ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
-            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
+            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
             {latest && <div className="actions">
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
               {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}
@@ -150,20 +164,19 @@ function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
 }
 
 function ChatReply({ artifact, author, action }: { artifact: Artifact; author: string; action: (fn: () => Promise<unknown>) => void }) {
-  const summary = tMessage(artifact.report.summary);
   return <div className="chat-reply">
-    <Markdown className="prose" text={summary} />
-    <div className="message-actions">
-      <ArtifactActions artifactId={artifact.id} action={action} />
-      <AnswerMarks artifactId={artifact.id} author={author} text={summary} />
-    </div>
+    <Markdown className="prose" text={tMessage(artifact.report.summary)} />
+    {artifact.report.limitations.length > 0 && <div className="chat-limitations">
+      <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
+      <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
+    </div>}
+    <div className="message-actions"><ArtifactActions artifactId={artifact.id} action={action} /><AnswerMarks artifactId={artifact.id} author={author} text={tMessage(artifact.report.summary)} /></div>
   </div>;
 }
 
 /**
- * Reply to this answer, or mark it. Both ride in the next message to the worker, so neither is decoration: the
- * quote tells a crew which of them is being answered, and a thumb tells the next run whether to keep going that
- * way. They sit with copy and download because they are all things you do to one answer.
+ * Reply to this answer, or react to it. Both ride in the next message to the worker, so neither is decoration:
+ * the quote tells a crew which of them is being answered, and a reaction says how the last one landed.
  */
 function AnswerMarks({ artifactId, author, text }: { artifactId: string; author: string; text: string }) {
   return <>
@@ -201,7 +214,7 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   // Evidence links leave the document for the sources panel.
   const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
   return <>
-    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}
       <ArtifactActions artifactId={artifact.id} action={action} />

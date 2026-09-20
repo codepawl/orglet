@@ -3,7 +3,7 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { Store } from '../../apps/desktop/src/core/storage/database';
+import { Store, SCHEMA_VERSION } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { compileContext, KNOWLEDGE_ITEM_LIMIT } from '../../apps/desktop/src/core/context/compiler';
 import type { Knowledge } from '../../apps/desktop/src/shared/knowledge';
@@ -145,12 +145,12 @@ it('backs up knowledge with frozen run context, rejects dangling scope and carri
   expect(worker.id).toBeTruthy();
 });
 
-it('migrates a v5 workspace to v6 and keeps a pre-upgrade copy for rollback', async () => {
+it('migrates a v5 workspace to the current schema and keeps a pre-upgrade copy for rollback', async () => {
   const [worker] = store.workspace().workers;
-  store.db.exec('DROP TABLE knowledge; DROP TABLE knowledge_revisions; DROP TABLE knowledge_search; DELETE FROM migrations WHERE version=6;');
+  store.db.exec('DROP TABLE tool_calls; DROP TABLE knowledge; DROP TABLE knowledge_revisions; DROP TABLE knowledge_search; DELETE FROM migrations WHERE version>5;');
   store.close();
   store = new Store(join(directory, 'state.sqlite'));
-  expect(store.db.prepare('SELECT MAX(version) AS version FROM migrations').get()!.version).toBe(6);
+  expect(store.db.prepare('SELECT MAX(version) AS version FROM migrations').get()!.version).toBe(SCHEMA_VERSION);
   expect(store.workspace()).toMatchObject({ knowledge: [], workers: [expect.objectContaining({ id: worker.id })] });
   const copies = (await readdir(directory)).filter(name => /^state\.sqlite\.v5-\d+\.bak$/.test(name));
   expect(copies).toHaveLength(1);

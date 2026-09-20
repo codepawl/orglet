@@ -1,7 +1,11 @@
+import { WorkspaceGrantSnapshot } from '../../shared/workspace-access';
+import { assertTeamPlan } from '../orchestration/plan';
 import { z } from 'zod';
+import { ToolCapabilities, snapshotCapabilities } from '../../shared/tool-policy';
+import { TeamMessage, TeamReassignment } from '../../shared/team-messages';
 import { createHash } from 'node:crypto';
 import { Store, now, id } from './database';
-import { Id, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput, TeamPlan } from '../../shared/contracts';
+import { Id, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput, TeamPlan, PlanAssignment } from '../../shared/contracts';
 import { DatasetProfile, DataFormat } from '../../shared/profiles';
 import { PreflightRecord } from '../../shared/preflight';
 import { SkillPackage } from '../../shared/skill-package';
@@ -19,11 +23,12 @@ const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPack
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
 const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
-const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
-const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime() }).strict();
+const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
+const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime(), teamMessage: TeamMessage.optional() }).strict();
 const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime() }).strict();
 const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional() }).strict();
 const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: z.iso.datetime(), sourceHashes: z.record(Id, Hash), result: DatasetProfile }).strict();
+const ProcessEvidence = z.object({ id: Id, runId: Id, exitCode: z.number().int() }).strict();
 const Reservation = z.object({ id: Id, run_id: Id, task_id: Id, provider: z.enum(['openai', 'anthropic', 'xai', 'openrouter']), month: z.string().regex(/^\d{4}-\d{2}$/), amount: Integer, state: z.enum(['held', 'unknown', 'settled']) }).strict();
 const Ledger = z.object({ id: Id, reservation_id: Id, amount: Integer, input_tokens: Integer, output_tokens: Integer, pricing_version: z.string() }).strict();
 const RevisionRow = z.object({ entity_id: Id, revision: Revision, data: z.union([Worker, Skill, Team]) }).strict();
@@ -32,7 +37,7 @@ const KnowledgeRevision = z.object({ id: Id, revision: Revision, data: Knowledge
 const Payload = z.object({
   routines: z.array(Routine).max(100).optional(),
   knowledge: z.array(Knowledge).max(10_000).optional(), knowledgeRevisions: z.array(KnowledgeRevision).max(100_000).optional(),
-  workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), settings: Settings,
+  workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), settings: Settings,
 }).strict();
 type Payload = z.infer<typeof Payload>;
 const Envelope = z.object({ format: z.literal('orglet-backup'), version: z.literal(1), createdAt: z.iso.datetime(), checksum: Hash, payload: Payload }).strict();
@@ -59,7 +64,8 @@ function validateRelations(data: Payload) {
     if (task.routineId && !routines.has(task.routineId)) fail('Task thiếu lịch.');
     if (task.handoff?.artifactIds.some(id => runs.get(artifacts.get(id)?.runId ?? '')?.taskId !== task.id)) fail('Handoff tham chiếu báo cáo ngoài task.');
   }
-  map(data.events); map(data.profiles); const reservations = map(data.reservations); map(data.ledger);
+  map(data.events); map(data.profiles); const processEvidence = map(data.processEvidence ?? []); const reservations = map(data.reservations); map(data.ledger);
+  for (const process of processEvidence.values()) if (!runs.has(process.runId)) fail('Bằng chứng tiến trình tham chiếu run không tồn tại.');
   const preflights = map(data.preflights ?? []);
   const preflightScopes = new Set<string>();
   for (const record of preflights.values()) {
@@ -74,10 +80,61 @@ function validateRelations(data: Payload) {
   for (const task of tasks.values()) if (!workers.has(task.workerId) || task.sourceIds.some(id => !sources.has(id)) || (task.teamId && (!teams.has(task.teamId) || task.teamSnapshot?.id !== task.teamId))) fail('Task thiếu Tí, hội hoặc nguồn.');
   for (const run of runs.values()) if (!tasks.has(run.taskId) || run.snapshot.worker.skillId !== run.snapshot.skill.id || run.snapshot.upstreamArtifactIds?.some(id => !artifacts.has(id))) fail('Snapshot hoặc task của run không hợp lệ.');
   for (const run of runs.values()) {
+    if (run.snapshot.assignment && (run.stage !== 'member' || (!run.snapshot.reassignment && run.snapshot.assignment.workerId !== run.snapshot.worker.id))) {
+      fail('Người nhận không khớp phần việc.');
+    }
+    const reassignment = run.snapshot.reassignment;
+    if (reassignment) {
+      const source = runs.get(reassignment.sourceRunId);
+      const decision = runs.get(reassignment.decisionRunId);
+      const team = run.snapshot.team;
+      const revision = run.snapshot.inputRevision ?? 0;
+      if (!source || !decision || !team || run.stage !== 'member' || !run.snapshot.assignment
+        || source.id === run.id || source.stage !== 'member' || source.taskId !== run.taskId || decision.taskId !== run.taskId
+        || source.snapshot.team?.id !== team.id || decision.snapshot.team?.id !== team.id
+        || (source.snapshot.inputRevision ?? 0) !== revision || (decision.snapshot.inputRevision ?? 0) !== revision
+        || decision.stage !== 'synthesis' || decision.snapshot.worker.id !== team.synthesizerId
+        || reassignment.newWorkerId !== run.snapshot.worker.id || !team.memberIds.includes(reassignment.newWorkerId)
+        || reassignment.assignmentWorkerId !== run.snapshot.assignment.workerId
+        || (source.snapshot.assignment?.workerId ?? source.snapshot.worker.id) !== reassignment.assignmentWorkerId
+        || (source.snapshot.assignment && digest(source.snapshot.assignment) !== digest(run.snapshot.assignment))) {
+        fail('Quyết định giao lại việc không hợp lệ.');
+      }
+      const peers = [...runs.values()].filter(candidate => candidate.taskId === run.taskId
+        && (candidate.snapshot.inputRevision ?? 0) === revision && candidate.snapshot.reassignment);
+      if (peers.filter(candidate => candidate.snapshot.reassignment!.assignmentWorkerId === reassignment.assignmentWorkerId).length > 2
+        || peers.filter(candidate => candidate.snapshot.reassignment!.decisionRunId === reassignment.decisionRunId
+          && candidate.snapshot.reassignment!.callId === reassignment.callId).length !== 1) fail('Quyết định giao lại việc không hợp lệ.');
+      const ancestry = new Set([run.id]);
+      let ancestor = source;
+      while (ancestor) {
+        if (ancestry.has(ancestor.id)) fail('Quyết định giao lại việc không hợp lệ.');
+        ancestry.add(ancestor.id);
+        ancestor = ancestor.snapshot.reassignment ? runs.get(ancestor.snapshot.reassignment.sourceRunId) : undefined;
+      }
+      const recipient = [...runs.values()].find(candidate => candidate.taskId === run.taskId && candidate.stage === 'member'
+        && (candidate.snapshot.inputRevision ?? 0) === revision && candidate.snapshot.team?.id === team!.id
+        && !candidate.snapshot.reassignment && candidate.snapshot.worker.id === reassignment.newWorkerId);
+      const plan = [...runs.values()].findLast(candidate => candidate.taskId === run.taskId && candidate.stage === 'plan'
+        && candidate.status === 'completed' && (candidate.snapshot.inputRevision ?? 0) === revision && candidate.snapshot.team?.id === team!.id)?.snapshot.plan;
+      const assignment = plan?.assignments.find(candidate => candidate.workerId === reassignment.assignmentWorkerId);
+      if (!recipient || !assignment || digest(assignment) !== digest(run.snapshot.assignment)) fail('Quyết định giao lại việc không hợp lệ.');
+      const capabilities = run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider);
+      for (const original of [source!, recipient!]) {
+        const allowed = original.snapshot.toolCapabilities ?? snapshotCapabilities(original.snapshot.worker.provider);
+        if (capabilities.some(capability => !allowed.includes(capability))) fail('Quyết định giao lại việc không hợp lệ.');
+        const grant = run.snapshot.workspaceGrant;
+        const originalGrant = original.snapshot.workspaceGrant;
+        if (grant && (!originalGrant || grant.id !== originalGrant.id || grant.taskId !== originalGrant.taskId
+          || grant.revision !== originalGrant.revision || grant.permissions.some(permission => !originalGrant.permissions.includes(permission)))) {
+          fail('Quyết định giao lại việc không hợp lệ.');
+        }
+      }
+    }
     const plan = run.snapshot.plan;
     if (!plan) continue;
     if (run.stage !== 'plan' || !run.snapshot.team) fail('Phân việc không thuộc lần chạy trưởng phòng.');
-    if (plan.assignments.some(assignment => !run.snapshot.team!.memberIds.includes(assignment.workerId))) fail('Phân việc tham chiếu Tí ngoài hội.');
+    assertTeamPlan(run.snapshot.team!, plan);
   }
   // Validate the whole join graph, including runs that never committed an artifact.
   // Kahn's traversal avoids recursive stack growth on a large imported history.
@@ -104,7 +161,36 @@ function validateRelations(data: Payload) {
   }
   if (ready.length !== runs.size) fail('Join có vòng lặp giữa các báo cáo.');
   for (const run of runs.values()) if (run.snapshot.input?.sourceIds.some(id => !tasks.get(run.taskId)!.sourceIds.includes(id))) fail('Snapshot tham chiếu nguồn ngoài task.');
-  for (const event of data.events) if (!runs.has(event.runId)) fail('Event thiếu run.');
+  const events = new Map(data.events.map(event => [event.id, event]));
+  for (const event of data.events) {
+    const run = runs.get(event.runId);
+    if (!run) fail('Event thiếu run.');
+    const message = event.teamMessage;
+    if (!message) continue;
+    const team = run!.snapshot.team;
+    if (!team || message.teamId !== team.id || message.senderId !== run!.snapshot.worker.id
+      || message.inputRevision !== (run!.snapshot.inputRevision ?? 0)
+      || ![...team.memberIds, team.synthesizerId].includes(message.recipientId)) fail('Thông điệp không khớp team hoặc lượt.');
+    if (message.assignmentWorkerId && message.assignmentWorkerId !== (run!.snapshot.assignment?.workerId ?? run!.snapshot.worker.id)) {
+      fail('Thông điệp không khớp phần việc.');
+    }
+    if ((message.state === 'resolved') !== !!message.resolution) fail('Thông điệp thiếu quyết định xử lý hợp lệ.');
+    if (message.resolution) {
+      const decision = runs.get(message.resolution.runId);
+      if (!decision || decision.stage !== 'synthesis' || decision.taskId !== run!.taskId
+        || decision.snapshot.team?.id !== team!.id || decision.snapshot.worker.id !== team!.synthesizerId
+        || (decision.snapshot.inputRevision ?? 0) !== message.inputRevision
+        || !['question', 'blocker'].includes(message.kind)) fail('Quyết định xử lý không thuộc trưởng nhóm trong lượt.');
+    }
+    if (message.replyTo) {
+      const parent = events.get(message.replyTo);
+      const parentRun = parent && runs.get(parent.runId);
+      if (!parent?.teamMessage || parentRun?.taskId !== run!.taskId || parent.teamMessage.teamId !== message.teamId
+        || parent.teamMessage.inputRevision !== message.inputRevision || parent.teamMessage.kind !== 'question'
+        || parent.teamMessage.senderId !== message.recipientId || parent.teamMessage.recipientId !== message.senderId
+        || message.kind !== 'response') fail('Phản hồi không khớp thông điệp gốc.');
+    } else if (message.kind === 'response') fail('Phản hồi thiếu thông điệp gốc.');
+  }
   const artifactRuns = new Set<string>();
   const findingIds = new Set<string>();
   for (const artifact of artifacts.values()) {
@@ -121,6 +207,11 @@ function validateRelations(data: Payload) {
     validateReview(artifact.report, upstream, new Set(artifactSourceIds), (id, sourceIds) => {
       const profile = data.profiles.find(item => item.id === id);
       if (!profile || profile.taskId !== task.id || (profile.runId !== owner.id && !(owner.snapshot.preflightId && preflights.get(owner.snapshot.preflightId)?.profileIds.includes(id))) || !sourceIds.some(sourceId => Object.hasOwn(profile.sourceHashes, sourceId))) fail('Review tham chiếu checker ngoài phạm vi.');
+    }, (id, status) => {
+      const process = processEvidence.get(id);
+      if (!owner.snapshot.workspaceGrant || !process || process.runId !== owner.id
+        || (status === 'pass' && process.exitCode !== 0)
+        || (status === 'fail' && process.exitCode === 0)) fail('Review tham chiếu tiến trình ngoài phạm vi hoặc không khớp kết quả.');
     });
     if (artifact.report.findings.some(finding => finding.sourceIds.some(id => !artifactSourceIds.includes(id)))) fail('Artifact trích nguồn ngoài task.');
     for (const finding of artifact.report.findings) {
@@ -168,7 +259,8 @@ function snapshot(store: Store): Payload {
     routines: store.all('routines'),
     knowledge: store.all('knowledge'),
     knowledgeRevisions: store.db.prepare('SELECT * FROM knowledge_revisions ORDER BY rowid').all().map(row => ({ id: row.id, revision: row.revision, data: JSON.parse(String(row.data)) })),
-    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs: store.all('runs'), events: store.all('events'), artifacts: store.all('artifacts'), sources: store.all('sources'), profiles: store.all('profiles'), preflights: store.all('preflights'),
+    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs: store.all('runs'), events: store.all('events'), artifacts: store.all('artifacts'), sources: store.all('sources'), profiles: store.all('profiles'),
+    processEvidence: store.db.prepare('SELECT id,run_id AS runId,exit_code AS exitCode FROM process_evidence').all(), preflights: store.all('preflights'),
     revisions: store.db.prepare('SELECT * FROM revisions ORDER BY rowid').all().map(row => ({ ...row, data: JSON.parse(String(row.data)) })),
     reservations: store.db.prepare('SELECT * FROM reservations ORDER BY rowid').all(), ledger: store.db.prepare('SELECT * FROM ledger ORDER BY rowid').all(),
     // Keys, reviewedSkills and modelLists stay on this machine; they are derived from local credentials/CLIs.
@@ -221,14 +313,15 @@ export class Backups {
         return [...rows.values()];
       };
       const restoredSources = incoming.sources.map(source => ({ ...source, revoked: true }));
-      const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, task: { ...routine.task, consent: false, providerScopes: [] } }));
-      const restoredTasks = incoming.tasks.map(task => ({ ...task, consent: false, providerScopes: [], status: ['running', 'queued', 'pausing', 'paused'].includes(task.status) ? 'interrupted' as const : task.status }));
+      const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, task: { ...routine.task, toolCapabilities: [], consent: false, providerScopes: [] } }));
+      const restoredTasks = incoming.tasks.map(task => ({ ...task, toolCapabilities: [], consent: false, providerScopes: [], status: ['running', 'queued', 'pausing', 'paused'].includes(task.status) ? 'interrupted' as const : task.status }));
       const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: comparableSnapshot(run, incoming), status: ['running', 'queued', 'pausing', 'paused'].includes(run.status) ? 'interrupted' as const : run.status }));
       const merged: Payload = { ...current,
         routines: merge(current.routines ?? [], restoredRoutines),
         workers: merge(current.workers, incoming.workers), skills: merge(current.skills, incoming.skills), teams: merge(current.teams, incoming.teams),
         tasks: merge(current.tasks, restoredTasks), runs: merge(current.runs, restoredRuns), sources: merge(current.sources, restoredSources),
         events: merge(current.events, incoming.events, true), artifacts: merge(current.artifacts, incoming.artifacts, true), profiles: merge(current.profiles, incoming.profiles, true),
+        processEvidence: merge(current.processEvidence ?? [], incoming.processEvidence ?? [], true),
         preflights: merge(current.preflights ?? [], incoming.preflights ?? []),
         ledger: merge(current.ledger, incoming.ledger, true), reservations: merge(current.reservations, incoming.reservations),
       };
@@ -257,6 +350,7 @@ export class Backups {
       for (const event of merged.events) this.store.put('events', event, { column: 'run_id', value: event.runId });
       for (const artifact of merged.artifacts) this.store.put('artifacts', artifact, { column: 'run_id', value: artifact.runId });
       for (const profile of merged.profiles) this.store.put('profiles', profile, { column: 'task_id', value: profile.taskId });
+      for (const process of merged.processEvidence ?? []) this.store.db.prepare('INSERT OR IGNORE INTO process_evidence(id,run_id,exit_code) VALUES(?,?,?)').run(process.id, process.runId, process.exitCode);
       for (const record of merged.preflights ?? []) this.store.put('preflights', record, { column: 'task_id', value: record.taskId });
       for (const row of merged.revisions) this.store.db.prepare('INSERT OR IGNORE INTO revisions VALUES(?,?,?)').run(row.entity_id, row.revision, JSON.stringify(row.data));
       for (const row of merged.reservations) this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state').run(row.id, row.run_id, row.task_id, row.provider, row.month, row.amount, row.state);

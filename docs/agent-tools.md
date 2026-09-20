@@ -1,0 +1,109 @@
+# Agent tools and permissions
+
+Workers can read attached sources and reviewed skill resources. With a separate workspace grant, they can list, search, read and edit files in a private working copy, and run commands when granted execution permission. Details contains the workspace controls and a separate web permission. Demo does not execute these tools.
+
+The core keeps tool declarations, argument schemas, required capabilities and execution limits in one catalog. Every model call is checked against the tools allowed for its run stage and permissions. A planner with a granted workspace can list, search and read its private copy before assigning file ownership, but cannot write, run commands or use the web at that stage. A planner cannot skip planning by calling the normal reply tool. Instructions and imported skills cannot grant permissions.
+
+Assigned team members also have send, read and acknowledge tools for the [team mailbox](team-chat.md#worker-messages). These validate membership and the current turn at execution. They do not grant file or network access. API workers and the CLI tool bridge use the same mailbox handlers.
+
+If a worker mistypes a team-message recipient ID, core returns the current assignment's valid recipients as a tool error. The worker can correct the call in the same run; the rejected message creates no mailbox event or new agent. Core still checks the recipient again when it saves a valid message.
+
+For a structured check of a workspace command, the worker may cite the process ID returned by `workspace_start_process`. Core accepts it only from the same run after the process exits, with exit code zero for a pass or nonzero for a failure. The backup retains only the cited process ID, run ID and exit code, not the command or its output. Imported source and dataset checks keep their separate source/checker citations. An assessed workspace check without either source or process evidence becomes `not_assessed` with an explicit limitation, so a missing citation does not discard completed file edits or become a false pass.
+
+If a member reports that its own check passed but an upstream report still lacks evidence, core retains the completed work and changes its overall review recommendation to insufficient evidence with a visible limitation. A report cannot silently turn an unfinished upstream review into a ready recommendation.
+
+A QA worker may inspect workspace files that were not imported as task sources. Until workspace-file citations have their own durable evidence contract, a finding without source, checker or line IDs is preserved as an explicitly unverified limitation rather than a verified finding. An invented or unread nonempty source ID still fails validation. A blocked QA report remains blocked and does not unlock downstream work; its file and limitations remain available for the lead to repair.
+
+The team lead can resolve a pending question or blocker with a recorded decision, or reassign unfinished work to a member whose configuration was frozen at the start of the turn. Reassignment keeps the original dependencies and writable resources, intersects both workers' permissions, and allows at most two attempts per assignment. The two-question limit also follows the assignment when its worker changes. Closing a message does not complete failed work.
+
+The lead receives assignment states and committed artifact identifiers, including when every initial attempt failed. A recovered prerequisite lets waiting dependents continue. Failed attempts remain in history; unresolved questions and blockers remain in the final report's limitations. Fixture tests cover this recovery path and exporting and restoring its history. Fixtures cover interrupted lead decisions before journal commit, pause and resume after a recovered prerequisite, and cancellation before dependents start. They do not prove a live provider or CLI session.
+
+Mailbox calls also use a durable execution journal. A committed output is returned on replay without running the operation again. Interrupted calls retain an uncertain outcome; only reads and operations explicitly implemented as idempotent may run again. Other effects require reconciliation first. A new run or call ID cannot bypass an unresolved effect in the same task. Recovery reads remain available. The journal stays local with checkpoints and is excluded from exported backups.
+
+`TaskInput.toolCapabilities` optionally limits a task to `source.read`, `dataset.check`, `skill.read` and `network.web`. An empty list allows answers but no resource tools. Omitting the field preserves the existing source, dataset and skill capabilities supported by the connection; it never grants network access. CLI defaults allow source and skill reads. Explicit dataset or web capabilities use the core tool bridge, as do workspace and team runs. Standalone source-and-skill-only CLI runs retain their restricted one-shot path. The existing configured preflight is a separate core check, not a harness tool.
+
+Runs freeze their capabilities when created. The effective permission is the intersection of that snapshot and the task's current permissions. The typed `setToolCapabilities` command changes the task policy; reducing permissions cancels active work, including opaque CLI processes. Increasing permissions does not upgrade an existing run. Details exposes the web permission; source, dataset and skill capability restrictions remain available through the core interface.
+
+In an existing chat, open its menu and choose **Details → Tool permissions**. Select **Read files only**, **Read and edit files**, or **Read, edit files and run commands**, then choose a folder in the native picker. The picker states the requested access. **Revoke folder access** stops active work. **Read and search the web** is a separate switch. Demo shows these controls as unavailable. New permissions apply to new runs, so send a new message after granting access.
+
+Reads recheck permissions after IO and before another model request or report commit. Read tools have a 20-second deadline; dataset tools have a 25-second outer deadline and retain the checker's own process limit. Cancellation prevents a late result from entering context; a filesystem read already in progress may still finish internally. Harness processes retain their existing 15-minute deadline and process cancellation.
+
+Harnesses receive only source copies and skill resources permitted by the task. Their existing restricted launch flags remain in place. Orglet cannot intercept each internal CLI file read; a permission reduction terminates the run rather than trying to reconfigure a live CLI. Already dispatched content cannot be recalled.
+
+Backups retain historical run snapshots but restore task and routine capabilities as an empty list. Restoring a backup never grants tools or workspace access on this computer. Workspace write and execution access are separate from source and network capabilities.
+
+## Public web tools
+
+Workers with explicit `network.web` permission can read a URL or search the web. The permission is frozen per run, checked before and after IO, and checked again before sending cached content to a model. Revoking it cancels active work. It does not grant network access to workspace commands or make fetched content an editable file.
+
+URL reads use public HTTP/HTTPS addresses on default ports. Core rejects credentials in URLs, private and special-purpose IP ranges, mixed public/private DNS answers, and redirects to forbidden destinations. The socket uses the checked IP while TLS verifies the original hostname. At most three redirects are followed; HTTPS cannot downgrade to HTTP. Requests use no browser cookies, provider keys or proxy configuration. JavaScript and linked resources do not execute or load.
+
+Each call has a 30-second deadline, a 1 MiB response limit and a 24,000-character text limit. Unsupported formats, interruptions and oversized responses fail explicitly. Successful reads include the requested URL, final URL, redirects, fetch time and truncation status. Content remains untrusted data, including any instructions it contains. Committed tool outputs are journaled for resume and are never registered as writable workspace files.
+
+Search currently reads DuckDuckGo's non-JavaScript results and returns up to ten public links with the provider URL and fetch time. It does not fetch the target pages; a worker must read them before citing their contents. Queries must not contain secrets or private workspace content. A challenge, HTTP error or unrecognized response is a failure, not an empty successful search. The native public-web smoke can read `example.com`; DuckDuckGo currently returns a human-verification challenge from this machine. A search API option is pending a product decision.
+
+Normal tests use DNS/HTTP fixtures and a local HTTP server to check redirects, address restrictions, byte limits, cancellation, provenance and revocation through Runner. To test the external services without credentials, set `ORGLET_TEST_WEB=1` and run `pnpm exec vitest run tests/integration/web-tools.test.ts -t "public web smoke"`. External availability is separate from the passing fixtures.
+
+## Windows isolation backend
+
+Workspace access is separate from attached sources. The native folder picker records a task-specific grant with read, write and command permissions. Its title states the requested access. The renderer receives only an opaque ID and folder name; it cannot submit an arbitrary directory through the command bridge. Runs freeze the grant ID, revision and permissions. Replacing or revoking a grant cancels active work and invalidates old snapshots. Core also checks the directory identity to detect replacement at the same path.
+
+These grants persist only in the local database. Exported backups retain historical snapshots but contain no directory grant or local path. Restoring those snapshots grants no workspace access. The bridge, storage, Details controls and model dispatch are connected. Claude Code, Codex and Cursor return structured tool requests to core, which checks the advertised tool, schema and current permissions before execution. Fixtures exercise each harness through this path. Native CLI configuration and containment still need verification with installed harnesses; the bridge alone does not establish that their internal tools are disabled.
+
+The workspace runtime uses Microsoft's MXC executor, pinned to SDK 0.8.0 with config schema 0.8.0-alpha. The executor is bundled separately from the app archive on Windows x64. Native capability probing must confirm BaseContainer before launch; other platforms and missing support fail closed. A separate execution grant is required for model command tools.
+
+Only the working directory is writable. Explicit runtime directories are readable; parent folders and the host environment are not inherited. Network egress, ingress and host loopback are denied. DACL mutation fallback is disabled. The Node runtime needs isolated UI initialization, but clipboard access and input injection remain disabled.
+
+Output is capped at 256 KiB across stdout and stderr. Commands have a maximum two-minute deadline; abort, timeout and excess output kill the executor and its BaseContainer job. The native smoke checks writes, outside-file and junction denial, environment isolation, loopback denial, output limits and descendant cancellation with synthetic fixtures.
+
+Run `pnpm test:isolation` on a supported Windows host, or `pnpm test:isolation --packaged` after `pnpm build` to check the bundled executor. Ordinary `pnpm test` runs the policy fixture and skips the native cases; that is not evidence of native containment. See the [MXC SDK documentation](https://github.com/microsoft/mxc/blob/main/sdk/node/README.md) for the public-preview status and platform requirements.
+
+The bundled workspace helper can list files, search literal text, read UTF-8 in pages and edit a private copy against an expected SHA-256 hash. Read offsets count Unicode characters, so a page does not split an emoji or Vietnamese character. Creating a file requires it to be absent; replacing one requires the hash from a prior read. The user directory is not changed by these private-copy operations.
+
+Snapshots record file hashes and omissions, with limits of 1 MiB per file, 100 MiB total and 10,000 entries. Links, `.git`, internal `.orglet-*` paths and `node_modules` are omitted. Limits fail explicitly; a partial snapshot is not presented as complete. `--packaged` also tests the helper with both Node and the packaged Electron runtime.
+
+Each run retains its own copy and baseline hashes in local storage. Operations on that copy are serialized, and team writes must fall within the assignment's `writeResources`. Workspace tools have a 150-second outer deadline, including the first snapshot; subsequent helper operations have a 30-second process deadline. Workspace runs have at most 24 model steps and retain the existing budget and checkpoint checks. Reads and effects recheck current permission; revocation prevents cached workspace content from being sent in a later model request.
+
+When a `submit_report` call fails schema validation, the activity journal records only field paths and validation codes. The runner gives the model one correction request using committed tool outputs, with only `submit_report` advertised; it cannot repeat a workspace write in that correction. Invalid report bodies are not saved in the checkpoint or activity event. A second malformed report ends the run with the field-level reason.
+
+When the selected folder contains `.git`, core creates a private repository and detached worktree from the snapshot. The baseline includes current uncommitted and untracked files within the snapshot limits. It does not copy repository history, settings or hooks, or alter the original index. Each worker has its own repository and worktree; integration still checks the original file hashes in order. Git for Windows must be installed at the configured runtime location. Missing Git fails explicitly.
+
+Preparing Git metadata is a fixed core operation, before the working directory reaches a worker. Core invokes only fixed Git plumbing commands with a clean environment, disabled hooks and filters, and no network protocols. Commands start in the fresh metadata directory rather than the snapshot, preventing executable lookup in project files. This preparation has a two-minute deadline and supports cancellation. Agent-requested commands continue to run in BaseContainer; they do not receive this internal Git operation or its runtime access.
+
+## Integrating a file
+
+The Windows integration broker accepts file bytes and an expected hash, never a shell command. It locks the parent directories and target file, opens reparse points without following them, checks the final handle path, and rejects hardlinks. A changed hash returns a conflict. A new file uses create-new semantics, so it cannot replace a file that appeared after the snapshot.
+
+Before changing an existing file, the broker flushes its original bytes to a private backup. The execution journal and reconciliation metadata are saved before invoking the broker. A crash or invalid result leaves an uncertain operation that cannot replay automatically. The saved original remains available even if the process stopped after writing. Integration is per file; a multi-file task can remain partially integrated and must show that state.
+
+Before publishing a worker's final answer, core computes the changed-file manifest and integrates those files in order, with a two-minute total deadline. It obtains bytes through the sandboxed helper instead of reading worker-controlled paths on the host. A hash conflict or interrupted integration prevents a success artifact; already integrated files and their backups remain recorded. File deletion currently requires manual handling and fails explicitly. Details shows file conflicts, process states and uncertain tool calls. Process output remains readable after a restart.
+
+`pnpm test:isolation --packaged` includes concurrent writer, user edit, Unicode path, junction/hardlink and process-crash cases. It also runs a model fixture through Runner, the packaged Electron helper, and the integration broker: a normal edit commits; an intervening user edit remains unchanged and produces no success artifact. This is fixture evidence, not a live-provider test. Crash injection is compiled into a separate test executable; the packaged broker contains no crash-test control. The broker is compiled with the Windows .NET Framework compiler during packaging.
+
+## Commands and process results
+
+Execution-enabled workers can start a process, wait for status, read stdout or stderr in pages, and cancel it. The command uses either the bundled Node runtime with literal arguments or Windows cmd with one command string. The user PATH and shell profiles are not inherited; tools such as Python, Git or pnpm are not implicitly available. Commands have no network access.
+
+Starting a process saves its identity before launch and returns a handle. The handle is not a completed result. Output is limited to 256 KiB across both streams; pages contain up to 16,000 Unicode characters. Status can wait up to ten seconds rather than repeatedly polling. While a process runs, file tools and integration cannot access the same working copy. Cancellation waits for the sandbox process tree to stop. Leaving a run, including pause or failure, stops its remaining processes.
+
+Core saves running, exited, cancelled, timeout, output-limit and uncertain outcomes separately from the tool-call journal. After a restart, an unfinished command becomes uncertain and cannot silently launch again. Its task cannot integrate changes or report success until that uncertainty is resolved. An ordinary failed check also blocks integration; rerunning the same command successfully satisfies that check while retaining the earlier failure in history. An unrelated successful command does not hide it.
+
+Native fixtures cover Node and cmd execution, descendant cancellation, timeout and excess output. The Runner fixture edits a file, runs a check against the private copy, reads its output and then integrates. A nonzero check exit prevents both integration and a success artifact.
+
+The packaged isolation suite also sends one team request through planning, a private file edit, a native check, mailbox handoff, integration, a dependent review and synthesis. It runs that same flow through an API adapter and the Claude Code, Codex and Cursor tool bridges. Model and CLI responses are fixtures; the workspace helper, command isolation and file broker are real packaged executables. This proves the core dispatch paths, not authentication or native tool restrictions inside a live CLI session.
+
+## Reviewing an interrupted attempt
+
+Open **Details → Files and processes** to inspect saved process output, file change states and calls whose outcome is unknown. Output is paged without restarting the process. Opening Details does not retry an operation.
+
+After stopping the task and checking the files, **Keep current files** retires the old attempt. The confirmation leaves current files, private copies, backups and historical outcomes unchanged. It does not apply pending edits or restore originals. The old attempt cannot resume or replay tools; a new run can work from the current files. Core rejects a stale review token or a still-running process. Completed runs cannot be retired through this action.
+
+For a changed file, **View private changes** reads the retained working copy through the isolated helper. It requires the original read grant to remain valid and the task to be stopped. Pages are plain text; if the file hash changes between pages, reopen it from the beginning. Inspection does not apply edits or replay tools. Details does not yet offer a side-by-side diff or restore a backup.
+
+The packaged smoke checks output paging after restart, cancelling and confirming retirement, and preservation of the failed run and uncertain effects.
+
+Codex launches explicitly disable native web search and local image attachment, and set the project-instruction byte limit to zero. Web and file access use the core permission checks; the argument contract is covered by fixtures. These settings follow the [Codex configuration reference](https://developers.openai.com/codex/config-reference/), but are not a claim of live harness verification.
+
+The CLI tool loop retains reported cost estimates in its checkpoint and subtracts them from the next call's allowance. Exhaustion pauses before dispatch, and resuming the same run keeps those estimates. They remain separate from API ledger charges. This is not a team-wide billing guarantee: native CLI budget enforcement varies, and a CLI that omits cost information remains explicitly unknown.
+
+CLI cancellation waits for both process-tree termination and process closure, with a bounded deadline. If either cannot be confirmed, the run fails with instructions to inspect and stop the CLI in Task Manager. Core keeps that call directory for inspection and does not treat the aborted request as a successful cancellation or automatically resume its uncertain checkpoint.

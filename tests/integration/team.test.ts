@@ -8,24 +8,36 @@ import type { Team, Worker } from '../../apps/desktop/src/shared/contracts';
 import { INVALID_PLAN_ERROR, MISSING_PLAN_ERROR, UNASSIGNED_PLAN_ERROR } from '../../apps/desktop/src/shared/contracts';
 import type { ModelAdapter } from '../../apps/desktop/src/core/adapters/openai';
 import { nextTeamMessage } from '../../apps/desktop/src/shared/live-task';
-import { isPlanRequest, planReply } from './team-plan';
+import { isPlanRequest, memberIdsFromPlanPrompt, planReply } from './team-plan';
 
 let directory: string; let store: Store; let core: CoreService;
-let failReviewer: boolean; let planMode: 'all' | 'first' | 'invalid' | 'fail'; let calls: string[]; let planBodies: string[]; let live: number; let peak: number;
+let failReviewer: boolean; let blockedFirstMember: boolean; let memberCalls: number;
+let planMode: 'all' | 'first' | 'invalid' | 'fail' | 'dependent'; let calls: string[]; let planBodies: string[]; let live: number; let peak: number;
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orglet-team-')); store = new Store(join(directory, 'state.sqlite'));
-  failReviewer = false; planMode = 'all'; calls = []; planBodies = []; live = 0; peak = 0;
+  failReviewer = false; blockedFirstMember = false; memberCalls = 0;
+  planMode = 'all'; calls = []; planBodies = []; live = 0; peak = 0;
   const adapter: ModelAdapter = { async request(messages, tools) {
     if (isPlanRequest(tools)) {
       planBodies.push(messages.map(message => String(message.content)).join('\n'));
       if (planMode === 'fail') throw new Error('Injected plan failure');
       if (planMode === 'invalid') return { calls: [{ id: 'plan', name: 'submit_plan', arguments: JSON.stringify({ assignments: [{ workerId: '00000000-0000-4000-8000-000000000000', brief: 'Nope' }] }) }], usage: { input: 10, output: 10 } };
+      if (planMode === 'dependent') {
+        const [firstWorkerId, secondWorkerId] = memberIdsFromPlanPrompt(messages);
+        return { calls: [{ id: 'plan', name: 'submit_plan', arguments: JSON.stringify({ assignments: [
+          { workerId: firstWorkerId, brief: 'Create the product brief', expectedOutput: 'product-brief.md', dependsOn: [], writeResources: [] },
+          { workerId: secondWorkerId, brief: 'Use the product brief', expectedOutput: 'Design report', dependsOn: [firstWorkerId], writeResources: [] },
+        ] }) }], usage: { input: 10, output: 10 } };
+      }
       return planReply(messages, planMode === 'first' ? ids => ids.slice(0, 1) : undefined);
     }
     const system = String(messages[0].content); calls.push(system); live++; peak = Math.max(peak, live);
     try {
       await new Promise(resolve => setTimeout(resolve, 10));
       if (failReviewer && system.includes('Check whether the source evidence')) throw new Error('Injected failure');
+      if (blockedFirstMember && memberCalls++ === 0) return { calls: [{ id: 'blocked-report', name: 'submit_report', arguments: JSON.stringify({
+        title: 'Blocked', summary: 'Could not create the product brief.', findings: [], limitations: ['Required deliverable is missing.'], assignmentOutcome: 'blocked',
+      }) }], usage: { input: 500, output: 100 } };
       return { calls: [{ id: 'report', name: 'submit_report', arguments: JSON.stringify({ title: 'Fixture report', summary: 'No source evidence provided.', findings: [], limitations: ['No files were supplied.'] }) }], usage: { input: 500, output: 100 } };
     } finally { live--; }
   } };
@@ -62,6 +74,20 @@ it('preserves a failed role as partial and retries only missing members before a
   failReviewer = false; await core.command('retry', { id: taskId }); await done(taskId);
   const after = store.detail(taskId); expect(after.task.status).toBe('completed'); expect(after.runs).toHaveLength(6);
   expect(after.artifacts.filter(a => a.id === retained)).toHaveLength(1); expect(after.artifacts).toHaveLength(4);
+});
+
+it('keeps a blocker report without unlocking a dependent assignment', async () => {
+  planMode = 'dependent';
+  blockedFirstMember = true;
+  const { taskId } = await setup();
+  const detail = store.detail(taskId);
+  const members = detail.runs.filter(run => run.stage === 'member');
+  expect(members[0].status).toBe('failed');
+  expect(members[0].error).toContain('bị chặn');
+  expect(detail.artifacts.some(artifact => artifact.runId === members[0].id)).toBe(true);
+  expect(members[1].status).toBe('interrupted');
+  expect(detail.artifacts.some(artifact => artifact.runId === members[1].id)).toBe(false);
+  expect(detail.task.status).not.toBe('completed');
 });
 it('sequential members receive only already committed results from their task', async () => {
   const template = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
@@ -197,7 +223,10 @@ it('demo team plan assigns only @tagged members', async () => {
   const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: `@${tagged.name} hãy đọc nguồn`, sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
   await done(taskId);
   const detail = store.detail(taskId);
-  expect(detail.runs.find(run => run.stage === 'plan')!.snapshot.plan).toEqual({ assignments: [{ workerId: tagged.id, brief: `@${tagged.name} hãy đọc nguồn` }], note: 'Giao các thành viên được gắn thẻ.' });
+  expect(detail.runs.find(run => run.stage === 'plan')!.snapshot.plan).toEqual({ assignments: [{
+    workerId: tagged.id, brief: `@${tagged.name} hãy đọc nguồn`, expectedOutput: `@${tagged.name} hãy đọc nguồn`,
+    dependsOn: [], writeResources: [],
+  }], note: 'Giao các thành viên được gắn thẻ.' });
   const members = detail.runs.filter(run => run.stage === 'member');
   expect(members.filter(run => run.status === 'completed').map(run => run.snapshot.worker.id)).toEqual([tagged.id]);
   expect(members.find(run => run.status === 'cancelled')!.error).toBe(UNASSIGNED_PLAN_ERROR);
