@@ -51,3 +51,30 @@ it('renders bold inside italic, as workers write suggested wording', () => {
   const html = render('Suggestion: *"Invoices are due within **7 days**."*');
   expect(html).toContain('<em>&quot;Invoices are due within <strong>7 days</strong>.&quot;</em>');
 });
+
+it('renders worker Markdown tables as safe, aligned cells', () => {
+  const html = render([
+    'Sales summary:',
+    '| Item | Sales | Notes |',
+    '| :--- | ---: | :---: |',
+    '| Notebook | **240,000 VND** | `12 | 20k` |',
+    '| Pen | 180,000 VND | A\\|B <script>alert(1)</script> |',
+    '',
+    'Net after booth: 121,000 VND.',
+  ].join('\n'));
+
+  expect(html).toContain('<p>Sales summary:</p><div class="markdown-table-wrap"><table>');
+  expect(html).toContain('<th scope="col" style="text-align:right">Sales</th>');
+  expect(html).toContain('<th scope="col" style="text-align:center">Notes</th>');
+  expect(html).toContain('<td style="text-align:right"><strong>240,000 VND</strong></td>');
+  expect(html).toContain('<code>12 | 20k</code>');
+  expect(html).toContain('A|B &lt;script&gt;alert(1)&lt;/script&gt;');
+  expect(html).toContain('</table></div><p>Net after booth: 121,000 VND.</p>');
+  expect(html).not.toContain('<script>');
+});
+
+it('keeps pipe-separated prose without a table divider as prose', () => {
+  const html = render('Options: red | blue\nStill one paragraph.');
+  expect(html).toContain('<p>Options: red | blue<br/>Still one paragraph.</p>');
+  expect(html).not.toContain('<table>');
+});
