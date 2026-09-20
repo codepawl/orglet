@@ -25,6 +25,7 @@ import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { Starters } from './components/Starters';
 import { DetailsPanel } from './components/DetailsPanel';
+import type { WorkspaceRecoveryView } from '../shared/workspace-recovery';
 import { suggestStarters } from '../shared/starters';
 import { accentInk, DEFAULT_ACCENT_COLOR } from '../shared/accent';
 import { ProviderMark } from './components/ProviderMark';
@@ -45,6 +46,8 @@ import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
 import { t, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
+import type { WorkspaceGrantView } from '../shared/workspace-access';
+import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -96,6 +99,9 @@ export function App() {
   const [workspace, setWorkspace] = useState<Workspace>(); const [connections, setConnections] = useState<Connections>(emptyConnections());
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>([]);
   const [selected, setSelected] = useState<string | null>(null); const [detail, setDetail] = useState<TaskDetail>();
+  const [workspaceAccess, setWorkspaceAccess] = useState<{ taskId: string; grant: WorkspaceGrantView | null }>();
+  const [workspaceRecovery, setWorkspaceRecovery] = useState<WorkspaceRecoveryView>();
+  const [toolPolicyBusy, setToolPolicyBusy] = useState(false);
   const [workerId, setWorkerId] = useState(''); const [brief, setBrief] = useState(''); const [sources, setSources] = useState<Source[]>([]);
   const [skippedSources, setSkippedSources] = useState<{ name: string; reason: string }[]>([]);
   const [teamId, setTeamId] = useState(''); const [editingTeam, setEditingTeam] = useState<Team>();
@@ -159,7 +165,9 @@ export function App() {
     try {
       // Load the open task first so markTaskSeen lands in SQLite before workspace is read.
       const taskDetail = selected ? await orglet.call('task', { id: selected }) : undefined;
-      const [next, connectionState, detected] = await Promise.all([orglet.call('workspace', {}), orglet.connections(), orglet.call('harnesses', { refresh: false })]);
+      const [next, connectionState, detected, grant, recovery] = await Promise.all([orglet.call('workspace', {}), orglet.connections(), orglet.call('harnesses', { refresh: false }),
+        selected ? orglet.call('workspaceAccess', { taskId: selected }) : Promise.resolve(null),
+        selected ? orglet.call('workspaceRecovery', { taskId: selected }) : Promise.resolve(undefined)]);
       if (requestId !== refreshId.current) return;
       if (taskDetail?.task.seenStamp) {
         seenInfo.current[taskDetail.task.id] = { seenStamp: taskDetail.task.seenStamp, lastArtifactId: taskDetail.task.lastArtifactId };
@@ -174,6 +182,8 @@ export function App() {
       });
       writeSeenStorage(seenInfo.current);
       setWorkspace({ ...next, tasks }); setConnections(connectionState); setHarnesses(detected); setDetail(taskDetail); setWorkerId(value => value || next.workers[0]?.id || '');
+      setWorkspaceAccess(selected ? { taskId: selected, grant } : undefined);
+      setWorkspaceRecovery(recovery);
     } catch (err) { if (requestId === refreshId.current) setError((err as Error).message); }
   }, []);
   useEffect(() => {
@@ -268,6 +278,20 @@ export function App() {
     if (live) openTask(live.id);
   }, [workspace, selected, teamId, workerId]);
   const action = (fn: () => Promise<unknown>) => { setError(''); void fn().then(() => refresh()).catch(err => setError((err as Error).message)); };
+  const toolAction = (perform: () => Promise<unknown>) => {
+    if (toolPolicyBusy) return;
+    setToolPolicyBusy(true);
+    setError('');
+    void (async () => {
+      try {
+        await perform();
+        await refresh();
+      } catch (error) {
+        setError((error as Error).message);
+      }
+      finally { setToolPolicyBusy(false); }
+    })();
+  };
   const worker = workspace?.workers.find(item => item.id === workerId);
   const team = workspace?.teams.find(item => item.id === teamId);
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : worker ? [worker] : [];
@@ -486,6 +510,29 @@ export function App() {
       <footer className="main-footer">{t('Orglet không đảm bảo câu trả lời luôn chính xác. Hãy kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
     </main>
     {detailsOpen && (detail || detailsTeam || detailsWorker) && <DetailsPanel workspace={workspace} team={detailsTeam} worker={detailsWorker} detail={detail}
+      recovery={workspaceRecovery}
+      readProcessOutput={detail ? (processId, stream, offset) => orglet.call('recoveryProcessOutput', { taskId: detail.task.id, processId, stream, offset }) : undefined}
+      readPrivateFile={detail ? (runId, path, offset) => orglet.call('recoveryFile', { taskId: detail.task.id, runId, path, offset }) : undefined}
+      onRetireWorkspace={detail ? (runId, reviewToken) => toolAction(async () => {
+        const confirmed = await confirmAction({ title: t('Giữ file hiện tại và kết thúc bản làm việc này?'),
+          description: t('File hiện tại không đổi. Bản riêng và lịch sử được giữ để kiểm tra, nhưng lần cũ không thể chạy tiếp. Thay đổi chưa tích hợp sẽ không tự áp dụng. Sau đó chọn Thử lại để tạo lần chạy mới.'),
+          confirmLabel: t('Giữ file hiện tại'), cancelLabel: t('Quay lại kiểm tra') });
+        if (confirmed) await orglet.call('retireWorkspaceAttempt', { taskId: detail.task.id, runId, reviewToken, keepCurrentFiles: true });
+      }) : undefined}
+      tools={detail ? {
+        grant: workspaceAccess?.taskId === detail.task.id ? workspaceAccess.grant : undefined,
+        networkEnabled: detail.task.toolCapabilities?.includes('network.web') ?? false,
+        supported: taskWorkers(detail.task, workspace).length > 0 && taskWorkers(detail.task, workspace).every(person => person.provider !== 'demo'),
+        busy: toolPolicyBusy,
+        onGrant: permissions => toolAction(() => orglet.pickWorkspace(detail.task.id, permissions)),
+        onRevoke: () => toolAction(() => orglet.call('revokeWorkspace', { taskId: detail.task.id })),
+        onNetworkChange: enabled => toolAction(() => {
+          const previous = detail.task.toolCapabilities ?? snapshotCapabilities(taskWorkers(detail.task, workspace)[0]?.provider ?? 'demo');
+          const capabilities: ToolCapability[] = previous.filter(capability => capability !== 'network.web');
+          if (enabled) capabilities.push('network.web');
+          return orglet.call('setToolCapabilities', { taskId: detail.task.id, capabilities });
+        }),
+      } : undefined}
       workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
     <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lỡ thì chạy bù một lần') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được. Gói nhập từ thư mục cần được review trước khi gắn cho Tí.') : t('Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : undefined} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><Button size="icon" aria-label={t('Quay lại danh sách lịch')} onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}><ArrowLeft size={18} /></Button><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? editingSkill?.package ? 'Review skill' : t('Chỉnh skill') : panel === 'knowledge' ? editingKnowledge ? 'Knowledge' : t('Knowledge mới') : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
       {panel === 'revision' && detail && <RevisionEditor key={`${detail.task.id}:${detail.task.inputRevision ?? 0}`} detail={detail} workspace={workspace} connections={ready} done={close} />}

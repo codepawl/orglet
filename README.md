@@ -61,9 +61,15 @@ Each API or harness worker can use a model ID from **that provider's own list** 
 
 API keys are encrypted with your system's secure storage and never reach the app's interface.
 
-Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, and only with the files you attached.
+Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, using attached files and workspace folders you explicitly grant.
 
 Start here: [Getting started](docs/getting-started.md). The [docs map](docs/README.md) lists how-it-works pages, product decisions, and ship records. Product fit is [product.md](docs/product.md). How to run and test is [technical-guide.md](docs/technical-guide.md).
+
+[Agent tools and permissions](docs/agent-tools.md) explains task permissions, workspace grants and revocation. Open a chat's **Details → Tool permissions** to choose its working folder and access level. Core can edit that folder and run isolated checks through private copies and conflict checks. API workers and the CLI tool bridge dispatch through these handlers; native CLI permission enforcement still needs live verification. Git workspace roots use separate worktrees based on the current files, including uncommitted edits. Public web reads and search require a separate switch; search may be unavailable when its provider requires human verification.
+
+Team progress shows who is doing each unfinished assignment, a short description, and who they are waiting for. Expand a long description to read the full assignment. **Details → Files and processes** keeps conflicts, saved output and unknown outcomes visible after a restart. After checking the current files, you can retire an interrupted attempt without retrying its effects or marking it successful.
+
+API team leads can record blocker resolutions and reassign unfinished work within the turn's existing permissions. Reassignment retains dependencies and file ownership, with at most two attempts per assignment. Failed work stays visible until a replacement produces a committed result.
 
 ## Install
 

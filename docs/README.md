@@ -18,6 +18,7 @@ What the app does today. Use the words on screen.
 | Page | What it is |
 |---|---|
 | [team-chat.md](team-chat.md) | Click a worker or team → that chat; `@` tags; how a team turn runs |
+| [agent-tools.md](agent-tools.md) | Workspace and web permissions, tool execution, team handoffs and interrupted attempts |
 | [routines.md](routines.md) | Schedules, missed runs, and catch-up (one pending, not a backlog) |
 | [recovery.md](recovery.md) | Where the database lives, upgrades, and rollback |
 | [technical-guide.md](technical-guide.md) | Run the app, connect providers and harnesses, limits, checks |

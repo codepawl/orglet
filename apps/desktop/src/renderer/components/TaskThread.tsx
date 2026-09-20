@@ -21,6 +21,7 @@ import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
 import { WorkingLine } from './Working';
 import type { MentionPerson } from '../../shared/mentions';
+import { teamProgress } from '../../shared/team-progress';
 
 /**
  * What this worker was doing for the team on this turn: assigning the work, doing a share of it, or combining the
@@ -99,6 +100,19 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
             {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
+            {latest && detail.task.status !== 'completed' && <div className="team-progress" role="status">
+              {teamProgress(turn.runs, detail.artifacts).map(({ run, waitingFor }) => {
+                const brief = run.snapshot.assignment!.brief;
+                const characters = Array.from(brief.replace(/\s+/g, ' ').trim());
+                const description = characters.length > 160 ? `${characters.slice(0, 160).join('')}…` : characters.join('');
+                const status = <span>{run.snapshot.worker.name} · {statusLabel[run.status]}
+                  {waitingFor.length > 0 ? ` · ${t('Chờ {0}', [waitingFor.join(', ')])}` : ''}</span>;
+                return characters.length > 160 ? <details className="muted" key={run.id}>
+                  <summary>{status} · {description}</summary>
+                  <p>{brief}</p>
+                </details> : <p className="muted" key={run.id}>{status} · {description}</p>;
+              })}
+            </div>}
             {latest && busy && thinkingRun && (liveUpdate
               ? <LiveRun update={liveUpdate} pausing={detail.task.status === 'pausing'} />
               : <Thinking worker={thinkingRun.snapshot.worker} stage={thinkingRun.stage} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} />)}
@@ -150,6 +164,10 @@ function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
 function ChatReply({ artifact, action }: { artifact: Artifact; action: (fn: () => Promise<unknown>) => void }) {
   return <div className="chat-reply">
     <Markdown className="prose" text={tMessage(artifact.report.summary)} />
+    {artifact.report.limitations.length > 0 && <div className="chat-limitations">
+      <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
+      <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
+    </div>}
     <div className="message-actions"><ArtifactActions artifactId={artifact.id} action={action} /></div>
   </div>;
 }
