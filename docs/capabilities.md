@@ -3,29 +3,33 @@
 | Path | Enabled | Limits |
 |---|---|---|
 | Demo | Yes | Deterministic sample report; no model or source analysis |
-| OpenAI native | Implemented; live acceptance pending | Default suggestion `gpt-4.1-mini-2025-04-14`; worker may pick or type any ID. Verified mini prices only for that catalog ID. Trusted text reader and validated report only |
+| OpenAI native | Implemented; live acceptance pending | Default suggestion `gpt-4.1-mini-2025-04-14`; worker may pick or type any ID. Verified mini prices only for that catalog ID. Permission-checked core tools and validated output |
 | Anthropic native | Implemented; live acceptance pending | Default suggestion `claude-haiku-4-5-20251001`; worker may pick or type any ID. Verified Haiku prices only for that catalog ID. Provider-scoped consent, trusted tools |
 | Grok (xAI) native | Implemented; live acceptance pending | OpenAI-compatible Chat Completions at `https://api.x.ai/v1`, default suggestion `grok-3-mini`, worker may pick or type any ID; native list tenths used when cached. Same trusted tools and report gate |
 | OpenRouter native | Implemented; live acceptance pending | OpenAI-compatible Chat Completions at `https://openrouter.ai/api/v1`, default suggestion `openai/gpt-4.1-mini`, worker may pick or type any ID; native list tenths used when cached. Same trusted tools and report gate |
 | Local Ollama | Implemented | OpenAI-compatible Chat Completions at `http://127.0.0.1:11434/v1`. Toggle in Settings (no API key). Default suggestion `llama3.2`. No Orglet budget reservation. Same trusted tools and report gate |
-| Teams | Yes | Up to four members, parallel concurrency two, sequential upstream reports, partial retry and synthesis |
+| Teams | Yes | Up to four members, concurrency two for independent assignments, resource ownership, dependencies, mailbox, lead reassignment and synthesis |
 | Team chat + orchestrator | Yes ([COD-24](https://linear.app/codepawl/issue/COD-24) shell, [COD-25](https://linear.app/codepawl/issue/COD-25) plan→members→report, [COD-26](https://linear.app/codepawl/issue/COD-26) hide task pile; [team-chat.md](team-chat.md)) | Click worker or team → one live `tasks` row; later messages `reviseTask`; sidebar is workers/teams not a task list; synthesizer plans, assigned members run as hidden jobs, one synthesis in the transcript; fail-closed `partial` / named errors; Chi tiết keeps cost/retry/cancel |
 | Provider request concurrency | Yes | Workspace-wide per provider, 1–4 (default 2); queued steps hold no budget reservation |
 | Local dataset checker | Yes | CSV/JSONL/Parquet; schema, counts, ID checks, column-name/row-count/ID-set comparison for two files; fixed SQL, process deadline, retained provenance |
 | Reviewed knowledge | Yes | Workspace/team/worker scope, immutable revisions, FTS5 keyword search, pins; model proposals and template imports wait for review |
 | Context compiler | Yes | Platform → team → worker → skill → approved knowledge; duplicate removal, 12 items / 16 KB knowledge budget, frozen per-run manifest |
 | Folder intake | Yes | 20 files, 64 MB total, 8 levels, 1,000 entries; excluded-item list |
-| Local Claude Code harness | Yes, when installed and signed in; live review verified | Headless `-p` with restricted/safe mode, Read/Grep/Glob only, JSON schema output; one step per run; no Orglet reservation |
-| Local Codex harness (`codex exec`) | Yes, when installed and signed in; live review verified | Sources inlined in the prompt; shell tools, apps, browser and computer use disabled; user config ignored |
+| Local Claude Code harness | Yes, when installed and signed in; live review verified | Headless `-p` with restricted/safe mode; structured core-tool loop, or Read/Grep/Glob for source-only review; no Orglet reservation |
+| Local Codex harness (`codex exec`) | Yes, when installed and signed in; live review verified | Structured core-tool loop; native shell, web, image, apps, browser and computer tools disabled; user config and project instructions excluded |
 | Local Cursor Agent harness | Yes, when installed and signed in; live probe optional | Headless `agent -p --mode=ask --sandbox enabled --trust`; report schema embedded in the prompt; never `--force`/`--yolo`; no Orglet reservation |
 | Codex app-server | No | `codex exec` covers review runs; app-server is not used. See below |
 | Model list fetch + cache | Yes ([COD-31](https://linear.app/codepawl/issue/COD-31)) | Native OpenAI/Anthropic/xAI/OpenRouter HTTP, Ollama `/api/tags`, Codex/Cursor CLI, Claude Code aliases; SQLite `settings.modelLists`, 24h TTL, stale-while-revalidate; fail-open custom ID; no HTML scrape. See [model-list-fetch.md](model-list-fetch.md) |
 | Worker model picker | Yes ([COD-28](https://linear.app/codepawl/issue/COD-28)) | Per-worker list + typed custom ID; catalog defaults are suggestions; adapters/harness `--model`/`-m` use the saved ID |
 | Deprecated model chip | Yes ([COD-30](https://linear.app/codepawl/issue/COD-30)) | Quiet chip on selected/suggested ID when cached `deprecated` is true; sunset day only from native `sunsetAt` (OpenAI `shutdown_date`); no HTML scrape or invented dates |
 | Subscription quota display / internal allocation | No | Neither CLI exposes quota windows in headless mode; no screen is shown |
-| Shell, imported scripts, external writes | No | Not exposed through IPC or tool schemas |
+| Workspace files and commands | Explicit grant, Windows x64 isolation backend | Private copies or Git worktrees; hash-checked integration; Node/cmd commands without network; recovery in Details. See [agent tools](agent-tools.md) |
+| Public web reads and search | Explicit task capability | Public-address validation, bounded text and provenance; provider challenges fail visibly |
+| Imported skill scripts and external writes | No | No automatic skill-script execution or tool for changing another service |
 
 ## Local harness capability matrix
+
+The table below describes the original source-only review path. Workspace, team, dataset-tool and web-enabled runs now use a structured tool-selection loop: core validates and executes each requested tool. Claude Code receives an empty native tool list in this loop; Codex retains the disabled native tools below; Cursor receives project deny rules for native file, shell, web and MCP tools in a fresh call directory. These new paths have per-harness fixtures and native workspace tests. The historical live reviews below do not prove the new loop or Cursor's native permission enforcement.
 
 Decision (user, 2026-09-16): connect the agent harnesses already installed on the machine first, detected per machine so it works for other users too. The native OpenAI and Anthropic paths do not depend on them.
 

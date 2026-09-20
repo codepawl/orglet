@@ -15,6 +15,10 @@ import { teamRoster } from '../assignees';
 import { orglet } from '../api';
 import { toast } from './toast';
 import type { Run, TaskDetail, Team, Worker, Workspace } from '../../shared/contracts';
+import type { WorkspaceGrantView, WorkspacePermission } from '../../shared/workspace-access';
+import { TaskTools } from './TaskTools';
+import { WorkspaceRecovery, type ReadProcessOutput, type ReadPrivateFile } from './WorkspaceRecovery';
+import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 
 /*
  * The panel beside a chat: who you are talking to, what this conversation has cost, and what happened in it.
@@ -154,15 +158,28 @@ async function copyRunId(id: string) {
   }
 }
 
-export function DetailsPanel({ workspace, team, worker, detail, workerStatus, onClose, onOpenSources, onExport }: {
+export function DetailsPanel({ workspace, team, worker, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, onRetireWorkspace, readProcessOutput, readPrivateFile }: {
   workspace: Workspace;
   team?: Team;
   worker?: Worker;
   detail?: TaskDetail;
+  recovery?: WorkspaceRecoveryView;
+  onRetireWorkspace?: (runId: string, reviewToken: string) => void;
+  readProcessOutput?: ReadProcessOutput;
+  readPrivateFile?: ReadPrivateFile;
   workerStatus: (id: string) => StatusMarkState;
   onClose: () => void;
   onOpenSources: () => void;
   onExport: (artifactId: string) => void;
+  tools?: {
+    grant: WorkspaceGrantView | null | undefined;
+    networkEnabled: boolean;
+    supported: boolean;
+    busy: boolean;
+    onGrant: (permissions: WorkspacePermission[]) => void;
+    onRevoke: () => void;
+    onNetworkChange: (enabled: boolean) => void;
+  };
 }) {
   const [technical, setTechnical] = useState(false);
   const members = team ? teamRoster(team, workspace.workers) : [];
@@ -212,6 +229,10 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
           <Button variant="outline" onClick={onOpenSources}><FileText size={16} />{t('Xem nguồn')}</Button>
         </>}
       </section>}
+
+      {detail && tools && <TaskTools key={detail.task.id} {...tools} />}
+      {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs}
+        busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} readOutput={readProcessOutput} readFile={readPrivateFile} />}
 
       {detail && detail.runs.length > 0 && <Section icon={Clock} title={t('Diễn biến')}>
         <ol className="details-runs">

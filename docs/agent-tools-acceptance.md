@@ -1,0 +1,32 @@
+# Tools and team acceptance record
+
+This records the COD-98 implementation against its six child issues. It is a local verification record, not a release or live-provider claim.
+
+| Issue | Required behavior | Implementation | Evidence |
+| --- | --- | --- | --- |
+| COD-99 | Central schemas, permissions, deadlines and cancellation; frozen grants intersect current permissions; prompts cannot grant authority | `core/tools/catalog.ts`, `policy.ts`, `storage/workspace-grants.ts`, `harness/tool-adapter.ts`; runner validates every requested call | `tool-policy.test.ts` covers denied dispatch, revocation during reads, timeout and restored grants; `harness-tools.test.ts` covers all three structured CLI adapters and malformed calls; `workspace-runtime.test.ts` covers revocation before the next CLI dispatch |
+| COD-100 | List/search/read/write, commands, process status/output, separate web permission, bounded output and process isolation | Private workspace copies; Windows BaseContainer executor; public-address-checked web retrieval; fixed helper and native integration broker | `sandbox.test.ts` uses real processes for outside-file, junction, environment, loopback, output, cancel and descendant-timeout checks; packaged isolation covers workspace operations and process handles; `web-tools.test.ts` covers URL/network boundaries |
+| COD-101 | Owner, expected output, editable resources and dependencies; independent parallel work; atomic claims | Normalized plan metadata, required model schema, SQLite assignment claims, dependency scheduler and overlapping-resource serialization | `assignments.test.ts` covers duplicate ownership, stale turns, missing/cyclic dependencies, resource overlap, failed prerequisites, budget pause and retained prerequisite output on retry |
+| COD-102 | Durable questions, responses, blockers and handoffs within one team turn; two-question limit; lead-controlled resolution and reassignment | Existing event journal, scoped mailbox, frozen roster and permission intersection on reassignment | `team-messages.test.ts` covers scope, replay, question limits across reassignment, lead resolution, handoff and an orchestrator request where parallel workers ask, answer, read and acknowledge without creating workers; `team-recovery.test.ts` covers API/CLI fixtures, interruption, pause and timeout |
+| COD-103 | Preserve user edits, private Git worktrees for parallel edits, ordered hash-checked integration, durable tool outcomes and no automatic replay of unknown effects | `workspace-git.ts`, `workspace-integration.ts`, `WorkspaceIntegrate.cs`, tool/process journals and recovery commands | Native integration tests cover concurrent writers, intervening user edits, links and real crashes after backup/write; Git tests preserve original dirty files/index/config; journal tests reject unknown effect replay; packaged recovery preserves failure history and current files |
+| COD-104 | Quiet progress, visible dependencies and user action, tool details on demand, disagreements/partial failure retained, docs and full-flow tests | Chat assignment descriptions and dependency status; Details permissions, output and private-copy inspection; limitations in answers/exports; bilingual controls | Packaged smoke checks short/long assignment descriptions, keyboard disclosure, permissions, recovery and backup/restore. Packaged isolation runs plan → edit → native check → handoff → integration → dependent review → synthesis through API and three CLI fixtures |
+
+## Verification boundaries
+
+- Latest full suite: 411 passed, 34 skipped, including parallel question/response and uncertain CLI termination regressions. Typecheck passed.
+- Latest packaged isolation run: 69 passed across six files. The separate native sandbox run passed seven tests. Their model responses are fixtures; filesystem helpers, process isolation and integration broker are real executables.
+- Latest Windows package and packaged UI smoke passed. No installer, live-provider authentication or live CLI tool-policy enforcement is established by those checks.
+- Claude Code receives an empty native tool list in controlled mode. Codex disables shell, apps, browser, computer, web search and image tools and excludes automatic project instructions. Cursor receives project deny rules. These launch contracts have fixtures; installed CLI behavior still needs separate live evidence.
+- CLI-reported cost estimates persist across steps and resume. Unknown costs stay unknown. This does not establish a hard shared billing cap across external subscription harnesses.
+- DuckDuckGo challenges fail explicitly. Search availability on this host has not been established by a successful live search.
+- Unsupported process-isolation platforms fail closed. There is no cloud runtime, marketplace or automatic execution of imported skill scripts.
+
+## Local delivery
+
+The implementation is split into six local changes in dependency order: COD-99 (098a7ba), COD-101 (77861b6), COD-100 (e4a44b1), COD-102 (d448143), COD-103 (71640d4), and COD-104 (this change). The final stack is on codex/agent-tools-workspace. Earlier layers supply the policy, backend and coordination contracts; COD-103 connects the controlled tool dispatcher and guarded integration, and COD-104 exposes the desktop controls. Acceptance applies to the complete stack.
+
+The stack has not been pushed or merged. The separate full-reference worktree remains available with its original uncommitted implementation. The main checkout was not modified. External issue status and the subsequent follow-up are recorded separately from this code verification.
+
+Final UI checks: packaged permissions, native grant bridge, assignment descriptions and dependency labels, keyboard disclosure, interrupted-attempt recovery with preserved failure history, and backup/restore all passed. Translation checking reports zero missing keys. No screenshot, live-provider session, installer or narrow-screen visual audit is claimed.
+
+CLI termination failures now have a bounded error path: a failed kill command or missing process closure produces an explicit termination error. Core retains the call directory, records failure even after an abort, and keeps the uncertain checkpoint non-resumable. Fault-injection tests cover both termination errors and runner retention; real Windows fixtures still cover normal descendant cancellation. The Windows package was rebuilt after this cleanup change and its packaged smoke passed.
