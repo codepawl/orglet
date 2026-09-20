@@ -48,7 +48,9 @@ function said(detail: TaskDetail, artifact: Artifact, current: Run): ThreadTurn 
   const raw = artifact.report.format === 'chat'
     ? artifact.report.summary
     : `${artifact.report.title}\n\n${artifact.report.summary}${artifact.report.findings.map(finding => `\n- ${finding.title}`).join('')}`;
-  const { text, truncated } = clip(raw);
+  const limitations = artifact.report.limitations.length
+    ? `Limitations: ${artifact.report.limitations.join('; ')}\n\n` : '';
+  const { text, truncated } = clip(limitations + raw);
   return {
     from: owner.snapshot.worker.id === current.snapshot.worker.id ? 'you' : owner.snapshot.worker.name,
     text,

@@ -34,11 +34,24 @@ export function claimAssignment(store: Store, run: Run, rawAssignment: Assignmen
   const assignment = PlanAssignment.parse(rawAssignment);
   return store.transaction(() => {
     const current = store.get<Run>('runs', run.id);
-    if (current.stage !== 'member' || current.snapshot.worker.id !== assignment.workerId) {
+    const reassignment = current.snapshot.reassignment;
+    if (current.stage !== 'member' || (current.snapshot.worker.id !== assignment.workerId && !reassignment)) {
       throw new Error('Người nhận không khớp phần việc.');
     }
     const revision = current.snapshot.inputRevision ?? 0;
     const detail = store.detail(current.taskId);
+    if (reassignment) {
+      const decision = detail.runs.find(candidate => candidate.id === reassignment.decisionRunId);
+      const source = detail.runs.find(candidate => candidate.id === reassignment.sourceRunId);
+      if (!decision || !source || decision.stage !== 'synthesis' || !['running', 'completed'].includes(decision.status)
+        || decision.snapshot.worker.id !== current.snapshot.team?.synthesizerId
+        || decision.snapshot.team?.id !== current.snapshot.team?.id
+        || (decision.snapshot.inputRevision ?? 0) !== revision || (source.snapshot.inputRevision ?? 0) !== revision
+        || reassignment.newWorkerId !== current.snapshot.worker.id || reassignment.assignmentWorkerId !== assignment.workerId
+        || assignmentKey(source) !== assignment.workerId || JSON.stringify(current.snapshot.assignment) !== JSON.stringify(assignment)) {
+        throw new Error('Quyết định giao lại việc không hợp lệ.');
+      }
+    }
     if ((detail.task.inputRevision ?? 0) !== revision || !['queued', 'paused', 'interrupted', 'waiting_budget'].includes(current.status)) {
       throw new Error('Phần việc không còn ở trạng thái có thể nhận.');
     }
