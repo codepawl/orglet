@@ -14,6 +14,7 @@ import { EvidenceRequest } from '../../shared/review';
 import { preflightScope } from '../orchestration/preflight';
 import { Knowledge, RunContext } from '../../shared/knowledge';
 import { KnowledgeBase } from '../context/knowledge';
+import { DecisionRequest } from '../../shared/work-decisions';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -22,7 +23,7 @@ const Worker = WorkerInput.extend({ id: Id, revision: Revision }).strict();
 const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPackage.optional() }).strict();
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
-const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
+const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(100).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
 const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
 const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime(), teamMessage: TeamMessage.optional() }).strict();
 const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime() }).strict();
@@ -53,6 +54,13 @@ function validateRelations(data: Payload) {
   for (const routine of routines.values()) if (!workers.has(routine.task.workerId) || (routine.task.teamId && !teams.has(routine.task.teamId)) || routine.task.sourceIds.some(id => !sources.has(id)) || (routine.lastTaskId && tasks.get(routine.lastTaskId)?.routineId !== routine.id)) fail('Lịch thiếu Tí, hội, nguồn hoặc task.');
   for (const task of tasks.values()) {
     if (task.currentInput?.sourceIds.some(id => !task.sourceIds.includes(id))) fail('Đầu vào hiện tại tham chiếu nguồn ngoài task.');
+    const decisions = task.decisionRequests ?? [];
+    if (new Set(decisions.map(request => request.id)).size !== decisions.length) fail('Câu hỏi quyết định bị trùng.');
+    for (const request of decisions) {
+      const run = runs.get(request.runId);
+      if (!run || run.taskId !== task.id || (run.snapshot.inputRevision ?? 0) !== request.inputRevision
+        || Boolean(request.answer) !== Boolean(request.answeredAt) || (request.interruptedAt && request.answer)) fail('Câu hỏi quyết định không khớp lượt.');
+    }
     const requests = task.evidenceRequests ?? [];
     if (new Set(requests.map(request => request.id)).size !== requests.length) fail('Yêu cầu bằng chứng bị trùng.');
     for (const request of requests) {
@@ -314,8 +322,17 @@ export class Backups {
       };
       const restoredSources = incoming.sources.map(source => ({ ...source, revoked: true }));
       const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, task: { ...routine.task, toolCapabilities: [], consent: false, providerScopes: [] } }));
-      const restoredTasks = incoming.tasks.map(task => ({ ...task, toolCapabilities: [], consent: false, providerScopes: [], status: ['running', 'queued', 'pausing', 'paused'].includes(task.status) ? 'interrupted' as const : task.status }));
-      const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: comparableSnapshot(run, incoming), status: ['running', 'queued', 'pausing', 'paused'].includes(run.status) ? 'interrupted' as const : run.status }));
+      const pendingDecisionRuns = new Set(incoming.tasks.flatMap(task => (task.decisionRequests ?? [])
+        .filter(request => !request.answer && !request.interruptedAt).map(request => request.runId)));
+      const restoredTasks = incoming.tasks.map(task => {
+        const decisionRequests = task.decisionRequests?.map(request => pendingDecisionRuns.has(request.runId)
+          ? { ...request, interruptedAt: now() } : request);
+        const pendingDecision = (task.decisionRequests ?? []).some(request => pendingDecisionRuns.has(request.runId));
+        return { ...task, decisionRequests, toolCapabilities: [], consent: false, providerScopes: [],
+          status: pendingDecision || ['running', 'queued', 'pausing', 'paused'].includes(task.status) ? 'interrupted' as const : task.status };
+      });
+      const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: comparableSnapshot(run, incoming),
+        status: pendingDecisionRuns.has(run.id) || ['running', 'queued', 'pausing', 'paused'].includes(run.status) ? 'interrupted' as const : run.status }));
       const merged: Payload = { ...current,
         routines: merge(current.routines ?? [], restoredRoutines),
         workers: merge(current.workers, incoming.workers), skills: merge(current.skills, incoming.skills), teams: merge(current.teams, incoming.teams),

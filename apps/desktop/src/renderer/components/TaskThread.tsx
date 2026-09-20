@@ -47,7 +47,9 @@ type Turn = { revision: number; runs: Run[]; brief: string; sourceCount: number;
 
 export function TaskThread({ detail, action, showSources, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
+  const [answeringDecision, setAnsweringDecision] = useState(false);
   const current = detail.task.inputRevision ?? 0;
+  const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === current && !request.answer && !request.interruptedAt);
   const turns: Turn[] = [...new Set([0, current, ...detail.runs.map(run => run.snapshot.inputRevision ?? 0)])].sort((a, b) => a - b).map(revision => {
     const runs = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
     const input = revision === current ? detail.task.currentInput ?? detail.task : runs.find(run => run.snapshot.input)?.snapshot.input ?? detail.task;
@@ -99,7 +101,18 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
           {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
             {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
-            {latest && detail.task.status === 'waiting_input' && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
+            {latest && detail.task.status === 'waiting_input' && pendingDecision && <div role="group" aria-label={t('Quyết định đang chờ')}>
+              <p role="status">{pendingDecision.question}</p>
+              <div className="actions">{pendingDecision.options.map(option => <Button key={option} variant="outline" disabled={answeringDecision} onClick={() => {
+                if (answeringDecision) return;
+                setAnsweringDecision(true);
+                action(async () => {
+                  try { await orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: option }); }
+                  finally { setAnsweringDecision(false); }
+                });
+              }}>{option}</Button>)}</div>
+            </div>}
+            {latest && detail.task.status === 'waiting_input' && !pendingDecision && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
             {latest && detail.task.status !== 'completed' && <div className="team-progress" role="status">
               {teamProgress(turn.runs, detail.artifacts).map(({ run, waitingFor }) => {
                 const brief = run.snapshot.assignment!.brief;
@@ -119,7 +132,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
-            {!turn.artifact && !turn.replies.length && !(latest && busy) && !unresolvedError && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
+            {!turn.artifact && !turn.replies.length && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
             {turn.artifact && !turn.replies.length && <FinishedActivity steps={savedSteps(detail.events, turn.artifact.runId)} />}
             {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
               ? <ChatReply artifact={turn.artifact} action={action} />

@@ -53,6 +53,7 @@ export class TeamRunner {
       if (plannedNow.status === 'paused' || plannedNow.status === 'waiting_budget') control.paused = true;
       if (control.cancelled) { this.finish(task, 'cancelled'); return; }
       if (control.paused) { this.finish(task, plannedNow.status === 'waiting_budget' ? 'waiting_budget' : 'paused'); return; }
+      if (plannedNow.status === 'waiting_input') { this.finish(task, 'waiting_input'); return; }
       if (plannedNow.status !== 'completed' || !plannedNow.snapshot.plan) {
         this.deferQueued(planned, MISSING_PLAN_ERROR);
         this.finish(task, plannedNow.status === 'failed' ? 'failed' : 'interrupted');

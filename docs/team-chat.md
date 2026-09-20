@@ -55,6 +55,8 @@ Find-or-create lives in `apps/desktop/src/shared/live-task.ts` (`liveWorkerTask`
 
 A user message on a team thread is one turn. The synthesizer (team lead) runs a **plan** job, then only the assigned members run as internal jobs, then one **synthesis** report comes back to the chat.
 
+For a choice that materially changes the work, the lead can ask one short question with two or three choices before dispatching members. A solo API worker can do the same. The question pauses the current run; choosing an option or replying in the composer resumes it from its saved checkpoint, without creating another turn or expanding its grants. The question and answer stay in **Details → Chat decisions**. At most two such questions are allowed in a turn. A fresh request sent after a completed turn is still a new turn. Source-only CLI sessions currently ask in a normal reply rather than using this pause mechanism; tool-loop CLI sessions can use it.
+
 ```
 User message (inputRevision)
   → plan run (synthesizer, stage: plan)     hidden job

@@ -4,6 +4,8 @@ Workers can read attached sources and reviewed skill resources. With a separate 
 
 The core keeps tool declarations, argument schemas, required capabilities and execution limits in one catalog. Every model call is checked against the tools allowed for its run stage and permissions. A planner with a granted workspace can list, search and read its private copy before assigning file ownership, but cannot write, run commands or use the web at that stage. A planner cannot skip planning by calling the normal reply tool. Instructions and imported skills cannot grant permissions.
 
+`request_user_decision` is available to a team planner and a solo worker in the tool loop. It pauses the current run with one question and two or three choices; the answer enters the saved checkpoint and resumes that same run. Core stores the question and answer with the chat turn, allows at most two questions per turn, and rechecks the original permissions on resume. The answer itself never grants a tool. A backup keeps the decision history but excludes the checkpoint, so a pending question restored from backup is marked interrupted rather than offered as resumable.
+
 Assigned team members also have send, read and acknowledge tools for the [team mailbox](team-chat.md#worker-messages). These validate membership and the current turn at execution. They do not grant file or network access. API workers and the CLI tool bridge use the same mailbox handlers.
 
 If a worker mistypes a team-message recipient ID, core returns the current assignment's valid recipients as a tool error. The worker can correct the call in the same run; the rejected message creates no mailbox event or new agent. Core still checks the recipient again when it saves a valid message.
