@@ -10,6 +10,8 @@ The core keeps tool declarations, argument schemas, required capabilities and ex
 
 When a user revises a running chat, core validates and saves the new revision before signalling cancellation to the old run. The new revision waits for the old run to stop; cancelling it while it waits prevents dispatch. Restart recovery leaves that saved revision interrupted for the user to inspect and resume. It never replays an uncertain prior tool call. Existing workspace integration, hash checks, and grant checks still govern effects of both revisions.
 
+Chat command status is derived from the persisted workspace process records for the current turn. Exit code 0, failures, unfinished processes, file conflicts and uncertain calls have separate counts. The compact line may cover only the latest 100 records; Details carries the full available inspection and recovery path. A model's planned check text does not change these counts.
+
 Assigned team members also have send, read and acknowledge tools for the [team mailbox](team-chat.md#worker-messages). These validate membership and the current turn at execution. They do not grant file or network access. API workers and the CLI tool bridge use the same mailbox handlers.
 
 If a worker mistypes a team-message recipient ID, core returns the current assignment's valid recipients as a tool error. The worker can correct the call in the same run; the rejected message creates no mailbox event or new agent. Core still checks the recipient again when it saves a valid message.

@@ -61,6 +61,8 @@ An API worker or team lead can save one interpretation for a turn before assigni
 
 A new user message can also revise a turn that is still running. Core stores the new input revision before cancelling active worker and team runs, then dispatches it only after the old run settles. The old attempts and committed outputs remain in Details. If the app restarts during that handoff, the new message stays saved but needs an explicit resume; it is not silently replayed. Cancel while the new revision is waiting drops its pending dispatch.
 
+The latest turn shows a compact summary of saved workspace command exits and any file conflicts or uncertain calls. It counts only runs in that turn. An exit code of zero reports that a command finished successfully; it does not establish that every planned check or the whole task passed. Detailed output and recovery stay in Details.
+
 ```
 User message (inputRevision)
   → plan run (synthesizer, stage: plan)     hidden job
