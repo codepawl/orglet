@@ -134,7 +134,12 @@ try {
   // panel (user, 2026-09-20), so the panel itself stays plain facts.
   await page.getByRole('button', { name: 'Chi tiết kỹ thuật', exact: true }).click();
   const technical = page.getByRole('dialog');
-  await technical.getByText('Source researcher: Desktop smoke: team synthesis', { exact: true }).waitFor();
+  // The plan sets each member's name in bold against their brief, so assert the two parts rather than one string.
+  // Both members carry the same brief, so the name is what picks one row out.
+  const assignment = technical.locator('.technical-run-plan li').filter({ hasText: 'Source researcher' });
+  await assignment.waitFor();
+  assert.equal((await assignment.locator('strong').textContent())?.trim(), 'Source researcher');
+  assert.match((await assignment.textContent()) ?? '', /Desktop smoke: team synthesis/);
   await technical.getByRole('button', { name: 'Xuất câu trả lời', exact: true }).first().waitFor();
   await technical.getByRole('button', { name: 'Đóng panel', exact: true }).click();
   await technical.waitFor({ state: 'hidden' });
