@@ -12,7 +12,7 @@ orglet.sqlite.v<old schema>-<unix ms>.bak
 
 The copy is taken before any migration statement runs, and the migrations themselves run in one transaction. A failed migration leaves the original file unchanged. Copies are never deleted automatically; remove old ones by hand once the new build has been in use for a while.
 
-Schema history: v1 base tables, v2 checkpoints/leases/step attempts, v3 preflights, v4 routines, v5 multiple preflight scopes per task, v6 knowledge, knowledge revisions and knowledge search, v7–v11 workspace tools and process evidence, and v12 budget reconciliation review.
+Schema history: v1 base tables, v2 checkpoints/leases/step attempts, v3 preflights, v4 routines, v5 multiple preflight scopes per task, v6 knowledge, knowledge revisions and knowledge search, v7–v11 workspace tools and process evidence, v12 budget reconciliation review, and v13 metadata for cited workspace-file reads.
 
 ## Rolling back to an older build
 

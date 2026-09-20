@@ -653,7 +653,8 @@ export class Runner {
     });
     const lineCounts = new Map<string, number>();
     for (const finding of report.findings) {
-      if (!finding.sourceIds.length || finding.sourceIds.some(sourceId => !readIds.has(sourceId))) throw new Error('Finding chưa có nguồn đã đọc để đối chiếu.');
+      if ((!finding.sourceIds.length && !finding.workspaceEvidenceIds?.length)
+        || finding.sourceIds.some(sourceId => !readIds.has(sourceId))) throw new Error('Finding chưa có nguồn đã đọc để đối chiếu.');
       for (const checkerId of finding.checkerIds ?? []) validateChecker(checkerId, finding.sourceIds);
       for (const location of finding.locations ?? []) {
         if (!finding.sourceIds.includes(location.sourceId)) throw new Error('Vị trí dòng phải thuộc nguồn được trích trong finding.');
@@ -661,6 +662,13 @@ export class Runner {
         if (!lineCounts.has(location.sourceId)) lineCounts.set(location.sourceId, (await this.sources.read(location.sourceId, task.sourceIds)).split('\n').length);
         if (location.endLine > lineCounts.get(location.sourceId)!) throw new Error('Vị trí dòng vượt quá nội dung nguồn.');
       }
+    }
+    const workspaceEvidenceIds = report.findings.flatMap(finding => finding.workspaceEvidenceIds ?? []);
+    if (workspaceEvidenceIds.length) {
+      if (!this.workspace) throw new Error('Bằng chứng workspace không có runtime để đối chiếu.');
+      const control = this.active.get(run.id);
+      if (!control) throw new Error('Lần chạy không còn hoạt động.');
+      await this.workspace.validateEvidence(run, [...new Set(workspaceEvidenceIds)], control.signal);
     }
     for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu báo cáo.');
     for (const source of scope.manifest.filter(source => !readIds.has(source.id))) report.limitations.push(`Nguồn chưa được đọc: ${source.name.slice(0, 300)} (${source.id}). Không xem đây là đánh giá đầy đủ tệp này.`);

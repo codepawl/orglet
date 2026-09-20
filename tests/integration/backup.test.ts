@@ -4,7 +4,7 @@ import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import { BudgetLedger } from '../../apps/desktop/src/core/budgets/ledger';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import type { Run, Task, Worker, Skill, Source } from '../../apps/desktop/src/shared/contracts';
+import { Report, type Run, type Task, type Worker, type Skill, type Source } from '../../apps/desktop/src/shared/contracts';
 
 const stores: Store[] = [];
 const create = () => { const store = new Store(':memory:'); stores.push(store); return store; };
@@ -29,6 +29,35 @@ const resign = (text: string, mutate: (payload: any) => void) => {
 };
 
 describe('workspace backup and additive restore', () => {
+  it('keeps cited workspace read metadata without local paths or contents, and marks restored grants unavailable', () => {
+    const original = create();
+    const fixtureData = fixture(original);
+    const grantId = id();
+    const run = { ...fixtureData.run, status: 'completed' as const,
+      snapshot: { ...fixtureData.run.snapshot, workspaceGrant: { id: grantId, taskId: fixtureData.task.id,
+        revision: 1, permissions: ['read'] as const } } };
+    original.update('runs', run);
+    const evidence = { id: id(), runId: run.id, callId: id(), path: 'src/app.ts', hash: 'b'.repeat(64),
+      grantId, grantRevision: 1 };
+    original.db.prepare('INSERT INTO workspace_read_evidence(id,run_id,call_id,data) VALUES(?,?,?,?)')
+      .run(evidence.id, evidence.runId, evidence.callId, JSON.stringify(evidence));
+    const report = Report.parse({ title: 'Workspace review', summary: 'Observed file', limitations: [], findings: [{
+      title: 'Mismatch', severity: 'warning', detail: 'One mismatch', coverage: 'src/app.ts', sourceIds: [],
+      workspaceEvidenceIds: [evidence.id],
+    }] });
+    original.put('artifacts', { id: id(), runId: run.id, report,
+      hash: createHash('sha256').update(JSON.stringify(report)).digest('hex'), createdAt: now() }, { column: 'run_id', value: run.id });
+    const text = backups(original).export();
+    expect(text).toContain('src/app.ts');
+    expect(text).not.toContain('private\\never-export');
+    const restored = create();
+    const manager = backups(restored);
+    manager.restore(manager.preview(text).token);
+    expect(restored.detail(fixtureData.task.id).workspaceEvidence).toMatchObject([{ ...evidence, grantCurrent: false }]);
+    expect(() => manager.preview(resign(text, payload => { payload.workspaceEvidence[0].grantRevision = 2; }))).toThrow('không khớp');
+    expect(() => manager.preview(resign(text, payload => { payload.artifacts[0].report.findings[0].workspaceEvidenceIds = [id()];
+      payload.artifacts[0].hash = createHash('sha256').update(JSON.stringify(payload.artifacts[0].report)).digest('hex'); }))).toThrow('ngoài lượt');
+  });
   it('keeps scoped command evidence without exporting command text or output', () => {
     const original = create(); const f = fixture(original);
     const run = { ...f.run, stage: 'member' as const, status: 'completed' as const, snapshot: { ...f.run.snapshot,

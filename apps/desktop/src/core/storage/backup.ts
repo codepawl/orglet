@@ -16,6 +16,7 @@ import { Knowledge, RunContext } from '../../shared/knowledge';
 import { KnowledgeBase } from '../context/knowledge';
 import { DecisionRequest } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
+import { WorkspaceReadEvidence } from '../../shared/workspace-evidence';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -42,7 +43,7 @@ const KnowledgeRevision = z.object({ id: Id, revision: Revision, data: Knowledge
 const Payload = z.object({
   routines: z.array(Routine).max(100).optional(),
   knowledge: z.array(Knowledge).max(10_000).optional(), knowledgeRevisions: z.array(KnowledgeRevision).max(100_000).optional(),
-  workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), reservationReviews: z.array(ReservationReview).optional(), settings: Settings,
+  workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), workspaceEvidence: z.array(WorkspaceReadEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), reservationReviews: z.array(ReservationReview).optional(), settings: Settings,
 }).strict();
 type Payload = z.infer<typeof Payload>;
 const Envelope = z.object({ format: z.literal('orglet-backup'), version: z.literal(1), createdAt: z.iso.datetime(), checksum: Hash, payload: Payload }).strict();
@@ -83,8 +84,15 @@ function validateRelations(data: Payload) {
     if (task.routineId && !routines.has(task.routineId)) fail('Task thiếu lịch.');
     if (task.handoff?.artifactIds.some(id => runs.get(artifacts.get(id)?.runId ?? '')?.taskId !== task.id)) fail('Handoff tham chiếu báo cáo ngoài task.');
   }
-  map(data.events); map(data.profiles); const processEvidence = map(data.processEvidence ?? []); const reservations = map(data.reservations); map(data.ledger);
+  map(data.events); map(data.profiles); const processEvidence = map(data.processEvidence ?? []); const workspaceEvidence = map(data.workspaceEvidence ?? []); const reservations = map(data.reservations); map(data.ledger);
   for (const process of processEvidence.values()) if (!runs.has(process.runId)) fail('Bằng chứng tiến trình tham chiếu run không tồn tại.');
+  const readCalls = new Set<string>();
+  for (const evidence of workspaceEvidence.values()) {
+    const grant = runs.get(evidence.runId)?.snapshot.workspaceGrant;
+    const key = `${evidence.runId}:${evidence.callId}`;
+    if (!grant || grant.id !== evidence.grantId || grant.revision !== evidence.grantRevision || readCalls.has(key)) fail('Bằng chứng workspace không khớp lượt hoặc quyền.');
+    readCalls.add(key);
+  }
   const preflights = map(data.preflights ?? []);
   const preflightScopes = new Set<string>();
   for (const record of preflights.values()) {
@@ -234,6 +242,8 @@ function validateRelations(data: Payload) {
     });
     if (artifact.report.findings.some(finding => finding.sourceIds.some(id => !artifactSourceIds.includes(id)))) fail('Artifact trích nguồn ngoài task.');
     for (const finding of artifact.report.findings) {
+      const evidenceIds = finding.workspaceEvidenceIds ?? [];
+      if (new Set(evidenceIds).size !== evidenceIds.length || evidenceIds.some(id => workspaceEvidence.get(id)?.runId !== artifact.runId)) fail('Finding trích bằng chứng workspace ngoài lượt.');
       if (finding.locations?.some(location => !finding.sourceIds.includes(location.sourceId))) fail('Vị trí dòng tham chiếu nguồn ngoài finding.');
       const provenance = finding.provenance;
       if (provenance) {
@@ -289,12 +299,19 @@ function validateRelations(data: Payload) {
 }
 
 function snapshot(store: Store): Payload {
+  const artifacts = store.all<z.infer<typeof Artifact>>('artifacts');
+  const citedWorkspaceEvidenceIds = new Set(artifacts.flatMap(artifact => artifact.report.findings
+    .flatMap(finding => finding.workspaceEvidenceIds ?? [])));
   return Payload.parse({
     routines: store.all('routines'),
     knowledge: store.all('knowledge'),
     knowledgeRevisions: store.db.prepare('SELECT * FROM knowledge_revisions ORDER BY rowid').all().map(row => ({ id: row.id, revision: row.revision, data: JSON.parse(String(row.data)) })),
-    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs: store.all('runs'), events: store.all('events'), artifacts: store.all('artifacts'), sources: store.all('sources'), profiles: store.all('profiles'),
-    processEvidence: store.db.prepare('SELECT id,run_id AS runId,exit_code AS exitCode FROM process_evidence').all(), preflights: store.all('preflights'),
+    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs: store.all('runs'), events: store.all('events'), artifacts, sources: store.all('sources'), profiles: store.all('profiles'),
+    processEvidence: store.db.prepare('SELECT id,run_id AS runId,exit_code AS exitCode FROM process_evidence').all(),
+    workspaceEvidence: store.db.prepare('SELECT data FROM workspace_read_evidence').all()
+      .map(row => WorkspaceReadEvidence.parse(JSON.parse(String(row.data))))
+      .filter(evidence => citedWorkspaceEvidenceIds.has(evidence.id)),
+    preflights: store.all('preflights'),
     revisions: store.db.prepare('SELECT * FROM revisions ORDER BY rowid').all().map(row => ({ ...row, data: JSON.parse(String(row.data)) })),
     reservations: store.db.prepare('SELECT * FROM reservations ORDER BY rowid').all(), ledger: store.db.prepare('SELECT * FROM ledger ORDER BY rowid').all(),
     reservationReviews: store.db.prepare('SELECT * FROM reservation_reviews ORDER BY rowid').all(),
@@ -366,6 +383,7 @@ export class Backups {
         tasks: merge(current.tasks, restoredTasks), runs: merge(current.runs, restoredRuns), sources: merge(current.sources, restoredSources),
         events: merge(current.events, incoming.events, true), artifacts: merge(current.artifacts, incoming.artifacts, true), profiles: merge(current.profiles, incoming.profiles, true),
         processEvidence: merge(current.processEvidence ?? [], incoming.processEvidence ?? [], true),
+        workspaceEvidence: merge(current.workspaceEvidence ?? [], incoming.workspaceEvidence ?? [], true),
         preflights: merge(current.preflights ?? [], incoming.preflights ?? []),
         ledger: merge(current.ledger, incoming.ledger, true), reservations: merge(current.reservations, incoming.reservations),
       };
@@ -409,6 +427,8 @@ export class Backups {
       for (const artifact of merged.artifacts) this.store.put('artifacts', artifact, { column: 'run_id', value: artifact.runId });
       for (const profile of merged.profiles) this.store.put('profiles', profile, { column: 'task_id', value: profile.taskId });
       for (const process of merged.processEvidence ?? []) this.store.db.prepare('INSERT OR IGNORE INTO process_evidence(id,run_id,exit_code) VALUES(?,?,?)').run(process.id, process.runId, process.exitCode);
+      for (const evidence of merged.workspaceEvidence ?? []) this.store.db.prepare('INSERT OR IGNORE INTO workspace_read_evidence(id,run_id,call_id,data) VALUES(?,?,?,?)')
+        .run(evidence.id, evidence.runId, evidence.callId, JSON.stringify(evidence));
       for (const record of merged.preflights ?? []) this.store.put('preflights', record, { column: 'task_id', value: record.taskId });
       for (const row of merged.revisions) this.store.db.prepare('INSERT OR IGNORE INTO revisions VALUES(?,?,?)').run(row.entity_id, row.revision, JSON.stringify(row.data));
       for (const row of merged.reservations) this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state').run(row.id, row.run_id, row.task_id, row.provider, row.month, row.amount, row.state);

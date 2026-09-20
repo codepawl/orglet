@@ -53,7 +53,7 @@ export function downgradeUncitedWorkspaceChecks(report: Report) {
 
 /** Workspace file reads lack a portable source ID; preserve their warning without claiming verified provenance. */
 export function downgradeUncitedWorkspaceFindings(report: Report) {
-  const uncited = report.findings.filter(finding => !finding.sourceIds.length
+  const uncited = report.findings.filter(finding => !finding.sourceIds.length && !finding.workspaceEvidenceIds?.length
     && !(finding.checkerIds?.length) && !(finding.locations?.length));
   if (!uncited.length) return;
   if (report.limitations.length + uncited.length > 30) throw new Error('Quá nhiều nhận xét workspace chưa có trích dẫn để lưu an toàn.');

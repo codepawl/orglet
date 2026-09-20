@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Run, Task } from '../../shared/contracts';
 import { WorkspaceGrantSnapshot, type WorkspacePermission } from '../../shared/workspace-access';
 import { WorkspaceBlob, WorkspaceFile, WorkspaceManifest, WorkspaceOperation } from '../../shared/workspace-tools';
+import { WorkspaceReadEvidence } from '../../shared/workspace-evidence';
 import { Store } from '../storage/database';
 import { ToolCalls } from '../storage/tool-calls';
 import { WorkspaceGrants } from '../storage/workspace-grants';
@@ -24,6 +25,7 @@ const Copy = z.object({
   })),
 }).strict();
 type Copy = z.infer<typeof Copy>;
+const ReadResult = z.object({ path: z.string(), hash: z.string(), content: z.string() }).passthrough();
 
 /** Coordinates isolated working copies. It never reads worker-controlled file paths on the host. */
 export class WorkspaceRuntime {
@@ -161,11 +163,57 @@ export class WorkspaceRuntime {
           if (permission === 'write' && copy.state !== 'ready') throw new Error('Bản làm việc đã tích hợp hoặc đang chờ xử lý xung đột.');
           await this.grants.directory(run.snapshot.workspaceGrant!, permission);
           const result = await this.files.execute(copy.directory!, request, signal);
+          if (request.operation === 'read') {
+            const read = ReadResult.parse(result);
+            const evidence = WorkspaceReadEvidence.parse({
+              id: randomUUID(), runId: run.id, callId, path: request.path, hash: read.hash,
+              grantId: copy.grant.id, grantRevision: copy.grant.revision,
+            });
+            if (read.path !== request.path) throw new Error('Helper workspace trả về đường dẫn không khớp.');
+            this.store.db.prepare(`INSERT INTO workspace_read_evidence(id,run_id,call_id,data) VALUES(?,?,?,?)
+              ON CONFLICT(run_id,call_id) DO UPDATE SET id=excluded.id,data=excluded.data`)
+              .run(evidence.id, run.id, callId, JSON.stringify(evidence));
+            this.store.event(run.id, `Workspace ${request.operation}: ${request.path}`);
+            this.notify();
+            return { ...read, evidenceId: evidence.id };
+          }
           this.store.event(run.id, `Workspace ${request.operation}: ${'path' in request ? request.path : ''}`);
           this.notify();
           return result;
         },
       });
+    });
+  }
+
+  /** A report may cite only a completed read of unchanged bytes in this run's current grant. */
+  async validateEvidence(run: Run, evidenceIds: readonly string[], signal: AbortSignal): Promise<void> {
+    if (new Set(evidenceIds).size !== evidenceIds.length) throw new Error('Finding trích bằng chứng workspace bị trùng.');
+    await this.serial(run.id, async () => {
+      this.authorize(run, 'read', signal);
+      this.processes?.assertIdle(run.id);
+      const copy = this.saved(run.id);
+      if (!copy?.directory || copy.state !== 'ready') throw new Error('Bản làm việc không còn để kiểm tra trích dẫn.');
+      for (const evidenceId of evidenceIds) {
+        const row = this.store.db.prepare('SELECT data FROM workspace_read_evidence WHERE id=?').get(evidenceId);
+        if (!row) throw new Error('Finding trích bằng chứng workspace không tồn tại.');
+        const evidence = WorkspaceReadEvidence.parse(JSON.parse(String(row.data)));
+        if (evidence.runId !== run.id || evidence.grantId !== copy.grant.id
+          || evidence.grantRevision !== copy.grant.revision) {
+          throw new Error('Finding trích bằng chứng workspace ngoài lượt hoặc quyền đã thay đổi.');
+        }
+        const call = this.store.db.prepare('SELECT state,output FROM tool_calls WHERE run_id=? AND call_id=?')
+          .get(run.id, evidence.callId);
+        if (!call || call.state !== 'completed') throw new Error('Finding trích lượt đọc workspace chưa hoàn tất.');
+        const savedOutput = JSON.parse(String(call.output));
+        if (savedOutput.evidenceId !== evidence.id || savedOutput.path !== evidence.path
+          || savedOutput.hash !== evidence.hash) throw new Error('Bằng chứng workspace không khớp tool call đã lưu.');
+        this.authorize(run, 'read', signal);
+        const current = ReadResult.parse(await this.files.execute(copy.directory, {
+          operation: 'read', path: evidence.path, offset: 0,
+        }, signal));
+        if (current.hash !== evidence.hash) throw new Error('Tệp workspace đã thay đổi; đọc lại trước khi trích dẫn.');
+      }
+      this.authorize(run, 'read', signal);
     });
   }
 
