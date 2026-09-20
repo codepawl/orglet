@@ -57,6 +57,8 @@ A user message on a team thread is one turn. The synthesizer (team lead) runs a 
 
 For a choice that materially changes the work, the lead can ask one short question with two or three choices before dispatching members. A solo API worker can do the same. The question pauses the current run; choosing an option or replying in the composer resumes it from its saved checkpoint, without creating another turn or expanding its grants. The question and answer stay in **Details → Chat decisions**. At most two such questions are allowed in a turn. A fresh request sent after a completed turn is still a new turn. Source-only CLI sessions currently ask in a normal reply rather than using this pause mechanism; tool-loop CLI sessions can use it.
 
+An API worker or team lead can save one interpretation for a turn before assigning work or changing files. The chat shows its short goal; **Details → Turn goal** separates user-stated constraints, unconfirmed assumptions, and planned checks. The record is part of the run snapshot and survives backup. It does not grant access or prove that the planned checks ran. A tool-loop CLI can use the same record; a source-only CLI cannot call this tool.
+
 ```
 User message (inputRevision)
   → plan run (synthesizer, stage: plan)     hidden job
