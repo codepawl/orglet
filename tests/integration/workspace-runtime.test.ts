@@ -65,6 +65,62 @@ async function edit(runtime: WorkspaceRuntime, path = 'note.txt', content = 'upd
   return runtime.execute(run, id(), { operation: 'write', path, expectedHash: read.hash, content }, signal());
 }
 
+it('mints a scoped read ID, reuses its committed result, and rejects forged, cross-run, changed and revoked citations', async () => {
+  const runtime = fixture();
+  const callId = id();
+  const read = await runtime.execute(run, callId, { operation: 'read', path: 'note.txt', offset: 0 }, signal()) as { evidenceId: string; hash: string };
+  expect(read.evidenceId).toMatch(/^[0-9a-f-]{36}$/);
+  expect(await runtime.execute(run, callId, { operation: 'read', path: 'note.txt', offset: 0 }, signal())).toEqual(read);
+  await runtime.validateEvidence(run, [read.evidenceId], signal());
+  await expect(runtime.validateEvidence(run, [id()], signal())).rejects.toThrow('không tồn tại');
+  const otherRun = { ...run, id: id() };
+  store.put('runs', otherRun, { column: 'task_id', value: task.id });
+  await runtime.execute(otherRun, id(), { operation: 'read', path: 'note.txt', offset: 0 }, signal());
+  await expect(runtime.validateEvidence(otherRun, [read.evidenceId], signal())).rejects.toThrow('ngoài lượt');
+  await runtime.execute(run, id(), { operation: 'write', path: 'note.txt', content: 'changed', expectedHash: read.hash }, signal());
+  await expect(runtime.validateEvidence(run, [read.evidenceId], signal())).rejects.toThrow('đã thay đổi');
+  const fresh = await runtime.execute(run, id(), { operation: 'read', path: 'note.txt', offset: 0 }, signal()) as { evidenceId: string };
+  await runtime.validateEvidence(run, [fresh.evidenceId], signal());
+  grants.revoke(task.id);
+  await expect(runtime.validateEvidence(run, [fresh.evidenceId], signal())).rejects.toThrow('Quyền workspace');
+});
+
+it.each(['openai', 'claude-code', 'codex', 'cursor'] as const)('keeps a cited workspace finding through the %s tool loop', async provider => {
+  task = { ...task, brief: 'Report on note.txt', providerScopes: [provider] };
+  run = { ...run, snapshot: { ...run.snapshot, worker: { ...run.snapshot.worker, provider } } };
+  store.update('tasks', task);
+  store.update('runs', run);
+  const adapter: ModelAdapter = { request: async messages => {
+    const last = messages.at(-1);
+    const lastResult = last?.role === 'tool' ? JSON.parse(String(last.content)) : null;
+    const name = lastResult?.evidenceId ? 'submit_report' : 'workspace_read';
+    const args = name === 'workspace_read' ? { path: 'note.txt', offset: 0 } : {
+      title: 'Workspace finding', summary: 'The file contains the original text.', limitations: [],
+      findings: [{ title: 'Original text', severity: 'info', detail: 'note.txt contains original.',
+        coverage: 'note.txt', sourceIds: [], workspaceEvidenceIds: [lastResult.evidenceId],
+        category: 'other', recommendation: null, checkerIds: [], locations: [] }],
+    };
+    return { calls: [{ id: id(), name, arguments: JSON.stringify(args) }], usage: { input: 10, output: 10 } };
+  } };
+  const harness = provider === 'openai' ? undefined : {
+    detect: async () => [{ ...missingHarness(provider, 'win32'), executable: 'fixture', auth: 'logged_in' as const,
+      status: 'signed_in' as const, version: 'fixture' }],
+    execute: async (request: import('../../apps/desktop/src/core/harness/exec').HarnessRequest) => {
+      const context = JSON.parse(request.prompt.slice(request.prompt.lastIndexOf('\n\n') + 2));
+      const response = await adapter.request(context.messages, context.tools, request.signal, () => {});
+      const selected = response.calls[0];
+      return { output: { call: { name: selected.name, arguments: JSON.parse(selected.arguments) } }, costUsd: null };
+    },
+  };
+  const core = new CoreService(store, () => {}, async () => adapter, undefined, undefined, harness,
+    undefined, undefined, fixture());
+  await core.runner.run(task, run);
+  const detail = store.detail(task.id);
+  expect(detail.task.status, JSON.stringify(detail.runs.map(item => item.error))).toBe('completed');
+  expect(detail.artifacts[0].report.findings).toMatchObject([{ title: 'Original text', sourceIds: [],
+    workspaceEvidenceIds: [detail.workspaceEvidence[0].id] }]);
+});
+
 it.each((['claude-code', 'codex', 'cursor'] as const).flatMap(provider =>
   (['read', 'edit', 'conflict', 'cancel-integration'] as const).map(mode => ({ provider, mode }))))('routes $provider workspace operations through core (mode=$mode)', async ({ provider, mode }) => {
   const parent = new AbortController();
@@ -396,9 +452,13 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('API fixture using packa
     let processId = '';
     let handoffId = '';
     let synthesized = false;
+    let reviewerEvidenceId = '';
     const adapter: ModelAdapter = { request: async (messages, tools) => {
       const call = (name: string, argumentsValue: unknown) => ({ calls: [{ id: id(), name, arguments: JSON.stringify(argumentsValue) }], usage: { input: 10, output: 10 } });
-      const report = (summary: string) => call('submit_report', { title: 'Workspace result', summary, findings: [], limitations: [] });
+      const report = (summary: string, evidenceId?: string) => call('submit_report', { title: 'Workspace result', summary,
+        findings: evidenceId ? [{ title: 'Integrated file checked', severity: 'info', detail: 'note.txt contains the integrated edit.',
+          coverage: 'note.txt', sourceIds: [], workspaceEvidenceIds: [evidenceId], category: 'other', recommendation: null,
+          checkerIds: [], locations: [] }] : [], limitations: [] });
       if (isPlanRequest(tools)) {
         const [writerId, recipient] = memberIdsFromPlanPrompt(messages);
         reviewerId = recipient;
@@ -439,8 +499,10 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('API fixture using packa
           return call('acknowledge_team_messages', { messageIds: [handoffId] });
         }
         if (step === 1) return call('workspace_read', { path: 'note.txt', offset: 0 });
-        expect(JSON.parse(String(messages.at(-1)!.content)).content).toBe('team checked edit');
-        return report('Reviewer confirmed integrated note.txt');
+        const read = JSON.parse(String(messages.at(-1)!.content));
+        expect(read.content).toBe('team checked edit');
+        reviewerEvidenceId = read.evidenceId;
+        return report('Reviewer confirmed integrated note.txt', reviewerEvidenceId);
       }
       expect(context).toContain('Writer checked note.txt');
       expect(context).toContain('Reviewer confirmed integrated note.txt');
@@ -475,6 +537,7 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('API fixture using packa
     expect(detail.task.status, JSON.stringify(detail.runs.map(item => item.error))).toBe('completed');
     expect(synthesized).toBe(true);
     expect(detail.artifacts).toHaveLength(3);
+    expect(detail.artifacts.find(artifact => artifact.report.summary === 'Reviewer confirmed integrated note.txt')?.report.findings[0].workspaceEvidenceIds).toEqual([reviewerEvidenceId]);
     expect(detail.events.find(event => event.id === handoffId)?.teamMessage?.state).toBe('acknowledged');
     expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('team checked edit');
   });

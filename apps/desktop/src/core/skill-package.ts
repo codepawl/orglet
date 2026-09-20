@@ -15,12 +15,14 @@ const Manifest = z.object({
 export const inputSchema = { type: 'object', properties: { brief: { type: 'string' } }, required: ['brief'], additionalProperties: false };
 export const outputSchema = z.toJSONSchema(Report, { target: 'draft-7' });
 // Schemas written by earlier exports stay importable. Each step removes the fields a later build added.
-const beforeFormat = Report.omit({ format: true });
+const beforeWorkspaceEvidence = Report.extend({ findings: z.array(Finding.omit({ workspaceEvidenceIds: true })).max(50) });
+const beforeWorkspaceEvidenceOutputSchema = z.toJSONSchema(beforeWorkspaceEvidence, { target: 'draft-7' });
+const beforeFormat = beforeWorkspaceEvidence.omit({ format: true });
 const beforeFormatOutputSchema = z.toJSONSchema(beforeFormat, { target: 'draft-7' });
-const beforeLocations = beforeFormat.extend({ findings: z.array(Finding.omit({ locations: true })).max(50) });
+const beforeLocations = beforeFormat.extend({ findings: z.array(Finding.omit({ locations: true, workspaceEvidenceIds: true })).max(50) });
 const beforeLocationsOutputSchema = z.toJSONSchema(beforeLocations, { target: 'draft-7' });
 const previousOutputSchema = z.toJSONSchema(beforeLocations.omit({ review: true }), { target: 'draft-7' });
-const legacyOutputSchema = z.toJSONSchema(beforeFormat.omit({ review: true }).extend({ findings: z.array(Finding.omit({ category: true, recommendation: true, checkerIds: true, locations: true, provenance: true })).max(50) }), { target: 'draft-7' });
+const legacyOutputSchema = z.toJSONSchema(beforeFormat.omit({ review: true }).extend({ findings: z.array(Finding.omit({ category: true, recommendation: true, checkerIds: true, locations: true, provenance: true, workspaceEvidenceIds: true })).max(50) }), { target: 'draft-7' });
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -72,7 +74,7 @@ export function inspectPackage(raw: unknown) {
     try { manifest = Manifest.parse(JSON.parse(own.text ?? '')); } catch { throw new Error('orglet.json không đúng manifest của Orglet.'); }
     if (manifest.version_hash !== hash) throw new Error('version_hash trong orglet.json không khớp nội dung gói.');
     if (canonical(manifest.input_schema) !== canonical(inputSchema)) blockers.push('input_schema chưa hỗ trợ.');
-    if (![outputSchema, beforeFormatOutputSchema, beforeLocationsOutputSchema, previousOutputSchema, legacyOutputSchema].some(schema => canonical(manifest.output_schema) === canonical(schema))) blockers.push('output_schema chưa hỗ trợ.');
+    if (![outputSchema, beforeWorkspaceEvidenceOutputSchema, beforeFormatOutputSchema, beforeLocationsOutputSchema, previousOutputSchema, legacyOutputSchema].some(schema => canonical(manifest.output_schema) === canonical(schema))) blockers.push('output_schema chưa hỗ trợ.');
     if (manifest.evaluator !== 'orglet-report-v1') blockers.push(`Evaluator chưa hỗ trợ: ${manifest.evaluator}`);
     for (const permission of manifest.required_permissions) if (!['selected-sources:read', 'skill-resources:read'].includes(permission)) blockers.push(`Quyền chưa hỗ trợ: ${permission}`);
   }

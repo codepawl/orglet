@@ -122,6 +122,7 @@ export const Finding = z.object({
   category: FindingCategory.optional(),
   recommendation: z.string().min(1).max(2000).nullable().optional(),
   checkerIds: z.array(Id).max(20).optional(),
+  workspaceEvidenceIds: z.array(Id).max(20).optional(),
   locations: z.array(SourceLocation).max(20).optional(),
   provenance: z.object({ findingId: Id, writerId: Id, runId: Id }).strict().optional(),
 });
@@ -158,7 +159,7 @@ export type BudgetReservationView = {
   verifiedSource: 'provider_dashboard' | 'invoice' | null;
   resolvedAt: string | null;
 };
-export type TaskDetail = { task: Task; runs: Run[]; events: Activity[]; artifacts: Artifact[]; profiles: ProfileRecord[]; preflights: PreflightRecord[]; sources: Source[]; usage: Usage };
+export type TaskDetail = { task: Task; runs: Run[]; events: Activity[]; artifacts: Artifact[]; profiles: ProfileRecord[]; preflights: PreflightRecord[]; sources: Source[]; workspaceEvidence: (import('./workspace-evidence').WorkspaceReadEvidence & { grantCurrent: boolean })[]; usage: Usage };
 export type Workspace = { copyFormat: FormatPreference; downloadFormat: FormatPreference; archivedWorkers: (Worker & { archivedAt: string })[]; archivedTeams: (Team & { archivedAt: string })[]; language: Language; autoTitles: boolean; confirmOpenTask: boolean; archiveRetentionDays: ArchiveRetention; avatarColors: string[]; /** The one colour the user picks for the app; see shared/accent.ts. */ accentColor: string; knowledge: Knowledge[]; workers: Worker[]; teams: Team[]; skills: Skill[]; tasks: Task[]; routines: Routine[]; usage: Usage; budgetReservations: BudgetReservationView[]; theme: 'system' | 'light' | 'dark'; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; currency: CurrencyState; sqliteVersion: string };
 export type Connections = { openai: boolean; anthropic: boolean; xai: boolean; openrouter: boolean; ollama: boolean };
 export const emptyConnections = (): Connections => ({ openai: false, anthropic: false, xai: false, openrouter: false, ollama: false });

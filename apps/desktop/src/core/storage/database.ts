@@ -5,9 +5,10 @@ import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import type { ProfileRecord } from '../../shared/profiles';
 import type { PreflightRecord } from '../../shared/preflight';
+import { WorkspaceReadEvidence } from '../../shared/workspace-evidence';
 import { usdCurrency } from '../../shared/currency';
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export class Store {
@@ -107,6 +108,13 @@ export class Store {
         CHECK((actual_amount IS NULL AND verified_source IS NULL AND resolved_at IS NULL)
           OR (actual_amount IS NOT NULL AND verified_source IS NOT NULL AND resolved_at IS NOT NULL))
       ); INSERT OR IGNORE INTO migrations VALUES (12);`);
+      this.db.exec(`CREATE TABLE IF NOT EXISTS workspace_read_evidence (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id),
+        call_id TEXT NOT NULL,
+        data TEXT NOT NULL,
+        UNIQUE(run_id,call_id)
+      ); INSERT OR IGNORE INTO migrations VALUES (13);`);
       this.db.prepare(`INSERT OR IGNORE INTO reservation_reviews (reservation_id,reason,noted_at)
         SELECT id,'legacy',? FROM reservations WHERE state='unknown'`).run(now());
     });
@@ -220,7 +228,14 @@ export class Store {
     const task = this.get<Task>('tasks', taskId);
     const runs = this.all<Run>('runs').filter(run => run.taskId === taskId);
     const runIds = new Set(runs.map(run => run.id));
-    return { task, runs, events: this.all<Activity>('events').filter(e => runIds.has(e.runId)), artifacts: this.all<Artifact>('artifacts').filter(a => runIds.has(a.runId)), profiles: this.all<ProfileRecord>('profiles').filter(p => p.taskId === taskId), preflights: this.all<PreflightRecord>('preflights').filter(p => p.taskId === taskId), sources: task.sourceIds.map(s => this.get<Source>('sources', s)), usage: this.usage(taskId) };
+    const grantRow = this.db.prepare('SELECT data FROM workspace_grants WHERE task_id=?').get(taskId);
+    const currentGrant = grantRow ? JSON.parse(String(grantRow.data)) as { id: string; revision: number; revoked: boolean } : null;
+    const workspaceEvidence = this.db.prepare('SELECT data FROM workspace_read_evidence').all()
+      .map(row => WorkspaceReadEvidence.parse(JSON.parse(String(row.data))))
+      .filter(evidence => runIds.has(evidence.runId))
+      .map(evidence => ({ ...evidence, grantCurrent: !task.archivedAt && !task.deletedAt && !!currentGrant
+        && !currentGrant.revoked && currentGrant.id === evidence.grantId && currentGrant.revision === evidence.grantRevision }));
+    return { task, runs, events: this.all<Activity>('events').filter(e => runIds.has(e.runId)), artifacts: this.all<Artifact>('artifacts').filter(a => runIds.has(a.runId)), profiles: this.all<ProfileRecord>('profiles').filter(p => p.taskId === taskId), preflights: this.all<PreflightRecord>('preflights').filter(p => p.taskId === taskId), sources: task.sourceIds.map(s => this.get<Source>('sources', s)), workspaceEvidence, usage: this.usage(taskId) };
   }
   recover() {
     for (const run of this.all<Run>('runs')) {
