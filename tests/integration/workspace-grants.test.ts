@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { mkdir, mkdtemp, rename, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
@@ -18,6 +18,7 @@ beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orglet-grants-'));
   workspace = join(directory, 'workspace');
   await mkdir(workspace);
+  workspace = await realpath(workspace);
   store = new Store(join(directory, 'state.sqlite'));
   grants = new WorkspaceGrants(store);
   task = { id: id(), workerId: store.all<Worker>('workers')[0].id, brief: 'Workspace task', sourceIds: [],
