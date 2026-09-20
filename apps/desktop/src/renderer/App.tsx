@@ -74,6 +74,22 @@ function useArrivals(ids: readonly string[], ready: boolean): (id: string) => bo
   return (id: string) => arrived.current.has(id);
 }
 
+/**
+ * The shape of a conversation while its detail is on the way. A sentence on an empty page made the app look like
+ * it had stopped; blocks where the message and the answer are about to be say the same thing without the wait
+ * reading as a fault (user, 2026-09-20). The sentence stays for screen readers, which cannot see a shape.
+ */
+function ThreadSkeleton() {
+  return <div className="thread-skeleton" role="status" aria-live="polite">
+    <span className="visually-hidden">{t('Đang mở cuộc trò chuyện…')}</span>
+    <div className="thread-skeleton-ask" aria-hidden="true"><span /></div>
+    <div className="thread-skeleton-reply" aria-hidden="true">
+      <span className="thread-skeleton-face" />
+      <div><span /><span /><span /></div>
+    </div>
+  </div>;
+}
+
 type Panel = 'task' | 'revision' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | 'sources' | null;
 export function App() {
   useLanguage();
@@ -199,6 +215,11 @@ export function App() {
       setTeamId('');
       if (opened && !opened.assignees) setWorkerId(opened.workerId);
     }
+    // The thread only needs its own detail, so fetch it now instead of waiting for the refresh below, which also
+    // reads the workspace, the connections and the harnesses before it hands anything back.
+    void orglet.call('task', { id }).then((opened: TaskDetail) => {
+      if (selectedRef.current === id) setDetail(current => current?.task.id === id ? current : opened);
+    }).catch(() => { /* the refresh below reports anything that is actually wrong */ });
     // Apply the returned stamp even after leaving — waiting for selected refresh drops the grey mark.
     void orglet.call('markTaskSeen', { id }).then((task: Task) => {
       if (task.seenStamp) rememberSeen(task.id, { seenStamp: task.seenStamp, lastArtifactId: task.lastArtifactId });
@@ -447,7 +468,7 @@ export function App() {
       </header>
       {error && <div className="error-banner" role="alert"><span>{error}</span><Button size="icon" aria-label={t('Đóng thông báo')} onClick={() => setError('')}><X size={16} /></Button></div>}
       {catchUpNotice && <div className="notice-banner" role="status"><LucideCalendarClock size={16} aria-hidden="true" /><div><p>{singleCatchUp ? t('{0} đã bỏ qua lần chạy vì app tắt hoặc máy ngủ. Lịch không mất. Bạn có thể chạy bù một lần hoặc bỏ qua.', [singleCatchUp.name]) : t('{0} lịch đã bỏ qua lần chạy vì app tắt hoặc máy ngủ. Lịch không mất. Mỗi lịch chỉ chạy bù một lần.', [pendingCatchUp.length])}</p><div className="actions">{singleCatchUp?.enabled && <Button variant="primary" onClick={() => action(async () => openTask(await orglet.call('catchUpRoutine', { id: singleCatchUp.id })))}>{t('Chạy bù một lần')}</Button>}<Button onClick={() => openRoutines()}>{t('Xem lịch chạy')}</Button></div></div><Button size="icon" aria-label={t('Đóng thông báo lịch bị lỡ')} onClick={() => setDismissedCatchUpNotice(catchUpNoticeKey)}><X size={16} /></Button></div>}
-      {selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} action={action} showSources={openSources} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openRevision={() => setPanel('revision')} openSettings={tab => openSettings(tab ?? 'connections')} action={action} /></> : <div className="loading" role="status">{t('Đang mở cuộc trò chuyện…')}</div>}</> : (team || worker) ? <div className="team-chat team-chat-fresh">
+      {selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} action={action} showSources={openSources} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openRevision={() => setPanel('revision')} openSettings={tab => openSettings(tab ?? 'connections')} action={action} /></> : <ThreadSkeleton />}</> : (team || worker) ? <div className="team-chat team-chat-fresh">
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">
