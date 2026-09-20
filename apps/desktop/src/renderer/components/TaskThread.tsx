@@ -16,6 +16,7 @@ import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Markdown } from './Markdown';
+import { Attachment } from './Attachment';
 import { reactionEmoji, reactionMeanings, reactionOrder, replyToAnswer, toggleReaction, useReaction } from './messageMarks';
 import { ReactionBar } from './ReactionBar';
 import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
@@ -39,7 +40,7 @@ function bylineRole(author: Run) {
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
 
-type Turn = { revision: number; runs: Run[]; brief: string; sourceCount: number; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
+type Turn = { revision: number; runs: Run[]; brief: string; sources: TaskDetail['sources'];  artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
 
 /**
  * A task shown as one chat (user decision 2026-09-17): every message the user sent, oldest first, each followed by the
@@ -56,7 +57,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
     const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis')));
     // Group chat: each worker's latest answered run for this message, in the order they answered.
     const replies = runs.filter(run => run.stage === 'group').flatMap(run => { const reply = detail.artifacts.find(item => item.runId === run.id); return reply ? [{ run, artifact: reply }] : []; });
-    return { revision, runs, brief: input.brief, sourceCount: input.sourceIds.length, artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
+    return { revision, runs, brief: input.brief, sources: input.sourceIds.map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
   });
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const liveRuns = useRunProgress(detail.task.id);
@@ -90,7 +91,7 @@ export function TaskThread({ detail, action, showSources, proposals, openKnowled
         // explanation just below, so it is quiet here too.
         const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
         return <div className="chat-turn" key={turn.revision}>
-          <div className="user-message"><p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>{turn.sourceCount > 0 && <Button onClick={() => showSources()}><FileText size={16} />{t('{0} nguồn', [turn.sourceCount])}</Button>}</div>
+          <div className="user-message"><p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>{turn.sources.length > 0 && <ul className="attachment-list message-files">{turn.sources.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}</ul>}</div>
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
             <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />

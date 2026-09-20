@@ -413,7 +413,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .reaction-row button { display:grid; place-items:center; width:40px; height:40px; padding:0; border:0; border-radius:50%; background:none; font-size:23px; line-height:1; cursor:pointer; transition:transform var(--motion-quick) var(--ease-out), background var(--motion-quick); }
 .reaction-row button:hover,.reaction-row button:focus-visible { background:var(--surface); transform:scale(1.22); }
 @media(prefers-reduced-motion:reduce) { .reaction-row { animation:none; } .reaction-row button { transition:none; } .reaction-row button:hover { transform:none; } }
-.thread-composer { width:100%; max-width:780px; margin:0 auto; padding:8px var(--page-x) 0; }
+.thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) 0; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
 /* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,
    the shape people already know from other chat apps (user, 2026-09-19). Once a turn exists the thread takes
@@ -461,6 +461,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .attachment-name { font-size:13px; font-weight:500; line-height:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .attachment-meta { font-size:11.5px; line-height:15px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* The remove control answers the card's hover with its own detail (muted to text), never a background of its own. */
+/* A card inside a sent message: one per line, filling the bubble, the way an attachment reads in a chat app.
+   The whole card is the button, so its inside is the row the card would otherwise be. */
+.message-files { flex-direction:column; gap:6px; margin-top:10px; }
+.message-files .attachment { width:100%; padding:0; background:color-mix(in srgb, var(--bg) 78%, transparent); }
+.attachment-open { display:flex; align-items:center; gap:10px; width:100%; min-width:0; padding:8px 12px; border:0; border-radius:inherit; background:none; text-align:left; font:inherit; color:inherit; cursor:pointer; }
+.attachment-open:hover { background:color-mix(in srgb, var(--bg) 92%, transparent); }
 .attachment-remove { display:flex; align-items:center; justify-content:center; flex-shrink:0; width:26px; height:26px; padding:0; border:0; border-radius:50%; background:none; color:var(--muted); opacity:0; transition:opacity var(--motion-quick) var(--ease-out), color var(--motion-quick); }
 .attachment:hover .attachment-remove,.attachment:has(:focus-visible) .attachment-remove { opacity:1; }
 .attachment-remove:hover { color:var(--text); }
@@ -472,7 +478,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .budget-label input { width:95px; padding:5px 8px; border:1px solid var(--border); background:var(--bg); border-radius:8px; }
 .main-footer { text-align:center; color:var(--muted); font-size:11px; padding:10px var(--page-x) 12px; margin-top:auto; }
 .thread-scroll { flex:1; overflow:auto; min-height:0; scroll-behavior:auto; }
-.thread-content { max-width:828px; margin:auto; padding:22px var(--page-x) 32px; }
+/* Wider than it was: 828px left the column feeling cramped against the panel around it (user, 2026-09-20).
+   Not the full pane — a line of body text still has to end somewhere the eye can find the next one. */
+.thread-content { max-width:960px; margin:auto; padding:22px var(--page-x) 32px; }
 /* The message wears the accent, but as a wash rather than a fill. Filled, the ink has to be chosen for whatever
    colour the user picked, and white on the default blue measures 3.86:1 — fine for a send arrow, short of the
    4.5:1 a paragraph needs. A wash keeps the colour theirs and keeps body text at the page contrast, for any pick. */
@@ -679,6 +687,23 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .money-input { display:inline-flex; align-items:center; gap:4px; min-height:36px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); }
 .money-input>span { color:var(--muted); font-size:14px; }
 /* ChatGPT-style toast: inverted pill at the top centre, above dialogs, never blocking clicks. */
+/* The notice centre: what the app has said, after the toast has gone. Filters are chips rather than a select,
+   because there are four and the count on each is half the information. */
+.notice-filters { display:flex; flex-wrap:wrap; gap:6px; }
+.notice-filter { display:flex; align-items:center; gap:6px; padding:5px 11px; border:0; border-radius:999px; background:var(--surface); color:var(--muted); font-size:12.5px; cursor:pointer; }
+.notice-filter span { font-size:11px; font-variant-numeric:tabular-nums; opacity:.75; }
+.notice-filter:hover { color:var(--text); }
+.notice-filter.on { background:color-mix(in srgb, var(--accent) 18%, var(--bg)); color:var(--text); }
+.notice-list { list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.notice-day { margin:14px 0 6px; color:var(--muted); font-size:11.5px; font-weight:600; }
+.notice-list > li:first-child .notice-day { margin-top:0; }
+.notice-body { display:flex; align-items:flex-start; gap:9px; padding:8px 10px; border-radius:10px; font-size:13px; line-height:1.5; }
+.notice-body:hover { background:var(--surface); }
+.notice-body > svg { flex-shrink:0; margin-top:2px; color:var(--muted); }
+.notice-error .notice-body > svg { color:var(--error); }
+.notice-done .notice-body > svg { color:var(--success); }
+.notice-text { flex:1; min-width:0; overflow-wrap:anywhere; }
+.notice-body time { flex-shrink:0; color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
 .toaster { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:60; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; width:max-content; max-width:calc(100vw - 32px); }
 .toast { display:flex; align-items:center; gap:8px; padding:9px 14px; border-radius:12px; background:var(--primary); color:var(--primary-text); font-size:14px; box-shadow:0 8px 24px #00000033; animation:toast-in .18s ease-out; }
 .toast.error svg { color:#ff8a8a; }
@@ -1199,6 +1224,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* The two stops are named first: a color-mix() written inline inside linear-gradient() is dropped by the CSS
    build, taking the whole rule with it. Through a custom property it passes through untouched. */
 .chat-reply .prose { --reply-top:color-mix(in srgb, var(--accent) 7%, var(--bg)); --reply-bottom:color-mix(in srgb, var(--accent) 3%, var(--bg)); max-width:var(--bubble-max); width:fit-content; padding:14px 16px 15px; border-radius:18px; box-shadow:0 1px 2px #0000000f; background:linear-gradient(160deg, var(--reply-top), var(--reply-bottom)); }
+/* An answer is the thing you came to read, so it sits a step above the message that asked for it (user,
+   2026-09-20): 15px against the 14 of the rest, with the line height that keeps a paragraph of it readable. */
+.chat-reply .prose { font-size:15px; line-height:1.68; }
+.chat-reply .prose h1,.chat-reply .prose h2,.chat-reply .prose h3 { font-size:1.06em; }
 /* The actions stay outside the bubble, so a copy button never has to decide whether it is part of the answer. */
 .chat-reply .message-actions { padding-left:2px; }
 /* A table header is drawn in --surface, which inside the bubble sits at nearly the same lightness as the wash:
