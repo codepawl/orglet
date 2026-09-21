@@ -20,11 +20,10 @@ import { t } from '../i18n';
 import { orglet } from '../api';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
-type Tab = 'general' | 'instructions' | 'skill';
+type Tab = 'general' | 'skill';
 type InvalidField = 'name' | 'instructions' | 'budget' | 'modelId';
 const tabs = [
   { id: 'general' as const, label: 'Chung', icon: <SlidersHorizontal size={16} /> },
-  { id: 'instructions' as const, label: 'Hướng dẫn', icon: <ScrollText size={16} /> },
   { id: 'skill' as const, label: 'Kỹ năng', icon: <Sparkles size={16} /> },
 ];
 
@@ -62,7 +61,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
 
   const submit = async () => {
     if (!name.trim()) return fail('general', t('Nhập tên Tí.'), 'name');
-    if (!instructions.trim()) return fail('instructions', t('Hướng dẫn không được để trống.'), 'instructions');
+    if (!instructions.trim()) return fail('general', t('Hướng dẫn không được để trống.'), 'instructions');
     const taskBudgetMicros = toMicros(budget);
     if (!Number.isFinite(taskBudgetMicros) || taskBudgetMicros < 0) return fail('general', t('Giới hạn mỗi task phải là số không âm.'), 'budget');
     const trimmedModel = modelId.trim();
@@ -74,11 +73,13 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'instructions' ? t('Mỗi lần lưu tạo một revision mới. Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.') : tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
+  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
     {tab === 'general' && <>
       <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error'))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} {...fieldInvalid(invalid === 'name', flash)} /></label>
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
+      <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} {...fieldInvalid(invalid === 'instructions', flash)} /></label>
+      {worker && <p className="muted">{t('Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.')}</p>}
       <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} value={provider} onChange={value => { const next = value as Worker['provider']; setProvider(next); if (next !== provider) setModelId(''); }} options={[
         modelOption('demo', 'Demo', t('không gọi API'), t('Thử nghiệm'), true),
         modelOption('openai', 'OpenAI', t('gợi ý {0}', [CATALOG_HINT_IDS.openai]), t('API trả phí'), ready.openai),
@@ -101,9 +102,6 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
       {provider === 'ollama' && <p className="muted">{t('Gọi Ollama trên máy này tại 127.0.0.1:11434. Cài Ollama và kéo model trước. Orglet không giữ ngân sách cho lần chạy local.')}</p>}
       {paid && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
-    </>}
-    {tab === 'instructions' && <>
-      <textarea data-field="instructions" aria-label={t('Hướng dẫn')} aria-required="true" rows={12} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} {...fieldInvalid(invalid === 'instructions', flash)} />
     </>}
     {tab === 'skill' && <>
       <Select ariaLabel={t('Kỹ năng')} value={skillId} onChange={setSkill} options={workspace.skills.map(item => { const pending = !!item.package && item.package.reviewedHash !== item.package.hash; return { value: item.id, label: item.name, detail: pending ? t('v{0} · Cần review trong Thư viện', [item.revision]) : `v${item.revision}`, icon: <Sparkles size={16} />, disabled: pending }; })} />
