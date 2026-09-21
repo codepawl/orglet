@@ -12,6 +12,7 @@ import { BudgetReconciliation } from './BudgetReconciliation';
 import { formatMoney, moneySymbol, toAmount, toMicros } from './money';
 import { currencies, CurrencyCode, usdCurrency } from '../../shared/currency';
 import { ProviderMark } from './ProviderMark';
+import { StatusMark, type StatusMarkState } from './StatusMark';
 import { toast } from './toast';
 import { Switch } from './Switch';
 import { t, tMessage } from '../i18n';
@@ -46,12 +47,17 @@ function Row({ title, description, children, id }: { title: string; description?
   </div>;
 }
 
-function statusPill(item: HarnessInfo) {
-  if (item.status === 'not_installed') return { className: 'not_installed', label: t('Chưa cài') };
-  if (item.status === 'detected') return { className: 'logged_out', label: t('Đã thấy · chưa đăng nhập') };
-  if (item.status === 'auth_error') return { className: 'auth_error', label: t('Lỗi đăng nhập') };
-  if (item.runnable) return { className: 'logged_in', label: t('Đã đăng nhập · sẵn sàng') };
-  return { className: 'logged_in', label: t('Đã đăng nhập') };
+/**
+ * A harness state, as the circle the rest of the app already uses for a state plus one short phrase. The phrase is
+ * one thing, not two joined by a dot: what the row can do right now. Whether it is installed and whether it is
+ * signed in are the lines underneath, so the state does not repeat them (user, 2026-09-22).
+ */
+function statusPill(item: HarnessInfo): { className: string; label: string; mark: StatusMarkState } {
+  if (item.status === 'not_installed') return { className: 'not_installed', label: t('Chưa cài'), mark: { variant: 'empty', tone: 'muted' } };
+  if (item.status === 'detected') return { className: 'logged_out', label: t('Chưa đăng nhập'), mark: { variant: 'dashed', tone: 'muted' } };
+  if (item.status === 'auth_error') return { className: 'auth_error', label: t('Lỗi đăng nhập'), mark: { variant: 'dashed', tone: 'error' } };
+  if (item.runnable) return { className: 'logged_in', label: t('Sẵn sàng'), mark: { variant: 'filled', tone: 'success' } };
+  return { className: 'logged_in', label: t('Đã đăng nhập'), mark: { variant: 'empty', tone: 'success' } };
 }
 
 /**
@@ -266,7 +272,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                           down the row to learn whether this harness is usable (user, 2026-09-19). */}
                       <span className="harness-head">
                         <span className="setting-title"><span>{item.name}</span>{!item.runnable && <span className="badge">{t('Chỉ trạng thái')}</span>}</span>
-                        <span className={`status-pill ${pill.className}`}>{pill.label}</span>
+                        <span className={`status-pill ${pill.className}`}><StatusMark variant={pill.mark.variant} tone={pill.mark.tone} label={pill.label} decorative />{pill.label}</span>
                       </span>
                       {/* With nothing installed the version line only repeats what the detail line already says. */}
                       {item.version && <span className="setting-description">{item.version}</span>}

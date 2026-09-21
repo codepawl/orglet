@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
-const pills = { not_installed: 'Chưa cài', detected: 'Đã thấy · chưa đăng nhập', signed_in_ready: 'Đã đăng nhập · sẵn sàng', signed_in: 'Đã đăng nhập', auth_error: 'Lỗi đăng nhập' };
+const pills = { not_installed: 'Chưa cài', detected: 'Chưa đăng nhập', signed_in_ready: 'Sẵn sàng', signed_in: 'Đã đăng nhập', auth_error: 'Lỗi đăng nhập' };
 const hint = { not_installed: name => `Cài và đăng nhập ${name} trên máy này`, detected: name => `Đăng nhập ${name} trên máy này`, auth_error: name => `Sửa đăng nhập ${name} trên máy này` };
 
 // Puts two fake CLIs first on PATH so CI always has a logged-out Claude Code and an
@@ -98,7 +98,7 @@ try {
   }
   const claudeRow = section.locator('.harness-row', { hasText: 'Claude Code' });
   const codexRow = section.locator('.harness-row', { hasText: 'Codex' });
-  await claudeRow.getByText('Đã thấy · chưa đăng nhập', { exact: true }).waitFor();
+  await claudeRow.getByText('Chưa đăng nhập', { exact: true }).waitFor();
   assert.equal(await claudeRow.getByText(/^Đã đăng nhập/, { exact: false }).count(), 0);
   await codexRow.getByText('Lỗi đăng nhập', { exact: true }).waitFor();
   await codexRow.getByText('không chuyển sang Demo', { exact: false }).waitFor();

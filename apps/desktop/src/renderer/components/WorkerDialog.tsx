@@ -7,6 +7,7 @@ import { FieldLabel, MoneyInput } from './ui';
 import { Select } from './Select';
 import { ModelPicker } from './ModelPicker';
 import { ProviderMark } from './ProviderMark';
+import { StatusMark } from './StatusMark';
 import { AvatarPicker } from './Avatar';
 import { isMascot, mascotIds } from './mascots';
 import { autoMascot } from './mascotSuggest';
@@ -92,14 +93,21 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         modelOption('opencode-zen', 'OpenCode Zen', t('trả theo mức dùng'), t('API trả phí'), ready['opencode-zen']),
         modelOption('opencode-go', 'OpenCode Go', t('gói đăng ký có hạn mức'), t('API theo gói'), ready['opencode-go']),
         modelOption('ollama', 'Ollama', t('gợi ý {0}', [CATALOG_HINT_IDS.ollama]), t('Local trên máy này'), ready.ollama),
+        // A harness carries its state as the circle the rest of the app uses for one, so the line underneath is the
+        // version and one phrase rather than three things strung together on dots (user, 2026-09-22). The circle is
+        // more exact than the generic "not ready" badge it stands in for: it tells missing from signed out from broken.
         ...(['claude-code', 'codex', 'cursor'] as const).map(id => {
           const found = harnesses.find(item => item.id === id);
-          const detail = !found || found.status === 'not_installed' ? t('chưa cài')
-            : found.status === 'detected' ? [found.version, t('đã thấy · chưa đăng nhập')].filter(Boolean).join(' · ')
-            : found.status === 'auth_error' ? [found.version, t('lỗi đăng nhập')].filter(Boolean).join(' · ')
-            : found.runnable ? [found.version, t('đã đăng nhập · sẵn sàng')].filter(Boolean).join(' · ')
-            : [found.version, t('đã đăng nhập')].filter(Boolean).join(' · ');
-          return modelOption(id, harnessNames[id], detail, t('Harness trên máy'), ready[id]);
+          const state = !found || found.status === 'not_installed' ? { word: t('chưa cài'), mark: { variant: 'empty', tone: 'muted' } as const }
+            : found.status === 'detected' ? { word: t('chưa đăng nhập'), mark: { variant: 'dashed', tone: 'muted' } as const }
+            : found.status === 'auth_error' ? { word: t('lỗi đăng nhập'), mark: { variant: 'dashed', tone: 'error' } as const }
+            : found.runnable ? { word: t('sẵn sàng'), mark: { variant: 'filled', tone: 'success' } as const }
+            : { word: t('đã đăng nhập'), mark: { variant: 'empty', tone: 'success' } as const };
+          const detail = [found?.version, state.word].filter(Boolean).join(' · ');
+          return {
+            ...modelOption(id, harnessNames[id], detail, t('Harness trên máy'), ready[id]),
+            badge: <StatusMark variant={state.mark.variant} tone={state.mark.tone} label={state.word} decorative />,
+          };
         }),
       ]} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} />}
