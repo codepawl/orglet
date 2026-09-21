@@ -140,8 +140,9 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
               <Reply size={13} aria-hidden="true" />{t('Mở tin gốc: {0}', [replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')])}
             </button>}
             <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
-            <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.brief} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
           </div>
+          {/* Under the bubble, as a worker's answer carries them, so both sides of the chat act the same way. */}
+          <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.brief} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
           {latest && workFrame && <p className="muted" role="status">{t('Mục tiêu Tí hiểu: {0}', [workFrame.goal])}</p>}
           {latest && outcomeText && <p className="muted" role="status">{outcomeText}</p>}
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
