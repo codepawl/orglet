@@ -207,13 +207,15 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .brand strong { font-size:18px; font-weight:600; letter-spacing:-.5px; }
 .brand strong { margin-right:auto; }
 .brand .button { margin-left:-4px; }
-/* The same three layers as apps/desktop/assets/icon.svg, in the same proportions, so the taskbar and the window
-   show one logo rather than two drawings that drifted apart (user, 2026-09-19). Read off the icon's 240px tile:
-   the tile is rounded 23%, the bubble covers 62% of it with a 31% corner and a 15% tail at the bottom left, and
-   the eye is 20%. Percentages mean a new size only sets width and height. */
-.orglet-mark { display:inline-grid; place-items:center; width:29px; height:29px; border-radius:23%; background:var(--text); font-size:0; flex-shrink:0; }
-.orglet-mark::before { content:''; grid-area:1/1; width:62%; height:62%; border-radius:31% 31% 31% 15%; background:var(--bg); }
-.orglet-mark::after { content:''; grid-area:1/1; width:20%; height:20%; border-radius:50%; background:var(--text); }
+/* The brand mark is an orglet (COD-154): the same drawing as apps/desktop/assets/icon.svg, in the text colour so
+   it follows the theme. The element is the bubble (31% corners, a 15% corner at the bottom left) with one soft
+   matte shade, and the two pseudo-elements are the eyes: upright capsules in the page colour, 2/14 of the side
+   wide and 4/14 tall, set high and a touch to the right, on the same 14-unit grid the icon is drawn on so the
+   sizes agree. Percentages mean a new size only sets width and height. */
+.orglet-mark { position:relative; display:inline-block; width:29px; height:29px; border-radius:31% 31% 31% 15%; background:linear-gradient(135deg, color-mix(in srgb, var(--text) 86%, white), var(--text) 50%, color-mix(in srgb, var(--text) 84%, black)); font-size:0; line-height:0; flex-shrink:0; }
+.orglet-mark::before,.orglet-mark::after { content:''; position:absolute; top:21.4%; width:14.3%; height:28.6%; border-radius:999px; background:var(--bg); }
+.orglet-mark::before { left:35.7%; }
+.orglet-mark::after { left:57.1%; }
 .orglet-mark.large { width:42px; height:42px; margin-bottom:24px; }
 .orglet-mark.small { width:25px; height:25px; }
 .section-heading { font-size:13px; font-weight:500; color:var(--muted); min-height:34px; display:flex; align-items:center; justify-content:space-between; padding:0 0 0 12px; }
@@ -559,14 +561,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .notice-banner .actions { margin-top:8px; }
 .startup,.loading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:40px; flex:1; }
 .startup { height:100dvh; text-align:center; }
-/* Opening the workspace is the one moment the app has nothing to show, so the logo does the waiting: the same
-   three shapes it is built from, the bubble breathing and its eye looking around (user, 2026-09-20). Reduced
-   motion slows it rather than stopping it, the way the stop button ring does. */
+/* Opening the workspace is the one moment the app has nothing to show, so the logo does the waiting: the orglet
+   breathing and its eyes looking around (user, 2026-09-20). Reduced motion slows it rather than stopping it, the
+   way the stop button ring does. */
 .startup .orglet-mark { animation:orglet-breathe 2.6s ease-in-out infinite; }
-.startup .orglet-mark::after { animation:orglet-look 2.6s ease-in-out infinite; }
+.startup .orglet-mark::before,.startup .orglet-mark::after { animation:orglet-look 2.6s ease-in-out infinite; }
 @keyframes orglet-breathe { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-3px) scale(1.05); } }
 @keyframes orglet-look { 0%,100% { transform:translate(0,0); } 22% { transform:translate(-55%,6%); } 58% { transform:translate(55%,6%); } }
-@media(prefers-reduced-motion:reduce) { .startup .orglet-mark,.startup .orglet-mark::after { animation-duration:7s; } }
+@media(prefers-reduced-motion:reduce) { .startup .orglet-mark,.startup .orglet-mark::before,.startup .orglet-mark::after { animation-duration:7s; } }
 /* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */
 .thread-skeleton { display:flex; flex-direction:column; gap:26px; width:100%; max-width:768px; margin:0 auto; padding:28px var(--page-x); }
 .thread-skeleton span { display:block; border-radius:8px; background:var(--surface); animation:skeleton-pulse 1.6s ease-in-out infinite; }
