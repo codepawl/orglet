@@ -427,6 +427,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Opacity and a nudge only: scaling a centred box moves its edges while it grows, which is the jump again in
    miniature — measured at 4px. */
 @keyframes reaction-row-in { from { opacity:0; transform:translateX(-50%) translateY(3px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+/* Under a sent message the trigger sits at the pane's right edge, so the row opens leftwards from it; centred, it
+   ran off the pane and lost its last faces. */
+.user-message + .message-actions .reaction-row { left:auto; right:0; transform:none; animation-name:reaction-row-in-end; }
+@keyframes reaction-row-in-end { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
 .reaction-row button { display:grid; place-items:center; width:30px; height:30px; padding:0; border:0; border-radius:50%; background:none; font-size:17px; line-height:1; cursor:pointer; transition:transform var(--motion-quick) var(--ease-out), background var(--motion-quick); }
 .reaction-row button:hover,.reaction-row button:focus-visible { background:var(--surface); transform:scale(1.18); }
 /* The picked reaction rides on the lower edge of the message it belongs to, the way a messenger wears one
@@ -526,8 +530,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .chat-turn { --bubble-max:min(64ch, 86%); }
 .user-message { --ask-wash:color-mix(in srgb, var(--accent) 18%, var(--bg)); background:var(--ask-wash); padding:12px 16px; border-radius:18px; max-width:var(--bubble-max); margin-left:auto; width:fit-content; box-shadow:0 1px 2px #00000010; }
 .user-message p,.prose { white-space:pre-wrap; overflow-wrap:anywhere; }
-.user-message .button { padding-left:0; font-size:12px; color:var(--muted); margin-top:6px; }
-.user-message .button:hover:not(:disabled) { background:transparent; opacity:1; }
 .assistant-message { padding-top:24px; }
 /* Each turn arrives once, on mount. Streaming re-renders do not remount the section, so this never replays. */
 .user-message,.assistant-message { animation:turn-in var(--motion-base) var(--ease-out); }
@@ -1287,6 +1289,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .chat-reply .prose h1,.chat-reply .prose h2,.chat-reply .prose h3 { font-size:1.06em; }
 /* The actions stay outside the bubble, so a copy button never has to decide whether it is part of the answer. */
 .chat-reply .message-actions { padding-left:2px; }
+/* A sent message's actions sit under its bubble like an answer's, lined up with the bubble's right edge. */
+.user-message + .message-actions { justify-content:flex-end; }
 /* A table header is drawn in --surface, which inside the bubble sits at nearly the same lightness as the wash:
    the two separate by hue alone, which is not a separation. A step in value instead, which holds whatever accent
    is picked and in dark mode too. */
