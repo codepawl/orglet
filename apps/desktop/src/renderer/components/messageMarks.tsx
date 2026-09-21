@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import type { Reaction } from '../../shared/message-interactions';
+import type { MessageReaction, Reaction } from '../../shared/message-interactions';
+import type { Run } from '../../shared/contracts';
 import { t, translated } from '../i18n';
 
 export type ReplyTarget = { taskId: string; messageId: string; author: string; text: string };
@@ -13,6 +14,32 @@ export const reactionMeanings: Record<Reaction, string> = translated({
   against: 'Chưa ổn, thử hướng khác.',
 });
 export const reactionOrder = Object.keys(reactionEmoji) as Reaction[];
+
+export type ReactionGroup = { emoji: Reaction; count: number; includesUser: boolean; label: string };
+
+function reactorName(mark: MessageReaction, runs: readonly Run[]): string {
+  if (mark.actor === 'user') return t('Bạn');
+  const run = runs.find(item => item.snapshot.worker.id === mark.workerId);
+  return run?.snapshot.worker.name ?? t('Tí');
+}
+
+/** The reactions on one message, one group per emoji in the bar's order, each naming who reacted. */
+export function reactionGroups(marks: readonly MessageReaction[], runs: readonly Run[]): ReactionGroup[] {
+  return reactionOrder.flatMap(emoji => {
+    const matching = marks.filter(mark => mark.emoji === emoji);
+    if (matching.length === 0) return [];
+    const people = matching.map(mark => reactorName(mark, runs));
+    const label = t('{0} người thả {1}: {2}', [matching.length, reactionEmoji[emoji], people.join(', ')]);
+    return [{ emoji, count: matching.length, includesUser: matching.some(mark => mark.actor === 'user'), label }];
+  });
+}
+
+/** Scrolls the original message into view and moves focus there, so a keyboard user lands on it too. */
+export function focusMessage(messageId: string) {
+  const original = document.getElementById(`message-${messageId}`);
+  original?.scrollIntoView({ block: 'center' });
+  original?.focus();
+}
 
 let target: ReplyTarget | undefined;
 const listeners = new Set<() => void>();

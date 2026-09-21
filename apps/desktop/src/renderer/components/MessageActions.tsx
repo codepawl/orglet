@@ -1,18 +1,20 @@
 import { Reply } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import type { MessageReaction } from '../../shared/message-interactions';
+import type { Run } from '../../shared/contracts';
 import { orglet } from '../api';
 import { t } from '../i18n';
 import { Button } from './ui';
-import { reactionEmoji, reactionMeanings, reactionOrder, replyToAnswer } from './messageMarks';
+import { reactionEmoji, reactionGroups, reactionMeanings, reactionOrder, replyToAnswer } from './messageMarks';
 import { ReactionBar, ReactionChip } from './ReactionBar';
 
-export function MessageActions({ taskId, messageId, author, text, reactions, action, leading }: {
+export function MessageActions({ taskId, messageId, author, text, reactions, runs, action, leading }: {
   taskId: string;
   messageId: string;
   author: string;
   text: string;
   reactions: readonly MessageReaction[];
+  runs: readonly Run[];
   action: (fn: () => Promise<unknown>) => void;
   leading?: ReactNode;
 }) {
@@ -33,8 +35,11 @@ export function MessageActions({ taskId, messageId, author, text, reactions, act
     {leading}
     <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(taskId, messageId, author, text)}><Reply size={15} /></Button>
     {userMarks.length === 0 && <ReactionBar options={options} onPick={emoji => { restoreFocus.current = true; setReaction(emoji, true); }} />}
-    {marks.map(mark => mark.actor === 'user'
-      ? <ReactionChip key={`${mark.actor}:${mark.emoji}`} options={options} picked={mark.emoji} onClear={() => { restoreFocus.current = true; setReaction(mark.emoji, false); }} />
-      : <span key={`${mark.actor}:${mark.workerId}:${mark.emoji}`} className="message-reaction" title={t('Tí đã thả {0}', [reactionMeanings[mark.emoji]])} aria-label={t('Tí đã thả {0}', [reactionMeanings[mark.emoji]])}>{reactionEmoji[mark.emoji]}</span>)}
+    {reactionGroups(marks, runs).map(group => group.includesUser
+      ? <ReactionChip key={group.emoji} options={options} picked={group.emoji} count={group.count} label={group.label}
+        onClear={() => { restoreFocus.current = true; setReaction(group.emoji, false); }} />
+      : <span key={group.emoji} className="message-reaction" title={group.label} aria-label={group.label}>
+        {reactionEmoji[group.emoji]}{group.count > 1 && <span>{group.count}</span>}
+      </span>)}
   </div>;
 }

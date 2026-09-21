@@ -784,14 +784,23 @@ export class CoreService {
     this.store.update('tasks', { ...started, pendingStart: undefined });
     this.notify();
   }
-  exportMarkdown(artifactId: string): string {
+  exportMarkdown(artifactId: string, includeMessageLinks = false): string {
     const artifact = this.store.get<Artifact>('artifacts', artifactId);
     const run = this.store.get<Run>('runs', artifact.runId);
     const task = this.store.get<Task>('tasks', run.taskId);
     const report = artifact.report;
+    const reactions = task.messageReactions?.filter(item => item.messageId === artifactId) ?? [];
+    const messageLinks = includeMessageLinks ? ['## Message links', `Message ID: ${artifact.id}`,
+      artifact.replyTo ? `Reply to: ${artifact.replyTo}` : '',
+      ...reactions.map(reaction => {
+        const actor = reaction.actor === 'user' ? 'User'
+          : this.store.detail(task.id).runs.find(item => item.snapshot.worker.id === reaction.workerId)?.snapshot.worker.name ?? reaction.workerId;
+        return `Reaction: ${reaction.emoji} — ${actor}`;
+      })].filter(Boolean) : [];
     // A chat answer exports as the message itself.
     if (report.format === 'chat') return [report.summary,
-      ...(report.limitations.length ? ['## Limitations', ...report.limitations.map(limitation => `- ${limitation}`)] : [])].join('\n\n');
+      ...(report.limitations.length ? ['## Limitations', ...report.limitations.map(limitation => `- ${limitation}`)] : []),
+      ...messageLinks].join('\n\n');
     const findings = report.findings.map(finding => [
       `## ${finding.title}`, `${finding.severity} — ${finding.detail}`, `Coverage: ${finding.coverage}`,
       finding.category ? `Category: ${finding.category}` : '',
@@ -805,6 +814,6 @@ export class CoreService {
     const profiles = this.store.all<ProfileRecord>('profiles').filter(profile => profile.runId === run.id || preflight?.profileIds.includes(profile.id));
     const checks = profiles.length ? ['## Trusted checker results', 'These describe the checks performed, not approval of the dataset, scoring or challenge.', ...profiles.map(profile => `### Checker ${profile.id}\n\n\`\`\`json\n${JSON.stringify({ sourceHashes: profile.sourceHashes, ...profile.result }, null, 2)}\n\`\`\``)] : [];
     const review = report.review ? ['## Review recommendation', report.review.recommendation, '## Check coverage', ...report.review.checks.map(check => `### ${check.name}: ${check.status}\n\n${check.coverage}\n\nSources: ${check.sourceIds.join(', ')}\nCheckers: ${check.checkerIds.map(id => `[${id}](#checker-${id})`).join(', ')}`), '## Unresolved disagreements', ...report.review.conflicts.map(conflict => `${conflict.reason}\n\nFindings: ${conflict.findingIds.join(', ')}`), '## Draft feedback', report.review.draftFeedback, `Upstream findings: ${report.review.upstreamFindingIds.join(', ')}`] : [];
-    return [`# ${report.title}`, report.summary, ...review, ...findings, '## Limitations', ...report.limitations.map(l => `- ${l}`), '## Sources', ...(run.snapshot.input?.sourceIds ?? task.sourceIds).map(sourceId => { const s = this.store.get<Source>('sources', sourceId); return `- ${s.id}: ${s.name} (SHA-256 ${s.hash})`; }), ...checks, `Run: ${run.id}\nWorker revision: ${run.snapshot.worker.revision}\nSkill revision: ${run.snapshot.skill.revision}\nProvider: ${run.snapshot.worker.provider}\nArtifact SHA-256: ${artifact.hash}`].join('\n\n');
+    return [`# ${report.title}`, report.summary, ...review, ...findings, '## Limitations', ...report.limitations.map(l => `- ${l}`), '## Sources', ...(run.snapshot.input?.sourceIds ?? task.sourceIds).map(sourceId => { const s = this.store.get<Source>('sources', sourceId); return `- ${s.id}: ${s.name} (SHA-256 ${s.hash})`; }), ...checks, `Run: ${run.id}\nWorker revision: ${run.snapshot.worker.revision}\nSkill revision: ${run.snapshot.skill.revision}\nProvider: ${run.snapshot.worker.provider}\nArtifact SHA-256: ${artifact.hash}`, ...messageLinks].join('\n\n');
   }
 }

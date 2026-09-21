@@ -97,6 +97,11 @@ it('lets an API worker react through its tool loop and carries a verified reply 
     expect(first.task.status).toBe('completed');
     expect(first.task.messageReactions).toMatchObject([{ messageId: taskId, actor: 'worker', emoji: 'watching' }]);
     const replyTo = first.artifacts[0].id;
+    new MessageInteractions(store).userReaction({ taskId, messageId: replyTo, emoji: 'agree', active: true });
+    expect(core.exportMarkdown(replyTo)).not.toContain('Message ID:');
+    expect(core.exportMarkdown(replyTo, true)).toContain(`Message ID: ${replyTo}`);
+    expect(core.exportMarkdown(replyTo, true)).toContain(`Reply to: ${taskId}`);
+    expect(core.exportMarkdown(replyTo, true)).toContain('Reaction: agree');
     await expect(core.command('reviseTask', { taskId, brief: 'Wrong target', replyTo: id(), sourceIds: [], consent: true,
       providerScopes: ['openai'], budgetMicros: 100_000 })).rejects.toThrow('Không tìm thấy');
     expect(store.detail(taskId).task.inputRevision ?? 0).toBe(0);

@@ -259,13 +259,13 @@ async function start() {
    * clipboard has no such restriction.
    */
   handle('orglet:copy-text', async raw => { clipboard.writeText(z.string().min(1).max(8000).parse(raw)); });
-  const artifactText = async (raw: unknown) => {
+  const artifactText = async (raw: unknown, includeMessageLinks = false) => {
     const input = z.object({ id: Id, format: TextFormat.default('markdown') }).strict().parse(typeof raw === 'string' ? { id: raw } : raw);
-    const markdown = String(await request('exportArtifact', input.id));
+    const markdown = String(await request('exportArtifact', includeMessageLinks ? { id: input.id, includeMessageLinks: true } : input.id));
     return { format: input.format, text: input.format === 'text' ? markdownToPlain(markdown) : markdown };
   };
   handle('orglet:export', async raw => {
-    const { format, text } = await artifactText(raw);
+    const { format, text } = await artifactText(raw, true);
     const result = await dialog.showSaveDialog(window, format === 'text'
       ? { defaultPath: 'orglet.txt', filters: [{ name: tr('Văn bản'), extensions: ['txt'] }] }
       : { defaultPath: 'orglet.md', filters: [{ name: 'Markdown', extensions: ['md'] }] });

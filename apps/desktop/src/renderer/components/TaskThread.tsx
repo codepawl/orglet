@@ -50,7 +50,7 @@ type Turn = { revision: number; runs: Run[]; brief: string; replyTo?: string; so
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, recovery, action, showSources, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
+export function TaskThread({ detail, recovery, action, showSources, openMessage, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   const current = detail.task.inputRevision ?? 0;
@@ -130,11 +130,13 @@ export function TaskThread({ detail, recovery, action, showSources, proposals, o
         // explanation just below, so it is quiet here too.
         const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
         return <div className="chat-turn" key={turn.revision}>
-          <div className="user-message" id={`message-${turnMessageId(detail.task.id, turn.revision)}`}>
-            {turn.replyTo && <p className="message-reply-context"><Reply size={13} aria-hidden="true" />{replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')}</p>}
+          <div className="user-message" id={`message-${turnMessageId(detail.task.id, turn.revision)}`} tabIndex={-1}>
+            {turn.replyTo && <button type="button" className="message-reply-context" onClick={() => openMessage(turn.replyTo!)}>
+              <Reply size={13} aria-hidden="true" />{t('Mở tin gốc: {0}', [replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')])}
+            </button>}
             <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
             {turn.sources.length > 0 && <ul className="attachment-list message-files">{turn.sources.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}</ul>}
-            <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.brief} reactions={detail.task.messageReactions ?? []} action={action} />
+            <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.brief} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
           </div>
           {latest && workFrame && <p className="muted" role="status">{t('Mục tiêu Tí hiểu: {0}', [workFrame.goal])}</p>}
           {latest && outcomeText && <p className="muted" role="status">{outcomeText}</p>}
@@ -142,7 +144,7 @@ export function TaskThread({ detail, recovery, action, showSources, proposals, o
             {byline(reply.run)}
             <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />
             {reply.artifact.report.format === 'chat'
-              ? <ChatReply artifact={reply.artifact} author={reply.run.snapshot.worker.name} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} action={action} />
+              ? <ChatReply artifact={reply.artifact} author={reply.run.snapshot.worker.name} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
               : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
           </section>)}
           {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
@@ -183,7 +185,7 @@ export function TaskThread({ detail, recovery, action, showSources, proposals, o
             {!turn.artifact && !turn.replies.length && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
             {turn.artifact && !turn.replies.length && <FinishedActivity steps={savedSteps(detail.events, turn.artifact.runId)} />}
             {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
-              ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} action={action} />
+              ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
             {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
@@ -223,14 +225,14 @@ function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
   return <div className="finished-activity"><ActivityGroup steps={steps} folded /></div>;
 }
 
-function ChatReply({ artifact, author, taskId, reactions, action }: { artifact: Artifact; author: string; taskId: string; reactions: NonNullable<TaskDetail['task']['messageReactions']>; action: (fn: () => Promise<unknown>) => void }) {
+function ChatReply({ artifact, author, taskId, reactions, runs, action }: { artifact: Artifact; author: string; taskId: string; reactions: NonNullable<TaskDetail['task']['messageReactions']>; runs: readonly Run[]; action: (fn: () => Promise<unknown>) => void }) {
   return <div className="chat-reply">
-    <div className="chat-bubble" id={`message-${artifact.id}`}><Markdown className="prose" text={tMessage(artifact.report.summary)} /></div>
+    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={tMessage(artifact.report.summary)} /></div>
     {artifact.report.limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
     </div>}
-    <MessageActions taskId={taskId} messageId={artifact.id} author={author} text={tMessage(artifact.report.summary)} reactions={reactions} action={action}
+    <MessageActions taskId={taskId} messageId={artifact.id} author={author} text={tMessage(artifact.report.summary)} reactions={reactions} runs={runs} action={action}
       leading={<ArtifactActions artifactId={artifact.id} action={action} />} />
   </div>;
 }
@@ -271,8 +273,8 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   // Evidence links leave the document for the sources panel.
   const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
   return <>
-    <div id={`message-${artifact.id}`}><DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
-      <MessageActions taskId={detail.task.id} messageId={artifact.id} author={author?.snapshot.worker.name ?? 'Orglet'} text={name} reactions={detail.task.messageReactions ?? []} action={action} />
+    <div id={`message-${artifact.id}`} tabIndex={-1}><DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+      <MessageActions taskId={detail.task.id} messageId={artifact.id} author={author?.snapshot.worker.name ?? 'Orglet'} text={name} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
     </div>
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}

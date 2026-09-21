@@ -44,13 +44,19 @@ export function ReactionBar<Name extends string>({ options, onPick, label }: {
  * shape every messenger uses, and the one the owner asked for (2026-09-20). Sits on the bubble's lower edge, so
  * it belongs to that message and to no other. The parent bubble needs `position:relative`.
  */
-export function ReactionChip<Name extends string>({ options, picked, onClear }: {
+export function ReactionChip<Name extends string>({ options, picked, count, label, onClear }: {
   options: readonly { name: Name; emoji: string; meaning: string }[];
   picked: Name;
+  count?: number;
+  label?: string;
   /** Clicking the chip takes the reaction off, the way clicking it again in the row does. */
   onClear: () => void;
 }) {
   const current = options.find(option => option.name === picked);
   if (!current) return null;
-  return <button type="button" className="reaction-chip" aria-label={t('Bỏ {0}', [current.meaning])} title={current.meaning} onClick={onClear}>{current.emoji}</button>;
+  // The name says what a click does. When others reacted too, it also says who, ahead of the action.
+  const clear = t('Bỏ {0}', [current.meaning]);
+  return <button type="button" className="reaction-chip" aria-label={label ? `${label}. ${clear}` : clear} title={label ?? current.meaning} onClick={onClear}>
+    {current.emoji}{count !== undefined && count > 1 && <span>{count}</span>}
+  </button>;
 }

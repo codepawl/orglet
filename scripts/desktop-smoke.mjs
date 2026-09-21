@@ -75,6 +75,7 @@ try {
   for (let attempt = 0; attempt < 50 && !(await readFile(exported, 'utf8').catch(() => '')); attempt++) await new Promise(resolve => setTimeout(resolve, 100));
   // A chat answer downloads as the message itself.
   assert.match(await readFile(exported, 'utf8'), /Tí demo/);
+  assert.match(await readFile(exported, 'utf8'), /Reaction: agree/);
   const fakeKeyPath = join(data, 'fixture-key.txt'); const fakeKey = 'sk-orglet-fixture-not-a-real-api-key'; await writeFile(fakeKeyPath, fakeKey);
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, fakeKeyPath);
   await page.getByRole('button', { name: 'Cài đặt', exact: true }).click();
