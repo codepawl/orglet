@@ -467,7 +467,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .user-message { position:relative; }
 .chat-reply:has(.reaction-chip) { padding-bottom:12px; }
 /* Who has read this far: small faces under the last message each orglet worked from. */
-.read-receipts { display:flex; justify-content:flex-end; gap:3px; margin:6px 2px 0; }
+/* The row is exactly as tall as its 16px faces and each face is a flex item, not an inline box on a text baseline,
+   so the faces land on whole pixels (COD-154: a 21px line box put them a quarter pixel down). */
+.read-receipts { display:flex; justify-content:flex-end; gap:3px; margin:6px 2px 0; line-height:16px; }
+.read-receipts > span { display:flex; }
 .read-receipts .avatar { box-shadow:0 0 0 1.5px var(--bg); }
 @media(prefers-reduced-motion:reduce) { .reaction-row { animation:none; } .reaction-row button { transition:none; } .reaction-row button:hover { transform:none; } .reaction-chip { transition:none; } .reaction-chip:hover { transform:none; } }
 .thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) 0; }
