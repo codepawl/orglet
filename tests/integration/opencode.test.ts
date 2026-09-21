@@ -150,12 +150,12 @@ describe('OpenCode plan tables', () => {
     expect(MODEL_LIST_ENDPOINTS['opencode-go']).toBe(OPENCODE_BASE_URLS['opencode-go']);
   });
 
-  it('bills Zen through Orglet budgets and Go through its plan, with no pinned price or default model', () => {
-    expect(isPaidApi('opencode-zen')).toBe(true);
-    expect(isPlanApi('opencode-zen')).toBe(false);
+  it('bills both plans outside Orglet budgets, with no pinned price or default model', () => {
+    expect(isPaidApi('opencode-zen')).toBe(false);
+    expect(isPlanApi('opencode-zen')).toBe(true);
     expect(isPaidApi('opencode-go')).toBe(false);
     expect(isPlanApi('opencode-go')).toBe(true);
-    expect(resolveWorkerModel({ provider: 'opencode-zen', modelId: 'glm-5.3' })).toEqual({ id: 'glm-5.3', pricingVersion: 'unknown:glm-5.3' });
+    expect(resolveWorkerModel({ provider: 'opencode-zen', modelId: 'glm-5.3' })).toEqual({ id: 'glm-5.3', pricingVersion: 'plan:opencode-zen:glm-5.3' });
     expect(resolveWorkerModel({ provider: 'opencode-go', modelId: 'kimi-k3' })).toEqual({ id: 'kimi-k3', pricingVersion: 'plan:opencode-go:kimi-k3' });
     expect(resolveWorkerModel({ provider: 'opencode-zen' }).id).toBeUndefined();
   });
@@ -223,15 +223,7 @@ describe.each(plans)('%s connection', plan => {
     expect(failed.task.status).toBe('failed');
     const expected = plan === 'opencode-zen' ? 'OpenCode Zen báo hết số dư' : 'OpenCode Go báo đã chạm hạn mức';
     expect(failed.runs[0].error).toContain(expected);
-    if (plan === 'opencode-zen') {
-      // Zen has no verified price, so the failed request held the rest of the task budget as unknown cost.
-      // The user settles it from the provider dashboard before the retry can reserve again.
-      const [held] = store.budgetReservations();
-      expect(held).toMatchObject({ taskId: task.id, reason: 'request_failed', actualMicros: null });
-      await core.command('reconcileBudget', { reservationId: held.id, amountMicros: 0, source: 'provider_dashboard' });
-    } else {
-      expect(store.budgetReservations()).toEqual([]);
-    }
+    expect(store.budgetReservations()).toEqual([]);
 
     fakes[plan].steps.push({ kind: 'tool', name: 'submit_report', args: report });
     await core.command('retry', { id: task.id });
@@ -270,38 +262,29 @@ describe.each(plans)('%s connection', plan => {
     await running;
     const detail = store.detail(task.id);
     expect(detail.task.status).toBe('cancelled');
-    // Zen holds the unknown cost of the cancelled request; Go is billed by its plan and holds nothing.
-    expect(detail.usage.uncertainCount).toBe(plan === 'opencode-zen' ? 1 : 0);
+    // OpenCode bills the cancelled request, not Orglet; nothing is held.
+    expect(detail.usage.uncertainCount).toBe(0);
+    expect(detail.usage.reservedMicros).toBe(0);
   });
 });
 
-describe('OpenCode budgets', () => {
-  it('runs a multi-step Go task without touching Orglet budgets', async () => {
-    const worker = await saveWorker('opencode-go');
-    fakes['opencode-go'].steps.push(
+describe.each(plans)('%s budgets', plan => {
+  it('completes a two-call task without writing to the reservations ledger', async () => {
+    const worker = await saveWorker(plan);
+    fakes[plan].steps.push(
       { kind: 'tool', name: 'record_work_frame', args: workFrame },
       { kind: 'tool', name: 'submit_report', args: report },
     );
     const { task, run } = fixtureRun(worker);
     await core.runner.run(task, run);
     const detail = store.detail(task.id);
-    expect(fakes['opencode-go'].chatRequests()).toHaveLength(2);
+    expect(detail.task.status).toBe('completed');
+    expect(fakes[plan].chatRequests()).toHaveLength(2);
     expect(detail.usage.reservedMicros).toBe(0);
     expect(detail.usage.chargedMicros).toBe(0);
-  });
-
-  it('holds the rest of the task budget for each unpriced Zen step, so a second step waits for budget', async () => {
-    const worker = await saveWorker('opencode-zen');
-    fakes['opencode-zen'].steps.push(
-      { kind: 'tool', name: 'record_work_frame', args: workFrame },
-      { kind: 'tool', name: 'submit_report', args: report },
-    );
-    const { task, run } = fixtureRun(worker);
-    await core.runner.run(task, run);
-    const detail = store.detail(task.id);
-    expect(fakes['opencode-zen'].chatRequests()).toHaveLength(1);
-    expect(detail.task.status).toBe('waiting_budget');
-    expect(detail.usage.uncertainCount).toBe(1);
+    expect(detail.usage.uncertainCount).toBe(0);
+    expect(store.db.prepare('SELECT COUNT(*) AS count FROM reservations').get()).toEqual({ count: 0 });
+    expect(store.db.prepare('SELECT COUNT(*) AS count FROM ledger').get()).toEqual({ count: 0 });
   });
 });
 

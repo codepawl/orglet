@@ -22,12 +22,11 @@ function catalogRates(provider: CatalogProvider): ModelRates {
 
 /**
  * OpenCode has no default model and no price Orglet can verify: `/models` carries no prices and the doc tables change,
- * so nothing is pinned here. Zen runs hold unknown cost like any unpriced ID; Go runs are billed by the Go plan.
+ * so nothing is pinned here. Both plans are billed outside Orglet budgets (Zen balance, Go subscription).
  */
 function resolveOpenCodeModel(plan: OpenCodePlan, custom: string | undefined): ResolvedModel {
   if (!custom) return { pricingVersion: `${plan}:unselected` };
-  if (plan === 'opencode-go') return { id: custom, pricingVersion: `plan:opencode-go:${custom}` };
-  return { id: custom, pricingVersion: `unknown:${custom}` };
+  return { id: custom, pricingVersion: `plan:${plan}:${custom}` };
 }
 
 /** Selected slug plus verified prices. Custom OpenAI/Anthropic IDs are unpriced (unknown reservation). */

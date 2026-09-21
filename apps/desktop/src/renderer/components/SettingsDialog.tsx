@@ -4,7 +4,7 @@ import { Check, Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal
 import { avatarPalette } from './Avatar';
 import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
-import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, isPlanApi, type Connections, type ProviderScope, type Workspace } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type ProviderScope, type Workspace } from '../../shared/contracts';
 import type { HarnessInfo } from '../../shared/harness';import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
@@ -194,7 +194,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       ? (connections[provider] ? t('Đã bật Ollama tại 127.0.0.1:11434') : t('Tắt · bật công tắc nếu Ollama đang chạy trên máy này'))
                       : active
                         ? (connections[provider] ? t('Đã lưu API key') : t('Nhập key để kích hoạt'))
-                        : t('Tắt · bật công tắc để nhập key')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); })}>{local ? t('Tài liệu') : isPlanApi(provider) ? t('Giá và hạn mức gói') : t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
+                        : t('Tắt · bật công tắc để nhập key')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); })}>{local ? t('Tài liệu') : provider === 'opencode-go' ? t('Giá và hạn mức gói') : t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
                   </div>
                   <div className="setting-control">
                     <Switch checked={active} disabled={busy} labelledBy={titleId} onChange={on => {

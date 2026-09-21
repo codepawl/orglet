@@ -403,7 +403,8 @@ export class Runner {
                 throw new Error('Request model không hoàn tất. Kiểm tra Ollama đang chạy trên máy này trước khi thử lại.');
               }
             } else if (isPlanApi(provider)) {
-              // The Go subscription bills and limits these requests; Orglet has no price to reserve against.
+              // OpenCode bills these requests (Zen balance, Go subscription) and enforces its own limits; Orglet has no
+              // verified price to reserve against, so a multi-call task and a retry run straight through.
               this.event(run.id, `Đang gọi model · bước ${step + 1}/${maxSteps}`);
               try {
                 reply = await model.request(messages, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
@@ -429,12 +430,8 @@ export class Runner {
                 if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
                 else ledger.unknown(reservation, 'missing_usage');
                 this.checkpoints.received(checkpoint, reply);
-              } catch (error) {
+              } catch {
                 ledger.unknown(reservation, 'request_failed');
-                if (error instanceof ProviderRequestError) {
-                  this.event(run.id, 'Chi phí chưa rõ của request này vẫn được giữ chỗ.');
-                  throw error;
-                }
                 throw new Error('Request model không hoàn tất. Chi phí chưa rõ vẫn được giữ chỗ; kiểm tra kết nối hoặc quota trước khi thử lại.');
               }
             }

@@ -36,14 +36,15 @@ export function isLocalApi(provider: string): provider is 'ollama' {
 }
 /** Pay-per-use APIs whose requests Orglet reserves against the task, team and connection budgets. */
 export function isPaidApi(provider: string): boolean {
-  return provider === 'openai' || provider === 'anthropic' || provider === 'xai' || provider === 'openrouter' || provider === 'opencode-zen';
+  return provider === 'openai' || provider === 'anthropic' || provider === 'xai' || provider === 'openrouter';
 }
 /**
- * APIs billed by a subscription with its own usage limits (OpenCode Go). The provider enforces those limits and
- * Orglet cannot read them, so these requests are not reserved against Orglet budgets.
+ * APIs whose spending is bounded by the provider's own controls, not Orglet budgets: the OpenCode Go subscription
+ * limits and the OpenCode Zen balance and spending limit. Orglet has no verified price for either, so these requests
+ * are never reserved against Orglet budgets (main session decision, 2026-09-21).
  */
-export function isPlanApi(provider: string): provider is 'opencode-go' {
-  return provider === 'opencode-go';
+export function isPlanApi(provider: string): provider is 'opencode-zen' | 'opencode-go' {
+  return provider === 'opencode-zen' || provider === 'opencode-go';
 }
 export const WorkerInput = z.object({
   id: Id.optional(), name: z.string().trim().min(1).max(80),

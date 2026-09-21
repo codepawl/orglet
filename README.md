@@ -54,7 +54,7 @@ Workers can run through a local CLI, an API key, or Demo:
 | Codex on this computer | Codex installed **and signed in** | Your ChatGPT plan |
 | Cursor Agent on this computer | Cursor Agent CLI installed **and signed in** | Your Cursor plan |
 | OpenAI, Anthropic, Grok (xAI) or OpenRouter API | An API key saved in Settings | Pay per use, with limits you set |
-| OpenCode Zen API | A Zen API key saved in Settings | Pay per use from your Zen balance. Orglet has no verified Zen prices, so each step reserves an unknown cost you settle later |
+| OpenCode Zen API | A Zen API key saved in Settings | Pay per use from your Zen balance. Orglet does not track Zen spending or apply its task budget; set a spending limit in the OpenCode Zen console |
 | OpenCode Go API | A Go API key saved in Settings (a separate connection from Zen) | Your Go subscription and its 5-hour, weekly and monthly limits, not Orglet budgets |
 | Ollama on this computer | Ollama running locally | Local, no Orglet budget |
 | Demo | Nothing | Free, sample replies only |

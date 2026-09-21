@@ -24,8 +24,7 @@ A worker stores `provider` and optional `modelId` (`apps/desktop/src/shared/cont
 | Anthropic | `claude-haiku-4-5-20251001` | $1.00 / $5.00 per MTok |
 | xAI | `grok-3-mini` | $0.30 / $0.50 per MTok |
 | OpenRouter | `openai/gpt-4.1-mini` | $0.40 / $1.60 per MTok (catalog hint; native list tenths when cached) |
-| OpenCode Zen | (none; a model must be chosen) | No pinned price; unknown reservation per step |
-| Demo / Claude Code / Codex / Cursor / Ollama / OpenCode Go | (none) | No Orglet reservation (OpenCode Go is billed by the Go plan) |
+| Demo / Claude Code / Codex / Cursor / Ollama / OpenCode Zen / OpenCode Go | (none) | No Orglet reservation (OpenCode Zen is billed to the Zen balance, OpenCode Go by the Go plan; neither has a default model) |
 
 The worker dialog labels those three IDs as suggestions in the picker (`WorkerDialog.tsx`, `workerModel.ts`). A saved `modelId` is frozen onto `run.snapshot.model`. Custom OpenAI/Anthropic IDs are not billed at mini/Haiku rates (unknown reservation until a later COD stores a verified price). xAI and OpenRouter native tenths from the cached list are used when present. Harness runs pass `--model` / `-m` when `modelId` is set. Ollama runs make no Orglet reservation.
 
