@@ -588,6 +588,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .drawer-scroll { flex:1; min-width:0; padding:18px 24px 24px; overflow:auto; }
 .drawer-scroll { overscroll-behavior:contain; }
 .form { display:flex; flex-direction:column; gap:22px; }
+/* A team's review setup from an older build or a template: one line saying what it does, and the way to drop it. */
+.review-setup-list { display:flex; flex-direction:column; gap:4px; }
+.review-setup { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.review-setup .button { flex-shrink:0; white-space:nowrap; }
 .form label { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
 .form input,.form select,.form textarea { width:100%; border:1px solid var(--border); background:var(--bg); border-radius:var(--radius); padding:7px 11px; min-height:var(--control-height); font-size:13px; font-weight:400; }
 /* Same dropdown affordance as Settings; the neutral grey chevron reads on both themes. */
