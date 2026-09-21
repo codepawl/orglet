@@ -28,7 +28,7 @@ import { forwardRef, type ForwardRefExoticComponent, type ReactNode, type RefAtt
  * used for two things only: dots (grip, ⋮) drawn as circles of radius 1.4, so a dot weighs the same as a stroke
  * end, and a small marker inside an outline (a play triangle, the eye of the mark). A filled variant of a whole
  * icon, when one is ever needed, is the same silhouette filled with currentColor and its inner detail cut out as
- * a hole (`fillRule="evenodd"`), the way the app icon and `.orglet-mark` knock the eye out of the bubble; it never
+ * a hole (`fillRule="evenodd"`), the way the app icon and `.orglet-mark` knock the eyes out of the bubble; it never
  * adds a second colour and never sits next to its outline twin as a hover state. Hover and selection are colour
  * changes in CSS, not a different drawing.
  *

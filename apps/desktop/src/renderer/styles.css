@@ -207,13 +207,32 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .brand strong { font-size:18px; font-weight:600; letter-spacing:-.5px; }
 .brand strong { margin-right:auto; }
 .brand .button { margin-left:-4px; }
-/* The same three layers as apps/desktop/assets/icon.svg, in the same proportions, so the taskbar and the window
-   show one logo rather than two drawings that drifted apart (user, 2026-09-19). Read off the icon's 240px tile:
-   the tile is rounded 23%, the bubble covers 62% of it with a 31% corner and a 15% tail at the bottom left, and
-   the eye is 20%. Percentages mean a new size only sets width and height. */
-.orglet-mark { display:inline-grid; place-items:center; width:29px; height:29px; border-radius:23%; background:var(--text); font-size:0; flex-shrink:0; }
-.orglet-mark::before { content:''; grid-area:1/1; width:62%; height:62%; border-radius:31% 31% 31% 15%; background:var(--bg); }
-.orglet-mark::after { content:''; grid-area:1/1; width:20%; height:20%; border-radius:50%; background:var(--text); }
+/* The brand mark is an orglet (COD-154): the same drawing as apps/desktop/assets/icon.svg, in the text colour so
+   it follows the theme. The element is the bubble (31% corners, a 15% corner at the bottom left) with one soft
+   matte shade, and the two pseudo-elements are the eyes: upright capsules in the page colour, 2/14 of the side
+   wide and 4/14 tall, set high and a touch to the right, on the same 14-unit grid the icon is drawn on so the
+   sizes agree. Percentages mean a new size only sets width and height. */
+.orglet-mark { position:relative; display:inline-block; width:29px; height:29px; border-radius:31% 31% 31% 15%; background:linear-gradient(135deg, color-mix(in srgb, var(--text) 86%, white), var(--text) 50%, color-mix(in srgb, var(--text) 84%, black)); font-size:0; line-height:0; flex-shrink:0; }
+.orglet-mark::before,.orglet-mark::after { content:''; position:absolute; top:21.4%; width:14.3%; height:28.6%; border-radius:999px; background:var(--bg); }
+.orglet-mark::before { left:35.7%; }
+.orglet-mark::after { left:57.1%; }
+/* At the sizes the app draws the mark, the eyes are placed in whole pixels so they stay crisp at device scale 1
+   (COD-154): the percentages above put a 2.7px eye at 6.8px. The brand mark is 20px (even, like the row it sits
+   in, so it centres on a whole pixel), a byline mark 25px, the startup mark 29px, `.large` 42px. */
+.orglet-mark.small::before,.orglet-mark.small::after { top:6px; width:3px; height:5px; }
+.orglet-mark.small::before { left:10px; }
+.orglet-mark.small::after { left:14px; }
+.startup .orglet-mark::before,.startup .orglet-mark::after { top:7px; width:3px; height:6px; }
+.startup .orglet-mark::before { left:12px; }
+.startup .orglet-mark::after { left:17px; }
+.orglet-mark.large::before,.orglet-mark.large::after { top:11px; width:4px; height:9px; }
+.orglet-mark.large::before { left:17px; }
+.orglet-mark.large::after { left:24px; }
+/* Settings → Màu logo (COD-154): with "Theo màu nhấn" the mark's body takes the accent, with the same matte shade,
+   and its eyes take the accent's ink so a pale accent still shows them. The startup screen has no workspace yet and
+   so stays monochrome. */
+:root[data-logo-color=accent] .orglet-mark { background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 86%, white), var(--accent) 50%, color-mix(in srgb, var(--accent) 84%, black)); }
+:root[data-logo-color=accent] .orglet-mark::before,:root[data-logo-color=accent] .orglet-mark::after { background:var(--accent-ink); }
 .orglet-mark.large { width:42px; height:42px; margin-bottom:24px; }
 .orglet-mark.small { width:25px; height:25px; }
 .section-heading { font-size:13px; font-weight:500; color:var(--muted); min-height:34px; display:flex; align-items:center; justify-content:space-between; padding:0 0 0 12px; }
@@ -399,9 +418,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
    separate squares (user, 2026-09-19). Nearly half a face now sits under the next one, and no ring separates
    them: the user asked for the border gone and the faces closer, so the shapes themselves carry the stack. */
 .composer-to-avatars { display:flex; align-items:center; flex-shrink:0; }
-.composer-to-avatars .avatar { transform:scale(.85); }
-.composer-to-avatars .avatar + .avatar { margin-left:-12px; }
-.composer-to-avatars .avatar.xs + .avatar.xs { margin-left:-10px; }
+/* Overlapping at their natural size: a scale here put every face between pixels (COD-154). */
+.composer-to-avatars .avatar + .avatar { margin-left:-10px; }
+.composer-to-avatars .avatar.xs + .avatar.xs { margin-left:-8px; }
 .roster-more { margin-left:1px; font-size:11px; font-weight:500; color:var(--muted); }
 .composer-to-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:500; color:var(--muted); }
 .composer-to:hover .composer-to-name { color:var(--text); }
@@ -448,8 +467,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .user-message { position:relative; }
 .chat-reply:has(.reaction-chip) { padding-bottom:12px; }
 /* Who has read this far: small faces under the last message each orglet worked from. */
-.read-receipts { display:flex; justify-content:flex-end; gap:3px; margin:6px 2px 0; }
-.read-receipts .avatar { width:16px; height:16px; box-shadow:0 0 0 1.5px var(--bg); }
+/* The row is exactly as tall as its 16px faces and each face is a flex item, not an inline box on a text baseline,
+   so the faces land on whole pixels (COD-154: a 21px line box put them a quarter pixel down). */
+.read-receipts { display:flex; justify-content:flex-end; gap:3px; margin:6px 2px 0; line-height:16px; }
+.read-receipts > span { display:flex; }
+.read-receipts .avatar { box-shadow:0 0 0 1.5px var(--bg); }
 @media(prefers-reduced-motion:reduce) { .reaction-row { animation:none; } .reaction-row button { transition:none; } .reaction-row button:hover { transform:none; } .reaction-chip { transition:none; } .reaction-chip:hover { transform:none; } }
 .thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) 0; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
@@ -559,14 +581,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .notice-banner .actions { margin-top:8px; }
 .startup,.loading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:40px; flex:1; }
 .startup { height:100dvh; text-align:center; }
-/* Opening the workspace is the one moment the app has nothing to show, so the logo does the waiting: the same
-   three shapes it is built from, the bubble breathing and its eye looking around (user, 2026-09-20). Reduced
-   motion slows it rather than stopping it, the way the stop button ring does. */
+/* Opening the workspace is the one moment the app has nothing to show, so the logo does the waiting: the orglet
+   breathing and its eyes looking around (user, 2026-09-20). Reduced motion slows it rather than stopping it, the
+   way the stop button ring does. */
 .startup .orglet-mark { animation:orglet-breathe 2.6s ease-in-out infinite; }
-.startup .orglet-mark::after { animation:orglet-look 2.6s ease-in-out infinite; }
+.startup .orglet-mark::before,.startup .orglet-mark::after { animation:orglet-look 2.6s ease-in-out infinite; }
 @keyframes orglet-breathe { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-3px) scale(1.05); } }
 @keyframes orglet-look { 0%,100% { transform:translate(0,0); } 22% { transform:translate(-55%,6%); } 58% { transform:translate(55%,6%); } }
-@media(prefers-reduced-motion:reduce) { .startup .orglet-mark,.startup .orglet-mark::after { animation-duration:7s; } }
+@media(prefers-reduced-motion:reduce) { .startup .orglet-mark,.startup .orglet-mark::before,.startup .orglet-mark::after { animation-duration:7s; } }
 /* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */
 .thread-skeleton { display:flex; flex-direction:column; gap:26px; width:100%; max-width:768px; margin:0 auto; padding:28px var(--page-x); }
 .thread-skeleton span { display:block; border-radius:8px; background:var(--surface); animation:skeleton-pulse 1.6s ease-in-out infinite; }
@@ -1030,7 +1052,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .select-option+.select-option,.select-group+.select-option { margin-top:2px; }
 /* Brand mark sized to the wordmark's cap height. */
 .brand { gap:8px; }
-.brand .orglet-mark { width:19px; height:19px; }
+.brand .orglet-mark { width:20px; height:20px; }
+.brand .orglet-mark::before,.brand .orglet-mark::after { top:5px; width:2px; height:4px; }
+.brand .orglet-mark::before { left:8px; }
+.brand .orglet-mark::after { left:11px; }
 /* Required fields: a small red asterisk after the label. */
 .field-label.required::after { content:"*" / ""; color:var(--error); margin-left:-4px; font-weight:600; }
 /* The same mark on anything else that must be chosen, a checkbox included (user, 2026-09-19). */
@@ -1083,6 +1108,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 
 /* Avatar: identity for workers and teams (Orglet UI). Letter or emoji on a tint of the entity colour, optional corner badge. */
 .avatar { position:relative; display:inline-grid; place-items:center; flex-shrink:0; width:26px; height:26px; border-radius:8px; background:color-mix(in srgb, var(--avatar-color) 16%, var(--bg)); color:color-mix(in srgb, var(--avatar-color) 80%, var(--text)); font-size:12px; font-weight:600; line-height:1; user-select:none; }
+.avatar.xxs { width:16px; height:16px; border-radius:5px; font-size:9px; }
 .avatar.xs { width:20px; height:20px; border-radius:6px; font-size:10px; }
 .avatar.sm { width:24px; height:24px; border-radius:7px; font-size:11px; }
 .avatar.lg { width:36px; height:36px; border-radius:11px; font-size:15px; }
@@ -1096,7 +1122,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .row-disclosure { display:flex; align-items:center; gap:0; height:34px; margin-left:2px; padding:0 2px; border:0; border-radius:8px; background:transparent; color:var(--muted); flex-shrink:0; }
 /* A worker row carries one face, so it sits a little smaller than a normal avatar and matches the size the
    members of a team cluster end up at beside it (user, 2026-09-19). */
-.worker-row .row-disclosure > .avatar.sm { width:21px; height:21px; border-radius:6px; font-size:10px; }
+/* An even size, like the 24-pixel drawing it holds, so the drawing centres on a whole pixel (COD-154). */
+.worker-row .row-disclosure > .avatar.sm { width:22px; height:22px; border-radius:6px; font-size:10px; }
 .row-disclosure .disclosure-chevron { flex-shrink:0; width:0; margin-right:0; opacity:0; transition:width .15s ease, margin-right .15s ease, opacity .12s, transform .15s; }
 .worker-row:hover .disclosure-chevron,.row-disclosure:focus-visible .disclosure-chevron,.tree-item.open .disclosure-chevron,.tree-item.dragging .disclosure-chevron { width:14px; margin-right:4px; opacity:1; }
 .tree-leaf .avatar { margin-right:2px; }
@@ -1300,7 +1327,16 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* No avatar tile (user decision 2026-09-17): mascots and emoji stand on their own; letters keep a thin ring in their colour. */
 .avatar { background:transparent; }
 .avatar:not(.has-mascot):not(.emoji) { box-shadow:inset 0 0 0 1.5px color-mix(in srgb, var(--avatar-color) 55%, transparent); }
-.avatar.has-mascot .mascot { --mascot-lift:-3%; width:112%; height:112%; transform:translateY(var(--mascot-lift)); }
+/* Each drawing's canvas is a whole number of pixels and sits in its avatar box at a whole-pixel offset (COD-154:
+   at device scale 1 a 112% canvas and a -3% lift put every edge between pixels). The small drawings (24 and 30
+   pixel canvases, see `smallGlyphs` in mascots.tsx) already place the body low in the canvas, so they need no
+   lift; the large drawing keeps a whole-pixel lift. A box and its canvas share parity, so centring stays whole. */
+.avatar.has-mascot .mascot { --mascot-lift:0px; transform:translateY(var(--mascot-lift)); }
+.avatar.xxs .mascot { width:16px; height:16px; margin-top:0; }
+.avatar.xs .mascot,.avatar.sm .mascot { width:24px; height:24px; margin-top:0; }
+.avatar.md .mascot { width:30px; height:30px; }
+.avatar.lg .mascot { --mascot-lift:-1px; width:40px; height:40px; }
+.avatar.xl .mascot { --mascot-lift:-2px; width:64px; height:64px; }
 /* Mascots sit centred on the text line: no clipping of the enlarged art (user feedback 2026-09-17). */
 .avatar.has-mascot .avatar-face { overflow:visible; }
 /* Sidebar hierarchy: section headings sit furthest left, their rows one step in, and nested rows further in (user feedback 2026-09-17). */

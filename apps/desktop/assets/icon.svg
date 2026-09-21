@@ -1,8 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-  <!-- The bubble is solid, with the eye knocked out in the chip colour, the same way the worker mascots are
-       drawn (user, 2026-09-19). An outline at 16px collapsed into a blur; a filled shape still reads. -->
-  <rect x="8" y="8" width="240" height="240" rx="56" fill="#171717"/>
-  <!-- The path is the centreline of the old 16px stroke, so it is filled and stroked to keep that footprint. -->
-  <path d="M100 62h56a38 38 0 0 1 38 38v56a38 38 0 0 1-38 38h-80a14 14 0 0 1-14-14v-80a38 38 0 0 1 38-38z" fill="#fff" stroke="#fff" stroke-width="16" stroke-linejoin="round"/>
-  <circle cx="128" cy="128" r="24" fill="#171717"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <!-- The logo is an orglet (COD-154): the Orglet bubble with two upright capsule eyes, near-black and matte, the
+       same drawing the in-app mark (.orglet-mark) and the mascots (mascots.tsx) use. Drawn on a 16-unit grid so
+       the body edges and the 2x4 eyes land on whole pixels at 16 and 32px. The body carries a thin lighter edge,
+       brightest at the top left, so the shape still separates from a dark taskbar; on a light ground it reads as
+       the lit edge of a matte object. Regenerate icon.png, icon.ico and icon.icns with scripts/build-icon.cjs. -->
+  <defs>
+    <linearGradient id="shade" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#454545"/>
+      <stop offset=".5" stop-color="#1e1e1e"/>
+      <stop offset="1" stop-color="#0e0e0e"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9a9a9a"/>
+      <stop offset="1" stop-color="#383838"/>
+    </linearGradient>
+  </defs>
+  <path d="M5.4 1h5.2a4.4 4.4 0 0 1 4.4 4.4v5.2a4.4 4.4 0 0 1-4.4 4.4H3.1A2.1 2.1 0 0 1 1 12.9V5.4A4.4 4.4 0 0 1 5.4 1z" fill="url(#edge)"/>
+  <path d="M5.55 1.55h4.9a4 4 0 0 1 4 4v4.9a4 4 0 0 1-4 4H3.45a1.9 1.9 0 0 1-1.9-1.9V5.55a4 4 0 0 1 4-4z" fill="url(#shade)"/>
+  <rect x="6" y="4" width="2" height="4" rx="1" fill="#fff"/>
+  <rect x="9" y="4" width="2" height="4" rx="1" fill="#fff"/>
 </svg>

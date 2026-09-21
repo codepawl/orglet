@@ -218,6 +218,9 @@ export function App() {
     document.documentElement.style.setProperty('--accent', accent);
     document.documentElement.style.setProperty('--accent-ink', accentInk(accent));
   }, [workspace?.accentColor]);
+  // The brand mark's colour is the user's too (COD-154): the text colour, or the accent. It rides on the root so
+  // every mark follows; before the workspace arrives there is nothing to read, so the startup mark stays monochrome.
+  useEffect(() => { document.documentElement.dataset.logoColor = workspace?.logoColor ?? 'mono'; }, [workspace?.logoColor]);
   useEffect(() => {
     const media = matchMedia('(max-width: 780px)');
     const collapse = () => { if (media.matches) setSidebar(false); };

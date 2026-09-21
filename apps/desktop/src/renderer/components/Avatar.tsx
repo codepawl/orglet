@@ -1,7 +1,7 @@
 import { useId, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Briefcase, ChartColumn, Check, ChevronDown, Code, Headset, PenLine, Plus, Shuffle, ShieldCheck, SlidersHorizontal, Smile, Sparkles } from 'lucide-react';
 import { t } from '../i18n';
-import { Mascot, isMascot, mascotIds, mascots, type MascotId } from './mascots';
+import { Mascot, isMascot, mascotIds, mascots, type MascotGlyph, type MascotId } from './mascots';
 import { autoMascot, avatarPalette, mascotCategoryIds, mascotCategoryLabels, mascotColors, seedHash, suggestedColors, suggestedMascots, type MascotCategory, type MascotHints } from './mascotSuggest';
 import { ColorPicker } from './ColorPicker';
 import { Select } from './Select';
@@ -9,6 +9,8 @@ import { Button } from './ui';
 import type { Worker } from '../../shared/contracts';
 
 export { avatarPalette };
+/** `xxs` is the 16px read receipt; the others are the sizes the stylesheet names. */
+export type AvatarSize = 'xxs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 export const avatarColor = (seed: string, color?: string) => color ?? avatarPalette[seedHash(seed) % avatarPalette.length];
 // Presets in the colour panel: the identity palette plus deeper office tones.
 const colorPresets = [...avatarPalette, '#2f4b7c', '#3d4451', '#2e7d5b', '#9b3d5a', '#b8862b', '#3b9ad9', '#8a7bd8', '#8d6e63'];
@@ -22,7 +24,7 @@ const colorPresets = [...avatarPalette, '#2f4b7c', '#3d4451', '#2e7d5b', '#9b3d5
  * `seed` should be a stable id so renaming does not change an automatic choice among equals.
  */
 export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, badge, size = 'md', shape = 'rounded', alive }: {
-  name: string; seed?: string; emoji?: string; mascot?: string; letter?: boolean; defaultMascot?: boolean; hint?: string; color?: string; badge?: ReactNode; size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'; shape?: 'rounded' | 'circle';
+  name: string; seed?: string; emoji?: string; mascot?: string; letter?: boolean; defaultMascot?: boolean; hint?: string; color?: string; badge?: ReactNode; size?: AvatarSize; shape?: 'rounded' | 'circle';
   /** Blinks now and then. Only for the handful of faces in the chat you are reading, never a whole list at once. */
   alive?: boolean;
 }) {
@@ -37,13 +39,26 @@ export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, 
   const idleSide = hash % 2 === 0 ? 1 : -1;
   return <span className={`avatar ${size} ${shape} ${face === 'emoji' ? 'emoji' : face ? 'has-mascot' : ''}${alive ? ' alive' : ''}`}
     style={{ '--avatar-color': ink, '--idle-delay': idleDelay, '--idle-side': idleSide } as CSSProperties} aria-hidden="true">
-    <span className="avatar-face">{face === 'emoji' ? emoji : face ? <Mascot id={face} /> : letter}</span>
+    <span className="avatar-face">{face === 'emoji' ? emoji : face ? <Mascot id={face} glyph={mascotGlyph(size)} /> : letter}</span>
     {badge && <span className="avatar-badge">{badge}</span>}
   </span>;
 }
 
 /** One idle cycle (`--motion-idle` in styles.css: a blink, and on a prominent face a look-up); the delay is spread across it. */
 const IDLE_SECONDS = 7;
+
+/**
+ * Which drawing an avatar size gets (COD-154): the list sizes take the pixel-snapped small drawings so the body
+ * edges and the eyes land on whole pixels at device scale 1; `lg` and `xl` are big enough for the 64-unit art.
+ * The stylesheet sizes each drawing's canvas to match (`.avatar.xs .mascot` and friends).
+ */
+export function mascotGlyph(size: AvatarSize): MascotGlyph {
+  if (size === 'xxs') return 'tiny';
+  if (size === 'xs' || size === 'sm') return 'small';
+  if (size === 'md') return 'medium';
+  return 'large';
+}
+// `export` above only so the test can check the mapping; the function sits after the component that uses it.
 
 /** Overlapping worker faces for a team chat header or empty thread. */
 export function RosterAvatars({ workers, size = 'xs', max = 4, alive }: { workers: readonly Worker[]; size?: 'xs' | 'sm'; max?: number; alive?: boolean }) {

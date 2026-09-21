@@ -11,54 +11,55 @@ const outputFolder = resolve('docs/images');
 const cardSize = { width: 1280, height: 640 };
 
 // The mascots that lead the card, each in its own colour: a face people recognise before they read anything.
-// The paths are the same ones `renderer/components/mascots.tsx` draws, inlined here so this script stays standalone.
+// The shapes are the same ones `renderer/components/mascots.tsx` draws (COD-154: the logo bubble with two
+// capsule eyes and at most one hat), inlined here so this script stays standalone.
+// Eyes are white on every body (dark only on a very light one, which the card has none of); hat rims take the
+// card's ground so a hat reads over the body, as in the app.
+const eyes = '<rect x="28.3" y="22.25" width="4.4" height="9.5" rx="2.2" fill="var(--eye)"/><rect x="35.3" y="22.25" width="4.4" height="9.5" rx="2.2" fill="var(--eye)"/>';
+const worn = 'fill="url(#shade)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"';
 const cast = [
   {
     color: '#4f7fe0',
-    art: `<circle cx="25" cy="33" r="4.6" fill="none" stroke="var(--ink)" stroke-width="2.8"/>
-          <circle cx="39" cy="33" r="4.6" fill="none" stroke="var(--ink)" stroke-width="2.8"/>
-          <path d="M29.6 33h4.8" fill="none" stroke="var(--ink)" stroke-width="2.4" stroke-linecap="round"/>
-          <path d="M29 41q3 3.15 6 0" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>`,
+    art: `<rect x="29" y="23.25" width="4.4" height="7.5" rx="2.2" fill="var(--eye)"/><rect x="35.3" y="23.25" width="4.4" height="7.5" rx="2.2" fill="var(--eye)"/>
+          <circle cx="30.5" cy="27" r="6.2" fill="none" stroke="var(--eye)" stroke-width="2.2"/>
+          <circle cx="37.5" cy="27" r="6.2" fill="none" stroke="var(--eye)" stroke-width="2.2"/>`,
   },
   {
     color: '#3f9a68',
-    art: `<circle cx="26" cy="32" r="2.6" fill="var(--ink)"/><circle cx="38" cy="32" r="2.6" fill="var(--ink)"/>
-          <path d="M28.5 38q3.5 3.15 7 0" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
-          <path d="M17.5 13.5 32 3l14.5 10.5z" fill="currentColor" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>
-          <path d="M24 13.5 32 7l8 6.5" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round"/>`,
+    art: `${eyes}<path d="M17.5 13.5 32 3l14.5 10.5z" ${worn}/><path d="M24 13.5 32 7l8 6.5" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round"/>`,
   },
   {
     color: '#d97757',
-    art: `<circle cx="26" cy="32" r="2.6" fill="var(--ink)"/><circle cx="38" cy="32" r="2.6" fill="var(--ink)"/>
-          <path d="M28.5 38q3.5 3.15 7 0" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
-          <path d="M13.5 8.5 32 2.5l18.5 6L32 14.5z" fill="currentColor" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>
-          <path d="M46.5 10v5.5" fill="none" stroke="var(--ink)" stroke-width="1.8" stroke-linecap="round"/>`,
+    art: `${eyes}<path d="M13.5 8.5 32 2.5l18.5 6L32 14.5z" ${worn}/><path d="M46.5 10v5.5" fill="none" stroke="var(--ink)" stroke-width="1.8" stroke-linecap="round"/>`,
   },
   {
     color: '#a764c9',
-    art: `<circle cx="26" cy="32" r="2.6" fill="var(--ink)"/><circle cx="38" cy="32" r="2.6" fill="var(--ink)"/>
-          <path d="M28.5 38q3.5 3.15 7 0" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
-          <path d="M22 12a10 9.5 0 0 1 20 0z" fill="currentColor" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>
-          <path d="M19.5 12h25v3h-25z" fill="currentColor" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>
-          <circle cx="32" cy="2.5" r="2.6" fill="currentColor" stroke="var(--ink)" stroke-width="2"/>`,
+    art: `${eyes}<path d="M22 12a10 9.5 0 0 1 20 0z" ${worn}/><path d="M19.5 12h25v3h-25z" ${worn}/><circle cx="32" cy="2.5" r="2.6" ${worn}/>`,
   },
   {
     color: '#c9922e',
-    art: `<circle cx="26" cy="32" r="2.6" fill="var(--ink)"/><circle cx="38" cy="32" r="2.6" fill="var(--ink)"/>
-          <path d="M28.5 38q3.5 3.15 7 0" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
-          <path d="M20 13.5 21.5 3l6 5.5L32 1l4.5 7.5 6-5.5L44 13.5z" fill="currentColor" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>`,
+    art: `${eyes}<path d="M20 13.5 21.5 3l6 5.5L32 1l4.5 7.5 6-5.5L44 13.5z" ${worn}/>`,
   },
 ];
 
-// The logo bubble from apps/desktop/assets/icon.svg, on the 64 grid the mascots use.
-const bubblePath = 'M24 13h16a13 13 0 0 1 13 13v16a13 13 0 0 1-13 13H16a5 5 0 0 1-5-5V26a13 13 0 0 1 13-13z';
+// The logo bubble from apps/desktop/assets/icon.svg on the 64 grid the mascots use: 44 wide, 31% corners and a
+// 15% corner at the bottom left, drawn with a 4-unit stroke of its own paint so the outline is part of the shape.
+const bubblePath = 'M23.7 13h16.6a11.7 11.7 0 0 1 11.7 11.7v16.6a11.7 11.7 0 0 1-11.7 11.7H16.5a4.5 4.5 0 0 1-4.5-4.5V24.7a11.7 11.7 0 0 1 11.7-11.7z';
 
-function mascotMarkup({ color, art }) {
-  // Filled, not stroked: a round-joined stroke in the same colour would soften the square bottom-left corner
-  // that makes the shape the Orglet logo rather than a rounded square.
+function mascotMarkup({ color, art }, index) {
+  // The matte light from mascots.tsx: one soft shade from a lighter top left to a darker bottom right. Each
+  // mascot gets its own gradient id, or every face would take the first one's colour.
+  const id = `shade-${index}`;
   return `<svg class="mascot" viewBox="0 -1 64 66" style="color:${color}" aria-hidden="true">
-    <path d="${bubblePath}" fill="${color}"/>
-    ${art}
+    <defs>
+      <linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="color-mix(in srgb, ${color} 86%, white)"/>
+        <stop offset=".5" stop-color="${color}"/>
+        <stop offset="1" stop-color="color-mix(in srgb, ${color} 84%, black)"/>
+      </linearGradient>
+    </defs>
+    <path d="${bubblePath}" fill="url(#${id})" stroke="url(#${id})" stroke-width="4" stroke-linejoin="round"/>
+    ${art.replaceAll('url(#shade)', `url(#${id})`)}
   </svg>`;
 }
 
@@ -67,7 +68,7 @@ const cardHtml = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <style>
-  :root { --ground:#171717; --ink:#171717; --text:#f5f5f5; --muted:#a1a1a1; }
+  :root { --ground:#171717; --ink:#171717; --eye:#fafafa; --text:#f5f5f5; --muted:#a1a1a1; }
   * { box-sizing:border-box; margin:0; }
   body {
     width:${cardSize.width}px; height:${cardSize.height}px; display:flex; flex-direction:column;
