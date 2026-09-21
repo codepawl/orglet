@@ -20,6 +20,9 @@ import { TaskTools } from './TaskTools';
 import { CapabilityView } from './CapabilityView';
 import { WorkspaceRecovery, type ReadProcessOutput, type ReadPrivateFile } from './WorkspaceRecovery';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
+import { MessageActions } from './MessageActions';
+import { focusMessage, reactionGroups } from './messageMarks';
+import { turnMessageId } from '../../shared/message-interactions';
 
 /*
  * The panel beside a chat: who you are talking to, what this conversation has cost, and what happened in it.
@@ -50,6 +53,21 @@ function originalAssignmentOwner(detail: TaskDetail, run: Run): string {
   const originalWorkerId = run.snapshot.reassignment?.assignmentWorkerId;
   return detail.runs.find(candidate => candidate.stage === 'member' && !candidate.snapshot.reassignment
     && candidate.snapshot.worker.id === originalWorkerId)?.snapshot.worker.name ?? originalWorkerId ?? '';
+}
+
+/** The text of a saved message in this chat: an answer, a team message or one of the user's turns. */
+function messageExcerpt(detail: TaskDetail, messageId: string): string | undefined {
+  const artifact = detail.artifacts.find(item => item.id === messageId);
+  if (artifact) return artifact.report.summary;
+  const teamMessage = detail.events.find(item => item.id === messageId)?.teamMessage;
+  if (teamMessage) return teamMessage.body;
+  const latestRevision = detail.task.inputRevision ?? 0;
+  for (let revision = 0; revision <= latestRevision; revision++) {
+    if (turnMessageId(detail.task.id, revision) !== messageId) continue;
+    if (revision === latestRevision) return detail.task.currentInput?.brief ?? detail.task.brief;
+    return detail.runs.find(run => (run.snapshot.inputRevision ?? 0) === revision)?.snapshot.input?.brief;
+  }
+  return undefined;
 }
 
 /** A section with an icon beside its title, so the panel can be scanned rather than read. */
@@ -279,6 +297,35 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
             <p className="muted">{request.answer ?? (request.interruptedAt ? t('Không thể tiếp tục từ bản sao lưu') : t('Đang chờ trả lời'))}</p>
           </div>
         </div>)}
+      </Section>}
+
+      {detail && detail.events.some(event => event.teamMessage) && <Section icon={MessageSquare} title={t('Tin nhắn giữa các Tí')}>
+        {detail.events.filter(event => event.teamMessage).map(event => {
+          const message = event.teamMessage!;
+          const sender = detail.runs.find(run => run.snapshot.worker.id === message.senderId)?.snapshot.worker.name ?? message.senderId;
+          const recipient = detail.runs.find(run => run.snapshot.worker.id === message.recipientId)?.snapshot.worker.name ?? message.recipientId;
+          const parent = detail.events.find(item => item.id === message.replyTo)?.teamMessage;
+          return <div className="details-team-message" key={event.id} id={`message-${event.id}`} tabIndex={-1}>
+            <p><strong>{sender}</strong> → {recipient} · {t(message.kind === 'question' ? 'Câu hỏi' : message.kind === 'response' ? 'Phản hồi' : message.kind === 'blocker' ? 'Điểm chặn' : 'Bàn giao')}</p>
+            {parent && <p className="muted">{t('Trả lời tin: {0}', [parent.body.slice(0, 140)])}</p>}
+            <p>{message.body}</p>
+            <MessageActions taskId={detail.task.id} messageId={event.id} author={sender} text={message.body}
+              reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={fn => { void fn().catch(error => toast(tMessage(String(error)), 'error')); }} />
+          </div>;
+        })}
+      </Section>}
+
+      {detail && Boolean(detail.task.messageReactions?.length) && <Section icon={MessageSquare} title={t('Tương tác')}>
+        {[...new Set(detail.task.messageReactions!.map(mark => mark.messageId))].map(messageId => {
+          const marks = detail.task.messageReactions!.filter(mark => mark.messageId === messageId);
+          const excerpt = messageExcerpt(detail, messageId);
+          return <div className="details-team-message" key={messageId}>
+            {excerpt === undefined
+              ? <p className="muted">{t('Tin nhắn trước không còn hiển thị')}</p>
+              : <button type="button" className="message-reply-context" onClick={() => focusMessage(messageId)}>{t('Mở tin gốc: {0}', [excerpt.slice(0, 100)])}</button>}
+            {reactionGroups(marks, detail.runs).map(group => <p key={group.emoji}>{group.label}</p>)}
+          </div>;
+        })}
       </Section>}
 
       {detail && detail.runs.length > 0 && <Section icon={Clock} title={t('Diễn biến')}>

@@ -433,6 +433,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
    (user, 2026-09-20). It overlaps the bubble rather than sitting under it, so it reads as attached. */
 .reaction-chip { position:absolute; right:12px; bottom:-11px; z-index:2; display:grid; place-items:center; width:24px; height:24px; padding:0; border:0; border-radius:50%; background:var(--bg); box-shadow:0 1px 3px #00000026; font-size:13px; line-height:1; cursor:pointer; transition:transform var(--motion-quick) var(--ease-out); }
 .reaction-chip:hover { transform:scale(1.12); }
+.message-actions .reaction-chip { position:static; width:auto; min-width:24px; height:24px; padding:0 5px; margin-left:4px; display:inline-flex; align-items:center; gap:3px; }
+.message-reaction { display:inline-flex; align-items:center; justify-content:center; gap:3px; min-width:24px; height:24px; padding:0 5px; border-radius:12px; background:var(--surface); font-size:13px; }
+.message-reply-context { display:flex; align-items:center; gap:6px; max-width:100%; padding:0; border:0; background:none; color:var(--muted); font:inherit; font-size:12px; text-align:start; overflow-wrap:anywhere; cursor:pointer; }
+.message-reply-context:hover { color:var(--text); }
+.details-team-message { padding:8px 0; overflow-wrap:anywhere; }
+.details-team-message p + p { margin-top:4px; }
 /* The wrapper is only as wide as the bubble, so a chip anchored to its corner lands on the bubble. */
 .chat-bubble { position:relative; width:fit-content; max-width:100%; }
 .user-message { position:relative; }

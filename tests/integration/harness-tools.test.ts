@@ -38,6 +38,17 @@ it.each(['claude-code', 'codex', 'cursor'] as const)('translates a %s structured
   expect(notices).toBe(1);
 });
 
+it.each(['claude-code', 'codex', 'cursor'] as const)('validates a %s reaction request through the shared tool schema', async harness => {
+  const messageId = '00000000-0000-4000-8000-000000000001';
+  const tools = [toolDefinitions.react_to_message.model];
+  const adapter = harnessToolAdapter({ request: { harness, executable: 'fixture', cwd: 'fixture', maxBudgetUsd: 1 },
+    execute: async () => ({ output: { call: { name: 'react_to_message', arguments: { messageId, emoji: 'agree', active: true } } }, costUsd: null }),
+    onResult: () => {},
+  });
+  const result = await adapter.request([], tools, new AbortController().signal, () => {});
+  expect(JSON.parse(result.calls[0].arguments)).toEqual({ messageId, emoji: 'agree', active: true });
+});
+
 it('gives Codex a strict schema even when a tool has optional fields, then validates its JSON arguments', async () => {
   const tools = [toolDefinitions.submit_plan.model];
   const schema = harnessToolSchema(tools, 'codex') as { properties: { call: { properties: { arguments: { type: string } }; required: string[] } } };

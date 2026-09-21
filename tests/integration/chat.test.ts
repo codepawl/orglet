@@ -41,7 +41,10 @@ it('answers as a normal chat message and keeps earlier turns for the next messag
   await core.command('reviseTask', { taskId, brief: 'Mình vừa nói gì?', ...scope });
   await until(() => store.detail(taskId).artifacts.length === 2 && store.detail(taskId).task.status === 'completed');
   const history = (sent[1].messages as { role: string; content: string }[]).map(message => message.content).find(content => content.includes('earlierConversation'));
-  expect(JSON.parse(history!).earlierConversation).toEqual([{ from: 'user', text: 'Chào bạn' }, { from: 'you', text: 'Chào bạn, mình đây.' }]);
+  expect(JSON.parse(history!).earlierConversation).toEqual([
+    { from: 'user', id: taskId, text: 'Chào bạn' },
+    { from: 'you', id: store.detail(taskId).artifacts[0].id, text: 'Chào bạn, mình đây.' },
+  ]);
   expect(JSON.parse((sent[1].messages as { content: string }[]).at(-1)!.content).brief).toBe('Mình vừa nói gì?');
 });
 
@@ -122,8 +125,8 @@ it('lets several workers, or all of them, answer each message in turn, each seei
   expect(group.map(run => run.snapshot.worker.id)).toEqual([workerId, second.id]);
   const earlier = (index: number) => JSON.parse((sent[index].messages as { content: string }[]).map(message => message.content).find(content => content.includes('earlierConversation'))!).earlierConversation;
   // The second worker sees the first worker's reply to the same message by name.
-  expect(earlier(2)).toContainEqual({ from: 'Researcher', text: 'Researcher đây.' });
-  expect(earlier(2)).toContainEqual({ from: 'Researcher', text: 'Chào từ Researcher.' });
+  expect(earlier(2)).toContainEqual(expect.objectContaining({ from: 'Researcher', id: expect.any(String), text: 'Researcher đây.' }));
+  expect(earlier(2)).toContainEqual(expect.objectContaining({ from: 'Researcher', id: expect.any(String), text: 'Chào từ Researcher.' }));
 
   await core.command('updateTask', { id: taskId, title: '', assignee: { kind: 'all' }, budgetMicros: 100_000 });
   expect(store.detail(taskId).task.assignees).toBe('all');

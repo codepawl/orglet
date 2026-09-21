@@ -17,8 +17,8 @@ import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Markdown } from './Markdown';
 import { Attachment } from './Attachment';
-import { reactionEmoji, reactionMeanings, reactionOrder, replyToAnswer, toggleReaction, useReaction } from './messageMarks';
-import { ReactionBar, ReactionChip } from './ReactionBar';
+import { MessageActions } from './MessageActions';
+import { turnMessageId } from '../../shared/message-interactions';
 import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
@@ -42,7 +42,7 @@ function bylineRole(author: Run) {
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
 
-type Turn = { revision: number; runs: Run[]; brief: string; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
+type Turn = { revision: number; runs: Run[]; brief: string; replyTo?: string; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
 
 /**
  * A task shown as one chat (user decision 2026-09-17): every message the user sent, oldest first, each followed by the
@@ -50,7 +50,7 @@ type Turn = { revision: number; runs: Run[]; brief: string; sources: TaskDetail[
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, recovery, action, showSources, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
+export function TaskThread({ detail, recovery, action, showSources, openMessage, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   const current = detail.task.inputRevision ?? 0;
@@ -61,8 +61,17 @@ export function TaskThread({ detail, recovery, action, showSources, proposals, o
     const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis')));
     // Group chat: each worker's latest answered run for this message, in the order they answered.
     const replies = runs.filter(run => run.stage === 'group').flatMap(run => { const reply = detail.artifacts.find(item => item.runId === run.id); return reply ? [{ run, artifact: reply }] : []; });
-    return { revision, runs, brief: input.brief, sources: input.sourceIds.map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
+    return { revision, runs, brief: input.brief, replyTo: 'replyTo' in input ? input.replyTo : undefined, sources: input.sourceIds.map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
   });
+  const replyLabel = (messageId?: string) => {
+    if (!messageId) return undefined;
+    const userTurn = turns.find(turn => turnMessageId(detail.task.id, turn.revision) === messageId);
+    if (userTurn) return t('Bạn: {0}', [userTurn.brief.slice(0, 140)]);
+    const artifact = detail.artifacts.find(item => item.id === messageId);
+    if (artifact) return t('{0}: {1}', [detail.runs.find(run => run.id === artifact.runId)?.snapshot.worker.name ?? 'Orglet', artifact.report.summary.slice(0, 140)]);
+    const event = detail.events.find(item => item.id === messageId && item.teamMessage);
+    return event?.teamMessage ? event.teamMessage.body.slice(0, 140) : undefined;
+  };
   /**
    * How far each orglet has got, the way a messenger shows it: a face under the last message that orglet has
    * actually worked from (user, 2026-09-20). Nothing new is recorded for this — a run carries the revision of
@@ -121,14 +130,21 @@ export function TaskThread({ detail, recovery, action, showSources, proposals, o
         // explanation just below, so it is quiet here too.
         const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
         return <div className="chat-turn" key={turn.revision}>
-          <div className="user-message"><p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>{turn.sources.length > 0 && <ul className="attachment-list message-files">{turn.sources.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}</ul>}</div>
+          <div className="user-message" id={`message-${turnMessageId(detail.task.id, turn.revision)}`} tabIndex={-1}>
+            {turn.replyTo && <button type="button" className="message-reply-context" onClick={() => openMessage(turn.replyTo!)}>
+              <Reply size={13} aria-hidden="true" />{t('Mở tin gốc: {0}', [replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')])}
+            </button>}
+            <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
+            {turn.sources.length > 0 && <ul className="attachment-list message-files">{turn.sources.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}</ul>}
+            <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.brief} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
+          </div>
           {latest && workFrame && <p className="muted" role="status">{t('Mục tiêu Tí hiểu: {0}', [workFrame.goal])}</p>}
           {latest && outcomeText && <p className="muted" role="status">{outcomeText}</p>}
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
             <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />
             {reply.artifact.report.format === 'chat'
-              ? <ChatReply artifact={reply.artifact} author={reply.run.snapshot.worker.name} action={action} />
+              ? <ChatReply artifact={reply.artifact} author={reply.run.snapshot.worker.name} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
               : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
           </section>)}
           {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
@@ -169,7 +185,7 @@ export function TaskThread({ detail, recovery, action, showSources, proposals, o
             {!turn.artifact && !turn.replies.length && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
             {turn.artifact && !turn.replies.length && <FinishedActivity steps={savedSteps(detail.events, turn.artifact.runId)} />}
             {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
-              ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} action={action} />
+              ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
             {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
@@ -209,32 +225,16 @@ function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
   return <div className="finished-activity"><ActivityGroup steps={steps} folded /></div>;
 }
 
-function ChatReply({ artifact, author, action }: { artifact: Artifact; author: string; action: (fn: () => Promise<unknown>) => void }) {
+function ChatReply({ artifact, author, taskId, reactions, runs, action }: { artifact: Artifact; author: string; taskId: string; reactions: NonNullable<TaskDetail['task']['messageReactions']>; runs: readonly Run[]; action: (fn: () => Promise<unknown>) => void }) {
   return <div className="chat-reply">
-    <div className="chat-bubble"><Markdown className="prose" text={tMessage(artifact.report.summary)} /><AnswerChip messageId={artifact.id} /></div>
+    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={tMessage(artifact.report.summary)} /></div>
     {artifact.report.limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
     </div>}
-    <div className="message-actions"><ArtifactActions artifactId={artifact.id} action={action} /><AnswerMarks artifactId={artifact.id} author={author} text={tMessage(artifact.report.summary)} /></div>
+    <MessageActions taskId={taskId} messageId={artifact.id} author={author} text={tMessage(artifact.report.summary)} reactions={reactions} runs={runs} action={action}
+      leading={<ArtifactActions artifactId={artifact.id} action={action} />} />
   </div>;
-}
-
-/**
- * Reply to this answer, or react to it. Both ride in the next message to the worker, so neither is decoration:
- * the quote tells a crew which of them is being answered, and a reaction says how the last one landed.
- */
-function AnswerMarks({ artifactId, author, text }: { artifactId: string; author: string; text: string }) {
-  return <>
-    <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(artifactId, author, text)}><Reply size={15} /></Button>
-    <AnswerReaction messageId={artifactId} />
-  </>;
-}
-
-/** The thread's own wiring of the shared bar: where a reaction is kept, and what each face means to a worker. */
-function AnswerReaction({ messageId }: { messageId: string }) {
-  const options = reactionOrder.map(name => ({ name, emoji: reactionEmoji[name], meaning: reactionMeanings[name] }));
-  return <ReactionBar options={options} onPick={name => toggleReaction(messageId, name)} />;
 }
 
 /**
@@ -250,13 +250,6 @@ function ReadReceipts({ readers }: { readers: readonly Run[] }) {
   </p>;
 }
 
-/** The picked reaction, worn on the answer it belongs to. */
-function AnswerChip({ messageId }: { messageId: string }) {
-  const picked = useReaction(messageId);
-  if (!picked) return null;
-  const options = reactionOrder.map(name => ({ name, emoji: reactionEmoji[name], meaning: reactionMeanings[name] }));
-  return <ReactionChip options={options} picked={picked} onClear={() => toggleReaction(messageId, picked)} />;
-}
 
 /** Copy and download for an answer or document, in the format the user picks or saved as default. */
 function ArtifactActions({ artifactId, action }: { artifactId: string; action: (fn: () => Promise<unknown>) => void }) {
@@ -280,7 +273,9 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   // Evidence links leave the document for the sources panel.
   const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
   return <>
-    <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+    <div id={`message-${artifact.id}`} tabIndex={-1}><DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+      <MessageActions taskId={detail.task.id} messageId={artifact.id} author={author?.snapshot.worker.name ?? 'Orglet'} text={name} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
+    </div>
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}
       <ArtifactActions artifactId={artifact.id} action={action} />

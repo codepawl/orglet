@@ -17,6 +17,7 @@ import { KnowledgeBase } from '../context/knowledge';
 import { DecisionRequest } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
 import { WorkspaceReadEvidence } from '../../shared/workspace-evidence';
+import { MessageReaction, turnMessageId } from '../../shared/message-interactions';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -25,10 +26,10 @@ const Worker = WorkerInput.extend({ id: Id, revision: Revision }).strict();
 const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPackage.optional() }).strict();
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
-const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), pendingStart: z.boolean().optional(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(100).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
+const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), messageReactions: z.array(MessageReaction).max(1000).optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), pendingStart: z.boolean().optional(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(100).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
 const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), workFrame: WorkFrame.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), scoreProfileIds: z.array(Id).max(20).optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable() }).strict();
 const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime(), teamMessage: TeamMessage.optional() }).strict();
-const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime() }).strict();
+const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime(), replyTo: Id.optional() }).strict();
 const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional() }).strict();
 const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: z.iso.datetime(), sourceHashes: z.record(Id, Hash), result: DatasetProfile }).strict();
 const manualScoreAvailable = (profile: z.infer<typeof Profile>, run: z.infer<typeof Run>) => !profile.runId && !!profile.result.exactMatch && profile.createdAt <= run.startedAt
@@ -189,6 +190,47 @@ function validateRelations(data: Payload) {
   if (ready.length !== runs.size) fail('Join có vòng lặp giữa các báo cáo.');
   for (const run of runs.values()) if (run.snapshot.input?.sourceIds.some(id => !tasks.get(run.taskId)!.sourceIds.includes(id))) fail('Snapshot tham chiếu nguồn ngoài task.');
   const events = new Map(data.events.map(event => [event.id, event]));
+  const messageScope = new Map<string, { taskId: string; revision: number; kind: 'user' | 'answer' | 'team' }>();
+  const addMessage = (id: string, taskId: string, revision: number, kind: 'user' | 'answer' | 'team') => {
+    if (messageScope.has(id)) fail('ID tin nhắn bị trùng.');
+    messageScope.set(id, { taskId, revision, kind });
+  };
+  for (const task of tasks.values()) for (let revision = 0; revision <= (task.inputRevision ?? 0); revision++) {
+    if (revision === 0 || (revision === (task.inputRevision ?? 0) && task.currentInput)
+      || [...runs.values()].some(run => run.taskId === task.id && (run.snapshot.inputRevision ?? 0) === revision && run.snapshot.input)) {
+      addMessage(turnMessageId(task.id, revision), task.id, revision, 'user');
+    }
+  }
+  for (const artifact of artifacts.values()) {
+    const owner = runs.get(artifact.runId);
+    if (!owner) fail('Artifact thiếu run.');
+    addMessage(artifact.id, owner!.taskId, owner!.snapshot.inputRevision ?? 0, 'answer');
+    if (artifact.replyTo && (artifact.replyTo !== turnMessageId(owner!.taskId, owner!.snapshot.inputRevision ?? 0)
+      || !messageScope.has(artifact.replyTo))) fail('Câu trả lời tham chiếu sai tin người dùng.');
+  }
+  for (const event of data.events) if (event.teamMessage) {
+    const owner = runs.get(event.runId);
+    if (!owner) fail('Thông điệp thiếu run.');
+    addMessage(event.id, owner!.taskId, event.teamMessage.inputRevision, 'team');
+  }
+  for (const task of tasks.values()) {
+    const current = task.currentInput?.replyTo;
+    if (current && (messageScope.get(current)?.taskId !== task.id || messageScope.get(current)!.revision >= (task.inputRevision ?? 0))) fail('Tin trả lời tham chiếu ngoài cuộc trò chuyện.');
+    const keys = new Set<string>();
+    for (const reaction of task.messageReactions ?? []) {
+      const target = messageScope.get(reaction.messageId);
+      const key = `${reaction.messageId}:${reaction.actor}:${reaction.workerId ?? ''}:${reaction.emoji}`;
+      if (target?.taskId !== task.id || keys.has(key)) fail('Tương tác tham chiếu tin ngoài cuộc trò chuyện hoặc bị trùng.');
+      keys.add(key);
+      if (reaction.actor === 'user' ? reaction.workerId || reaction.runId || reaction.callId
+        : !reaction.workerId || !reaction.runId || !reaction.callId || runs.get(reaction.runId)?.taskId !== task.id
+          || runs.get(reaction.runId)?.snapshot.worker.id !== reaction.workerId
+          || target!.revision > (runs.get(reaction.runId)?.snapshot.inputRevision ?? -1)) fail('Người thả tương tác không khớp lượt.');
+    }
+  }
+  for (const run of runs.values()) if (run.snapshot.input?.replyTo &&
+    (messageScope.get(run.snapshot.input.replyTo)?.taskId !== run.taskId
+      || messageScope.get(run.snapshot.input.replyTo)!.revision >= (run.snapshot.inputRevision ?? 0))) fail('Run tham chiếu tin ngoài cuộc trò chuyện.');
   for (const event of data.events) {
     const run = runs.get(event.runId);
     if (!run) fail('Event thiếu run.');
@@ -377,10 +419,21 @@ export class Backups {
       });
       const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: comparableSnapshot(run, incoming),
         status: pendingDecisionRuns.has(run.id) || ['running', 'queued', 'pausing', 'paused'].includes(run.status) ? 'interrupted' as const : run.status }));
+      const mergedTasks = merge(current.tasks, restoredTasks).map(task => {
+        const imported = restoredTasks.find(item => item.id === task.id);
+        if (!imported || imported === task) return task;
+        const reactions = [...(task.messageReactions ?? [])];
+        for (const reaction of imported.messageReactions ?? []) {
+          if (!reactions.some(item => item.messageId === reaction.messageId && item.actor === reaction.actor
+            && item.workerId === reaction.workerId && item.emoji === reaction.emoji)) reactions.push(reaction);
+        }
+        if (reactions.length > 1000) fail('Cuộc trò chuyện vượt giới hạn tương tác.');
+        return { ...task, messageReactions: reactions };
+      });
       const merged: Payload = { ...current,
         routines: merge(current.routines ?? [], restoredRoutines),
         workers: merge(current.workers, incoming.workers), skills: merge(current.skills, incoming.skills), teams: merge(current.teams, incoming.teams),
-        tasks: merge(current.tasks, restoredTasks), runs: merge(current.runs, restoredRuns), sources: merge(current.sources, restoredSources),
+        tasks: mergedTasks, runs: merge(current.runs, restoredRuns), sources: merge(current.sources, restoredSources),
         events: merge(current.events, incoming.events, true), artifacts: merge(current.artifacts, incoming.artifacts, true), profiles: merge(current.profiles, incoming.profiles, true),
         processEvidence: merge(current.processEvidence ?? [], incoming.processEvidence ?? [], true),
         workspaceEvidence: merge(current.workspaceEvidence ?? [], incoming.workspaceEvidence ?? [], true),

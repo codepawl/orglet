@@ -33,6 +33,7 @@ import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './mod
 import { canStoreModelListRow, dropProviderRow, readModelListCache, writeModelListCache } from './models/cache';
 import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
 import { mentionedPeople } from '../shared/mentions';
+import { MessageInteractions } from './orchestration/message-interactions';
 
 export class CoreService {
   feedbackText(artifactId: string): string {
@@ -149,9 +150,14 @@ export class CoreService {
         this.notify(); return team;
       }
       case 'createTask': return this.createTask(commands.createTask.parse(args));
+      case 'setMessageReaction': {
+        new MessageInteractions(this.store).userReaction(commands.setMessageReaction.parse(args));
+        this.notify(); return;
+      }
       case 'reviseTask': {
         const input = commands.reviseTask.parse(args);
         const task = this.store.get<Task>('tasks', input.taskId);
+        if (input.replyTo) new MessageInteractions(this.store).target(task.id, input.replyTo);
         if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
         if (this.sources.isChecking()) throw new Error('Đợi checker kết thúc trước khi tạo revision.');
         const active = this.runner.isActive(task.id) || this.teams.isActive(task.id);
@@ -160,7 +166,7 @@ export class CoreService {
         const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
         if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
         this.policy.assertStart(task.teamId, task.id);
-        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
+        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
           decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
             ? { ...request, interruptedAt: now() } : request) };
         this.store.transaction(() => {
@@ -648,8 +654,10 @@ export class CoreService {
       db.prepare('DELETE FROM workspace_grants WHERE task_id=?').run(task.id);
       for (const item of proposed) for (const table of ['knowledge', 'knowledge_revisions', 'knowledge_search']) db.prepare(`DELETE FROM ${table} WHERE id=?`).run(item.id);
       if (tombstone) {
-        for (const run of runs) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, ...(run.snapshot.input ? { input: { ...run.snapshot.input, brief: removed } } : {}), context: undefined, preflightId: undefined, upstreamArtifactIds: undefined } });
-        const { currentInput: _input, handoff: _handoff, evidenceRequests: _requests, archivedAt: _archived, ...rest } = task;
+        for (const run of runs) this.store.update('runs', { ...run, snapshot: { ...run.snapshot,
+          ...(run.snapshot.input ? { input: { ...run.snapshot.input, brief: removed, replyTo: undefined } } : {}),
+          context: undefined, preflightId: undefined, upstreamArtifactIds: undefined } });
+        const { currentInput: _input, messageReactions: _reactions, handoff: _handoff, evidenceRequests: _requests, archivedAt: _archived, ...rest } = task;
         this.store.update('tasks', { ...rest, brief: removed, deletedAt: this.clock().toISOString() });
       } else {
         for (const run of runs) db.prepare('DELETE FROM step_attempts WHERE run_id=?').run(run.id);
@@ -776,14 +784,23 @@ export class CoreService {
     this.store.update('tasks', { ...started, pendingStart: undefined });
     this.notify();
   }
-  exportMarkdown(artifactId: string): string {
+  exportMarkdown(artifactId: string, includeMessageLinks = false): string {
     const artifact = this.store.get<Artifact>('artifacts', artifactId);
     const run = this.store.get<Run>('runs', artifact.runId);
     const task = this.store.get<Task>('tasks', run.taskId);
     const report = artifact.report;
+    const reactions = task.messageReactions?.filter(item => item.messageId === artifactId) ?? [];
+    const messageLinks = includeMessageLinks ? ['## Message links', `Message ID: ${artifact.id}`,
+      artifact.replyTo ? `Reply to: ${artifact.replyTo}` : '',
+      ...reactions.map(reaction => {
+        const actor = reaction.actor === 'user' ? 'User'
+          : this.store.detail(task.id).runs.find(item => item.snapshot.worker.id === reaction.workerId)?.snapshot.worker.name ?? reaction.workerId;
+        return `Reaction: ${reaction.emoji} — ${actor}`;
+      })].filter(Boolean) : [];
     // A chat answer exports as the message itself.
     if (report.format === 'chat') return [report.summary,
-      ...(report.limitations.length ? ['## Limitations', ...report.limitations.map(limitation => `- ${limitation}`)] : [])].join('\n\n');
+      ...(report.limitations.length ? ['## Limitations', ...report.limitations.map(limitation => `- ${limitation}`)] : []),
+      ...messageLinks].join('\n\n');
     const findings = report.findings.map(finding => [
       `## ${finding.title}`, `${finding.severity} — ${finding.detail}`, `Coverage: ${finding.coverage}`,
       finding.category ? `Category: ${finding.category}` : '',
@@ -797,6 +814,6 @@ export class CoreService {
     const profiles = this.store.all<ProfileRecord>('profiles').filter(profile => profile.runId === run.id || preflight?.profileIds.includes(profile.id));
     const checks = profiles.length ? ['## Trusted checker results', 'These describe the checks performed, not approval of the dataset, scoring or challenge.', ...profiles.map(profile => `### Checker ${profile.id}\n\n\`\`\`json\n${JSON.stringify({ sourceHashes: profile.sourceHashes, ...profile.result }, null, 2)}\n\`\`\``)] : [];
     const review = report.review ? ['## Review recommendation', report.review.recommendation, '## Check coverage', ...report.review.checks.map(check => `### ${check.name}: ${check.status}\n\n${check.coverage}\n\nSources: ${check.sourceIds.join(', ')}\nCheckers: ${check.checkerIds.map(id => `[${id}](#checker-${id})`).join(', ')}`), '## Unresolved disagreements', ...report.review.conflicts.map(conflict => `${conflict.reason}\n\nFindings: ${conflict.findingIds.join(', ')}`), '## Draft feedback', report.review.draftFeedback, `Upstream findings: ${report.review.upstreamFindingIds.join(', ')}`] : [];
-    return [`# ${report.title}`, report.summary, ...review, ...findings, '## Limitations', ...report.limitations.map(l => `- ${l}`), '## Sources', ...(run.snapshot.input?.sourceIds ?? task.sourceIds).map(sourceId => { const s = this.store.get<Source>('sources', sourceId); return `- ${s.id}: ${s.name} (SHA-256 ${s.hash})`; }), ...checks, `Run: ${run.id}\nWorker revision: ${run.snapshot.worker.revision}\nSkill revision: ${run.snapshot.skill.revision}\nProvider: ${run.snapshot.worker.provider}\nArtifact SHA-256: ${artifact.hash}`].join('\n\n');
+    return [`# ${report.title}`, report.summary, ...review, ...findings, '## Limitations', ...report.limitations.map(l => `- ${l}`), '## Sources', ...(run.snapshot.input?.sourceIds ?? task.sourceIds).map(sourceId => { const s = this.store.get<Source>('sources', sourceId); return `- ${s.id}: ${s.name} (SHA-256 ${s.hash})`; }), ...checks, `Run: ${run.id}\nWorker revision: ${run.snapshot.worker.revision}\nSkill revision: ${run.snapshot.skill.revision}\nProvider: ${run.snapshot.worker.provider}\nArtifact SHA-256: ${artifact.hash}`, ...messageLinks].join('\n\n');
   }
 }
