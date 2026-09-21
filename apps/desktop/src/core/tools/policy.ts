@@ -1,10 +1,9 @@
 import type { Run, Task } from '../../shared/contracts';
-import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
+import type { ToolCapability } from '../../shared/tool-policy';
+import { capabilityAllowed } from '../../shared/capability-status';
 
 export function hasCapability(run: Run, task: Task, capability: ToolCapability): boolean {
-  const frozen = run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider);
-  const current = task.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider);
-  return frozen.includes(capability) && current.includes(capability);
+  return capabilityAllowed(run.snapshot.worker.provider, capability, task.toolCapabilities, run.snapshot.toolCapabilities);
 }
 
 export function assertCapability(run: Run, task: Task, capability: ToolCapability): void {

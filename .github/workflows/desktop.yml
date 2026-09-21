@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A manual run signs too, so a new certificate or SimplySign version can be tried without a merge.
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -34,7 +36,11 @@ jobs:
   packaged:
     name: packaged
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    env:
+      # SimplySign Desktop is pinned because the login step drives its window with the keyboard: a changed window in
+      # a newer version would break it. Move to a new version only after a manual run has signed with it.
+      SIMPLYSIGN_URL: https://files.certum.eu/software/SimplySignDesktop/Windows/9.4.3.90/SimplySignDesktop-9.4.3.90-64-bit-en.msi
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: pnpm/action-setup@v6
@@ -45,16 +51,88 @@ jobs:
           node-version: '24.19.0'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm make
+      # Pull requests never log in to SimplySign: three wrong one-time codes lock the Certum account, and runs for
+      # several pull requests at once would be logging in at the same moment. Signing happens on main and on a manual run.
+      - name: Decide whether to sign
+        id: signing
+        shell: pwsh
+        env:
+          CERTUM_USERNAME: ${{ secrets.CERTUM_USERNAME }}
+          CERTUM_OTP_URI: ${{ secrets.CERTUM_OTP_URI }}
+          CERTUM_KEY_ID: ${{ secrets.CERTUM_KEY_ID }}
+          SIGNING_EVENT: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' }}
+        run: |
+          $missing = @('CERTUM_USERNAME', 'CERTUM_OTP_URI', 'CERTUM_KEY_ID') |
+            Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
+          if ($env:SIGNING_EVENT -ne 'true') {
+            Write-Host "Not signing: only main and manual runs sign."
+            "enabled=false" >> $env:GITHUB_OUTPUT
+          } elseif ($missing.Count -gt 0) {
+            Write-Host "Not signing: secrets not set ($($missing -join ', '))."
+            "enabled=false" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Signing with the Certum certificate."
+            "enabled=true" >> $env:GITHUB_OUTPUT
+          }
+      - name: Cache the SimplySign Desktop installer
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/cache@v4
+        with:
+          path: SimplySignDesktop.msi
+          key: simplysign-msi-${{ env.SIMPLYSIGN_URL }}
+      # Installs SimplySign Desktop, makes the one-time code from the TOTP secret, logs in, and waits until the
+      # certificate with CERTUM_KEY_ID is in CurrentUser\My. Pinned to a commit, not the v1.2.5 tag, because the action
+      # sees the TOTP secret and a moved tag must not be able to take it. Source read in full on 2026-09-21 (MIT): no
+      # network calls of its own, the secrets pass through the clipboard and it is cleared after each paste, and no
+      # screenshots unless capture-diagnostics is on.
+      - name: Log in to Certum SimplySign
+        if: steps.signing.outputs.enabled == 'true'
+        uses: dismine/windows-app-signing-setup-action@89ae3b032d4bc7a5b98d1a42a34e61ecb6faad64 # v1.2.5
+        with:
+          certum-username: ${{ secrets.CERTUM_USERNAME }}
+          certum-otp-uri: ${{ secrets.CERTUM_OTP_URI }}
+          certum-key-id: ${{ secrets.CERTUM_KEY_ID }}
+          simplysign-url: ${{ env.SIMPLYSIGN_URL }}
+      - name: Make
+        env:
+          WINDOWS_SIGNING_ENABLED: ${{ steps.signing.outputs.enabled }}
+          WINDOWS_CERTIFICATE_SHA1: ${{ secrets.CERTUM_KEY_ID }}
+        run: pnpm make
+      # Catches here what a user would otherwise find: every file Orglet signs must be Valid, signed by this
+      # certificate and timestamped (without a timestamp the signature dies with the certificate), and the binaries
+      # Microsoft signed must still carry Microsoft's signature.
+      - name: Verify signatures
+        if: steps.signing.outputs.enabled == 'true'
+        shell: pwsh
+        env:
+          CERTUM_KEY_ID: ${{ secrets.CERTUM_KEY_ID }}
+        run: |
+          $ours = @(
+            'out/Orglet-win32-x64/Orglet.exe',
+            'out/Orglet-win32-x64/resources/WorkspaceIntegrate.exe'
+          ) + @(Get-ChildItem -Path 'out/make/squirrel.windows/x64/*Setup.exe' | ForEach-Object FullName)
+          $failed = $false
+          foreach ($file in $ours) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $file
+            $thumbprint = $signature.SignerCertificate.Thumbprint
+            $timestamped = [bool]$signature.TimeStamperCertificate
+            Write-Host "$file`: $($signature.Status), timestamped=$timestamped"
+            if ($signature.Status -ne 'Valid') { Write-Host "::error::$file is not validly signed: $($signature.StatusMessage)"; $failed = $true }
+            if ($thumbprint -ne $env:CERTUM_KEY_ID) { Write-Host "::error::$file is not signed by the Certum certificate"; $failed = $true }
+            if (-not $timestamped) { Write-Host "::error::$file has no timestamp"; $failed = $true }
+          }
+          $microsoft = Get-AuthenticodeSignature -LiteralPath 'out/Orglet-win32-x64/resources/wxc-exec.exe'
+          if ($microsoft.SignerCertificate.Thumbprint -eq $env:CERTUM_KEY_ID) { Write-Host "::error::wxc-exec.exe was signed over"; $failed = $true }
+          if ($failed) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
-          name: orglet-windows-unsigned-setup
+          name: orglet-windows-${{ steps.signing.outputs.enabled == 'true' && 'signed' || 'unsigned' }}-setup
           path: out/make/squirrel.windows/**
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
-          name: orglet-windows-unsigned-zip
+          name: orglet-windows-${{ steps.signing.outputs.enabled == 'true' && 'signed' || 'unsigned' }}-zip
           path: out/make/zip/win32/**/*.zip
           if-no-files-found: error
           retention-days: 14

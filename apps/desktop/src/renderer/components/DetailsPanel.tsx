@@ -17,6 +17,7 @@ import { toast } from './toast';
 import type { Run, TaskDetail, Team, Worker, Workspace } from '../../shared/contracts';
 import type { WorkspaceGrantView, WorkspacePermission } from '../../shared/workspace-access';
 import { TaskTools } from './TaskTools';
+import { CapabilityView } from './CapabilityView';
 import { WorkspaceRecovery, type ReadProcessOutput, type ReadPrivateFile } from './WorkspaceRecovery';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { MessageActions } from './MessageActions';
@@ -197,13 +198,20 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
   onOpenSources: () => void;
   onExport: (artifactId: string) => void;
   tools?: {
+    workers: Worker[];
+    connectedProviders: Worker['provider'][];
+    onConfigure: (provider: Exclude<Worker['provider'], 'demo'>) => void;
     grant: WorkspaceGrantView | null | undefined;
+    sourceEnabled: boolean;
     networkEnabled: boolean;
+    datasetEnabled: boolean;
     supported: boolean;
     busy: boolean;
     onGrant: (permissions: WorkspacePermission[]) => void;
     onRevoke: () => void;
+    onSourceChange: (enabled: boolean) => void;
     onNetworkChange: (enabled: boolean) => void;
+    onDatasetChange: (enabled: boolean) => void;
   };
 }) {
   const [technical, setTechnical] = useState(false);
@@ -255,6 +263,15 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
         </>}
       </section>}
 
+      {detail && tools && <section className="details-section" aria-label={t('Khả năng của Tí')}>
+        {tools.workers.length > 1 && <h3><Wrench size={15} aria-hidden="true" />{t('Khả năng theo từng Tí trong hội')}</h3>}
+        {tools.workers.map(person => <div key={person.id} className="capability-member">
+          {tools.workers.length > 1 && <strong>{person.name}</strong>}
+          <CapabilityView provider={person.provider} connected={person.provider === 'demo' || tools.connectedProviders.includes(person.provider)}
+            capabilities={detail.task.toolCapabilities} grant={tools.grant} grantLoaded={tools.grant !== undefined}
+            taskId={detail.task.id} sourceCount={detail.sources.length} onConfigure={tools.onConfigure} />
+        </div>)}
+      </section>}
       {detail && tools && <TaskTools key={detail.task.id} {...tools} />}
       {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs}
         busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} readOutput={readProcessOutput} readFile={readPrivateFile} />}

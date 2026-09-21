@@ -2,6 +2,7 @@ import { realpath, stat } from 'node:fs/promises';
 import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { GrantWorkspace, WorkspaceGrantSnapshot, WorkspaceGrantView, type WorkspacePermission } from '../../shared/workspace-access';
+import { workspaceAllowed } from '../../shared/capability-status';
 import type { Task } from '../../shared/contracts';
 import { Store, id } from './database';
 
@@ -69,8 +70,7 @@ export class WorkspaceGrants {
     const frozen = WorkspaceGrantSnapshot.parse(snapshot);
     this.assertTask(frozen.taskId);
     const current = this.current(frozen.taskId);
-    if (!current || current.revoked || current.id !== frozen.id || current.revision !== frozen.revision
-      || !current.permissions.includes(permission) || !frozen.permissions.includes(permission)) {
+    if (!current || !workspaceAllowed(frozen.taskId, permission, frozen, current)) {
       throw new Error('Quyền workspace đã thay đổi hoặc không cho phép thao tác này.');
     }
     return current.directory;

@@ -40,8 +40,12 @@ All four of these matter. When two conflict, the order below breaks the tie.
 | Team (Nhóm) | Workers who take a message together and combine their results. Click the team to open **that team's chat**. |
 | Routine (Lịch chạy) | A request that repeats on a schedule |
 | Skill / Knowledge | Reusable instructions and notes workers can use |
+| Capability | A concrete action, such as reading an attachment, editing a granted folder, running a check, or reading the web. The chat Details shows whether each worker can do it now and what setup is missing. |
+| Connection | The API or signed-in local CLI that runs the model. A skill, imported package, or note never grants a capability. |
 
 Projects that group several tasks are postponed until real use shows a need (shared files or shared context across tasks).
+
+In a worker's setup and the chat Details, **What can this worker do?** is the main way to understand its abilities. A team shows each member separately because members can use different connections. File and web access belongs to the chat; changes apply to new turns, while revocation blocks active access. Technical tool names stay in the tool guide. Routines decide when a turn starts; they do not grant access.
 
 **Team and worker chat (COD-24 + COD-25 + COD-26, shipped):** click a worker or a team → that conversation. One live thread each (find-or-create a `tasks` row; a user message is a turn, not a new row). The sidebar is workers and teams, not a task pile. In a team chat, type `@` to tag who should take that turn ([COD-36](https://linear.app/codepawl/issue/COD-36)). The synthesizer plans, assigned members run as hidden jobs, one report comes back. How it works: [team-chat.md](team-chat.md). Long-chat context, memory, cost and fail-closed defaults: [team-chat-context.md](team-chat-context.md).
 
