@@ -14,12 +14,15 @@ import {
 import { modelCatalog, type CatalogProvider } from '../adapters/catalog';
 import { cleanEnv, commandLine, type Probe } from '../harness/detect';
 import { harnessNames, type HarnessInfo } from '../../shared/harness';
+import { OPENCODE_BASE_URLS, type OpenCodePlan } from '../../shared/opencode';
 
 export const MODEL_LIST_ENDPOINTS = {
   openai: 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com/v1',
   xai: 'https://api.x.ai/v1',
   openrouter: 'https://openrouter.ai/api/v1',
+  'opencode-zen': OPENCODE_BASE_URLS['opencode-zen'],
+  'opencode-go': OPENCODE_BASE_URLS['opencode-go'],
   ollama: 'http://127.0.0.1:11434',
 } as const;
 
@@ -208,6 +211,26 @@ export function parseOpenRouterModels(payload: unknown): ModelEntry[] {
   return models;
 }
 
+/**
+ * OpenCode `/models` is an OpenAI-style list of IDs with no prices or endpoints. Every ID is kept so the picker can
+ * show which ones this plan offers; whether Orglet can run one comes from the plan's docs (shared/opencode.ts).
+ */
+export function parseOpenCodeModels(plan: OpenCodePlan, payload: unknown): ModelEntry[] {
+  const data = payload && typeof payload === 'object' ? (payload as { data?: unknown }).data : undefined;
+  if (!Array.isArray(data)) throw new Error(shapeError);
+  const models: ModelEntry[] = [];
+  const seen = new Set<string>();
+  for (const row of data) {
+    if (!row || typeof row !== 'object') continue;
+    const id = pickId((row as { id?: unknown }).id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    models.push({ provider: plan, id, source: 'native' });
+    if (models.length >= MODEL_LIST_MAX) break;
+  }
+  return models;
+}
+
 export function parseOllamaTags(payload: unknown): ModelEntry[] {
   const rows = payload && typeof payload === 'object' ? (payload as { models?: unknown }).models : undefined;
   if (!Array.isArray(rows)) throw new Error(shapeError);
@@ -391,6 +414,15 @@ async function fetchOpenRouter(options: ModelListFetchOptions): Promise<Pick<Mod
   return withCatalogHint('openrouter', parseOpenRouterModels(payload), 'native');
 }
 
+/** Each plan reads only its own key and its own endpoint; a missing Go key never falls back to Zen or the reverse. */
+async function fetchOpenCode(plan: OpenCodePlan, options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const key = await options.readKey(plan);
+  if (!key) return withCatalogHint(plan, [], 'native', missingKey(apiName(plan)));
+  const base = options.endpoints?.[plan] ?? MODEL_LIST_ENDPOINTS[plan];
+  const payload = await readJson(`${base}/models`, { Authorization: `Bearer ${key}` }, { fetch: options.fetch ?? fetch, timeoutMs: options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS });
+  return withCatalogHint(plan, parseOpenCodeModels(plan, payload), 'native');
+}
+
 async function fetchOllama(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
   const key = await options.readKey('ollama');
   if (!key) return withCatalogHint('ollama', [], 'native', missingKey(apiName('ollama')));
@@ -434,6 +466,7 @@ export async function fetchProviderList(provider: ModelListProvider, options: Mo
   if (provider === 'anthropic') return { fetchedAt, ...await fetchAnthropic(options) };
   if (provider === 'xai') return { fetchedAt, ...await fetchXai(options) };
   if (provider === 'openrouter') return { fetchedAt, ...await fetchOpenRouter(options) };
+  if (provider === 'opencode-zen' || provider === 'opencode-go') return { fetchedAt, ...await fetchOpenCode(provider, options) };
   if (provider === 'ollama') return { fetchedAt, ...await fetchOllama(options) };
   if (provider === 'claude-code') return { fetchedAt, ...withCatalogHint('claude-code', claudeCodeModels(), 'alias') };
   if (provider === 'codex') return { fetchedAt, ...await fetchCodex(options) };

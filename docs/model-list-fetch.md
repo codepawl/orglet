@@ -24,7 +24,8 @@ A worker stores `provider` and optional `modelId` (`apps/desktop/src/shared/cont
 | Anthropic | `claude-haiku-4-5-20251001` | $1.00 / $5.00 per MTok |
 | xAI | `grok-3-mini` | $0.30 / $0.50 per MTok |
 | OpenRouter | `openai/gpt-4.1-mini` | $0.40 / $1.60 per MTok (catalog hint; native list tenths when cached) |
-| Demo / Claude Code / Codex / Cursor / Ollama | (none) | No Orglet reservation |
+| OpenCode Zen | (none; a model must be chosen) | No pinned price; unknown reservation per step |
+| Demo / Claude Code / Codex / Cursor / Ollama / OpenCode Go | (none) | No Orglet reservation (OpenCode Go is billed by the Go plan) |
 
 The worker dialog labels those three IDs as suggestions in the picker (`WorkerDialog.tsx`, `workerModel.ts`). A saved `modelId` is frozen onto `run.snapshot.model`. Custom OpenAI/Anthropic IDs are not billed at mini/Haiku rates (unknown reservation until a later COD stores a verified price). xAI and OpenRouter native tenths from the cached list are used when present. Harness runs pass `--model` / `-m` when `modelId` is set. Ollama runs make no Orglet reservation.
 
@@ -38,6 +39,8 @@ Checked against official docs on 2026-09-18. Revalidate URLs before COD-31 lands
 | **Anthropic API** | Native `GET https://api.anthropic.com/v1/models` (SDK `client.models.list()`, paginate `limit` up to 1000 until `has_more` is false). | Already the Messages API we call. Returns `id` + `display_name`. | **None.** `created_at`, capabilities, token limits only. Retirement dates live on the HTML deprecations page — **do not scrape it.** |
 | **xAI (Grok) API** | Native `GET https://api.x.ai/v1/language-models` with the saved key. | Chat/tool models plus **native prices**. Better than `/v1/models`, which mixes image-generation rows Orglet cannot run. | **None.** Retirement notices are HTML ([May 15 retirement](https://docs.x.ai/developers/migration/may-15-retirement)) — do not scrape. |
 | **OpenRouter API** | Native `GET https://openrouter.ai/api/v1/models` with the saved OpenRouter key. | That connection's own catalog and prices. Not used as a list for OpenAI/Anthropic/xAI workers. | **None.** Do not scrape HTML. |
+| **OpenCode Zen API** | Native `GET https://opencode.ai/zen/v1/models` with the saved Zen key ([docs](https://opencode.ai/docs/zen/): "You can fetch the full list of available models and their metadata from" that URL). | The Zen plan's own list. IDs only: no prices, no endpoint per model. | **None.** |
+| **OpenCode Go API** | Native `GET https://opencode.ai/zen/go/v1/models` with the saved Go key ([docs](https://opencode.ai/docs/go/)). Never falls back to the Zen key or list. | The Go plan's own list. IDs only. | **None.** |
 | **Ollama** | Native `GET http://127.0.0.1:11434/api/tags` after the Settings toggle. | Local tags already pulled on this machine. | **None.** |
 | **Claude Code** | No list command. Ship the documented `--model` **aliases** (`sonnet`, `opus`, `haiku`, `fable`) plus custom ID. | Official CLI has `--model` but no `claude model list` ([feature request](https://github.com/anthropics/claude-code/issues/12612)). `/model` is interactive. Anthropic Models API **rejects** Claude Code OAuth. | **None.** Aliases are not versions and have no sunset. |
 | **Codex** | Native `codex debug models` JSON on the detected executable (logged-in). Fall back to `codex debug models --bundled` if the remote catalog refresh fails. | Official CLI JSON. Do **not** start Codex app-server (`model/list`) — [capabilities.md](capabilities.md) already keeps app-server off. | No sunset date. Optional **`upgrade`** (replacement slug) and `visibility` if present. Map `upgrade` as `replacementId` for COD-30 copy, not as a date. |
@@ -53,6 +56,16 @@ Checked against official docs on 2026-09-18. Revalidate URLs before COD-31 lands
 Do not invent a chat allowlist that drops a new family. A typed ID is never rejected because it failed the display filter.
 
 xAI: keep rows whose `output_modalities` include `text`; drop image-generation-only. OpenRouter: keep rows whose architecture output includes `text`. Anthropic's list is already Messages models.
+
+### OpenCode Zen and Go: which models can run (COD-112)
+
+Both plans serve models on several endpoints, and `/models` does not say which. Each plan's docs table does ([Zen](https://opencode.ai/docs/zen/), [Go](https://opencode.ai/docs/go/), read 2026-09-21), and the same ID can differ between plans: MiniMax is `/chat/completions` in Zen but `/messages` in Go. `apps/desktop/src/shared/opencode.ts` copies both tables per plan. Orglet calls only `/chat/completions` (the OpenAI adapter OpenRouter and xAI use), so:
+
+- IDs a plan's table lists on `/chat/completions` can be picked, typed and run.
+- IDs on `/responses`, `/messages`, the Gemini endpoint or `/systemone` stay in the list, marked **Not supported**, and are refused on save and before each run with the endpoint named.
+- IDs the plan's table does not list at all (new models, older ones still in `/models`) are refused as undocumented rather than guessed. Update the table when the docs change.
+
+models.dev also publishes per-model packages for both plans, but it disagrees with the Go docs (for example `qwen3.7-max`), so it is not used.
 
 ### Aggregators considered and rejected
 
@@ -70,7 +83,7 @@ A later COD may add an optional community overlay **only** if a native list is s
 Normalize every source into one object. Unknown fields stay omitted, never invented.
 
 ```
-provider        openai | anthropic | xai | openrouter | ollama | claude-code | codex | cursor
+provider        openai | anthropic | xai | openrouter | opencode-zen | opencode-go | ollama | claude-code | codex | cursor
 id              exact slug sent to the API or `--model`
 displayName     optional (Anthropic, Codex, Cursor, OpenRouter, Ollama)
 aliases         optional (xAI, Claude Code)

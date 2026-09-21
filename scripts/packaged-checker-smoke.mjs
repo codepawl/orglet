@@ -277,7 +277,7 @@ try {
   const restoredPreflight = await page.evaluate(id => window.orglet.call('task', { id }), preflightTaskId);
   assert.equal(restoredPreflight.task.evidenceRequests[0].state, "pending");
   assert.equal(restoredPreflight.preflights[0].profileIds.length, 1); assert.equal(restoredPreflight.profiles[0].result.datasets[0].rows, 3);
-  assert.deepEqual(await page.evaluate(() => window.orglet.connections()), { openai: false, anthropic: false, xai: false, openrouter: false, ollama: false });
+  assert.deepEqual(await page.evaluate(() => window.orglet.connections()), { openai: false, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, ollama: false });
   await app.evaluate(({ dialog }) => { dialog.showOpenDialog = globalThis.orgletTestDialogs.open; dialog.showMessageBox = globalThis.orgletTestDialogs.message; });
   await page.keyboard.press('Escape');
   console.log(JSON.stringify({ backupRestore: 'passed', restoreDirectory, backupPath, restoredReports: restored.artifacts.length, restoredChecks: restored.profiles.length }));

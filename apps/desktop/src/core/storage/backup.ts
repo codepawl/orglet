@@ -35,7 +35,7 @@ const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: 
 const manualScoreAvailable = (profile: z.infer<typeof Profile>, run: z.infer<typeof Run>) => !profile.runId && !!profile.result.exactMatch && profile.createdAt <= run.startedAt
   && !!run.snapshot.scoreProfileIds?.includes(profile.id) && Object.keys(profile.sourceHashes).every(sourceId => run.snapshot.input?.sourceIds.includes(sourceId));
 const ProcessEvidence = z.object({ id: Id, runId: Id, exitCode: z.number().int() }).strict();
-const Reservation = z.object({ id: Id, run_id: Id, task_id: Id, provider: z.enum(['openai', 'anthropic', 'xai', 'openrouter']), month: z.string().regex(/^\d{4}-\d{2}$/), amount: Integer, state: z.enum(['held', 'unknown', 'settled']) }).strict();
+const Reservation = z.object({ id: Id, run_id: Id, task_id: Id, provider: z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen']), month: z.string().regex(/^\d{4}-\d{2}$/), amount: Integer, state: z.enum(['held', 'unknown', 'settled']) }).strict();
 const Ledger = z.object({ id: Id, reservation_id: Id, amount: Integer, input_tokens: Integer, output_tokens: Integer, pricing_version: z.string() }).strict();
 const ReservationReview = z.object({ reservation_id: Id, reason: z.enum(['missing_usage', 'request_failed', 'interrupted', 'legacy']), noted_at: z.iso.datetime(), actual_amount: Integer.nullable(), verified_source: z.enum(['provider_dashboard', 'invoice']).nullable(), resolved_at: z.iso.datetime().nullable() }).strict();
 const RevisionRow = z.object({ entity_id: Id, revision: Revision, data: z.union([Worker, Skill, Team]) }).strict();

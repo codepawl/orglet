@@ -9,6 +9,8 @@ import { orglet } from '../api';
 import { Button, FieldLabel } from './ui';
 import { ProviderMark } from './ProviderMark';
 import { fieldInvalid } from './fieldInvalid';
+import { modelRunnable, openCodeModelIssue } from './openCodeModel';
+import { isOpenCodePlan } from '../../shared/opencode';
 
 function deprecationChipLabel(sunsetAt?: string) {
   const day = formatSunsetDay(sunsetAt, currentLocale());
@@ -49,7 +51,11 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   const menu = useRef<HTMLUListElement>(null);
   const hint = Object.hasOwn(CATALOG_HINT_IDS, provider) ? CATALOG_HINT_IDS[provider as keyof typeof CATALOG_HINT_IDS] : undefined;
   const models = list?.models ?? [];
-  const options = filterModels(models, value);
+  const runnable = (entry: ModelEntry) => modelRunnable(provider, entry.id);
+  // Models this plan offers but Orglet cannot call stay listed, after the ones it can, so the gap is visible.
+  const matching = filterModels(models, value);
+  const options = [...matching.filter(runnable), ...matching.filter(entry => !runnable(entry))];
+  const modelIssue = openCodeModelIssue(provider, value);
   const failOpen = t('Gõ ID model. Danh sách chưa tải được.');
 
   const load = async (refresh = false) => {
@@ -74,7 +80,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   const close = () => { setOpen(false); setPlacement(undefined); };
   const openList = () => { setActive(Math.max(0, options.findIndex(entry => entry.id === value))); setOpen(true); };
   const choose = (index: number) => {
-    const option = options[index]; if (!option) return;
+    const option = options[index]; if (!option || !runnable(option)) return;
     if (option.id !== value) onChange(option.id);
     close(); input.current?.focus();
   };
@@ -122,14 +128,18 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   }, [open, active, placement]);
 
   const move = (from: number, step: number) => {
-    const next = from + step;
-    if (next < 0 || next >= options.length) return from;
-    return next;
+    for (let next = from + step; next >= 0 && next < options.length; next += step) {
+      if (runnable(options[next])) return next;
+    }
+    return from;
   };
 
+  const defaultNote = isOpenCodePlan(provider)
+    ? t('Chọn model trong gói hoặc gõ ID. Model ghi Chưa hỗ trợ dùng endpoint Orglet chưa gọi được.')
+    : t('Gõ ID model hoặc chọn từ danh sách. Tên mặc định chỉ là gợi ý.');
   const note = busy && !list ? t('Đang tải danh sách model…')
-    : list?.error || (!models.length && !busy ? failOpen : undefined)
-    || (list?.stale ? t('Danh sách model từ lần tải trước.') : t('Gõ ID model hoặc chọn từ danh sách. Tên mặc định chỉ là gợi ý.'));
+    : modelIssue || list?.error || (!models.length && !busy ? failOpen : undefined)
+    || (list?.stale ? t('Danh sách model từ lần tải trước.') : defaultNote);
   const selected = pickerListedModel(models, value, hint);
   const notice = deprecationNotice(selected);
   const replacementId = selected?.replacementId;
@@ -177,6 +187,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
       className={`select-menu ${placement?.above ? 'above' : ''}`} style={placement?.style ?? { position: 'fixed', visibility: 'hidden', left: 0, top: 0 }}>
       {options.map((option, index) => (
         <li key={option.id} id={`${id}-option-${index}`} data-index={index} role="option" aria-selected={option.id === value}
+          aria-disabled={runnable(option) ? undefined : true}
           className={`select-option${index === active ? ' active' : ''}`}
           onPointerMove={() => { if (index !== active) setActive(index); }} onPointerDown={event => event.preventDefault()} onClick={() => choose(index)}>
           {/* The provider is the same for every row, but without its mark a list of bare slugs says nothing about
@@ -187,6 +198,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
             {option.displayName ? <span className="select-detail">{option.id}</span> : option.source === 'catalog-hint' ? <span className="select-detail">{t('Gợi ý')}</span> : null}
           </span>
           {option.deprecated && <span className="select-option-badge model-deprecation-chip">{t('Sắp ngừng')}</span>}
+          {!runnable(option) && <span className="select-option-badge">{t('Chưa hỗ trợ')}</span>}
           <Check size={16} className="select-check" aria-hidden="true" />
         </li>
       ))}

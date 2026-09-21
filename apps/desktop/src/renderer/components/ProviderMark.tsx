@@ -19,6 +19,9 @@ const marks: Record<ProviderId | Extract<HarnessCatalogId, 'cursor'>, { name: st
   anthropic: { name: 'Anthropic API', path: paths.anthropic },
   xai: { name: 'Grok (xAI) API', path: paths.x },
   openrouter: { name: 'OpenRouter API', path: paths.openrouter },
+  // No official OpenCode mark in Simple Icons; a monogram per plan keeps Zen and Go apart at a glance.
+  'opencode-zen': { name: 'OpenCode Zen API', letter: 'Z' },
+  'opencode-go': { name: 'OpenCode Go API', letter: 'G' },
   ollama: { name: 'Ollama', path: paths.ollama },
   'claude-code': { name: 'Claude Code', path: paths.claude, color: '#D97757' },
   codex: { name: 'Codex', path: paths.openai },

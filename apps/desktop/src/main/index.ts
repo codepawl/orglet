@@ -8,6 +8,7 @@ import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
 import { en, enGB } from '../shared/locales/en';
 import { commands, Id, ApiProvider, type Reply, type Command, TextFormat } from '../shared/contracts';
 import { PickWorkspace } from '../shared/workspace-access';
+import { OPENCODE_DOCS_URLS } from '../shared/opencode';
 import { markdownToPlain } from '../shared/plainText';
 import { Credentials, OLLAMA_LOCAL_TOKEN } from './credentials';
 import { readBoundedText, writeAtomicText } from './files';
@@ -213,6 +214,8 @@ async function start() {
       anthropic: 'https://www.anthropic.com/pricing#api',
       xai: 'https://docs.x.ai/developers/pricing',
       openrouter: 'https://openrouter.ai/models',
+      'opencode-zen': OPENCODE_DOCS_URLS['opencode-zen'],
+      'opencode-go': OPENCODE_DOCS_URLS['opencode-go'],
       ollama: 'https://ollama.com',
     } as const;
     await shell.openExternal(pricing[ApiProvider.parse(raw)]);

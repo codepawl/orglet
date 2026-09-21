@@ -4,7 +4,8 @@ import { Store } from './storage/database';
 import { CoreService } from './service';
 import { OpenAIAdapter } from './adapters/openai';
 import { AnthropicAdapter } from './adapters/anthropic';
-import { ApiProvider, Id, type Command } from '../shared/contracts';
+import { OpenCodeAdapter } from './adapters/opencode';
+import { API_PROVIDER_NAMES, ApiProvider, Id, type Command } from '../shared/contracts';
 import { CATALOG_HINT_IDS } from '../shared/models';
 import { MODEL_LIST_ENDPOINTS } from './models/fetch';
 import { DatasetProfile, type ProfileExecutor } from '../shared/profiles';
@@ -51,15 +52,17 @@ const workspaceRuntime = new WorkspaceRuntime(store, workspaceFiles,
   new WorkspaceIntegration(store, runtimePaths.integrationExecutable, workspaceDirectory),
   () => port.postMessage({ type: 'changed' }), workspaceFiles);
 const core = new CoreService(store, () => port.postMessage({ type: 'changed' }), async (provider, model) => {
-  if (!ApiProvider.safeParse(provider).success) throw new Error('Provider chưa được hỗ trợ.');
+  const apiProvider = ApiProvider.safeParse(provider);
+  if (!apiProvider.success) throw new Error('Provider chưa được hỗ trợ.');
   const key = await requestKey(provider);
-  if (!key) throw new Error(`Chưa kết nối ${provider}. Mở Cài đặt để nhập API key.`);
+  if (!key) throw new Error(`Chưa kết nối ${API_PROVIDER_NAMES[apiProvider.data]}. Mở Cài đặt để nhập API key.`);
   if (provider === 'anthropic') return new AnthropicAdapter(key, undefined, model);
   if (provider === 'xai') return new OpenAIAdapter(key, { baseURL: 'https://api.x.ai/v1', provider: 'xai', model });
   if (provider === 'openrouter') return new OpenAIAdapter(key, {
     baseURL: MODEL_LIST_ENDPOINTS.openrouter, provider: 'openrouter', model,
     defaultHeaders: { 'HTTP-Referer': 'https://github.com/codepawl/orglet', 'X-Title': 'Orglet' },
   });
+  if (provider === 'opencode-zen' || provider === 'opencode-go') return new OpenCodeAdapter(provider, key, model);
   if (provider === 'ollama') return new OpenAIAdapter(key, { baseURL: `${MODEL_LIST_ENDPOINTS.ollama}/v1`, model: model || CATALOG_HINT_IDS.ollama });
   return new OpenAIAdapter(key, { model });
 }, profile, undefined, undefined, undefined, {

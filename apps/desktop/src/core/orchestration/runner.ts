@@ -5,11 +5,13 @@ import { assertCapability, executeReadTool, hasCapability } from '../tools/polic
 import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, MemberReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswerSchema, HarnessAnswer, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
 import { z } from 'zod';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import { API_PROVIDER_NAMES, isLocalApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
 import { BudgetLedger, BudgetError, cost } from '../budgets/ledger';
 import { Sources, fingerprint } from '../tools/sources';
 import type { ModelAdapter } from '../adapters/openai';
+import { ProviderRequestError } from '../adapters/opencode';
+import { assertOpenCodeModel, isOpenCodePlan } from '../../shared/opencode';
 import { readModelListCache } from '../models/cache';
 import { resolveWorkerModel } from '../models/resolve';
 import { ProfileArgs, type ProfileRecord } from '../../shared/profiles';
@@ -166,6 +168,8 @@ export class Runner {
       task = { ...task, ...input };
       assertSkillReady(run.snapshot.skill, this.store);
       const resolved = resolveWorkerModel(run.snapshot.worker, readModelListCache(this.store));
+      const workerProvider = run.snapshot.worker.provider;
+      if (isOpenCodePlan(workerProvider)) assertOpenCodeModel(workerProvider, run.snapshot.model ?? resolved.id);
       if (run.snapshot.worker.provider !== 'demo') {
         if (!run.snapshot.model && resolved.id) {
           run = { ...run, snapshot: { ...run.snapshot, model: resolved.id, pricingVersion: resolved.pricingVersion } };
@@ -398,6 +402,17 @@ export class Runner {
               } catch {
                 throw new Error('Request model không hoàn tất. Kiểm tra Ollama đang chạy trên máy này trước khi thử lại.');
               }
+            } else if (isPlanApi(provider)) {
+              // The Go subscription bills and limits these requests; Orglet has no price to reserve against.
+              this.event(run.id, `Đang gọi model · bước ${step + 1}/${maxSteps}`);
+              try {
+                reply = await model.request(messages, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+                reply = sanitizeReportReply(run, reply);
+                this.checkpoints.received(checkpoint, reply);
+              } catch (error) {
+                if (error instanceof ProviderRequestError) throw error;
+                throw new Error('Request model không hoàn tất. Kiểm tra kết nối hoặc hạn mức gói trước khi thử lại.');
+              }
             } else {
               const teamBudget = task.teamSnapshot ? { id: task.teamSnapshot.id, limit: this.store.get<Team>('teams', task.teamSnapshot.id).monthlyBudgetMicros } : undefined;
 
@@ -414,8 +429,12 @@ export class Runner {
                 if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
                 else ledger.unknown(reservation, 'missing_usage');
                 this.checkpoints.received(checkpoint, reply);
-              } catch {
+              } catch (error) {
                 ledger.unknown(reservation, 'request_failed');
+                if (error instanceof ProviderRequestError) {
+                  this.event(run.id, 'Chi phí chưa rõ của request này vẫn được giữ chỗ.');
+                  throw error;
+                }
                 throw new Error('Request model không hoàn tất. Chi phí chưa rõ vẫn được giữ chỗ; kiểm tra kết nối hoặc quota trước khi thử lại.');
               }
             }

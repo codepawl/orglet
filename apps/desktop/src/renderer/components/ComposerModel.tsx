@@ -4,6 +4,8 @@ import { CATALOG_HINT_IDS, type ModelEntry } from '../../shared/models';
 import { t } from '../i18n';
 import { orglet } from '../api';
 import { Select } from './Select';
+import { modelRunnable } from './openCodeModel';
+import { isOpenCodePlan } from '../../shared/opencode';
 
 const DEFAULT_VALUE = '';
 
@@ -33,10 +35,17 @@ export function ComposerModel({ worker, onChange }: {
   const suggestion = suggestedId(worker.provider);
   // A model the user typed into the worker dialog may not be in the fetched list; it still belongs in the menu.
   const listed = models.some(entry => entry.id === worker.modelId);
+  // OpenCode Zen and Go have no default model, so clearing the choice is not offered there.
+  const hasDefault = !isOpenCodePlan(worker.provider);
   const options = [
-    { value: DEFAULT_VALUE, label: t('Mặc định'), detail: suggestion },
+    ...(hasDefault ? [{ value: DEFAULT_VALUE, label: t('Mặc định'), detail: suggestion }] : []),
     ...(worker.modelId && !listed ? [{ value: worker.modelId, label: worker.modelId }] : []),
-    ...models.map(entry => ({ value: entry.id, label: entry.displayName ?? entry.id, detail: entry.displayName ? entry.id : undefined })),
+    ...models.map(entry => ({
+      value: entry.id,
+      label: entry.displayName ?? entry.id,
+      detail: entry.displayName ? entry.id : undefined,
+      ...(modelRunnable(worker.provider, entry.id) ? {} : { disabled: true, badge: t('Chưa hỗ trợ') }),
+    })),
   ];
 
   return <Select
