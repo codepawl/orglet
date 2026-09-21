@@ -40,7 +40,9 @@ function restingScrollLeft(strip: HTMLUListElement) {
  * the attached files as a strip of cards that scrolls sideways, the text, and the controls (add, who, send).
  * Team and group chats can pass `mentions` so `@` opens a worker picker.
  */
-export function Composer({ value, onChange, onSubmit, label, placeholder, sendLabel, leading, trailing, attachments, onRemoveAttachment, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: readonly ComposerAttachment[]; onRemoveAttachment?: (id: string) => void; disabled?: boolean; sendDisabled?: boolean; textareaRef?: RefObject<HTMLTextAreaElement | null>; mentions?: MentionRoster;
+export function Composer({ value, onChange, onSubmit, label, placeholder, sendLabel, leading, trailing, attachments, onRemoveAttachment, context, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: readonly ComposerAttachment[]; onRemoveAttachment?: (id: string) => void;
+  /** The top zone of the grown bar, above the files: what this message answers, for example. */
+  context?: ReactNode; disabled?: boolean; sendDisabled?: boolean; textareaRef?: RefObject<HTMLTextAreaElement | null>; mentions?: MentionRoster;
   /**
    * Set while a run is in progress: the send button becomes the stop button, turning a ring so the eye lands on
    * it (user, 2026-09-19). Stop belongs where send was, because that is where the hand already is, and nothing
@@ -59,6 +61,7 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
   const canSend = !disabled && !sendDisabled && value.trim().length > 0;
   const attachmentCount = attachments?.length ?? 0;
   const hasAttachments = attachmentCount > 0;
+  const grown = hasAttachments || Boolean(context);
   // A file just added lands at the end of the strip, which may already be scrolled away; bring it into view so
   // the person sees what they attached. Removing one leaves the strip where it is.
   const previousAttachmentCount = useRef(attachmentCount);
@@ -104,18 +107,18 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
     const element = textarea.current; if (!element) return;
     const measure = () => {
       // An empty bar is always one line; measuring then would pick up transient widths while the layout settles.
-      if (!element.value) { element.style.height = ''; element.style.overflowY = 'hidden'; setExpanded(hasAttachments); return; }
+      if (!element.value) { element.style.height = ''; element.style.overflowY = 'hidden'; setExpanded(grown); return; }
       element.style.height = 'auto';
       element.style.height = `${Math.min(element.scrollHeight, 250)}px`;
       element.style.overflowY = element.scrollHeight > 250 ? 'auto' : 'hidden';
-      setExpanded(current => hasAttachments || current || element.scrollHeight > SINGLE_LINE);
+      setExpanded(current => grown || current || element.scrollHeight > SINGLE_LINE);
     };
     measure();
     let width = element.clientWidth;
     const observer = new ResizeObserver(() => { if (element.clientWidth !== width) { width = element.clientWidth; measure(); } });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [value, hasAttachments, textarea]);
+  }, [value, grown, textarea]);
   const syncCursor = (element: HTMLTextAreaElement) => setCursor(element.selectionStart ?? 0);
   const pick = (option: typeof selected) => {
     if (!option) return;
@@ -138,7 +141,7 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
     }
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); if (canSend) onSubmit(); }
   };
-  return <form className={`composer${expanded ? ' expanded' : ''}${trailing ? ' has-trailing' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) onSubmit(); }}>
+  return <form className={`composer${expanded ? ' expanded' : ''}${trailing ? ' has-trailing' : ''}${context ? ' has-context' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) onSubmit(); }}>
     {menuOpen && <ul id={listId} className="mention-menu" role="listbox" aria-label={t('Gắn thẻ Tí')}>
       {options.map((option, index) => {
         const worker = option.kind === 'worker' ? mentions!.people.find(item => item.id === option.id) : undefined;
@@ -154,6 +157,7 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
         </li>;
       })}
     </ul>}
+    {context && <div className="composer-context">{context}</div>}
     {attachments && hasAttachments && <ul className="composer-attachments" ref={strip} aria-label={t('Tệp đính kèm')}>
       {attachments.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onRemove={onRemoveAttachment ? () => onRemoveAttachment(item.id) : undefined} />)}
     </ul>}
@@ -209,14 +213,14 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
     action(async () => { try { await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
   };
   return <div className="thread-composer">
-    {reply && !pendingDecision && <div className="composer-reply">
-      <Reply size={14} aria-hidden="true" />
-      <p><strong>{reply.author}</strong><span>{reply.text}</span></p>
-      <Button type="button" size="icon" aria-label={t('Bỏ trả lời')} title={t('Bỏ trả lời')} onClick={clearReplyTarget}><X size={14} /></Button>
-    </div>}
     <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(detail.task.pendingStart) || submitting} sendDisabled={blocked}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
+      context={reply && !pendingDecision ? <div className="composer-reply">
+        <Reply size={14} aria-hidden="true" />
+        <p><strong>{reply.author}</strong><span>{reply.text}</span></p>
+        <Button type="button" size="icon" aria-label={t('Bỏ trả lời')} title={t('Bỏ trả lời')} onClick={clearReplyTarget}><X size={14} /></Button>
+      </div> : undefined}
       leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Đính kèm tệp')} title={t('Đính kèm tệp')} disabled={busy} onClick={openRevision}><Plus size={20} /></Button>} />
     {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
   </div>;

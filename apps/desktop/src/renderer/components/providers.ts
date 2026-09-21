@@ -12,13 +12,15 @@ const labels: Record<ProviderScope, string> = {
 export const providerLabel = (provider: ProviderScope) => t(labels[provider]);
 
 /** API providers need a stored key; local harnesses need a signed-in, runnable install — detected-on-disk is not enough. */
-export function readiness(connections: Connections, harnesses: HarnessInfo[]): Readiness {
-  const item = (id: 'claude-code' | 'codex' | 'cursor') => harnesses.find(entry => entry.id === id);
+/** `harnesses` is undefined while detection is still running; a harness then counts as ready rather than flashing "not ready". */
+export function readiness(connections: Connections, harnesses: HarnessInfo[] | undefined): Readiness {
+  const item = (id: 'claude-code' | 'codex' | 'cursor') => harnesses?.find(entry => entry.id === id);
+  const ready = (id: 'claude-code' | 'codex' | 'cursor') => harnesses === undefined || harnessReady(item(id) ?? { auth: 'missing', runnable: true });
   return {
     ...connections,
-    'claude-code': harnessReady(item('claude-code') ?? { auth: 'missing', runnable: true }),
-    codex: harnessReady(item('codex') ?? { auth: 'missing', runnable: true }),
-    cursor: harnessReady(item('cursor') ?? { auth: 'missing', runnable: true }),
+    'claude-code': ready('claude-code'),
+    codex: ready('codex'),
+    cursor: ready('cursor'),
   };
 }
 

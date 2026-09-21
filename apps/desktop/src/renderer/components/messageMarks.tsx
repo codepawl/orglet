@@ -46,8 +46,19 @@ const listeners = new Set<() => void>();
 const emit = () => { for (const listener of listeners) listener(); };
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 
+/** One line of a Markdown answer as the reader sees it: no heading hashes, quote or list markers, emphasis or link syntax. */
+export function plainExcerptLine(markdown: string) {
+  const lines = markdown.split('\n').map(line => line.trim()).filter(line => line.length > 0 && !line.startsWith('```'));
+  const first = lines[0] ?? '';
+  return first
+    .replace(/^(#{1,6}|>+|[-*+]|\d+[.)])\s+/, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__|\*|_|~~|`)(.+?)\1/g, '$2')
+    .trim();
+}
+
 export function replyToAnswer(taskId: string, messageId: string, author: string, text: string) {
-  const line = text.trim().split('\n').find(part => part.trim().length > 0) ?? '';
+  const line = plainExcerptLine(text);
   target = { taskId, messageId, author, text: line.length > 140 ? `${line.slice(0, 139).trimEnd()}…` : line };
   emit();
 }
