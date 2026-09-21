@@ -1,4 +1,6 @@
-import { existsSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import config from '../../forge.config';
 import { MakerZIP } from '@electron-forge/maker-zip';
@@ -10,6 +12,13 @@ import {
   resolveOsxNotarize,
   resolveOsxSign,
 } from '../../forge.macos';
+import {
+  assertPackageSigned,
+  CERTUM_TIMESTAMP_SERVER,
+  resolveSquirrelSign,
+  resolveWindowsSign,
+  signtoolParameters,
+} from '../../forge.windows';
 
 describe('forge packaging', () => {
   const makers = config.makers ?? [];
@@ -92,5 +101,39 @@ describe('forge packaging', () => {
       appleApiKeyId: 'ABCDE12345',
       appleApiIssuer: '00000000-0000-0000-0000-000000000000',
     });
+  });
+
+  it('signs Windows builds only when WINDOWS_SIGNING_ENABLED=true, by thumbprint, SHA-256 and timestamped', () => {
+    const thumbprint = '0123456789ABCDEF0123456789ABCDEF01234567';
+    expect(packager.windowsSign).toBeUndefined();
+    expect(resolveWindowsSign({})).toBeUndefined();
+    expect(resolveSquirrelSign({})).toBeUndefined();
+    expect(resolveSquirrelSign({ WINDOWS_SIGNING_ENABLED: 'false', WINDOWS_CERTIFICATE_SHA1: thumbprint })).toBeUndefined();
+    // Asking for signing without a certificate must fail the build rather than ship it unsigned.
+    expect(() => resolveWindowsSign({ WINDOWS_SIGNING_ENABLED: 'true' })).toThrow(/WINDOWS_CERTIFICATE_SHA1/);
+    const enabled = { WINDOWS_SIGNING_ENABLED: 'true', WINDOWS_CERTIFICATE_SHA1: ` ${thumbprint} ` };
+    expect(typeof resolveWindowsSign(enabled)?.hookFunction).toBe('function');
+    expect(resolveSquirrelSign(enabled)).toBe(`/sha1 ${thumbprint} /fd sha256 /tr ${CERTUM_TIMESTAMP_SERVER} /td sha256`);
+    expect(signtoolParameters(thumbprint)).not.toContain('/a');
+  });
+
+  const microsoftSigned = 'node_modules/@microsoft/mxc-sdk/bin/x64/wxc-exec.exe';
+  it.runIf(process.platform === 'win32' && existsSync(microsoftSigned))('leaves a file that already carries a valid signature alone', async () => {
+    // No certificate has this thumbprint, so an attempt to sign would make signtool fail and the hook throw.
+    const sign = resolveWindowsSign({ WINDOWS_SIGNING_ENABLED: 'true', WINDOWS_CERTIFICATE_SHA1: '0'.repeat(40) });
+    await expect(Promise.resolve(sign?.hookFunction?.(resolve(microsoftSigned)))).resolves.toBeUndefined();
+  });
+
+  it.runIf(process.platform === 'win32' && existsSync(microsoftSigned))('fails a package that holds an unsigned binary', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orglet-signing-'));
+    try {
+      mkdirSync(join(directory, 'resources'));
+      copyFileSync(microsoftSigned, join(directory, 'resources', 'signed.exe'));
+      expect(() => assertPackageSigned([directory])).not.toThrow();
+      writeFileSync(join(directory, 'resources', 'unsigned.dll'), 'not a signed binary');
+      expect(() => assertPackageSigned([directory])).toThrow(/unsigned\.dll/);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
