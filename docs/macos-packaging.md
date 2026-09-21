@@ -1,6 +1,6 @@
 # macOS packaging
 
-ZIP packaging of `Orglet.app` for dogfood. GitHub Actions on `macos-latest` **Developer ID signs and notarizes**: the signing and App Store Connect API key secrets were set on 2026-09-19, and run [35398258178](https://github.com/codepawl/orglet/actions/runs/35398258178) produced a stapled build (`flags=0x10000(runtime)`, `Notarization Ticket=stapled`). This job is **not** the required merge check.
+ZIP packaging of `Orglet.app` for dogfood. GitHub Actions on `macos-latest` **Developer ID signs and notarizes** the app, and the notarization ticket is stapled to it. This job is **not** the required merge check.
 
 Windows remains first: the required GitHub check is still the **Windows desktop** `test` aggregator. See [windows-release-gates.md](windows-release-gates.md). Do not treat a green macOS job as a substitute for that aggregator.
 
