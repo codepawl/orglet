@@ -1,5 +1,10 @@
 # Fetching model lists
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/model-list-fetch-dark.png">
+  <img src="images/orglets/model-list-fetch-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Plan for [COD-29](https://linear.app/codepawl/issue/COD-29) under epic [COD-27](https://linear.app/codepawl/issue/COD-27). **This page is the decision.** [COD-31](https://linear.app/codepawl/issue/COD-31) implements fetch + cache; [COD-28](https://linear.app/codepawl/issue/COD-28) is the picker UI; [COD-30](https://linear.app/codepawl/issue/COD-30) is the deprecated chip.
 
 **Shipped (COD-31):** `modelList` fetches each connection from its native API or CLI, caches the result in SQLite `settings.modelLists` (24h TTL, stale-while-revalidate), stores OpenAI `shutdown_date` and Codex `upgrade` when present, and always allows a typed custom model ID.

@@ -1,5 +1,10 @@
 # Orglet technical guide
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/technical-guide-dark.png">
+  <img src="images/orglets/technical-guide-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 This guide covers how Orglet runs work, connects providers and harnesses, and what each limit and check does. First walk-through: [Getting started](getting-started.md). For what Orglet is and who it is for, see the [README](../README.md) and [product direction](product.md). The [docs map](README.md) lists the rest.
 
 This build supports individual workers, sequential or parallel teams, native OpenAI, Anthropic, xAI (Grok), OpenRouter, OpenCode Zen and OpenCode Go connections, local Ollama, local Claude Code / Codex / Cursor Agent harnesses, local dataset checks, routines, checkpoint/resume, backup/restore, team templates, Agent Skills import/review/export and reviewed reusable knowledge. The full MVP in `plans/orglet_mvp_plan_vi.md` is still in progress. Custom metric recomputation beyond built-in exact-match accuracy, live API-provider acceptance (script ready, needs a key path), a clean-machine Setup install and benchmarks remain unverified. The public 0.2.x release ships Windows Setup and ZIP; macOS and Linux have separate pull-request packaging workflows for dogfooding, not public release assets.

@@ -1,5 +1,10 @@
 # Writing docs
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/writing-dark.png">
+  <img src="images/orglets/writing-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Use this when you add or change pages under `docs/`, or user-facing parts of the [README](../README.md). It is not a second copy of [AGENTS.md](../AGENTS.md) or [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Default voice
@@ -33,6 +38,8 @@ User guides that are not written yet stay as a row in the map. Do not add empty 
 When the app's layout changes (sidebar, composer, font), replace the shots in `docs/images/` with `pnpm images:readme` after a local `pnpm make` (or, on Linux, a Vite compile plus unpackaged Electron). Keep the files the README and Getting started already link.
 
 `docs/images/social-preview.png` is the card GitHub, Slack and X show for a repository link. `pnpm images:social` redraws it from the mascots and the product line; it needs no packaged build. GitHub has no API for the social preview, so after changing it someone has to upload the file under Settings → General → Social preview.
+
+Every page under `docs/` opens with one orglet, and the README with the crew, from `docs/images/orglets/`. `pnpm images:orglets` draws them all, a light and a dark file each, from the list at the top of `scripts/doc-orglets.cjs`; it needs no packaged build. A new page gets a row there with an accessory and a colour that fit its topic and are not already taken, then the same `<picture>` block the other pages carry, with `alt=""` because the picture decorates the page rather than saying anything the text does not.
 
 ## Do not
 

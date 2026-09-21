@@ -1,5 +1,10 @@
 # Orglet continuation
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/handoff-dark.png">
+  <img src="images/orglets/handoff-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 The full goal is active. Continue both plans in `plans/`; do not redefine completion as the current demo. `docs/implementation_status.md` is the detailed implementation and validation record.
 
 ## User decisions

@@ -1,5 +1,10 @@
 # Mobile
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/mobile-dark.png">
+  <img src="images/orglets/mobile-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 **Status: proposed, not decided.** Nothing is being built. This page exists so "coming soon" stops standing in for a plan, and so the four questions that block any mobile work are written down with a recommended answer each.
 
 ## Why mobile is not a port

@@ -1,5 +1,10 @@
 # Workspace recovery and rollback
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/recovery-dark.png">
+  <img src="images/orglets/recovery-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Orglet keeps its workspace in `orglet.sqlite` inside the app data folder (`%APPDATA%\orglet` on Windows, `~/Library/Application Support/Orglet` on macOS, or the folder passed with `--user-data-dir`). The database refuses to open when it was written by a newer schema than the running build.
 
 ## What happens on upgrade

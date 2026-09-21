@@ -1,5 +1,10 @@
 # Capability catalog
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/capabilities-dark.png">
+  <img src="images/orglets/capabilities-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 ## What a worker can do
 
 Worker setup previews actions in plain language. Chat Details shows each worker's current connection, attachment, task-capability and workspace-grant status for the next turn. The execution layer still checks both the frozen run snapshot and current task policy; a newly enabled capability does not upgrade a resumed run, while revocation blocks it. A folder grant is a separate task-scoped permission. Imported sources remain read-only, and skill packages or knowledge are instructions, never grants. Team roles and routines decide who works and when, not what tools can bypass policy.

@@ -1,5 +1,10 @@
 # Getting started
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/getting-started-dark.png">
+  <img src="images/orglets/getting-started-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Orglet is a desktop app. You keep a few AI workers, each with a name and a role, and you talk to them in a normal chat. There is no Orglet account and no Orglet server. Chats, workers and files stay on this computer.
 
 This page is the first walk-through. The [docs map](README.md) lists everything else. How teams work in detail: [team-chat.md](team-chat.md). How to run tests and connect providers in depth: [technical-guide.md](technical-guide.md).

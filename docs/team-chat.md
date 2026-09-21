@@ -1,5 +1,10 @@
 # Team and worker chat
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/team-chat-dark.png">
+  <img src="images/orglets/team-chat-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Team plans can declare an expected output, dependencies on other assigned members, and workspace resources they intend to change. With a workspace grant, the lead can inspect its files and brief through read-only tools before choosing those paths. Members report whether their assignment completed or is blocked; a saved blocker report remains visible but does not satisfy a dependency. A file assignment with no integrated changes is blocked even if its report claims completion. Failed prerequisites block downstream work and remain visible in the final status. Independent members can still run two at a time; overlapping file or directory ownership is serialized, including case aliases on Windows. Resource ownership does not grant permission to edit files.
 
 The core claims each member run in a SQLite transaction. A second claim for the same worker and turn is rejected, as is a claim for an older input revision. Retries keep completed results. Older saved plans without dependency or resource fields retain their independent-work behavior. Declared ownership currently coordinates members within one task; workspace-wide file execution and isolation are still pending.

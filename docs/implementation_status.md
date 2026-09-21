@@ -1,5 +1,10 @@
 # Orglet implementation status
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/implementation_status-dark.png">
+  <img src="images/orglets/implementation_status-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 ## Starting point
 
 The workspace contains only `plans/orglet_mvp_plan_vi.md` and its coding starter. There is no application, repository metadata, dependency manifest, or test suite. Those plans are the product contract.

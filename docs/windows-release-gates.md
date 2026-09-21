@@ -1,5 +1,10 @@
 # Windows release gates (Orglet 0.2)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/windows-release-gates-dark.png">
+  <img src="images/orglets/windows-release-gates-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 This page is the Windows ship checklist: required pull-request CI, how Windows builds are signed, optional human installer validation, and the GitHub Release procedure. [Orglet 0.2.2](https://github.com/codepawl/orglet/releases/tag/v0.2.2) is already public with Windows Setup and ZIP assets.
 
 It does **not** record that a smoke already ran. It does **not** create tags or Releases.

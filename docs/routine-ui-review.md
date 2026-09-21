@@ -1,5 +1,10 @@
 # Routine and shift interface review
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/routine-ui-review-dark.png">
+  <img src="images/orglets/routine-ui-review-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 | Field | Scope |
 | --- | --- |
 | Target | Current routine/shift edits in the uncommitted workspace |
