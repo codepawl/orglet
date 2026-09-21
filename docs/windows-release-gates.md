@@ -84,7 +84,7 @@ Copy this list into the release issue or tag notes and tick a step only after yo
    Open Orglet from the Start Menu. The window should open. New installs default to US English and include a **Researcher** worker on **Demo**.
 
 5. **Settings → Local harnesses**  
-   Open **Settings** → **Local harnesses**. The tab must open and list Claude Code, Codex and Cursor Agent. On a clean machine they are usually **Not installed**. That is enough here. Also open **Settings** → **Connections** and confirm OpenAI / Anthropic / Grok (xAI) / OpenRouter show with no keys and Ollama is off. Fixture detected / signed-out / auth-error states are CI's job (`pnpm test:harness`).
+   Open **Settings** → **Local harnesses**. The tab must open and list Claude Code, Codex and Cursor Agent. On a clean machine they are usually **Not installed**. That is enough here. Also open **Settings** → **Connections** and confirm OpenAI / Anthropic / Grok (xAI) / OpenRouter / OpenCode Zen / OpenCode Go show with no keys and Ollama is off. Fixture detected / signed-out / auth-error states are CI's job (`pnpm test:harness`).
 
 6. **Create a Demo worker**  
    In the sidebar, create a worker (**+** next to Workers), keep **Model** on **Demo**, save. Using the seeded Researcher also counts as Demo; still create one extra worker so the create path is exercised.

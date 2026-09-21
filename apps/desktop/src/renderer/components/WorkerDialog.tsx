@@ -12,6 +12,7 @@ import { isMascot, mascotIds } from './mascots';
 import { autoMascot } from './mascotSuggest';
 import { TabbedFormDialog } from './DialogTabs';
 import { readiness } from './providers';
+import { openCodeModelIssue } from './openCodeModel';
 import { CapabilityView } from './CapabilityView';
 import { fieldInvalid } from './fieldInvalid';
 import { toAmount, toMicros } from './money';
@@ -66,6 +67,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     if (!Number.isFinite(taskBudgetMicros) || taskBudgetMicros < 0) return fail('general', t('Giới hạn mỗi task phải là số không âm.'), 'budget');
     const trimmedModel = modelId.trim();
     if (trimmedModel.length > 200) return fail('general', t('ID model tối đa 200 ký tự.'), 'modelId');
+    const modelIssue = openCodeModelIssue(provider, trimmedModel);
+    if (modelIssue) return fail('general', modelIssue, 'modelId');
     setBusy(true); clearError();
     try {
       await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}) });
@@ -86,6 +89,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         modelOption('anthropic', 'Anthropic', t('gợi ý {0}', [CATALOG_HINT_IDS.anthropic]), t('API trả phí'), ready.anthropic),
         modelOption('xai', 'Grok', t('gợi ý {0}', [CATALOG_HINT_IDS.xai]), t('API trả phí'), ready.xai),
         modelOption('openrouter', 'OpenRouter', t('gợi ý {0}', [CATALOG_HINT_IDS.openrouter]), t('API trả phí'), ready.openrouter),
+        modelOption('opencode-zen', 'OpenCode Zen', t('trả theo mức dùng'), t('API trả phí'), ready['opencode-zen']),
+        modelOption('opencode-go', 'OpenCode Go', t('gói đăng ký có hạn mức'), t('API theo gói'), ready['opencode-go']),
         modelOption('ollama', 'Ollama', t('gợi ý {0}', [CATALOG_HINT_IDS.ollama]), t('Local trên máy này'), ready.ollama),
         ...(['claude-code', 'codex', 'cursor'] as const).map(id => {
           const found = harnesses.find(item => item.id === id);
@@ -101,6 +106,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       <CapabilityView provider={provider} connected={provider === 'demo' || ready[provider]} sourceCount={0} grant={null} setup />
       {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
       {provider === 'ollama' && <p className="muted">{t('Gọi Ollama trên máy này tại 127.0.0.1:11434. Cài Ollama và kéo model trước. Orglet không giữ ngân sách cho lần chạy local.')}</p>}
+      {provider === 'opencode-zen' && <p className="muted">{t('Dùng API key OpenCode Zen. Zen trừ số dư của bạn theo từng request. Orglet không theo dõi chi tiêu Zen và không áp giới hạn mỗi task, nên hãy đặt giới hạn chi tiêu trong console OpenCode Zen. Chỉ chạy được model mà tài liệu Zen ghi endpoint chat/completions.')}</p>}
+      {provider === 'opencode-go' && <p className="muted">{t('Dùng API key OpenCode Go, tính vào hạn mức 5 giờ, tuần và tháng của gói Go, không qua ngân sách Orglet. Nếu bật Use balance trên opencode.ai, phần vượt hạn mức trừ vào số dư Zen mà Orglet không thấy được. Chỉ chạy được model mà tài liệu Go ghi endpoint chat/completions.')}</p>}
       {paid && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
     </>}
     {tab === 'skill' && <>

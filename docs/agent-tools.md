@@ -16,6 +16,8 @@ When a user revises a running chat, core validates and saves the new revision be
 
 Chat command status is derived from the persisted workspace process records for the current turn. Exit code 0, failures, unfinished processes, file conflicts and uncertain calls have separate counts. The compact line may cover only the latest 100 records; Details carries the full available inspection and recovery path. A model's planned check text does not change these counts.
 
+OpenCode Zen and OpenCode Go workers are API workers: Orglet sends its own tool definitions over `/chat/completions` and runs every call through the same core handlers, capability defaults and folder grants as OpenAI or OpenRouter workers. They get no OpenCode CLI, no auto-approve flag and no skill scripts, and cancelling aborts the HTTP request. Fixture tests (`tests/integration/opencode.test.ts`) cover this; no live OpenCode call has been made.
+
 Assigned team members also have send, read and acknowledge tools for the [team mailbox](team-chat.md#worker-messages). These validate membership and the current turn at execution. They do not grant file or network access. API workers and the CLI tool bridge use the same mailbox handlers.
 
 If a worker mistypes a team-message recipient ID, core returns the current assignment's valid recipients as a tool error. The worker can correct the call in the same run; the rejected message creates no mailbox event or new agent. Core still checks the recipient again when it saves a valid message.

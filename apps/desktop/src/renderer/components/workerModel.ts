@@ -16,6 +16,8 @@ export function providerName(provider: Worker['provider']) {
   if (provider === 'anthropic') return 'Anthropic';
   if (provider === 'xai') return 'Grok';
   if (provider === 'openrouter') return 'OpenRouter';
+  if (provider === 'opencode-zen') return 'OpenCode Zen';
+  if (provider === 'opencode-go') return 'OpenCode Go';
   if (provider === 'ollama') return 'Ollama';
   if (isHarness(provider)) return harnessNames[provider];
   return provider;

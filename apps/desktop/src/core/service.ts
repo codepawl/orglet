@@ -33,6 +33,7 @@ import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './mod
 import { canStoreModelListRow, dropProviderRow, readModelListCache, writeModelListCache } from './models/cache';
 import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
 import { mentionedPeople } from '../shared/mentions';
+import { assertOpenCodeModel, isOpenCodePlan } from '../shared/opencode';
 import { MessageInteractions } from './orchestration/message-interactions';
 
 export class CoreService {
@@ -103,6 +104,7 @@ export class CoreService {
         assertSkillReady(this.store.get<Skill>('skills', input.skillId), this.store);
         if (input.id) this.store.get<Worker>('workers', input.id);
         const { modelId, ...fields } = input;
+        if (isOpenCodePlan(fields.provider)) assertOpenCodeModel(fields.provider, modelId);
         const worker: Worker = {
           ...fields,
           id: input.id ?? id(),

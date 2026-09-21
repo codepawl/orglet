@@ -19,22 +19,32 @@ import { CustomModelId, type ModelListResult } from './models';
 import { SetUserReaction, type MessageReaction } from './message-interactions';
 
 export const Id = z.string().uuid();
-export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'openrouter', 'ollama', 'claude-code', 'codex', 'cursor']);
+export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor']);
 export type ProviderId = z.infer<typeof ProviderId>;
 /** Providers that receive task content and therefore need per-task consent. */
 export const ProviderScope = ProviderId.exclude(['demo']);
 export type ProviderScope = z.infer<typeof ProviderScope>;
 /** API providers that store an encrypted connection (not local harnesses). Ollama stores a local sentinel, not a billed key. */
-export const ApiProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'ollama']);
+export const ApiProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama']);
 export type ApiProvider = z.infer<typeof ApiProvider>;
 export const API_PROVIDER_NAMES: Record<ApiProvider, string> = {
-  openai: 'OpenAI', anthropic: 'Anthropic', xai: 'Grok (xAI)', openrouter: 'OpenRouter', ollama: 'Ollama',
+  openai: 'OpenAI', anthropic: 'Anthropic', xai: 'Grok (xAI)', openrouter: 'OpenRouter',
+  'opencode-zen': 'OpenCode Zen', 'opencode-go': 'OpenCode Go', ollama: 'Ollama',
 };
 export function isLocalApi(provider: string): provider is 'ollama' {
   return provider === 'ollama';
 }
+/** Pay-per-use APIs whose requests Orglet reserves against the task, team and connection budgets. */
 export function isPaidApi(provider: string): boolean {
   return provider === 'openai' || provider === 'anthropic' || provider === 'xai' || provider === 'openrouter';
+}
+/**
+ * APIs whose spending is bounded by the provider's own controls, not Orglet budgets: the OpenCode Go subscription
+ * limits and the OpenCode Zen balance and spending limit. Orglet has no verified price for either, so these requests
+ * are never reserved against Orglet budgets (main session decision, 2026-09-21).
+ */
+export function isPlanApi(provider: string): provider is 'opencode-zen' | 'opencode-go' {
+  return provider === 'opencode-zen' || provider === 'opencode-go';
 }
 export const WorkerInput = z.object({
   id: Id.optional(), name: z.string().trim().min(1).max(80),
@@ -162,8 +172,8 @@ export type BudgetReservationView = {
 };
 export type TaskDetail = { task: Task; runs: Run[]; events: Activity[]; artifacts: Artifact[]; profiles: ProfileRecord[]; preflights: PreflightRecord[]; sources: Source[]; workspaceEvidence: (import('./workspace-evidence').WorkspaceReadEvidence & { grantCurrent: boolean })[]; usage: Usage };
 export type Workspace = { copyFormat: FormatPreference; downloadFormat: FormatPreference; archivedWorkers: (Worker & { archivedAt: string })[]; archivedTeams: (Team & { archivedAt: string })[]; language: Language; autoTitles: boolean; confirmOpenTask: boolean; archiveRetentionDays: ArchiveRetention; avatarColors: string[]; /** The one colour the user picks for the app; see shared/accent.ts. */ accentColor: string; knowledge: Knowledge[]; workers: Worker[]; teams: Team[]; skills: Skill[]; tasks: Task[]; routines: Routine[]; usage: Usage; budgetReservations: BudgetReservationView[]; theme: 'system' | 'light' | 'dark'; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; currency: CurrencyState; sqliteVersion: string };
-export type Connections = { openai: boolean; anthropic: boolean; xai: boolean; openrouter: boolean; ollama: boolean };
-export const emptyConnections = (): Connections => ({ openai: false, anthropic: false, xai: false, openrouter: false, ollama: false });
+export type Connections = Record<ApiProvider, boolean>;
+export const emptyConnections = (): Connections => ({ openai: false, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, ollama: false });
 
 export const commands = {
   workspace: z.object({}),

@@ -54,10 +54,12 @@ Workers can run through a local CLI, an API key, or Demo:
 | Codex on this computer | Codex installed **and signed in** | Your ChatGPT plan |
 | Cursor Agent on this computer | Cursor Agent CLI installed **and signed in** | Your Cursor plan |
 | OpenAI, Anthropic, Grok (xAI) or OpenRouter API | An API key saved in Settings | Pay per use, with limits you set |
+| OpenCode Zen API | A Zen API key saved in Settings | Pay per use from your Zen balance. Orglet does not track Zen spending or apply its task budget; set a spending limit in the OpenCode Zen console |
+| OpenCode Go API | A Go API key saved in Settings (a separate connection from Zen) | Your Go subscription and its 5-hour, weekly and monthly limits, not Orglet budgets |
 | Ollama on this computer | Ollama running locally | Local, no Orglet budget |
 | Demo | Nothing | Free, sample replies only |
 
-Each API or harness worker can use a model ID from **that provider's own list** (cached 24 hours in the local database) or a typed custom ID. Catalog names such as GPT-4.1 mini are suggestions, not a lock. If the list is empty or fails to load, you can still type an ID. When the cached list marks the selected (or suggested) model as deprecated, the picker shows a quiet chip; a sunset date appears only if that provider's API included one (OpenAI `shutdown_date`). Anthropic, xAI and harness lists have no native dates, so Orglet does not invent them. Details: [model-list-fetch.md](docs/model-list-fetch.md).
+Each API or harness worker can use a model ID from **that provider's own list** (cached 24 hours in the local database) or a typed custom ID. Catalog names such as GPT-4.1 mini are suggestions, not a lock. If the list is empty or fails to load, you can still type an ID. When the cached list marks the selected (or suggested) model as deprecated, the picker shows a quiet chip; a sunset date appears only if that provider's API included one (OpenAI `shutdown_date`). Anthropic, xAI and harness lists have no native dates, so Orglet does not invent them. OpenCode Zen and Go have no default model: pick one from that plan's own list. Orglet calls them over the chat/completions endpoint only, so models the OpenCode docs put on another endpoint (Claude, GPT, Gemini and some others) are listed as **Not supported** instead of being sent the wrong request. Details: [model-list-fetch.md](docs/model-list-fetch.md).
 
 **Settings → Local harnesses** always shows Claude Code, Codex and Cursor Agent as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. If sign-in fails, the screen gives the CLI login command to copy; Orglet does not switch to Demo.
 

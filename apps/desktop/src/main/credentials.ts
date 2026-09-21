@@ -11,6 +11,9 @@ const keyPattern: Record<ApiProvider, RegExp> = {
   anthropic: /^sk-[A-Za-z0-9_\-]{12,500}$/,
   xai: /^(?:xai-|sk-)[A-Za-z0-9_\-]{12,500}$/,
   openrouter: /^sk-or-[A-Za-z0-9_\-]{12,500}$/,
+  // The OpenCode docs do not publish a key format, so accept any plain token of a plausible length.
+  'opencode-zen': /^[A-Za-z0-9_\-]{16,500}$/,
+  'opencode-go': /^[A-Za-z0-9_\-]{16,500}$/,
   ollama: /^(?:ollama-local|[A-Za-z0-9_\-]{8,500})$/,
 };
 

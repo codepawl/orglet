@@ -2,7 +2,7 @@
 
 This guide covers how Orglet runs work, connects providers and harnesses, and what each limit and check does. First walk-through: [Getting started](getting-started.md). For what Orglet is and who it is for, see the [README](../README.md) and [product direction](product.md). The [docs map](README.md) lists the rest.
 
-This build supports individual workers, sequential or parallel teams, native OpenAI, Anthropic, xAI (Grok) and OpenRouter connections, local Ollama, local Claude Code / Codex / Cursor Agent harnesses, local dataset checks, routines, checkpoint/resume, backup/restore, team templates, Agent Skills import/review/export and reviewed reusable knowledge. The full MVP in `plans/orglet_mvp_plan_vi.md` is still in progress. Custom metric recomputation beyond built-in exact-match accuracy, live API-provider acceptance (script ready, needs a key path), a clean-machine Setup install and benchmarks remain unverified. The public 0.2.x release ships Windows Setup and ZIP; macOS and Linux have separate pull-request packaging workflows for dogfooding, not public release assets.
+This build supports individual workers, sequential or parallel teams, native OpenAI, Anthropic, xAI (Grok), OpenRouter, OpenCode Zen and OpenCode Go connections, local Ollama, local Claude Code / Codex / Cursor Agent harnesses, local dataset checks, routines, checkpoint/resume, backup/restore, team templates, Agent Skills import/review/export and reviewed reusable knowledge. The full MVP in `plans/orglet_mvp_plan_vi.md` is still in progress. Custom metric recomputation beyond built-in exact-match accuracy, live API-provider acceptance (script ready, needs a key path), a clean-machine Setup install and benchmarks remain unverified. The public 0.2.x release ships Windows Setup and ZIP; macOS and Linux have separate pull-request packaging workflows for dogfooding, not public release assets.
 
 ## Run
 
@@ -21,7 +21,7 @@ To try the interface without a model connection, keep the Researcher worker on *
 
 1. In **Cài đặt → Kết nối API**, turn on the provider you need. Paste the key and choose **Lưu key**, or choose **Từ tệp**. Turn the switch off to disconnect and hide the fields. Ollama has no key: turn the switch on if Ollama is running at `127.0.0.1:11434`.
 2. The main process encrypts the key with Electron `safeStorage` (DPAPI on Windows, Keychain on macOS). The renderer never receives the saved key back (typed drafts are cleared after a successful save). The original `.txt`, if you used one, remains where you saved it; remove it yourself when it is no longer needed.
-3. Edit Researcher, choose a connection (OpenAI, Anthropic, Grok, OpenRouter, Ollama, or a local harness), then pick a model from the fetched list or type a custom ID, and save. Catalog names such as GPT-4.1 mini are suggestions only.
+3. Edit Researcher, choose a connection (OpenAI, Anthropic, Grok, OpenRouter, OpenCode Zen, OpenCode Go, Ollama, or a local harness), then pick a model from the fetched list or type a custom ID, and save. Catalog names such as GPT-4.1 mini are suggestions only.
 4. Select UTF-8 text files, describe the task, set a task budget and allow the selected content to be sent to the providers listed for that task.
 5. Send the task. Open **Chi tiết** for activity or source references. Accepting a report only updates its status in Orglet.
 
