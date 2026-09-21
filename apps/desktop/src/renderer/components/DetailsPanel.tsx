@@ -55,7 +55,6 @@ function originalAssignmentOwner(detail: TaskDetail, run: Run): string {
     && candidate.snapshot.worker.id === originalWorkerId)?.snapshot.worker.name ?? originalWorkerId ?? '';
 }
 
-/** A section with an icon beside its title, so the panel can be scanned rather than read. */
 /** The text of a saved message in this chat: an answer, a team message or one of the user's turns. */
 function messageExcerpt(detail: TaskDetail, messageId: string): string | undefined {
   const artifact = detail.artifacts.find(item => item.id === messageId);
@@ -71,6 +70,7 @@ function messageExcerpt(detail: TaskDetail, messageId: string): string | undefin
   return undefined;
 }
 
+/** A section with an icon beside its title, so the panel can be scanned rather than read. */
 function Section({ icon: Icon, title, children }: { icon: typeof Users; title: string; children: React.ReactNode }) {
   return <section className="details-section">
     <h3><Icon size={15} aria-hidden="true" />{title}</h3>
