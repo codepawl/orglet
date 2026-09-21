@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { createElement, type ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
-import { mascots, mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
+import { Mascot, bubbleOutline, mascots, mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
 import { autoMascot, mascotCategoryIds, mascotColors, rankMascots, suggestMascots, suggestedColors, suggestedMascots } from '../../apps/desktop/src/renderer/components/mascotSuggest';
 
 const all = Object.values(mascotCategoryIds).flat();
@@ -56,15 +57,15 @@ it('suggests three colours led by the colour of the face shown', () => {
 });
 
 /** Every element a mascot draws, flattened out of the fragment tree, with the colours it paints with. */
-function painted(art: ReactNode): { name: string; fill?: string; stroke?: string }[] {
-  const out: { name: string; fill?: string; stroke?: string }[] = [];
+function painted(art: ReactNode): { name: string; fill?: string; stroke?: string; d?: string }[] {
+  const out: { name: string; fill?: string; stroke?: string; d?: string }[] = [];
   const walk = (node: ReactNode) => {
     if (Array.isArray(node)) { node.forEach(walk); return; }
     if (!node || typeof node !== 'object' || !('props' in node)) return;
     const element = node as { type: unknown; props: Record<string, unknown> };
     if (typeof element.type === 'string') {
       const text = (key: string) => typeof element.props[key] === 'string' ? element.props[key] as string : undefined;
-      out.push({ name: element.type, fill: text('fill'), stroke: text('stroke') });
+      out.push({ name: element.type, fill: text('fill'), stroke: text('stroke'), d: text('d') });
     }
     walk(element.props.children as ReactNode);
   };
@@ -81,13 +82,37 @@ it('never fills a mascot with the colour of the body it sits on', () => {
   // The mirror of this bug — a part drawn outside the body in the page colour, like an antenna stem — is not
   // caught here. Telling inside from outside needs the rendered geometry, not the source, so those are held by
   // the `outside` helper in mascots.tsx and by looking at them.
+  //
+  // The body paint is `--mascot-fill` (the shaded gradient, COD-131) with currentColor as its fallback; a shape in
+  // either is the body's own colour. The body itself is the one shape allowed to be, so it is skipped by its outline.
+  const bodyColoured = (fill: string | undefined) => fill === 'currentColor' || Boolean(fill?.startsWith('var(--mascot-fill'));
   const invisible: string[] = [];
+  let wornShapes = 0;
   for (const id of mascotIds) {
     for (const shape of painted(mascots[id].art)) {
-      if (shape.fill !== 'currentColor') continue;
+      if (shape.d === bubbleOutline) continue;
+      if (!bodyColoured(shape.fill)) continue;
+      wornShapes += 1;
       const rimmed = Boolean(shape.stroke && shape.stroke.includes('--mascot-ink'));
       if (!rimmed) invisible.push(`${id}: a ${shape.name} is filled with the body colour and has no rim`);
     }
   }
   expect(invisible).toEqual([]);
+  // The rule has to see the hats, or a change to the body paint would silently switch it off.
+  expect(wornShapes).toBeGreaterThan(20);
+});
+
+it('lights every mascot from its own gradient, never a shared one', () => {
+  // Many faces sit on one page. A gradient id shared between them would resolve to the first face in the document,
+  // painting every mascot in that one's colour, so each rendered face must define and reference its own.
+  const markup = renderToStaticMarkup(createElement('div', null, mascotIds.map(id => createElement(Mascot, { id, key: id }))));
+  const definedIds = [...markup.matchAll(/<radialGradient id="([^"]+)-body"/g)].map(match => match[1]);
+  const referencedIds = [...markup.matchAll(/--mascot-fill:url\(#([^)]+)-body\)/g)].map(match => match[1]);
+  expect(definedIds).toHaveLength(mascotIds.length);
+  expect(new Set(definedIds).size).toBe(mascotIds.length);
+  expect(referencedIds).toEqual(definedIds);
+  for (const id of definedIds) expect(id).toMatch(/^[\w-]+$/);
+  // The tones are mixed from the avatar colour at render time, never baked in, so any user colour shades.
+  expect(markup).toContain('stop-color="color-mix(in srgb, currentColor 72%, white)"');
+  expect(markup).toContain('stop-color="color-mix(in srgb, currentColor 74%, black)"');
 });
