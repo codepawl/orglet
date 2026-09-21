@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { MascotId } from './mascots';
 import type { Mood } from './orgletSolid';
-import { CANVAS_SCALE, mountFace, type FaceHandle, type Follow } from './orgletStage';
+import { CANVAS_SCALE, mountFace, type FaceHandle, type Follow, type Moment } from './orgletStage';
 
 /** How a large face behaves; every field is optional, and a face with none of them still turns after the pointer. */
 export type FaceMotion = {
@@ -15,6 +15,8 @@ export type FaceMotion = {
   mood?: Mood;
   /** Each increase plays the "say cheese" smile with a small hop. */
   cheer?: number;
+  /** Each increase of `count` plays that moment once (a glance, a doze, a wince), on the caller's cue. */
+  moment?: { kind: Moment; count: number };
 };
 
 /**
@@ -42,6 +44,9 @@ export function Orglet3D({ id, seed, size, color, motion = {} }: { id: MascotId;
   });
   const cheer = motion.cheer ?? 0;
   useEffect(() => { if (cheer > 0) handle.current?.cheer(); }, [cheer]);
+  const momentKind = motion.moment?.kind;
+  const momentCount = motion.moment?.count ?? 0;
+  useEffect(() => { if (momentKind && momentCount > 0) handle.current?.play(momentKind); }, [momentKind, momentCount]);
   const box = size * CANVAS_SCALE;
   return <canvas ref={canvas} className="orglet-3d" width={box} height={box} style={{ width: box, height: box, margin: -box / 2 }} aria-hidden="true" />;
 }

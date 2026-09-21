@@ -1300,6 +1300,8 @@ export const en: Dictionary = {
   'Đang lưu…': 'Saving…',
   'Đang mở cuộc trò chuyện…': 'Opening chat…',
   'Đang mở workspace…': 'Opening workspace…',
+  'Vẫn đang mở, chờ chút…': 'Still opening, one moment…',
+  'Mở lâu hơn bình thường. Nếu vẫn không xong, đóng rồi mở lại Orglet.': 'This is taking longer than usual. If it still does not finish, close Orglet and open it again.',
   'Đang tải danh sách model…': 'Loading the model list…',
   'Đang tạm dừng': 'Pausing',
   'Đang tổng hợp': 'Combining',
