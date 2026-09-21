@@ -59,7 +59,7 @@ try {
   assert.equal(await details.count(), 0);
   await page.waitForFunction(() => document.activeElement?.classList.contains('thread-menu'));
   // The message lists its files as cards; opening one is what the count button used to do.
-  await page.locator('.user-message .message-files .attachment-open').first().click();
+  await page.locator('.chat-turn .message-files .attachment-open').first().click();
   await page.getByRole('button', { name: 'Đọc nội dung', exact: true }).click();
   await page.getByText('Evidence fixture.', { exact: false }).waitFor();
   await page.screenshot({ path: join(output, 'desktop-source.png') });
@@ -163,7 +163,7 @@ try {
   await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: deterministic dataset checker');
   await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
-  await page.locator('.user-message .message-files .attachment-open').first().click();
+  await page.locator('.chat-turn .message-files .attachment-open').first().click();
   await page.getByRole('checkbox', { name: 'dataset.csv', exact: true }).check();
   await page.getByLabel('Cột ID (không bắt buộc)').fill('id');
   await page.getByRole('button', { name: 'Chạy checker local', exact: true }).click();
