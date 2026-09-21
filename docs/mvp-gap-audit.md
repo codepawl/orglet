@@ -1,5 +1,10 @@
 # MVP scope audit
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/mvp-gap-audit-dark.png">
+  <img src="images/orglets/mvp-gap-audit-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 This is an implementation gap audit, not a completion certificate. The contract remains both files in `plans/`. Passing tests establish their tested behaviors, not all milestone acceptance gates. Updated 2026-09-18 for the 0.2.0 Windows scope.
 
 ## Status against the plan

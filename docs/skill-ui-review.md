@@ -1,5 +1,10 @@
 # Agent Skills review flow
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/skill-ui-review-dark.png">
+  <img src="images/orglets/skill-ui-review-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Scope: import, inspect, approve, assign and export Agent Skills in the Windows desktop app. Existing drawer, buttons, select and checkbox styles are reused.
 
 The packaged E2E imports a real folder, inspects a script as text, verifies assignment is refused before review, confirms the explicit review action and exports all resources plus the Orglet manifest. It then imports a package declaring Bash and verifies activation is disabled with a repair message. It covers narrow layout and absence of renderer exceptions. Native folder dialogs are stubbed only in E2E.

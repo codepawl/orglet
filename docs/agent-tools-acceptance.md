@@ -1,5 +1,10 @@
 # Tools and team acceptance record
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/agent-tools-acceptance-dark.png">
+  <img src="images/orglets/agent-tools-acceptance-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 This records the COD-98 implementation against its six child issues. It is a local verification record, not a release claim.
 
 | Issue | Required behavior | Implementation | Evidence |

@@ -1,5 +1,10 @@
 # Finding evidence navigation
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/finding-ui-review-dark.png">
+  <img src="images/orglets/finding-ui-review-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 The packaged app was tested with an explicitly labelled synthetic report in an isolated database. Its CSV profile was produced by the real local checker; the report was inserted after closing the database. This tests presentation and navigation, not model analysis.
 
 Packaged E2E passed provenance display, exact source focus and automatic text preview, exact checker focus and expansion, and overflow at 780 × 640. Evidence is in `test-results/finding-smoke.json` and `test-results/finding-evidence.png`.

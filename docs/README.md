@@ -1,5 +1,10 @@
 # Docs
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/README-dark.png">
+  <img src="images/orglets/README-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 This folder is the map. Start with [Getting started](getting-started.md) if you want to use Orglet. Coding agents start at [AGENTS.md](../AGENTS.md); humans who want to contribute start at [CONTRIBUTING.md](../CONTRIBUTING.md). Do not copy those files here.
 
 How to write new pages: [writing.md](writing.md).

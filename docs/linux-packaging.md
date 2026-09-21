@@ -1,5 +1,10 @@
 # Linux packaging
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/linux-packaging-dark.png">
+  <img src="images/orglets/linux-packaging-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 ZIP packaging of the `Orglet` directory for dogfood, built by GitHub Actions on `ubuntu-latest`. Like the macOS job, this is **not** the required merge check: that remains the **Windows desktop** `test` aggregator. See [windows-release-gates.md](windows-release-gates.md).
 
 Nobody is running Orglet on Linux daily yet. The point of this job is that a Linux contributor gets an artifact and a signal instead of a build they have to trust.

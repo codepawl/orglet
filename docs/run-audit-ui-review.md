@@ -1,5 +1,10 @@
 # Run-log audit UI review
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/run-audit-ui-review-dark.png">
+  <img src="images/orglets/run-audit-ui-review-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 The source drawer reuses the existing dataset selector, native select, buttons and checker history. Users select exactly one dataset and explicitly choose the metric direction. Missing direction, multiple selections and revoked sources disable the run action. Trusted input errors explain the required columns inside the drawer.
 
 The packaged E2E attaches two CSV fixtures through the UI, checks disabled states, submits a malformed log, verifies the column error and confirms no partial checker result was saved. It then runs a 61-row log: 60 completed observations, one failure whose score is excluded, zero within-group sample deviation, and a public 15 → private 1 change of +14. The fixture tests error-code disclosure, rank rows and narrow overflow.

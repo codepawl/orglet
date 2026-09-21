@@ -1,5 +1,10 @@
 # Routine catch-up
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/routines-dark.png">
+  <img src="images/orglets/routines-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 This is the current scheduler policy. It matches `apps/desktop/src/core/orchestration/routines.ts`. Do not add cloud cron or run work while the machine is off.
 
 ## What runs, and when

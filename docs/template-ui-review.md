@@ -1,5 +1,10 @@
 # Team template interface review
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/template-ui-review-dark.png">
+  <img src="images/orglets/template-ui-review-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Scope: import/export controls in the existing TeamEditor drawer. No layout or visual-system redesign.
 
 Native computer use opened a saved team, scrolled to export, saved through Windows Save, opened Create team, selected the file through Windows Open and observed a new team. The export success status was visible; closing the drawer restored focus to its trigger. The imported team kept its name, so identical names can appear; identity and configuration remain separate.

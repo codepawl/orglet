@@ -1,5 +1,10 @@
 # macOS packaging
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/macos-packaging-dark.png">
+  <img src="images/orglets/macos-packaging-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 ZIP packaging of `Orglet.app` for dogfood. GitHub Actions on `macos-latest` **Developer ID signs and notarizes** the app, and the notarization ticket is stapled to it. This job is **not** the required merge check.
 
 Windows remains first: the required GitHub check is still the **Windows desktop** `test` aggregator. See [windows-release-gates.md](windows-release-gates.md). Do not treat a green macOS job as a substitute for that aggregator.

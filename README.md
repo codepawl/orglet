@@ -6,6 +6,11 @@
 
 **Your own small team of AI workers, on your computer.**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/orglets/crew-dark.png">
+  <img src="docs/images/orglets/crew-light.png" alt="" width="378" height="96">
+</picture>
+
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/codepawl/orglet)](https://github.com/codepawl/orglet/releases/latest)
 [![Status: early](https://img.shields.io/badge/status-0.2.0%20early-orange)](docs/implementation_status.md)

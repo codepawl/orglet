@@ -1,5 +1,10 @@
 # Waiting-for-input UI review
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/waiting-input-ui-review-dark.png">
+  <img src="images/orglets/waiting-input-ui-review-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Contract: after a final report with `not_assessed` checks, the task stays in `waiting_input` while runs remain completed. The user can acknowledge limits, accept without changing the report, or supplement via a new revision. Routines defer while the prior task waits.
 
 ## Packaged evidence (automated)

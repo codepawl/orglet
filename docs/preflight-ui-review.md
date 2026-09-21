@@ -1,5 +1,10 @@
 # Preflight interface review
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/preflight-ui-review-dark.png">
+  <img src="images/orglets/preflight-ui-review-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Scope: new preflight controls in TeamEditor, coverage/results in SourcePanel, the task link and demo explanation in TaskThread/App, and the grid height correction. React/Electron with existing buttons, inputs, typography and monochrome tokens. Generated bundles, binaries and lockfiles are excluded. The repository has no committed base; this review uses the current edits and observed before/after behavior.
 
 | Domain | Evidence inspected | Result |

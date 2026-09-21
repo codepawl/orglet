@@ -1,5 +1,10 @@
 # Product direction
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/product-dark.png">
+  <img src="images/orglets/product-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Decided with An on 2026-09-17. Use this page to settle product questions before building; change it when a decision changes.
 
 ## One line

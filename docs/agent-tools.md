@@ -1,5 +1,10 @@
 # Agent tools and permissions
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/agent-tools-dark.png">
+  <img src="images/orglets/agent-tools-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Worker setup and chat Details contain **Tí này làm được gì? / What can this worker do?**. The list is a preview for the next turn: attachments, dataset checks, file read/edit/command modes, and public web. “Connect the model” opens Connections or Local harnesses; “Attach a source” means adding it to the chat; “Grant access” means the controls below the list in Details. Reading attachments, dataset checks and web have separate switches. A team lists members individually because one connected member does not make all members capable. The runtime remains authoritative: it intersects the run's frozen capabilities with current task capabilities and validates the current folder grant again before each operation. Skills, knowledge, packages, teams and routines never grant file or network access.
 
 Workers can read attached sources and reviewed skill resources. With a separate workspace grant, they can list, search, read and edit files in a private working copy, and run commands when granted execution permission. Details contains the workspace controls and a separate web permission. Demo does not execute these tools.

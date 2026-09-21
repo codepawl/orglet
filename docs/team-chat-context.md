@@ -1,5 +1,10 @@
 # Team/worker chat: context, memory, cost, fail-closed
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/team-chat-context-dark.png">
+  <img src="images/orglets/team-chat-context-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Policy for epic [COD-22](https://linear.app/codepawl/issue/COD-22), written with [COD-23](https://linear.app/codepawl/issue/COD-23). **The five approval questions below are yes.** Numbers are defaults to implement, not a new settings screen.
 
 **Shipped:** team chat shell ([COD-24](https://linear.app/codepawl/issue/COD-24)), orchestrator ([COD-25](https://linear.app/codepawl/issue/COD-25)), hide-task-pile UX ([COD-26](https://linear.app/codepawl/issue/COD-26)) — click worker or team → live thread, find-or-create one `tasks` row. User-facing behavior: [team-chat.md](team-chat.md).

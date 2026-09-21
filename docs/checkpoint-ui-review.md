@@ -1,5 +1,10 @@
 # Checkpoint interface review
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/checkpoint-ui-review-dark.png">
+  <img src="images/orglets/checkpoint-ui-review-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Scope: pause/resume controls and state copy in TaskThread; narrow-sidebar behavior in App. React/Electron, shared button primitives and existing monochrome CSS. This review covers the current uncommitted change, not all previously implemented screens. Generated bundles, binaries and lockfiles are excluded. There is no committed base in this repository; before/after behavior is established by the edits and failing/passing desktop smoke runs.
 
 | Domain | Evidence inspected | Result |

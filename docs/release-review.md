@@ -1,5 +1,10 @@
 # Release review (historical v0.2.0 candidate)
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/orglets/release-review-dark.png">
+  <img src="images/orglets/release-review-light.png" alt="" width="112" height="112" align="right">
+</picture>
+
 Local review updated 2026-09-18 for the Windows 0.2.0 branch stack. It records what was checked then; it is not a current release approval. [v0.2.2](https://github.com/codepawl/orglet/releases/tag/v0.2.2) is now public with Windows Setup and ZIP. The [Windows release gates](windows-release-gates.md) record the later COD-12 decision that green packaged CI is sufficient for a public 0.2.x tag; the clean-machine Setup checklist remains optional and has not been claimed as run here.
 
 ## Dependencies
