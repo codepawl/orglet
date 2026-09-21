@@ -71,6 +71,12 @@ export class CoreService {
     this.routines = new Routines(store, this.sources, this.notify, (input, next) => this.createTask(input, next), clock);
     this.policy.captureHandoffs();
   }
+  /** Path of a task's source for the main process to open in the default app; the renderer only ever sends ids. */
+  sourcePath(raw: unknown): string {
+    const input = commands.sourceBytes.parse(raw);
+    const task = this.store.get<Task>('tasks', input.taskId);
+    return this.sources.pathOf(input.id, task.sourceIds);
+  }
   async grantWorkspace(raw: unknown) {
     const grant = await this.workspaceGrants.grant(raw);
     this.teams.cancel(grant.taskId);
@@ -312,6 +318,16 @@ export class CoreService {
         const text = await this.sources.read(input.id, task.sourceIds);
         const source = this.store.get<Source>('sources', input.id);
         return { name: source.name, text, hash: source.hash };
+      }
+      case 'sourceBytes': {
+        const input = commands.sourceBytes.parse(args);
+        const task = this.store.get<Task>('tasks', input.taskId);
+        return this.sources.readPreview(input.id, task.sourceIds);
+      }
+      case 'sourceOrigins': {
+        const input = commands.sourceOrigins.parse(args);
+        const task = this.store.get<Task>('tasks', input.taskId);
+        return this.sources.origins(task.sourceIds);
       }
       case 'sourceMetadata': return commands.sourceMetadata.parse(args).ids.map(id => this.store.get<Source>('sources', id));
       case 'profileSources': {

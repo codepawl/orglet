@@ -322,6 +322,17 @@ describe('runner integration', () => {
     expect(detail.events.map(event => event.message).join(' ')).toContain('$0.0030');
   });
 
+  it('keeps media on the person\'s screen: no copy for the harness, and the prompt says it is unreadable', async () => {
+    const image = join(directory, 'photo.png'); await writeFile(image, Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]));
+    sources = [...sources, ...(await core.sources.import([image]))];
+    const detail = await run('claude-code');
+    expect(detail.task.status).toBe('completed');
+    const [request] = requests;
+    expect(Object.keys(request.files)).toEqual(['01-note.txt']);
+    expect(request.prompt).toContain('Attached but not readable by you');
+    expect(request.prompt).toContain('photo.png');
+  });
+
   it('inlines source text for Codex, which has no file tool, and rejects out-of-range citations', async () => {
     const codex = await run('codex');
     expect(codex.artifacts[0].report.limitations.join(' ')).toContain('không có tool đọc tệp');

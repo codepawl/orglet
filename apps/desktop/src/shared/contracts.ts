@@ -10,6 +10,7 @@ import { PreflightPolicy, type PreflightRecord } from './preflight';
 import { Schedule, WorkHours } from './schedule';
 import { SkillPackage, type PackageReview } from './skill-package';
 import { RunAuditArgs } from './run-audit';
+import type { MediaKind } from './source-kinds';
 import { Review, ReviewPolicy, type EvidenceRequest } from './review';
 import { KnowledgeInput, type Knowledge, type RunContext } from './knowledge';
 import type { HarnessInfo } from './harness';
@@ -148,7 +149,12 @@ export const Report = z.object({
 export type Report = z.infer<typeof Report>;
 export type Worker = WorkerInput & { id: string; revision: number };
 export type Skill = z.infer<typeof SkillInput> & { id: string; revision: number; package?: SkillPackage };
-export type Source = { id: string; name: string; bytes: number; hash: string; revoked: boolean; format?: DataFormat };
+/** `format` marks a dataset the checkers can profile; `media` marks a preview-only file no worker can read yet. */
+export type Source = { id: string; name: string; bytes: number; hash: string; revoked: boolean; format?: DataFormat; media?: MediaKind };
+/** Where an attached file was picked from, for the person's own eyes only; never sent to a model. */
+export type SourceOrigin = { id: string; path: string | null };
+/** Verified bytes of a media source for an inline preview. */
+export type SourceBytes = { name: string; mimeType: string; bytes: Uint8Array };
 export type FolderIntake = { sources: Source[]; skipped: { name: string; reason: string }[] };
 export type TaskStatus = 'queued' | 'running' | 'pausing' | 'paused' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted' | 'waiting_budget' | 'waiting_input';
 export type Task = { toolCapabilities?: ToolCapability[]; messageReactions?: MessageReaction[]; id: string; brief: string; title?: string; workerId: string; teamId?: string; teamSnapshot?: Team; assignees?: 'all' | string[]; archivedAt?: string; deletedAt?: string; status: TaskStatus; createdAt: string; budgetMicros: number; sourceIds: string[]; excludedSources?: FolderIntake['skipped']; consent: boolean; providerScopes?: ProviderScope[]; accepted: boolean; /** A new input was saved while an older run was stopping; dispatch only after it settles. */ pendingStart?: boolean; /** Stamp of the result the user last opened; unread when it differs from `taskResultStamp`. */ seenStamp?: string; /** Latest saved answer/report id, part of the result stamp. */ lastArtifactId?: string; /** When the user last opened this task. */ seenAt?: string; routineId?: string; pauseReason?: 'shift'; handoff?: Handoff; evidenceRequests?: EvidenceRequest[]; decisionRequests?: DecisionRequest[]; inputRevision?: number; currentInput?: RunInput };
@@ -205,6 +211,8 @@ export const commands = {
   recoveryFile: ReadRecoveryFile,
   revokeWorkspace: z.object({ taskId: Id }).strict(),
   previewSource: z.object({ taskId: Id, id: Id }),
+  sourceBytes: z.object({ taskId: Id, id: Id }).strict(),
+  sourceOrigins: z.object({ taskId: Id }).strict(),
   sourceMetadata: z.object({ ids: z.array(Id).max(20) }),
   profileSources: ProfileArgs.extend({ taskId: Id }),
   auditRunLog: RunAuditArgs.extend({ taskId: Id }),
@@ -236,12 +244,14 @@ export const commands = {
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { reconcileBudget: void; recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
+export type Results = { reconcileBudget: void; recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;
   pickSources(): Promise<Source[]>;
   pickFolder(): Promise<FolderIntake>;
+  /** Open an attached file in the system's default app. The path is looked up by id in the core, never sent from here. */
+  openSource(taskId: string, id: string): Promise<void>;
   pickWorkspace(taskId: string, permissions: WorkspacePermission[]): Promise<WorkspaceGrantView | null>;
   /** Save an API key from typed input, or omit `key` to pick a .txt file. The key never comes back to the renderer. */
   connect(provider: ApiProvider, key?: string): Promise<Connections>;

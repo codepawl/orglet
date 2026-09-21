@@ -29,12 +29,21 @@ export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className
     window.addEventListener('resize', dismiss);
     return () => { document.removeEventListener('pointerdown', outside); window.removeEventListener('resize', dismiss); };
   }, [open]);
+  // Inside a modal dialog the panel goes into the dialog, like Select's menu: a modal turns pointer events off for
+  // everything outside itself, so a panel in the body would show but never take a click. A dialog is transformed,
+  // which makes it the containing block, so the panel is placed relative to it.
+  const container = () => (trigger.current?.closest('[role=dialog]') as HTMLElement | null) ?? document.body;
   const toggle = () => {
     if (open) { close(); return; }
     const rect = trigger.current!.getBoundingClientRect();
-    const below = rect.bottom + 4 + (items.length + 1) * 40 + 12 < innerHeight;
+    const host = container();
+    const bounds = host === document.body ? { left: 0, top: 0, right: innerWidth, bottom: innerHeight } : host.getBoundingClientRect();
+    const height = (items.length + 1) * 40 + 12;
+    const below = rect.bottom + 4 + height < bounds.bottom;
     const width = 240;
-    setPosition({ left: align === 'start' ? Math.min(rect.left, innerWidth - width - 8) : Math.max(8, rect.right - width), ...(below ? { top: rect.bottom + 4 } : { bottom: innerHeight - rect.top + 4 }) });
+    const left = align === 'start' ? Math.min(rect.left, bounds.right - width - 8) : Math.max(bounds.left + 8, rect.right - width);
+    const top = below ? rect.bottom + 4 : Math.max(bounds.top + 8, rect.top - 4 - height);
+    setPosition({ position: host === document.body ? 'fixed' : 'absolute', left: left - bounds.left, top: top - bounds.top });
   };
   const onMenuKey = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape') { event.stopPropagation(); if (asking) setAsking(undefined); else close(true); }
@@ -54,7 +63,7 @@ export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className
         <button type="button" role="menuitem" onClick={() => setAsking(undefined)}><X size={16} aria-hidden="true" /><span>{t('Không')}</span></button>
       </> : items.map(item => <button key={item.label} type="button" role="menuitem" className={item.danger ? 'danger' : undefined} onClick={() => { if (item.confirm) { setAsking(item); return; } close(true); item.onSelect(); }}><item.icon size={16} aria-hidden="true" /><span>{item.label}</span></button>)}
     </div>,
-    document.body,
+    container(),
   );
   return <div ref={root} className="row-menu" onBlur={event => { if (open && !inside(event.relatedTarget as Node | null)) close(); }} onKeyDown={event => { if (open) onMenuKey(event); }}>
     <Button ref={trigger} size="icon" className={className} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={toggle}><Icon size={16} /></Button>

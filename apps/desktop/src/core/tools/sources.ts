@@ -1,11 +1,11 @@
-import { open, realpath, lstat, opendir } from 'node:fs/promises';
+import { open, realpath, lstat, opendir, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, resolve, extname, join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Store, id, now } from '../storage/database';
-import type { Source, FolderIntake } from '../../shared/contracts';
+import type { Source, FolderIntake, SourceBytes, SourceOrigin } from '../../shared/contracts';
+import { DATASET_SOURCE_LIMIT, INLINE_PREVIEW_LIMIT, MEDIA_SOURCE_EXTENSIONS, MEDIA_SOURCE_LIMITS, TEXT_SOURCE_EXTENSIONS, TEXT_SOURCE_LIMIT, mediaKindOf, mediaMimeType, type MediaKind } from '../../shared/source-kinds';
 import { DataFormat, type ExactMatchRequest, type ProfileExecutor, type DatasetProfile, type ProfileInput } from '../../shared/profiles';
 
-const MAX_BYTES = 256 * 1024;
 export const fingerprint = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
 
 /**
@@ -28,11 +28,42 @@ export async function hasLinkInPath(path: string): Promise<boolean> {
     current = parent;
   }
 }
+
+/** The limit a file is held to, the reason given when it is over, and what the file is. */
+export type SourceLimit = { kind: 'text' | 'dataset' | 'media'; limit: number; overLimit: string; format?: DataFormat; media?: MediaKind };
+
+const MEDIA_OVER_LIMIT: Record<MediaKind, string> = {
+  image: 'Ảnh vượt 20 MB.',
+  audio: 'Tệp âm thanh vượt 50 MB.',
+  video: 'Video vượt 200 MB.',
+  pdf: 'PDF vượt 200 MB.',
+};
+const MEDIA_LABEL: Record<MediaKind, string> = { image: 'ảnh', video: 'tệp video', audio: 'tệp âm thanh', pdf: 'tệp PDF' };
+
+export function limitFor(name: string): SourceLimit {
+  const format = DataFormat.safeParse(extname(name).slice(1).toLowerCase());
+  if (format.success) return { kind: 'dataset', limit: DATASET_SOURCE_LIMIT, overLimit: 'Dataset vượt 32 MB.', format: format.data };
+  const media = mediaKindOf(name);
+  if (media) return { kind: 'media', limit: MEDIA_SOURCE_LIMITS[media], overLimit: MEDIA_OVER_LIMIT[media], media };
+  return { kind: 'text', limit: TEXT_SOURCE_LIMIT, overLimit: 'Chỉ đọc tệp văn bản tối đa 256 KB.' };
+}
+
+/** What a worker is told when it asks for a media source: the file exists, and this kind cannot be read. */
+export function unreadableSourceMessage(source: Source): string {
+  return `Nguồn ${source.name} là ${MEDIA_LABEL[source.media ?? 'image']}. Tí chưa đọc được loại tệp này; chỉ xem được trong Nguồn của cuộc trò chuyện.`;
+}
+
+type ReadMode = 'buffer' | 'hash';
+type FileRead = { bytes?: Buffer; hash: string; size: number };
+
 export class Sources {
   private checks = new Map<string, Set<AbortController>>();
   constructor(private store: Store, private executor?: ProfileExecutor) {}
-  private async bytes(path: string, dataset = false): Promise<Buffer> {
-    const limit = dataset ? 32 * 1024 * 1024 : MAX_BYTES;
+  /**
+   * Reads a file within `rule.limit` while making sure it is a plain file that nobody swaps under us. `hash` mode
+   * streams the digest without keeping the bytes, so a 200 MB video is fingerprinted without 200 MB of memory.
+   */
+  private async readFile(path: string, rule: SourceLimit, mode: ReadMode): Promise<FileRead> {
     if (await hasLinkInPath(path)) throw new Error('Không hỗ trợ symlink hoặc junction. Chọn tệp gốc.');
     const canonical = await realpath(path);
     const before = await lstat(path);
@@ -40,28 +71,50 @@ export class Sources {
     try {
       const stat = await file.stat();
       if (stat.dev !== before.dev || stat.ino !== before.ino) throw new Error('Tệp bị thay thế trong lúc mở. Chọn lại nguồn.');
-      if (!stat.isFile() || stat.size > limit) throw new Error(dataset ? 'Dataset vượt 32 MB.' : 'Chỉ đọc tệp văn bản tối đa 256 KB.');
-      const buffer = Buffer.alloc(Math.min(stat.size + 1, limit + 1));
-      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-      if (bytesRead > limit || bytesRead !== stat.size) throw new Error('Tệp vượt giới hạn hoặc thay đổi trong lúc đọc.');
+      if (!stat.isFile() || stat.size > rule.limit) throw new Error(rule.overLimit);
+      const result = mode === 'buffer' ? await this.readWhole(file, stat.size, rule.limit) : await this.hashWhole(file, stat.size, rule.limit);
       if ((await realpath(path)).toLowerCase() !== canonical.toLowerCase()) throw new Error('Đường dẫn thay đổi trong lúc đọc.');
       const after = await lstat(path);
       if (after.dev !== stat.dev || after.ino !== stat.ino || after.isSymbolicLink()) throw new Error('Tệp bị thay thế trong lúc đọc.');
-      const data = buffer.subarray(0, bytesRead);
-      if (extname(path).toLowerCase() !== '.parquet') {
-        if (data.includes(0)) throw new Error('Định dạng nhị phân chưa được hỗ trợ.');
-        new TextDecoder('utf-8', { fatal: true }).decode(data);
+      if (result.bytes && rule.kind !== 'media' && rule.format !== 'parquet') {
+        if (result.bytes.includes(0)) throw new Error('Định dạng nhị phân chưa được hỗ trợ.');
+        new TextDecoder('utf-8', { fatal: true }).decode(result.bytes);
       }
-      return data;
+      return result;
     } finally { await file.close(); }
+  }
+  private async readWhole(file: FileHandle, size: number, limit: number): Promise<FileRead> {
+    const buffer = Buffer.alloc(Math.min(size + 1, limit + 1));
+    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+    if (bytesRead > limit || bytesRead !== size) throw new Error('Tệp vượt giới hạn hoặc thay đổi trong lúc đọc.');
+    const bytes = buffer.subarray(0, bytesRead);
+    return { bytes, hash: fingerprint(bytes), size: bytesRead };
+  }
+  private async hashWhole(file: FileHandle, size: number, limit: number): Promise<FileRead> {
+    const digest = createHash('sha256');
+    const chunk = Buffer.alloc(1024 * 1024);
+    let total = 0;
+    while (true) {
+      const { bytesRead } = await file.read(chunk, 0, chunk.length, total);
+      if (bytesRead === 0) break;
+      total += bytesRead;
+      if (total > limit || total > size) throw new Error('Tệp vượt giới hạn hoặc thay đổi trong lúc đọc.');
+      digest.update(chunk.subarray(0, bytesRead));
+    }
+    if (total !== size) throw new Error('Tệp vượt giới hạn hoặc thay đổi trong lúc đọc.');
+    return { hash: digest.digest('hex'), size: total };
   }
   async import(paths: string[]): Promise<Source[]> {
     if (paths.length > 20) throw new Error('Chọn tối đa 20 tệp.');
     const imported: { source: Source; path: string }[] = [];
     for (const path of paths) {
-      const format = DataFormat.safeParse(extname(path).slice(1).toLowerCase());
-      const data = await this.bytes(path, format.success);
-      imported.push({ path: resolve(path), source: { id: id(), name: basename(path), bytes: data.length, hash: fingerprint(data), revoked: false, ...(format.success ? { format: format.data } : {}) } });
+      const rule = limitFor(path);
+      // Media is only fingerprinted here; its bytes are read again, and checked again, when previewed.
+      const read = await this.readFile(path, rule, rule.kind === 'media' ? 'hash' : 'buffer');
+      const source: Source = { id: id(), name: basename(path), bytes: read.size, hash: read.hash, revoked: false };
+      if (rule.format) source.format = rule.format;
+      if (rule.media) source.media = rule.media;
+      imported.push({ path: resolve(path), source });
     }
     this.store.transaction(() => { for (const { path, source } of imported) this.store.put('sources', source, { column: 'path', value: path }); });
     return imported.map(row => row.source);
@@ -69,7 +122,7 @@ export class Sources {
   async importFolder(root: string): Promise<FolderIntake> {
     if (await hasLinkInPath(root)) throw new Error('Không hỗ trợ thư mục symlink hoặc junction.');
     const result: FolderIntake = { sources: [], skipped: [] };
-    const supported = new Set(['.md', '.txt', '.json', '.jsonl', '.csv', '.parquet', '.ts', '.js', '.py', '.yaml', '.yml', '.log']);
+    const supported = new Set([...TEXT_SOURCE_EXTENSIONS, ...MEDIA_SOURCE_EXTENSIONS].map(extension => `.${extension}`));
     let entriesSeen = 0; let totalBytes = 0;
     const scan = async (directory: string, depth: number) => {
       if (depth > 8 || entriesSeen >= 1000) { result.skipped.push({ name: relative(root, directory) || '.', reason: 'Vượt giới hạn duyệt 8 cấp / 1.000 mục.' }); return; }
@@ -97,31 +150,66 @@ export class Sources {
     };
     await scan(root, 0); return result;
   }
+  /** Text of a source for a worker or a preview. Media sources are refused by name, never read. */
   async read(sourceId: string, allowedIds: string[]): Promise<string> {
     if (!allowedIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
     const source = this.store.get<Source>('sources', sourceId);
     if (source.format === 'parquet') throw new Error('Dùng profile_dataset để đọc Parquet.');
-    return (await this.readBytes(sourceId, allowedIds, false)).toString('utf8');
+    if (source.media) throw new Error(unreadableSourceMessage(source));
+    const read = await this.readChecked(sourceId, allowedIds, 'buffer');
+    return read.bytes!.toString('utf8');
   }
-  async verify(sourceId: string, allowedIds: string[]) { await this.readBytes(sourceId, allowedIds, true); }
-  /** Exact permitted, hash-checked bytes, for handing a snapshot copy to a local harness. */
+  /** Confirms the file is still there, unchanged and permitted, without keeping its bytes. */
+  async verify(sourceId: string, allowedIds: string[]) { await this.readChecked(sourceId, allowedIds, 'hash'); }
+  /** Exact permitted, hash-checked bytes, for handing a snapshot copy to a local harness. Never media. */
   async readVerified(sourceId: string, allowedIds: string[]): Promise<Buffer> {
-    return this.readBytes(sourceId, allowedIds, Boolean(this.store.get<Source>('sources', sourceId).format));
+    const source = this.store.get<Source>('sources', sourceId);
+    if (source.media) throw new Error(unreadableSourceMessage(source));
+    const read = await this.readChecked(sourceId, allowedIds, 'buffer');
+    return read.bytes!;
   }
-  private async readBytes(sourceId: string, allowedIds: string[], dataset: boolean): Promise<Buffer> {
+  /** Bytes of a media source for the person to look at, behind the same permission, revoke and hash gate. */
+  async readPreview(sourceId: string, allowedIds: string[]): Promise<SourceBytes> {
+    if (!allowedIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
+    const source = this.store.get<Source>('sources', sourceId);
+    if (!source.media) throw new Error('Nguồn này là văn bản; dùng previewSource.');
+    if (source.bytes > INLINE_PREVIEW_LIMIT) throw new Error('Tệp vượt 64 MB nên không xem trực tiếp trong Orglet được. Mở bằng ứng dụng mặc định.');
+    const read = await this.readChecked(sourceId, allowedIds, 'buffer');
+    const bytes = read.bytes!;
+    return { name: source.name, mimeType: mediaMimeType(source.name), bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.length) };
+  }
+  /** The stored path of a permitted, unrevoked source, for the main process to hand to the default app. */
+  pathOf(sourceId: string, allowedIds: string[]): string {
+    if (!allowedIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
+    const source = this.store.get<Source>('sources', sourceId);
+    if (source.revoked) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
+    const path = this.storedPath(sourceId);
+    if (!path) throw new Error(`Không còn tệp nguồn ${source.name} ở chỗ cũ.`);
+    return path;
+  }
+  /** Where each source was picked from; null for one restored from a backup. Shown to the person, never to a model. */
+  origins(sourceIds: string[]): SourceOrigin[] {
+    return sourceIds.map(sourceId => ({ id: sourceId, path: this.storedPath(sourceId) }));
+  }
+  private storedPath(sourceId: string): string | null {
+    const row = this.store.db.prepare('SELECT path FROM sources WHERE id=?').get(sourceId);
+    if (!row || !row.path) return null;
+    return String(row.path);
+  }
+  private async readChecked(sourceId: string, allowedIds: string[], mode: ReadMode): Promise<FileRead> {
     if (!allowedIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
     const source = this.store.get<Source>('sources', sourceId);
     if (source.revoked) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
     const row = this.store.db.prepare('SELECT path FROM sources WHERE id=?').get(sourceId)!;
-    const bytes = await this.bytes(String(row.path), dataset).catch((error: unknown) => {
+    const read = await this.readFile(String(row.path), limitFor(source.name), mode).catch((error: unknown) => {
       // The file lived on disk when it was attached; saying which one is gone is more use than the system error.
       if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') throw new Error(`Không còn tệp nguồn ${source.name} ở chỗ cũ. Tệp có thể đã bị đổi tên, di chuyển hoặc xóa. Đính kèm lại tệp, hoặc mở Nguồn của cuộc trò chuyện và Thu hồi quyền đọc để tiếp tục mà không có tệp này.`);
       throw error;
     });
     // Recheck after IO: revocation can arrive while the file is being read.
     if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
-    if (fingerprint(bytes) !== source.hash) throw new Error('Nguồn đã thay đổi. Chọn lại tệp để tạo manifest mới.');
-    return bytes;
+    if (read.hash !== source.hash) throw new Error('Nguồn đã thay đổi. Chọn lại tệp để tạo manifest mới.');
+    return read;
   }
   async profile(sourceIds: string[], allowedIds: string[], idColumn: string | null, signal?: AbortSignal, owner?: { id?: string; taskId: string; runId?: string }, runAudit?: ProfileInput['runAudit'], exactMatch?: ExactMatchRequest): Promise<DatasetProfile> {
     const controller = new AbortController();
@@ -142,7 +230,8 @@ export class Sources {
       if (!allowedIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
       const source = this.store.get<Source>('sources', sourceId);
       const format = DataFormat.parse(source.format ?? extname(source.name).slice(1).toLowerCase());
-      files.push({ sourceId, format, base64: (await this.readBytes(sourceId, allowedIds, true)).toString('base64') });
+      const read = await this.readChecked(sourceId, allowedIds, 'buffer');
+      files.push({ sourceId, format, base64: read.bytes!.toString('base64') });
     }
     signal?.throwIfAborted();
     const result = await this.executor({ files, idColumn, ...(runAudit ? { runAudit } : {}), ...(exactMatch ? { exactMatch } : {}) }, signal);
