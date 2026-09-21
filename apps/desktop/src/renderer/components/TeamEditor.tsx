@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Team, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput } from './ui';
-import { Activity, Columns2, FileText, GitCompare, ListOrdered, CalendarDays, Clock, Combine, Database, Download, FileUp, Globe, Plus, KeyRound, Layers, ListChecks, ScrollText, ShieldCheck, SlidersHorizontal, Type, Users, Wallet, Workflow } from 'lucide-react';
+import { Columns2, ListOrdered, CalendarDays, Clock, Combine, Download, FileUp, Globe, Layers, ScrollText, SlidersHorizontal, Users, Wallet, Workflow } from 'lucide-react';
 import { ProviderMark } from './ProviderMark';
 import { Avatar } from './Avatar';
 import { TabbedFormDialog } from './DialogTabs';
@@ -9,20 +9,16 @@ import { Select } from './Select';
 import { toast } from './toast';
 import { toAmount, toMicros } from './money';
 import { TimeZone } from '../../shared/schedule';
-import { ReviewPolicy } from '../../shared/review';
 import { fieldInvalid } from './fieldInvalid';
 import { t } from '../i18n';
 import { orglet } from '../api';
 import { Checkbox } from './Checkbox';
 import { SwitchField } from './Switch';
 
-type Tab = 'general' | 'instructions' | 'checklist' | 'dataset' | 'limits';
-type InvalidField = 'name' | 'members' | 'instructions' | 'checks' | 'limit' | 'taskBudget' | 'concurrency' | 'shiftZone' | 'shift';
+type Tab = 'general' | 'limits';
+type InvalidField = 'name' | 'members' | 'instructions' | 'limit' | 'taskBudget' | 'concurrency' | 'shiftZone' | 'shift';
 const tabs = [
   { id: 'general' as const, label: 'Chung', icon: <SlidersHorizontal size={16} /> },
-  { id: 'instructions' as const, label: 'Hướng dẫn', icon: <ScrollText size={16} /> },
-  { id: 'checklist' as const, label: 'Checklist', icon: <ListChecks size={16} /> },
-  { id: 'dataset' as const, label: 'Dataset', icon: <Database size={16} /> },
   { id: 'limits' as const, label: 'Giới hạn & ca', icon: <Wallet size={16} /> },
 ];
 
@@ -36,10 +32,10 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
   const [workflow, setWorkflow] = useState(team?.workflow ?? 'parallel');
   const [limit, setLimit] = useState(toAmount(team?.monthlyBudgetMicros ?? 5_000_000));
   const [taskBudget, setTaskBudget] = useState(toAmount(team?.taskBudgetMicros ?? 500_000));
-  const [preflight, setPreflight] = useState(Boolean(team?.preflight));
-  const [idColumn, setIdColumn] = useState(team?.preflight?.idColumn ?? '');
-  const [compareTwo, setCompareTwo] = useState(team?.preflight?.compareTwo ?? true);
-  const [requiredChecks, setRequiredChecks] = useState<ReviewPolicy['requiredChecks']>(team?.reviewPolicy?.requiredChecks ?? []);
+  // A checklist and a dataset check are no longer set up here (COD-143). A team that already has them, such as one
+  // made from the Eris Review template, keeps them on save and can drop them from General.
+  const [reviewPolicy, setReviewPolicy] = useState(team?.reviewPolicy);
+  const [preflight, setPreflight] = useState(team?.preflight);
   const [concurrency, setConcurrency] = useState(team?.maxConcurrentTasks ?? 4);
   const [shift, setShift] = useState(Boolean(team?.workHours));
   const [shiftZone, setShiftZone] = useState(team?.workHours?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -63,8 +59,7 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
   const submit = () => {
     if (!name.trim()) return fail('general', t('Nhập tên hội.'), 'name');
     if (!members.length || members.length > 4) return fail('general', t('Chọn từ 1 đến 4 thành viên.'), 'members');
-    if (!instructions.trim()) return fail('instructions', t('Hướng dẫn của hội không được để trống.'), 'instructions');
-    if (requiredChecks.length && !ReviewPolicy.safeParse({ requiredChecks }).success) return fail('checklist', t('Mỗi mục kiểm tra cần tên riêng, tối đa 200 ký tự; không để trống hoặc trùng tên.'), 'checks');
+    if (!instructions.trim()) return fail('general', t('Hướng dẫn của hội không được để trống.'), 'instructions');
     const monthlyBudgetMicros = toMicros(limit), taskBudgetMicros = toMicros(taskBudget);
     if (!Number.isFinite(monthlyBudgetMicros) || monthlyBudgetMicros < 0) return fail('limits', t('Giới hạn chi phí phải là số không âm.'), 'limit');
     if (!Number.isFinite(taskBudgetMicros) || taskBudgetMicros < 0) return fail('limits', t('Giới hạn chi phí phải là số không âm.'), 'taskBudget');
@@ -72,44 +67,30 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
     if (shift && !TimeZone.safeParse(shiftZone).success) return fail('limits', t('Timezone của ca không hợp lệ. Dùng tên như Asia/Ho_Chi_Minh hoặc UTC.'), 'shiftZone');
     if (shift && (!shiftDays.length || shiftStart === shiftEnd)) return fail('limits', t('Chọn ít nhất một ngày làm việc và giờ bắt đầu khác giờ kết thúc.'), 'shift');
     void run(async () => {
-      await orglet.call('saveTeam', { ...(team ? { id: team.id } : {}), name, instructions, ...(requiredChecks.length ? { reviewPolicy: { requiredChecks } } : {}), memberIds: members, synthesizerId: synthesizer, workflow, monthlyBudgetMicros, taskBudgetMicros, maxConcurrentTasks: concurrency, ...(shift ? { workHours: { timeZone: shiftZone, start: shiftStart, end: shiftEnd, days: shiftDays } } : {}), ...(preflight ? { preflight: { idColumn: idColumn.trim() || null, compareTwo } } : {}) });
+      await orglet.call('saveTeam', { ...(team ? { id: team.id } : {}), name, instructions, ...(reviewPolicy ? { reviewPolicy } : {}), memberIds: members, synthesizerId: synthesizer, workflow, monthlyBudgetMicros, taskBudgetMicros, maxConcurrentTasks: concurrency, ...(shift ? { workHours: { timeZone: shiftZone, start: shiftStart, end: shiftEnd, days: shiftDays } } : {}), ...(preflight ? { preflight } : {}) });
       toast(team ? t('Đã lưu hội') : t('Đã tạo hội')); onClose();
     });
   };
 
-  const actions = tab === 'checklist'
-    ? <Button type="button" variant="outline" disabled={busy || requiredChecks.length >= 20} onClick={() => { setRequiredChecks(current => [...current, { name: '', checker: 'none' }]); setTimeout(() => (document.querySelector('#team-panel fieldset:last-of-type input') as HTMLElement | null)?.focus(), 0); }}><Plus size={16} />{t('Thêm mục kiểm tra')}</Button>
-    : tab === 'general' && team
+  const actions = tab === 'general' && team
       ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.exportTemplate(team.id)) toast(t('Đã xuất template')); })}><Download size={16} />{t('Xuất template đã lưu')}</Button>
       : tab === 'general'
         ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.importTemplate()) onClose(); })}><FileUp size={16} />{t('Nhập template')}</Button>
         : undefined;
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={team ? t('Thiết lập hội') : t('Hội mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="team-panel" onSubmit={submit} submitLabel={t('Lưu hội')} busy={busy} actions={actions} error={error} description={tab === 'checklist' ? t('Báo cáo phải trả lời các mục này. Chỉ áp dụng cho lần chạy mới.') : undefined}>
+  return <TabbedFormDialog open={open} onClose={onClose} title={team ? t('Thiết lập hội') : t('Hội mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="team-panel" onSubmit={submit} submitLabel={t('Lưu hội')} busy={busy} actions={actions} error={error}>
     {tab === 'general' && <>
       <label><FieldLabel icon={Users} required>{t('Tên hội')}</FieldLabel><input data-field="name" value={name} onChange={e => { setName(e.target.value); if (invalid === 'name') clearError(); }} maxLength={80} {...fieldInvalid(invalid === 'name', flash)} /></label>
       <fieldset><legend><FieldLabel icon={Users} required>{t('Thành viên (1–4)')}</FieldLabel></legend>{workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} data-field={invalid === 'members' ? 'members' : undefined} checked={members.includes(worker.id)} onChange={e => { setMembers(current => e.target.checked ? [...current, worker.id] : current.filter(id => id !== worker.id)); if (invalid === 'members') clearError(); }} {...fieldInvalid(invalid === 'members', flash)}><span className="inline-mark"><Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />{worker.name}</span></Checkbox>)}{!workspace.workers.length && <p className="muted">{t('Chưa có Tí nào. Tạo một Tí trước.')}</p>}</fieldset>
       <Select label={<FieldLabel icon={Combine} required>{t('Tí trưởng')}</FieldLabel>} value={synthesizer} onChange={setSynthesizer} options={workspace.workers.map(worker => ({ value: worker.id, label: worker.name, icon: <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} /> }))} />
       <Select label={<FieldLabel icon={Workflow} required>{t('Quy trình')}</FieldLabel>} value={workflow} onChange={value => setWorkflow(value as typeof workflow)} options={[{ value: 'parallel', label: t('Song song, rồi tổng hợp'), icon: <Columns2 size={16} /> }, { value: 'sequential', label: t('Tuần tự, rồi tổng hợp'), icon: <ListOrdered size={16} /> }]} />
       <p className="muted">{t('Tuần tự theo thứ tự chọn thành viên. Song song chạy tối đa hai role cùng lúc. Thử lại giữ các kết quả role đã hoàn tất.')}</p>
+      <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn của hội')}</FieldLabel><textarea data-field="instructions" rows={8} value={instructions} onChange={e => { setInstructions(e.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} {...fieldInvalid(invalid === 'instructions', flash)} /></label>
+      {(reviewPolicy || preflight) && <div className="review-setup-list">
+        {reviewPolicy && <p className="muted review-setup"><span>{t('Báo cáo của hội phải trả lời {0} mục kiểm tra.', [reviewPolicy.requiredChecks.length])}</span><Button type="button" variant="ghost" disabled={busy} onClick={() => setReviewPolicy(undefined)}>{t('Bỏ checklist')}</Button></p>}
+        {preflight && <p className="muted review-setup"><span>{t('Tệp CSV/JSON được kiểm tra trên máy trước khi hội review.')}</span><Button type="button" variant="ghost" disabled={busy} onClick={() => setPreflight(undefined)}>{t('Tắt kiểm tra dataset')}</Button></p>}
+      </div>}
       {team && <p className="muted">{t('Template xuất ra gồm cấu hình hội, Tí và skill đã lưu. Không chứa API key, nguồn hay lịch sử công việc.')}</p>}
-    </>}
-    {tab === 'instructions' && <textarea data-field="instructions" aria-label={t('Hướng dẫn của hội')} aria-required="true" rows={12} value={instructions} onChange={e => { setInstructions(e.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} {...fieldInvalid(invalid === 'instructions', flash)} />}
-    {tab === 'checklist' && <>
-      {requiredChecks.map((check, index) => <fieldset key={index}><legend>{t('Mục {0}', [index + 1])}</legend>
-        <div className="form">
-          <label><FieldLabel icon={Type} required>{t('Tên mục')}</FieldLabel><input data-field={index === 0 ? 'checks' : undefined} aria-label={t('Tên mục {0}', [index + 1])} value={check.name} maxLength={200} onChange={event => { setRequiredChecks(current => current.map((item, position) => position === index ? { ...item, name: event.target.value } : item)); if (invalid === 'checks') clearError(); }} {...fieldInvalid(invalid === 'checks', flash)} /></label>
-          <Select label={<><FieldLabel icon={ShieldCheck} required>{t('Bằng chứng')}</FieldLabel><span className="visually-hidden"> {t('cho mục {0}', [index + 1])}</span></>} value={check.checker} onChange={value => setRequiredChecks(current => current.map((item, position) => position === index ? { ...item, checker: value as ReviewPolicy['requiredChecks'][number]['checker'] } : item))} options={[{ value: 'none', label: t('Nguồn đã đọc'), icon: <FileText size={16} /> }, { value: 'run_audit', label: t('Kiểm tra run-log'), detail: t('Cần kết quả trước khi PASS'), icon: <Activity size={16} /> }, { value: 'pair_alignment', label: t('Đối chiếu hai dataset'), detail: t('Cột, số dòng, tập ID trước khi PASS'), icon: <GitCompare size={16} /> }, { value: 'exact_match_accuracy', label: t('Tính exact-match accuracy'), detail: t('Cần điểm từ cặp predictions/answers đã chọn'), icon: <GitCompare size={16} /> }]} />
-          <Button type="button" disabled={busy} aria-label={t('Bỏ mục {0}', [index + 1])} onClick={() => setRequiredChecks(current => current.filter((_, position) => position !== index))}>{t('Bỏ mục')}</Button>
-        </div>
-      </fieldset>)}
-    </>}
-    {tab === 'dataset' && <>
-      <SwitchField checked={preflight} onChange={setPreflight} description={t('Kiểm tra tệp CSV/JSON trên máy trước khi hội review. Không gọi model.')}>{t('Kiểm tra dataset trước khi review')}</SwitchField>
-      {preflight && <>
-        <label><FieldLabel icon={KeyRound}>{t('Cột ID (không bắt buộc)')}</FieldLabel><input value={idColumn} onChange={event => setIdColumn(event.target.value)} maxLength={256} placeholder={t('Ví dụ: id')} /></label>
-        <SwitchField checked={compareTwo} onChange={setCompareTwo} description={t('Khi có đúng hai tệp, so cột và ID. Để trống cột ID nếu chưa rõ.')}>{t('Đối chiếu schema và ID khi task có đúng hai dataset')}</SwitchField>
-      </>}
     </>}
     {tab === 'limits' && <>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn hội / tháng')}</FieldLabel><MoneyInput data-field="limit" type="number" min="0" step="any" value={limit} onChange={value => { setLimit(value); if (invalid === 'limit') clearError(); }} invalid={invalid === 'limit'} flash={flash} /></label>

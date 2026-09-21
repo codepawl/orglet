@@ -31,22 +31,20 @@ try {
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
   await page.getByRole('button', { name: 'Tùy chọn hội Eris Review', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Tùy chọn hội Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
-  await page.getByRole('tab', { name: 'Checklist', exact: true }).click();
-  assert.equal(await page.getByLabel(/^Tên mục \d+$/).count(), 5);
-  await page.getByLabel('Tên mục 1', { exact: true }).fill('Mục tiêu và GPU relevance');
-  await page.getByRole('button', { name: 'Thêm mục kiểm tra', exact: true }).click();
-  await page.getByLabel('Tên mục 6', { exact: true }).fill('Mục tiêu và GPU relevance');
+  // The team editor no longer edits a checklist or a dataset check (COD-143). A template team keeps both and says so.
+  await page.getByText('Báo cáo của hội phải trả lời 5 mục kiểm tra.', { exact: true }).waitFor();
+  await page.getByText('Tệp CSV/JSON được kiểm tra trên máy trước khi hội review.', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Lưu hội', exact: true }).click();
-  await page.getByRole('alert').filter({ hasText: 'không để trống hoặc trùng tên' }).waitFor();
-  await page.getByRole('button', { name: 'Bỏ mục 6', exact: true }).click();
-  assert.equal(await page.getByRole('combobox', { name: 'Bằng chứng cho mục 5', exact: true }).getAttribute('data-value'), 'run_audit');
-  await page.getByRole('tab', { name: 'Dataset', exact: true }).click();
-  assert.equal(await page.getByRole('switch', { name: 'Kiểm tra dataset trước khi review', exact: true }).getAttribute('aria-checked'), 'true');
-  await page.getByLabel('Cột ID (không bắt buộc)', { exact: true }).fill('id');
-  const compareTwo = page.getByRole('switch', { name: 'Đối chiếu schema và ID khi task có đúng hai dataset', exact: true });
-  await compareTwo.click();
-  assert.equal(await compareTwo.getAttribute('aria-checked'), 'false');
-  await page.getByRole('button', { name: 'Lưu hội', exact: true }).click();
+  await page.getByText('Đã lưu hội', { exact: true }).first().waitFor();
+  const keptOnSave = await page.evaluate(async () => {
+    const workspace = await window.orglet.call('workspace', {});
+    const team = workspace.teams.find(item => item.name === 'Eris Review');
+    const kept = { checks: team.reviewPolicy?.requiredChecks.length, lastChecker: team.reviewPolicy?.requiredChecks[4]?.checker, preflight: Boolean(team.preflight) };
+    // The ID column is set through the command, now that the editor has no field for it.
+    await window.orglet.call('saveTeam', { ...team, preflight: { idColumn: 'id', compareTwo: false } });
+    return kept;
+  });
+  assert.deepEqual(keptOnSave, { checks: 5, lastChecker: 'run_audit', preflight: true }, 'Saving from the editor must keep what it no longer shows');
   const preflightTaskId = await page.evaluate(async sourceId => {
     const workspace = await window.orglet.call('workspace', {}); const team = workspace.teams.find(team => team.name === 'Eris Review');
     return window.orglet.call('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Packaged automatic preflight', sourceIds: [sourceId], consent: false, budgetMicros: 1000 });
@@ -78,7 +76,7 @@ try {
   await page.getByText('Đã xuất template', { exact: true }).waitFor();
   const template = JSON.parse(await readFile(templatePath, 'utf8'));
   assert.equal(template.team.reviewPolicy.requiredChecks.length, 5);
-  assert.equal(template.team.reviewPolicy.requiredChecks[0].name, 'Mục tiêu và GPU relevance');
+  assert.equal(template.team.reviewPolicy.requiredChecks[4].checker, 'run_audit');
   assert.equal(template.format, 'orglet-team-template'); assert.equal(template.team.preflight.idColumn, 'id');
   template.team.name = 'Imported review'; await writeFile(templatePath, JSON.stringify(template));
   await page.keyboard.press('Escape');
