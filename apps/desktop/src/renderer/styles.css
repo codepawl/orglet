@@ -850,7 +850,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .source-preview { font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size:12px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--surface); padding:12px 14px; border-radius:10px; max-height:480px; overflow:auto; tab-size:4; }
 pre.source-preview { margin:0; }
 pre.source-preview>span { display:block; padding-left:calc(var(--line-number-width, 4ch) + 12px); text-indent:calc(-1 * (var(--line-number-width, 4ch) + 12px)); }
-.line-highlight { background:var(--bg); outline:1px solid var(--muted); border-radius:4px; }
+/* Cited lines read as one soft band in the accent, not a box around each line (no rules between rows). */
+.line-highlight { background:color-mix(in srgb, var(--accent) 16%, transparent); }
 .line-number { display:inline-block; width:var(--line-number-width, 4ch); margin-right:12px; text-align:right; text-indent:0; color:var(--muted); user-select:none; font-variant-numeric:tabular-nums; }
 .tok-comment { color:var(--muted); font-style:italic; }
 .tok-string { color:var(--success); }
