@@ -163,17 +163,25 @@ function capsulePoints(centreX: number, centreY: number, width: number, height: 
   return roundedRectPoints(centreX + 32 - width / 2, centreY + 33 - height / 2, width, height, radius);
 }
 
-// The bubble outline, clockwise from the top edge: three big corners and the small bottom-left one that makes it
-// a speech bubble, the logo's proportions (mascots.tsx `bubbleOutline`).
-function buildBodyOutline(): Point2[] {
+/**
+ * The bubble outline, clockwise from the top edge: three big corners and the small bottom-left one that makes it
+ * a speech bubble, the logo's proportions (mascots.tsx `bubbleOutline`). `inset` shrinks it by that distance
+ * everywhere, which for a rounded outline is exactly the same outline with every radius reduced by the inset and
+ * every arc centre where it was; that is what makes the bevel below a true parallel curve and not a scaled copy,
+ * so the logo's own proportions survive it.
+ */
+export function buildBodyOutline(inset = 0): Point2[] {
   const points: Point2[] = [];
+  const half = BODY_HALF - inset;
+  const corner = BODY_CORNER - inset;
+  const tail = BODY_TAIL - inset;
   const cornerSteps = 10;
   const tailSteps = 6;
   const arcs: [number, number, number, number, number, number][] = [
-    [-BODY_HALF + BODY_CORNER, -BODY_HALF + BODY_CORNER, BODY_CORNER, Math.PI, Math.PI * 1.5, cornerSteps],
-    [BODY_HALF - BODY_CORNER, -BODY_HALF + BODY_CORNER, BODY_CORNER, Math.PI * 1.5, TAU, cornerSteps],
-    [BODY_HALF - BODY_CORNER, BODY_HALF - BODY_CORNER, BODY_CORNER, 0, Math.PI / 2, cornerSteps],
-    [-BODY_HALF + BODY_TAIL, BODY_HALF - BODY_TAIL, BODY_TAIL, Math.PI / 2, Math.PI, tailSteps],
+    [-half + corner, -half + corner, corner, Math.PI, Math.PI * 1.5, cornerSteps],
+    [half - corner, -half + corner, corner, Math.PI * 1.5, TAU, cornerSteps],
+    [half - corner, half - corner, corner, 0, Math.PI / 2, cornerSteps],
+    [-half + tail, half - tail, tail, Math.PI / 2, Math.PI, tailSteps],
   ];
   for (const [centreX, centreY, radius, startAngle, endAngle, steps] of arcs) {
     for (let index = 0; index <= steps; index++) {
@@ -184,6 +192,29 @@ function buildBodyOutline(): Point2[] {
   return points;
 }
 export const bodyOutline = buildBodyOutline();
+
+/*
+ * The rolled edge (user, 2026-09-22: the edges were still too sharp). The slab is not a cut-out with a crease where
+ * the face meets the side: its edge is a quarter round of radius BEVEL, so the widest cross-section is the rim at
+ * ±RIM_Z and the face plate at ±FRONT is inset by the whole radius. The steps between them are drawn as shoulders,
+ * each one a ring of the quarter round with a tone that much further from the side and towards the face, which is
+ * what a rolled edge is made of at the sizes these faces are drawn.
+ */
+export const BEVEL = 3.4;
+export const RIM_Z = FRONT - BEVEL;
+/** Along the quarter round, 0 at the rim and a right angle at the face plate. Two steps read as a roll; one reads as a chamfer. */
+const SHOULDER_ANGLES = [Math.PI / 6, Math.PI / 3];
+const bevelInset = (angle: number) => BEVEL * (1 - Math.cos(angle));
+const bevelDepth = (angle: number) => RIM_Z + BEVEL * Math.sin(angle);
+const shoulders = SHOULDER_ANGLES.map((angle, index) => ({
+  outline: buildBodyOutline(bevelInset(angle)),
+  z: bevelDepth(angle),
+  /** How far this ring has travelled from the side's colour to the face's. */
+  towardsFace: (index + 1) / (SHOULDER_ANGLES.length + 1),
+}));
+const faceOutline = buildBodyOutline(BEVEL);
+/** Stroking a fill in its own paint rounds its corners, because the context joins with arcs. */
+const EDGE_ROUND = 1.1;
 
 /* ---------- Accessories, the same ones mascots.tsx draws. A shape is a polygon with a depth, a paint and an
    optional rim; "worn" is the mascot rule: the body's own colour rimmed in the page colour. */
@@ -876,6 +907,13 @@ function drawShape(context: Context, record: Shape, projected: readonly (readonl
   if (record.fill) {
     context.fillStyle = paintFor(record.fill, tones);
     context.fill();
+    if (!record.stroke) {
+      // A rimless shape is a bare fill, so its polygon corners stay sharp; stroking it in its own paint rounds them
+      // the way the rim rounds a worn one.
+      context.strokeStyle = context.fillStyle;
+      context.lineWidth = EDGE_ROUND;
+      context.stroke();
+    }
   }
   if (record.stroke) {
     context.strokeStyle = paintFor(record.stroke, tones);
@@ -1139,13 +1177,17 @@ export function drawOrglet(context: Context, model: OrgletModel, tones: Tones, l
   context.lineCap = 'round';
   context.lineJoin = 'round';
 
-  const front = bodyOutline.map(([x, y]) => projectPoint(rotation, x, y, FRONT));
-  const back = bodyOutline.map(([x, y]) => projectPoint(rotation, x, y, -FRONT));
+  // The rolled edge: the widest cross-section is the rim at ±RIM_Z, the plates at ±FRONT are inset by the bevel,
+  // and a shoulder sits at the 45° point between them.
+  const rimFront = bodyOutline.map(([x, y]) => projectPoint(rotation, x, y, RIM_Z));
+  const rimBack = bodyOutline.map(([x, y]) => projectPoint(rotation, x, y, -RIM_Z));
+  const front = faceOutline.map(([x, y]) => projectPoint(rotation, x, y, FRONT));
+  const back = faceOutline.map(([x, y]) => projectPoint(rotation, x, y, -FRONT));
   const frontCentre = projectPoint(rotation, 0, 0, FRONT);
   const backCentre = projectPoint(rotation, 0, 0, -FRONT);
-  // The slab's silhouette is the convex hull of the front and back outlines; the bubble is convex apart from its
-  // tail, and the tail is drawn again on the front face on top.
-  const hull = convexHull(front.concat(back));
+  // The slab's silhouette is the convex hull of every cross-section; the bubble is convex apart from its tail, and
+  // the tail is drawn again on the face plate on top.
+  const hull = convexHull(rimFront.concat(rimBack, front, back));
 
   const projectedShapes = model.look.shapes.map((record, index) => {
     const result = projectShape(record, rotation, model);
@@ -1163,18 +1205,36 @@ export function drawOrglet(context: Context, model: OrgletModel, tones: Tones, l
   sideGradient.addColorStop(0, rgbString(mixRgb(sideColour, BLACK, 0.3)));
   sideGradient.addColorStop(1, rgbString(sideColour));
   context.fillStyle = sideGradient;
+  context.strokeStyle = sideGradient;
+  context.lineWidth = EDGE_ROUND;
   tracePolygon(context, hull, true);
   context.fill();
+  context.stroke();
 
   if (facing) {
-    context.fillStyle = faceGradient(context, front, tones, rotation);
+    for (const shoulder of shoulders) {
+      context.fillStyle = rgbString(mixRgb(sideColour, tones.base, shoulder.towardsFace));
+      tracePolygon(context, shoulder.outline.map(([x, y]) => projectPoint(rotation, x, y, shoulder.z)), true);
+      context.fill();
+    }
+    const face = faceGradient(context, front, tones, rotation);
+    context.fillStyle = face;
+    context.strokeStyle = face;
     tracePolygon(context, front, true);
     context.fill();
+    context.stroke();
     drawEyes(context, model, rotation, tones, now);
   } else {
+    for (const shoulder of shoulders) {
+      context.fillStyle = rgbString(mixRgb(sideColour, tones.back, shoulder.towardsFace));
+      tracePolygon(context, shoulder.outline.map(([x, y]) => projectPoint(rotation, x, y, -shoulder.z)), true);
+      context.fill();
+    }
     context.fillStyle = rgbString(tones.back);
+    context.strokeStyle = rgbString(tones.back);
     tracePolygon(context, back, true);
     context.fill();
+    context.stroke();
   }
   for (const item of projectedShapes) {
     if (item.inFront) {
