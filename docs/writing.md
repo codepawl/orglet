@@ -40,4 +40,4 @@ When the app's layout changes (sidebar, composer, font), replace the shots in `d
 - Rewrite a page that is already clear.
 - Change app fonts, UI, or add @tags from a docs-only change.
 - Put secrets, keys, or machine-local paths that are not examples into docs.
-- Paste a verification log into a start-here or how-it-works page: commit SHAs, CI run links, file hashes, local script paths, one machine's security policy, or "before closing COD-xx". Put that evidence on the Linear issue and tell the reader, in plain words, what was tried and what was not.
+- Paste a verification log into a start-here or how-it-works page: commit SHAs, CI run links, file hashes, local script paths, one machine's security policy, or "before closing COD-xx". Put that evidence in [implementation_status.md](implementation_status.md), the ship/verify record, and tell the reader of the page, in plain words, what was tried and what was not.

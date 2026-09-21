@@ -29,6 +29,15 @@ Encrypted API keys live in `openai.credential`, `anthropic.credential`, `xai.cre
 
 `tests/integration/knowledge.test.ts` migrates a v5 workspace to v6 and opens the pre-upgrade copy directly to confirm it still reports schema 5 with the original rows and without the v6 tables. `tests/integration/checkpoints.test.ts` covers the v1 path and refusal of a newer schema.
 
-The rollback steps above have also been tried by hand with the published v0.2.2 build. It refused to open a workspace written by a newer build and left that file unchanged. Following the steps, it then opened the `.bak` copy with the original workers, chats and reports.
+On 2026-09-21, a controlled Windows trial opened the [v0.2.2 release ZIP](https://github.com/codepawl/orglet/releases/tag/v0.2.2) (commit `bc67ccfb03e65556590644a16d1ee9449a10ca27`, ZIP SHA-256 `8D8CC17B40673AE01E33B6E1D6952BCDAFB11D6464066DFBAC5410F0D35CE604`) with `--user-data-dir` pointing to a disposable folder. The packaged build created one Demo chat and one report. A temporary local Vitest check opened that database with source commit `b7f425d34105671b068d5ead1c1851fe88c1dfe6` (schema 12), confirmed the worker, chat and report persisted, and found a v6 `.bak`. The commands were:
 
-Not tried yet: rolling back between two newer builds, rolling back with real API keys in place, and rolling back a workspace installed with Setup.
+```powershell
+node .worktrees\cod94-validation\rollback-smoke.mjs old
+node_modules\.bin\vitest.cmd run tests\integration\cod94-local.test.ts
+node .worktrees\cod94-validation\rollback-smoke.mjs refuse
+node .worktrees\cod94-validation\rollback-smoke.mjs rollback
+```
+
+Those harness files were local test fixtures, not repository tests. The `refuse` phase copied the v12 database to a second disposable folder. The v0.2.2 app did not open a workspace window, and the database SHA-256 stayed unchanged. The `rollback` phase moved the v12 database and its WAL/SHM files aside, copied the v6 `.bak` to `orglet.sqlite`, and opened it with v0.2.2. It retained the original Demo worker, chat and report. The preserved v12 file still reports schema 12. No credential files were used or copied in this trial, so preservation of real encrypted credentials was not exercised. The Setup installer and clean-machine installation were not tested.
+
+This does not yet satisfy a two-packaged-build rollback test: all published v0.2.0–v0.2.2 builds use schema 6. The Windows CI ZIP for commit `a16d370e142cceb7bd1d781edbe6586df2db044a` (schema 12; [run 35532453950](https://github.com/codepawl/orglet/actions/runs/35532453950); ZIP SHA-256 `0C9A7B9D7B5E687853CD6E724CC1F47EA6E45F9AFACDE04FCBDDDC25834CFBAB`) was blocked at launch by this machine's Device Guard policy. Repeat the full trial with two permitted packaged builds of different schema versions before closing COD-94.
