@@ -1,11 +1,13 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Check, Contrast, Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Check, Contrast, Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
+import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
-import type { HarnessInfo } from '../../shared/harness';import { Button, PanelHeading, keepOpenForPopup } from './ui';
+import type { HarnessInfo } from '../../shared/harness';
+import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
 import { BudgetReconciliation } from './BudgetReconciliation';
@@ -91,7 +93,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const currency = workspace.currency ?? usdCurrency;
   /** The accent's own picker, opened from the swatch row so a colour outside the palette is still reachable. */
   const [colorPanel, setColorPanel] = useState(false);
+  const customColorButton = useRef<HTMLButtonElement>(null);
+  const closeColorPanel = useCallback(() => setColorPanel(false), []);
   const accent = workspace.accentColor ?? DEFAULT_ACCENT_COLOR;
+  const customAccent = !avatarPalette.some(color => color.toLowerCase() === accent.toLowerCase());
   const [limit, setLimit] = useState(toAmount(workspace.connectionLimitMicros));
   const [limitError, setLimitError] = useState('');
   const savedLimit = useRef(workspace.connectionLimitMicros);
@@ -149,15 +154,22 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       className="avatar-swatch" style={{ '--avatar-color': color } as CSSProperties} aria-label={color} title={color}
                       onClick={() => void save({ accentColor: color })}>{checked && <Check size={12} strokeWidth={3} aria-hidden="true" />}</button>;
                   })}
-                  <Button type="button" size="icon" className="setting-swatch-custom" aria-label={t('Chọn màu khác')} title={t('Chọn màu khác')}
-                    aria-expanded={colorPanel} disabled={busy} onClick={() => setColorPanel(open => !open)}><Palette size={15} /></Button>
+                  {/* A swatch like its neighbours: a colour wheel with a pencil, or the custom accent itself once one is chosen. */}
+                  <button ref={customColorButton} type="button" className="avatar-swatch accent-swatch-custom" data-custom={customAccent || undefined}
+                    style={customAccent ? { '--avatar-color': accent } as CSSProperties : undefined}
+                    aria-label={customAccent ? t('Màu tùy chỉnh {0}, chỉnh sửa', [accent]) : t('Chọn màu khác')} title={customAccent ? accent : t('Chọn màu khác')}
+                    aria-haspopup="dialog" aria-expanded={colorPanel} aria-pressed={customAccent} disabled={busy} onClick={() => setColorPanel(open => !open)}>
+                    <Pencil size={11} strokeWidth={2.75} aria-hidden="true" />
+                  </button>
                 </div>
               </Row>
-              {colorPanel && <ColorPicker id="accent-colors" value={accent} presets={avatarPalette} saved={workspace.avatarColors ?? []}
-                onChange={color => void save({ accentColor: color })}
-                onSave={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: [...new Set([...(workspace.avatarColors ?? []), color])] }); })}
-                onRemove={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: (workspace.avatarColors ?? []).filter(item => item !== color) }); })}
-                onClose={() => setColorPanel(false)} />}
+              <AnchoredPopover anchor={customColorButton} open={colorPanel} onClose={closeColorPanel} label={t('Tạo màu')}>
+                <ColorPicker id="accent-colors" value={accent} presets={avatarPalette} saved={workspace.avatarColors ?? []}
+                  onChange={color => void save({ accentColor: color })}
+                  onSave={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: [...new Set([...(workspace.avatarColors ?? []), color])] }); })}
+                  onRemove={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: (workspace.avatarColors ?? []).filter(item => item !== color) }); })}
+                  onClose={closeColorPanel} />
+              </AnchoredPopover>
               <Row title={t('Màu logo')} description={t('Logo trong ứng dụng: màu chữ, hoặc màu nhấn bạn chọn.')}>
                 <Select ariaLabel={t('Màu logo')} className="setting-select" value={workspace.logoColor ?? 'mono'} disabled={busy} onChange={value => void save({ logoColor: value as LogoColor })} options={[{ value: 'mono', label: t('Đơn sắc'), icon: <Contrast size={16} /> }, { value: 'accent', label: t('Theo màu nhấn'), icon: <Palette size={16} /> }]} />
               </Row>

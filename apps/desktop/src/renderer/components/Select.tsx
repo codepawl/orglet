@@ -70,7 +70,7 @@ export function Select({ value, options, onChange, label, ariaLabel, disabled, s
       const left = Math.min(Math.max(preferred, EDGE), innerWidth - width - EDGE);
       const top = placeAbove ? rect.top - GAP - maxHeight : rect.bottom + GAP;
       const host = container();
-      // Dialogs are transformed, which makes them the containing block; position relative to them instead of the window.
+      // A fixed-position dialog is the containing block for the menu, so position relative to it instead of the window.
       const origin = host === document.body ? { left: 0, top: 0 } : host.getBoundingClientRect();
       setPlacement({ above: placeAbove, style: { position: host === document.body ? 'fixed' : 'absolute', left: left - origin.left, top: top - origin.top, width, ...(scrolls ? { maxHeight, overflowY: 'auto' } : { overflowY: 'hidden' }) } });
     };
