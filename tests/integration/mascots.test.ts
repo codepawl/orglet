@@ -106,13 +106,16 @@ it('lights every mascot from its own gradient, never a shared one', () => {
   // Many faces sit on one page. A gradient id shared between them would resolve to the first face in the document,
   // painting every mascot in that one's colour, so each rendered face must define and reference its own.
   const markup = renderToStaticMarkup(createElement('div', null, mascotIds.map(id => createElement(Mascot, { id, key: id }))));
-  const definedIds = [...markup.matchAll(/<radialGradient id="([^"]+)-body"/g)].map(match => match[1]);
+  const definedIds = [...markup.matchAll(/<linearGradient id="([^"]+)-body"/g)].map(match => match[1]);
   const referencedIds = [...markup.matchAll(/--mascot-fill:url\(#([^)]+)-body\)/g)].map(match => match[1]);
   expect(definedIds).toHaveLength(mascotIds.length);
   expect(new Set(definedIds).size).toBe(mascotIds.length);
   expect(referencedIds).toEqual(definedIds);
   for (const id of definedIds) expect(id).toMatch(/^[\w-]+$/);
-  // The tones are mixed from the avatar colour at render time, never baked in, so any user colour shades.
-  expect(markup).toContain('stop-color="color-mix(in srgb, currentColor 72%, white)"');
-  expect(markup).toContain('stop-color="color-mix(in srgb, currentColor 74%, black)"');
+  // The tones are mixed from the avatar colour at render time, never baked in, so any user colour shades. The
+  // mixes are gentle on purpose (matte, after the owner's reference, COD-154): a lighter and a darker tone within
+  // a fifth of the colour itself, never a gloss.
+  expect(markup).toMatch(/stop-color="color-mix\(in srgb, currentColor 8\d%, white\)"/);
+  expect(markup).toMatch(/stop-color="color-mix\(in srgb, currentColor 8\d%, black\)"/);
+  expect(markup).not.toContain('mascot-gloss');
 });
