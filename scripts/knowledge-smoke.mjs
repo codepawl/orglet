@@ -28,6 +28,9 @@ try {
   await page.getByRole('combobox', { name: 'Phạm vi', exact: true }).click(); await page.getByRole('option', { name: team.name, exact: true }).click();
   await page.getByRole('switch', { name: /Luôn nạp/ }).click();
   await page.getByRole('button', { name: 'Lưu knowledge', exact: true }).click();
+  // Opened from the Library, the editor leads back there on its own; the sidebar assertions below need it closed.
+  await page.getByRole('button', { name: 'Tạo knowledge', exact: true }).waitFor();
+  await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   const [note] = (await workspace(page)).knowledge;
   assert.deepEqual({ status: note.status, tags: note.tags, pinned: note.pinned, scope: note.scope }, { status: 'approved', tags: ['evidence', 'review'], pinned: true, scope: { type: 'team', id: team.id } });
@@ -42,6 +45,8 @@ try {
   await page.getByRole('region', { name: 'Chờ duyệt' }).getByRole('button', { name: /Evidence limits/ }).click();
   await page.getByText('Nhập từ template hội · v1 · Chờ duyệt').waitFor();
   await page.getByRole('button', { name: 'Duyệt', exact: true }).click();
+  await page.getByRole('button', { name: 'Tạo knowledge', exact: true }).waitFor();
+  await page.keyboard.press('Escape');
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   const approved = (await workspace(page)).knowledge.find(item => item.scope.type === 'team' && item.scope.id === imported.id);
   assert.equal(approved.status, 'approved'); assert.equal(approved.revision, 2);

@@ -42,7 +42,8 @@ try {
   await page.getByRole('button', { name: 'Xác nhận review', exact: true }).click();
   const reviewed = await page.evaluate(async id => (await window.orglet.call('workspace', {})).skills.find(skill => skill.id === id), imported.id);
   assert.equal(reviewed.package.reviewedHash, imported.hash);
-  await page.getByRole('button', { name: 'Thư viện', exact: true }).click();
+  // Reviewed from the Library, the editor leads back there on its own instead of closing the panel.
+  await page.getByRole('button', { name: 'Nhập từ thư mục', exact: true }).waitFor();
   await page.getByRole('button', { name: /review-kit/ }).click();
   await page.getByText('Đã review trên máy này.', { exact: true }).waitFor();
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, exportPath);
