@@ -40,8 +40,14 @@ export type FaceHandle = {
   update(options: FaceOptions): void;
   /** The "say cheese" smile with a small hop: the picker's chosen face. */
   cheer(): void;
+  /** Plays one of the face's own moments now, on cue rather than on the idle dice: the startup screen's long wait. */
+  play(moment: Moment): void;
   unmount(): void;
 };
+
+/** The one-face moments, and how long each runs; the group moments (a blink wave, a look at a neighbour) stay the stage's. */
+export type Moment = 'glance' | 'stretch' | 'sing' | 'doze' | 'squint';
+const momentLength: Record<Moment, number> = { glance: 1.4, stretch: 1.3, sing: 3.6, doze: 6, squint: 0.5 };
 
 type Face = {
   canvas: HTMLCanvasElement;
@@ -388,7 +394,7 @@ function idleMoment(forced?: IdleMoment) {
   const moment = forced ?? pickIdleMoment(rested, now, companions.length > 0);
   if (moment === 'doze') {
     lastDoze = now;
-    addAct(actor.model, 'doze', now, 6);
+    addAct(actor.model, 'doze', now, momentLength.doze);
   } else if (moment === 'blink-wave' && companions.length > 0) {
     // A blink runs across the team, left to right or right to left.
     const members = [actor, ...companions].sort((a, b) => a.groupIndex - b.groupIndex);
@@ -400,11 +406,11 @@ function idleMoment(forced?: IdleMoment) {
     addAct(actor.model, 'stare', now, 1.5, directionTo(actor, neighbour));
     if (Math.random() < 0.6) addAct(neighbour.model, 'stare', now + 0.55, 1.1, directionTo(neighbour, actor));
   } else if (moment === 'sing') {
-    addAct(actor.model, 'sing', now, 3.6);
+    addAct(actor.model, 'sing', now, momentLength.sing);
   } else if (moment === 'stretch') {
-    addAct(actor.model, 'stretch', now, 1.3);
+    addAct(actor.model, 'stretch', now, momentLength.stretch);
   } else {
-    addAct(actor.model, 'glance', now, 1.4, { direction: Math.random() < 0.5 ? -1 : 1 });
+    addAct(actor.model, 'glance', now, momentLength.glance, { direction: Math.random() < 0.5 ? -1 : 1 });
   }
   wake();
 }
@@ -508,6 +514,14 @@ export function mountFace(canvas: HTMLCanvasElement, options: FaceOptions): Face
       model.acts = model.acts.filter(act => act.kind !== 'hop');
       addAct(model, 'cheese', seconds(), 2.2);
       blink(model, seconds() + 2.3);
+      wake();
+    },
+    play(moment) {
+      if (reducedMotion()) return;
+      const now = seconds();
+      if (moment === 'doze') lastDoze = now;
+      // A glance on cue goes to the face's own side, like its unprompted ones.
+      addAct(model, moment, now, momentLength[moment], moment === 'glance' ? { direction: model.personality.side } : {});
       wake();
     },
     unmount() {

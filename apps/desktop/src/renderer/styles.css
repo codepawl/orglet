@@ -218,19 +218,16 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .orglet-mark::after { left:57.1%; }
 /* At the sizes the app draws the mark, the eyes are placed in whole pixels so they stay crisp at device scale 1
    (COD-154): the percentages above put a 2.7px eye at 6.8px. The brand mark is 20px (even, like the row it sits
-   in, so it centres on a whole pixel), a byline mark 25px, the startup mark 29px, `.large` 42px. */
+   in, so it centres on a whole pixel), a byline mark 25px, `.large` 42px. */
 .orglet-mark.small::before,.orglet-mark.small::after { top:6px; width:3px; height:5px; }
 .orglet-mark.small::before { left:10px; }
 .orglet-mark.small::after { left:14px; }
-.startup .orglet-mark::before,.startup .orglet-mark::after { top:7px; width:3px; height:6px; }
-.startup .orglet-mark::before { left:12px; }
-.startup .orglet-mark::after { left:17px; }
 .orglet-mark.large::before,.orglet-mark.large::after { top:11px; width:4px; height:9px; }
 .orglet-mark.large::before { left:17px; }
 .orglet-mark.large::after { left:24px; }
 /* Settings → Màu logo (COD-154): with "Theo màu nhấn" the mark's body takes the accent, with the same matte shade,
    and its eyes take the accent's ink so a pale accent still shows them. The startup screen has no workspace yet and
-   so stays monochrome. */
+   so its face (`.startup-face`, the 3D orglet) stays monochrome. */
 :root[data-logo-color=accent] .orglet-mark { background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 86%, white), var(--accent) 50%, color-mix(in srgb, var(--accent) 84%, black)); }
 :root[data-logo-color=accent] .orglet-mark::before,:root[data-logo-color=accent] .orglet-mark::after { background:var(--accent-ink); }
 .orglet-mark.large { width:42px; height:42px; margin-bottom:24px; }
@@ -585,15 +582,17 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .notice-banner>div { flex:1; min-width:0; }
 .notice-banner .actions { margin-top:8px; }
 .startup,.loading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:40px; flex:1; }
-.startup { height:100dvh; text-align:center; }
-/* Opening the workspace is the one moment the app has nothing to show, so the logo does the waiting: the orglet
-   breathing and its eyes looking around (user, 2026-09-20). Reduced motion slows it rather than stopping it, the
-   way the stop button ring does. */
-.startup .orglet-mark { animation:orglet-breathe 2.6s ease-in-out infinite; }
-.startup .orglet-mark::before,.startup .orglet-mark::after { animation:orglet-look 2.6s ease-in-out infinite; }
-@keyframes orglet-breathe { 0%,100% { transform:translateY(0) scale(1); } 50% { transform:translateY(-3px) scale(1.05); } }
-@keyframes orglet-look { 0%,100% { transform:translate(0,0); } 22% { transform:translate(-55%,6%); } 58% { transform:translate(55%,6%); } }
-@media(prefers-reduced-motion:reduce) { .startup .orglet-mark,.startup .orglet-mark::before,.startup .orglet-mark::after { animation-duration:7s; } }
+.startup { height:100dvh; gap:22px; text-align:center; }
+/* Opening the workspace is the one moment the app has nothing to show, so the logo does the waiting: the 3D orglet
+   (Startup.tsx) in the brand mark's monochrome, hopping in, turning after the pointer and smiling at a tap. Its
+   canvas is out of layout, so the box is only the drawing and the copy sits close under the body. The copy rises
+   in once, like a message; reduced motion cuts every animation on this screen through the global rule and the
+   stage keeps the face still. */
+.startup-face { position:relative; width:80px; height:80px; color:var(--text); --mascot-ink:var(--bg); }
+.startup-copy { display:flex; flex-direction:column; align-items:center; gap:10px; animation:turn-in var(--motion-base) var(--ease-out); }
+.startup h1 { margin:0; font-size:1.5rem; font-weight:400; letter-spacing:-.3px; line-height:1.2; }
+.startup p { margin:0; max-width:40ch; color:var(--muted); text-wrap:balance; }
+.startup .button { margin-top:6px; }
 /* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */
 .thread-skeleton { display:flex; flex-direction:column; gap:26px; width:100%; max-width:768px; margin:0 auto; padding:28px var(--page-x); }
 .thread-skeleton span { display:block; border-radius:8px; background:var(--surface); animation:skeleton-pulse 1.6s ease-in-out infinite; }

@@ -25,6 +25,7 @@ import { SourcePicker } from './components/SourcePicker';
 import { Composer, FollowUpComposer } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
+import { Startup } from './components/Startup';
 import { Starters } from './components/Starters';
 import { DetailsPanel } from './components/DetailsPanel';
 import type { WorkspaceRecoveryView } from '../shared/workspace-recovery';
@@ -383,7 +384,7 @@ export function App() {
   // Phase 5 of the avatar animations: a row that was just created rises into the list once. This sits above the
   // loading return, because a hook must run on every render and the workspace arrives after the first one.
   const isArriving = useArrivals(workspace ? [...workspace.teams.map(item => `team-${item.id}`), ...workspace.workers.map(item => `worker-${item.id}`)] : [], Boolean(workspace));
-  if (!workspace) return <div className="startup"><span className="orglet-mark">o</span><h1>Orglet</h1><p role={error ? 'alert' : 'status'}>{error || t('Đang mở workspace…')}</p>{error && window.orglet && <Button onClick={() => void refresh()}>{t('Thử lại')}</Button>}</div>;
+  if (!workspace) return <Startup error={error} onRetry={window.orglet ? () => void refresh() : undefined} />;
   const recipientOptions = [
     ...workspace.workers.map(item => {
       const available = recipientReady([item.provider]);
