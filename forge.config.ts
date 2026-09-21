@@ -3,6 +3,7 @@ import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { resolveOsxNotarize, resolveOsxSign } from './forge.macos';
+import { assertPackageSigned, resolveSquirrelSign, resolveWindowsCertificate, resolveWindowsSign } from './forge.windows';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -32,6 +33,11 @@ const config: ForgeConfig = {
     generateAssets: async () => {
       execFileSync(process.execPath, [join(__dirname, 'scripts/build-workspace-native.mjs')], { windowsHide: true, stdio: 'inherit' });
     },
+    postPackage: async (_config, packageResult) => {
+      if (packageResult.platform === 'win32' && resolveWindowsCertificate()) {
+        assertPackageSigned(packageResult.outputPaths);
+      }
+    },
   },
   packagerConfig: {
     extraResource: process.platform === 'win32' && process.arch === 'x64' ? [
@@ -47,6 +53,8 @@ const config: ForgeConfig = {
     // Notarize only when Apple ID or App Store Connect API key env is complete.
     osxSign: resolveOsxSign(),
     osxNotarize: resolveOsxNotarize(),
+    // Certum sign when WINDOWS_SIGNING_ENABLED=true (CI after SimplySign Desktop has logged in).
+    windowsSign: resolveWindowsSign(),
     // Regenerate with: node_modules/electron/dist/electron.exe scripts/build-icon.cjs
     icon: 'apps/desktop/assets/icon',
     // Vite's default ignores all node_modules, including external native dependencies.
@@ -59,7 +67,7 @@ const config: ForgeConfig = {
   makers: [
     // Linux ships as a ZIP for now: no deb or AppImage until someone is actually running it.
     new MakerZIP({}, ['win32', 'darwin', 'linux']),
-    new MakerSquirrel({ name: 'orglet', setupIcon: 'apps/desktop/assets/icon.ico' }),
+    new MakerSquirrel({ name: 'orglet', setupIcon: 'apps/desktop/assets/icon.ico', signWithParams: resolveSquirrelSign() }),
   ],
   plugins: [new VitePlugin({
     build: [
