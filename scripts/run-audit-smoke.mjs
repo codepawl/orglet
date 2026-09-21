@@ -30,7 +30,7 @@ try {
   await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
   // The message lists its files as cards; opening one is what the count button used to do.
-  await page.locator('.user-message .message-files .attachment-open').first().click();
+  await page.locator('.chat-turn .message-files .attachment-open').first().click();
   await page.getByRole('checkbox', { name: 'runs.csv', exact: true }).check();
   assert.equal(await page.getByRole('button', { name: 'Kiểm tra run-log local', exact: true }).isEnabled(), false);
   await page.getByRole('combobox', { name: 'Chiều tối ưu của metric', exact: true }).click(); await page.getByRole('option', { name: 'Điểm cao hơn tốt hơn', exact: true }).click();

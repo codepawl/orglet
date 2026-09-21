@@ -495,10 +495,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .attachment-name { font-size:13px; font-weight:500; line-height:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .attachment-meta { font-size:11.5px; line-height:15px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* The remove control answers the card's hover with its own detail (muted to text), never a background of its own. */
-/* A card inside a sent message: one per line, filling the bubble, the way an attachment reads in a chat app.
+/* A sent message's files: a row above the bubble, right-aligned with it and never wider, in the composer's card
+   size. Past that width the row scrolls sideways. The bottom padding is the scrollbar's own lane, so the bar runs
+   under the cards instead of across them; a vertical wheel is left alone so it still scrolls the thread.
    The whole card is the button, so its inside is the row the card would otherwise be. */
-.message-files { flex-direction:column; gap:6px; margin-top:10px; }
-.message-files .attachment { width:100%; padding:0; background:color-mix(in srgb, var(--bg) 78%, transparent); }
+.message-files { display:flex; gap:8px; width:fit-content; max-width:var(--bubble-max); margin:0 0 6px auto; padding:0 0 4px; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; animation:turn-in var(--motion-base) var(--ease-out); }
+.message-files .attachment { padding:0; }
 .attachment-open { display:flex; align-items:center; gap:10px; width:100%; min-width:0; padding:8px 12px; border:0; border-radius:inherit; background:none; text-align:left; font:inherit; color:inherit; cursor:pointer; }
 .attachment-open:hover { background:color-mix(in srgb, var(--bg) 92%, transparent); }
 .attachment-remove { display:flex; align-items:center; justify-content:center; flex-shrink:0; width:26px; height:26px; padding:0; border:0; border-radius:50%; background:none; color:var(--muted); opacity:0; transition:opacity var(--motion-quick) var(--ease-out), color var(--motion-quick); }
