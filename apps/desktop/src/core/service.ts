@@ -449,6 +449,7 @@ export class CoreService {
         if (input.confirmOpenTask !== undefined) this.store.setSetting('confirmOpenTask', input.confirmOpenTask);
         if (input.archiveRetentionDays !== undefined) this.store.setSetting('archiveRetentionDays', input.archiveRetentionDays);
         if (input.accentColor !== undefined) this.store.setSetting('accentColor', input.accentColor);
+        if (input.logoColor !== undefined) this.store.setSetting('logoColor', input.logoColor);
         this.store.setSetting('connectionLimitMicros', input.connectionLimitMicros);
         if (input.providerConcurrency) this.store.setSetting('providerConcurrency', input.providerConcurrency);
         // Standing per-provider permission (plan §12: consent scoped by connection); backups never restore it.

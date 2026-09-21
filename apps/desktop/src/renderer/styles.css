@@ -216,6 +216,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .orglet-mark::before,.orglet-mark::after { content:''; position:absolute; top:21.4%; width:14.3%; height:28.6%; border-radius:999px; background:var(--bg); }
 .orglet-mark::before { left:35.7%; }
 .orglet-mark::after { left:57.1%; }
+/* Settings → Màu logo (COD-154): with "Theo màu nhấn" the mark's body takes the accent, with the same matte shade,
+   and its eyes take the accent's ink so a pale accent still shows them. The startup screen has no workspace yet and
+   so stays monochrome. */
+:root[data-logo-color=accent] .orglet-mark { background:linear-gradient(135deg, color-mix(in srgb, var(--accent) 86%, white), var(--accent) 50%, color-mix(in srgb, var(--accent) 84%, black)); }
+:root[data-logo-color=accent] .orglet-mark::before,:root[data-logo-color=accent] .orglet-mark::after { background:var(--accent-ink); }
 .orglet-mark.large { width:42px; height:42px; margin-bottom:24px; }
 .orglet-mark.small { width:25px; height:25px; }
 .section-heading { font-size:13px; font-weight:500; color:var(--muted); min-height:34px; display:flex; align-items:center; justify-content:space-between; padding:0 0 0 12px; }

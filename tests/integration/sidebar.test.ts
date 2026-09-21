@@ -64,6 +64,19 @@ it('keeps the accent colour the user picks, and rejects anything that is not a h
   await expect(core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, accentColor: 'blue' })).rejects.toThrow();
 });
 
+it('keeps the logo monochrome until the user picks the accent, and keeps that pick', async () => {
+  // A store without the setting (an older workspace, or a restored backup, which never carries it) is monochrome.
+  expect((await workspace()).logoColor).toBe('mono');
+  await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, logoColor: 'accent' });
+  expect((await workspace()).logoColor).toBe('accent');
+  // Leaving it out of a later save keeps what was chosen rather than resetting it.
+  await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000 });
+  expect((await workspace()).logoColor).toBe('accent');
+  await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, logoColor: 'mono' });
+  expect((await workspace()).logoColor).toBe('mono');
+  await expect(core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, logoColor: 'blue' })).rejects.toThrow();
+});
+
 it('adopts a tag colour chosen before the accent existed, rather than resetting to the default', async () => {
   store.setSetting('mentionColor', '#2e7a32');
   expect((await workspace()).accentColor).toBe('#2e7a32');
