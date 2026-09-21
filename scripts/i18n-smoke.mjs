@@ -33,7 +33,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.lang), 'en');
   await page.screenshot({ path: 'test-results/i18n-settings-en.png' });
   // Native dialogs follow the saved language straight away.
-  assert.equal(await dialogTitle(app, page), 'Choose sources: text up to 256 KB; CSV, JSONL, Parquet up to 32 MB each');
+  assert.equal(await dialogTitle(app, page), 'Choose sources: text up to 256 KB; CSV, JSONL, Parquet 32 MB; images 20 MB; audio 50 MB; video and PDF 200 MB');
   await page.keyboard.press('Escape');
 
   await page.getByRole('heading', { name: 'Chatting with Researcher' }).waitFor();
@@ -58,7 +58,7 @@ try {
   await app.close(); app = await launch(); page = await app.firstWindow(); await page.setViewportSize({ width: 1400, height: 900 });
   await page.getByRole('heading', { name: 'Chatting with Researcher' }).waitFor();
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).language, 'en');
-  assert.equal(await dialogTitle(app, page), 'Choose sources: text up to 256 KB; CSV, JSONL, Parquet up to 32 MB each', 'language is read at startup');
+  assert.equal(await dialogTitle(app, page), 'Choose sources: text up to 256 KB; CSV, JSONL, Parquet 32 MB; images 20 MB; audio 50 MB; video and PDF 200 MB', 'language is read at startup');
   // British English: same text with UK spellings.
   await page.getByRole('button', { name: /^Settings/ }).click();
   await page.getByRole('combobox', { name: 'Language', exact: true }).click();
