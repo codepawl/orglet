@@ -3,14 +3,16 @@ import { Briefcase, ChartColumn, Check, ChevronDown, Code, Headset, PenLine, Plu
 import { t } from '../i18n';
 import { Mascot, isMascot, mascotIds, mascots, type MascotGlyph, type MascotId } from './mascots';
 import { autoMascot, avatarPalette, mascotCategoryIds, mascotCategoryLabels, mascotColors, seedHash, suggestedColors, suggestedMascots, type MascotCategory, type MascotHints } from './mascotSuggest';
+import { Orglet3D, type FaceMotion } from './Orglet3D';
 import { ColorPicker } from './ColorPicker';
 import { Select } from './Select';
 import { Button } from './ui';
 import type { Worker } from '../../shared/contracts';
 
 export { avatarPalette };
-/** `xxs` is the 16px read receipt; the others are the sizes the stylesheet names. */
-export type AvatarSize = 'xxs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+export type { FaceMotion };
+/** `xxs` is the 16px read receipt, `xxl` the greeting of an empty chat; the others are the sizes the stylesheet names. */
+export type AvatarSize = 'xxs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'xxl';
 export const avatarColor = (seed: string, color?: string) => color ?? avatarPalette[seedHash(seed) % avatarPalette.length];
 // Presets in the colour panel: the identity palette plus deeper office tones.
 const colorPresets = [...avatarPalette, '#2f4b7c', '#3d4451', '#2e7d5b', '#9b3d5a', '#b8862b', '#3b9ad9', '#8a7bd8', '#8d6e63'];
@@ -23,10 +25,12 @@ const colorPresets = [...avatarPalette, '#2f4b7c', '#3d4451', '#2e7d5b', '#9b3d5
  * Decorative: the name is always shown next to it, so it is hidden from assistive technology.
  * `seed` should be a stable id so renaming does not change an automatic choice among equals.
  */
-export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, badge, size = 'md', shape = 'rounded', alive }: {
+export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, badge, size = 'md', shape = 'rounded', alive, motion }: {
   name: string; seed?: string; emoji?: string; mascot?: string; letter?: boolean; defaultMascot?: boolean; hint?: string; color?: string; badge?: ReactNode; size?: AvatarSize; shape?: 'rounded' | 'circle';
   /** Blinks now and then. Only for the handful of faces in the chat you are reading, never a whole list at once. */
   alive?: boolean;
+  /** How a large (`lg` and up) face behaves; see `Orglet3D`. The small sizes ignore it: their motion is the stylesheet's. */
+  motion?: FaceMotion;
 }) {
   const letter = [...name.trim()][0]?.toLocaleUpperCase() ?? '?';
   // Workers only use mascots (user decision 2026-09-17), so emoji or letter values saved earlier are ignored there.
@@ -39,7 +43,7 @@ export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, 
   const idleSide = hash % 2 === 0 ? 1 : -1;
   return <span className={`avatar ${size} ${shape} ${face === 'emoji' ? 'emoji' : face ? 'has-mascot' : ''}${alive ? ' alive' : ''}`}
     style={{ '--avatar-color': ink, '--idle-delay': idleDelay, '--idle-side': idleSide } as CSSProperties} aria-hidden="true">
-    <span className="avatar-face">{face === 'emoji' ? emoji : face ? <Mascot id={face} glyph={mascotGlyph(size)} /> : letter}</span>
+    <span className="avatar-face">{face === 'emoji' ? emoji : face ? avatarRenderer(size) === 'solid' ? <Orglet3D id={face} seed={hash} size={solidSizes[size]} color={ink} motion={motion} /> : <Mascot id={face} glyph={mascotGlyph(size)} /> : letter}</span>
     {badge && <span className="avatar-badge">{badge}</span>}
   </span>;
 }
@@ -49,7 +53,7 @@ const IDLE_SECONDS = 7;
 
 /**
  * Which drawing an avatar size gets (COD-154): the list sizes take the pixel-snapped small drawings so the body
- * edges and the eyes land on whole pixels at device scale 1; `lg` and `xl` are big enough for the 64-unit art.
+ * edges and the eyes land on whole pixels at device scale 1; `lg` and up are big enough for the 64-unit art.
  * The stylesheet sizes each drawing's canvas to match (`.avatar.xs .mascot` and friends).
  */
 export function mascotGlyph(size: AvatarSize): MascotGlyph {
@@ -58,7 +62,17 @@ export function mascotGlyph(size: AvatarSize): MascotGlyph {
   if (size === 'md') return 'medium';
   return 'large';
 }
-// `export` above only so the test can check the mapping; the function sits after the component that uses it.
+
+/**
+ * Which renderer an avatar size gets (COD-156): a large face is the 3D solid that turns after the pointer, a small
+ * one stays the flat whole-pixel glyph, because a slab a few pixels wide would blur what COD-154 made crisp.
+ */
+export function avatarRenderer(size: AvatarSize): 'solid' | 'glyph' {
+  return size === 'lg' || size === 'xl' || size === 'xxl' ? 'solid' : 'glyph';
+}
+/** The size of the 64-unit drawing at each solid size, matching what the stylesheet gives the flat `.mascot`. */
+export const solidSizes: Record<AvatarSize, number> = { xxs: 16, xs: 24, sm: 24, md: 30, lg: 40, xl: 64, xxl: 96 };
+// `export` above only so the test can check the mapping; the functions sit after the component that uses them.
 
 /** Overlapping worker faces for a team chat header or empty thread. */
 export function RosterAvatars({ workers, size = 'xs', max = 4, alive }: { workers: readonly Worker[]; size?: 'xs' | 'sm'; max?: number; alive?: boolean }) {
@@ -110,7 +124,9 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
   const [open, setOpen] = useState(false);
   const [colorPanel, setColorPanel] = useState(false);
   const [category, setCategory] = useState<MascotCategory>(() => categoryOf(face) ?? 'basic');
-  const choose = (mascot: MascotId, patch: AvatarValue = {}) => { set({ mascot, emoji: undefined, letter: undefined, ...patch }); setCategory(categoryOf(mascot) ?? 'basic'); };
+  // Every choice makes the preview smile (the "say cheese" of the standalone page, COD-156).
+  const [cheer, setCheer] = useState(0);
+  const choose = (mascot: MascotId, patch: AvatarValue = {}) => { set({ mascot, emoji: undefined, letter: undefined, ...patch }); setCategory(categoryOf(mascot) ?? 'basic'); setCheer(count => count + 1); };
   const suggest = () => {
     const options = suggestedMascots(suggestionHints, { taken });
     const next = options[(options.indexOf(face) + 1) % options.length];
@@ -130,10 +146,10 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
   };
 
   // The avatar and its quick actions share one centred row; the full choice opens below at full width. The preview
-  // is keyed by its mascot so a newly chosen face remounts and hops in (the Arriving state in styles.css).
+  // is a 3D face (COD-156): it hops in when the dialog opens, turns after the pointer, and smiles at every choice.
   return <div className="avatar-picker">
     <div className="avatar-picker-head">
-      <Avatar key={face} name={name || '?'} seed={seed} mascot={value.mascot} defaultMascot hint={hint} color={value.color} badge={badge} size="xl" />
+      <Avatar name={name || '?'} seed={seed} mascot={value.mascot} defaultMascot hint={hint} color={value.color} badge={badge} size="xl" motion={{ lead: true, greet: true, cheer }} />
       <div className="avatar-picker-toolbar">
         <Button type="button" variant="outline" className="avatar-action" onClick={suggest} title={t('Chọn linh vật khác hợp với tên, mô tả và kỹ năng')}><Sparkles size={15} aria-hidden="true" />{t('Gợi ý khác')}</Button>
         <Button type="button" variant="outline" className="avatar-action" onClick={randomize}><Shuffle size={15} aria-hidden="true" />{t('Ngẫu nhiên')}</Button>
@@ -149,7 +165,8 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
           {mascotCategoryIds[category].map((id, index) => {
             const checked = face === id;
             const focusable = checked || (index === 0 && !mascotCategoryIds[category].includes(face));
-            return <button key={id} type="button" role="radio" aria-checked={checked} tabIndex={focusable ? 0 : -1} className="avatar-choice mascot-choice" aria-label={t(mascots[id].name)} title={t(mascots[id].name)} onClick={() => choose(id)}><Mascot id={id} /></button>;
+            // Each tile is a 3D face that turns and hops only while the pointer or the keyboard is on it.
+            return <button key={id} type="button" role="radio" aria-checked={checked} tabIndex={focusable ? 0 : -1} className="avatar-choice mascot-choice" aria-label={t(mascots[id].name)} title={t(mascots[id].name)} onClick={() => choose(id)}><Orglet3D id={id} seed={index} size={32} color="grid" motion={{ follow: 'hover' }} /></button>;
           })}
         </div>
       </div>

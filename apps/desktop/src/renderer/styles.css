@@ -322,10 +322,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* New task: greeting, one prompt bar and a quiet list of starters, centred like a fresh chat. */
 .new-task-content { margin:auto; padding:24px var(--page-x) 12vh; width:100%; max-width:768px; overflow:auto; }
 .welcome { text-align:center; font-size:1.5rem; font-weight:400; letter-spacing:-.3px; margin-bottom:22px; }
-/* Empty chat: avatar sits with the worker/team name, not in front of the whole heading. */
 .team-chat-empty .welcome { text-box:trim-both cap alphabetic; }
-/* The line box sits lower than the cap height of the heading, so lift the faces onto the text centre. */
-.welcome-who { position:relative; top:-0.1em; display:inline-flex; align-items:safe center; gap:8px; vertical-align:middle; }
+/* Empty chat: the faces you are about to talk to sit above the greeting, big and in 3D (COD-156), a team side by
+   side. The row is a fixed height and each face moves inside its own box, so a hop never shifts the heading. */
+.fresh-faces { display:flex; justify-content:center; align-items:flex-end; gap:18px; min-height:96px; margin-bottom:26px; }
+.fresh-faces .avatar.xl { margin-bottom:8px; }
 /* Prompt bar: a one-line pill (add · input · [who] · send) that grows into a box when the text wraps or sources are attached.
    Grown, it is three zones stacked: the attached files, the text, then the controls. The zones are told apart by
    what they are made of (cards on a surface, bare text, round buttons) and by spacing, never by a line. */
@@ -1129,6 +1130,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .tree-leaf .avatar { margin-right:2px; }
 .tree-item.dragging .disclosure-chevron { transform:none; }
 .avatar.xl { width:56px; height:56px; border-radius:16px; font-size:22px; }
+.avatar.xxl { width:96px; height:96px; border-radius:26px; font-size:36px; }
 .avatar.emoji { font-size:15px; }
 .avatar.xs.emoji { font-size:11px; }
 .avatar.sm.emoji { font-size:13px; }
@@ -1171,13 +1173,17 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 
    Prominence (user, 2026-09-20: the faces should feel alive, like a companion character, without the sidebar
    turning into a twitching list). What a face may do unprompted scales with how much of the screen it has:
-     Prominent  The face in the chat heading (`.welcome-who`) and the faces of the turn being read
-                (`.chat-turn:last-child .message-byline`): the one or few faces you are looking at. An idle
-                gesture is allowed here, on the blink's own cycle and no bigger than a glance: under 1.5 px for
-                the eyes, under 3° for the head. Only a prominent face ever moves unprompted beyond a blink.
+     Prominent  The faces of the turn being read (`.chat-turn:last-child .message-byline`): the one or few faces
+                you are looking at. An idle gesture is allowed here, on the blink's own cycle and no bigger than
+                a glance: under 1.5 px for the eyes, under 3° for the head. Only a prominent face ever moves
+                unprompted beyond a blink.
      In the chat but not prominent: earlier replies. They blink and nothing more.
-     In a list  Sidebar rows, the picker grid, the details panel. Still until you reach for them. Ten small faces
-                each doing something small is still ten things moving, so a listed face reacts and never acts.
+     In a list  Sidebar rows, the details panel. Still until you reach for them. Ten small faces each doing
+                something small is still ten things moving, so a listed face reacts and never acts.
+     Large      The greeting of an empty chat, the avatar picker's preview and its grid (COD-156) are not this
+                drawing at all but the 3D solid of orgletSolid.ts on a canvas (`.orglet-3d`), which turns to follow
+                the pointer on springs; its states and its rare idle moments live in orgletStage.ts and follow
+                the same ladder (a listed tile only reacts to the pointer on it, a lead face may glance or stretch).
    Motion you caused (hover, focus, send, a run finishing, a row you created) may always be livelier than motion
    nobody asked for: a reaction is what feels satisfying, an ambient loop is what feels noisy. So every reaction
    is a one-shot on a spring, and the only loops are the blink, the look-up, and the states of a run in progress.
@@ -1211,8 +1217,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 @keyframes mascot-blink { 0%,95%,100% { transform:translateY(var(--gaze-y)) scaleY(1); } 97.5% { transform:translateY(var(--gaze-y)) scaleY(.12); } }
 /* Present, prominent: the face being read blinks twice a cycle and, between the blinks, looks up to its own side,
    eyes first and the head a beat behind; the spring on the head makes the turn and the settle overshoot. */
-:where(.welcome-who, .chat-turn:last-child .message-byline) .avatar.alive .mascot { animation:mascot-look-head var(--motion-idle) var(--ease-spring) var(--idle-delay, 0s) infinite; }
-:where(.welcome-who, .chat-turn:last-child .message-byline) .avatar.alive .mascot-eyes { animation:mascot-look-eyes var(--motion-idle) ease-out var(--idle-delay, 0s) infinite; }
+:where(.chat-turn:last-child .message-byline) .avatar.alive .mascot { animation:mascot-look-head var(--motion-idle) var(--ease-spring) var(--idle-delay, 0s) infinite; }
+:where(.chat-turn:last-child .message-byline) .avatar.alive .mascot-eyes { animation:mascot-look-eyes var(--motion-idle) ease-out var(--idle-delay, 0s) infinite; }
 @keyframes mascot-look-eyes {
   0%,41.5%,46.5%,66%,77%,95%,100% { transform:translateY(var(--gaze-y)) translateX(0) scaleY(1); }
   44%,97.5% { transform:translateY(var(--gaze-y)) translateX(0) scaleY(.12); }
@@ -1234,7 +1240,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .mascot-choice:is(:hover, :focus-visible) .mascot { transform:translateY(-2px); transition:transform var(--motion-gesture) var(--ease-spring); }
 .mascot-choice:is(:hover, :focus-visible) .mascot-eyes { --gaze-y:-0.9px; }
 /* Noticing: while you write, the face you are writing to looks down at the words. */
-.fresh-chat:has(.composer textarea:focus) .welcome-who .mascot-eyes,
 .main-pane:has(.thread-composer textarea:focus) .chat-turn:last-child .message-byline:not(.working) .mascot-eyes { --gaze-y:1.6px; }
 
 /* Thinking: one hop as the message lands, then the head turns from side to side and pauses at each side, the eyes
@@ -1261,21 +1266,24 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   83% { transform:translateY(var(--gaze-y)) translateX(-.4px) scaleY(.12); } 86%,100% { transform:translateY(var(--gaze-y)) translateX(-1.4px) scaleY(1); }
 }
 
-/* Finishing: one nod as the answer lands. In the turn being read the nod is listed after the look-up so it wins
-   while it plays and the look-up carries on; an earlier landed reply keeps the nod alone. */
+/* Finishing: one happy hop as the answer lands (COD-156, the page's "say cheese" on the small face): the head
+   springs up and lands, and the eyes squint shut at the top of it. In the turn being read the hop is listed after
+   the look-up so it wins while it plays and the look-up carries on; an earlier landed reply keeps the hop alone. */
 .message-byline.landed .avatar .mascot { animation:mascot-nod var(--motion-gesture) var(--ease-spring) 1; }
+.message-byline.landed .avatar .mascot-eyes { animation:mascot-blink var(--motion-idle) var(--idle-delay, 0s) infinite, mascot-cheer-eyes var(--motion-gesture) ease-out 1; }
 :where(.chat-turn:last-child) .message-byline.landed .avatar .mascot { animation:mascot-look-head var(--motion-idle) var(--ease-spring) var(--idle-delay, 0s) infinite, mascot-nod var(--motion-gesture) var(--ease-spring) 1; }
-@keyframes mascot-nod { 0% { transform:translateY(var(--mascot-lift)) translateY(-3px); } 55% { transform:translateY(var(--mascot-lift)) translateY(2px); } 100% { transform:translateY(var(--mascot-lift)); } }
+:where(.chat-turn:last-child) .message-byline.landed .avatar .mascot-eyes { animation:mascot-look-eyes var(--motion-idle) ease-out var(--idle-delay, 0s) infinite, mascot-cheer-eyes var(--motion-gesture) ease-out 1; }
+@keyframes mascot-nod { 0% { transform:translateY(var(--mascot-lift)) translateY(-4px); } 55% { transform:translateY(var(--mascot-lift)) translateY(1.5px); } 100% { transform:translateY(var(--mascot-lift)); } }
+@keyframes mascot-cheer-eyes { 0%,100% { transform:translateY(var(--gaze-y)) scaleY(1); } 30%,60% { transform:translateY(var(--gaze-y)) scaleY(.4); } }
 
 /* Needs you: waiting on a person is not working, so it breathes slowly instead of turning its head. */
 .assistant-message.needs-you .avatar .mascot { animation:mascot-breathe var(--motion-cycle) ease-in-out infinite; }
 @keyframes mascot-breathe { 0%,100% { transform:translateY(var(--mascot-lift)) scale(1); } 50% { transform:translateY(var(--mascot-lift)) scale(1.06); } }
 
 /* Arriving: a worker or team that was just created rises into the list once, and its face hops once the row has
-   settled. The picker preview hops the same way when the chosen mascot changes. */
+   settled. (The picker preview is a 3D face and hops in on its own, see orgletStage.ts.) */
 .tree-item.arriving { animation:row-arrive .32s var(--ease-out) 1; }
 .tree-item.arriving .mascot { animation:mascot-hop var(--motion-gesture) var(--ease-spring) .32s 1; }
-.avatar-picker-head > .avatar .mascot { animation:mascot-hop var(--motion-gesture) var(--ease-spring) 1; }
 @keyframes row-arrive { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
 
 /* Reduced motion: no loops, no gestures, no glides. A state still shows (the eyes still drop or lift, the row still
@@ -1284,7 +1292,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   .avatar .mascot,.avatar-face,.mascot-eyes,.mascot-choice .mascot,
   .worker-row:is(:hover, :has(.worker:focus-visible)) .row-disclosure .mascot,.mascot-choice:is(:hover, :focus-visible) .mascot { transition:none; }
   .avatar.alive .mascot,.avatar.alive .mascot-eyes,.message-byline.working .mascot,.message-byline.working .mascot-eyes,.assistant-message:has(> .live-run) .message-byline.working .mascot-eyes,
-  .message-byline.landed .avatar .mascot,.assistant-message.needs-you .avatar .mascot,.tree-item.arriving .mascot,.avatar-picker-head > .avatar .mascot { animation:none; }
+  .message-byline.landed .avatar .mascot,.message-byline.landed .avatar .mascot-eyes,.assistant-message.needs-you .avatar .mascot,.tree-item.arriving .mascot { animation:none; }
   .worker-row:is(:hover, :has(.worker:focus-visible)) .row-disclosure .mascot,.assistant-message:has(> .live-run) .message-byline.working .mascot { transform:translateY(var(--mascot-lift)); filter:none; }
   .mascot-choice:is(:hover, :focus-visible) .mascot { transform:none; }
   .tree-item.arriving { animation:row-arrive-quiet .32s var(--ease-out) 1; }
@@ -1292,6 +1300,16 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 }
 .avatar.xl .avatar-badge { width:20px; height:20px; right:-5px; bottom:-5px; }
 .avatar.xl .avatar-badge .provider-mark svg { width:13px; height:13px; }
+.avatar.xxl .avatar-badge { width:26px; height:26px; right:-6px; bottom:-6px; }
+.avatar.xxl .avatar-badge .provider-mark svg { width:16px; height:16px; }
+/* The 3D face (COD-156): a canvas twice the drawing, centred on the box the flat drawing would fill, so a hop,
+   a hat turning or a note floating off stays inside it and never touches layout. It keeps the flat drawing's
+   whole-pixel lift in its box so the badge and the heading line up the same. */
+.orglet-3d { position:absolute; left:50%; top:50%; display:block; pointer-events:none; transform:translateY(var(--mascot-lift, 0px)); }
+.avatar.lg .orglet-3d { --mascot-lift:-1px; }
+.avatar.xl .orglet-3d { --mascot-lift:-2px; }
+.avatar.xxl .orglet-3d { --mascot-lift:-3px; }
+.mascot-choice { position:relative; }
 /* Avatar picker: preview left, letter/emoji and colour choices right. */
 .avatar-picker { display:flex; flex-direction:column; gap:12px; }
 .avatar-picker-head { display:flex; align-items:center; gap:16px; }

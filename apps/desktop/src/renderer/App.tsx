@@ -461,7 +461,6 @@ export function App() {
   const chatProviders = [...new Set((selected && detail ? detail.runs.map(run => run.snapshot.worker.provider) : executionWorkers.map(item => item.provider)))];
   const headerProvider = chatProviders.length === 1 ? chatProviders[0] : undefined;
   const chatName = team?.name ?? worker?.name ?? 'Orglet';
-  const [chatHeadingBefore = '', chatHeadingAfter = ''] = t('Đang nhắn với {0}').split('{0}');
   const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với hội…') : t('Nhắn với {0}…', [worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={!isDemo && missingConnections.length > 0} mentions={team ? { people: executionWorkers, allNames: [team.name] } : undefined}
     leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
     trailing={composerTrailing}
@@ -523,7 +522,15 @@ export function App() {
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">
-          <h1 className="welcome">{chatHeadingBefore}<span className="welcome-who">{team ? <RosterAvatars workers={roster} size="sm" max={2} alive /> : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm" alive /> : null}{chatName}</span>{chatHeadingAfter}</h1>
+          {/* The faces you are about to talk to, big and in 3D (COD-156): a worker alone, or a team side by side. They
+              hop in when the chat opens, turn to follow the pointer, and a team glances at each other first. Keyed by
+              the chat so switching to another worker greets again. */}
+          <div className="fresh-faces" key={team ? `team-${team.id}` : worker?.id}>
+            {team
+              ? roster.slice(0, 4).map(member => <Avatar key={member.id} name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xl" motion={{ lead: true, greet: true, group: `team-${team.id}` }} />)
+              : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xxl" motion={{ lead: true, greet: true }} /> : null}
+          </div>
+          <h1 className="welcome">{t('Đang nhắn với {0}', [chatName])}</h1>
           <div className="thread-composer">
             {composerBar}
             {composerHint}
