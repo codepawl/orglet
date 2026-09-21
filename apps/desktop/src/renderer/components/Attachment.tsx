@@ -1,11 +1,13 @@
-import { File, FileArchive, FileCode, FileData, FileDocument, FileImage, FileSpreadsheet, FileText, X, type Icon } from './icons';
+import { File, FileArchive, FileAudio, FileCode, FileData, FileDocument, FileImage, FileSpreadsheet, FileText, FileVideo, X, type Icon } from './icons';
 import { currentLocale, t, translated } from '../i18n';
 
 /** What a file is, as far as a glance needs to know. Read from the extension of its name. */
-export type FileKind = 'image' | 'document' | 'spreadsheet' | 'data' | 'code' | 'archive' | 'text' | 'file';
+export type FileKind = 'image' | 'video' | 'audio' | 'document' | 'spreadsheet' | 'data' | 'code' | 'archive' | 'text' | 'file';
 
 const kindsByExtension: Record<string, FileKind> = {
   png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', bmp: 'image', heic: 'image', avif: 'image', tiff: 'image', tif: 'image',
+  mp4: 'video', webm: 'video', mov: 'video', mkv: 'video', avi: 'video',
+  mp3: 'audio', wav: 'audio', ogg: 'audio', m4a: 'audio', flac: 'audio', aac: 'audio',
   pdf: 'document', doc: 'document', docx: 'document', odt: 'document', rtf: 'document', pages: 'document', md: 'document', markdown: 'document',
   xls: 'spreadsheet', xlsx: 'spreadsheet', ods: 'spreadsheet', numbers: 'spreadsheet', csv: 'spreadsheet', tsv: 'spreadsheet',
   json: 'data', jsonl: 'data', ndjson: 'data', parquet: 'data', xml: 'data', yaml: 'data', yml: 'data', toml: 'data', sqlite: 'data', db: 'data',
@@ -14,9 +16,14 @@ const kindsByExtension: Record<string, FileKind> = {
   txt: 'text', log: 'text', text: 'text',
 };
 
-const kindIcons: Record<FileKind, Icon> = { image: FileImage, document: FileDocument, spreadsheet: FileSpreadsheet, data: FileData, code: FileCode, archive: FileArchive, text: FileText, file: File };
+const kindIcons: Record<FileKind, Icon> = { image: FileImage, video: FileVideo, audio: FileAudio, document: FileDocument, spreadsheet: FileSpreadsheet, data: FileData, code: FileCode, archive: FileArchive, text: FileText, file: File };
 
-const kindLabels: Record<FileKind, string> = translated({ image: 'Ảnh', document: 'Tài liệu văn bản', spreadsheet: 'Bảng tính', data: 'Dữ liệu', code: 'Mã nguồn', archive: 'Tệp nén', text: 'Văn bản thuần', file: 'Tệp khác' });
+const kindLabels: Record<FileKind, string> = translated({ image: 'Ảnh', video: 'Video', audio: 'Âm thanh', document: 'Tài liệu văn bản', spreadsheet: 'Bảng tính', data: 'Dữ liệu', code: 'Mã nguồn', archive: 'Tệp nén', text: 'Văn bản thuần', file: 'Tệp khác' });
+
+/** "Ảnh", "Mã nguồn": the kind's label in the interface language. */
+export function fileKindLabel(name: string): string {
+  return kindLabels[fileKind(name)];
+}
 
 export function fileKind(name: string): FileKind {
   const dot = name.lastIndexOf('.');

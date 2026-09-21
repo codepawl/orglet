@@ -12,6 +12,7 @@ import { SettingsDialog, type SettingsTab } from './components/SettingsDialog';
 import { TaskThread } from './components/TaskThread';
 import { focusMessage } from './components/messageMarks';
 import { SourcePanel, type SourceTarget } from './components/SourcePanel';
+import { SourceDialog } from './components/SourceViewer';
 import { TeamDialog } from './components/TeamEditor';
 import { TaskDialog } from './components/TaskDialog';
 import { FormatPreferences } from './components/FormatAction';
@@ -118,9 +119,14 @@ export function App() {
     routineDirty.current = false; then();
   };
   const [sourceTarget, setSourceTarget] = useState<SourceTarget>();
+  // One source per dialog (user, 2026-09-21): a file opens in its own viewer; the panel lists the chat's files and holds the checkers.
+  const [viewingSource, setViewingSource] = useState<{ id: string; lines?: [number, number] }>();
   // Chat details list the team behind a team chat; a worker chat has none.
   const detailTeam = detail ? workspace?.teams.find(team => team.id === detail.task.teamId) : undefined;
-  const openSources = (target?: SourceTarget) => { setSourceTarget(target); setPanel('sources'); };
+  const openSources = (target?: SourceTarget) => {
+    if (target?.type === 'source') { setViewingSource({ id: target.id, lines: target.lines }); return; }
+    setSourceTarget(target); setPanel('sources');
+  };
   
   const [panel, setPanel] = useState<Panel>(null); const [editingWorker, setEditingWorker] = useState<Worker>(); const [editingTask, setEditingTask] = useState<string>(); const [editingSkill, setEditingSkill] = useState<Skill>();
   const [editingKnowledge, setEditingKnowledge] = useState<Knowledge>(); const [libraryTab, setLibraryTab] = useState<'skills' | 'knowledge'>('skills');
@@ -565,8 +571,9 @@ export function App() {
         <div id="library-panel" role="tabpanel" aria-labelledby={`library-tab-${libraryTab}`}>{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} onOpen={skill => { setEditingSkill(skill); setPanel('skill'); }} /> : <KnowledgeLibrary workspace={workspace} onOpen={openKnowledge} />}</div>
       </div>}
       {panel === 'knowledge' && <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={close} />}
-      {panel === 'sources' && detail && <SourcePanel detail={detail} target={sourceTarget} refresh={() => void refresh()} />}
+      {panel === 'sources' && detail && <SourcePanel detail={detail} target={sourceTarget} refresh={() => void refresh()} openSource={id => setViewingSource({ id })} />}
     </Drawer>
+    {viewingSource && detail && <SourceDialog key={viewingSource.id} detail={detail} sourceId={viewingSource.id} lines={viewingSource.lines} onClose={() => setViewingSource(undefined)} refresh={() => void refresh()} />}
     <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}`} open={panel === 'worker'} worker={editingWorker} workspace={workspace} connections={connections} harnesses={harnesses} onClose={close} />
     <TeamDialog key={`team:${panel === 'team'}:${editingTeam?.id ?? 'new'}`} open={panel === 'team'} team={editingTeam} workspace={workspace} onClose={close} />
     <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />

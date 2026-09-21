@@ -81,6 +81,7 @@ port.on('message', async ({ data }) => {
     const value = command === 'importSources'
       ? await core.sources.import(z.array(z.string().min(1).max(32768)).max(20).parse(args))
       : command === 'importFolder' ? await core.sources.importFolder(z.string().min(1).max(32768).parse(args))
+      : command === 'sourcePath' ? core.sourcePath(args)
       : command === 'grantWorkspace' ? await core.grantWorkspace(args)
       : command === 'exportArtifact' ? typeof args === 'string' ? core.exportMarkdown(Id.parse(args))
         : core.exportMarkdown(z.object({ id: Id, includeMessageLinks: z.literal(true) }).strict().parse(args).id, true)

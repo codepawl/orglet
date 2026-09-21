@@ -55,16 +55,20 @@ try {
   await app.evaluate(({ clipboard }) => { clipboard.writeText = globalThis.originalClipboardWrite; });
   await page.getByText('Nguồn gốc finding', { exact: true }).click();
   await page.getByText(`Finding: ${findingId}`, { exact: false }).waitFor();
+  // A cited file opens on its own, content first, with focus inside its viewer.
   await page.getByRole('button', { name: 'evidence.txt', exact: true }).click();
-  await page.locator(`#source-${fixture.sourceIds[0]} .source-preview`).filter({ hasText: 'Navigation fixture evidence.' }).waitFor();
-  assert.equal(await page.evaluate(() => document.activeElement.id), `source-${fixture.sourceIds[0]}`);
+  const viewer = page.getByRole('dialog', { name: 'evidence.txt' });
+  await viewer.locator('.source-preview').filter({ hasText: 'Navigation fixture evidence.' }).waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement?.closest('[role=dialog]')?.id), 'source-viewer');
   await page.keyboard.press('Escape');
+  await viewer.waitFor({ state: 'hidden' });
   await page.locator('.report-file').first().click();
   await page.getByRole('button', { name: 'evidence.txt · dòng 2', exact: true }).click();
-  const highlighted = page.locator(`#source-${fixture.sourceIds[0]} .line-highlight`);
+  const highlighted = viewer.locator('.line-highlight');
   await highlighted.waitFor();
   assert.deepEqual(await highlighted.evaluateAll(lines => lines.map(line => [line.dataset.line, line.textContent])), [['2', '2Second line.\n']]);
   await page.keyboard.press('Escape');
+  await viewer.waitFor({ state: 'hidden' });
   await page.locator('.report-file').first().click();
   await page.getByRole('button', { name: 'Xem checker 1', exact: true }).click();
   assert.equal(await page.locator(`#checker-${profile.id}`).evaluate(element => element.open), true);

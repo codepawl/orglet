@@ -10,6 +10,7 @@ import { commands, Id, ApiProvider, type Reply, type Command, TextFormat } from 
 import { PickWorkspace } from '../shared/workspace-access';
 import { OPENCODE_DOCS_URLS } from '../shared/opencode';
 import { markdownToPlain } from '../shared/plainText';
+import { MEDIA_SOURCE_EXTENSIONS, TEXT_SOURCE_EXTENSIONS } from '../shared/source-kinds';
 import { Credentials, OLLAMA_LOCAL_TOKEN } from './credentials';
 import { readBoundedText, writeAtomicText } from './files';
 import { readSkillDirectory, writeSkillDirectory } from './skill-files';
@@ -151,8 +152,19 @@ async function start() {
     return result;
   });
   handle('orglet:pick', async () => {
-    const result = await dialog.showOpenDialog(window, { title: tr('Chọn nguồn: text 256 KB; CSV, JSONL, Parquet 32 MB mỗi tệp'), properties: ['openFile', 'multiSelections'], filters: [{ name: 'Sources and datasets', extensions: ['md', 'txt', 'json', 'jsonl', 'csv', 'parquet', 'ts', 'js', 'py', 'yaml', 'yml', 'log'] }] });
+    const result = await dialog.showOpenDialog(window, { title: tr('Chọn nguồn: text 256 KB; CSV, JSONL, Parquet 32 MB; ảnh 20 MB; âm thanh 50 MB; video, PDF 200 MB'), properties: ['openFile', 'multiSelections'], filters: [
+      { name: 'Sources, datasets and media', extensions: [...TEXT_SOURCE_EXTENSIONS, ...MEDIA_SOURCE_EXTENSIONS] },
+      { name: 'Sources and datasets', extensions: TEXT_SOURCE_EXTENSIONS },
+      { name: 'Images, video, audio and PDF', extensions: MEDIA_SOURCE_EXTENSIONS },
+    ] });
     return result.canceled ? [] : request('importSources', result.filePaths);
+  });
+  // The renderer names a source by id; the core checks the task owns it and is not revoked, then main opens it.
+  handle('orglet:open-source', async raw => {
+    const input = z.object({ taskId: Id, id: Id }).strict().parse(raw);
+    const path = z.string().min(1).parse(await request('sourcePath', input));
+    const failure = await shell.openPath(path);
+    if (failure) throw new Error('Không mở được tệp bằng ứng dụng mặc định.');
   });
   handle('orglet:connections', async () => credentials.status());
   handle('orglet:pick-workspace', async raw => {

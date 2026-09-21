@@ -170,6 +170,13 @@ export const BookOpen = defineIcon('book-open', <>
   <path d="M10 6v11.5" />
 </>);
 
+/** An "i" in a ring: a dot for the tittle and a short stem, so it stays an i at 14px. */
+export const Info = defineIcon('info', <>
+  <circle cx="10" cy="10" r="7" />
+  {dot(10, 6.6)}
+  <path d="M10 9.5v4.5" />
+</>);
+
 export const Settings = defineIcon('settings', <>
   <circle cx="6" cy="6.5" r="2.3" />
   <path d="M9.3 6.5H17" />
@@ -208,6 +215,15 @@ export const FileImage = defineIcon('file-image', <>
   {dot(7, 7.5)}
   <path d="m3.5 14.5 3.5-3.5 3 3 2.5-2.5 4 3.5" />
 </>);
+
+/** The same frame as a picture, with a play triangle as its one filled marker. */
+export const FileVideo = defineIcon('file-video', <>
+  <rect x="3" y="4" width="14" height="12" rx="2.5" />
+  <path d="M8.5 7.5v5l4-2.5Z" fill="currentColor" stroke="none" />
+</>);
+
+/** A waveform: five bars around the middle line. */
+export const FileAudio = defineIcon('file-audio', <path d="M4 8.5v3M7 6v8M10 3.5v13M13 6.5v7M16 8.5v3" />);
 
 export const FileSpreadsheet = defineIcon('file-spreadsheet', <>
   <rect x="3" y="3" width="14" height="14" rx="3" />

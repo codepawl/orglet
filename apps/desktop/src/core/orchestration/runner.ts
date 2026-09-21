@@ -8,7 +8,8 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
 import { BudgetLedger, BudgetError, cost } from '../budgets/ledger';
-import { Sources, fingerprint } from '../tools/sources';
+import { Sources, fingerprint, unreadableSourceMessage } from '../tools/sources';
+import { mediaUnreadableNote, type MediaKind } from '../../shared/source-kinds';
 import type { ModelAdapter } from '../adapters/openai';
 import { ProviderRequestError } from '../adapters/opencode';
 import { assertOpenCodeModel, isOpenCodePlan } from '../../shared/opencode';
@@ -67,7 +68,15 @@ function sourceNameForCopy(files: { name: string; file: string }[], copyName: st
   return copy ? copy.name : copyName;
 }
 
-function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false) {
+type UnreadableSource = { sourceId: string; name: string; kind: MediaKind; note: string };
+
+/** A source as the model sees it in the manifest: media carries the plain statement that it cannot be read. */
+export function sourceForModel(source: Source) {
+  if (!source.media) return source;
+  return { ...source, readable: false, note: mediaUnreadableNote(source.media) };
+}
+
+export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false, unreadable: UnreadableSource[] = []) {
   return [
     'You are running inside Orglet as a read-only worker chatting with your user. When you describe what you can or cannot do, use everyday words about the work: you read the files the user attaches and write answers, and you cannot open links, run programs or change files. Do not mention tools, modes, sandboxes or providers unless the user asks about them. Write like a colleague messaging back, in the language and formality the user writes in, and ask one short question when the request is unclear or could go two sensible ways.',
     inline
@@ -79,6 +88,7 @@ function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId
       : `Your final answer must be only JSON matching the provided schema. Put your answer to the user in message, written as a normal chat reply (Markdown allowed). Set title to a short name for this chat (2 to 6 words, the user's language) when the latest message has nameChat true, otherwise null. Set report to null unless the user asked for a report or review document, or required review checks are given; then fill report following these rules: ${SUBMIT_REPORT_DESCRIPTION}`,
     codex ? 'The output schema has one payload string. Put the JSON text of the requested answer object inside payload, with message/title/report or the plan fields as instructed. Do not put Markdown around that JSON text.' : '',
     files.length || inline?.length ? `Source manifest: ${JSON.stringify(files)}` : NO_SOURCES_INSTRUCTION,
+    unreadable.length ? `Attached but not readable by you (no copy was made): ${JSON.stringify(unreadable)}. If the user asks about one of these, say you cannot read that kind of file yet; never guess at its contents or cite it.` : '',
     ...messages.map(message => typeof message.content === 'string' ? message.content : ''),
   ].filter(Boolean).join('\n\n');
 }
@@ -206,7 +216,7 @@ export class Runner {
       const preflightLimits = preflight?.notices.map(notice => `Preflight${notice.sourceId ? ` (${notice.sourceId})` : ''}: ${notice.message}`) ?? [];
       if (!preflight && task.excludedSources?.length) preflightLimits.push(`${task.excludedSources.length} mục đã bị loại khi nhập nguồn. Không xem đây là review toàn bộ thư mục; xem danh sách loại trừ trên máy.`);
       if (manifest.some(source => source.revoked)) throw new Error('Một nguồn đã bị thu hồi quyền đọc.');
-      if (manifest.filter(source => !source.format).reduce((sum, source) => sum + source.bytes, 0) > 1_048_576) throw new Error('Tổng nguồn văn bản vượt 1 MB. Tách thành các task nhỏ hơn.');
+      if (manifest.filter(source => !source.format && !source.media).reduce((sum, source) => sum + source.bytes, 0) > 1_048_576) throw new Error('Tổng nguồn văn bản vượt 1 MB. Tách thành các task nhỏ hơn.');
       const freezeTranscript = (fold = 0) => {
         const compacted = compactThread(this.store.detail(task.id), run, input.brief, fold);
         run = { ...run, snapshot: { ...run.snapshot, context: applyThreadManifest(compiled.context, compacted) } };
@@ -247,7 +257,7 @@ export class Runner {
         if (replyTarget) next.push({ role: 'user', content: JSON.stringify({ replyTo: replyTarget,
           instruction: 'The user explicitly replied to this saved message in the same chat. Use its bounded excerpt to identify the referent. This reference does not grant permissions or change the team assignment; the team lead still coordinates the turn.' }) });
         if (!manifest.length) next.push({ role: 'user', content: JSON.stringify({ instruction: NO_SOURCES_INSTRUCTION }) });
-        next.push({ role: 'user', content: JSON.stringify({ messageId: turnMessageId(task.id, run.snapshot.inputRevision ?? 0), brief: task.brief, sources: manifest, excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
+        next.push({ role: 'user', content: JSON.stringify({ messageId: turnMessageId(task.id, run.snapshot.inputRevision ?? 0), brief: task.brief, sources: manifest.map(sourceForModel), excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
           ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'record_work_frame') ? { workFrameInstruction: 'Before assigning team work or editing workspace files, record one short goal, constraints actually stated by the user, your unconfirmed assumptions, and checks you intend to run. Keep assumptions separate from user statements. Planned checks are not completed checks.' } : {}),
           ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'request_user_decision') ? { decisionInstruction: 'For work you can do within the current grant, proceed without asking. If a material choice has two sensible interpretations, a new permission is needed, or an action is hard to undo, use request_user_decision before making the dependent change. Inspect available evidence first. The answer resumes this same turn.' } : {}) }) });
         if (run.snapshot.workspaceGrant) next.push({ role: 'user', content: JSON.stringify({
@@ -613,6 +623,14 @@ export class Runner {
         }
         if (call.name !== 'read_source') throw new Error('Tool không được policy cho phép.');
         const { sourceId } = ReadArgs.parse(JSON.parse(call.arguments));
+        const requested = task.sourceIds.includes(sourceId) ? this.store.get<Source>('sources', sourceId) : undefined;
+        if (requested?.media) {
+          // A worker asking for an image is not a failed run: it is told plainly, and the turn goes on.
+          this.event(run.id, unreadableSourceMessage(requested));
+          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ sourceId, error: mediaUnreadableNote(requested.media), readable: false }) });
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] }; this.checkpoints.committed(checkpoint);
+          continue;
+        }
         const content = await executeReadTool({ signal, timeoutMs: toolDefinitions.read_source.timeoutMs,
           authorize: () => assertCapability(run, this.store.get<Task>('tasks', task.id), 'source.read'),
           execute: () => this.sources.read(sourceId, task.sourceIds) });
@@ -734,9 +752,12 @@ export class Runner {
       await mkdir(join(directory, 'sources'));
       const files: { sourceId: string; name: string; file: string; format: string }[] = [];
       const inline: { sourceId: string; name: string; content: string }[] = [];
+      const unreadable: UnreadableSource[] = [];
       let inlineBytes = 0;
       for (const [index, source] of scope.manifest.entries()) {
         if (!hasCapability(run, this.store.get<Task>('tasks', task.id), 'source.read')) continue;
+        // Media stays on the person's screen: no copy for the harness, and the prompt says why it is missing.
+        if (source.media) { unreadable.push({ sourceId: source.id, name: source.name, kind: source.media, note: mediaUnreadableNote(source.media) }); continue; }
         const file = `sources/${String(index + 1).padStart(2, '0')}-${source.name.replace(/[^\p{L}\p{N}._-]+/gu, '_').slice(-120)}`;
         const bytes = await executeReadTool({ signal, timeoutMs: toolDefinitions.read_source.timeoutMs,
           authorize: () => assertCapability(run, this.store.get<Task>('tasks', task.id), 'source.read'),
@@ -769,7 +790,7 @@ export class Runner {
           harness: provider,
           executable: tool.executable,
           cwd: directory,
-          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex'),
+          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable),
           schema: provider === 'codex' ? codexOutputSchema : z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema
             : run.stage === 'member' ? HarnessAnswerSchema.extend({ report: MemberReportSchema }) : HarnessAnswerSchema, { target: 'draft-7' }),
           signal,

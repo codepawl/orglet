@@ -814,10 +814,90 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .tabs .button { min-height:32px; padding:5px 14px; border-radius:9px; font-size:13px; color:var(--muted); }
 .tabs .button:hover:not(:disabled) { background:transparent; color:var(--text); }
 .tabs .button[aria-selected=true] { background:var(--bg); color:var(--text); box-shadow:0 1px 3px #0000001f; }
-.hash { display:block; font-size:11px; overflow-wrap:anywhere; background:var(--surface); padding:10px; border-radius:8px; }
-.source-preview { font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--surface); padding:12px; border-radius:8px; max-height:420px; overflow:auto; }
-.line-highlight { display:inline-block; width:100%; background:var(--bg); outline:1px solid var(--muted); border-radius:4px; }
-.line-number { display:inline-block; width:35px; color:var(--muted); user-select:none; font-variant-numeric:tabular-nums; }
+/* Chat sources (user, 2026-09-21): the panel lists the chat's files as rows, and a row opens that one file in its
+   own viewer; a file's content is never poured into the list. */
+.source-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.source-row { display:flex; align-items:center; gap:10px; width:100%; padding:7px 8px 7px 10px; border:0; border-radius:10px; background:transparent; color:inherit; text-align:left; }
+.source-row:hover { background:var(--row-hover); }
+.source-row-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+.source-kind { flex-shrink:0; color:var(--muted); }
+.source-name { min-width:0; font-size:14px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.source-meta { font-size:12.5px; color:var(--muted); white-space:nowrap; }
+.source-meta.revoked { color:var(--error); }
+.source-row-open { flex-shrink:0; color:var(--muted); }
+/* The viewer: the document viewer's toolbar with the file's kind and size under its name, its actions on the
+   right (open externally, info, options), and the content on the grey backdrop. Preview surfaces switch to the
+   page colour there, and their own scroll caps come off so the viewer scrolls as one page. */
+.source-viewer { width:min(960px, calc(100vw - 32px)); }
+.source-viewer-heading { display:flex; flex-direction:column; align-items:center; min-width:0; }
+.source-viewer-meta { font-size:11.5px; color:var(--muted); white-space:nowrap; }
+.source-viewer .doc-actions .info-tip-trigger,.source-viewer .doc-actions .source-action { width:32px; height:32px; min-height:32px; padding:6px; }
+.source-viewer .doc-scroll { padding:20px 24px 40px; }
+.source-stage { display:flex; flex-direction:column; gap:12px; max-width:880px; margin:0 auto; min-width:0; }
+.source-stage>.preview-state { justify-content:center; padding:48px 0; font-size:14px; }
+.source-viewer .source-preview,.source-viewer .preview-table-scroll,.source-viewer .media-preview,.source-viewer .pdf-pages { background:var(--bg); max-height:none; overflow:visible; }
+.source-viewer .preview-table-scroll { overflow-x:auto; }
+.source-viewer .preview-table-scroll th { background:var(--bg); }
+.source-viewer .preview-table-scroll tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--surface) 55%, var(--bg)); }
+.source-viewer .media-image img { max-height:none; }
+.source-viewer .media-video video { max-height:none; }
+.source-viewer .pdf-page { box-shadow:0 1px 2px #0000001a, 0 8px 28px #0000000f; }
+.preview-state,.preview-note { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; font-size:12.5px; color:var(--muted); }
+.preview-state { font-size:13px; }
+.preview-toolbar { display:flex; align-items:center; gap:8px; }
+.preview-toolbar .button { font-size:12.5px; min-height:30px; padding:4px 10px; }
+.code-preview,.table-preview,.json-preview,.markdown-preview,.pdf-preview { display:flex; flex-direction:column; gap:8px; min-width:0; }
+/* Text and code: a number on every line, a hanging indent so a wrapped line starts under its text, and the
+   tokenizer's colours. A cited line keeps its old outline so citation navigation still lands on it. */
+.source-preview { font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size:12px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--surface); padding:12px 14px; border-radius:10px; max-height:480px; overflow:auto; tab-size:4; }
+pre.source-preview { margin:0; }
+pre.source-preview>span { display:block; padding-left:calc(var(--line-number-width, 4ch) + 12px); text-indent:calc(-1 * (var(--line-number-width, 4ch) + 12px)); }
+/* Cited lines read as one soft band in the accent, not a box around each line (no rules between rows). */
+.line-highlight { background:color-mix(in srgb, var(--accent) 16%, transparent); }
+.line-number { display:inline-block; width:var(--line-number-width, 4ch); margin-right:12px; text-align:right; text-indent:0; color:var(--muted); user-select:none; font-variant-numeric:tabular-nums; }
+.tok-comment { color:var(--muted); font-style:italic; }
+.tok-string { color:var(--success); }
+.tok-number { color:var(--working); }
+.tok-keyword,.tok-tag { color:color-mix(in srgb, var(--accent) 78%, var(--text)); }
+.tok-attribute,.tok-key { font-weight:600; }
+.tok-punctuation { color:var(--muted); }
+/* Markdown rendered as a document, in the interface type rather than monospace. */
+.source-preview.source-document { font-family:var(--font); font-size:13.5px; line-height:1.55; white-space:normal; }
+/* CSV and TSV as a table: sticky header, zebra rows, no rules (house rule: no divider lines). */
+.preview-table-scroll { max-width:100%; max-height:480px; overflow:auto; border-radius:10px; background:var(--surface); }
+.preview-table-scroll table { border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; font-size:12.5px; font-variant-numeric:tabular-nums; }
+.preview-table-scroll th,.preview-table-scroll td { padding:6px 10px; text-align:left; vertical-align:top; white-space:nowrap; max-width:320px; overflow:hidden; text-overflow:ellipsis; }
+.preview-table-scroll th { position:sticky; top:0; background:var(--surface); font-weight:600; }
+.preview-table-scroll tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--bg) 45%, var(--surface)); }
+/* JSON as a folding tree; a leaf is indented to the toggle's text so keys line up. */
+.json-preview { white-space:normal; }
+.json-node { display:flex; flex-direction:column; }
+.json-children { padding-left:18px; }
+.json-toggle { display:inline-flex; align-items:center; gap:4px; align-self:flex-start; padding:1px 6px 1px 2px; margin-left:-2px; border:0; border-radius:6px; background:transparent; font:inherit; color:inherit; text-align:left; }
+.json-toggle:hover { background:var(--row-hover); }
+.json-toggle .orglet-icon { color:var(--muted); transition:transform var(--motion-quick) var(--ease-out); }
+.json-toggle .orglet-icon.open { transform:rotate(90deg); }
+.json-leaf { display:inline-block; padding:1px 0 1px 18px; overflow-wrap:anywhere; }
+.json-key { font-weight:600; }
+.json-colon,.json-summary { color:var(--muted); }
+/* Pictures, video, audio and PDF pages sit on the same soft surface as text. */
+.media-preview { margin:0; display:flex; justify-content:center; padding:12px; border-radius:10px; background:var(--surface); }
+.media-image img { display:block; max-width:100%; max-height:520px; border-radius:6px; object-fit:contain; }
+.media-video video { display:block; width:100%; max-height:480px; border-radius:6px; background:#000; }
+.media-audio audio { display:block; width:100%; }
+.pdf-pages { display:flex; flex-direction:column; align-items:center; gap:12px; max-height:640px; overflow:auto; padding:12px; border-radius:10px; background:var(--surface); }
+.pdf-page { display:block; max-width:100%; height:auto; border-radius:4px; background:#fff; box-shadow:0 1px 3px #0000001f; }
+/* InfoTip: an "i" that reveals technical detail (kind, size, origin, id, hash) on hover or focus. The panel is
+   fixed and portaled so a scrolling dialog cannot clip it; a copy button sits at the end of a copyable row. */
+.info-tip { display:inline-flex; }
+.info-tip-panel { position:fixed; z-index:30; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001f; font-size:12.5px; color:var(--text); animation:menu-in var(--motion-quick) var(--ease-out); }
+.info-tip-rows { margin:0; display:flex; flex-direction:column; gap:6px; }
+.info-tip-row { display:grid; grid-template-columns:86px minmax(0,1fr); gap:8px; align-items:start; }
+.info-tip-row dt { color:var(--muted); padding-top:2px; }
+.info-tip-row dd { margin:0; min-width:0; display:flex; align-items:flex-start; gap:4px; overflow-wrap:anywhere; }
+.info-tip-row dd.mono { font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size:11.5px; }
+.info-tip-value { flex:1; min-width:0; padding-top:2px; }
+.info-tip-copy { width:24px; height:24px; min-height:24px; padding:4px; }
 .activity { list-style:none; margin:12px 0 0; padding:0; }
 .activity li { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; font-size:13px; }
 .activity time { font-size:11px; color:var(--muted); margin-top:2px; flex-shrink:0; }

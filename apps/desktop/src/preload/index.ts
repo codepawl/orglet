@@ -11,6 +11,7 @@ const bridge: Bridge = {
   call: (command, args) => invoke('orglet:command', { command, args }),
   pickSources: () => invoke('orglet:pick'),
   pickFolder: () => invoke('orglet:pick-folder'),
+  openSource: (taskId, id) => invoke('orglet:open-source', { taskId, id }),
   pickWorkspace: (taskId, permissions) => invoke('orglet:pick-workspace', { taskId, permissions }),
   connections: () => invoke('orglet:connections'),
   connect: (provider, key) => invoke('orglet:connect', key === undefined ? { provider } : { provider, key }),

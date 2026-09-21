@@ -35,7 +35,7 @@ Reply to a saved user or worker message to give the next turn a precise referenc
 |---|---|
 | 💬 **Chat with a worker** | Click a worker. One live thread — a new message is a turn, not a new task. |
 | 👥 **Chat with a team** | Click a team to open its chat. Members stay in the roster. One live thread per team. Type `@name` to tag who should take that turn. The lead plans, assigned members work, one report comes back. [How it works](docs/team-chat.md). |
-| 📎 **Attach files safely** | A worker only reads the files you attach to that chat. |
+| 📎 **Attach files safely** | A worker only reads the files you attach to that chat. Open any attached file to see what is in it: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. Images, video, audio and PDF are preview-only for now; workers are told they exist and cannot read them yet. |
 | 📄 **Reports as documents** | Ask for a report and it opens like a file. Copy it as plain text or Markdown, or download it. |
 | 🔁 **Repeat work on a schedule** | Schedules send the same request every day or week while Orglet is open. If the computer was off, missed runs become one catch-up you can run or skip; the next time stays on the calendar. |
 | 📚 **Reuse what works** | Save skills and notes that workers use in later chats. |

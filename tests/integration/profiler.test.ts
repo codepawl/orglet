@@ -54,10 +54,13 @@ it('bounds folder intake and reports unsupported or excluded entries', async () 
     await writeFile(join(root, 'readme.md'), 'Read-only instructions');
     await writeFile(join(root, 'data.csv'), 'id\n1\n2\n');
     await writeFile(join(root, 'image.png'), Buffer.from([0, 1]));
+    await writeFile(join(root, 'bundle.zip'), Buffer.from([0x50, 0x4b]));
     await mkdir(join(root, 'node_modules')); await writeFile(join(root, 'node_modules', 'ignored.txt'), 'not selected');
     const sources = new Sources(store, input => analyze(input)); const intake = await sources.importFolder(root);
-    expect(intake.sources.map(source => source.name)).toEqual(['data.csv', 'readme.md']);
-    expect(intake.skipped.map(item => item.name)).toEqual(['image.png', 'node_modules']);
+    // An image comes in as preview-only media; an archive is still not a kind Orglet takes.
+    expect(intake.sources.map(source => source.name)).toEqual(['data.csv', 'image.png', 'readme.md']);
+    expect(intake.sources.find(source => source.name === 'image.png')?.media).toBe('image');
+    expect(intake.skipped.map(item => item.name)).toEqual(['bundle.zip', 'node_modules']);
     await expect(sources.profile([intake.sources[0].id], [], 'id')).rejects.toThrow('quyền');
     await writeFile(join(root, 'data.csv'), 'id\n3\n');
     await expect(sources.profile([intake.sources[0].id], [intake.sources[0].id], 'id')).rejects.toThrow('thay đổi');

@@ -60,13 +60,21 @@ try {
   await page.waitForFunction(() => document.activeElement?.classList.contains('thread-menu'));
   // The message lists its files as cards; opening one is what the count button used to do.
   await page.locator('.chat-turn .message-files .attachment-open').first().click();
-  await page.getByRole('button', { name: 'Đọc nội dung', exact: true }).click();
-  await page.getByText('Evidence fixture.', { exact: false }).waitFor();
+  // A file opens on its own and shows what is in it straight away; the technical detail sits behind the info button.
+  const viewer = page.getByRole('dialog', { name: 'evidence.txt' });
+  await viewer.locator('.source-preview').filter({ hasText: 'Evidence fixture.' }).waitFor();
+  assert.equal(await viewer.getByText(/SHA-256/).count(), 0);
+  await viewer.getByRole('button', { name: 'Thông tin về evidence.txt', exact: true }).hover();
+  await page.getByRole('tooltip').getByText(/SHA-256/).waitFor();
   await page.screenshot({ path: join(output, 'desktop-source.png') });
-  await page.getByRole('button', { name: 'Thu hồi quyền đọc', exact: true }).click();
-  await page.getByText(/Đã thu hồi quyền đọc/).waitFor();
+  await page.keyboard.press('Escape');
+  await viewer.getByRole('button', { name: 'Tùy chọn cho evidence.txt', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Thu hồi quyền đọc', exact: true }).click();
+  await page.getByRole('menu').getByRole('menuitem', { name: 'Thu hồi quyền đọc', exact: true }).click();
+  await viewer.getByText('Đã thu hồi quyền đọc', { exact: true }).waitFor();
   assert.equal(await page.locator('.source-preview').count(), 0);
   await page.keyboard.press('Escape');
+  await viewer.waitFor({ state: 'hidden' });
   const exported = join(data, 'report.md');
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, exported);
   await page.getByRole('button', { name: 'Tải xuống', exact: true }).first().click();
@@ -163,7 +171,11 @@ try {
   await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: deterministic dataset checker');
   await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
-  await page.locator('.chat-turn .message-files .attachment-open').first().click();
+  // The checker tools live with the chat's source list, reached from the details panel; a file card opens the file itself.
+  await page.locator('.topbar-actions .thread-menu').click();
+  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
+  await page.getByRole('button', { name: 'Xem nguồn', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Nguồn của cuộc trò chuyện' }).waitFor();
   await page.getByRole('checkbox', { name: 'dataset.csv', exact: true }).check();
   await page.getByLabel('Cột ID (không bắt buộc)').fill('id');
   await page.getByRole('button', { name: 'Chạy checker local', exact: true }).click();
