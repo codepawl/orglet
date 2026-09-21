@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
-import { Mascot, bubbleOutline, mascots, mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
+import { Mascot, bubbleOutline, eyeColor, mascots, mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
 import { autoMascot, mascotCategoryIds, mascotColors, rankMascots, suggestMascots, suggestedColors, suggestedMascots } from '../../apps/desktop/src/renderer/components/mascotSuggest';
 
 const all = Object.values(mascotCategoryIds).flat();
@@ -118,4 +118,16 @@ it('lights every mascot from its own gradient, never a shared one', () => {
   expect(markup).toMatch(/stop-color="color-mix\(in srgb, currentColor 8\d%, white\)"/);
   expect(markup).toMatch(/stop-color="color-mix\(in srgb, currentColor 8\d%, black\)"/);
   expect(markup).not.toContain('mascot-gloss');
+});
+
+it('draws white eyes on every body and dark ones only on a very light body', () => {
+  // The eyes are white in both themes, the way Grok's are (owner, 2026-09-21), so they never take the page colour
+  // the hat rims use; a near-white worker colour is the one case that needs a dark eye. That is one step on the
+  // body's lightness, written once in `eyeColor` and used by every eye and eye stroke.
+  expect(eyeColor).toMatch(/^oklch\(from currentColor calc\(0\.25 \+ 0\.73 \* clamp\(0, \(0\.78 - l\) \* 1000, 1\)\) 0 0\)$/);
+  const markup = renderToStaticMarkup(createElement('div', null, mascotIds.map(id => createElement(Mascot, { id, key: id }))));
+  const eyeFills = markup.match(/<rect [^>]*rx="2\.2"[^>]*fill="([^"]+)"/g) ?? [];
+  expect(eyeFills.length).toBeGreaterThan(40);
+  for (const eye of eyeFills) expect(eye).toContain(`fill="${eyeColor}"`);
+  expect(markup).not.toMatch(/<rect [^>]*rx="2\.2"[^>]*fill="var\(--mascot-ink/);
 });

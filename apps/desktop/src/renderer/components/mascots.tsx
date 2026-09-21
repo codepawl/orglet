@@ -3,7 +3,7 @@ import { useId, type CSSProperties, type ReactNode } from 'react';
 /*
  * Orglet mascots, the Grok reading (owner's reference, 2026-09-21): the Orglet logo bubble, the rounded speech
  * bubble with a small bottom-left corner at the logo's proportions, in the worker's colour, with two small
- * capsule eyes in the page colour set high and a touch to one side, and no mouth. Matte, naive 3D: one soft shade
+ * white capsule eyes set high and a touch to one side, and no mouth (dark only on a very light body, see `eyeColor`). Matte, naive 3D: one soft shade
  * across the body and a faint contact shadow, nothing glossy. Expressions are sparing and live in the eyes
  * alone: closed in a smile, one shut, half shut, ringed by glasses, covered by a visor. Each mascot adds at most
  * one small accessory. 64×64 grid, viewed from y -1 so a hat worn on the head fits above the body. Strokes
@@ -15,7 +15,13 @@ import { useId, type CSSProperties, type ReactNode } from 'react';
  * colour the user picked, near-white or near-black included, still shades in both directions.
  */
 const ink = 'var(--mascot-ink, #fff)';
+// The eyes are white on every body, in both themes, the way Grok's are (owner, 2026-09-21), and only on a very light
+// body (a near-white worker colour, or the brand mark in the dark theme) do they turn dark so they still show. The
+// switch is a step on the body colour's lightness: above 0.78 the eye lightness is 0.25, below it 0.98.
+export const eyeColor = 'oklch(from currentColor calc(0.25 + 0.73 * clamp(0, (0.78 - l) * 1000, 1)) 0 0)';
 const stroke = { fill: 'none', stroke: ink, strokeWidth: 3.4, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+// A stroke that belongs to the eyes (an arch, a lens ring) takes the eye colour.
+const eyeStroke = { ...stroke, stroke: eyeColor } as const;
 // Outside the body the ink colour is the page colour, so an antenna or a headband drawn with `stroke` is
 // invisible. Anything that leaves the body is drawn in the mascot colour instead (COD-106).
 const outside = { ...stroke, stroke: 'currentColor' } as const;
@@ -33,13 +39,13 @@ const eyeHeight = 9.5;
 const eyeY = 27;
 const eyeLeft = 30.5;
 const eyeRight = 37.5;
-const capsule = (x: number, y: number, height = eyeHeight) => <rect x={x - eyeWidth / 2} y={y - height / 2} width={eyeWidth} height={height} rx={eyeWidth / 2} fill={ink} />;
+const capsule = (x: number, y: number, height = eyeHeight) => <rect x={x - eyeWidth / 2} y={y - height / 2} width={eyeWidth} height={height} rx={eyeWidth / 2} fill={eyeColor} />;
 const eyes = (dx = 0, dy = 0, height = eyeHeight) => <g className="mascot-eyes">{capsule(eyeLeft + dx, eyeY + dy, height)}{capsule(eyeRight + dx, eyeY + dy, height)}</g>;
 const face = eyes();
 // Eyes closed in a smile: two small arches.
-const smilingEyes = <path d={`M${eyeLeft - 3.25} ${eyeY + 1.5}q2.25-4 4.5 0M${eyeRight - 1.25} ${eyeY + 1.5}q2.25-4 4.5 0`} {...stroke} strokeWidth={3} />;
+const smilingEyes = <path d={`M${eyeLeft - 3.25} ${eyeY + 1.5}q2.25-4 4.5 0M${eyeRight - 1.25} ${eyeY + 1.5}q2.25-4 4.5 0`} {...eyeStroke} strokeWidth={3} />;
 // A shut eye: a short flat capsule.
-const shutEye = (x: number, y = eyeY) => <rect x={x - 3.5} y={y - 1.5} width={7} height={3} rx={1.5} fill={ink} />;
+const shutEye = (x: number, y = eyeY) => <rect x={x - 3.5} y={y - 1.5} width={7} height={3} rx={1.5} fill={eyeColor} />;
 // Anything worn on the head: the shape in the body paint, rimmed with the page ground so it reads over the body.
 const worn = { fill: body, stroke: ink, strokeWidth: 2, strokeLinejoin: 'round', strokeLinecap: 'round' } as const;
 const blush = (y = 35) => <><ellipse cx="22" cy={y} rx="3" ry="1.8" fill="#ff8fa3" opacity=".6" /><ellipse cx="45" cy={y} rx="3" ry="1.8" fill="#ff8fa3" opacity=".6" /></>;
@@ -53,7 +59,7 @@ export const mascots = {
   curious: { name: 'Tò mò', art: <>{bubble}<g className="mascot-eyes">{capsule(eyeLeft + 1.5, eyeY - 1)}{capsule(eyeRight + 1.5, eyeY - 2.5, 12.5)}</g></> },
   wink: { name: 'Nháy mắt', art: <>{bubble}<g className="mascot-eyes">{capsule(eyeLeft, eyeY)}</g>{shutEye(eyeRight)}</> },
   sleepy: { name: 'Buồn ngủ', art: <>{bubble}{shutEye(eyeLeft, eyeY + 2)}{shutEye(eyeRight, eyeY + 2)}<path d="M49 6h5l-5 5h5" {...outside} strokeWidth={2.4} /></> },
-  focused: { name: 'Đeo kính', art: <>{bubble}{eyes(0, 0, 7.5)}<circle cx={eyeLeft} cy={eyeY} r="6.2" {...stroke} strokeWidth={2.2} /><circle cx={eyeRight} cy={eyeY} r="6.2" {...stroke} strokeWidth={2.2} /></> },
+  focused: { name: 'Đeo kính', art: <>{bubble}{eyes(0, 0, 7.5)}<circle cx={eyeLeft} cy={eyeY} r="6.2" {...eyeStroke} strokeWidth={2.2} /><circle cx={eyeRight} cy={eyeY} r="6.2" {...eyeStroke} strokeWidth={2.2} /></> },
   antenna: { name: 'Ăng-ten', art: <>{bubble}<path d="M32 13V6" {...outside} /><circle cx="32" cy="5" r="3" fill="#ff8fa3" />{face}</> },
   sprout: { name: 'Mầm cây', art: <>{bubble}<path d="M32 13V7" {...outside} strokeWidth={3} /><path d="M32 8c-2-4-7-5-9-3 2 4 6 5 9 3zM32 8c2-4 7-5 9-3-2 4-6 5-9 3z" fill="#5fb878" />{face}</> },
   idea: { name: 'Ý tưởng', art: <>{bubble}{face}<path d="M52 4v7M48.5 7.5h7" {...stroke} strokeWidth={2.6} stroke="#f2b33d" /></> },

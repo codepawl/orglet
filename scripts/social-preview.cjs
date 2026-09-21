@@ -13,14 +13,16 @@ const cardSize = { width: 1280, height: 640 };
 // The mascots that lead the card, each in its own colour: a face people recognise before they read anything.
 // The shapes are the same ones `renderer/components/mascots.tsx` draws (COD-154: the logo bubble with two
 // capsule eyes and at most one hat), inlined here so this script stays standalone.
-const eyes = '<rect x="28.3" y="22.25" width="4.4" height="9.5" rx="2.2" fill="var(--ink)"/><rect x="35.3" y="22.25" width="4.4" height="9.5" rx="2.2" fill="var(--ink)"/>';
+// Eyes are white on every body (dark only on a very light one, which the card has none of); hat rims take the
+// card's ground so a hat reads over the body, as in the app.
+const eyes = '<rect x="28.3" y="22.25" width="4.4" height="9.5" rx="2.2" fill="var(--eye)"/><rect x="35.3" y="22.25" width="4.4" height="9.5" rx="2.2" fill="var(--eye)"/>';
 const worn = 'fill="url(#shade)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"';
 const cast = [
   {
     color: '#4f7fe0',
-    art: `<rect x="29" y="23.25" width="4.4" height="7.5" rx="2.2" fill="var(--ink)"/><rect x="35.3" y="23.25" width="4.4" height="7.5" rx="2.2" fill="var(--ink)"/>
-          <circle cx="30.5" cy="27" r="6.2" fill="none" stroke="var(--ink)" stroke-width="2.2"/>
-          <circle cx="37.5" cy="27" r="6.2" fill="none" stroke="var(--ink)" stroke-width="2.2"/>`,
+    art: `<rect x="29" y="23.25" width="4.4" height="7.5" rx="2.2" fill="var(--eye)"/><rect x="35.3" y="23.25" width="4.4" height="7.5" rx="2.2" fill="var(--eye)"/>
+          <circle cx="30.5" cy="27" r="6.2" fill="none" stroke="var(--eye)" stroke-width="2.2"/>
+          <circle cx="37.5" cy="27" r="6.2" fill="none" stroke="var(--eye)" stroke-width="2.2"/>`,
   },
   {
     color: '#3f9a68',
@@ -66,7 +68,7 @@ const cardHtml = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <style>
-  :root { --ground:#171717; --ink:#171717; --text:#f5f5f5; --muted:#a1a1a1; }
+  :root { --ground:#171717; --ink:#171717; --eye:#fafafa; --text:#f5f5f5; --muted:#a1a1a1; }
   * { box-sizing:border-box; margin:0; }
   body {
     width:${cardSize.width}px; height:${cardSize.height}px; display:flex; flex-direction:column;
