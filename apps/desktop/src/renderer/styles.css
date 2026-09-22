@@ -793,6 +793,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .harness-commands { display:flex; flex-direction:column; gap:6px; margin-top:7px; }
 .harness-commands .setting-repair { margin-top:0; }
 .setting-path { font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Deleting what the app has kept: an outline button that says what it is by its colour alone, and, for the one
+   erase that cannot be undone, the typed confirmation beside its own row rather than in a centred dialog. */
+.button.danger,.button.danger svg { color:var(--error); }
+.button.danger:hover:not(:disabled) { border-color:color-mix(in srgb, var(--error) 45%, var(--border)); background:color-mix(in srgb, var(--error) 7%, var(--bg)); }
+.erase-form { display:flex; flex-direction:column; gap:8px; padding:12px; max-width:320px; }
+.erase-form label { font-size:12.5px; color:var(--muted); }
+.erase-form div { display:flex; align-items:center; gap:6px; }
+.erase-form input { flex:1; min-width:120px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
 .settings-message { font-size:13px; margin-top:14px; color:var(--muted); }
 .money-input { display:inline-flex; align-items:center; gap:4px; min-height:36px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); }
 .money-input>span { color:var(--muted); font-size:14px; }

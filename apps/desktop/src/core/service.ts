@@ -26,6 +26,8 @@ import type { HarnessInfo } from '../shared/harness';
 import { detectHarnesses, probe } from './harness/detect';
 import { HarnessAccounts } from './harness/accounts';
 import { executeHarness } from './harness/exec';
+import { eraseEverything, eraseKnowledge, eraseSources } from './storage/erase';
+import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../shared/erase';
 import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
 import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/currency';
 import { assertSkillReady, inspectPackage, packageForImport, packageForExport } from './skill-package';
@@ -79,7 +81,7 @@ export class CoreService {
     this.workspaceGrants = new WorkspaceGrants(store);
     this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
-    this.backups = new Backups(store, () => this.routines.isBusy() || this.sources.isChecking() || store.all<Task>('tasks').some(task => this.runner.isActive(task.id) || this.teams.isActive(task.id)), this.notify);
+    this.backups = new Backups(store, () => this.isBusy(), this.notify);
     this.templates = new TeamTemplates(store, this.notify);
     this.routines = new Routines(store, this.sources, this.notify, (input, next) => this.createTask(input, next), clock);
     this.policy.captureHandoffs();
@@ -411,6 +413,10 @@ export class CoreService {
         const input = commands.selectHarnessAccount.parse(args);
         return this.harnessAccount(() => this.harnessAccounts.select(input.harness, input.id));
       }
+      case 'eraseData': {
+        const input = commands.eraseData.parse(args);
+        return this.eraseData(input.scope, input.confirm);
+      }
       case 'modelList': return this.modelList(commands.modelList.parse(args));
       case 'renameTask': {
         const input = commands.renameTask.parse(args);
@@ -514,6 +520,43 @@ export class CoreService {
     })().finally(() => { this.currencyRefresh = undefined; });
     return this.currencyRefresh;
   }
+  /** A task, routine or checker in flight would write rows back while they are being removed. */
+  private isBusy() {
+    return this.routines.isBusy() || this.sources.isChecking()
+      || this.store.all<Task>('tasks').some(task => this.runner.isActive(task.id) || this.teams.isActive(task.id));
+  }
+
+  /**
+   * Removes one kind of stored data. Chats go through the same deletion a single chat uses, so one that cost money
+   * still leaves its cost row behind and knowledge it taught keeps the artifact it cites. API keys live outside the
+   * database, in the credential store, and no scope here touches them.
+   */
+  eraseData(scope: EraseScope, confirm?: string): EraseSummary {
+    if (this.isBusy()) throw new Error('Chờ hoặc hủy các task/checker đang chạy trước khi xóa.');
+    if (scope === 'everything' && confirm !== ERASE_CONFIRMATION) throw new Error(`Gõ ${ERASE_CONFIRMATION} để xác nhận xóa toàn bộ.`);
+    const summary: EraseSummary = { scope, chats: 0, knowledge: 0, sources: 0, sourcesForgotten: 0, entities: 0 };
+    if (scope === 'chats' || scope === 'everything') {
+      // A deleted chat that cost money leaves a tombstone row, which a full erase then drops with its table.
+      for (const task of this.store.all<Task>('tasks')) {
+        if (task.deletedAt) continue;
+        this.deleteTask(task.id);
+        summary.chats++;
+      }
+    }
+    if (scope === 'knowledge') summary.knowledge = eraseKnowledge(this.store);
+    if (scope === 'sources') Object.assign(summary, eraseSources(this.store));
+    if (scope === 'everything') {
+      summary.knowledge = this.store.all('knowledge').length;
+      summary.sources = this.store.all('sources').length;
+      Object.assign(summary, eraseEverything(this.store));
+      // Settings went with the tables, so the model lists cached in memory no longer have a row behind them.
+      this.modelListMemory = emptyModelListCache();
+      this.modelListLoaded = false;
+    }
+    this.notify();
+    return summary;
+  }
+
   /** Probing spawns each CLI, so results are reused for a minute unless the user asks to detect again. */
   harnesses(refresh: boolean): Promise<HarnessInfo[]> {
     if (refresh) for (const id of ['claude-code', 'codex', 'cursor'] as const) this.invalidateModelList(id);
