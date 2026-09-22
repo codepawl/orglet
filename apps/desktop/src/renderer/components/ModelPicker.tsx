@@ -8,9 +8,9 @@ import { currentLocale, t } from '../i18n';
 import { orglet } from '../api';
 import { Button, FieldLabel } from './ui';
 import { ProviderMark } from './ProviderMark';
-import { fieldInvalid } from './fieldInvalid';
 import { modelRunnable, openCodeModelIssue } from './openCodeModel';
 import { isOpenCodePlan } from '../../shared/opencode';
+import { Input } from '@codepawl/orglet-ui';
 
 function deprecationChipLabel(sunsetAt?: string) {
   const day = formatSunsetDay(sunsetAt, currentLocale());
@@ -154,14 +154,14 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
     <span className="field-title" id={labelId}><FieldLabel icon={Hash}>{t('ID model')}</FieldLabel></span>
     <div className="model-picker">
       <div className="model-picker-field">
-      <input ref={input} data-field="modelId" value={value} maxLength={200} autoComplete="off" autoCorrect="off" spellCheck={false}
+      <Input ref={input} data-field="modelId" value={value} maxLength={200} autoComplete="off" autoCorrect="off" spellCheck={false}
         placeholder={hint ?? t('Gõ ID model')}
         aria-labelledby={labelId} aria-describedby={describedBy} aria-invalid={invalid || undefined} data-flash={invalid ? flash : undefined}
         role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={open ? listId : undefined}
         aria-activedescendant={open && options[active] ? `${id}-option-${active}` : undefined}
         onChange={event => { onChange(event.target.value); if (!open && models.length) openList(); }}
         onFocus={() => { if (models.length) openList(); }}
-        {...fieldInvalid(!!invalid, flash ?? 0)}
+        invalid={!!invalid} flash={flash ?? 0}
         onKeyDown={event => {
           if (event.key === 'Escape' && open) { event.preventDefault(); event.stopPropagation(); close(); return; }
           if (!open && ['ArrowDown', 'ArrowUp'].includes(event.key) && options.length) { event.preventDefault(); openList(); return; }

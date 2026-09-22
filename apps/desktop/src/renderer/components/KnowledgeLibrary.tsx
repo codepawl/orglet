@@ -7,6 +7,7 @@ import { Select } from './Select';
 import { t } from '../i18n';
 import { orglet } from '../api';
 import { SwitchField } from './Switch';
+import { Input, Textarea } from '@codepawl/orglet-ui';
 
 export function scopeLabel(scope: KnowledgeScope, workspace: Workspace) {
   if (scope.type === 'workspace') return t('Toàn workspace');
@@ -34,7 +35,7 @@ export function KnowledgeLibrary({ workspace, onOpen }: { workspace: Workspace; 
     {item.pinned && <Pin size={14} aria-label={t('Luôn nạp')} />}<span className="badge">v{item.revision}</span>
   </Button>;
   return <div className="form">
-    <label><FieldLabel icon={Search}>{t('Tìm knowledge')}</FieldLabel><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('Từ khóa hoặc tag')} maxLength={200} /></label>
+    <label><FieldLabel icon={Search}>{t('Tìm knowledge')}</FieldLabel><Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('Từ khóa hoặc tag')} maxLength={200} /></label>
     {proposed.length > 0 && <section aria-label={t('Chờ duyệt')}><h3>{t('Chờ duyệt ({0})', [proposed.length])}</h3>{proposed.map(row)}</section>}
     <section aria-label={t('Đã duyệt')}><h3>{t('Đã duyệt ({0})', [approved.length])}</h3>{approved.map(row)}{!approved.length && <p className="muted">{query ? t('Không có mục khớp.') : t('Chưa có knowledge đã duyệt.')}</p>}</section>
     {error && <p role="alert" className="error">{error}</p>}
@@ -58,9 +59,9 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
   return <form className="form" onSubmit={event => { event.preventDefault(); void run(save); }}>
     {item && <p className="muted">{provenanceLabel(item)} · v{item.revision} · {item.status === 'proposed' ? t('Chờ duyệt') : t('Đã duyệt')}</p>}
     {proposed && <p role="status">{t('Nội dung do model đề xuất hoặc đến từ template. Đọc kỹ trước khi duyệt; knowledge không cấp quyền hay tăng ngân sách.')}</p>}
-    <label><FieldLabel icon={Type} required>{t('Tiêu đề')}</FieldLabel><input value={title} onChange={event => setTitle(event.target.value)} required maxLength={200} /></label>
-    <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><textarea rows={8} value={content} onChange={event => setContent(event.target.value)} required maxLength={8000} /></label>
-    <label><FieldLabel icon={Tag}>Tags</FieldLabel><input value={tags} onChange={event => setTags(event.target.value)} placeholder="scoring, dataset" /></label>
+    <label><FieldLabel icon={Type} required>{t('Tiêu đề')}</FieldLabel><Input value={title} onChange={event => setTitle(event.target.value)} required maxLength={200} /></label>
+    <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><Textarea rows={8} value={content} onChange={event => setContent(event.target.value)} required maxLength={8000} /></label>
+    <label><FieldLabel icon={Tag}>Tags</FieldLabel><Input value={tags} onChange={event => setTags(event.target.value)} placeholder="scoring, dataset" /></label>
     <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
     <p className="muted">{t('Knowledge của hội chỉ nạp khi chạy trong hội đó, kể cả khi Tí tham gia nhiều hội.')}</p>
     <SwitchField checked={pinned} onChange={setPinned} description={t('Không ghim thì chỉ nạp khi yêu cầu có từ khóa khớp. Sửa xong, lần chạy cũ vẫn giữ nội dung nó đã đọc.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>

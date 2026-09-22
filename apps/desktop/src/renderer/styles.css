@@ -623,12 +623,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .review-setup { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .review-setup .button { flex-shrink:0; white-space:nowrap; }
 .form label { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
-.form input,.form select,.form textarea { width:100%; border:1px solid var(--border); background:var(--bg); border-radius:var(--radius); padding:7px 11px; min-height:var(--control-height); font-size:13px; font-weight:400; }
+/* Fields the kit draws (`.org-input`) bring their own box; these rules are for the ones still left in the app,
+   and they go when the last of those moves. */
+.form input:not(.org-input),.form select,.form textarea:not(.org-input) { width:100%; border:1px solid var(--border); background:var(--bg); border-radius:var(--radius); padding:7px 11px; min-height:var(--control-height); font-size:13px; font-weight:400; }
 /* Same dropdown affordance as Settings; the neutral grey chevron reads on both themes. */
 .form select { appearance:none; padding-right:36px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23888' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; }
-.form select:hover:not(:disabled),.form input:hover:not(:disabled):not(:focus) { border-color:var(--muted); }
+.form select:hover:not(:disabled),.form input:not(.org-input):hover:not(:disabled):not(:focus) { border-color:var(--muted); }
 
-.form textarea { resize:vertical; min-height:100px; line-height:1.6; }
+.form textarea:not(.org-input) { resize:vertical; min-height:100px; line-height:1.6; }
 .form fieldset { border:1px solid var(--border); border-radius:10px; padding:12px; }
 .form legend { font-size:13px; padding:0 4px; }
 
@@ -676,13 +678,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
   0%, 100% { box-shadow:0 0 0 0 transparent; }
   40% { box-shadow:0 0 0 3px color-mix(in srgb, var(--error) 35%, transparent); }
 }
-.form :is(input, textarea, select)[aria-invalid=true],
+.form :is(input, textarea, select):not(.org-input)[aria-invalid=true],
 .form .select-trigger[aria-invalid=true],
 .form .money-input.invalid,
 .setting-key-form input[aria-invalid=true] {
   border-color:var(--error);
 }
-.form :is(input, textarea, select)[aria-invalid=true][data-flash],
+.form :is(input, textarea, select):not(.org-input)[aria-invalid=true][data-flash],
 .form .select-trigger[aria-invalid=true][data-flash],
 .form .money-input.invalid[data-flash],
 .form .checkbox-input[aria-invalid=true][data-flash] + .checkbox-box,

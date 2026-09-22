@@ -15,11 +15,11 @@ import { TabbedFormDialog } from './DialogTabs';
 import { readiness } from './providers';
 import { openCodeModelIssue } from './openCodeModel';
 import { CapabilityView } from './CapabilityView';
-import { fieldInvalid } from './fieldInvalid';
 import { toAmount, toMicros } from './money';
 import { toast } from './toast';
 import { t } from '../i18n';
 import { orglet } from '../api';
+import { Input, Textarea } from '@codepawl/orglet-ui';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
 type Tab = 'general' | 'skill';
@@ -80,9 +80,9 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
     {tab === 'general' && <>
       <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error'))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
-      <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} {...fieldInvalid(invalid === 'name', flash)} /></label>
-      <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
-      <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} {...fieldInvalid(invalid === 'instructions', flash)} /></label>
+      <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} /></label>
+      <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><Input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
+      <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>
       {worker && <p className="muted">{t('Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.')}</p>}
       <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} value={provider} onChange={value => { const next = value as Worker['provider']; setProvider(next); if (next !== provider) setModelId(''); }} options={[
         modelOption('demo', 'Demo', t('không gọi API'), t('Thử nghiệm'), true),

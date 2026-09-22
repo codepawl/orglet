@@ -12,6 +12,7 @@ import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Switch, SwitchField } from './Switch';
 import { StatusMark } from './StatusMark';
+import { Input, Textarea } from '@codepawl/orglet-ui';
 
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
 export const formatRoutineTime = (iso: string, timeZone: string) => new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' });
@@ -106,8 +107,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
 
     <section className="routine-group" aria-labelledby="routine-group-job">
       <h4 id="routine-group-job">{t('Công việc')}</h4>
-      <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><input value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
-      <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><textarea rows={4} value={brief} onChange={event => setBrief(event.target.value)} required maxLength={16000} /></label>
+      <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><Input value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
+      <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><Textarea rows={4} value={brief} onChange={event => setBrief(event.target.value)} required maxLength={16000} /></label>
       <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> }))]} />
       <div className="routine-sources">
         <PanelHeading level={3} title={<FieldLabel icon={FileText}>{t('Nguồn ({0}/20)', [sources.length])}</FieldLabel>}>
@@ -127,8 +128,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       <div className="field-grid">
         <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as typeof frequency); }} options={[{ value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> }, { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> }]} />
         {frequency === 'weekly' && <Select label={<FieldLabel icon={CalendarDays} required>{t('Ngày trong tuần')}</FieldLabel>} value={String(weekday)} onChange={value => { setWeekday(Number(value)); }} options={weekdays.map((day, index) => ({ value: String(index), label: day }))} />}
-        <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>
-        <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError || undefined} aria-describedby={zoneError ? 'routine-zone-error' : undefined} data-flash={zoneError ? 1 : undefined} /></label>
+        <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><Input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>
+        <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><Input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError || undefined} aria-describedby={zoneError ? 'routine-zone-error' : undefined} data-flash={zoneError ? 1 : undefined} /></label>
       </div>
       {zoneError && <p id="routine-zone-error" role="alert" className="error">{error}</p>}
       <p className="muted">{t('App tắt hoặc máy ngủ thì không chạy. Lịch không mất: khi mở lại, các lần lỡ gộp thành một lần chạy bù. Giờ bị bỏ qua do đổi giờ mùa hè không được chạy bù; giờ lặp chỉ chạy một lần.')}</p>

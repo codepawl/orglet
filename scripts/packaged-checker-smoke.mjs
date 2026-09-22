@@ -146,8 +146,8 @@ try {
   // DOM geometry checks work without desktop screenshots or computer-use automation.
   await page.setViewportSize({ width: 780, height: 700 });
   const toolLayout = await toolsPanel.evaluate(panel => {
-    const row = panel.querySelector('.switch-field');
-    const title = row.querySelector('.switch-field-text').getBoundingClientRect();
+    const row = panel.querySelector('.org-switch-field');
+    const title = row.querySelector('.org-switch-field-text').getBoundingClientRect();
     const control = row.querySelector('[role=switch]').getBoundingClientRect();
     return { overflow: panel.scrollWidth > panel.clientWidth + 1,
       centerDifference: Math.abs(title.y + title.height / 2 - control.y - control.height / 2) };
