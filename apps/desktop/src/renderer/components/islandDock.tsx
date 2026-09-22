@@ -20,7 +20,12 @@ export function dockIsland(view: IslandView | undefined) {
 
 function sameView(a: IslandView | undefined, b: IslandView | undefined) {
   if (!a || !b) return a === b;
-  return a.state === b.state && a.label === b.label && a.receipt === b.receipt;
+  return a.state === b.state && a.label === b.label && a.receipt === b.receipt && sameWorkers(a, b);
+}
+
+function sameWorkers(a: IslandView, b: IslandView) {
+  if (a.workers.length !== b.workers.length) return false;
+  return a.workers.every((worker, index) => worker.id === b.workers[index].id);
 }
 
 export function useDockedIsland() {
@@ -59,7 +64,7 @@ export function IslandDock() {
 
   const shown = view ?? lastView.current;
   if (!shown) return null;
-  return <LiveIsland state={shown.state} label={shown.label} receipt={shown.receipt} leaving={leaving} />;
+  return <LiveIsland state={shown.state} label={shown.label} receipt={shown.receipt} workers={shown.workers} leaving={leaving} />;
 }
 
 function prefersReducedMotion() {

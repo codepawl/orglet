@@ -1629,29 +1629,35 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .row-menu-popover { color:var(--text); }
 
 /* Live island (COD-164, the owner's dynamic-island reference; docked on the prompt bar in COD-167): a working run
-   is one tab on the bar, in the bar's own colour and outline, with a glowing shape and one label for what the
-   worker is doing now, and above the label one grey line for the last thing it did. It sits on the bar's top edge
-   and moves with the bar, never with the thread: `IslandDock` mounts it just before the bar inside `.thread-composer`,
-   where it takes its own room, so it covers no answer and stays put while the chat scrolls. Who is working is said
-   by the byline in the thread, so the island carries no face and no name (user, 2026-09-19); thinking is the face
-   turning from side to side, see the Thinking and Working states above the `.avatar .mascot` rules.
+   is one tab on the bar, in the bar's own colour and outline, with the faces of the workers at work and one label
+   for what they are doing now (COD-169: "Researcher is thinking…", or "3 orglets are working…" with every face),
+   above the label one grey line for the last thing done, and at the end a glowing shape. It sits on the bar's top
+   edge and moves with the bar, never with the thread: `IslandDock` mounts it just before the bar inside
+   `.thread-composer`, where it takes its own room, so it covers no answer and stays put while the chat scrolls.
+   The faces are `Avatar` at the list size (24px, the whole-pixel glyph) and stay still; thinking is the face
+   turning from side to side on the byline, see the Thinking and Working states above the `.avatar .mascot` rules.
    The join: the tab has no bottom edge and overlaps the bar's top border by one pixel, so its fill covers that
    stretch of line, and its two bottom corners curve outward into the bar, the inverted corner a tab makes with the
-   panel it belongs to. Each corner is a pseudo-element the width of the fillet, painted with a radial gradient
-   centred on its outer top corner: clear inside the fillet radius, one pixel of outline on the arc, then the bar's
-   colour beyond it. So the outline runs down the tab's side, round the arc and along the bar's top edge without a
-   break, and the arc's ends meet the tab's side and the bar's edge as tangents. The tab keeps to the straight part
-   of that edge: the max-width stays clear of the bar's corners (24px at their largest) in every shape the bar takes.
+   panel it belongs to. Each corner is a pseudo-element the width of the fillet plus the tab's own outline, painted
+   with a radial gradient centred on its outer top corner: clear inside the fillet radius, one pixel of outline on
+   the arc, then the bar's colour beyond it. So the outline runs down the tab's side, round the arc and along the
+   bar's top edge without a break, and the arc's ends meet the tab's side and the bar's edge as tangents. The
+   pseudo-element covers the tab's outline over the fillet's height, because that outline would otherwise run
+   straight on past the arc's tangent down to the bar, a stub beside every fillet (COD-169). The tab keeps to the
+   straight part of the bar's edge: the max-width stays clear of the bar's corners (24px at their largest) in every
+   shape the bar takes, and the min-width keeps the tab a pill (over four times its height) under a short label.
    The shape is a light source, not an icon: its silhouette and colour change with the state, blurred and breathing.
    `--glow` is the colour, `--glow-w/h/r` the silhouette; a second dot (::after) appears for listing. The colours
-   are chosen against the page, and the dark theme brings its own: what glows on #212121 washes out on white. */
+   are chosen against the page, and the dark theme brings its own: what glows on #212121 washes out on white.
+   It sits outside the measured body, level with the label, so the body's clip never cuts its halo. */
 .live-island {
   --island-fillet:12px; --island-line:var(--border-subtle);
   --glow-thinking:#ee3f86; --glow-reading:#e28f16; --glow-searching:#159fd6; --glow-listing:#ec7526;
   --glow-tool:#ad4be3; --glow-writing:#e9553a; --glow-waiting:#8d8d96; --glow-pausing:#aaaab2;
   --glow-halo:color-mix(in srgb, var(--glow) 38%, transparent);
-  position:relative; z-index:1; width:fit-content; max-width:calc(100% - 2 * (24px + var(--island-fillet)));
-  margin:0 auto -1px; padding:6px 16px 6px 11px;
+  position:relative; z-index:1; display:flex; align-items:flex-end; justify-content:center; gap:8px;
+  width:fit-content; min-width:150px; max-width:calc(100% - 2 * (24px + var(--island-fillet)));
+  margin:0 auto -1px; padding:5px 10px 5px 9px;
   border:1px solid var(--island-line); border-bottom:0; border-radius:18px 18px 0 0;
   background:var(--bg); color:var(--text); box-shadow:0 2px 12px #00000008;
   /* The shadow stops at the seam: below it is the bar, which carries its own. The sides keep room for the fillets. */
@@ -1662,7 +1668,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 @media (prefers-color-scheme:dark) { :root[data-theme=system] .live-island { --glow-thinking:#ff6b9d; --glow-reading:#ffb648; --glow-searching:#5adcff; --glow-listing:#ff9a52; --glow-tool:#d873ff; --glow-writing:#ff7a5c; --glow-waiting:#9a9aa3; --glow-pausing:#c9c9cf; --glow-halo:color-mix(in srgb, var(--glow) 70%, transparent); } }
 /* One outline for tab and bar: the same colour the bar's own focus rule sets. */
 .thread-composer:has(.composer:focus-within) .live-island { --island-line:color-mix(in srgb, var(--muted) 42%, var(--bg)); }
-.live-island::before,.live-island::after { content:""; position:absolute; bottom:0; width:var(--island-fillet); height:calc(var(--island-fillet) + 1px); }
+.live-island::before,.live-island::after { content:""; position:absolute; bottom:0; width:calc(var(--island-fillet) + 1px); height:calc(var(--island-fillet) + 1px); }
 .live-island::before { left:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 0 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
 .live-island::after { right:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 100% 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
 /* Out of the bar's top edge and back into it: the tab moves as one and is cut at the seam, so it is poured rather
@@ -1671,17 +1677,21 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .live-island.leaving { animation:island-sink 170ms var(--ease-out) forwards; }
 @keyframes island-rise { from { transform:translateY(100%); clip-path:inset(-24px calc(-24px - var(--island-fillet)) 100% calc(-24px - var(--island-fillet))); } }
 @keyframes island-sink { to { transform:translateY(100%); clip-path:inset(-24px calc(-24px - var(--island-fillet)) 100% calc(-24px - var(--island-fillet))); } }
-/* The width is set from the label by LiveIsland, so a new label morphs the tab instead of cutting it. The receipt
-   takes the width the label gives and never widens the tab; it opens its own row once it has something to say. */
-.live-island-body { display:flex; flex-direction:column; max-width:100%; overflow:hidden; transition:width 320ms var(--ease-out); }
-.live-island-receipt-row { display:grid; grid-template-rows:1fr; transition:grid-template-rows 320ms var(--ease-out); }
-.live-island-receipt-row[data-empty] { grid-template-rows:0fr; }
-.live-island-receipt { min-height:0; padding:0 0 3px 36px; font-size:12.5px; line-height:18px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in var(--motion-base) var(--ease-out); }
-.live-island-content { display:inline-flex; align-items:center; gap:10px; width:max-content; height:26px; }
+/* The width is set from the faces and label by LiveIsland, so a new label morphs the tab instead of cutting it. The
+   receipt takes the width the label gives and never widens the tab; it opens its own row once it has something to
+   say, and the row's air under it opens with it, so an empty receipt costs no height (COD-169). */
+.live-island-body { display:flex; flex-direction:column; flex:0 1 auto; min-width:0; max-width:100%; overflow:hidden; transition:width 320ms var(--ease-out); }
+.live-island-receipt-row { display:grid; grid-template-rows:1fr; padding-bottom:3px; transition:grid-template-rows 320ms var(--ease-out), padding-bottom 320ms var(--ease-out); }
+.live-island-receipt-row[data-empty] { grid-template-rows:0fr; padding-bottom:0; }
+/* Inset past the faces (measured by LiveIsland into --island-faces), so the line sits over the label. */
+.live-island-receipt { min-height:0; padding-left:calc(var(--island-faces, 24px) + var(--island-faces-gap, 8px)); font-size:12.5px; line-height:18px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in var(--motion-base) var(--ease-out); }
+.live-island-content { display:inline-flex; align-items:center; gap:var(--island-faces-gap, 8px); width:max-content; height:24px; }
+.live-island-faces { display:flex; flex-shrink:0; }
 /* Capped from the bar's width, never from the tab's own: the bar less the corner clearance (72px), the tab's
-   padding and outline (29px) and the glow with its gap (36px), so the widest label still fits the straight edge. */
-.live-island-label { min-width:0; max-width:min(46ch, calc(100cqw - 137px)); font-size:14px; font-weight:500; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in 260ms var(--ease-out); }
-.live-island-glow { position:relative; display:grid; place-items:center; width:26px; height:26px; flex-shrink:0; --glow:var(--glow-thinking); --glow-w:4px; --glow-h:20px; --glow-r:2px; }
+   padding and outline (21px), the glow with its gap (32px) and the faces with theirs, so the widest label still
+   fits the straight edge. */
+.live-island-label { min-width:0; max-width:min(46ch, calc(100cqw - 133px - var(--island-faces, 24px))); font-size:14px; font-weight:500; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in 260ms var(--ease-out); }
+.live-island-glow { position:relative; display:grid; place-items:center; width:24px; height:24px; flex-shrink:0; --glow:var(--glow-thinking); --glow-w:4px; --glow-h:20px; --glow-r:2px; }
 .live-island-glow::before,.live-island-glow::after { content:""; grid-area:1/1; border-radius:var(--glow-r); background:var(--glow); box-shadow:0 0 12px 3px var(--glow-halo); filter:blur(1.5px);
   transition:width 320ms var(--ease-out), height 320ms var(--ease-out), border-radius 320ms var(--ease-out), background-color 320ms, box-shadow 320ms, transform 320ms var(--ease-out), opacity 320ms; }
 .live-island-glow::before { width:var(--glow-w); height:var(--glow-h); animation:island-breathe var(--motion-cycle) ease-in-out infinite; }

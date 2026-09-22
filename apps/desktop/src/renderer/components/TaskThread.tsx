@@ -20,7 +20,7 @@ import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { ActivityGroup, LiveRun, islandBeforeStreaming, islandOf, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
+import { ActivityGroup, LiveRun, islandBeforeStreaming, islandOf, liveRunOf, savedSteps, useRunProgress, workingWorkers } from './LiveRun';
 import { dockIsland } from './islandDock';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
@@ -102,12 +102,17 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
   const latestActiveRun = latestTurn ? latestTurn.runs.find(item => item.status === 'running') ?? latestTurn.runs.find(item => item.status === 'queued') : undefined;
   const dockedRun = busy ? latestLive?.run ?? latestActiveRun : undefined;
   const pausing = detail.task.status === 'pausing';
+  // Who the island names (COD-169): the workers whose runs of this turn are really running, never the roster; while
+  // none is yet (the run is still queued for a turn), the run the island is about.
+  const working = latestTurn ? workingWorkers(latestTurn.runs, liveRuns) : [];
+  const islandWorkers = working.length > 0 ? working : dockedRun ? [dockedRun.snapshot.worker] : [];
   const dockedIsland = dockedRun
     ? latestLive?.update.progress
-      ? islandOf(latestLive.update.progress, pausing)
-      : islandBeforeStreaming({ worker: dockedRun.snapshot.worker, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
+      ? islandOf(latestLive.update.progress, pausing, islandWorkers)
+      : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
     : undefined;
-  useEffect(() => { dockIsland(dockedIsland); }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt]);
+  const islandWorkerKey = islandWorkers.map(worker => worker.id).join(',');
+  useEffect(() => { dockIsland(dockedIsland); }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, islandWorkerKey]);
   useEffect(() => () => dockIsland(undefined), []);
 
   // A face nods when its answer lands, not when an old chat opens: the runs already finished when this chat was
