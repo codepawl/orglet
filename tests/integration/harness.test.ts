@@ -30,7 +30,8 @@ describe('detection', () => {
       join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.10', 'claude.exe'),
       join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.9', 'claude.exe'),
     ]);
-    expect(await candidates('codex', env, 'win32')).toEqual([join(bin, 'codex.cmd'), join(local, 'OpenAI', 'Codex', 'bin', 'bffc', 'codex.exe')]);
+    // The app's executable outranks the npm shim on PATH: a shim can only start through cmd.exe (COD-170).
+    expect(await candidates('codex', env, 'win32')).toEqual([join(local, 'OpenAI', 'Codex', 'bin', 'bffc', 'codex.exe'), join(bin, 'codex.cmd')]);
     expect(await candidates('cursor', env, 'win32')).toEqual([join(home, '.cursor', 'bin', 'agent.exe')]);
 
     const calls: string[] = [];
@@ -275,6 +276,19 @@ const fixture = (item: Pick<HarnessInfo, 'id' | 'executable' | 'version' | 'auth
   loginCommand: loginCommand(item.id, item.executable || undefined, 'win32'),
   runnable: true,
   ...item,
+});
+
+it('takes a real executable over a shell shim, wherever each was found', async () => {
+  const home = join(directory, 'home');
+  const npm = join(home, 'AppData', 'Roaming', 'npm');
+  const local = join(home, 'AppData', 'Local');
+  // What this machine has: npm's shim first on PATH, the desktop build's executable further down the search.
+  await touch(join(npm, 'claude.cmd'));
+  await touch(join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.9', 'claude.exe'));
+  const paths = await candidates('claude-code', { USERPROFILE: home, LOCALAPPDATA: local, APPDATA: join(home, 'AppData', 'Roaming'), PATH: npm }, 'win32');
+  // A .cmd can only run through cmd.exe, whose 8191-character line cannot carry the report schema.
+  expect(paths[0].endsWith('claude.exe')).toBe(true);
+  expect(paths.at(-1)!.endsWith('claude.cmd')).toBe(true);
 });
 
 describe('accounts', () => {
