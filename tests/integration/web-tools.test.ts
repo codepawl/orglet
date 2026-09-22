@@ -311,6 +311,31 @@ describe('web execution permission', () => {
     } finally { store.close(); }
   });
 
+  it('tells a run that keeps calling tools to hand in before the step limit, and it ends with its answer', async () => {
+    const { store, task, run } = fixture();
+    try {
+      task.toolCapabilities = ['network.web'];
+      store.update('tasks', task);
+      const page = await new WebTools(network()).read({ url: 'https://example.com' }, signal());
+      vi.spyOn(WebTools.prototype, 'read').mockResolvedValue(page);
+      let calls = 0;
+      let wrapUpToolNames: string[] = [];
+      const core = new CoreService(store, () => {}, async () => ({ request: async (messages, tools) => {
+        calls++;
+        const toldToHandIn = messages.some(message => message.role === 'user' && String(message.content).includes('almost out of steps'));
+        if (!toldToHandIn) return { calls: [{ id: `read-${calls}`, name: 'web_read_url', arguments: '{"url":"https://example.com"}' }], usage: { input: 1, output: 1 } };
+        wrapUpToolNames = tools.flatMap(tool => tool.type === 'function' ? [tool.function.name] : []);
+        return { calls: [{ id: 'answer', name: 'reply', arguments: JSON.stringify({ message: 'Read the pages; comparison not finished.' }) }], usage: { input: 1, output: 1 } };
+      } }));
+      await core.runner.run(task, run);
+      expect(store.detail(task.id).task.status).toBe('completed');
+      expect(calls).toBe(15);
+      expect(wrapUpToolNames.length).toBeGreaterThan(0);
+      expect(wrapUpToolNames.every(name => ['reply', 'submit_report', 'submit_plan'].includes(name))).toBe(true);
+      expect(store.detail(task.id).events.some(event => event.message.startsWith('Còn 2 bước'))).toBe(true);
+    } finally { store.close(); }
+  });
+
   it('discards fetched content when network permission is revoked before returning', async () => {
     const { store, task, run } = fixture();
     try {
