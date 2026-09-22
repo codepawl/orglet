@@ -41,11 +41,20 @@ export function applyReviewPolicy(report: Report, policy: ReviewPolicy | undefin
 
 /** Workspace command output has no source ID yet. Keep the work, but never publish an uncited pass. */
 export function downgradeUncitedWorkspaceChecks(report: Report) {
+  downgradeUncitedChecks(report, 'Kết quả công cụ workspace chưa có mã bằng chứng để trích dẫn trong báo cáo.');
+}
+
+/** Web pages are untrusted and have no source ID, so a check judged from them is kept but not counted as verified (COD-182). */
+export function downgradeUncitedWebChecks(report: Report) {
+  downgradeUncitedChecks(report, 'Check dựa trên trang web hoặc hiểu biết của model, không có nguồn đính kèm để trích dẫn.');
+}
+
+function downgradeUncitedChecks(report: Report, coverageNote: string) {
   if (!report.review) return;
   for (const check of report.review.checks) {
     if (check.status === 'not_assessed' || check.sourceIds.length || check.processIds?.length) continue;
     check.status = 'not_assessed';
-    check.coverage += '\nKết quả công cụ workspace chưa có mã bằng chứng để trích dẫn trong báo cáo.';
+    check.coverage += `\n${coverageNote}`;
     report.limitations.push(`Chưa xác minh độc lập check: ${check.name}.`);
   }
   if (report.review.checks.some(check => check.status === 'not_assessed')) report.review.recommendation = 'insufficient_evidence';

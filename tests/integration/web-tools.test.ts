@@ -266,6 +266,27 @@ describe('web execution permission', () => {
     } finally { store.close(); }
   });
 
+  it('keeps a web report whose checks cite pages, marking those checks not assessed', async () => {
+    const { store, task, run } = fixture();
+    try {
+      task.toolCapabilities = ['network.web'];
+      store.update('tasks', task);
+      const report = {
+        title: 'Attention survey', summary: 'GQA cuts KV memory.', findings: [], limitations: [],
+        review: { checks: [{ name: 'GQA paper matches the table', status: 'pass', coverage: 'Read arxiv.org/abs/2305.13245', sourceIds: [], checkerIds: [] }],
+          recommendation: 'ready_for_human_review', draftFeedback: 'Looks right.', upstreamFindingIds: [], conflicts: [] },
+      };
+      const core = new CoreService(store, () => {}, async () => ({ request: async () => ({ calls: [{ id: 'report', name: 'submit_report', arguments: JSON.stringify(report) }], usage: { input: 1, output: 1 } }) }));
+      await core.runner.run(task, run);
+      const detail = store.detail(task.id);
+      expect(detail.task.status).toBe('waiting_input');
+      const saved = detail.artifacts[0].report;
+      expect(saved.review?.checks[0].status).toBe('not_assessed');
+      expect(saved.review?.recommendation).toBe('insufficient_evidence');
+      expect(saved.limitations.some(limitation => limitation.includes('GQA paper matches the table'))).toBe(true);
+    } finally { store.close(); }
+  });
+
   it('discards fetched content when network permission is revoked before returning', async () => {
     const { store, task, run } = fixture();
     try {

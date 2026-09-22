@@ -28,7 +28,7 @@ import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
-import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
+import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, type Colleague } from '../context/compiler';
 import { applyThreadManifest, compactThread, fitThread, threadMessages } from '../context/thread';
@@ -775,7 +775,8 @@ export class Runner {
       downgradeUncitedWorkspaceFindings(report);
       downgradePrematureRecommendation(report, options.upstream ?? []);
     }
-    const validateChecker = (checkerId: string, sourceIds: string[]) => {
+    if (!run.snapshot.workspaceGrant && run.snapshot.toolCapabilities?.includes('network.web')) downgradeUncitedWebChecks(report);
+    const validateChecker =(checkerId: string, sourceIds: string[]) => {
       const profile = this.store.get<ProfileRecord>('profiles', checkerId);
       if (!profiles.some(available => available.id === checkerId)) throw new Error('Finding tham chiếu checker chưa được cung cấp cho lần chạy này.');
       if (!sourceIds.some(sourceId => Object.hasOwn(profile.sourceHashes, sourceId))) throw new Error('Checker không kiểm tra nguồn được trích trong finding.');
