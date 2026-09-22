@@ -672,7 +672,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .usage { margin:0; }
 .usage>div { display:flex; align-items:center; justify-content:space-between; font-size:13px; padding:4px 0; }
 .usage dd { margin:0; font-variant-numeric:tabular-nums; }
-.library-item { width:100%; justify-content:flex-start; }
+/* A library entry is a card you open: an icon, the name, one or two lines saying what it is, and its revision.
+   Sized so a list of one still reads as something you can pick, not a stray button. */
+.library-item { width:100%; justify-content:flex-start; align-items:center; gap:12px; min-height:64px; padding:12px 14px; border-radius:12px; text-align:left; }
+.library-icon { flex-shrink:0; color:var(--muted); }
+.library-item:hover .library-icon { color:var(--text); }
+.library-title { font-size:14px; font-weight:500; color:var(--text); }
+.library-summary { font-size:12.5px; line-height:1.45; color:var(--muted); font-weight:400; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .library-item .badge { margin-left:auto; }
 /* Frosted backdrop shared by drawers and dialogs: the page stays visible but out of focus. */
 .modal-overlay,.drawer-overlay { position:fixed; inset:0; z-index:10; background:#0000002e; backdrop-filter:blur(6px) saturate(.9); animation:fade-in var(--motion-base) var(--ease-out); }
@@ -886,7 +892,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .provider-mark svg { width:15px; height:15px; }
 .provider-mark.small { width:22px; height:22px; border-radius:6px; }
 .provider-mark.small svg { width:13px; height:13px; }
-.library-text { display:flex; flex-direction:column; align-items:flex-start; text-align:left; min-width:0; overflow-wrap:anywhere; }
+.library-text { display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; min-width:0; flex:1; overflow-wrap:anywhere; }
 .revision-select { display:flex; align-items:center; justify-content:flex-end; gap:8px; font-size:13px; color:var(--muted); margin-bottom:16px; }
 .thread-content>[role=status] { color:var(--muted); font-size:13px; text-align:right; margin-bottom:12px; }
 /* Segmented control: a soft track with the selected tab raised on it. */

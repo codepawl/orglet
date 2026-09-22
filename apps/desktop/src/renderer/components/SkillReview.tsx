@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { Skill } from '../../shared/contracts';
 import type { PackageReview } from '../../shared/skill-package';
+import { skillSummary } from '../../shared/skill-summary';
 import { Button } from './ui';
-import { FileText, FolderInput, Plus } from 'lucide-react';
+import { FileText, FolderInput, Plus, Sparkles } from 'lucide-react';
 import { Select } from './Select';
 import { toast } from './toast';
 import { t } from '../i18n';
@@ -25,9 +26,18 @@ export function SkillLibraryActions({ onOpen }: { onOpen: (skill?: Skill) => voi
 
 export function SkillLibrary({ skills, onOpen }: { skills: Skill[]; onOpen: (skill?: Skill) => void }) {
   return <div className="form">
-    {skills.map(skill => <Button key={skill.id} variant="outline" className="library-item" onClick={() => onOpen(skill)}>
-      <span>{skill.name}{skill.package && <small className="muted" style={{ display: 'block' }}>{t('Gói {0} · {1}', [skill.package.hash.slice(0, 8), skill.package.reviewedHash === skill.package.hash ? t('Đã review') : t('Cần review')])}</small>}</span><span className="badge">v{skill.revision}</span>
-    </Button>)}
+    {skills.map(skill => {
+      const summary = skillSummary(skill.content);
+      return <Button key={skill.id} variant="outline" className="library-item" onClick={() => onOpen(skill)}>
+        <Sparkles size={18} aria-hidden="true" className="library-icon" />
+        <span className="library-text">
+          <span className="library-title">{skill.name}</span>
+          {summary && <span className="library-summary">{summary}</span>}
+          {skill.package && <small className="muted">{t('Gói {0} · {1}', [skill.package.hash.slice(0, 8), skill.package.reviewedHash === skill.package.hash ? t('Đã review') : t('Cần review')])}</small>}
+        </span>
+        <span className="badge">v{skill.revision}</span>
+      </Button>;
+    })}
   </div>;
 }
 
