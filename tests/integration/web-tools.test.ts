@@ -287,6 +287,30 @@ describe('web execution permission', () => {
     } finally { store.close(); }
   });
 
+  it('trims pages read earlier instead of failing when the context fills up', async () => {
+    const { store, task, run } = fixture();
+    try {
+      task.toolCapabilities = ['network.web'];
+      store.update('tasks', task);
+      const page = await new WebTools(network()).read({ url: 'https://example.com' }, signal());
+      vi.spyOn(WebTools.prototype, 'read').mockResolvedValue({ ...page, content: 'Evidence paragraph. '.repeat(1_200) });
+      let calls = 0;
+      let lastRequestBytes = 0;
+      const core = new CoreService(store, () => {}, async () => ({ request: async messages => {
+        lastRequestBytes = Buffer.byteLength(JSON.stringify(messages), 'utf8');
+        if (++calls <= 10) return { calls: [{ id: `read-${calls}`, name: 'web_read_url', arguments: '{"url":"https://example.com"}' }], usage: { input: 1, output: 1 } };
+        const pages = messages.filter(message => message.role === 'tool').map(message => JSON.parse(message.content as string));
+        expect(pages.at(-1).trimmedForContext).toBeUndefined();
+        expect(pages.some(read => read.trimmedForContext)).toBe(true);
+        return { calls: [{ id: 'answer', name: 'reply', arguments: JSON.stringify({ message: 'Read ten long pages.' }) }], usage: { input: 1, output: 1 } };
+      } }));
+      await core.runner.run(task, run);
+      expect(store.detail(task.id).task.status).toBe('completed');
+      expect(lastRequestBytes).toBeLessThan(200_000);
+      expect(store.detail(task.id).events.some(event => event.message.startsWith('Đã rút gọn các trang web'))).toBe(true);
+    } finally { store.close(); }
+  });
+
   it('discards fetched content when network permission is revoked before returning', async () => {
     const { store, task, run } = fixture();
     try {
