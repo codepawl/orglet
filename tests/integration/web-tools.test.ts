@@ -228,6 +228,44 @@ describe('web execution permission', () => {
     } finally { store.close(); }
   });
 
+  it('hands a blocked search back to the worker instead of failing the run', async () => {
+    const { store, task, run } = fixture();
+    try {
+      task.toolCapabilities = ['network.web'];
+      store.update('tasks', task);
+      vi.spyOn(WebTools.prototype, 'search').mockRejectedValue(new Error('Dịch vụ tìm kiếm yêu cầu xác minh người dùng. Cung cấp URL hoặc thử lại sau.'));
+      let calls = 0;
+      const core = new CoreService(store, () => {}, async () => ({ request: async messages => {
+        if (++calls === 1) return { calls: [{ id: 'blocked-search', name: 'web_search', arguments: '{"query":"grouped query attention"}' }], usage: { input: 1, output: 1 } };
+        const output = messages.find(message => message.role === 'tool');
+        expect(JSON.stringify(output)).toContain('xác minh người dùng');
+        expect(JSON.stringify(output)).toContain('retryable');
+        return { calls: [{ id: 'answer', name: 'reply', arguments: JSON.stringify({ message: 'Search was blocked; answered from the known paper.' }) }], usage: { input: 1, output: 1 } };
+      } }));
+      await core.runner.run(task, run);
+      expect(calls).toBe(2);
+      expect(store.detail(task.id).task.status).toBe('completed');
+      expect(store.detail(task.id).events.some(event => event.message.startsWith('Tìm kiếm web không thành công'))).toBe(true);
+    } finally { store.close(); }
+  });
+
+  it('gives a web run more than six steps', async () => {
+    const { store, task, run } = fixture();
+    try {
+      task.toolCapabilities = ['network.web'];
+      store.update('tasks', task);
+      const page = await new WebTools(network()).read({ url: 'https://example.com' }, signal());
+      vi.spyOn(WebTools.prototype, 'read').mockResolvedValue(page);
+      let calls = 0;
+      const core = new CoreService(store, () => {}, async () => ({ request: async () => {
+        if (++calls <= 8) return { calls: [{ id: `read-${calls}`, name: 'web_read_url', arguments: '{"url":"https://example.com"}' }], usage: { input: 1, output: 1 } };
+        return { calls: [{ id: 'answer', name: 'reply', arguments: JSON.stringify({ message: 'Read eight pages.' }) }], usage: { input: 1, output: 1 } };
+      } }));
+      await core.runner.run(task, run);
+      expect(store.detail(task.id).task.status).toBe('completed');
+    } finally { store.close(); }
+  });
+
   it('discards fetched content when network permission is revoked before returning', async () => {
     const { store, task, run } = fixture();
     try {

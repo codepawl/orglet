@@ -55,7 +55,7 @@ Backups retain historical run snapshots but restore task and routine capabilitie
 
 ## Public web tools
 
-Workers with explicit `network.web` permission can read a URL or search the web. The permission is frozen per run, checked before and after IO, and checked again before sending cached content to a model. Revoking it cancels active work. It does not grant network access to workspace commands or make fetched content an editable file.
+Workers with explicit `network.web` permission can read a URL or search the web. The permission is frozen per run, checked before and after IO, and checked again before sending cached content to a model. Revoking it cancels active work. It does not grant network access to workspace commands or make fetched content an editable file. A search the service blocks, or a page that cannot be fetched, comes back to the worker as a tool error it can work around (another query, or a known URL); it does not fail the run. A run with web access gets 16 model steps instead of the 6 a sources-only run gets, so it can search, read a few pages and still write its answer.
 
 URL reads use public HTTP/HTTPS addresses on default ports. Core rejects credentials in URLs, private and special-purpose IP ranges, mixed public/private DNS answers, and redirects to forbidden destinations. The socket uses the checked IP while TLS verifies the original hostname. At most three redirects are followed; HTTPS cannot downgrade to HTTP. Requests use no browser cookies, provider keys or proxy configuration. JavaScript and linked resources do not execute or load.
 
