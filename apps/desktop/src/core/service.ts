@@ -23,7 +23,8 @@ import { WorkPolicy } from './orchestration/work-policy';
 import { KnowledgeBase } from './context/knowledge';
 import type { HarnessRuntime } from './orchestration/runner';
 import type { HarnessInfo } from '../shared/harness';
-import { detectHarnesses } from './harness/detect';
+import { detectHarnesses, probe } from './harness/detect';
+import { HarnessAccounts } from './harness/accounts';
 import { executeHarness } from './harness/exec';
 import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
 import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/currency';
@@ -35,6 +36,16 @@ import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, Model
 import { mentionedPeople } from '../shared/mentions';
 import { assertOpenCodeModel, isOpenCodePlan } from '../shared/opencode';
 import { MessageInteractions } from './orchestration/message-interactions';
+
+/**
+ * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
+ * account; without it only the system account exists, which is what the tests want.
+ */
+export const localHarnessRuntime = (accountRoot?: string): HarnessRuntime => ({
+  detect: accounts => detectHarnesses(process.env, process.platform, probe, accounts),
+  execute: executeHarness,
+  ...(accountRoot ? { accountRoot } : {}),
+});
 
 export class CoreService {
   feedbackText(artifactId: string): string {
@@ -53,14 +64,16 @@ export class CoreService {
   readonly policy: WorkPolicy;
   readonly knowledge: KnowledgeBase;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
+  readonly harnessAccounts: HarnessAccounts;
   private modelListMemory = emptyModelListCache();
   private modelListLoaded = false;
   private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
   private modelListEpoch = new Map<ModelListProviderId, number>();
   private modelListFailed = new Set<ModelListProviderId>();
-  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = { detect: () => detectHarnesses(), execute: executeHarness }, private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime) {
+  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
+    this.harnessAccounts = new HarnessAccounts(store, harness.accountRoot);
     this.notify = () => { if (!this.store.db.isOpen) return; this.policy.captureHandoffs(); notify(); };
     this.sources = new Sources(store, profiler);
     this.workspaceGrants = new WorkspaceGrants(store);
@@ -384,6 +397,20 @@ export class CoreService {
       }
       case 'searchKnowledge': return this.knowledge.search(commands.searchKnowledge.parse(args).query);
       case 'harnesses': return this.harnesses(commands.harnesses.parse(args).refresh);
+      case 'saveHarnessAccount': {
+        const input = commands.saveHarnessAccount.parse(args);
+        return this.harnessAccount(() => input.id
+          ? this.harnessAccounts.rename(input.harness, input.id, input.label)
+          : this.harnessAccounts.add(input.harness, input.label));
+      }
+      case 'removeHarnessAccount': {
+        const input = commands.removeHarnessAccount.parse(args);
+        return this.harnessAccount(() => this.harnessAccounts.remove(input.harness, input.id));
+      }
+      case 'selectHarnessAccount': {
+        const input = commands.selectHarnessAccount.parse(args);
+        return this.harnessAccount(() => this.harnessAccounts.select(input.harness, input.id));
+      }
       case 'modelList': return this.modelList(commands.modelList.parse(args));
       case 'renameTask': {
         const input = commands.renameTask.parse(args);
@@ -484,10 +511,21 @@ export class CoreService {
   harnesses(refresh: boolean): Promise<HarnessInfo[]> {
     if (refresh) for (const id of ['claude-code', 'codex', 'cursor'] as const) this.invalidateModelList(id);
     if (refresh || !this.harnessCache || Date.now() - this.harnessCache.at > 60_000) {
-      const value = this.harness.detect().catch(() => [] as HarnessInfo[]);
+      const value = this.harness.detect(this.harnessAccounts.map()).catch(() => [] as HarnessInfo[]);
       this.harnessCache = { at: Date.now(), value };
     }
     return this.harnessCache.value;
+  }
+
+  /**
+   * Adds, renames, removes or selects one harness account, then detects again: a different account means a
+   * different sign-in, so the cached status and model list no longer describe it.
+   */
+  private async harnessAccount(change: () => void | Promise<unknown>): Promise<HarnessInfo[]> {
+    await change();
+    const found = await this.harnesses(true);
+    this.notify();
+    return found;
   }
   /**
    * Native or alias model list for one connection. Returns the last cache immediately when present;

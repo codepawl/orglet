@@ -766,6 +766,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Name on the left, state on the right, on the line the mark sits beside. */
 .harness-head { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:26px; }
 .harness-row .setting-title { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
+/* Which account of this harness runs: the picker, its folder behind an "i", and the add/rename/remove menu. */
+.harness-account { display:flex; align-items:center; gap:6px; margin-top:8px; }
+.harness-account-select { max-width:240px; }
+.harness-account-form { display:flex; align-items:center; gap:6px; padding:10px; }
+.harness-account-form input { min-width:220px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
 .harness-commands { display:flex; flex-direction:column; gap:6px; margin-top:7px; }
 .harness-commands .setting-repair { margin-top:0; }
 .setting-path { font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

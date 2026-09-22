@@ -13,7 +13,7 @@ import { RunAuditArgs } from './run-audit';
 import type { MediaKind } from './source-kinds';
 import { Review, ReviewPolicy, type EvidenceRequest } from './review';
 import { KnowledgeInput, type Knowledge, type RunContext } from './knowledge';
-import type { HarnessInfo } from './harness';
+import { HarnessCatalogId, type HarnessInfo } from './harness';
 import { CurrencyCode, type CurrencyState } from './currency';
 import { Language } from './i18n';
 import { CustomModelId, type ModelListResult } from './models';
@@ -228,6 +228,10 @@ export const commands = {
   reviewKnowledge: z.object({ id: Id, revision: z.number().int().positive(), decision: z.enum(['approve', 'archive']) }).strict(),
   searchKnowledge: z.object({ query: z.string().max(200) }).strict(),
   harnesses: z.object({ refresh: z.boolean() }).strict(),
+  // A harness account is a folder the CLI signs in to; adding one selects it so the next login command is its own.
+  saveHarnessAccount: z.object({ harness: HarnessCatalogId, id: z.string().min(1).max(64).optional(), label: z.string().trim().min(1).max(60) }).strict(),
+  removeHarnessAccount: z.object({ harness: HarnessCatalogId, id: z.string().min(1).max(64) }).strict(),
+  selectHarnessAccount: z.object({ harness: HarnessCatalogId, id: z.string().min(1).max(64) }).strict(),
   modelList: z.object({ provider: ProviderId, refresh: z.boolean().optional() }).strict(),
   setCurrency: z.object({ code: CurrencyCode }).strict(),
   // Display-only names and sidebar order; kept in settings so a running task never overwrites them.
@@ -247,7 +251,7 @@ export const commands = {
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { reconcileBudget: void; recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
+export type Results = { reconcileBudget: void; recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;

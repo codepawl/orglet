@@ -36,6 +36,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { harnessNames, isHarness, type HarnessId, type HarnessInfo } from '../../shared/harness';
+import type { HarnessAccountMap } from '../harness/accounts';
 import { HarnessTerminationError, type HarnessExecutor } from '../harness/exec';
 import { ProgressSender } from './progress';
 import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
@@ -50,7 +51,12 @@ import { MessageInteractions } from './message-interactions';
 import { turnMessageId } from '../../shared/message-interactions';
 
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
-export type HarnessRuntime = { detect(): Promise<HarnessInfo[]>; execute: HarnessExecutor };
+export type HarnessRuntime = {
+  detect(accounts?: HarnessAccountMap): Promise<HarnessInfo[]>;
+  execute: HarnessExecutor;
+  /** Where account folders are created. Absent when the core has no data directory, leaving only the system account. */
+  accountRoot?: string;
+};
 
 const providerNames: Record<string, string> = { ...API_PROVIDER_NAMES, ...harnessNames };
 
@@ -346,6 +352,7 @@ export class Runner {
         },
           request: { harness: provider, executable: harness.executable, cwd: harnessDirectory,
             maxBudgetUsd: 0,
+            ...(harness.configDir ? { configDir: harness.configDir } : {}),
             ...(run.snapshot.model ? { model: run.snapshot.model } : {}) },
           onResult: result => {
             if (result.costUsd !== null) {
@@ -789,6 +796,7 @@ export class Runner {
         result = await this.harness.execute({
           harness: provider,
           executable: tool.executable,
+          ...(tool.configDir ? { configDir: tool.configDir } : {}),
           cwd: directory,
           prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable),
           schema: provider === 'codex' ? codexOutputSchema : z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema

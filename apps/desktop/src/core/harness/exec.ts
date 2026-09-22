@@ -2,7 +2,7 @@ import { spawn, execFile } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HarnessId } from '../../shared/harness';
-import { cleanEnv, commandLine } from './detect';
+import { cleanEnv, commandLine, harnessAccountEnv } from './detect';
 import { ClaudeStreamParser } from './claudeStream';
 import { CodexStreamParser } from './codexStream';
 import { claudeLimitWarning, claudeRejection, detectUsageLimit, usageLimitMessage, type ClaudeRateLimitInfo } from '../usageLimits';
@@ -20,6 +20,8 @@ export type HarnessRequest = {
   model?: string;
   /** Tool selection is returned as JSON; native file tools must not bypass core authorization. */
   coreToolsOnly?: boolean;
+  /** Credential folder of the account this run signs in as; absent runs the CLI as installed. */
+  configDir?: string;
   /** Called as a streaming harness thinks, uses tools and writes. Harnesses that do not stream never call it. */
   onProgress?: (progress: HarnessProgress) => void;
 };
@@ -213,7 +215,7 @@ export const executeHarness: HarnessExecutor = async request => {
   const stdout = await new Promise<string>((resolve, reject) => {
     request.signal.throwIfAborted();
     const command = commandLine(request.executable, harnessArgs(request));
-    const child = spawn(command.file, command.args, { cwd: request.cwd, env: cleanEnv(process.env), windowsHide: true, windowsVerbatimArguments: command.verbatim, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(command.file, command.args, { cwd: request.cwd, env: { ...cleanEnv(process.env), ...harnessAccountEnv(request.harness, request.configDir) }, windowsHide: true, windowsVerbatimArguments: command.verbatim, stdio: ['pipe', 'pipe', 'pipe'] });
     let outputBytes = 0;
     let collected = '';
     let errorOutput = '';
