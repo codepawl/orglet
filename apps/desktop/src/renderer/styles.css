@@ -1,7 +1,18 @@
 @import "tailwindcss";
 
+/* The two fonts Orglet ships with, so it reads the same on a machine that has neither (docs/technical-guide.md#appearance).
+   Both are SIL Open Font License 1.1; the licence text sits beside the files in `fonts/`. Nothing is fetched over the
+   network: index.html allows `font-src 'self'` only. Inter is the variable file, so every weight comes from one 352 KB
+   face; JetBrains Mono ships the three faces the code surfaces actually use, and anything else is synthesised. */
+@font-face { font-family:"Inter"; src:url("./fonts/InterVariable.woff2") format("woff2"); font-weight:100 900; font-style:normal; font-display:swap; }
+@font-face { font-family:"JetBrains Mono"; src:url("./fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:"JetBrains Mono"; src:url("./fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); font-weight:600; font-style:normal; font-display:swap; }
+@font-face { font-family:"JetBrains Mono"; src:url("./fonts/JetBrainsMono-Italic.woff2") format("woff2"); font-weight:400; font-style:italic; font-display:swap; }
+
 :root {
-  --font: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  /* Both fonts are set from the workspace in App.tsx; these are what the sheet uses until it arrives. */
+  --font: "Inter", ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --font-sans: var(--font); --default-font-family: var(--font);
   font-family: var(--font); font-size: 14px; line-height: 1.5; color-scheme: light;
   --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
@@ -766,6 +777,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Name on the left, state on the right, on the line the mark sits beside. */
 .harness-head { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:26px; }
 .harness-row .setting-title { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
+/* The font pair as it reads: a sentence with Vietnamese diacritics, then a code line with the characters a code
+   font is picked for. Both draw in the tokens the rest of the app uses, so this is the app, not a mock-up. */
+.font-preview { display:flex; flex-direction:column; gap:6px; padding:12px 14px; border-radius:12px; background:var(--surface); }
+.font-preview p { margin:0; font-size:14px; color:var(--text); }
+.font-preview code { font-family:var(--font-mono); font-size:12.5px; color:var(--muted); }
+.font-custom-form { display:flex; align-items:center; gap:6px; padding:10px; }
+.font-custom-form input { min-width:200px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
+
 /* Which account of this harness runs: the picker, its folder behind an "i", and the add/rename/remove menu. */
 .harness-account { display:flex; align-items:center; gap:6px; margin-top:8px; }
 .harness-account-select { max-width:240px; }
@@ -873,7 +892,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .code-preview,.table-preview,.json-preview,.markdown-preview,.pdf-preview { display:flex; flex-direction:column; gap:8px; min-width:0; }
 /* Text and code: a number on every line, a hanging indent so a wrapped line starts under its text, and the
    tokenizer's colours. A cited line keeps its old outline so citation navigation still lands on it. */
-.source-preview { font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size:12px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--surface); padding:12px 14px; border-radius:10px; max-height:480px; overflow:auto; tab-size:4; }
+.source-preview { font-family:var(--font-mono); font-size:12px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--surface); padding:12px 14px; border-radius:10px; max-height:480px; overflow:auto; tab-size:4; }
 pre.source-preview { margin:0; }
 pre.source-preview>span { display:block; padding-left:calc(var(--line-number-width, 4ch) + 12px); text-indent:calc(-1 * (var(--line-number-width, 4ch) + 12px)); }
 /* Cited lines read as one soft band in the accent, not a box around each line (no rules between rows). */
@@ -919,7 +938,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .info-tip-row { display:grid; grid-template-columns:86px minmax(0,1fr); gap:8px; align-items:start; }
 .info-tip-row dt { color:var(--muted); padding-top:2px; }
 .info-tip-row dd { margin:0; min-width:0; display:flex; align-items:flex-start; gap:4px; overflow-wrap:anywhere; }
-.info-tip-row dd.mono { font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size:11.5px; }
+.info-tip-row dd.mono { font-family:var(--font-mono); font-size:11.5px; }
 .info-tip-value { flex:1; min-width:0; padding-top:2px; }
 .info-tip-copy { width:24px; height:24px; min-height:24px; padding:4px; }
 .activity { list-style:none; margin:12px 0 0; padding:0; }
@@ -1416,7 +1435,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .color-hue::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 0 0 1px #0004, 0 1px 3px #0003; cursor:pointer; }
 .color-panel-row { display:flex; align-items:center; gap:8px; }
 .color-panel-preview { flex-shrink:0; width:28px; height:28px; border-radius:8px; box-shadow:inset 0 0 0 1px #0000001a; }
-.color-hex { flex:1; min-width:0; height:32px; padding:4px 10px; font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size:13px; }
+.color-hex { flex:1; min-width:0; height:32px; padding:4px 10px; font-family:var(--font-mono); font-size:13px; }
 .color-panel-section { display:flex; flex-direction:column; gap:6px; }
 .color-panel-title { font-size:12px; color:var(--muted); }
 .color-panel-swatches { display:flex; flex-wrap:wrap; gap:6px; }
@@ -1477,7 +1496,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .markdown li { padding-left:2px; }
 .markdown li+li { margin-top:6px; }
 .markdown li::marker { color:var(--muted); }
-.markdown code { padding:1px 5px; border-radius:5px; background:var(--surface); font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size:.88em; }
+.markdown code { padding:1px 5px; border-radius:5px; background:var(--surface); font-family:var(--font-mono); font-size:.88em; }
 .markdown pre { padding:12px 14px; border-radius:10px; background:var(--surface); overflow-x:auto; white-space:pre; }
 .markdown pre code { padding:0; background:none; }
 .markdown blockquote { padding:10px 14px; border-radius:10px; background:var(--surface); color:var(--muted); }

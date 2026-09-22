@@ -31,6 +31,7 @@ import { DetailsPanel } from './components/DetailsPanel';
 import type { WorkspaceRecoveryView } from '../shared/workspace-recovery';
 import { suggestStarters } from '../shared/starters';
 import { accentInk, DEFAULT_ACCENT_COLOR } from '../shared/accent';
+import { fontStack } from '../shared/fonts';
 import { ProviderMark } from './components/ProviderMark';
 import { SidebarTreeRow, useReorder } from './components/SidebarTree';
 import { SearchDialog } from './components/SearchDialog';
@@ -241,6 +242,12 @@ export function App() {
   // The brand mark's colour is the user's too (COD-154): the text colour, or the accent. It rides on the root so
   // every mark follows; before the workspace arrives there is nothing to read, so the startup mark stays monochrome.
   useEffect(() => { document.documentElement.dataset.logoColor = workspace?.logoColor ?? 'mono'; }, [workspace?.logoColor]);
+  // Both fonts ride on the root the same way, so a change reaches every surface at once. A family the machine does
+  // not have falls through to the bundled one, which is why the stack keeps it behind whatever was picked.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--font', fontStack('interface', workspace?.interfaceFont));
+    document.documentElement.style.setProperty('--font-mono', fontStack('code', workspace?.codeFont));
+  }, [workspace?.interfaceFont, workspace?.codeFont]);
   useEffect(() => {
     const media = matchMedia('(max-width: 780px)');
     const collapse = () => { if (media.matches) setSidebar(false); };

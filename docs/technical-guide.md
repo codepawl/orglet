@@ -110,6 +110,14 @@ A model can suggest up to three notes when it submits a report. Suggestions and 
 
 Before its first request, every run freezes the context it will use. **Chi tiết → Context đã nạp** lists the instruction and knowledge revisions loaded and anything left out as a duplicate, over the 12-note/16 KB limit, or unrelated to the brief. Later edits never change a finished or resumed run. Follow-up turns currently send a truncated recent window (10 turns, 24 000 characters), not a rolling summary; the long-chat policy is [team-chat-context.md](team-chat-context.md). Team chat UI (click team → one live thread) is [team-chat.md](team-chat.md). Team templates carry only that team's approved notes; backups carry all knowledge with its revision history.
 
+## Appearance
+
+Orglet ships with its own two fonts: **Inter** for the interface and **JetBrains Mono** for code, paths and other technical values. Both are SIL Open Font License 1.1 and live in `apps/desktop/src/renderer/fonts`, loaded by `@font-face` from the app itself — `index.html` sets `font-src 'self'`, so no font is ever fetched over the network, and the app looks the same on a machine that has neither installed.
+
+**Cài đặt → Chung** can put another family in either role. The picker lists the bundled font first, then the suggested families this machine actually has — measured by drawing text in the family against a generic fallback, because `document.fonts.check` answers yes to any name — and **Phông khác…** takes a family typed by hand. A family name is letters, digits, spaces, periods and hyphens only (`shared/fonts.ts`), because the name is written into a CSS custom property; anything else is refused and the bundled font stays. Each option is drawn in the font it names, and the sample under the two rows shows the pair together with Vietnamese diacritics and the characters a code font is picked for.
+
+The choice is stored like the accent colour and applied to `--font` and `--font-mono` on the root element, so it reaches every surface at once and survives a restart. A picked family that is missing falls through to the bundled font, never to blank text.
+
 ## Current limits
 
 In **Cài đặt → Sao lưu và khôi phục**, save a JSON backup of workers, teams, revisions, schedules, task history, reports, checker results, handoffs and costs. Restore validates the format, checksums and references, then adds missing records in one transaction. Existing work, settings and recorded costs stay in place. Imported sources have no file path or read permission; select the files again in a new task. Backups exclude stored API keys, checkpoint context and source file contents, but reports can contain source excerpts. Keep the JSON private. Restored schedules are disabled and lose recurring/provider approval; select sources again and review them before enabling. The backup limit is 50 MB.

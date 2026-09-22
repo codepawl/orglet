@@ -7,6 +7,7 @@ import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
 import { SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../shared/harness';
+import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, INTERFACE_FONT_SUGGESTIONS, type FontRole } from '../../shared/fonts';
 import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
@@ -96,6 +97,72 @@ function HarnessAccountPicker({ item, busy, onSelect, onSave, onRemove }: {
   </div>;
 }
 
+/**
+ * `document.fonts.check` answers "would this render", which is true for any name because a fallback always matches.
+ * Measuring is the only way to learn whether the machine really has a family: draw the same text in the family with
+ * a generic fallback behind it, and see whether the width moved.
+ */
+function fontInstalled(family: string): boolean {
+  const context = document.createElement('canvas').getContext('2d');
+  if (!context) return false;
+  const sample = 'mmmmmmmmmmlliwWQ';
+  return ['monospace', 'sans-serif', 'serif'].some(generic => {
+    context.font = `72px ${generic}`;
+    const plain = context.measureText(sample).width;
+    context.font = `72px "${family}", ${generic}`;
+    return context.measureText(sample).width !== plain;
+  });
+}
+
+/** Value of the "type your own" option. `FontFamily` refuses underscores, so no real family can collide with it. */
+const CUSTOM_FONT = '__custom__';
+
+/**
+ * One font choice. The bundled font is the first option and the default; the rest are families this machine
+ * actually has, plus whatever the person typed. Every option is drawn in the font it names, so the list is the
+ * preview, and the sample below the pair shows the two together once picked.
+ */
+function FontSetting({ role, title, description, value, busy, onPick }: {
+  role: FontRole; title: string; description: string; value?: string; busy: boolean; onPick: (family: string | null) => void;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+  const [typing, setTyping] = useState<string>();
+  const suggestions = role === 'interface' ? INTERFACE_FONT_SUGGESTIONS : CODE_FONT_SUGGESTIONS;
+  const [installed, setInstalled] = useState<string[]>([]);
+  useEffect(() => {
+    let live = true;
+    void document.fonts.ready.then(() => { if (live) setInstalled(suggestions.filter(fontInstalled)); });
+    return () => { live = false; };
+  }, [suggestions]);
+  const bundled = bundledFont(role);
+  const families = [...new Set([...installed, ...(value && value !== bundled ? [value] : [])])];
+  const submit = () => {
+    const family = FontFamily.safeParse(typing);
+    if (!family.success) return;
+    onPick(family.data);
+    setTyping(undefined);
+  };
+  return <div ref={row}>
+    <Row title={title} description={description}>
+      <Select ariaLabel={title} className="setting-select" menuMinWidth={240} disabled={busy} value={value ?? ''}
+        onChange={next => { if (next === CUSTOM_FONT) setTyping(value ?? ''); else onPick(next || null); }}
+        options={[
+          { value: '', label: bundled, detail: t('đi kèm Orglet'), labelStyle: { fontFamily: `"${bundled}"` } },
+          ...families.map(family => ({ value: family, label: family, labelStyle: { fontFamily: `"${family}"` } })),
+          { value: CUSTOM_FONT, label: t('Phông khác…'), icon: <Pencil size={15} /> },
+        ]} />
+    </Row>
+    <AnchoredPopover anchor={row} open={typing !== undefined} onClose={() => setTyping(undefined)} label={t('Phông khác')}>
+      <form className="font-custom-form" onSubmit={event => { event.preventDefault(); submit(); }}>
+        <input autoFocus value={typing ?? ''} maxLength={64} disabled={busy}
+          aria-label={t('Tên phông chữ')} placeholder={role === 'interface' ? 'Inter Tight' : 'Fira Code'}
+          onChange={event => setTyping(event.target.value)} />
+        <Button type="submit" variant="outline" disabled={busy || !FontFamily.safeParse(typing).success}>{t('Dùng phông này')}</Button>
+      </form>
+    </AnchoredPopover>
+  </div>;
+}
+
 function Row({ title, description, children, id }: { title: string; description?: ReactNode; children?: ReactNode; id?: string }) {
   return <div className="setting-row">
     <div className="setting-text"><span id={id} className="setting-title">{title}</span>{description && <span className="setting-description">{description}</span>}</div>
@@ -169,7 +236,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     finally { setBusy(false); }
   };
   // Settings apply as soon as they change; the command always carries the full current set.
-  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor }>) => act(async () => {
+  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null }>) => act(async () => {
     await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, ...patch });
     return t('Đã lưu');
   });
@@ -233,6 +300,16 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Màu logo')} description={t('Logo trong ứng dụng: màu chữ, hoặc màu nhấn bạn chọn.')}>
                 <Select ariaLabel={t('Màu logo')} className="setting-select" value={workspace.logoColor ?? 'mono'} disabled={busy} onChange={value => void save({ logoColor: value as LogoColor })} options={[{ value: 'mono', label: t('Đơn sắc'), icon: <Contrast size={16} /> }, { value: 'accent', label: t('Theo màu nhấn'), icon: <Palette size={16} /> }]} />
               </Row>
+              <FontSetting role="interface" busy={busy} value={workspace.interfaceFont}
+                title={t('Phông chữ')} description={t('Dùng cho toàn bộ chữ trong app.')}
+                onPick={family => void save({ interfaceFont: family })} />
+              <FontSetting role="code" busy={busy} value={workspace.codeFont}
+                title={t('Phông chữ code')} description={t('Dùng cho code, đường dẫn và các giá trị kỹ thuật.')}
+                onPick={family => void save({ codeFont: family })} />
+              <div className="font-preview" role="group" aria-label={t('Xem trước phông chữ')}>
+                <p>{t('Tí đọc nguồn rồi trả lời bằng tiếng Việt có dấu đầy đủ.')}</p>
+                <code>const answer = review(sources); // 0123456789 il1 O0</code>
+              </div>
             </>}
 
             {tab === 'chat' && <>
