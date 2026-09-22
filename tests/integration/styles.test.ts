@@ -4,8 +4,8 @@ import { expect, it } from 'vitest';
 
 const css = readFileSync(join(__dirname, '../../apps/desktop/src/renderer/styles.css'), 'utf8');
 
-it('defaults the shell to the bundled font, with the platform sans behind it', () => {
-  expect(css).toContain('--font: "Inter", ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";');
+it('defaults the shell to SF Pro, with the bundled font and the platform sans behind it', () => {
+  expect(css).toContain('--font: "SF Pro Text", "SF Pro Display", "Inter", ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";');
   expect(css).toContain('--font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;');
   expect(css).toContain('--font-sans: var(--font); --default-font-family: var(--font);');
   expect(css).toMatch(/:root \{[\s\S]*?font-family: var\(--font\)/);

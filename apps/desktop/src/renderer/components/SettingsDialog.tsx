@@ -7,7 +7,7 @@ import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
 import { SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../shared/harness';
-import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, INTERFACE_FONT_SUGGESTIONS, type FontRole } from '../../shared/fonts';
+import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, type FontRole } from '../../shared/fonts';
 import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
@@ -149,7 +149,7 @@ function FontSetting({ role, title, description, value, busy, onPick }: {
       <Select ariaLabel={title} className="setting-select" menuMinWidth={240} disabled={busy} value={value ?? ''}
         onChange={next => { if (next === CUSTOM_FONT) setTyping(value ?? ''); else onPick(next || null); }}
         options={[
-          { value: '', label: bundled, detail: t('đi kèm Orglet'), labelStyle: { fontFamily: `"${bundled}"` } },
+          { value: '', label: t('Mặc định'), detail: role === 'interface' ? t('SF Pro nếu máy có, không thì {0}', [bundled]) : t('{0}, đi kèm Orglet', [bundled]), labelStyle: { fontFamily: fontStack(role) } },
           ...families.map(family => ({ value: family, label: family, labelStyle: { fontFamily: `"${family}"` } })),
           { value: CUSTOM_FONT, label: t('Phông khác…'), icon: <Pencil size={15} /> },
         ]} />
