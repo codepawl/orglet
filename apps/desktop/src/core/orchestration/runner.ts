@@ -117,6 +117,40 @@ function stepLimit(run: Run) {
   return 6;
 }
 
+const MAX_REQUEST_BYTES = 200_000;
+const TRIMMED_PAGE_CHARACTERS = 1_500;
+
+/**
+ * Shortens the text of every web page read before the latest one, so a research run that has read several pages can
+ * keep going instead of failing on the context limit (COD-184). The address and title stay, and the worker is told it
+ * can read the page again. Returns whether anything was trimmed.
+ */
+function trimOlderWebPages(messages: { role: string; content?: unknown }[]) {
+  const pageIndexes = messages.flatMap((message, index) => message.role === 'tool' && isWebPage(message.content) ? [index] : []);
+  let trimmed = false;
+  for (const index of pageIndexes.slice(0, -1)) {
+    const page = JSON.parse(messages[index].content as string);
+    const characters = Array.from(String(page.content));
+    if (characters.length <= TRIMMED_PAGE_CHARACTERS) continue;
+    page.content = characters.slice(0, TRIMMED_PAGE_CHARACTERS).join('');
+    page.truncated = true;
+    page.trimmedForContext = 'Only the start of this page is kept to fit the context limit. Call web_read_url again for the full text.';
+    messages[index] = { ...messages[index], content: JSON.stringify(page) };
+    trimmed = true;
+  }
+  return trimmed;
+}
+
+function isWebPage(content: unknown) {
+  if (typeof content !== 'string' || !content.includes('"trust":"Untrusted web data')) return false;
+  try {
+    const parsed = JSON.parse(content);
+    return typeof parsed.content === 'string' && typeof parsed.source?.url === 'string';
+  } catch {
+    return false;
+  }
+}
+
 /** The original name of a source whose copy the harness read, given the copy's name without its number prefix. */
 function sourceNameForCopy(files: { name: string; file: string }[], copyName: string) {
   const copy = files.find(item => item.file.replace(/^sources\/\d{2}-/, '') === copyName);
@@ -449,8 +483,13 @@ export class Runner {
         // UTF-8 byte count bounds byte-fallback tokens; extra allowance covers chat framing/schema overhead.
         const requestTools = checkpoint.reportCorrections
           ? tools.filter(tool => tool.type === 'function' && tool.function.name === 'submit_report') : tools;
-        const upperInput = Buffer.byteLength(JSON.stringify({ messages, tools: requestTools }), 'utf8') + 8192;
-        if (upperInput > 200_000) throw new Error('Context quá lớn cho chế độ giới hạn chi phí.');
+        const measureInput = () => Buffer.byteLength(JSON.stringify({ messages, tools: requestTools }), 'utf8') + 8192;
+        let upperInput = measureInput();
+        if (upperInput > MAX_REQUEST_BYTES && trimOlderWebPages(messages)) {
+          this.event(run.id, 'Đã rút gọn các trang web đọc trước đó để vừa giới hạn context.');
+          upperInput = measureInput();
+        }
+        if (upperInput > MAX_REQUEST_BYTES) throw new Error('Context quá lớn cho chế độ giới hạn chi phí.');
         let reply = checkpoint.phase === 'replied' ? checkpoint.reply : undefined;
         if (!reply) {
           const provider = run.snapshot.worker.provider;
