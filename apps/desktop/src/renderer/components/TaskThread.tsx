@@ -20,8 +20,8 @@ import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
-import { LiveIsland, type IslandState } from './LiveIsland';
+import { ActivityGroup, LiveRun, islandBeforeStreaming, islandOf, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
+import { dockIsland } from './islandDock';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
 import type { MentionPerson } from '../../shared/mentions';
@@ -95,6 +95,21 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
   const liveLength = Object.values(liveRuns).reduce((total, update) => total + (update.progress ? update.progress.preamble.length + update.progress.answer.length + update.progress.activity.length : 0), 0);
   useEffect(() => { if (atBottom.current && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; }, [detail.events.length, detail.artifacts.length, turns.length, liveLength]);
 
+  // What the worker is doing now, shown as the island on the prompt bar (COD-167) rather than in the thread: the
+  // latest turn's streaming run, or the run the core's own events describe before anything has streamed.
+  const latestTurn = turns.find(turn => turn.revision === current);
+  const latestLive = busy && latestTurn ? liveRunOf(latestTurn.runs, liveRuns) : undefined;
+  const latestActiveRun = latestTurn ? latestTurn.runs.find(item => item.status === 'running') ?? latestTurn.runs.find(item => item.status === 'queued') : undefined;
+  const dockedRun = busy ? latestLive?.run ?? latestActiveRun : undefined;
+  const pausing = detail.task.status === 'pausing';
+  const dockedIsland = dockedRun
+    ? latestLive?.update.progress
+      ? islandOf(latestLive.update.progress, pausing)
+      : islandBeforeStreaming({ worker: dockedRun.snapshot.worker, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
+    : undefined;
+  useEffect(() => { dockIsland(dockedIsland); }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt]);
+  useEffect(() => () => dockIsland(undefined), []);
+
   // A face nods when its answer lands, not when an old chat opens: the runs already finished when this chat was
   // opened stay still, and only a run that completes after that is marked `landed` (the Finishing state in styles.css).
   const finishedAtOpen = useRef<Set<string>>(null);
@@ -118,7 +133,7 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
           outcomes.truncated ? t('Chỉ tính bản ghi gần đây.') : '',
         ].filter(Boolean).join(' ') : '';
         const activeRun = turn.runs.find(item => item.status === 'running') ?? turn.runs.find(item => item.status === 'queued');
-        const live = latest && busy ? liveRunOf(turn.runs, liveRuns) : undefined;
+        const live = latest ? latestLive : undefined;
         const liveUpdate = live?.update;
         const thinkingRun = live?.run ?? activeRun;
         const headline = turn.runs.find(item => item.stage === 'plan' && item.error && item.status !== 'completed')
@@ -184,9 +199,7 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
                 </details> : <p className="muted" key={run.id}>{status} · {description}</p>;
               })}
             </div>}
-            {latest && busy && thinkingRun && (liveUpdate
-              ? <LiveRun update={liveUpdate} pausing={detail.task.status === 'pausing'} />
-              : <Thinking worker={thinkingRun.snapshot.worker} stage={thinkingRun.stage} message={detail.events.at(-1)?.message} pausing={detail.task.status === 'pausing'} />)}
+            {latest && busy && liveUpdate && <LiveRun update={liveUpdate} />}
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
@@ -207,24 +220,6 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
       })}
     </div>
   </div>;
-}
-
-/**
- * Work in progress for a run that does not stream: the same island as a streaming run, with the few states the
- * core's own events give (planning, handing out, combining, a read it did itself, waiting for a turn). No receipt
- * line, because nothing finer than these is observed. Details (versions, paths, costs) stay in Chi tiết.
- */
-function Thinking({ worker, stage, message, pausing }: { worker: Run['snapshot']['worker']; stage?: Run['stage']; message?: string; pausing: boolean }) {
-  const read = message?.match(/^Đã đọc (.+)$/);
-  const view: { state: IslandState; label: string } = pausing ? { state: 'pausing', label: t('Đang dừng sau bước này') }
-    : stage === 'plan' || message === 'Đang phân việc.' ? { state: 'thinking', label: t('Đang phân việc') }
-    : stage === 'member' ? { state: 'thinking', label: t('Đang giao {0}', [worker.name]) }
-    : stage === 'synthesis' || message?.startsWith('Đang tổng hợp') ? { state: 'writing', label: t('Đang tổng hợp') }
-    : read ? { state: 'reading', label: t('Đang đọc {0}', [read[1]]) }
-    : message?.startsWith('Đang chờ lượt') ? { state: 'waiting', label: t('Đang chờ lượt') }
-    : message === 'Model đang trả kết quả…' ? { state: 'writing', label: t('Đang viết câu trả lời') }
-    : { state: 'thinking', label: t('Đang suy nghĩ') };
-  return <LiveIsland state={view.state} label={view.label} />;
 }
 
 /** A normal chat answer: the message, with copy and export tucked into a quiet row. */

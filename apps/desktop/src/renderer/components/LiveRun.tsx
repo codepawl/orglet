@@ -3,7 +3,7 @@ import { ChevronRight, FileText, FolderSearch, Search, Wrench } from 'lucide-rea
 import type { Activity, Run } from '../../shared/contracts';
 import type { ActivityKind, ActivityStep, HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 
-import { LiveIsland, type IslandState } from './LiveIsland';
+import type { IslandState, IslandView } from './LiveIsland';
 import { Markdown } from './Markdown';
 import { orglet } from '../api';
 import { t } from '../i18n';
@@ -49,18 +49,17 @@ function useElapsedSeconds(since: number) {
 }
 
 /**
- * A worker's run as it happens: what it said it will do, one island for what it is doing now and the last thing it
- * did, and the answer appearing as it is written. The full step list, the timer and the worker's notes are the
- * receipt, not the headline, so they sit behind one quiet control below.
+ * A worker's run as it happens: what it said it will do, and the answer appearing as it is written. What it is doing
+ * now is the island, which sits on the prompt bar rather than here (COD-167, `islandOf` below and `IslandDock`). The
+ * full step list, the timer and the worker's notes are the receipt, not the headline, so they sit behind one quiet
+ * control below.
  */
-export function LiveRun({ update, pausing }: { update: RunProgressUpdate; pausing: boolean }) {
+export function LiveRun({ update }: { update: RunProgressUpdate }) {
   const progress = update.progress!;
-  const island = islandOf(progress, pausing);
   const answering = progress.answer.length > 0;
 
   return <div className="live-run">
     {progress.preamble && <Markdown className="prose" text={progress.preamble} />}
-    <LiveIsland state={island.state} label={island.label} receipt={island.receipt} />
     {answering && <Markdown className="prose live-answer" text={progress.answer} />}
     <ActivityGroup steps={progress.activity}>
       <ElapsedLine since={update.startedAt} />
@@ -68,8 +67,6 @@ export function LiveRun({ update, pausing }: { update: RunProgressUpdate; pausin
     </ActivityGroup>
   </div>;
 }
-
-export type IslandView = { state: IslandState; label: string; receipt: string };
 
 /**
  * The island's state from what the harness has streamed. Only steps the core observed are named: a read shows the
@@ -92,13 +89,30 @@ function stepView(step: ActivityStep): { state: IslandState; label: string } {
   return { state: 'tool', label: t('Đang chạy một bước') };
 }
 
-/** The line above the pill: the last finished step, or nothing while none has finished. */
+/** The line above the label: the last finished step, or nothing while none has finished. */
 function receiptOf(step: ActivityStep | undefined): string {
   if (!step) return '';
   if (step.kind === 'read') return step.target ? t('Đã đọc {0}', [step.target]) : t('Đã đọc một tệp');
   if (step.kind === 'search') return step.target ? t('Đã tìm {0}', [step.target]) : t('Đã tìm xong');
   if (step.kind === 'list') return t('Đã liệt kê tệp');
   return t('Đã xong một bước');
+}
+
+/**
+ * The island for a run that has not streamed anything yet, or never will: the few states the core's own events give
+ * (planning, handing out, combining, a read it did itself, waiting for a turn). No receipt, because nothing finer
+ * than these is observed. Details (versions, paths, costs) stay in Chi tiết.
+ */
+export function islandBeforeStreaming({ worker, stage, message, pausing }: { worker: Run['snapshot']['worker']; stage?: Run['stage']; message?: string; pausing: boolean }): IslandView {
+  const read = message?.match(/^Đã đọc (.+)$/);
+  if (pausing) return { state: 'pausing', label: t('Đang dừng sau bước này') };
+  if (stage === 'plan' || message === 'Đang phân việc.') return { state: 'thinking', label: t('Đang phân việc') };
+  if (stage === 'member') return { state: 'thinking', label: t('Đang giao {0}', [worker.name]) };
+  if (stage === 'synthesis' || message?.startsWith('Đang tổng hợp')) return { state: 'writing', label: t('Đang tổng hợp') };
+  if (read) return { state: 'reading', label: t('Đang đọc {0}', [read[1]]) };
+  if (message?.startsWith('Đang chờ lượt')) return { state: 'waiting', label: t('Đang chờ lượt') };
+  if (message === 'Model đang trả kết quả…') return { state: 'writing', label: t('Đang viết câu trả lời') };
+  return { state: 'thinking', label: t('Đang suy nghĩ') };
 }
 
 function ElapsedLine({ since }: { since: number }) {

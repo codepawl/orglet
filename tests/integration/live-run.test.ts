@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { islandOf, liveRunOf } from '../../apps/desktop/src/renderer/components/LiveRun';
+import { islandBeforeStreaming, islandOf, liveRunOf } from '../../apps/desktop/src/renderer/components/LiveRun';
 import type { Run } from '../../apps/desktop/src/shared/contracts';
 import { emptyProgress, type ActivityStep, type RunProgressUpdate } from '../../apps/desktop/src/shared/progress';
 
@@ -81,4 +81,15 @@ it('gives a provider that reports no steps a thinking island with an empty recei
   const island = islandOf(emptyProgress(), false);
   expect(island.state).toBe('thinking');
   expect(island.receipt).toBe('');
+});
+
+const worker = { id: 'worker', name: 'Minh' } as Run['snapshot']['worker'];
+
+it('names what the core itself observed before anything has streamed, with no receipt', () => {
+  expect(islandBeforeStreaming({ worker, pausing: false })).toEqual({ state: 'thinking', label: 'Thinking' });
+  expect(islandBeforeStreaming({ worker, stage: 'plan', pausing: false }).label).toBe('Assigning work');
+  expect(islandBeforeStreaming({ worker, stage: 'member', pausing: false }).label).toBe('Working with Minh');
+  expect(islandBeforeStreaming({ worker, message: 'Đã đọc brief.md', pausing: false })).toEqual({ state: 'reading', label: 'Reading brief.md' });
+  expect(islandBeforeStreaming({ worker, message: 'Đang chờ lượt 2', pausing: false }).state).toBe('waiting');
+  expect(islandBeforeStreaming({ worker, message: 'Đã đọc brief.md', pausing: true }).state).toBe('pausing');
 });
