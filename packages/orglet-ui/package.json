@@ -1,0 +1,24 @@
+{
+  "name": "@codepawl/orglet-ui",
+  "version": "0.0.0",
+  "description": "The interface Orglet is built from: a small set of components and the tokens they read",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "author": "CodePawl",
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.css": "./src/styles/tokens.css",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19"
+  }
+}

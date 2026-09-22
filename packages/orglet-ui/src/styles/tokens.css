@@ -1,0 +1,103 @@
+/*
+ * The kit's tokens: the values a component here is allowed to read. Everything is `--org-` so a host application's
+ * own variables cannot collide with them, and every one has a fallback at its use site, so a page that forgets this
+ * file still renders something sane rather than transparent boxes.
+ *
+ * An Orglet-only value (the sidebar width, the details panel, the window wash behind the panels) does not belong
+ * here. If a component needs one, that is the signal the component is not general yet.
+ *
+ * Dark mode is opt-in twice on purpose: `[data-theme=dark]` for an app that owns a theme switch, and the media
+ * query for one that follows the system. An app that does both sets `data-theme="system"` and gets the media query.
+ */
+:root {
+  --org-font: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --org-font-size: 14px;
+  --org-line-height: 1.5;
+
+  /* Surfaces and text. `bg` is the page, `surface` is a raised block on it, `muted` is secondary text. */
+  --org-bg: #fff;
+  --org-surface: #f1f1f1;
+  --org-text: #1f1f1f;
+  --org-muted: #666;
+  --org-border: #e5e5e5;
+  --org-border-subtle: color-mix(in srgb, var(--org-border) 58%, var(--org-bg));
+
+  /* A row reacts to the pointer with a wash, never with a border. */
+  --org-row-hover: #f1f1f2;
+  --org-row-active: #e8e8ea;
+
+  /* The one strong colour a component may use on its own: a primary button, a checked box. */
+  --org-primary: #171717;
+  --org-primary-text: #fff;
+  /* The application's colour, for anything it marks as its own. Not used by default. */
+  --org-accent: #4f7fe0;
+  --org-accent-ink: #fff;
+
+  /* States. These carry meaning, so they stay distinguishable in both themes. */
+  --org-error: #a82626;
+  --org-success: #2e7a32;
+  --org-working: #9a7b2f;
+  --org-warning: #9a6700;
+  --org-focus: #576b99;
+
+  /* Shape. One control height keeps a row of mixed controls on one line. */
+  --org-control-height: 34px;
+  --org-icon-size: 32px;
+  --org-radius: 9px;
+  --org-radius-menu: 12px;
+
+  /* Motion. Everything that appears uses the same short decelerating curve: quick enough never to delay a click,
+     long enough that nothing snaps. A gesture that should overshoot uses the spring instead. */
+  --org-motion-quick: 110ms;
+  --org-motion-base: 170ms;
+  --org-motion-gesture: 500ms;
+  --org-ease-out: cubic-bezier(.2, 0, 0, 1);
+  --org-ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+}
+
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --org-bg: #212121;
+  --org-surface: #2f2f2f;
+  --org-text: #ececec;
+  --org-muted: #b4b4b4;
+  --org-border: #404040;
+  --org-row-hover: #252525;
+  --org-row-active: #323232;
+  --org-primary: #ececec;
+  --org-primary-text: #171717;
+  --org-error: #ffaaaa;
+  --org-success: #8fd48a;
+  --org-working: #d4b45a;
+  --org-warning: #d4a72c;
+  --org-focus: #a6c1ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme=system] {
+    color-scheme: dark;
+    --org-bg: #212121;
+    --org-surface: #2f2f2f;
+    --org-text: #ececec;
+    --org-muted: #b4b4b4;
+    --org-border: #404040;
+    --org-row-hover: #252525;
+    --org-row-active: #323232;
+    --org-primary: #ececec;
+    --org-primary-text: #171717;
+    --org-error: #ffaaaa;
+    --org-success: #8fd48a;
+    --org-working: #d4b45a;
+    --org-warning: #d4a72c;
+    --org-focus: #a6c1ff;
+  }
+}
+
+/* Reduced motion is the kit's floor, not each component's business: a state still shows, it just stops animating. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --org-motion-quick: 0ms;
+    --org-motion-base: 0ms;
+    --org-motion-gesture: 0ms;
+  }
+}
