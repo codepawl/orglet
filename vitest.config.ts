@@ -1,6 +1,9 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // The same source alias the renderer build uses, so a test can render an app component that imports the kit.
+  resolve: { alias: { '@codepawl/orglet-ui': fileURLToPath(new URL('packages/orglet-ui/src/index.ts', import.meta.url)) } },
   test: {
     include: ['tests/integration/**/*.test.ts', 'tests/live/**/*.test.ts'],
     environment: 'node',

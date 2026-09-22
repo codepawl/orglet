@@ -134,25 +134,34 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-section h3 svg { color:var(--muted); }
 /* Permission controls stay grouped inside chat Details. */
 .task-tools { gap:12px; }
-.task-tool-group { display:flex; flex-direction:column; gap:7px; min-width:0; }
-.task-tool-folder, .task-tools .org-switch-field-title { display:flex; align-items:center; gap:7px; overflow-wrap:anywhere; }
-.task-tool-folder svg { flex-shrink:0; }
-.task-tool-actions { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
-.task-tools .muted { font-size:12px; }
-.capability-view { display:flex; flex-direction:column; gap:7px; min-width:0; }
-.capability-view h3 { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--muted); }
-.capability-view > .muted, .capability-explain .muted { font-size:12px; line-height:1.4; }
-.capability-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; }
-.capability-list li { display:flex; align-items:center; gap:7px; min-width:0; font-size:12.5px; }
-.capability-list li svg { flex-shrink:0; color:var(--muted); }
-.capability-list li span { flex:1; min-width:0; }
-.capability-list li small { font-size:11px; color:var(--muted); text-align:right; }
-.capability-explain { font-size:12px; color:var(--muted); }
-.capability-explain summary { cursor:pointer; }
-.capability-explain p { margin-top:6px; }
-.capability-configure { align-self:flex-start; font-size:12px; }
-.capability-member + .capability-member { border-top:1px solid var(--border); padding-top:10px; }
-.capability-member > strong { display:block; margin-bottom:7px; font-size:12.5px; }
+/*
+ * PermissionControls: one chat's permissions as three switch rows and one folder row, in Details and in the worker
+ * dialog's Quyền tab. The folder row mirrors a switch row (text left, control right, centred on the text) with the
+ * granted folder named under the dropdown; where the column is narrow the control drops under the text instead.
+ */
+.permissions { display:flex; flex-direction:column; gap:14px; min-width:0; container-type:inline-size; }
+.permissions .org-switch-field-title,.permission-folder-title { display:flex; align-items:center; gap:7px; overflow-wrap:anywhere; }
+.permissions .org-switch-field-title svg,.permission-folder-title svg,.permission-folder-name svg { flex-shrink:0; color:var(--muted); }
+.permissions .org-switch-field-description,.permission-folder-description { display:flex; flex-direction:column; gap:2px; line-height:1.45; }
+.permissions-reason { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; font-size:13px; line-height:1.45; color:var(--muted); }
+.permissions-reason .button { min-height:28px; padding:3px 10px; font-size:12px; border-radius:14px; }
+.permission-folder { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.permission-folder-disabled .permission-folder-text { opacity:.55; }
+.permission-folder-text { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.permission-folder-title { font-size:14px; }
+.permission-folder-description { font-size:12px; color:var(--muted); }
+.permission-folder-control { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex-shrink:0; }
+/* The dropdown keeps the settings column width whichever level is chosen, so it never resizes under the pointer. */
+.permission-folder-control .select-trigger { width:210px; }
+.permission-folder-name { display:inline-flex; align-items:center; gap:5px; max-width:210px; font-size:12px; overflow-wrap:anywhere; }
+.permission-folder-pending { color:var(--muted); }
+@container (width < 400px) {
+  .permission-folder { flex-direction:column; align-items:stretch; gap:8px; }
+  .permission-folder-control { align-items:flex-start; }
+  .permission-folder-control .select-trigger { width:100%; }
+  .permission-folder-name { max-width:none; }
+}
+.permission-footnote { font-size:12px; line-height:1.45; }
 /* A member reads as a person: face, name, and what they are here for. */
 .details-member { display:flex; align-items:center; gap:8px; min-height:34px; }
 .details-member > div { min-width:0; }

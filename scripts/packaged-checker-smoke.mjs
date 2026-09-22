@@ -117,7 +117,9 @@ try {
   await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
   const toolsPanel = page.locator('.task-tools');
   await toolsPanel.getByRole('heading', { name: 'Quyền công cụ', exact: true }).waitFor();
-  assert.equal(await toolsPanel.getByRole('button', { name: 'Đổi thư mục hoặc quyền', exact: true }).isDisabled(), true, 'Demo must state its unsupported tools');
+  const folderAccess = toolsPanel.getByRole('combobox', { name: 'Thư mục làm việc', exact: true });
+  assert.equal(await folderAccess.isDisabled(), true, 'Demo must state its unsupported tools');
+  await toolsPanel.getByText('Tí Demo không dùng công cụ, nên chưa bật được quyền.', { exact: true }).waitFor();
   const originalWorker = await page.evaluate(async taskId => {
     const detail = await window.orglet.call('task', { id: taskId });
     const workspace = await window.orglet.call('workspace', {});
@@ -125,17 +127,21 @@ try {
     await window.orglet.call('saveWorker', { ...worker, provider: 'openai' });
     return worker;
   }, result.id);
-  const folderAccess = toolsPanel.getByRole('combobox', { name: 'Quyền cho thư mục được chọn', exact: true });
+  // Choosing a level opens the native picker straight away; the stubbed picker records the title it was given.
+  await page.waitForFunction(() => !document.querySelector('.task-tools [role=combobox]')?.disabled);
   await folderAccess.focus();
   await folderAccess.press('ArrowDown');
   await page.keyboard.press('End');
   await page.keyboard.press('Enter');
-  assert.equal(await folderAccess.getAttribute('data-value'), 'execute');
-  await toolsPanel.getByRole('button', { name: 'Đổi thư mục hoặc quyền', exact: true }).click();
   await page.waitForFunction(async taskId => (await window.orglet.call('workspaceAccess', { taskId }))?.permissions.includes('execute'), result.id);
+  await page.waitForFunction(() => document.querySelector('.task-tools [role=combobox]')?.dataset.value === 'execute');
   assert.equal(await app.evaluate(() => globalThis.workspaceGrantTitle), 'Chọn workspace: đọc, sửa file và chạy lệnh');
-  await toolsPanel.getByRole('button', { name: 'Thu hồi quyền thư mục', exact: true }).click();
-  await toolsPanel.getByText('Chưa cấp thư mục làm việc', { exact: true }).waitFor();
+  await folderAccess.focus();
+  await folderAccess.press('ArrowDown');
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(async taskId => (await window.orglet.call('workspaceAccess', { taskId }))?.revoked === true, result.id);
+  await page.waitForFunction(() => document.querySelector('.task-tools [role=combobox]')?.dataset.value === 'none');
   const webAccess = toolsPanel.getByRole('switch', { name: 'Đọc và tìm kiếm web', exact: true });
   await webAccess.focus();
   await webAccess.press('Space');

@@ -3,40 +3,66 @@ import type { ProviderId } from './contracts';
 import { snapshotCapabilities } from './tool-policy';
 import type { WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermission } from './workspace-access';
 
-export type WorkAbility = 'sources' | 'dataset' | 'workspace-read' | 'workspace-write' | 'workspace-execute' | 'web';
-export type AbilityState = 'available' | 'connection' | 'permission' | 'source' | 'unsupported' | 'loading';
-export type AbilityStatus = { ability: WorkAbility; state: AbilityState };
+/**
+ * How much of the working folder a chat may touch. The levels are cumulative because the grant schema
+ * (`WorkspacePermissions`) refuses `write` without `read` and `execute` without `write`, so the only grants that can
+ * exist are read, read+write and read+write+execute. `none` is no folder at all.
+ */
+export type WorkspaceLevel = 'none' | 'read' | 'write' | 'execute';
+export const workspaceLevels: readonly WorkspaceLevel[] = ['none', 'read', 'write', 'execute'];
 
-/** A preview for the next turn. Runtime still validates the frozen run and current task before every tool call. */
-export function abilityStatuses(input: {
+export function workspaceLevelOf(permissions: readonly WorkspacePermission[]): WorkspaceLevel {
+  if (permissions.includes('execute')) return 'execute';
+  if (permissions.includes('write')) return 'write';
+  if (permissions.includes('read')) return 'read';
+  return 'none';
+}
+
+export function permissionsForLevel(level: WorkspaceLevel): WorkspacePermission[] {
+  if (level === 'execute') return ['read', 'write', 'execute'];
+  if (level === 'write') return ['read', 'write'];
+  if (level === 'read') return ['read'];
+  return [];
+}
+
+/** Why a worker cannot use any tool permission right now: Demo runs no tools, and a model with no connection cannot run. */
+export type PermissionBlocker = 'unsupported' | 'connection';
+
+export function permissionBlocker(provider: ProviderId, connected: boolean): PermissionBlocker | undefined {
+  if (provider === 'demo') return 'unsupported';
+  if (!connected) return 'connection';
+  return undefined;
+}
+
+/** What the permission controls show for one chat: the current task policy and folder grant, never a frozen run. */
+export type PermissionState = {
+  sources: boolean;
+  dataset: boolean;
+  web: boolean;
+  workspace: WorkspaceLevel;
+  folder?: string;
+};
+
+/**
+ * The same values core reads when it dispatches the next turn. A grant counts only while it is current: not revoked
+ * and made for this task. Runtime still intersects these with the frozen run before every tool call.
+ */
+export function permissionState(input: {
   provider: ProviderId;
-  connected: boolean;
   capabilities?: ToolCapability[];
   grant?: WorkspaceGrantView | null;
   taskId?: string;
-  grantLoaded?: boolean;
-  sourceCount: number;
-}): AbilityStatus[] {
-  const { provider, connected, grant, sourceCount } = input;
-  const capabilities = input.capabilities ?? snapshotCapabilities(provider);
-  const state = (capability?: ToolCapability, permission?: WorkspacePermission, source = false): AbilityState => {
-    if (provider === 'demo') return 'unsupported';
-    if (!connected) return 'connection';
-    if (capability && !capabilities.includes(capability)) return 'permission';
-    if (permission && input.grantLoaded === false) return 'loading';
-    if (permission && (!grant || grant.revoked || (input.taskId && grant.taskId !== input.taskId)
-      || !grant.permissions.includes(permission))) return 'permission';
-    if (source && sourceCount === 0) return 'source';
-    return 'available';
+}): PermissionState {
+  const capabilities = input.capabilities ?? snapshotCapabilities(input.provider);
+  const grant = input.grant;
+  const current = !!grant && !grant.revoked && (!input.taskId || grant.taskId === input.taskId);
+  return {
+    sources: capabilities.includes('source.read'),
+    dataset: capabilities.includes('dataset.check'),
+    web: capabilities.includes('network.web'),
+    workspace: current ? workspaceLevelOf(grant.permissions) : 'none',
+    ...(current ? { folder: grant.name } : {}),
   };
-  return [
-    { ability: 'sources', state: state('source.read', undefined, true) },
-    { ability: 'dataset', state: state('dataset.check', undefined, true) },
-    { ability: 'workspace-read', state: state(undefined, 'read') },
-    { ability: 'workspace-write', state: state(undefined, 'write') },
-    { ability: 'workspace-execute', state: state(undefined, 'execute') },
-    { ability: 'web', state: state('network.web') },
-  ];
 }
 
 /** The same frozen/current intersection used by the execution policy. */
