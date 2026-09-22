@@ -1640,11 +1640,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Live island (COD-164, the owner's dynamic-island reference; docked on the prompt bar in COD-167): a working run
    is one tab on the bar, in the bar's own colour and outline, with the faces of the workers at work and one label
    for what they are doing now (COD-169: "Researcher is thinking…", or "3 orglets are working…" with every face),
-   above the label one grey line for the last thing done, and at the end a glowing shape. It sits on the bar's top
-   edge and moves with the bar, never with the thread: `IslandDock` mounts it just before the bar inside
-   `.thread-composer`, where it takes its own room, so it covers no answer and stays put while the chat scrolls.
-   The faces are `Avatar` at the list size (24px, the whole-pixel glyph) and stay still; thinking is the face
-   turning from side to side on the byline, see the Thinking and Working states above the `.avatar .mascot` rules.
+   and above the label one grey line for the last thing done. It sits on the bar's top edge and moves with the
+   bar, never with the thread: `IslandDock` mounts it just before the bar inside `.thread-composer`, where it
+   takes its own room, so it covers no answer and stays put while the chat scrolls. The faces are `Avatar` at the
+   list size (24px, the whole-pixel glyph); they never blink or look up (`alive` is for the chat being read) and
+   move only with the run's state, see the end of this block.
    The join: the tab has no bottom edge and overlaps the bar's top border by one pixel, so its fill covers that
    stretch of line, and its two bottom corners curve outward into the bar, the inverted corner a tab makes with the
    panel it belongs to. Each corner is a pseudo-element the width of the fillet plus the tab's own outline, painted
@@ -1655,16 +1655,17 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    straight on past the arc's tangent down to the bar, a stub beside every fillet (COD-169). The tab keeps to the
    straight part of the bar's edge: the max-width stays clear of the bar's corners (24px at their largest) in every
    shape the bar takes, and the min-width keeps the tab a pill (over four times its height) under a short label.
-   The shape is a light source, not an icon: its silhouette and colour change with the state, blurred and breathing.
-   `--glow` is the colour, `--glow-w/h/r` the silhouette; a second dot (::after) appears for listing. The colours
-   are chosen against the page, and the dark theme brings its own: what glows on #212121 washes out on white.
-   It sits outside the measured body, level with the label, so the body's clip never cuts its halo. */
+   The faces carry the state (COD-171). The tab used to end in a glowing shape whose silhouette and colour
+   followed the state, and the owner's verdict on it was "what is that pink bar?": a mark nobody can name is
+   decoration, and the sentence beside it already says the state in words. So there is no light. Instead the
+   faces do what the byline's face does for the same states (Thinking and Working above the `.avatar .mascot`
+   rules): a head that turns is thinking, eyes down and moving along a line are reading, eyes darting are
+   searching, eyes following a line slowly are writing, a slow breath is waiting for a turn, and a still face is
+   the run pausing. That is motion a person reads without a legend, it is the vocabulary the app already has, and
+   it costs a transform on a 24px drawing. The rules sit after the tab's own, below. */
 .live-island {
   --island-fillet:12px; --island-line:var(--border-subtle);
-  --glow-thinking:#ee3f86; --glow-reading:#e28f16; --glow-searching:#159fd6; --glow-listing:#ec7526;
-  --glow-tool:#ad4be3; --glow-writing:#e9553a; --glow-waiting:#8d8d96; --glow-pausing:#aaaab2;
-  --glow-halo:color-mix(in srgb, var(--glow) 38%, transparent);
-  position:relative; z-index:1; display:flex; align-items:flex-end; justify-content:center; gap:8px;
+  position:relative; z-index:1; display:flex; align-items:flex-end; justify-content:center;
   width:fit-content; min-width:150px; max-width:calc(100% - 2 * (24px + var(--island-fillet)));
   margin:0 auto -1px; padding:5px 10px 5px 9px;
   border:1px solid var(--island-line); border-bottom:0; border-radius:18px 18px 0 0;
@@ -1673,8 +1674,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   clip-path:inset(-24px calc(-24px - var(--island-fillet)) 0 calc(-24px - var(--island-fillet)));
   animation:island-rise 220ms var(--ease-out);
 }
-:root[data-theme=dark] .live-island { --glow-thinking:#ff6b9d; --glow-reading:#ffb648; --glow-searching:#5adcff; --glow-listing:#ff9a52; --glow-tool:#d873ff; --glow-writing:#ff7a5c; --glow-waiting:#9a9aa3; --glow-pausing:#c9c9cf; --glow-halo:color-mix(in srgb, var(--glow) 70%, transparent); }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] .live-island { --glow-thinking:#ff6b9d; --glow-reading:#ffb648; --glow-searching:#5adcff; --glow-listing:#ff9a52; --glow-tool:#d873ff; --glow-writing:#ff7a5c; --glow-waiting:#9a9aa3; --glow-pausing:#c9c9cf; --glow-halo:color-mix(in srgb, var(--glow) 70%, transparent); } }
 /* One outline for tab and bar: the same colour the bar's own focus rule sets. */
 .thread-composer:has(.composer:focus-within) .live-island { --island-line:color-mix(in srgb, var(--muted) 42%, var(--bg)); }
 .live-island::before,.live-island::after { content:""; position:absolute; bottom:0; width:calc(var(--island-fillet) + 1px); height:calc(var(--island-fillet) + 1px); }
@@ -1697,28 +1696,29 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .live-island-content { display:inline-flex; align-items:center; gap:var(--island-faces-gap, 8px); width:max-content; height:24px; }
 .live-island-faces { display:flex; flex-shrink:0; }
 /* Capped from the bar's width, never from the tab's own: the bar less the corner clearance (72px), the tab's
-   padding and outline (21px), the glow with its gap (32px) and the faces with theirs, so the widest label still
-   fits the straight edge. */
-.live-island-label { min-width:0; max-width:min(46ch, calc(100cqw - 133px - var(--island-faces, 24px))); font-size:14px; font-weight:500; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in 260ms var(--ease-out); }
-.live-island-glow { position:relative; display:grid; place-items:center; width:24px; height:24px; flex-shrink:0; --glow:var(--glow-thinking); --glow-w:4px; --glow-h:20px; --glow-r:2px; }
-.live-island-glow::before,.live-island-glow::after { content:""; grid-area:1/1; border-radius:var(--glow-r); background:var(--glow); box-shadow:0 0 12px 3px var(--glow-halo); filter:blur(1.5px);
-  transition:width 320ms var(--ease-out), height 320ms var(--ease-out), border-radius 320ms var(--ease-out), background-color 320ms, box-shadow 320ms, transform 320ms var(--ease-out), opacity 320ms; }
-.live-island-glow::before { width:var(--glow-w); height:var(--glow-h); animation:island-breathe var(--motion-cycle) ease-in-out infinite; }
-.live-island-glow::after { width:8px; height:8px; border-radius:50%; opacity:0; transform:translateX(6px); animation:island-breathe var(--motion-cycle) ease-in-out calc(var(--motion-cycle) / 2) infinite; }
-.live-island[data-state=thinking] .live-island-glow { --glow:var(--glow-thinking); --glow-w:4px; --glow-h:20px; --glow-r:2px; }
-.live-island[data-state=reading] .live-island-glow { --glow:var(--glow-reading); --glow-w:13px; --glow-h:13px; --glow-r:3px; }
-.live-island[data-state=searching] .live-island-glow { --glow:var(--glow-searching); --glow-w:24px; --glow-h:9px; --glow-r:5px; }
-.live-island[data-state=listing] .live-island-glow { --glow:var(--glow-listing); --glow-w:8px; --glow-h:8px; --glow-r:50%; }
-.live-island[data-state=listing] .live-island-glow::before { transform:translateX(-6px); }
-.live-island[data-state=listing] .live-island-glow::after { opacity:1; }
-.live-island[data-state=tool] .live-island-glow { --glow:var(--glow-tool); --glow-w:11px; --glow-h:11px; --glow-r:3px; }
-.live-island[data-state=writing] .live-island-glow { --glow:var(--glow-writing); --glow-w:26px; --glow-h:10px; --glow-r:5px; }
-.live-island[data-state=waiting] .live-island-glow { --glow:var(--glow-waiting); --glow-w:9px; --glow-h:9px; --glow-r:50%; }
-.live-island[data-state=pausing] .live-island-glow { --glow:var(--glow-pausing); --glow-w:10px; --glow-h:10px; --glow-r:3px; }
-@keyframes island-breathe { 50% { opacity:.55; } }
+   padding and outline (21px) and the faces with their gap, so the widest label still fits the straight edge. */
+.live-island-label { min-width:0; max-width:min(46ch, calc(100cqw - 101px - var(--island-faces, 24px))); font-size:14px; font-weight:500; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in 260ms var(--ease-out); }
 @keyframes island-fade-in { from { opacity:0; transform:translateY(2px); } }
-/* Reduced motion: every transition and animation is already off (the global rule above), so a state change is a
-   cut; only the glow's blur stays, since a still glow is still a shape. */
+/* The state, in the faces (COD-171). Thinking: the head turns from side to side, the eyes leading (the byline's
+   Thinking without the hop, since the tab itself has just risen). Reading, listing files and running a step: the
+   head leans in and the eyes read a line, jumping back with a blink. Searching: the eyes look about and the head
+   stays. Writing: leaning in, the eyes follow the line being made, slower than reading and without the jump back.
+   Waiting for a turn: not working, so a slow breath. Pausing: still. Several faces are put out of step by each
+   face's own seed (`--idle-delay`, a negative delay), so a team is not a chorus; a single face starts from rest.
+   Every head transform keeps `translateY(var(--mascot-lift))` and every eye keyframe `translateY(var(--gaze-y))`,
+   the carry-through rule above the `.avatar .mascot` rules. */
+.live-island[data-state=thinking] .avatar .mascot { animation:mascot-ponder var(--motion-cycle) ease-in-out infinite; }
+.live-island[data-state=thinking] .avatar .mascot-eyes { --gaze-y:-0.8px; animation:mascot-glance var(--motion-cycle) ease-in-out infinite; }
+.live-island:is([data-state=reading],[data-state=listing],[data-state=tool],[data-state=writing]) .avatar .mascot { transform:translateY(var(--mascot-lift)) translateY(1px); }
+.live-island:is([data-state=reading],[data-state=listing],[data-state=tool]) .avatar .mascot-eyes { --gaze-y:1.6px; animation:mascot-read var(--motion-cycle) linear infinite; }
+.live-island[data-state=searching] .avatar .mascot-eyes { animation:mascot-glance var(--motion-cycle) ease-in-out infinite; }
+.live-island[data-state=writing] .avatar .mascot-eyes { --gaze-y:1.6px; animation:mascot-write calc(var(--motion-cycle) * 1.5) ease-in-out infinite; }
+@keyframes mascot-write { 0%,100% { transform:translateY(var(--gaze-y)) translateX(-1.4px); } 50% { transform:translateY(var(--gaze-y)) translateX(1.4px); } }
+.live-island[data-state=waiting] .avatar .mascot { animation:mascot-breathe var(--motion-cycle) ease-in-out infinite; }
+.live-island-faces .avatar:not(:only-child) :is(.mascot,.mascot-eyes) { animation-delay:var(--idle-delay, 0s); }
+/* Reduced motion: the loops and the width morph are already off (the global rule above), so a state is a cut:
+   the eyes still drop or lift, and the head keeps its lift so the art never shifts. */
+@media (prefers-reduced-motion:reduce) { .live-island[data-state] .avatar .mascot { transform:translateY(var(--mascot-lift)); } }
 /* Live run: preamble, the answer as it streams, then the folded step list. Space only, no lines. */
 .live-run { display:flex; flex-direction:column; gap:12px; padding-left:35px; }
 .live-run .prose { line-height:1.65; }

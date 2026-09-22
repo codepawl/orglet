@@ -3,8 +3,8 @@ import type { Worker } from '../../shared/contracts';
 import { RosterAvatars } from './Avatar';
 
 /**
- * What the worker is doing right now. The shape and colour of the glow follow it, so a change of state is seen
- * before it is read.
+ * What the worker is doing right now. The faces move with it (COD-171: a head that turns is thinking, eyes on a
+ * line are reading, a breath is waiting), so a change of state is seen before it is read.
  */
 export type IslandState = 'thinking' | 'reading' | 'searching' | 'listing' | 'tool' | 'writing' | 'waiting' | 'pausing';
 
@@ -23,8 +23,9 @@ const FACES_GAP_PX = 8;
 /**
  * A working run as one island (COD-164, from the owner's dynamic-island reference), docked on the prompt bar
  * (COD-167): a tab in the bar's own colour and outline that grows out of the bar's top edge, with the faces of the
- * workers at work and one label for what they are doing now, above the label one grey line for the last thing done,
- * and at the end a glowing shape whose silhouette and colour follow the state.
+ * workers at work and one label for what they are doing now, and above the label one grey line for the last thing
+ * done. The faces carry the state through `data-state` (COD-171, the rules under `.live-island` in styles.css):
+ * there is no separate light, because a mark nobody can name says nothing the sentence does not.
  *
  * The tab's width follows its label through a transition, so a new label reads as the same shape changing rather
  * than a cut. The receipt changes a beat after the label. `prefers-reduced-motion` turns every change into a cut
@@ -70,7 +71,6 @@ export function LiveIsland({ state, label, receipt, workers, leaving }: { state:
         <span className="live-island-label" key={label}>{label}</span>
       </span>
     </div>
-    <span className="live-island-glow" aria-hidden="true" />
   </div>;
 }
 
