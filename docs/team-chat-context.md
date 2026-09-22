@@ -161,5 +161,5 @@ Answered **yes** (COD-24 may implement against these defaults):
 
 - Not permission to stuff the full chat into every request.
 - Not a cloud memory service.
-- Not a change to source consent, checksums, or the 6-step / 4 096-output-token worker limits.
+- Not a change to source consent, checksums, or the step limits (6, 16 with web access, 24 with a working folder) or the 4 096-output-token worker limit.
 - Not a substitute for [team-chat.md](team-chat.md) (the shipped click-team shell, orchestrator, and hide-task-pile UX). Context layers 3–4 and the refuse path are [COD-32](https://linear.app/codepawl/issue/COD-32).

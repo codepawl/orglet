@@ -100,6 +100,23 @@ function harnessCostLine(name: string, costUsd: number | null, stopped = false) 
   return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
 }
 
+/** What a web tool hands back to the worker when the search or the page could not be read. */
+function webToolFailure(error: unknown) {
+  const reason = error instanceof Error ? error.message : 'Không đọc được kết quả web.';
+  return { error: reason, retryable: true, hint: 'Try a different query, or read a known URL such as the paper page with web_read_url.' };
+}
+
+function webFailureEvent(toolName: string, reason: string) {
+  return toolName === 'web_search' ? `Tìm kiếm web không thành công: ${reason}` : `Không đọc được trang web: ${reason}`;
+}
+
+/** Search, read a few pages and write the report does not fit in the six steps a sources-only run gets. */
+function stepLimit(run: Run) {
+  if (run.snapshot.workspaceGrant) return 24;
+  if (run.snapshot.toolCapabilities?.includes('network.web')) return 16;
+  return 6;
+}
+
 /** The original name of a source whose copy the harness read, given the copy's name without its number prefix. */
 function sourceNameForCopy(files: { name: string; file: string }[], copyName: string) {
   const copy = files.find(item => item.file.replace(/^sources\/\d{2}-/, '') === copyName);
@@ -418,7 +435,7 @@ export class Runner {
       const readIds = new Set<string>(checkpoint.readIds);
       for (const sourceId of readIds) await this.sources.verify(sourceId, task.sourceIds);
       this.checkpoints.save(checkpoint);
-      const maxSteps = run.snapshot.workspaceGrant ? 24 : 6;
+      const maxSteps = stepLimit(run);
       for (let step = checkpoint.step; step < maxSteps; step++) {
         signal.throwIfAborted();
         if (control.paused || !this.canDispatch(task)) throw new Paused();
@@ -633,10 +650,21 @@ export class Runner {
                 toolSignal.throwIfAborted();
                 assertCapability(run, this.store.get<Task>('tasks', task.id), 'network.web');
               },
-              perform: async () => call.name === 'web_search' ? await web.search(input, toolSignal) : await web.read(input, toolSignal),
+              perform: async () => {
+                try {
+                  return call.name === 'web_search' ? await web.search(input, toolSignal) : await web.read(input, toolSignal);
+                } catch (error) {
+                  // A blocked search or an unreadable page is something the worker can work around with another query
+                  // or a known URL, so it goes back as the tool's answer (COD-181). Cancelling still stops the run.
+                  if (toolSignal.aborted) throw error;
+                  return webToolFailure(error);
+                }
+              },
             }),
           });
-          this.event(run.id, call.name === 'web_search' ? 'Đã tìm kiếm web; kết quả chưa được xác minh.' : 'Đã đọc trang web dưới dạng dữ liệu không đáng tin.');
+          const failed = 'error' in result;
+          this.event(run.id, failed ? webFailureEvent(call.name, result.error)
+            : call.name === 'web_search' ? 'Đã tìm kiếm web; kết quả chưa được xác minh.' : 'Đã đọc trang web dưới dạng dữ liệu không đáng tin.');
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
           checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
           this.checkpoints.committed(checkpoint);
@@ -699,7 +727,7 @@ export class Runner {
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ sourceId, content, coverage: 'Full text, maximum 256 KB; no code execution or semantic guarantees.' }) });
         checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] }; this.checkpoints.committed(checkpoint);
       }
-      throw new Error(run.snapshot.workspaceGrant ? 'Đã chạm giới hạn 24 bước mà chưa hoàn tất công việc.' : 'Đã chạm giới hạn 6 bước mà chưa có báo cáo hợp lệ.');
+      throw new Error(run.snapshot.workspaceGrant ? 'Đã chạm giới hạn 24 bước mà chưa hoàn tất công việc.' : `Đã chạm giới hạn ${maxSteps} bước mà chưa có báo cáo hợp lệ.`);
     } catch (error) {
       if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true));
       const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error) : 'Lần chạy gặp lỗi.';

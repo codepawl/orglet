@@ -18,6 +18,7 @@ export const translate = (dictionary: Dictionary | null, key: string, params?: r
 
 const escape = (text: string) => text.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
 const patternCache = new WeakMap<Dictionary, { pattern: RegExp; template: string }[]>();
+const translateValue = (dictionary: Dictionary, value: string) => dictionary[value] ?? value;
 
 /**
  * Translates a finished message, e.g. an error text built by the core with values filled in.
@@ -35,7 +36,8 @@ export function translateMessage(dictionary: Dictionary | null, message: string)
   }
   for (const { pattern, template } of patterns) {
     const match = pattern.exec(message);
-    if (match) return template.replace(/\{(\d+)\}/g, (_, index: string) => match.groups?.[`p${index}`] ?? '');
+    // A filled-in value can itself be a known message, such as the reason inside "Search failed: {0}".
+    if (match) return template.replace(/\{(\d+)\}/g, (_, index: string) => translateValue(dictionary, match.groups?.[`p${index}`] ?? ''));
   }
   return message;
 }
