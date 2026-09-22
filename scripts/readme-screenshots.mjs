@@ -73,7 +73,7 @@ async function main() {
     }, team.id, { timeout: 15_000 });
     await waitForTask(page, await taskHandle.jsonValue());
     await page.locator('.chat-reply, .report').first().waitFor();
-    await page.locator('.thinking').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
+    await page.locator('.live-island').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
     await page.waitForTimeout(600);
     await page.screenshot({ path: join(outputFolder, 'chat-light.png') });
 

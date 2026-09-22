@@ -20,9 +20,9 @@ import { Attachment } from './Attachment';
 import { MessageActions } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
 import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
+import { LiveIsland, type IslandState } from './LiveIsland';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
-import { WorkingLine } from './Working';
 import type { MentionPerson } from '../../shared/mentions';
 import { teamProgress } from '../../shared/team-progress';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
@@ -207,27 +207,28 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
 }
 
 /**
- * Work in progress, kept visual (user decision 2026-09-17): the provider's mark inside a spinning ring, one short phrase
- * for what is happening, and a quiet stop button. Details (versions, paths, costs) stay in Chi tiết.
+ * Work in progress for a run that does not stream: the same island as a streaming run, with the few states the
+ * core's own events give (planning, handing out, combining, a read it did itself, waiting for a turn). No receipt
+ * line, because nothing finer than these is observed. Details (versions, paths, costs) stay in Chi tiết.
  */
 function Thinking({ worker, stage, message, pausing }: { worker: Run['snapshot']['worker']; stage?: Run['stage']; message?: string; pausing: boolean }) {
   const read = message?.match(/^Đã đọc (.+)$/);
-  const label = pausing ? t('Đang dừng sau bước này…')
-    : stage === 'plan' || message === 'Đang phân việc.' ? t('Đang phân việc…')
-    : stage === 'member' ? t('Đang giao {0}…', [worker.name])
-    : stage === 'synthesis' || message?.startsWith('Đang tổng hợp') ? t('Đang tổng hợp…')
-    : read ? t('Đang đọc {0}', [read[1]])
-    : message?.startsWith('Đang chờ lượt') ? t('Đang chờ lượt…')
-    : message === 'Model đang trả kết quả…' ? t('Đang viết câu trả lời…')
-    : t('Đang suy nghĩ…');
-  return <WorkingLine label={label} />;
+  const view: { state: IslandState; label: string } = pausing ? { state: 'pausing', label: t('Đang dừng sau bước này') }
+    : stage === 'plan' || message === 'Đang phân việc.' ? { state: 'thinking', label: t('Đang phân việc') }
+    : stage === 'member' ? { state: 'thinking', label: t('Đang giao {0}', [worker.name]) }
+    : stage === 'synthesis' || message?.startsWith('Đang tổng hợp') ? { state: 'writing', label: t('Đang tổng hợp') }
+    : read ? { state: 'reading', label: t('Đang đọc {0}', [read[1]]) }
+    : message?.startsWith('Đang chờ lượt') ? { state: 'waiting', label: t('Đang chờ lượt') }
+    : message === 'Model đang trả kết quả…' ? { state: 'writing', label: t('Đang viết câu trả lời') }
+    : { state: 'thinking', label: t('Đang suy nghĩ') };
+  return <LiveIsland state={view.state} label={view.label} />;
 }
 
 /** A normal chat answer: the message, with copy and export tucked into a quiet row. */
 /** The folded "Read 2 files" line above a finished answer; nothing when the worker read and searched nothing. */
 function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
   if (steps.length === 0) return null;
-  return <div className="finished-activity"><ActivityGroup steps={steps} folded /></div>;
+  return <div className="finished-activity"><ActivityGroup steps={steps} /></div>;
 }
 
 function ChatReply({ artifact, author, taskId, reactions, runs, action }: { artifact: Artifact; author: string; taskId: string; reactions: NonNullable<TaskDetail['task']['messageReactions']>; runs: readonly Run[]; action: (fn: () => Promise<unknown>) => void }) {

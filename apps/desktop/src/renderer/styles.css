@@ -1623,36 +1623,60 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .new-task-row:hover .shortcut,.new-task-row:focus-visible .shortcut { opacity:1; }
 .row-menu-popover { color:var(--text); }
 
-/* Working indicator: the provider mark inside a spinning ring and one short phrase. */
-/* The status line under a turn: words, a timer and a stop button. Who is working is said by the byline above,
-   so this line carries no face and no name (user, 2026-09-19). */
-.thinking { display:flex; align-items:center; gap:8px; min-height:30px; }
-/* Thinking is the face turning slowly from side to side, not a ring going round (user, 2026-09-19): see the
-   Thinking and Working states in the orglet animation system above the `.avatar .mascot` rules. */
-/* The words are muted, with a band of light sweeping across them in time with the mark. */
-.thinking-text { font-size:14px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  background:linear-gradient(100deg, var(--muted) 38%, var(--text) 50%, var(--muted) 62%); background-size:220% 100%;
-  -webkit-background-clip:text; background-clip:text; color:transparent; animation:thinking-shimmer 1.6s ease-in-out infinite; }
-.thinking-seconds { font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
-.thinking-toggle { padding:0; border:0; cursor:pointer; }
-.thinking-notes { margin:4px 0 0; max-height:220px; overflow-y:auto; font-size:13px; line-height:1.6; color:var(--muted); white-space:pre-wrap; }
-/* Live run: preamble, activity steps and the answer as it streams. Groups are separated by space only. */
+/* Live island (COD-164, the owner's dynamic-island reference): a working run is one dark pill, centred, with a
+   glowing shape and one label for what the worker is doing now, and one grey line above it for the last thing it
+   did. Who is working is said by the byline above, so the island carries no face and no name (user, 2026-09-19);
+   thinking is the face turning from side to side, see the Thinking and Working states above the `.avatar .mascot`
+   rules. The shape is a light source, not an icon: its silhouette and colour change with the state, blurred and
+   breathing. `--glow` is the colour, `--glow-w/h/r` the silhouette; a second dot (::after) appears for listing. */
+.live-island { display:flex; flex-direction:column; align-items:center; gap:6px; padding:4px 0; }
+/* On its own under a non-streaming turn it takes the same inset as `.live-run`, so both runs centre alike. */
+.assistant-message > .live-island { padding-left:35px; }
+.live-island-receipt { min-height:20px; max-width:100%; font-size:13px; line-height:20px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in var(--motion-base) var(--ease-out); }
+/* The width is set from the content by LiveIsland, so a new label morphs the pill instead of cutting it. */
+.live-island-pill { --island-bg:#1b1b1e; --island-text:#f4f4f5; height:46px; max-width:100%; border-radius:19px; background:var(--island-bg); color:var(--island-text); overflow:hidden;
+  box-shadow:0 1px 2px #00000033, 0 8px 22px #0000002e; transition:width 320ms var(--ease-out); }
+:root[data-theme=dark] .live-island-pill { --island-bg:#0e0e10; box-shadow:0 0 0 1px #ffffff14, 0 8px 22px #00000066; }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] .live-island-pill { --island-bg:#0e0e10; box-shadow:0 0 0 1px #ffffff14, 0 8px 22px #00000066; } }
+.live-island-content { display:inline-flex; align-items:center; gap:10px; height:100%; width:max-content; padding:0 20px 0 14px; }
+.live-island-label { max-width:min(46ch, 60vw); font-size:15px; font-weight:500; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in 260ms var(--ease-out); }
+.live-island-glow { position:relative; display:grid; place-items:center; width:26px; height:26px; flex-shrink:0; --glow:#ff6b9d; --glow-w:4px; --glow-h:20px; --glow-r:2px; }
+.live-island-glow::before,.live-island-glow::after { content:""; grid-area:1/1; border-radius:var(--glow-r); background:var(--glow); box-shadow:0 0 12px 3px var(--glow); filter:blur(1.5px);
+  transition:width 320ms var(--ease-out), height 320ms var(--ease-out), border-radius 320ms var(--ease-out), background-color 320ms, box-shadow 320ms, transform 320ms var(--ease-out), opacity 320ms; }
+.live-island-glow::before { width:var(--glow-w); height:var(--glow-h); animation:island-breathe var(--motion-cycle) ease-in-out infinite; }
+.live-island-glow::after { width:8px; height:8px; border-radius:50%; opacity:0; transform:translateX(6px); animation:island-breathe var(--motion-cycle) ease-in-out calc(var(--motion-cycle) / 2) infinite; }
+.live-island-pill[data-state=thinking] .live-island-glow { --glow:#ff6b9d; --glow-w:4px; --glow-h:20px; --glow-r:2px; }
+.live-island-pill[data-state=reading] .live-island-glow { --glow:#ffb648; --glow-w:13px; --glow-h:13px; --glow-r:3px; }
+.live-island-pill[data-state=searching] .live-island-glow { --glow:#5adcff; --glow-w:24px; --glow-h:9px; --glow-r:5px; }
+.live-island-pill[data-state=listing] .live-island-glow { --glow:#ff9a52; --glow-w:8px; --glow-h:8px; --glow-r:50%; }
+.live-island-pill[data-state=listing] .live-island-glow::before { transform:translateX(-6px); }
+.live-island-pill[data-state=listing] .live-island-glow::after { opacity:1; }
+.live-island-pill[data-state=tool] .live-island-glow { --glow:#d873ff; --glow-w:11px; --glow-h:11px; --glow-r:3px; }
+.live-island-pill[data-state=writing] .live-island-glow { --glow:#ff7a5c; --glow-w:26px; --glow-h:10px; --glow-r:5px; }
+.live-island-pill[data-state=waiting] .live-island-glow { --glow:#9a9aa3; --glow-w:9px; --glow-h:9px; --glow-r:50%; }
+.live-island-pill[data-state=pausing] .live-island-glow { --glow:#c9c9cf; --glow-w:10px; --glow-h:10px; --glow-r:3px; }
+@keyframes island-breathe { 50% { opacity:.55; } }
+@keyframes island-fade-in { from { opacity:0; transform:translateY(2px); } }
+/* Reduced motion: every transition and animation is already off (the global rule above), so a state change is a
+   cut; only the glow's blur stays, since a still glow is still a shape. */
+/* Live run: preamble, the island, the answer as it streams, then the folded step list. Space only, no lines. */
 .live-run { display:flex; flex-direction:column; gap:12px; padding-left:35px; }
 .live-run .prose { line-height:1.65; }
-.live-working { margin-left:-6px; }
 .activity-group { font-size:13px; color:var(--muted); }
+.activity-detail { display:flex; flex-direction:column; gap:6px; margin-top:4px; padding-left:24px; }
+.activity-elapsed { margin:0; font-variant-numeric:tabular-nums; }
+.activity-notes { margin:0; max-height:220px; overflow-y:auto; line-height:1.6; white-space:pre-wrap; }
 .finished-activity { margin:0 0 6px 29px; }
 @media(max-width:1000px) { .finished-activity { margin-left:-6px; } }
 .activity-summary { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:2px 8px 2px 4px; border:0; border-radius:8px; background:none; color:var(--muted); }
 .activity-summary:hover { background:var(--row-hover); color:var(--text); }
 .activity-chevron { transition:transform .15s; }
 .activity-summary[aria-expanded=true] .activity-chevron { transform:rotate(90deg); }
-.activity-steps { display:flex; flex-direction:column; gap:4px; margin:4px 0 0; padding:0 0 0 24px; list-style:none; }
+.activity-steps { display:flex; flex-direction:column; gap:4px; margin:0; padding:0; list-style:none; }
 .activity-step { display:flex; align-items:center; gap:8px; min-height:26px; min-width:0; }
 .activity-verb { flex-shrink:0; }
 .activity-target { min-width:0; padding:1px 8px; border-radius:6px; background:var(--surface); color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .activity-step.running .activity-verb { animation:thinking-pulse 1.4s ease-in-out infinite; }
 @keyframes thinking-pulse { 50% { opacity:.45; } }
-@media(max-width:1000px) { .live-run { padding-left:0; } }
-@keyframes thinking-shimmer { from { background-position:120% 0; } to { background-position:-120% 0; } }
-@media (prefers-reduced-motion: reduce) { .thinking-text { animation:none; color:var(--muted); background:none; } .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }
+@media(max-width:1000px) { .live-run,.assistant-message > .live-island { padding-left:0; } }
+@media (prefers-reduced-motion: reduce) { .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }

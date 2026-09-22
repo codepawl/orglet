@@ -1,0 +1,59 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+
+/**
+ * What the worker is doing right now. The shape and colour of the glow follow it, so a change of state is seen
+ * before it is read.
+ */
+export type IslandState = 'thinking' | 'reading' | 'searching' | 'listing' | 'tool' | 'writing' | 'waiting' | 'pausing';
+
+/** How long the receipt above the pill waits after the pill has changed, so the new state is read first. */
+const RECEIPT_DELAY_MS = 350;
+
+/**
+ * A working run as one island (COD-164, from the owner's dynamic-island reference): a dark pill with a glowing
+ * shape and one label for what the worker is doing now, and above it one grey line for the last thing it did.
+ *
+ * The pill's width follows its content through a transition, so a new label reads as the same shape changing
+ * rather than a cut. The receipt changes a beat after the pill. `prefers-reduced-motion` turns both into cuts
+ * (the global rule in styles.css drops every transition and animation).
+ *
+ * `receipt` is left out where the run reports no steps, and passed as an empty string to keep the line's room
+ * while the first step is still running, so the pill does not jump when it lands.
+ */
+export function LiveIsland({ state, label, receipt }: { state: IslandState; label: string; receipt?: string }) {
+  const content = useRef<HTMLSpanElement>(null);
+  const [width, setWidth] = useState<number>();
+  const settledReceipt = useDelayed(receipt, RECEIPT_DELAY_MS);
+
+  useLayoutEffect(() => {
+    const element = content.current;
+    if (!element) return;
+    // Whole pixels, or a fractional width clips the last letter.
+    const measure = () => setWidth(Math.ceil(element.getBoundingClientRect().width));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return <div role="status" className="live-island">
+    {receipt !== undefined && <span className="live-island-receipt" key={settledReceipt}>{settledReceipt}</span>}
+    <div className="live-island-pill" data-state={state} style={{ width }}>
+      <span className="live-island-content" ref={content}>
+        <span className="live-island-glow" aria-hidden="true" />
+        <span className="live-island-label" key={label}>{label}</span>
+      </span>
+    </div>
+  </div>;
+}
+
+/** The value as it was `delayMs` ago, so a second line can follow the first instead of changing with it. */
+function useDelayed<T>(value: T, delayMs: number) {
+  const [delayed, setDelayed] = useState(value);
+  useEffect(() => {
+    if (value === delayed) return;
+    const timer = setTimeout(() => setDelayed(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayed, delayMs]);
+  return delayed;
+}
