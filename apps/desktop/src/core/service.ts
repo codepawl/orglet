@@ -190,7 +190,7 @@ export class CoreService {
         const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
         if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
         this.policy.assertStart(task.teamId, task.id);
-        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
+        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
           decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
             ? { ...request, interruptedAt: now() } : request) };
         this.store.transaction(() => {
@@ -260,6 +260,7 @@ export class CoreService {
         }
         if (!['paused', 'interrupted', 'waiting_budget'].includes(task.status)) throw new Error('Task không ở trạng thái có thể tiếp tục.');
         this.policy.assertStart(task.teamId, task.id);
+        task.budgetMicros = this.currentTaskLimit(task) ?? task.budgetMicros;
         if (task.teamSnapshot) {
           this.teams.assertResumable(task.id);
           task.pauseReason = undefined; task.handoff = undefined; this.store.update('tasks', task);
@@ -284,7 +285,7 @@ export class CoreService {
         if (this.runner.isActive(task.id) || this.teams.isActive(task.id)) throw new Error('Task đang chạy.');
         if (task.status === 'completed') throw new Error('Task đã hoàn tất. Tạo task mới để chạy lại.');
         if (task.decisionRequests?.some(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt)) throw new Error('Trả lời câu hỏi đang chờ hoặc gửi yêu cầu mới trước khi thử lại.');
-        this.start(task); return;
+        this.start({ ...task, budgetMicros: this.currentTaskLimit(task) ?? task.budgetMicros }); return;
       }
       case 'workspaceRecovery': return new WorkspaceRecovery(this.store).view(commands.workspaceRecovery.parse(args).taskId);
       case 'recoveryFile': {
@@ -810,6 +811,16 @@ export class CoreService {
       if (titles[task.id]) { delete titles[task.id]; this.store.setSetting('taskTitles', titles); }
       for (const routine of this.store.all<Routine>('routines')) if (routine.lastTaskId === task.id) { const { lastTaskId: _last, ...kept } = routine; this.store.update('routines', kept); }
     });
+  }
+  /**
+   * The Limit per task a crew or orglet chat runs under is that crew's or orglet's current setting, so raising it in
+   * settings reaches the chat's next turn, retry and resume; a run already in flight keeps the limit it started with.
+   * Group chats and scheduled runs keep the limit saved on their own row.
+   */
+  private currentTaskLimit(task: Pick<Task, 'teamId' | 'workerId' | 'assignees' | 'routineId'>): number | undefined {
+    if (task.assignees || task.routineId) return undefined;
+    if (task.teamId) return this.store.all<Team>('teams').find(team => team.id === task.teamId)?.taskBudgetMicros;
+    return this.store.all<Worker>('workers').find(worker => worker.id === task.workerId)?.taskBudgetMicros;
   }
   /** Workers of a group chat in sidebar order, or undefined when one worker (or a team) handles the task. */
   private groupWorkers(task: Pick<Task, 'assignees'>) {

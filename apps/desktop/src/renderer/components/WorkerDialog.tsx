@@ -56,6 +56,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [flash, setFlash] = useState(0);
   const ready = readiness(connections, harnesses);
   const paid = isPaidApi(provider);
+  // Claude Code is the one harness that takes a spending cap, so its chat's limit is set here too.
+  const capped = paid || provider === 'claude-code';
   const skill = workspace.skills.find(item => item.id === skillId);
   const clearError = () => { setError(''); setInvalid(undefined); };
   const fail = (at: Tab, message: string, field?: InvalidField) => {
@@ -123,7 +125,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       {provider === 'ollama' && <p className="muted">{t('Gọi Ollama trên máy này tại 127.0.0.1:11434. Cài Ollama và kéo model trước. Orglet không giữ ngân sách cho lần chạy local.')}</p>}
       {provider === 'opencode-zen' && <p className="muted">{t('Dùng API key OpenCode Zen. Zen trừ số dư của bạn theo từng request. Orglet không theo dõi chi tiêu Zen và không áp giới hạn mỗi task, nên hãy đặt giới hạn chi tiêu trong console OpenCode Zen. Chỉ chạy được model mà tài liệu Zen ghi endpoint chat/completions.')}</p>}
       {provider === 'opencode-go' && <p className="muted">{t('Dùng API key OpenCode Go, tính vào hạn mức 5 giờ, tuần và tháng của gói Go, không qua ngân sách Orglet. Nếu bật Use balance trên opencode.ai, phần vượt hạn mức trừ vào số dư Zen mà Orglet không thấy được. Chỉ chạy được model mà tài liệu Go ghi endpoint chat/completions.')}</p>}
-      {paid && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
+      {capped && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
     </>}
     {tab === 'skill' && <>
       <Select ariaLabel={t('Kỹ năng')} value={skillId} onChange={setSkill} options={workspace.skills.map(item => { const pending = !!item.package && item.package.reviewedHash !== item.package.hash; return { value: item.id, label: item.name, detail: pending ? t('v{0} · Cần review trong Thư viện', [item.revision]) : `v${item.revision}`, icon: <Sparkles size={16} />, disabled: pending }; })} />

@@ -33,6 +33,15 @@ export type HarnessResult = {
 };
 export type HarnessExecutor = (request: HarnessRequest) => Promise<HarnessResult>;
 export class HarnessError extends Error {}
+/**
+ * The CLI stopped because it reached the spending cap Orglet passed it (`--max-budget-usd`, only Claude Code has one).
+ * A known outcome, not an unknown request: the runner treats it like its own budget stop and words it for the chat.
+ */
+export class HarnessBudgetError extends HarnessError {
+  constructor(public readonly limitUsd: number, public readonly costUsd: number | null) {
+    super(`Claude Code dừng vì đã dùng hết phần còn lại của giới hạn mỗi task ($${limitUsd.toFixed(2)}). Nâng Giới hạn mỗi task của hội hoặc Tí, rồi thử lại.`);
+  }
+}
 export class HarnessTerminationError extends HarnessError {
   constructor() {
     super('Không xác nhận được harness đã dừng. Kiểm tra và dừng CLI trong Task Manager trước khi thử lại.');
@@ -110,7 +119,10 @@ export function parseCursorOutput(stdout: string): HarnessResult {
   throw new HarnessError('Cursor Agent không trả về báo cáo đúng schema.');
 }
 
-export function parseClaudeOutput(stdout: string, rateLimit: ClaudeRateLimitInfo | null = null): HarnessResult {
+/** Claude Code's result subtype when `--max-budget-usd` stopped it; older builds put the same token in `result`. */
+const claudeBudgetStop = /error_max_budget_usd/i;
+
+export function parseClaudeOutput(stdout: string, rateLimit: ClaudeRateLimitInfo | null = null, maxBudgetUsd = 0): HarnessResult {
   let data: { is_error?: boolean; result?: string; structured_output?: unknown; total_cost_usd?: number; subtype?: string };
   try {
     data = JSON.parse(stdout.trim());
@@ -125,6 +137,7 @@ export function parseClaudeOutput(stdout: string, rateLimit: ClaudeRateLimitInfo
 
   if (data.is_error) {
     const errorText = data.result ?? data.subtype ?? '';
+    if (claudeBudgetStop.test(data.subtype ?? '') || claudeBudgetStop.test(errorText)) throw new HarnessBudgetError(maxBudgetUsd, costUsd);
     if (looksLikeAuth(errorText)) throw new HarnessError(authHint('claude-code'));
     const limit = claudeRejection(rateLimit) ?? detectUsageLimit(errorText);
     if (limit) throw new HarnessError(usageLimitMessage('Claude Code', limit));
@@ -295,7 +308,7 @@ export const executeHarness: HarnessExecutor = async request => {
     child.stdin.end(prompt);
   });
 
-  if (claudeStream) return parseClaudeOutput(stdout, claudeStream.rateLimit);
+  if (claudeStream) return parseClaudeOutput(stdout, claudeStream.rateLimit, request.maxBudgetUsd);
   if (request.harness === 'cursor') return parseCursorOutput(stdout);
   const lastMessage = await readFile(join(request.cwd, LAST_MESSAGE_FILE), 'utf8').catch(() => null);
   return parseCodexOutput(stdout, lastMessage);

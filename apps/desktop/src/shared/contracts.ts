@@ -56,7 +56,8 @@ export const WorkerInput = z.object({
   provider: ProviderId, skillId: Id,
   // Selected or typed model slug. Absence means the catalog suggestion for this provider (or the CLI default for a harness).
   modelId: CustomModelId.optional(),
-  // Default spending cap for tasks this worker runs through a paid API; harnesses and Demo ignore it.
+  // Limit per task for this worker's chat: reserved against for a paid API, passed to Claude Code as its spending cap;
+  // Codex, Cursor Agent and Demo have no cap to give it to.
   taskBudgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
   // Presentation only: shown in the app and carried by templates, never sent to a model.
   avatar: z.object({ mascot: z.string().regex(/^[a-z-]{1,32}$/).optional(), letter: z.literal(true).optional(), emoji: z.string().min(1).max(16).optional(), color: z.string().regex(/^#[0-9a-f]{6}$/i).optional() }).strict().optional(),

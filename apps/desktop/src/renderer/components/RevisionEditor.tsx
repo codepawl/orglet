@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { Source, TaskDetail, Workspace } from '../../shared/contracts';
-import { Button, FieldLabel, MoneyInput } from './ui';
-import { MessageSquare, Wallet } from 'lucide-react';
-import { formatMoney, toAmount, toMicros } from './money';
+import { Button, FieldLabel } from './ui';
+import { MessageSquare } from 'lucide-react';
+import { formatMoney } from './money';
 import { providerLabel, type Readiness } from './providers';
 import { t } from '../i18n';
 import { taskWorkers } from '../assignees';
@@ -13,7 +13,6 @@ export function RevisionEditor({ detail, workspace, connections, done }: { detai
   const input = detail.task.currentInput ?? detail.task;
   const [brief, setBrief] = useState('');
   const [sources, setSources] = useState<Source[]>(detail.sources.filter(source => input.sourceIds.includes(source.id) && !source.revoked));
-  const [budget, setBudget] = useState(toAmount(detail.task.budgetMicros));
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const workers = taskWorkers(detail.task, workspace);
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
@@ -21,7 +20,7 @@ export function RevisionEditor({ detail, workspace, connections, done }: { detai
   return <form className="form" onSubmit={async event => {
     event.preventDefault(); setBusy(true); setError('');
     try {
-      await orglet.call('reviseTask', { taskId: detail.task.id, brief, sourceIds: sources.map(source => source.id), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: toMicros(budget) });
+      await orglet.call('reviseTask', { taskId: detail.task.id, brief, sourceIds: sources.map(source => source.id), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
       done();
     } catch (error) { setError(error instanceof Error ? error.message : t('Không gửi được tin nhắn.')); }
     finally { setBusy(false); }
@@ -39,8 +38,8 @@ export function RevisionEditor({ detail, workspace, connections, done }: { detai
       } catch (error) { setError(error instanceof Error ? error.message : t('Không thể thêm nguồn.')); }
       finally { setBusy(false); }
     }}>{t('Bổ sung tệp')}</Button>
-    <label><FieldLabel icon={Wallet} required>{t('Giới hạn tổng task')}</FieldLabel><MoneyInput type="number" min="0" step="any" required value={budget} onChange={setBudget} /></label>
-    <p className="muted">{t('Đã đối soát {0} · giữ chỗ {1}. Giới hạn này tính cả các tin nhắn trước.', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.usage.reservedMicros)])}</p>
+    {/* The limit is the crew's or orglet's Limit per task; core reads it on every turn, so there is no field to edit here. */}
+    <p className="muted">{t('Giới hạn {0} · đã đối soát {1} · giữ chỗ {2}. Giới hạn này tính cả các tin nhắn trước.', [formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.chargedMicros), formatMoney(detail.usage.reservedMicros)])}</p>
     {providers.length ? null : <p className="muted">{t('Demo không gọi model; checker đã cấu hình vẫn chạy trên máy.')}</p>}
     {missing.length > 0 && <p role="status">{t('Cần kết nối hoặc đăng nhập {0} (xem Cài đặt) trước khi chạy.', [missing.map(providerLabel).join(', ')])}</p>}
     <div className="actions">

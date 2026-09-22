@@ -38,7 +38,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { harnessNames, isHarness, type HarnessId, type HarnessInfo } from '../../shared/harness';
 import type { HarnessAccountMap } from '../harness/accounts';
-import { HarnessTerminationError, type HarnessExecutor } from '../harness/exec';
+import { HarnessBudgetError, HarnessTerminationError, type HarnessExecutor } from '../harness/exec';
 import { ProgressSender } from './progress';
 import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 import { detectUsageLimit, usageLimitMessage } from '../usageLimits';
@@ -67,6 +67,37 @@ function failureMessage(run: Run, error: Error) {
   const providerName = providerNames[run.snapshot.worker.provider];
   if (limit && providerName) return usageLimitMessage(providerName, limit);
   return error.message;
+}
+
+/** Micro-dollars as "$0.50", keeping a third or fourth decimal only when the amount has one. */
+function dollars(micros: number) {
+  return `$${(micros / 1_000_000).toFixed(4).replace(/(\.\d\d[1-9]?)0+$/, '$1')}`;
+}
+
+/** What the chat says when the CLI stopped at the task's cap: the amount, and where that cap lives for this chat. */
+function harnessBudgetMessage(run: Run, budgetMicros: number) {
+  const name = harnessNames[run.snapshot.worker.provider as HarnessId] ?? providerNames[run.snapshot.worker.provider] ?? run.snapshot.worker.provider;
+  if (run.snapshot.team) return `${name} dừng vì chạm giới hạn mỗi task của chat này (${dollars(budgetMicros)}). Nâng Giới hạn mỗi task trong Thiết lập hội → Giới hạn & ca, rồi thử lại.`;
+  return `${name} dừng vì chạm giới hạn mỗi task của chat này (${dollars(budgetMicros)}). Nâng Giới hạn mỗi task trong Thiết lập Tí, rồi thử lại.`;
+}
+
+/** CLI cost estimates accumulate in integer micros so each next call's cap is what the task has left. */
+function addHarnessCost(accumulatedMicros: number | undefined, costUsd: number) {
+  const amount = Math.ceil(costUsd * 1_000_000);
+  if (!Number.isSafeInteger(amount) || amount < 0) throw new Error('Usage không hợp lệ.');
+  const accumulated = (accumulatedMicros ?? 0) + amount;
+  if (!Number.isSafeInteger(accumulated)) throw new Error('Usage không hợp lệ.');
+  return accumulated;
+}
+
+/** The activity line for one CLI call: its own estimate counts toward this chat's cap, never toward an Orglet ledger. */
+function harnessCostLine(name: string, costUsd: number | null, stopped = false) {
+  if (stopped) {
+    if (costUsd === null) return `${name} dừng ở giới hạn; không báo chi phí.`;
+    return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
+  }
+  if (costUsd === null) return `${name} đã trả lời; không báo chi phí.`;
+  return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
 }
 
 /** The original name of a source whose copy the harness read, given the copy's name without its number prefix. */
@@ -372,16 +403,11 @@ export class Runner {
             ...(run.snapshot.model ? { model: run.snapshot.model } : {}) },
           onResult: result => {
             if (result.costUsd !== null) {
-              const amount = Math.ceil(result.costUsd * 1_000_000);
-              if (!Number.isSafeInteger(amount) || amount < 0) throw new Error('Usage không hợp lệ.');
-              const accumulated = (checkpoint.harnessCostMicros ?? 0) + amount;
-              if (!Number.isSafeInteger(accumulated)) throw new Error('Usage không hợp lệ.');
-              checkpoint = { ...checkpoint, harnessCostMicros: accumulated };
+              checkpoint = { ...checkpoint, harnessCostMicros: addHarnessCost(checkpoint.harnessCostMicros, result.costUsd) };
               this.checkpoints.save({ ...checkpoint, phase: 'requesting' });
             }
             if (result.notice) this.event(run.id, result.notice);
-            this.event(run.id, result.costUsd === null ? `${harness.name} đã trả lời; không báo chi phí.`
-              : `${harness.name} đã trả lời; harness ước tính $${result.costUsd.toFixed(4)} theo gói hoặc tài khoản của nó, không trừ vào ngân sách Orglet.`);
+            this.event(run.id, harnessCostLine(harness.name, result.costUsd));
           },
         });
       } else model = await this.adapter(run.snapshot.worker.provider, run.snapshot.model);
@@ -423,7 +449,17 @@ export class Runner {
               harnessRemainingUsd = Math.floor(remainingMicros / 100) / 10_000;
               if (harnessRemainingUsd < 0.0001) throw new BudgetError('Ngân sách còn lại không đủ cho request kế tiếp.');
               this.checkpoints.save({ ...checkpoint, phase: 'requesting' });
-              reply = await model.request(messages, requestTools, AbortSignal.any([signal, AbortSignal.timeout(900000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+              try {
+                reply = await model.request(messages, requestTools, AbortSignal.any([signal, AbortSignal.timeout(900000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+              } catch (error) {
+                // The CLI answered with a budget stop, so what it spent is known and the step can run again once the
+                // limit is raised; an unknown in-flight request would stay at 'requesting'.
+                if (error instanceof HarnessBudgetError) {
+                  if (error.costUsd !== null) checkpoint = { ...checkpoint, harnessCostMicros: addHarnessCost(checkpoint.harnessCostMicros, error.costUsd) };
+                  this.checkpoints.save({ ...checkpoint, phase: 'ready' });
+                }
+                throw error;
+              }
               reply = sanitizeReportReply(run, reply);
               this.checkpoints.received(checkpoint, reply);
             } else if (isLocalApi(provider)) {
@@ -665,8 +701,9 @@ export class Runner {
       }
       throw new Error(run.snapshot.workspaceGrant ? 'Đã chạm giới hạn 24 bước mà chưa hoàn tất công việc.' : 'Đã chạm giới hạn 6 bước mà chưa có báo cáo hợp lệ.');
     } catch (error) {
-      const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error) : 'Lần chạy gặp lỗi.';
-      const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError ? 'waiting_budget' : 'failed';
+      if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true));
+      const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error) : 'Lần chạy gặp lỗi.';
+      const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
       if (options.keepTaskOpen) this.store.update('runs', { ...run, status, error: message });
       else this.store.status(task.id, run.id, status, message);
       this.event(run.id, message);
@@ -829,7 +866,7 @@ export class Runner {
       for (const capability of run.snapshot.toolCapabilities ?? []) assertCapability(run, this.store.get<Task>('tasks', task.id), capability);
       if (result.notice) this.event(run.id, result.notice);
       signal.throwIfAborted();
-      this.event(run.id, result.costUsd === null ? `${tool.name} đã trả lời; không báo chi phí.` : `${tool.name} đã trả lời; harness ước tính $${result.costUsd.toFixed(4)} theo gói hoặc tài khoản của nó, không trừ vào ngân sách Orglet.`);
+      this.event(run.id, harnessCostLine(tool.name, result.costUsd));
       const readIds = new Set([...(provider === 'codex' ? inline : files).map(item => item.sourceId), ...scope.checkedSourceIds]);
       const limitations = [provider === 'codex'
         ? `Chạy bằng ${tool.name} ${tool.version} trên máy này. Nội dung nguồn văn bản được gửi trực tiếp trong prompt; Codex không có tool đọc tệp hay chạy lệnh.`
