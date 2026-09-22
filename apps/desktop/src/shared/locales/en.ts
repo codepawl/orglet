@@ -1387,6 +1387,7 @@ export const en: Dictionary = {
   'Đã đối soát': 'Settled',
   'Đã phân việc cho {0} Tí.': 'Assigned work to {0} orglets.',
   'Đã phân việc: {0}': 'Assigned work: {0}',
+  'Phần gộp kết quả của {0} chuyển vào bước tổng hợp, không chạy thành phần việc riêng.': '{0}’s combining job moved into the final answer step; it does not run as a separate member job.',
   'Đã đổi sang USD.': 'Switched to USD.',
   'Đã đổi sang {0} theo tỷ giá mới nhất.': 'Switched to {0} at the latest rate.',
   'Đóng cài đặt': 'Close settings',

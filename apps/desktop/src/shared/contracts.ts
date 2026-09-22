@@ -116,6 +116,8 @@ export const PlanAssignment = z.object({
 export const TeamPlan = z.object({
   assignments: z.array(PlanAssignment).min(1).max(4).refine(items => new Set(items.map(item => item.workerId)).size === items.length, 'Members must be unique'),
   note: z.string().trim().max(2000).optional(),
+  /** Notes for the lead's own synthesis step, which combines the members' saved results into the final answer. */
+  synthesisBrief: z.string().trim().min(1).max(4000).optional(),
 }).strict();
 export type TeamPlan = z.infer<typeof TeamPlan>;
 /** Queued member run skipped because the orchestrator did not assign that worker this turn. */

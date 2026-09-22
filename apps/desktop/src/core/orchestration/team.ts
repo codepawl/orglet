@@ -144,6 +144,7 @@ export class TeamRunner {
       const synthesis = this.join(planned.synthesis, originalJoin, preflightId);
       const limitations = failures.map(failure => `Role chưa hoàn tất: ${failure}`);
       await this.runner.run(task, synthesis, { keepTaskOpen: true, upstream: memberArtifacts, limitations,
+        assignment: plannedNow.snapshot.plan.synthesisBrief,
         reassign: async (callId, input, signal) => {
           signal.throwIfAborted();
           if (control.cancelled || control.paused) throw new Error('Hội bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.');

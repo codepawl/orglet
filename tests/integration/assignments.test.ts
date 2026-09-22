@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { claimAssignment, resourcesOverlap, validateDependencies } from '../../apps/desktop/src/core/orchestration/assignments';
+import { foldCombiningAssignment, isCombiningAssignment } from '../../apps/desktop/src/core/orchestration/plan';
 import { PlanAssignment, type Run, type Task, type Team, type TeamPlan, type Worker, type Skill } from '../../apps/desktop/src/shared/contracts';
 import { isPlanRequest, memberIdsFromPlanPrompt } from './team-plan';
 
@@ -18,6 +19,27 @@ it('rejects missing dependencies, self dependencies, cycles and ambiguous resour
   for (const resource of ['../outside', '/absolute', 'C:/outside', 'docs//file', 'docs/file.', 'docs\\file']) {
     expect(PlanAssignment.safeParse({ workerId: first, brief: 'one', writeResources: [resource] }).success).toBe(false);
   }
+});
+
+it('folds only a lead job that waits for every other member, owns no files and nobody waits for', () => {
+  const lead = id();
+  const first = id();
+  const second = id();
+  const team: Team = { id: id(), name: 'Crew', instructions: 'Work together', memberIds: [first, second, lead], synthesizerId: lead, workflow: 'sequential', monthlyBudgetMicros: 1_000_000, revision: 1 };
+  const research = [{ workerId: first, brief: 'Find sources', dependsOn: [] }, { workerId: second, brief: 'Check them', dependsOn: [] }];
+  const combining = { workerId: lead, brief: 'Merge both results into the final answer', dependsOn: [first, second] };
+  const folded = foldCombiningAssignment(team, { assignments: [...research, combining], synthesisBrief: 'Keep it short.' });
+  expect(folded.folded).toEqual(combining);
+  expect(folded.plan.assignments).toEqual(research);
+  expect(folded.plan.synthesisBrief).toBe('Keep it short.\nMerge both results into the final answer');
+  // Distinct work stays a member job: partial dependencies, file ownership, a dependent, a member's job, or the lead alone.
+  const keep = (assignment: TeamPlan['assignments'][number], others: TeamPlan['assignments'] = research) => isCombiningAssignment(team, { assignments: [...others, assignment] }, assignment);
+  expect(keep({ ...combining, dependsOn: [first] })).toBe(false);
+  expect(keep({ ...combining, writeResources: ['answer.md'] })).toBe(false);
+  expect(keep(combining, [research[0], { ...research[1], dependsOn: [lead] }])).toBe(false);
+  expect(keep({ ...combining, workerId: second, dependsOn: [first] }, [research[0]])).toBe(false);
+  expect(keep({ ...combining, dependsOn: [] }, [])).toBe(false);
+  expect(foldCombiningAssignment(team, { assignments: [...research, { ...combining, dependsOn: [] }] }).folded).toBeUndefined();
 });
 
 it('treats directory ownership and Windows case aliases as overlapping', () => {
