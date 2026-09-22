@@ -49,12 +49,12 @@ describe('detection', () => {
     const found = await detectHarnesses(env, 'win32', probe);
     expect(found.map(item => item.id)).toEqual(['claude-code', 'codex', 'cursor']);
     expect(found[0]).toEqual(expect.objectContaining({
-      id: 'claude-code', version: '2.1.10 (Claude Code)', auth: 'logged_out', status: 'detected',
+      id: 'claude-code', version: '2.1.10', auth: 'logged_out', status: 'detected',
       executable: expect.stringContaining('2.1.10'), runnable: true,
       loginCommand: expect.stringContaining('auth login'),
     }));
     expect(found[1]).toEqual(expect.objectContaining({
-      id: 'codex', version: 'codex-cli 0.154.0', auth: 'logged_in', status: 'signed_in',
+      id: 'codex', version: '0.154.0', auth: 'logged_in', status: 'signed_in',
       executable: expect.stringContaining('bffc'), runnable: true,
     }));
     expect(found[2]).toEqual(expect.objectContaining({
