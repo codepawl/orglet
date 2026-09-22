@@ -10,6 +10,7 @@ import { providerLabel, settingsTabFor, type Readiness } from './providers';
 import { t } from '../i18n';import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
 import { briefWithReaction, clearReplyTarget, useReplyTarget } from './messageMarks';
+import { IslandDock } from './islandDock';
 
 const SINGLE_LINE = 40;
 
@@ -185,7 +186,10 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
   </form>;
 }
 
-/** Follow-up bar under a task: the text becomes an extra instruction for a new review of the same sources. */
+/**
+ * Follow-up bar under a task: the text becomes an extra instruction for a new review of the same sources. While a
+ * run is on, the island saying what the worker is doing sits on the bar's top edge (COD-167, `IslandDock`).
+ */
 export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, action }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: (tab?: 'connections' | 'harness') => void; action: (fn: () => Promise<unknown>) => void }) {
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -213,6 +217,7 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
     action(async () => { try { await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
   };
   return <div className="thread-composer">
+    <IslandDock />
     <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(detail.task.pendingStart) || submitting} sendDisabled={blocked}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}

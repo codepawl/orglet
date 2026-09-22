@@ -486,7 +486,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .read-receipts > span { display:flex; }
 .read-receipts .avatar { box-shadow:0 0 0 1.5px var(--bg); }
 @media(prefers-reduced-motion:reduce) { .reaction-row { animation:none; } .reaction-row button { transition:none; } .reaction-row button:hover { transform:none; } .reaction-chip { transition:none; } .reaction-chip:hover { transform:none; } }
-.thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) 0; }
+/* A size container, so the island's label can be capped from the bar's width (`cqw` in `.live-island-label`)
+   rather than from the island's own measured width, which would let a measurement of zero lock it at zero. */
+.thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) 0; container-type:inline-size; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
 /* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,
    the shape people already know from other chat apps (user, 2026-09-19). Once a turn exists the thread takes
@@ -1626,43 +1628,79 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .new-task-row:hover .shortcut,.new-task-row:focus-visible .shortcut { opacity:1; }
 .row-menu-popover { color:var(--text); }
 
-/* Live island (COD-164, the owner's dynamic-island reference): a working run is one dark pill, centred, with a
-   glowing shape and one label for what the worker is doing now, and one grey line above it for the last thing it
-   did. Who is working is said by the byline above, so the island carries no face and no name (user, 2026-09-19);
-   thinking is the face turning from side to side, see the Thinking and Working states above the `.avatar .mascot`
-   rules. The shape is a light source, not an icon: its silhouette and colour change with the state, blurred and
-   breathing. `--glow` is the colour, `--glow-w/h/r` the silhouette; a second dot (::after) appears for listing. */
-.live-island { display:flex; flex-direction:column; align-items:center; gap:6px; padding:4px 0; }
-/* On its own under a non-streaming turn it takes the same inset as `.live-run`, so both runs centre alike. */
-.assistant-message > .live-island { padding-left:35px; }
-.live-island-receipt { min-height:20px; max-width:100%; font-size:13px; line-height:20px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in var(--motion-base) var(--ease-out); }
-/* The width is set from the content by LiveIsland, so a new label morphs the pill instead of cutting it. */
-.live-island-pill { --island-bg:#1b1b1e; --island-text:#f4f4f5; height:46px; max-width:100%; border-radius:19px; background:var(--island-bg); color:var(--island-text); overflow:hidden;
-  box-shadow:0 1px 2px #00000033, 0 8px 22px #0000002e; transition:width 320ms var(--ease-out); }
-:root[data-theme=dark] .live-island-pill { --island-bg:#0e0e10; box-shadow:0 0 0 1px #ffffff14, 0 8px 22px #00000066; }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] .live-island-pill { --island-bg:#0e0e10; box-shadow:0 0 0 1px #ffffff14, 0 8px 22px #00000066; } }
-.live-island-content { display:inline-flex; align-items:center; gap:10px; height:100%; width:max-content; padding:0 20px 0 14px; }
-.live-island-label { max-width:min(46ch, 60vw); font-size:15px; font-weight:500; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in 260ms var(--ease-out); }
-.live-island-glow { position:relative; display:grid; place-items:center; width:26px; height:26px; flex-shrink:0; --glow:#ff6b9d; --glow-w:4px; --glow-h:20px; --glow-r:2px; }
-.live-island-glow::before,.live-island-glow::after { content:""; grid-area:1/1; border-radius:var(--glow-r); background:var(--glow); box-shadow:0 0 12px 3px var(--glow); filter:blur(1.5px);
+/* Live island (COD-164, the owner's dynamic-island reference; docked on the prompt bar in COD-167): a working run
+   is one tab on the bar, in the bar's own colour and outline, with a glowing shape and one label for what the
+   worker is doing now, and above the label one grey line for the last thing it did. It sits on the bar's top edge
+   and moves with the bar, never with the thread: `IslandDock` mounts it just before the bar inside `.thread-composer`,
+   where it takes its own room, so it covers no answer and stays put while the chat scrolls. Who is working is said
+   by the byline in the thread, so the island carries no face and no name (user, 2026-09-19); thinking is the face
+   turning from side to side, see the Thinking and Working states above the `.avatar .mascot` rules.
+   The join: the tab has no bottom edge and overlaps the bar's top border by one pixel, so its fill covers that
+   stretch of line, and its two bottom corners curve outward into the bar, the inverted corner a tab makes with the
+   panel it belongs to. Each corner is a pseudo-element the width of the fillet, painted with a radial gradient
+   centred on its outer top corner: clear inside the fillet radius, one pixel of outline on the arc, then the bar's
+   colour beyond it. So the outline runs down the tab's side, round the arc and along the bar's top edge without a
+   break, and the arc's ends meet the tab's side and the bar's edge as tangents. The tab keeps to the straight part
+   of that edge: the max-width stays clear of the bar's corners (24px at their largest) in every shape the bar takes.
+   The shape is a light source, not an icon: its silhouette and colour change with the state, blurred and breathing.
+   `--glow` is the colour, `--glow-w/h/r` the silhouette; a second dot (::after) appears for listing. The colours
+   are chosen against the page, and the dark theme brings its own: what glows on #212121 washes out on white. */
+.live-island {
+  --island-fillet:12px; --island-line:var(--border-subtle);
+  --glow-thinking:#ee3f86; --glow-reading:#e28f16; --glow-searching:#159fd6; --glow-listing:#ec7526;
+  --glow-tool:#ad4be3; --glow-writing:#e9553a; --glow-waiting:#8d8d96; --glow-pausing:#aaaab2;
+  --glow-halo:color-mix(in srgb, var(--glow) 38%, transparent);
+  position:relative; z-index:1; width:fit-content; max-width:calc(100% - 2 * (24px + var(--island-fillet)));
+  margin:0 auto -1px; padding:6px 16px 6px 11px;
+  border:1px solid var(--island-line); border-bottom:0; border-radius:18px 18px 0 0;
+  background:var(--bg); color:var(--text); box-shadow:0 2px 12px #00000008;
+  /* The shadow stops at the seam: below it is the bar, which carries its own. The sides keep room for the fillets. */
+  clip-path:inset(-24px calc(-24px - var(--island-fillet)) 0 calc(-24px - var(--island-fillet)));
+  animation:island-rise 220ms var(--ease-out);
+}
+:root[data-theme=dark] .live-island { --glow-thinking:#ff6b9d; --glow-reading:#ffb648; --glow-searching:#5adcff; --glow-listing:#ff9a52; --glow-tool:#d873ff; --glow-writing:#ff7a5c; --glow-waiting:#9a9aa3; --glow-pausing:#c9c9cf; --glow-halo:color-mix(in srgb, var(--glow) 70%, transparent); }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] .live-island { --glow-thinking:#ff6b9d; --glow-reading:#ffb648; --glow-searching:#5adcff; --glow-listing:#ff9a52; --glow-tool:#d873ff; --glow-writing:#ff7a5c; --glow-waiting:#9a9aa3; --glow-pausing:#c9c9cf; --glow-halo:color-mix(in srgb, var(--glow) 70%, transparent); } }
+/* One outline for tab and bar: the same colour the bar's own focus rule sets. */
+.thread-composer:has(.composer:focus-within) .live-island { --island-line:color-mix(in srgb, var(--muted) 42%, var(--bg)); }
+.live-island::before,.live-island::after { content:""; position:absolute; bottom:0; width:var(--island-fillet); height:calc(var(--island-fillet) + 1px); }
+.live-island::before { left:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 0 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
+.live-island::after { right:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 100% 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
+/* Out of the bar's top edge and back into it: the tab moves as one and is cut at the seam, so it is poured rather
+   than faded. The resting rule above is the visible one, so nothing waits on either of these finishing; with
+   reduced motion the global rule below drops both and the tab simply is there, then is not. */
+.live-island.leaving { animation:island-sink 170ms var(--ease-out) forwards; }
+@keyframes island-rise { from { transform:translateY(100%); clip-path:inset(-24px calc(-24px - var(--island-fillet)) 100% calc(-24px - var(--island-fillet))); } }
+@keyframes island-sink { to { transform:translateY(100%); clip-path:inset(-24px calc(-24px - var(--island-fillet)) 100% calc(-24px - var(--island-fillet))); } }
+/* The width is set from the label by LiveIsland, so a new label morphs the tab instead of cutting it. The receipt
+   takes the width the label gives and never widens the tab; it opens its own row once it has something to say. */
+.live-island-body { display:flex; flex-direction:column; max-width:100%; overflow:hidden; transition:width 320ms var(--ease-out); }
+.live-island-receipt-row { display:grid; grid-template-rows:1fr; transition:grid-template-rows 320ms var(--ease-out); }
+.live-island-receipt-row[data-empty] { grid-template-rows:0fr; }
+.live-island-receipt { min-height:0; padding:0 0 3px 36px; font-size:12.5px; line-height:18px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in var(--motion-base) var(--ease-out); }
+.live-island-content { display:inline-flex; align-items:center; gap:10px; width:max-content; height:26px; }
+/* Capped from the bar's width, never from the tab's own: the bar less the corner clearance (72px), the tab's
+   padding and outline (29px) and the glow with its gap (36px), so the widest label still fits the straight edge. */
+.live-island-label { min-width:0; max-width:min(46ch, calc(100cqw - 137px)); font-size:14px; font-weight:500; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in 260ms var(--ease-out); }
+.live-island-glow { position:relative; display:grid; place-items:center; width:26px; height:26px; flex-shrink:0; --glow:var(--glow-thinking); --glow-w:4px; --glow-h:20px; --glow-r:2px; }
+.live-island-glow::before,.live-island-glow::after { content:""; grid-area:1/1; border-radius:var(--glow-r); background:var(--glow); box-shadow:0 0 12px 3px var(--glow-halo); filter:blur(1.5px);
   transition:width 320ms var(--ease-out), height 320ms var(--ease-out), border-radius 320ms var(--ease-out), background-color 320ms, box-shadow 320ms, transform 320ms var(--ease-out), opacity 320ms; }
 .live-island-glow::before { width:var(--glow-w); height:var(--glow-h); animation:island-breathe var(--motion-cycle) ease-in-out infinite; }
 .live-island-glow::after { width:8px; height:8px; border-radius:50%; opacity:0; transform:translateX(6px); animation:island-breathe var(--motion-cycle) ease-in-out calc(var(--motion-cycle) / 2) infinite; }
-.live-island-pill[data-state=thinking] .live-island-glow { --glow:#ff6b9d; --glow-w:4px; --glow-h:20px; --glow-r:2px; }
-.live-island-pill[data-state=reading] .live-island-glow { --glow:#ffb648; --glow-w:13px; --glow-h:13px; --glow-r:3px; }
-.live-island-pill[data-state=searching] .live-island-glow { --glow:#5adcff; --glow-w:24px; --glow-h:9px; --glow-r:5px; }
-.live-island-pill[data-state=listing] .live-island-glow { --glow:#ff9a52; --glow-w:8px; --glow-h:8px; --glow-r:50%; }
-.live-island-pill[data-state=listing] .live-island-glow::before { transform:translateX(-6px); }
-.live-island-pill[data-state=listing] .live-island-glow::after { opacity:1; }
-.live-island-pill[data-state=tool] .live-island-glow { --glow:#d873ff; --glow-w:11px; --glow-h:11px; --glow-r:3px; }
-.live-island-pill[data-state=writing] .live-island-glow { --glow:#ff7a5c; --glow-w:26px; --glow-h:10px; --glow-r:5px; }
-.live-island-pill[data-state=waiting] .live-island-glow { --glow:#9a9aa3; --glow-w:9px; --glow-h:9px; --glow-r:50%; }
-.live-island-pill[data-state=pausing] .live-island-glow { --glow:#c9c9cf; --glow-w:10px; --glow-h:10px; --glow-r:3px; }
+.live-island[data-state=thinking] .live-island-glow { --glow:var(--glow-thinking); --glow-w:4px; --glow-h:20px; --glow-r:2px; }
+.live-island[data-state=reading] .live-island-glow { --glow:var(--glow-reading); --glow-w:13px; --glow-h:13px; --glow-r:3px; }
+.live-island[data-state=searching] .live-island-glow { --glow:var(--glow-searching); --glow-w:24px; --glow-h:9px; --glow-r:5px; }
+.live-island[data-state=listing] .live-island-glow { --glow:var(--glow-listing); --glow-w:8px; --glow-h:8px; --glow-r:50%; }
+.live-island[data-state=listing] .live-island-glow::before { transform:translateX(-6px); }
+.live-island[data-state=listing] .live-island-glow::after { opacity:1; }
+.live-island[data-state=tool] .live-island-glow { --glow:var(--glow-tool); --glow-w:11px; --glow-h:11px; --glow-r:3px; }
+.live-island[data-state=writing] .live-island-glow { --glow:var(--glow-writing); --glow-w:26px; --glow-h:10px; --glow-r:5px; }
+.live-island[data-state=waiting] .live-island-glow { --glow:var(--glow-waiting); --glow-w:9px; --glow-h:9px; --glow-r:50%; }
+.live-island[data-state=pausing] .live-island-glow { --glow:var(--glow-pausing); --glow-w:10px; --glow-h:10px; --glow-r:3px; }
 @keyframes island-breathe { 50% { opacity:.55; } }
 @keyframes island-fade-in { from { opacity:0; transform:translateY(2px); } }
 /* Reduced motion: every transition and animation is already off (the global rule above), so a state change is a
    cut; only the glow's blur stays, since a still glow is still a shape. */
-/* Live run: preamble, the island, the answer as it streams, then the folded step list. Space only, no lines. */
+/* Live run: preamble, the answer as it streams, then the folded step list. Space only, no lines. */
 .live-run { display:flex; flex-direction:column; gap:12px; padding-left:35px; }
 .live-run .prose { line-height:1.65; }
 .activity-group { font-size:13px; color:var(--muted); }
@@ -1681,5 +1719,5 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .activity-target { min-width:0; padding:1px 8px; border-radius:6px; background:var(--surface); color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .activity-step.running .activity-verb { animation:thinking-pulse 1.4s ease-in-out infinite; }
 @keyframes thinking-pulse { 50% { opacity:.45; } }
-@media(max-width:1000px) { .live-run,.assistant-message > .live-island { padding-left:0; } }
+@media(max-width:1000px) { .live-run { padding-left:0; } }
 @media (prefers-reduced-motion: reduce) { .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }
