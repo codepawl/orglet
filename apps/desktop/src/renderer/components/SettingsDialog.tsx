@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Check, Contrast, Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop } from 'lucide-react';
+import { Check, Contrast, Database, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
@@ -23,16 +23,16 @@ import { confirmAction } from './confirm';
 import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../../shared/erase';
 import { Switch } from './Switch';
 import { CodeFontPreview, InterfaceFontSample } from './FontPreview';
+import { AboutSettings } from './AboutSettings';
 import { t, tMessage, translated } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
-import { version as appVersion } from '../../../../../package.json';
 
 /** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
 const SAVED_KEY_MASK = '••••••••••••••••';
 
-export type SettingsTab = 'general' | 'chat' | 'connections' | 'harness' | 'usage' | 'data';
-// Six short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming).
+export type SettingsTab = 'general' | 'chat' | 'connections' | 'harness' | 'usage' | 'data' | 'about';
+// Short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming). About sits last (COD-176).
 const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'general', label: 'Chung', icon: <SlidersHorizontal size={16} /> },
   { id: 'chat', label: 'Cuộc trò chuyện', icon: <MessageSquare size={16} /> },
@@ -40,6 +40,7 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'harness', label: 'Harness trên máy', icon: <SquareTerminal size={16} /> },
   { id: 'usage', label: 'Chi phí & giới hạn', icon: <Wallet size={16} /> },
   { id: 'data', label: 'Dữ liệu', icon: <Database size={16} /> },
+  { id: 'about', label: 'Giới thiệu', icon: <Info size={16} /> },
 ];
 // Section notes sit under the section title.
 /** What each saved setting is called, so a "Đã lưu" notice can say which one it was (COD-174). Same words as the rows. */
@@ -47,6 +48,7 @@ const settingNames = translated({
   language: 'Ngôn ngữ', theme: 'Giao diện', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Phông chữ', codeFont: 'Phông chữ code',
   autoTitles: 'Tự đặt tên cuộc trò chuyện', copyFormat: 'Định dạng khi sao chép', downloadFormat: 'Định dạng khi tải xuống', confirmOpenTask: 'Hỏi trước khi mở công việc',
   archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi connection / tháng', providerConcurrency: 'Request đồng thời mỗi provider', providerConsent: 'Provider được phép',
+  autoUpdate: 'Tự động cập nhật',
 });
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
 
@@ -294,8 +296,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     finally { setBusy(false); }
   };
   // Settings apply as soon as they change; the command always carries the full current set.
-  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null }>) => act(async () => {
-    await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, ...patch });
+  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean }>) => act(async () => {
+    await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, autoUpdate: workspace.autoUpdate, ...patch });
     return t('Đã lưu');
   }, Object.keys(patch).map(key => settingNames[key as keyof typeof settingNames]).filter(Boolean).join(', '));
   const eraseMessage = (summary: EraseSummary) => {
@@ -560,9 +562,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 title={t('Xóa toàn bộ dữ liệu')}
                 description={t('Đưa app về như mới cài: trò chuyện, Tí, hội, skill, lịch chạy, nguồn, kiến thức và cài đặt. API key nằm ngoài cơ sở dữ liệu nên không bị đụng tới.')}
                 question={t('Xóa sạch mọi thứ trong Orglet?')} />
-              <Row title={t('Phiên bản')} description={`Orglet ${appVersion} · SQLite ${workspace.sqliteVersion}`} />
               <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi cuộc trò chuyện, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet, và không một bí mật nào bị tổn hại trong quá trình làm ra app này.')} />
             </>}
+
+            {tab === 'about' && <AboutSettings workspace={workspace} busy={busy} act={act} onAutoUpdate={value => void save({ autoUpdate: value })} />}
           </section>
         </div>
       </Dialog.Content>

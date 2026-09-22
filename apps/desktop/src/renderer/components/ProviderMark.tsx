@@ -13,6 +13,9 @@ const paths = {
   x: 'M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z',
 } as const;
 
+/** The X mark, shared with the About tab's link to the company's X account. */
+export const xMarkPath = paths.x;
+
 const marks: Record<ProviderId | Extract<HarnessCatalogId, 'cursor'>, { name: string; path?: string; color?: string; letter?: string }> = {
   demo: { name: 'Demo' },
   openai: { name: 'OpenAI API', path: paths.openai },

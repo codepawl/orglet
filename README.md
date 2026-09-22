@@ -111,6 +111,10 @@ Windows installers are unsigned. macOS CI signs when Developer ID credentials ar
 | Linux | ZIP from `pnpm make` on Linux, or the `orglet-linux-zip` CI artifact. CI builds it and starts it headless on every pull request, but nobody has used it on a real Linux desktop yet, so treat it as untested. See [linux-packaging.md](docs/linux-packaging.md). |
 | iOS and Android | Not started. The shape under discussion is a companion to a desktop workspace, not a port: a phone cannot run a worker. See [mobile.md](docs/mobile.md). |
 
+### Updates
+
+A Windows install from **Setup.exe** updates itself. It checks GitHub Releases shortly after launch and every few hours, downloads a new version in the background, and then offers a restart; if you skip it, the next launch uses the new version. **Settings → About** shows the version you run, lets you check by hand or turn automatic updates off, and lists what changed in each release. The ZIP build, macOS and Linux cannot update themselves; the same tab links to the releases page instead. Versions 0.2.3 and earlier have no updater, so install the next release by hand once. Details in the [technical guide](docs/technical-guide.md#about-and-updates).
+
 ## Dev
 
 You need Windows, macOS or Linux, Node 24.19 or newer and pnpm 11.19.0.

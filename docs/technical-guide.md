@@ -119,6 +119,28 @@ The interface asks for **SF Pro** first (the owner's pick): macOS supplies it, a
 **Cài đặt → Chung** can put another family in either role. The picker lists the default first (for the interface, SF Pro with Inter behind it; for code, JetBrains Mono), then Inter as a choice of its own in the interface picker since it ships with the app, then the suggested families this machine actually has — measured by drawing text in the family against a generic fallback, because `document.fonts.check` answers yes to any name — and **Phông khác…** takes a family typed by hand. A family name is letters, digits, spaces, periods and hyphens only (`shared/fonts.ts`), because the name is written into a CSS custom property; anything else is refused and the bundled font stays. Each option is drawn in the font it names. Under the interface row one sentence shows the interface font with Vietnamese diacritics; under the code row two cards show the same short snippet in the code font on a light card and a dark card side by side (stacked in a narrow window), with line numbers, the source viewer's own syntax colours and one removed/added pair, so the diff colours show too. Each card carries its own theme (`.theme-light` / `.theme-dark` in `styles.css` put one palette on a subtree), so both are visible whichever theme the app is in.
 
 The choice is stored like the accent colour and applied to `--font` and `--font-mono` on the root element, so it reaches every surface at once and survives a restart. A picked family that is missing falls through to the bundled font, never to blank text.
+
+## About and updates
+
+**Cài đặt → Giới thiệu** is the last settings tab. It shows the app mark, the version the running build reports (`app.getVersion()`, which Electron reads from `package.json`), and a details line with the Electron, Chromium, Node and SQLite versions, the operating system and architecture, and how the build was installed: with Setup (Squirrel), as a ZIP, as a macOS app, as a Linux ZIP, or run from source. **Sao chép** puts those lines on the clipboard for a bug report. Under it are the links to the website, GitHub, Discord, X and Threads. The renderer names a link by key; the main process holds the five addresses and opens them in the system browser, so nothing shown in the window can choose where a click goes.
+
+**Có gì mới** lists the last ten GitHub Releases, newest first, with each release's notes rendered as Markdown and the running version marked. Only the newest is open; **Hiện N bản cũ hơn** expands the rest. The main process fetches the list from GitHub's releases API with no identifying headers, validates it, and keeps the last good copy in `changelog-cache.json` next to the database. A fetch is reused for an hour; the reload button forces one. Offline, the tab shows the saved list and says when it was fetched; with nothing saved, it says the list could not be fetched.
+
+**Kiểm tra cập nhật** is the built-in Electron updater on the feed `https://update.electronjs.org/codepawl/orglet/<platform>-<arch>/<version>`, a free service that reads this repository's public Releases. It works only where Squirrel can replace the app:
+
+| Build | What the row says |
+|---|---|
+| Windows, installed with Setup.exe | Checks, downloads and offers a restart |
+| Windows ZIP | Cannot update itself (no `Update.exe`); links the releases page |
+| macOS, signed by CI | Checks against the feed (the Release has to carry a `-darwin` ZIP for an update to exist) |
+| macOS, unsigned local make | Cannot update itself; links the releases page |
+| Linux ZIP | Cannot update itself; links the releases page |
+| `pnpm dev` | Cannot update itself |
+
+The row shows one state at a time: not checked yet, checking, up to date with the time, downloading, ready with the version and a **Khởi động lại** button, or the error the updater reported. **Tự động cập nhật** (on by default, stored with the other settings) checks 30 seconds after launch and every four hours, downloads in the background, then raises a notice; if the person does not restart, the next launch already uses the new version, because Squirrel unpacks it as soon as it is downloaded. Turned off, the app checks only when the person clicks **Kiểm tra**. The first launch after Setup (`--squirrel-firstrun`) skips the startup check so it does not race the installer; the interval still runs. The state lives in the main process and is pushed to the window over the typed bridge.
+
+Builds 0.2.3 and earlier have no updater and never learn about a newer version; the first release that carries it is installed by hand. For what a release has to include, see [windows-release-gates.md](windows-release-gates.md#updates).
+
 ## Deleting data
 
 **Cài đặt → Dữ liệu** removes what the app has kept. Every deletion refuses while a task, routine or checker is running, runs in one transaction, and reports what it actually removed.
