@@ -89,7 +89,7 @@ Thread-memory search can reuse FTS5 the same way as `knowledge_search` (`apps/de
 
 Keep three hard money gates that already exist (`BudgetLedger` in `apps/desktop/src/core/budgets/ledger.ts`):
 
-- **Per-turn cap** — `task.budgetMicros` on the thread, default from the worker or team `taskBudgetMicros`. Cumulative across follow-ups of that thread (today's revise-task label).
+- **Per-turn cap** — `task.budgetMicros` on the thread, read from the worker or team `taskBudgetMicros` on the first message and again on every follow-up, retry and resume. Cumulative across follow-ups of that thread. For Claude Code the remaining amount is the CLI's own `--max-budget-usd`; its stop reports the limit and where to raise it.
 - **Team monthly cap** — `monthlyBudgetMicros`.
 - **Connection monthly cap** — Settings `connectionLimitMicros`.
 

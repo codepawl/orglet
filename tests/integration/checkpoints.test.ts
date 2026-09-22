@@ -131,7 +131,8 @@ it('honors a lowered live team cap and refuses acceptance without a synthesis ar
   const team = await core.command('saveTeam', { ...template, workflow: 'sequential' }) as Team;
   const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Lower budget during run', sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
   await idle(taskId);
-  expect(calls).toBe(1); expect(store.detail(taskId).task.status).toBe('paused');
+  // The second member could not reserve against the lowered cap, so the crew waits for budget rather than merely pausing.
+  expect(calls).toBe(1); expect(store.detail(taskId).task.status).toBe('waiting_budget');
   expect(store.detail(taskId).artifacts).toHaveLength(1);
   await expect(core.command('accept', { id: taskId })).rejects.toThrow('Chỉ chấp nhận báo cáo');
   expect(store.detail(taskId).runs.some(run => run.stage === 'synthesis' && run.status === 'completed')).toBe(false);

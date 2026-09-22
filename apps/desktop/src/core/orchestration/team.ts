@@ -19,7 +19,8 @@ export class TeamRunner {
     const detail = this.store.detail(taskId);
     const latest = new Map(detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === (detail.task.inputRevision ?? 0))
       .map(run => [`${run.stage}:${run.stage === 'member' ? assignmentKey(run) : run.snapshot.worker.id}`, run]));
-    for (const run of latest.values()) if (run.status !== 'completed') this.runner.assertResumable(run);
+    // A member the plan left out was cancelled on purpose; it has nothing to resume and must not block the others.
+    for (const run of latest.values()) if (run.status !== 'completed' && !(run.status === 'cancelled' && run.error === UNASSIGNED_PLAN_ERROR)) this.runner.assertResumable(run);
   }
   async run(task: Task, team: Team, resume = false) {
     if (this.active.has(task.id)) throw new Error('Hội đang chạy task này.');
@@ -68,6 +69,8 @@ export class TeamRunner {
       const memberArtifacts: Artifact[] = [];
       const successful = new Set<string>();
       const failures: string[] = [];
+      // A member stopped at the task's cap pauses the crew the same way, but the chat must say it is the budget.
+      let waitingBudget = false;
       const execute = async (workerId: string, signal?: AbortSignal) => {
         signal?.throwIfAborted();
         if (!this.canDispatch(task)) control.paused = true;
@@ -93,6 +96,7 @@ export class TeamRunner {
         const result = this.store.detail(task.id);
         const resultStatus = result.runs.find(candidate => candidate.id === run.id)?.status;
         if (resultStatus === 'paused' || resultStatus === 'waiting_budget') control.paused = true;
+        if (resultStatus === 'waiting_budget') waitingBudget = true;
         const artifact = result.artifacts.find(a => a.runId === run.id);
         if (artifact && resultStatus === 'completed') {
           memberArtifacts.push(artifact);
@@ -129,7 +133,7 @@ export class TeamRunner {
       };
       await drain();
       if (control.cancelled) { this.finish(task, 'cancelled'); return; }
-      if (control.paused) { this.finish(task, 'paused'); return; }
+      if (control.paused) { this.finish(task, waitingBudget ? 'waiting_budget' : 'paused'); return; }
       // Freeze a deterministic join input from committed member artifacts only. Do not invent missing roles.
       memberArtifacts.sort((a, b) => a.id.localeCompare(b.id));
       // A resumed lead already received recovery results in its checkpointed tool messages.
@@ -182,7 +186,7 @@ export class TeamRunner {
     this.store.update('tasks', { ...task, status: 'running', accepted: false }); this.notify();
     task = { ...task, ...(task.currentInput ?? {}) };
     const revision = task.inputRevision ?? 0;
-    let answered = 0, failed = 0;
+    let answered = 0, failed = 0, waitingBudget = false;
     try {
       for (const worker of workers) {
         if (!this.canDispatch(task)) control.paused = true;
@@ -197,11 +201,12 @@ export class TeamRunner {
         }
         await this.runner.run(task, run, { keepTaskOpen: true });
         const status = this.store.get<Run>('runs', run.id).status;
-        if (status === 'paused' || status === 'waiting_budget') control.paused = true;
+        if (status === 'waiting_budget') { control.paused = true; waitingBudget = true; }
+        else if (status === 'paused') control.paused = true;
         else if (status === 'completed') answered++;
         else if (status !== 'cancelled') failed++;
       }
-      this.finish(task, control.cancelled ? 'cancelled' : control.paused ? 'paused' : !answered ? 'failed' : failed ? 'partial' : 'completed');
+      this.finish(task, control.cancelled ? 'cancelled' : control.paused ? (waitingBudget ? 'waiting_budget' : 'paused') : !answered ? 'failed' : failed ? 'partial' : 'completed');
     } catch {
       this.finish(task, control.cancelled ? 'cancelled' : 'interrupted');
     } finally { this.notify(); this.active.delete(task.id); }

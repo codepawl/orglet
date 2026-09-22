@@ -91,10 +91,10 @@ it('runs dependencies first regardless of plan order and passes their committed 
   expect(result.detail.task.status).toBe('completed');
 });
 
-it('pauses before a dependent request when the connection budget is exhausted', async () => {
+it('waits for budget before a dependent request when the connection budget is exhausted', async () => {
   const result = await executeTeam({ dependencies: true, exhaustBudgetAfterFirst: true });
   expect(result.calls).toEqual(['first']);
-  expect(result.detail.task.status).toBe('paused');
+  expect(result.detail.task.status).toBe('waiting_budget');
   expect(result.detail.artifacts).toHaveLength(1);
   expect(result.detail.artifacts[0].report.summary).toBe('committed-first');
   expect(result.detail.runs.some(run => run.stage === 'member' && run.status === 'waiting_budget')).toBe(true);

@@ -23,7 +23,7 @@ Work is a **chat**, not a pile of tasks or sessions.
 - Archive the thread (⋯ next to **Chi tiết** / Chat details) to start over. Search still finds older or archived chats.
 - **Lịch chạy** stays a list of discrete scheduled jobs. Those rows are not merged into the infinite chat.
 
-Under the hood the thread is still a `tasks` row. **Chi tiết** lists internal `runs` (plan, members, synthesis, or the single worker job) for retry, cost and cancel. Dollars sit next to **Chi tiết**.
+Under the hood the thread is still a `tasks` row. **Chi tiết** lists internal `runs` (plan, members, synthesis, or the single worker job) for retry, cost and cancel. Dollars sit next to **Chi tiết**. The thread's cap is the crew's or orglet's current **Giới hạn mỗi task** (Limit per task): every follow-up, retry and resume reads it again, so raising it in **Thiết lập hội → Giới hạn & ca** or **Thiết lập Tí** applies to the existing chat. When a member on Claude Code stops at that cap, the crew waits for budget and the chat names the limit and that setting.
 
 **Tool permissions** in Chi tiết belong to the chat and are there before anything is sent (COD-178). For an empty chat the three switches set what the first message will start with; the core keeps that set under the worker or team until `createTask` moves it onto the new row, and the folder is chosen after the first message because a grant is made for one task. Each run freezes its permissions when it starts, not when the message was sent: turning on the web while the lead is still routing reaches the member and report runs that have not started, and a run already working keeps what it started with. See [agent-tools.md](agent-tools.md).
 
