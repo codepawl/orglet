@@ -7,7 +7,7 @@ import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../../apps/desktop/src/core/harness/detect';
 import { HarnessAccounts } from '../../apps/desktop/src/core/harness/accounts';
-import { executeHarness, harnessArgs, HarnessError, HarnessTerminationError, stopHarnessProcess, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
+import { executeHarness, harnessArgs, HarnessError, HarnessTerminationError, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import { harnessReady, harnessStatus, loginCommand, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
@@ -483,4 +483,37 @@ it('reports uncertain termination when the kill command fails or the process nev
     .rejects.toBeInstanceOf(HarnessTerminationError);
   await expect(stopHarnessProcess(123, new Promise<void>(() => {}), async () => {}, 5))
     .rejects.toBeInstanceOf(HarnessTerminationError);
+});
+
+it.runIf(process.platform === 'win32')('keeps what the CLI printed to stderr when it exits without a result', async () => {
+  const script = join(directory, 'exit-fixture.cjs');
+  await writeFile(script, `
+    process.stdin.resume();
+    process.stdin.on('end', () => {
+      const escape = String.fromCharCode(27);
+      process.stderr.write(escape + '[31mError: The command line is too long.' + escape + '[0m' + String.fromCharCode(10));
+      process.exit(1);
+    });
+  `);
+  const shim = join(directory, 'exit-fixture.cmd');
+  await writeFile(shim, `@"${process.execPath}" "${script}" %*\r\n`);
+  await expect(executeHarness({ harness: 'claude-code', executable: shim, cwd: directory,
+    prompt: 'fixture', schema: {}, signal: new AbortController().signal, maxBudgetUsd: 1 }))
+    .rejects.toThrow('Claude Code thoát với mã 1: Error: The command line is too long.');
+});
+
+it('names a harness executable that disappeared since detection instead of a bare exit code', async () => {
+  const gone = join(directory, 'replaced', 'claude.exe');
+  await expect(executeHarness({ harness: 'claude-code', executable: gone, cwd: directory,
+    prompt: 'fixture', schema: {}, signal: new AbortController().signal, maxBudgetUsd: 1 }))
+    .rejects.toThrow(`Không còn thấy Claude Code ở ${gone}`);
+});
+
+it('keeps only the bounded end of a long stderr, without colour codes', () => {
+  const noisy = `${'\u001b[33mwarning\u001b[0m '.repeat(400)}Fatal: the real cause`;
+  const tail = stderrTail(noisy);
+  expect(tail.endsWith('Fatal: the real cause')).toBe(true);
+  expect(tail).not.toContain('\u001b');
+  expect(tail.length).toBeLessThanOrEqual(601);
+  expect(stderrTail('  \n ')).toBe('');
 });
