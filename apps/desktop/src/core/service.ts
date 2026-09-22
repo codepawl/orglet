@@ -2,7 +2,8 @@ import { WorkspaceRecovery } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { newChatKey } from '../shared/live-task';
-import { WorkspaceGrants } from './storage/workspace-grants';
+import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
+import { GrantWorkspace, type NewChatTarget } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
 import { commands, type ApiProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
@@ -50,6 +51,9 @@ export const localHarnessRuntime = (accountRoot?: string): HarnessRuntime => ({
   ...(accountRoot ? { accountRoot } : {}),
 });
 
+/** A folder waiting for a chat's first message, checked again at that moment (COD-186). */
+type NewChatFolder = { pending: PendingWorkspace; resolved: ResolvedDirectory; failure?: undefined } | { pending: PendingWorkspace; resolved?: undefined; failure: string };
+
 export class CoreService {
   feedbackText(artifactId: string): string {
     const artifact = this.store.get<Artifact>('artifacts', artifactId);
@@ -93,10 +97,28 @@ export class CoreService {
     const task = this.store.get<Task>('tasks', input.taskId);
     return this.sources.pathOf(input.id, task.sourceIds);
   }
+  /**
+   * Keeps a folder main's picker chose. For a chat that has not started it waits under the worker or team until
+   * the first message (COD-186). For a chat row, a folder where there was none, or more permissions on the same
+   * folder, leaves active and queued work running: queued runs read the grant when they start, and a run already
+   * working keeps the snapshot it froze. Another folder or fewer permissions stops active work, since a worker
+   * may be mid-edit in the old copy.
+   */
   async grantWorkspace(raw: unknown) {
-    const grant = await this.workspaceGrants.grant(raw);
-    this.teams.cancel(grant.taskId);
-    this.runner.cancel(grant.taskId);
+    const input = GrantWorkspace.parse(raw);
+    if (!('taskId' in input)) {
+      const chat: NewChatTarget = 'teamId' in input ? { teamId: input.teamId } : { workerId: input.workerId };
+      this.assertAssignable('teamId' in chat ? 'team' : 'worker', 'teamId' in chat ? chat.teamId : chat.workerId);
+      const view = await this.workspaceGrants.setPending(chat, input.directory, input.permissions);
+      this.notify();
+      return view;
+    }
+    const previous = this.workspaceGrants.view(input.taskId);
+    const grant = await this.workspaceGrants.grant(input);
+    if (replacesGrant(previous, grant)) {
+      this.teams.cancel(grant.taskId);
+      this.runner.cancel(grant.taskId);
+    }
     this.notify();
     return grant;
   }
@@ -173,7 +195,10 @@ export class CoreService {
         this.store.versionMany([{ table: 'skills', value: skill }, ...workers.map(value => ({ table: 'workers' as const, value })), { table: 'teams', value: team }]);
         this.notify(); return team;
       }
-      case 'createTask': return this.createTask(commands.createTask.parse(args));
+      case 'createTask': {
+        const input = commands.createTask.parse(args);
+        return this.createTask(input, undefined, await this.resolveNewChatWorkspace(input));
+      }
       case 'setMessageReaction': {
         new MessageInteractions(this.store).userReaction(commands.setMessageReaction.parse(args));
         this.notify(); return;
@@ -300,10 +325,15 @@ export class CoreService {
       }
       case 'workspaceAccess': return this.workspaceGrants.view(commands.workspaceAccess.parse(args).taskId);
       case 'revokeWorkspace': {
-        const { taskId } = commands.revokeWorkspace.parse(args);
-        this.workspaceGrants.revoke(taskId);
-        this.teams.cancel(taskId);
-        this.runner.cancel(taskId);
+        const input = commands.revokeWorkspace.parse(args);
+        if (!('taskId' in input)) {
+          this.workspaceGrants.takePending('teamId' in input ? { teamId: input.teamId } : { workerId: input.workerId });
+          this.notify();
+          return;
+        }
+        this.workspaceGrants.revoke(input.taskId);
+        this.teams.cancel(input.taskId);
+        this.runner.cancel(input.taskId);
         this.notify();
         return;
       }
@@ -705,6 +735,7 @@ export class CoreService {
     this.assertRemovable(kind, entityId);
     this.setEntityState(kind, entityId, { deletedAt: this.clock().toISOString() });
     this.takeNewChatCapabilities(kind === 'team' ? { teamId: entityId } : { workerId: entityId });
+    this.workspaceGrants.takePending(kind === 'team' ? { teamId: entityId } : { workerId: entityId });
   }
   /**
    * Permissions for a chat that has not started yet (COD-178). The `tasks` row only exists once the first message
@@ -848,9 +879,31 @@ export class CoreService {
     const task: Task = { ...input, workerId: worker.id, ...(team ? { teamSnapshot: team } : {}), sourceIds: [...new Set(input.sourceIds)], id: id(), status: 'queued', createdAt: now(), accepted: false };
     return task;
   }
-  private createTask(input: TaskInput, routine?: Routine): string {
+  /** The first message of a worker or team chat is the one that takes what was chosen while the chat was still empty. */
+  private isLiveChatStart(input: TaskInput, routine?: Routine): boolean {
+    return !routine && !input.assignees;
+  }
+  private newChatTarget(input: TaskInput): NewChatTarget {
+    return input.teamId ? { teamId: input.teamId } : { workerId: input.workerId };
+  }
+  /**
+   * Checks the folder waiting for this chat, if any, right before its first message creates the row (COD-186). A
+   * folder that is gone or was replaced does not stop the message: the chat starts without it and `createTask`
+   * says so on the first run. Either way the waiting entry is used up.
+   */
+  private async resolveNewChatWorkspace(input: TaskInput): Promise<NewChatFolder | undefined> {
+    if (!this.isLiveChatStart(input)) return undefined;
+    const pending = this.workspaceGrants.pending(this.newChatTarget(input));
+    if (!pending) return undefined;
+    try {
+      return { pending, resolved: await this.workspaceGrants.confirmPending(pending) };
+    } catch (error) {
+      return { pending, failure: error instanceof Error ? error.message : String(error) };
+    }
+  }
+  private createTask(input: TaskInput, routine?: Routine, folder?: NewChatFolder): string {
     // The first message of a worker or team chat takes the permissions chosen while the chat was still empty.
-    const liveChat = !routine && !input.assignees && input.toolCapabilities === undefined;
+    const liveChat = this.isLiveChatStart(input, routine) && input.toolCapabilities === undefined;
     const chosen = liveChat ? this.pendingNewChatCapabilities({ teamId: input.teamId, workerId: input.workerId }) : undefined;
     const task = this.prepareTask(chosen ? { ...input, toolCapabilities: chosen } : input);
     const workerIds = task.teamSnapshot ? [...task.teamSnapshot.memberIds, task.teamSnapshot.synthesizerId] : task.assignees === 'all' ? this.store.all<Worker>('workers').map(worker => worker.id) : task.assignees ?? [task.workerId];
@@ -862,8 +915,19 @@ export class CoreService {
       this.store.db.prepare('INSERT INTO task_search VALUES(?,?)').run(task.id, task.brief);
       if (routine) this.store.update('routines', { ...routine, lastTaskId: task.id });
       if (chosen) this.takeNewChatCapabilities({ teamId: input.teamId, workerId: input.workerId });
+      if (folder) {
+        if (folder.resolved) this.workspaceGrants.applyInsideTransaction(task.id, folder.resolved, folder.pending.permissions);
+        this.workspaceGrants.takePending(this.newChatTarget(input));
+      }
     });
-    this.start(task, true); return task.id;
+    this.start(task, true);
+    if (folder?.failure) {
+      // The runs of the first turn exist as soon as start returns, so the first one carries the reason.
+      const firstRun = this.store.detail(task.id).runs[0];
+      if (firstRun) this.store.event(firstRun.id, `Chat bắt đầu không có thư mục làm việc ${folder.pending.name}: ${folder.failure} Chọn lại thư mục trong Chi tiết.`);
+      this.notify();
+    }
+    return task.id;
   }
   importSkill(raw: unknown): Skill {
     const skill: Skill = { ...packageForImport(raw), id: id(), revision: 1 };

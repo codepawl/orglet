@@ -5,7 +5,7 @@ import { CATALOG_HINT_IDS } from '../../shared/models';
 import { liveWorkerTask, newChatKey } from '../../shared/live-task';
 import { permissionsForLevel, type WorkspaceLevel } from '../../shared/capability-status';
 import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
-import type { WorkspaceGrantView } from '../../shared/workspace-access';
+import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/workspace-access';
 import { harnessNames, isHarness, type HarnessInfo } from '../../shared/harness';
 import { FieldLabel, MoneyInput } from './ui';
 import { Select } from './Select';
@@ -139,8 +139,9 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
 /**
  * The permissions of this worker's own chat, changed in place the way Details changes them. Permissions live on the
  * chat; before its first message the switches set what that chat will start with (kept under the worker in the
- * core, or in the dialog's draft while the worker has no id yet), and only the folder waits for the chat row,
- * because a grant is made for one task (COD-178).
+ * core, or in the dialog's draft while the worker has no id yet, COD-178) and the folder waits under the worker
+ * until the first message turns it into a grant (COD-186). A worker not saved yet has nothing to keep a folder
+ * under, so only then does the folder wait.
  */
 function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, onDraftCapabilities }: {
   worker?: Worker; workspace: Workspace; draft: { id: string; name: string; provider: Worker['provider']; connected: boolean };
@@ -150,6 +151,7 @@ function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, on
   const pending = worker && !chat ? workspace.newChatCapabilities[newChatKey({ workerId: worker.id })] : undefined;
   const [capabilities, setCapabilities] = useState(chat ? chat.toolCapabilities : worker ? pending : draftCapabilities);
   const [grant, setGrant] = useState<WorkspaceGrantView | null | undefined>(chat ? undefined : null);
+  const [pendingFolder, setPendingFolder] = useState<NewChatWorkspaceView | undefined>(worker && !chat ? workspace.newChatWorkspace[newChatKey({ workerId: worker.id })] : undefined);
   const [busy, setBusy] = useState(false);
   const readGrant = async (taskId: string) => setGrant(await orglet.call('workspaceAccess', { taskId }));
   useEffect(() => {
@@ -169,11 +171,21 @@ function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, on
     setCapabilities(next);
   });
   const onWorkspace = (level: WorkspaceLevel) => change(async () => {
-    if (!chat) return;
-    if (level === 'none') await orglet.call('revokeWorkspace', { taskId: chat.id });
-    else await orglet.pickWorkspace(chat.id, permissionsForLevel(level));
-    await readGrant(chat.id);
+    if (chat) {
+      if (level === 'none') await orglet.call('revokeWorkspace', { taskId: chat.id });
+      else await orglet.pickWorkspace(chat.id, permissionsForLevel(level));
+      await readGrant(chat.id);
+      return;
+    }
+    if (!worker) return;
+    if (level === 'none') {
+      await orglet.call('revokeWorkspace', { workerId: worker.id });
+      setPendingFolder(undefined);
+      return;
+    }
+    const picked = await orglet.pickNewChatWorkspace({ workerId: worker.id }, permissionsForLevel(level));
+    if (picked) setPendingFolder(picked);
   });
-  return <PermissionControls workers={[draft]} capabilities={capabilities} grant={grant} taskId={chat?.id} sourceCount={chat?.sourceIds.length ?? 0}
-    busy={busy} folderLocked={chat ? undefined : t('Chọn thư mục sau khi gửi tin đầu tiên.')} onCapability={onCapability} onWorkspace={onWorkspace} />;
+  return <PermissionControls workers={[draft]} capabilities={capabilities} grant={grant} pending={pendingFolder} taskId={chat?.id} sourceCount={chat?.sourceIds.length ?? 0}
+    busy={busy} folderLocked={chat || worker ? undefined : t('Lưu Tí rồi chọn thư mục.')} onCapability={onCapability} onWorkspace={onWorkspace} />;
 }

@@ -111,7 +111,14 @@ try {
   await page.evaluate(taskId => window.orglet.call('revokeWorkspace', { taskId }), result.id);
   assert.equal((await page.evaluate(taskId => window.orglet.call('workspaceAccess', { taskId }), result.id)).revoked, true);
   await page.evaluate(taskId => window.orglet.pickWorkspace(taskId, ['read']), result.id);
-  console.log(JSON.stringify({ workspaceGrantBridge: 'passed' }));
+  // A chat with no row yet keeps its folder under the worker until the first message (COD-186); the renderer sees a name, never a path.
+  const pendingWorkerId = importedWorkspace.workers.at(-1).id;
+  const pendingFolder = await page.evaluate(workerId => window.orglet.pickNewChatWorkspace({ workerId }, ['read', 'write']), pendingWorkerId);
+  assert.deepEqual(pendingFolder, { name: 'task-workspace', permissions: ['read', 'write'] });
+  assert.deepEqual((await page.evaluate(() => window.orglet.call('workspace', {}))).newChatWorkspace, { [`worker:${pendingWorkerId}`]: { name: 'task-workspace', permissions: ['read', 'write'] } });
+  await page.evaluate(workerId => window.orglet.call('revokeWorkspace', { workerId }), pendingWorkerId);
+  assert.deepEqual((await page.evaluate(() => window.orglet.call('workspace', {}))).newChatWorkspace, {});
+  console.log(JSON.stringify({ workspaceGrantBridge: 'passed', pendingFolderBridge: 'passed' }));
   await openThreadByBrief(page, 'Packaged native checker fixture');
   await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();

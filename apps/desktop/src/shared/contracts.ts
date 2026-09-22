@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { DecisionRequest } from './work-decisions';
 import type { WorkFrame } from './work-frame';
 import { ToolCapabilities, type ToolCapability } from './tool-policy';
-import type { WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermission } from './workspace-access';
+import type { NewChatTarget, NewChatWorkspaceView, WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermission } from './workspace-access';
 import type { WorkspaceRecoveryView } from './workspace-recovery';
 import { ReadRecoveryFile, type RecoveryFile, ReadRecoveryOutput, RetireWorkspaceAttempt, type RecoveryOutput } from './workspace-recovery';
 import { ExactMatchRequest, ProfileArgs, type DataFormat, type DatasetProfile, type ProfileRecord } from './profiles';
@@ -186,7 +186,7 @@ export type TaskDetail = { task: Task; runs: Run[]; events: Activity[]; artifact
 /** How the in-app brand mark is coloured: the text colour, or the user's accent (COD-154). */
 export const LogoColor = z.enum(['mono', 'accent']);
 export type LogoColor = z.infer<typeof LogoColor>;
-export type Workspace = { copyFormat: FormatPreference; downloadFormat: FormatPreference; archivedWorkers: (Worker & { archivedAt: string })[]; archivedTeams: (Team & { archivedAt: string })[]; language: Language; autoTitles: boolean; confirmOpenTask: boolean; archiveRetentionDays: ArchiveRetention; avatarColors: string[]; /** The one colour the user picks for the app; see shared/accent.ts. */ accentColor: string; logoColor: LogoColor; /** Family names the person picked; absent keeps the fonts the app ships with (shared/fonts.ts). */ interfaceFont?: string; codeFont?: string; /** Check for a new build on a schedule and download it in the background (COD-176); off means manual checks only. */ autoUpdate: boolean; knowledge: Knowledge[]; workers: Worker[]; teams: Team[]; skills: Skill[]; tasks: Task[]; routines: Routine[]; usage: Usage; budgetReservations: BudgetReservationView[]; theme: 'system' | 'light' | 'dark'; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; currency: CurrencyState; sqliteVersion: string; /** Permissions chosen for a chat before its first message, keyed by `newChatKey`; `createTask` moves them onto the new row (COD-178). */ newChatCapabilities: Record<string, ToolCapability[]> };
+export type Workspace = { copyFormat: FormatPreference; downloadFormat: FormatPreference; archivedWorkers: (Worker & { archivedAt: string })[]; archivedTeams: (Team & { archivedAt: string })[]; language: Language; autoTitles: boolean; confirmOpenTask: boolean; archiveRetentionDays: ArchiveRetention; avatarColors: string[]; /** The one colour the user picks for the app; see shared/accent.ts. */ accentColor: string; logoColor: LogoColor; /** Family names the person picked; absent keeps the fonts the app ships with (shared/fonts.ts). */ interfaceFont?: string; codeFont?: string; /** Check for a new build on a schedule and download it in the background (COD-176); off means manual checks only. */ autoUpdate: boolean; knowledge: Knowledge[]; workers: Worker[]; teams: Team[]; skills: Skill[]; tasks: Task[]; routines: Routine[]; usage: Usage; budgetReservations: BudgetReservationView[]; theme: 'system' | 'light' | 'dark'; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; currency: CurrencyState; sqliteVersion: string; /** Permissions chosen for a chat before its first message, keyed by `newChatKey`; `createTask` moves them onto the new row (COD-178). */ newChatCapabilities: Record<string, ToolCapability[]>; /** The working folder chosen for a chat before its first message, keyed the same way; only its name and level reach the renderer (COD-186). */ newChatWorkspace: Record<string, NewChatWorkspaceView> };
 export type Connections = Record<ApiProvider, boolean>;
 export const emptyConnections = (): Connections => ({ openai: false, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, ollama: false });
 
@@ -223,7 +223,8 @@ export const commands = {
   retireWorkspaceAttempt: RetireWorkspaceAttempt,
   recoveryProcessOutput: ReadRecoveryOutput,
   recoveryFile: ReadRecoveryFile,
-  revokeWorkspace: z.object({ taskId: Id }).strict(),
+  /** Drops a chat's folder; with a `workerId` or `teamId`, the folder waiting for a chat that has not started (COD-186). */
+  revokeWorkspace: z.union([z.object({ taskId: Id }).strict(), z.object({ workerId: Id }).strict(), z.object({ teamId: Id }).strict()]),
   previewSource: z.object({ taskId: Id, id: Id }),
   sourceBytes: z.object({ taskId: Id, id: Id }).strict(),
   sourceOrigins: z.object({ taskId: Id }).strict(),
@@ -273,6 +274,8 @@ export interface Bridge {
   /** Open an attached file in the system's default app. The path is looked up by id in the core, never sent from here. */
   openSource(taskId: string, id: string): Promise<void>;
   pickWorkspace(taskId: string, permissions: WorkspacePermission[]): Promise<WorkspaceGrantView | null>;
+  /** The same native picker for a chat with no row yet; the core keeps the folder until the first message (COD-186). */
+  pickNewChatWorkspace(chat: NewChatTarget, permissions: WorkspacePermission[]): Promise<NewChatWorkspaceView | null>;
   /** Save an API key from typed input, or omit `key` to pick a .txt file. The key never comes back to the renderer. */
   connect(provider: ApiProvider, key?: string): Promise<Connections>;
   disconnect(provider: ApiProvider): Promise<Connections>;

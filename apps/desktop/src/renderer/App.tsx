@@ -52,9 +52,9 @@ import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
 import { t, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
-import type { WorkspaceGrantView } from '../shared/workspace-access';
+import type { NewChatTarget, WorkspaceGrantView } from '../shared/workspace-access';
 import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
-import { permissionsForLevel } from '../shared/capability-status';
+import { permissionsForLevel, type WorkspaceLevel } from '../shared/capability-status';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -387,14 +387,22 @@ export function App() {
   const worker = workspace?.workers.find(item => item.id === workerId);
   const team = workspace?.teams.find(item => item.id === teamId);
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : worker ? [worker] : [];
-  // An empty chat has no row yet, so its permissions wait under the worker or team until the first message (COD-178).
+  // An empty chat has no row yet, so its permissions wait under the worker or team until the first message (COD-178),
+  // and so does its working folder (COD-186).
   const newChat = team ? { teamId: team.id, workerId: team.synthesizerId } : worker ? { workerId: worker.id } : undefined;
+  const newChatTarget: NewChatTarget | undefined = team ? { teamId: team.id } : worker ? { workerId: worker.id } : undefined;
   const newChatCapabilities = newChat ? workspace?.newChatCapabilities[newChatKey(newChat)] : undefined;
+  const newChatWorkspace = newChat ? workspace?.newChatWorkspace[newChatKey(newChat)] : undefined;
   const changeNewChatCapability = (capability: ToolCapability, enabled: boolean) => toolAction(() => {
     if (!newChat) return Promise.resolve();
     const previous = newChatCapabilities ?? snapshotCapabilities(executionWorkers[0]?.provider ?? 'demo');
     const capabilities = toggledCapabilities(previous, capability, enabled);
     return orglet.call('setToolCapabilities', newChat.teamId ? { teamId: newChat.teamId, capabilities } : { workerId: newChat.workerId, capabilities });
+  });
+  const changeNewChatWorkspace = (level: WorkspaceLevel) => toolAction(async () => {
+    if (!newChatTarget) return;
+    if (level === 'none') await orglet.call('revokeWorkspace', newChatTarget);
+    else await orglet.pickNewChatWorkspace(newChatTarget, permissionsForLevel(level));
   });
   const nativeProviders = [...new Set(executionWorkers.map(item => item.provider).filter(provider => provider !== 'demo'))];
   const isDemo = nativeProviders.length === 0;
@@ -657,10 +665,10 @@ export function App() {
         onConfigure: provider => openSettings(settingsTabFor([provider])),
         capabilities: newChatCapabilities,
         grant: null,
-        folderLocked: t('Chọn thư mục sau khi gửi tin đầu tiên.'),
+        pending: newChatWorkspace,
         busy: toolPolicyBusy,
         onCapability: changeNewChatCapability,
-        onWorkspace: () => {},
+        onWorkspace: changeNewChatWorkspace,
       } : undefined}
       workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
     <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lỡ thì chạy bù một lần') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được. Gói nhập từ thư mục cần được review trước khi gắn cho Tí.') : t('Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
