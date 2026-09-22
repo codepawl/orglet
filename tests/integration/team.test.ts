@@ -12,15 +12,30 @@ import { isPlanRequest, memberIdsFromPlanPrompt, planReply } from './team-plan';
 
 let directory: string; let store: Store; let core: CoreService;
 let failReviewer: boolean; let blockedFirstMember: boolean; let memberCalls: number;
-let planMode: 'all' | 'first' | 'invalid' | 'fail' | 'dependent'; let calls: string[]; let planBodies: string[]; let live: number; let peak: number;
+let planMode: 'all' | 'first' | 'invalid' | 'fail' | 'dependent' | 'leadCombines' | 'leadOwnJob'; let calls: string[]; let planBodies: string[]; let bodies: string[]; let live: number; let peak: number;
+const COMBINING_BRIEF = 'Combine the others\' results into one short final answer with links';
+const LEAD_OWN_BRIEF = 'Read the attention paper yourself and summarise its method';
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orglet-team-')); store = new Store(join(directory, 'state.sqlite'));
   failReviewer = false; blockedFirstMember = false; memberCalls = 0;
-  planMode = 'all'; calls = []; planBodies = []; live = 0; peak = 0;
+  planMode = 'all'; calls = []; planBodies = []; bodies = []; live = 0; peak = 0;
   const adapter: ModelAdapter = { async request(messages, tools) {
     if (isPlanRequest(tools)) {
       planBodies.push(messages.map(message => String(message.content)).join('\n'));
       if (planMode === 'fail') throw new Error('Injected plan failure');
+      if (planMode === 'leadCombines' || planMode === 'leadOwnJob') {
+        // The roster lists the lead last: the fixture crew below adds the synthesizer as a member.
+        const memberIds = memberIdsFromPlanPrompt(messages);
+        const leadId = memberIds.at(-1)!;
+        const others = memberIds.slice(0, -1);
+        const leadAssignment = planMode === 'leadCombines'
+          ? { workerId: leadId, brief: COMBINING_BRIEF, expectedOutput: 'Short answer with links', dependsOn: others, writeResources: [] }
+          : { workerId: leadId, brief: LEAD_OWN_BRIEF, dependsOn: [], writeResources: [] };
+        return { calls: [{ id: 'plan', name: 'submit_plan', arguments: JSON.stringify({ assignments: [
+          ...others.map(workerId => ({ workerId, brief: 'Do your assigned role for this user message.', dependsOn: [], writeResources: [] })),
+          leadAssignment,
+        ] }) }], usage: { input: 10, output: 10 } };
+      }
       if (planMode === 'invalid') return { calls: [{ id: 'plan', name: 'submit_plan', arguments: JSON.stringify({ assignments: [{ workerId: '00000000-0000-4000-8000-000000000000', brief: 'Nope' }] }) }], usage: { input: 10, output: 10 } };
       if (planMode === 'dependent') {
         const [firstWorkerId, secondWorkerId] = memberIdsFromPlanPrompt(messages);
@@ -32,6 +47,7 @@ beforeEach(async () => {
       return planReply(messages, planMode === 'first' ? ids => ids.slice(0, 1) : undefined);
     }
     const system = String(messages[0].content); calls.push(system); live++; peak = Math.max(peak, live);
+    bodies.push(messages.map(message => String(message.content)).join('\n'));
     try {
       await new Promise(resolve => setTimeout(resolve, 10));
       if (failReviewer && system.includes('Check whether the source evidence')) throw new Error('Injected failure');
@@ -52,6 +68,13 @@ async function setup() {
 async function done(taskId: string) {
   for (let i = 0; i < 200 && core.teams.isActive(taskId); i++) await new Promise(resolve => setTimeout(resolve, 10));
   expect(core.teams.isActive(taskId)).toBe(false);
+}
+/** A crew whose lead also works as a member, the shape of the COD-185 report; the lead is last in the roster. */
+async function setupLeadAsMember(workflow: Team['workflow']) {
+  const template = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
+  const team = await core.command('saveTeam', { ...template, workflow, memberIds: [...template.memberIds, template.synthesizerId] }) as Team;
+  const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Find the paper. Lead combines everything into a short final answer with links.', sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
+  await done(taskId); return { team, taskId, detail: store.detail(taskId) };
 }
 it('joins independent artifacts, keeps source scopes local and uses at most two parallel members', async () => {
   const { team, taskId } = await setup(); const detail = store.detail(taskId);
@@ -193,6 +216,51 @@ it('routes a subset of members from the plan and still returns one synthesis rep
   expect(synthesis.snapshot.upstreamArtifactIds).toHaveLength(1);
   expect(detail.artifacts.filter(artifact => artifact.runId === synthesis.id)).toHaveLength(1);
   expect(team.memberIds).toHaveLength(2);
+});
+
+it('folds the lead\'s combining job into synthesis so the final answer is written once', async () => {
+  planMode = 'leadCombines';
+  const { team, detail } = await setupLeadAsMember('sequential');
+  expect(detail.task.status).toBe('completed');
+  const plan = detail.runs.find(run => run.stage === 'plan')!;
+  expect(plan.snapshot.plan!.assignments.map(assignment => assignment.workerId)).toEqual(team.memberIds.slice(0, -1));
+  expect(plan.snapshot.plan!.synthesisBrief).toBe(`${COMBINING_BRIEF}\nExpected output: Short answer with links`);
+  expect(detail.events.some(event => event.runId === plan.id && event.message.includes('chuyển vào bước tổng hợp'))).toBe(true);
+  const members = detail.runs.filter(run => run.stage === 'member');
+  expect(members.filter(run => run.status === 'completed').map(run => run.snapshot.worker.id)).toEqual(team.memberIds.slice(0, -1));
+  const leadMember = members.find(run => run.snapshot.worker.id === team.synthesizerId)!;
+  expect(leadMember.status).toBe('cancelled');
+  expect(leadMember.error).toBe(UNASSIGNED_PLAN_ERROR);
+  const synthesis = detail.runs.find(run => run.stage === 'synthesis')!;
+  expect(synthesis.status).toBe('completed');
+  expect(synthesis.snapshot.upstreamArtifactIds).toHaveLength(2);
+  expect(detail.artifacts).toHaveLength(3);
+  expect(detail.artifacts.filter(artifact => artifact.runId === synthesis.id)).toHaveLength(1);
+  // The combining notes reach exactly one model call: the synthesis run, never a member run.
+  expect(bodies.filter(body => body.includes(COMBINING_BRIEF))).toHaveLength(1);
+  expect(bodies.some(body => body.includes(`"synthesisBrief":"${COMBINING_BRIEF}`))).toBe(true);
+  expect(planBodies.some(body => body.includes(`"leadId":"${team.synthesizerId}"`))).toBe(true);
+  expect(() => core.backups.preview(core.backups.export())).not.toThrow();
+});
+
+it('keeps a member job for the lead when it is distinct work of its own', async () => {
+  planMode = 'leadOwnJob';
+  const { team, taskId, detail } = await setupLeadAsMember('parallel');
+  expect(detail.task.status).toBe('completed');
+  const plan = detail.runs.find(run => run.stage === 'plan')!;
+  expect(plan.snapshot.plan!.assignments).toHaveLength(3);
+  expect(plan.snapshot.plan!.synthesisBrief).toBeUndefined();
+  const members = detail.runs.filter(run => run.stage === 'member');
+  expect(members.every(run => run.status === 'completed')).toBe(true);
+  const leadMember = members.find(run => run.snapshot.worker.id === team.synthesizerId)!;
+  expect(leadMember.snapshot.assignment?.brief).toBe(LEAD_OWN_BRIEF);
+  expect(detail.artifacts.some(artifact => artifact.runId === leadMember.id)).toBe(true);
+  const synthesis = detail.runs.find(run => run.stage === 'synthesis')!;
+  expect(synthesis.snapshot.upstreamArtifactIds).toHaveLength(3);
+  expect(detail.artifacts).toHaveLength(4);
+  expect(detail.artifacts.filter(artifact => artifact.runId === synthesis.id)).toHaveLength(1);
+  expect(bodies.filter(body => body.includes(`"assignment":"${LEAD_OWN_BRIEF}`))).toHaveLength(1);
+  expect(store.detail(taskId).task.id).toBe(taskId);
 });
 
 it('fails closed when the orchestrator cannot plan and does not invent member results', async () => {

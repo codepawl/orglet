@@ -42,7 +42,7 @@ import { HarnessBudgetError, HarnessTerminationError, type HarnessExecutor } fro
 import { ProgressSender } from './progress';
 import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 import { detectUsageLimit, usageLimitMessage } from '../usageLimits';
-import { assertTeamPlan, defaultTeamPlan } from './plan';
+import { assertTeamPlan, defaultTeamPlan, foldCombiningAssignment } from './plan';
 import { mentionedPeople } from '../../shared/mentions';
 import { reportValidationMessage, sanitizeReportReply } from '../tools/report-validation';
 import { savedArtifactContext, savedAssignmentAttempts } from './artifact-provenance';
@@ -165,6 +165,9 @@ export function sourceForModel(source: Source) {
   return { ...source, readable: false, note: mediaUnreadableNote(source.media) };
 }
 
+/** Told to the lead while planning: the final combining step already exists, so it must not become a member job. */
+const SYNTHESIS_STEP_INSTRUCTION = 'Combining, merging or summarising the members\' results into the final answer is your own synthesis step, which runs automatically after the members finish; never assign it as a member job, not even to yourself. Put notes for that final answer in synthesisBrief. Assign yourself (leadId) a member job only for distinct work of your own.';
+
 export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false, unreadable: UnreadableSource[] = []) {
   return [
     'You are running inside Orglet as a read-only worker chatting with your user. When you describe what you can or cannot do, use everyday words about the work: you read the files the user attaches and write answers, and you cannot open links, run programs or change files. Do not mention tools, modes, sandboxes or providers unless the user asks about them. Write like a colleague messaging back, in the language and formality the user writes in, and ask one short question when the request is unclear or could go two sensible ways.',
@@ -173,7 +176,7 @@ export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { s
       : 'The selected sources are copied under ./sources and any skill reference files under ./skill. Read them with your file-reading tools only. Do not run commands, create or edit files, browse the web or use any other tool.',
     'Cite sources only by the sourceId values in the manifest below. checkerIds may only contain profile IDs from the preflight message; otherwise use empty arrays. Tool names mentioned in later messages (read_source, profile_dataset, audit_run_log, read_skill_resource) are not available here.',
     plan
-      ? `Your final answer must be only JSON matching the provided schema. Assign work with submit_plan fields: assignments of listed member ids plus briefs. Do not invent workers or missing results.`
+      ? `Your final answer must be only JSON matching the provided schema. Assign work with submit_plan fields: assignments of listed member ids plus briefs. ${SYNTHESIS_STEP_INSTRUCTION} Do not invent workers or missing results.`
       : `Your final answer must be only JSON matching the provided schema. Put your answer to the user in message, written as a normal chat reply (Markdown allowed). Set title to a short name for this chat (2 to 6 words, the user's language) when the latest message has nameChat true, otherwise null. Set report to null unless the user asked for a report or review document, or required review checks are given; then fill report following these rules: ${SUBMIT_REPORT_DESCRIPTION}`,
     codex ? 'The output schema has one payload string. Put the JSON text of the requested answer object inside payload, with message/title/report or the plan fields as instructed. Do not put Markdown around that JSON text.' : '',
     files.length || inline?.length ? `Source manifest: ${JSON.stringify(files)}` : NO_SOURCES_INSTRUCTION,
@@ -378,13 +381,16 @@ export class Runner {
           const tagged = mentionedPeople(input.brief, members, [run.snapshot.team.name]);
           next.push({ role: 'user', content: JSON.stringify({
             members,
+            leadId: run.snapshot.team.synthesizerId,
             ...(tagged?.length ? { tagged: tagged.map(member => member.id) } : {}),
             instruction: tagged?.length
-              ? `Assign this user message to one or more listed members. The user tagged ${tagged.map(member => `${member.name} (${member.id})`).join(', ')} with @. Prefer those members unless the message clearly needs others. Use only those member ids. You may assign a subset. Each assignment brief is that worker's job for this turn. Do not invent workers or results. Finish with submit_plan only.`
-              : 'Assign this user message to one or more listed members. Use only those member ids. You may assign a subset. Each assignment brief is that worker\'s job for this turn. Do not invent workers or results. Finish with submit_plan only.',
+              ? `Assign this user message to one or more listed members. The user tagged ${tagged.map(member => `${member.name} (${member.id})`).join(', ')} with @. Prefer those members unless the message clearly needs others. Use only those member ids. You may assign a subset. Each assignment brief is that worker's job for this turn. ${SYNTHESIS_STEP_INSTRUCTION} Do not invent workers or results. Finish with submit_plan only.`
+              : `Assign this user message to one or more listed members. Use only those member ids. You may assign a subset. Each assignment brief is that worker's job for this turn. ${SYNTHESIS_STEP_INSTRUCTION} Do not invent workers or results. Finish with submit_plan only.`,
           }) });
         }
-        if (options.assignment) next.push({ role: 'user', content: JSON.stringify({ assignment: options.assignment, instruction: 'This is your assignment from the team lead for this turn. Do this work. Do not invent results for workers who were not assigned.' }) });
+        if (options.assignment) next.push({ role: 'user', content: JSON.stringify(run.stage === 'synthesis'
+          ? { synthesisBrief: options.assignment, instruction: 'These are the plan\'s notes for your final answer. Combine the saved teammate results below the way they say; do not redo the members\' work.' }
+          : { assignment: options.assignment, instruction: 'This is your assignment from the team lead for this turn. Do this work. Do not invent results for workers who were not assigned.' }) });
         if (run.snapshot.team && ['member', 'synthesis'].includes(run.stage ?? '')) {
           const detail = this.store.detail(task.id);
           const turnRuns = detail.runs.filter(candidate => candidate.snapshot.team?.id === run.snapshot.team!.id
@@ -967,10 +973,11 @@ export class Runner {
   private completePlan(run: Run, plan: unknown) {
     const team = run.snapshot.team;
     if (!team) throw new Error('Phân việc cần snapshot hội.');
-    const parsed = assertTeamPlan(team, plan);
+    const { plan: parsed, folded } = foldCombiningAssignment(team, assertTeamPlan(team, plan));
     this.store.transaction(() => {
       this.store.put('runs', { ...run, status: 'completed', error: null, snapshot: { ...run.snapshot, plan: parsed } }, { column: 'task_id', value: run.taskId });
       this.store.event(run.id, parsed.note?.trim() ? `Đã phân việc: ${parsed.note.trim()}` : `Đã phân việc cho ${parsed.assignments.length} Tí.`);
+      if (folded) this.store.event(run.id, `Phần gộp kết quả của ${run.snapshot.worker.name} chuyển vào bước tổng hợp, không chạy thành phần việc riêng.`);
       this.store.db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);
       this.store.db.prepare("UPDATE step_attempts SET state='committed' WHERE run_id=? AND state='received'").run(run.id);
     });

@@ -51,7 +51,7 @@ export function identitySection(input: IdentityInput): string {
     lines.push('This is your own chat with the user. The workspace may hold other workers and teams, but you cannot see them or their chats; say so plainly if you are asked.');
   }
 
-  if (stage === 'plan') lines.push('This turn you are planning: split the user\'s message into briefs for the listed members.');
+  if (stage === 'plan') lines.push('This turn you are planning: split the user\'s message into briefs for the listed members. You combine their results yourself afterwards, so that combining is not a member job.');
   if (stage === 'member') lines.push('This turn you answer only the brief the team gave you.');
   if (stage === 'synthesis') lines.push('This turn you combine your teammates\' answers into one reply for the user, and name who found what.');
   if (stage === 'group') lines.push('This turn other workers answer the same message. Read what they already said, add what is missing and do not repeat them.');
