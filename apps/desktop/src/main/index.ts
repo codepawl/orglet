@@ -141,7 +141,10 @@ async function start() {
   }
   handle('orglet:command', async raw => {
     const envelope = z.object({ command: z.string(), args: z.unknown() }).parse(raw);
-    if (!Object.hasOwn(commands, envelope.command)) throw new Error('Command không được phép.');
+    // The renderer asked for a command this build does not know. That happens when the window hot-reloaded a newer
+    // command list while main and the core kept the old one (a branch switch with the app open), so the message
+    // names the command and says what puts the two back on one version (COD-174).
+    if (!Object.hasOwn(commands, envelope.command)) throw new Error(`Bản Orglet đang chạy không có lệnh "${envelope.command}": giao diện và phần lõi đang khác phiên bản. Tải lại cửa sổ (Ctrl+R) hoặc khởi động lại app.`);
     const command = envelope.command as Command;
     const args = commands[command].parse(envelope.args);
     const result = await request(command, args);

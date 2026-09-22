@@ -121,7 +121,8 @@ describe('durable task runtime', () => {
     ledger.settle(reservation, 10, 10); expect(() => ledger.settle(reservation, 10, 10)).toThrow(); expect(store.usage().chargedMicros).toBe(20);
   });
   it('rejects non-allowlisted commands and does not expose source paths in workspace/detail', async () => {
-    await expect(core.command('shell' as never, {})).rejects.toThrow('IPC');
+    // The refusal names the command it did not know and says what to do (COD-174).
+    await expect(core.command('shell' as never, {})).rejects.toThrow('không có lệnh "shell"');
     const path = join(directory, 'private.txt'); await writeFile(path, 'secret source text'); const [source] = await core.sources.import([path]); const { task } = fixtureRun(); task.sourceIds = [source.id]; store.put('tasks', task);
     const serialized = JSON.stringify(store.detail(task.id)); expect(serialized).not.toContain(directory); expect(serialized).not.toContain('secret source text');
   });

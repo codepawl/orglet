@@ -4,9 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { commands } from '../../apps/desktop/src/shared/contracts';
 
 /**
- * The IPC boundary rejects any command the core does not declare, with "Command không được phép." — which is what
- * the owner saw in the app on 2026-09-20. That error can only mean the renderer asked for a name that does not
- * exist, so it is a mistake that belongs in a failing test rather than in a red banner in front of a person.
+ * The IPC boundary rejects any command the core does not declare — the owner saw that as "Command không được phép."
+ * in the app on 2026-09-20 (since COD-174 the error names the command and says to reload or restart). That error
+ * can only mean the renderer asked for a name that does not exist, so it is a mistake that belongs in a failing
+ * test rather than in a red banner in front of a person.
  */
 const rendererRoot = resolve(__dirname, '../../apps/desktop/src/renderer');
 

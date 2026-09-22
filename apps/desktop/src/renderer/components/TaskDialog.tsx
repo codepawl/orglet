@@ -49,7 +49,7 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
     setBusy(true); clearError();
     try {
       await orglet.call('updateTask', { id: task.id, title: title.trim(), assignee, budgetMicros });
-      toast(t('Đã lưu công việc')); onClose();
+      toast(t('Đã lưu công việc'), 'success', title.trim() || task.title || task.brief.split('\n')[0]); onClose();
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
 

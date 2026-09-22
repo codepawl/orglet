@@ -242,7 +242,7 @@ function ChatReply({ artifact, author, taskId, reactions, runs, action }: { arti
       <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
     </div>}
     <MessageActions taskId={taskId} messageId={artifact.id} author={author} text={tMessage(artifact.report.summary)} reactions={reactions} runs={runs} action={action}
-      leading={<ArtifactActions artifactId={artifact.id} action={action} />} />
+      leading={<ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [author])} action={action} />} />
   </div>;
 }
 
@@ -260,10 +260,10 @@ function ReadReceipts({ readers }: { readers: readonly Run[] }) {
 }
 
 
-/** Copy and download for an answer or document, in the format the user picks or saved as default. */
-function ArtifactActions({ artifactId, action }: { artifactId: string; action: (fn: () => Promise<unknown>) => void }) {
+/** Copy and download for an answer or document, in the format the user picks or saved as default; `about` names it for the notice. */
+function ArtifactActions({ artifactId, about, action }: { artifactId: string; about: string; action: (fn: () => Promise<unknown>) => void }) {
   return <>
-    <FormatAction kind="copy" onPick={format => action(async () => { await orglet.copyArtifact(artifactId, format); toast(format === 'text' ? t('Đã sao chép văn bản') : t('Đã sao chép Markdown')); })} />
+    <FormatAction kind="copy" onPick={format => action(async () => { await orglet.copyArtifact(artifactId, format); toast(format === 'text' ? t('Đã sao chép văn bản') : t('Đã sao chép Markdown'), 'success', about); })} />
     <FormatAction kind="download" onPick={format => action(() => orglet.exportArtifact(artifactId, format))} />
   </>;
 }
@@ -287,7 +287,7 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
     </div>
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}
-      <ArtifactActions artifactId={artifact.id} action={action} />
+      <ArtifactActions artifactId={artifact.id} about={name} action={action} />
     </>}>
       <h1>{name}</h1>
       <p className="doc-meta">{[author?.snapshot.worker.name, when].filter(Boolean).join(' · ')}</p>

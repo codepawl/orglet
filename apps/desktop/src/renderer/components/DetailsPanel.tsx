@@ -179,9 +179,9 @@ function TechnicalRun({ run, detail, workspace, onExport }: { run: Run; detail: 
 async function copyRunId(id: string) {
   try {
     await orglet.copyText(id);
-    toast(t('Đã sao chép mã'));
+    toast(t('Đã sao chép mã'), 'success', t('Mã lượt chạy {0}', [id]));
   } catch {
-    toast(t('Không sao chép được mã'), 'error');
+    toast(t('Không sao chép được mã'), 'error', t('Mã lượt chạy {0}', [id]));
   }
 }
 
@@ -301,7 +301,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
             {parent && <p className="muted">{t('Trả lời tin: {0}', [parent.body.slice(0, 140)])}</p>}
             <p>{message.body}</p>
             <MessageActions taskId={detail.task.id} messageId={event.id} author={sender} text={message.body}
-              reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={fn => { void fn().catch(error => toast(tMessage(String(error)), 'error')); }} />
+              reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={fn => { void fn().catch(error => toast(tMessage(String(error)), 'error', t('Tin của {0}', [sender]))); }} />
           </div>;
         })}
       </Section>}

@@ -197,6 +197,19 @@ export function App() {
   // Refreshes started by older callbacks (an action finishing, a change event) must load the task shown now, not the
   // one selected when they were created; otherwise a late refresh replaces the open task with nothing.
   const selectedRef = useRef(selected); selectedRef.current = selected;
+  /** What was being done when the banner's error was set; the notice centre shows it under the message (COD-174). */
+  const errorAbout = useRef<string | undefined>(undefined);
+  /** How a chat is named in the sidebar: its title, or the first line of what was asked. */
+  const taskName = (taskId: string) => {
+    const task = workspace?.tasks.find(item => item.id === taskId);
+    if (!task) return undefined;
+    return task.title || task.brief.split('\n')[0].trim();
+  };
+  const entityName = (kind: 'worker' | 'team', entityId: string) => {
+    if (!workspace) return undefined;
+    const listed = kind === 'worker' ? [...workspace.workers, ...workspace.archivedWorkers] : [...workspace.teams, ...workspace.archivedTeams];
+    return listed.find(item => item.id === entityId)?.name;
+  };
   const refresh = useCallback(async () => {
     const requestId = ++refreshId.current;
     const selected = selectedRef.current;
@@ -225,7 +238,7 @@ export function App() {
       setWorkspace({ ...next, tasks }); setConnections(connectionState); setDetail(taskDetail); setWorkerId(value => value || next.workers[0]?.id || '');
       setWorkspaceAccess(selected ? { taskId: selected, grant } : undefined);
       setWorkspaceRecovery(recovery);
-    } catch (err) { if (requestId === refreshId.current) setError((err as Error).message); }
+    } catch (err) { if (requestId === refreshId.current) { errorAbout.current = t('Đọc dữ liệu từ phần lõi'); setError((err as Error).message); } }
   }, []);
   useEffect(() => {
     if (!window.orglet) { setError(t('Mở Orglet bằng pnpm dev để dùng desktop core. Bản web không có quyền truy cập dữ liệu.')); return; }
@@ -238,8 +251,9 @@ export function App() {
     if (workerId && !workspace.workers.some(worker => worker.id === workerId)) setWorkerId(workspace.workers[0]?.id ?? '');
     if (teamId && !workspace.teams.some(team => team.id === teamId)) setTeamId('');
   }, [workspace, workerId, teamId]);
-  // An error shown in the banner is also kept, so dismissing it does not lose it (user, 2026-09-20).
-  useEffect(() => { if (error) recordNotice(error, 'error'); }, [error]);
+  // An error shown in the banner is also kept, so dismissing it does not lose it (user, 2026-09-20), together with
+  // what was being done when it happened, which whoever set the error wrote into `errorAbout` first (COD-174).
+  useEffect(() => { if (error) recordNotice(error, 'error', errorAbout.current); }, [error]);
   useEffect(() => { document.documentElement.dataset.theme = workspace?.theme ?? 'system'; }, [workspace?.theme]);
   // The accent is the user's to pick, so it rides on the root rather than being baked into the sheet. What sits on
   // top of it comes with it: a pale accent needs dark ink, or the send arrow disappears into its own button.
@@ -286,7 +300,7 @@ export function App() {
     void orglet.call('markTaskSeen', { id }).then((task: Task) => {
       if (task.seenStamp) rememberSeen(task.id, { seenStamp: task.seenStamp, lastArtifactId: task.lastArtifactId });
       if (selectedRef.current === id) void refresh();
-    }).catch(err => { if (selectedRef.current === id) setError((err as Error).message); });
+    }).catch(err => { if (selectedRef.current === id) { errorAbout.current = taskName(id); setError((err as Error).message); } });
     if (matchMedia('(max-width: 780px)').matches) { setSidebar(false); setTimeout(() => document.getElementById('main-content')?.focus(), 0); }
   };
   const openTeam = (id: string) => {
@@ -329,7 +343,12 @@ export function App() {
     const live = liveWorkerTask(workspace.tasks, workerId);
     if (live) openTask(live.id);
   }, [workspace, selected, teamId, workerId]);
-  const action = (fn: () => Promise<unknown>) => { setError(''); void fn().then(() => refresh()).catch(err => setError((err as Error).message)); };
+  /** Runs one command and shows its failure in the banner; `about` names what it concerned for the notice centre. */
+  const action = (fn: () => Promise<unknown>, about?: string) => {
+    errorAbout.current = about;
+    setError('');
+    void fn().then(() => refresh()).catch(err => setError((err as Error).message));
+  };
   const toolAction = (perform: () => Promise<unknown>) => {
     if (toolPolicyBusy) return;
     setToolPolicyBusy(true);
@@ -380,22 +399,24 @@ export function App() {
         setSelected(id);
       }
       setBrief(''); setSources([]);
-    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+    } catch (err) { errorAbout.current = t('Gửi tin cho {0}', [team?.name ?? worker?.name ?? '']); setError((err as Error).message); } finally { setBusy(false); }
   };
   const close = () => { setPanel(null); void refresh(); };
   const openRoutines = (view: RoutineView = { editing: false }) => { setRoutineDraft(undefined); setRoutineView(view); setPanel('routines'); };
   const teamOrder = useReorder(workspace?.teams.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'teams', ids })));
   const workerOrder = useReorder(workspace?.workers.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'workers', ids })));
   const deleteTask = (taskId: string) => action(async () => {
+    const name = taskName(taskId);
     await orglet.call('deleteTask', { id: taskId });
     if (selectedRef.current === taskId) { hideTaskLocally(taskId, 'deletedAt'); leaveThread(); }
-    toast(t('Đã xóa cuộc trò chuyện'));
-  });
+    toast(t('Đã xóa cuộc trò chuyện'), 'success', name);
+  }, taskName(taskId));
   const archiveTask = (taskId: string, archived: boolean) => action(async () => {
+    const name = taskName(taskId);
     await orglet.call('archiveTask', { id: taskId, archived });
     if (archived && selectedRef.current === taskId) { hideTaskLocally(taskId, 'archivedAt'); leaveThread(); }
-    toast(archived ? t('Đã lưu trữ cuộc trò chuyện') : t('Đã khôi phục cuộc trò chuyện'));
-  });
+    toast(archived ? t('Đã lưu trữ cuộc trò chuyện') : t('Đã khôi phục cuộc trò chuyện'), 'success', name);
+  }, taskName(taskId));
   setDisplayCurrency(workspace?.currency);
   // Phase 5 of the avatar animations: a row that was just created rises into the list once. This sits above the
   // loading return, because a hook must run on every render and the workspace arrives after the first one.
@@ -434,8 +455,16 @@ export function App() {
     const share = daysLeft / retention;
     return { daysLeft, tone: share > 0.5 ? 'fresh' : share > 0.2 ? 'aging' : 'expiring' };
   };
-  const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => action(async () => { await orglet.call('archiveEntity', { kind, id: entityId, archived }); toast(archived ? t('Đã lưu trữ') : t('Đã khôi phục')); });
-  const deleteEntity = (kind: 'worker' | 'team', entityId: string) => action(async () => { await orglet.call('deleteEntity', { kind, id: entityId }); toast(t('Đã xóa')); });
+  const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => action(async () => {
+    const name = entityName(kind, entityId);
+    await orglet.call('archiveEntity', { kind, id: entityId, archived });
+    toast(archived ? t('Đã lưu trữ') : t('Đã khôi phục'), 'success', name);
+  }, entityName(kind, entityId));
+  const deleteEntity = (kind: 'worker' | 'team', entityId: string) => action(async () => {
+    const name = entityName(kind, entityId);
+    await orglet.call('deleteEntity', { kind, id: entityId });
+    toast(t('Đã xóa'), 'success', name);
+  }, entityName(kind, entityId));
   const activeTasks = workspace.tasks.filter(task => !task.archivedAt);
   const taskSeen = (task: Workspace['tasks'][number]) => {
     if (selected === task.id) return true;
