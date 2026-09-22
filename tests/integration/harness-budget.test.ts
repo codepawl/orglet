@@ -159,7 +159,7 @@ describe('crew on Claude Code', () => {
     const checkpoint = new Checkpoints(store).get(member.id);
     expect(checkpoint?.phase).toBe('ready');
     expect(checkpoint?.harnessCostMicros).toBe(500_000);
-    expect(detail.events.map(event => event.message)).toContain('Claude Code dừng ở giới hạn; harness ước tính $0.5000 theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.');
+    expect(detail.events.map(event => event.message)).toContain('Claude Code dừng ở giới hạn; harness ước tính $0.5000 cho bước này, tổng $0.5000 trong lượt chạy này theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.');
   });
 
   it('retry and a follow-up turn run under the crew\'s raised limit', async () => {

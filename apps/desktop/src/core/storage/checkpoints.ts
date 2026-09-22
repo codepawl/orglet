@@ -8,6 +8,8 @@ export type Checkpoint = {
   reportCorrections?: number;
   /** CLI-reported estimates, separate from settled API charges. */
   harnessCostMicros?: number;
+  /** CLI calls in this run that reported no estimate, so the run total above is a floor, not the whole spend. */
+  harnessCallsWithoutCost?: number;
 };
 // Context may contain selected source text. It stays in core storage, outside renderer IPC and backups.
 export class Checkpoints {
