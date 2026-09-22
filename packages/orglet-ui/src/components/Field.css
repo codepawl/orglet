@@ -1,0 +1,38 @@
+/*
+ * A text field is a box with one border, and that border is where every state is said: hover darkens it, focus is
+ * the ring the page gives every focusable thing, failing validation turns it red and shakes it once.
+ */
+.org-input {
+  width: 100%;
+  min-height: var(--org-control-height, 34px);
+  padding: 7px 11px;
+  border: 1px solid var(--org-border, #e5e5e5);
+  border-radius: var(--org-radius, 9px);
+  background: var(--org-bg, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+.org-input:hover:not(:disabled):not(:focus) { border-color: var(--org-muted, #666); }
+.org-input:disabled { opacity: .55; }
+.org-input::placeholder { color: var(--org-muted, #666); }
+
+.org-textarea {
+  min-height: 100px;
+  line-height: 1.6;
+  /* Vertical only: a field the person can widen would rearrange the form around it. */
+  resize: vertical;
+}
+
+.org-input[aria-invalid=true] { border-color: var(--org-error, #a82626); }
+/* The shake replays whenever `data-flash` changes, which is how submitting the same bad value twice stays visible. */
+.org-input[aria-invalid=true][data-flash] { animation: org-field-flash .55s ease-in-out 2; }
+@keyframes org-field-flash {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  40% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--org-error, #a82626) 35%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* The state still has to show, so the red border stays and only the shake goes. */
+  .org-input[aria-invalid=true][data-flash] { animation: none; }
+}

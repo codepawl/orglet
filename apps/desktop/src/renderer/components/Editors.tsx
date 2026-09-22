@@ -5,6 +5,7 @@ import { Sparkles, FileText } from 'lucide-react';
 import { SkillReview } from './SkillReview';
 import { t } from '../i18n';
 import { orglet } from '../api';
+import { Input, Textarea } from '@codepawl/orglet-ui';
 
 export function SkillEditor({ skill, done }: { skill?: Skill; done: () => void }) {
   return skill?.package ? <SkillReview skill={skill} done={done} /> : <PlainSkillEditor skill={skill} done={done} />;
@@ -17,8 +18,8 @@ function PlainSkillEditor({ skill, done }: { skill?: Skill; done: () => void }) 
     try { await orglet.call('saveSkill', { ...(skill ? { id: skill.id } : {}), name, content }); done(); }
     catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }}>
-    <label><FieldLabel icon={Sparkles} required>{t('Tên skill')}</FieldLabel><input value={name} onChange={e => setName(e.target.value)} required maxLength={80} /></label>
-    <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><textarea rows={16} value={content} onChange={e => setContent(e.target.value)} required maxLength={16000} /></label>
+    <label><FieldLabel icon={Sparkles} required>{t('Tên skill')}</FieldLabel><Input value={name} onChange={e => setName(e.target.value)} required maxLength={80} /></label>
+    <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><Textarea rows={16} value={content} onChange={e => setContent(e.target.value)} required maxLength={16000} /></label>
     <p className="muted">{t('Skill chỉ chứa hướng dẫn. Nội dung không cấp quyền chạy script hay mở thêm tệp.')}</p>
     <div className="actions">
       {error ? <p className="form-error" role="alert">{error}</p> : null}

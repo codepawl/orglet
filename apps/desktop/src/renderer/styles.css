@@ -124,7 +124,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Permission controls stay grouped inside chat Details. */
 .task-tools { gap:12px; }
 .task-tool-group { display:flex; flex-direction:column; gap:7px; min-width:0; }
-.task-tool-folder, .task-tools .switch-field-title { display:flex; align-items:center; gap:7px; overflow-wrap:anywhere; }
+.task-tool-folder, .task-tools .org-switch-field-title { display:flex; align-items:center; gap:7px; overflow-wrap:anywhere; }
 .task-tool-folder svg { flex-shrink:0; }
 .task-tool-actions { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
 .task-tools .muted { font-size:12px; }
@@ -623,12 +623,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .review-setup { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .review-setup .button { flex-shrink:0; white-space:nowrap; }
 .form label { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
-.form input,.form select,.form textarea { width:100%; border:1px solid var(--border); background:var(--bg); border-radius:var(--radius); padding:7px 11px; min-height:var(--control-height); font-size:13px; font-weight:400; }
+/* Fields the kit draws (`.org-input`) bring their own box; these rules are for the ones still left in the app,
+   and they go when the last of those moves. */
+.form input:not(.org-input),.form select,.form textarea:not(.org-input) { width:100%; border:1px solid var(--border); background:var(--bg); border-radius:var(--radius); padding:7px 11px; min-height:var(--control-height); font-size:13px; font-weight:400; }
 /* Same dropdown affordance as Settings; the neutral grey chevron reads on both themes. */
 .form select { appearance:none; padding-right:36px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23888' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; }
-.form select:hover:not(:disabled),.form input:hover:not(:disabled):not(:focus) { border-color:var(--muted); }
+.form select:hover:not(:disabled),.form input:not(.org-input):hover:not(:disabled):not(:focus) { border-color:var(--muted); }
 
-.form textarea { resize:vertical; min-height:100px; line-height:1.6; }
+.form textarea:not(.org-input) { resize:vertical; min-height:100px; line-height:1.6; }
 .form fieldset { border:1px solid var(--border); border-radius:10px; padding:12px; }
 .form legend { font-size:13px; padding:0 4px; }
 
@@ -676,13 +678,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
   0%, 100% { box-shadow:0 0 0 0 transparent; }
   40% { box-shadow:0 0 0 3px color-mix(in srgb, var(--error) 35%, transparent); }
 }
-.form :is(input, textarea, select)[aria-invalid=true],
+.form :is(input, textarea, select):not(.org-input)[aria-invalid=true],
 .form .select-trigger[aria-invalid=true],
 .form .money-input.invalid,
 .setting-key-form input[aria-invalid=true] {
   border-color:var(--error);
 }
-.form :is(input, textarea, select)[aria-invalid=true][data-flash],
+.form :is(input, textarea, select):not(.org-input)[aria-invalid=true][data-flash],
 .form .select-trigger[aria-invalid=true][data-flash],
 .form .money-input.invalid[data-flash],
 .form .checkbox-input[aria-invalid=true][data-flash] + .checkbox-box,
@@ -797,15 +799,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @keyframes toast-in { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
 /* One on/off setting inside a form (components/Switch.tsx): title left, switch right, vertically centred on the
    text block beside it. Its description sits directly under its title, where a loose paragraph used to. */
-.switch-field { display:flex; align-items:center; justify-content:space-between; gap:16px; }
-.switch-field.disabled { opacity:.55; }
-.switch-field-text { display:flex; flex-direction:column; gap:3px; min-width:0; }
-.switch-field-title { font-size:14px; }
-.switch-field-description { font-size:12px; color:var(--muted); }
-.switch { position:relative; width:38px; height:22px; flex-shrink:0; padding:0; border:0; border-radius:11px; background:var(--border); transition:background .15s; }
-.switch>span { position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px #0003; transition:transform .15s; }
-.switch[aria-checked=true] { background:var(--accent); }
-.switch[aria-checked=true]>span { transform:translateX(16px); background:var(--accent-ink); }
 .money-input .money-currency { font-size:12px; margin-left:auto; }
 .form .money-input { width:100%; min-height:var(--control-height); }
 .form .money-input input { flex:1; width:auto; min-width:0; min-height:0; border:0; padding:0; border-radius:0; background:transparent; }
@@ -1001,6 +994,20 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 
 /* Select: one dropdown for the whole app. Tune it through these tokens rather than per-use overrides. */
 :root { --select-height:var(--control-height); --select-radius:var(--radius); --select-menu-radius:12px; --select-option-height:36px; }
+/* The kit (packages/orglet-ui) reads `--org-` tokens and never the app's own names, so that it can be dropped into
+   an application that themes itself differently. Orglet is that application: it keeps its tokens above and hands
+   them over here, which is the whole adoption cost. */
+:root {
+  --org-bg:var(--bg); --org-surface:var(--surface); --org-text:var(--text); --org-muted:var(--muted);
+  --org-border:var(--border); --org-border-subtle:var(--border-subtle);
+  --org-row-hover:var(--row-hover); --org-row-active:var(--row-active);
+  --org-primary:var(--primary); --org-primary-text:var(--primary-text);
+  --org-accent:var(--accent); --org-accent-ink:var(--accent-ink);
+  --org-error:var(--error); --org-success:var(--success); --org-working:var(--working); --org-warning:var(--warning); --org-focus:var(--focus);
+  --org-control-height:var(--control-height); --org-icon-size:var(--icon-size); --org-radius:var(--radius); --org-radius-menu:var(--select-menu-radius);
+  --org-motion-quick:var(--motion-quick); --org-motion-base:var(--motion-base); --org-motion-gesture:var(--motion-gesture);
+  --org-ease-out:var(--ease-out); --org-ease-spring:var(--ease-spring);
+}
 .field { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
 .field-title { cursor:default; }
 .select-trigger { display:flex; align-items:center; gap:10px; width:100%; min-width:0; min-height:var(--select-height); padding:6px 12px; border:1px solid var(--border); border-radius:var(--select-radius); background:var(--bg); color:var(--text); font-size:14px; font-weight:400; text-align:left; }

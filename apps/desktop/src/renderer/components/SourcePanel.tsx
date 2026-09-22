@@ -11,6 +11,7 @@ import { orglet } from '../api';
 import { Checkbox } from './Checkbox';
 import { ChevronRight } from './icons';
 import { fileKindIcon, fileKindLabel, fileSize } from './Attachment';
+import { Input } from '@codepawl/orglet-ui';
 
 export type SourceTarget = { type: 'source' | 'checker'; id: string; lines?: [number, number] };
 
@@ -81,14 +82,14 @@ export function SourcePanel({ detail, refresh, target, openSource }: { detail: T
     </section>)}
     {error && <p role="alert" className="error">{error}</p>}
     {checking && <Button onClick={() => void orglet.call('cancelCheckers', { id: detail.task.id }).catch(err => setError((err as Error).message))}>{t('Hủy checker')}</Button>}
-    {detail.sources.some(source => source.format) && <section className="form"><h3>{t('Kiểm tra dữ liệu trên máy')}</h3><p className="muted">{t('Chọn một hoặc hai dataset. Đối chiếu ID cần tên cột chung. Checker không gọi model.')}</p>{detail.sources.filter(source => source.format).map(source => <Checkbox key={source.id} checked={selected.includes(source.id)} disabled={source.revoked || busy || (!selected.includes(source.id) && selected.length >= 2)} onChange={event => setSelected(event.target.checked ? [...selected, source.id] : selected.filter(id => id !== source.id))}>{source.name}</Checkbox>)}<label>{t('Cột ID (không bắt buộc)')}<input value={idColumn} onChange={event => setIdColumn(event.target.value)} maxLength={256} placeholder={t('Ví dụ: id')} /></label><Button variant="outline" disabled={busy || !selected.length || selected.some(id => detail.sources.find(source => source.id === id)?.revoked)} onClick={() => void profile()}>{busy ? t('Đang kiểm tra…') : t('Chạy checker local')}</Button></section>}
+    {detail.sources.some(source => source.format) && <section className="form"><h3>{t('Kiểm tra dữ liệu trên máy')}</h3><p className="muted">{t('Chọn một hoặc hai dataset. Đối chiếu ID cần tên cột chung. Checker không gọi model.')}</p>{detail.sources.filter(source => source.format).map(source => <Checkbox key={source.id} checked={selected.includes(source.id)} disabled={source.revoked || busy || (!selected.includes(source.id) && selected.length >= 2)} onChange={event => setSelected(event.target.checked ? [...selected, source.id] : selected.filter(id => id !== source.id))}>{source.name}</Checkbox>)}<label>{t('Cột ID (không bắt buộc)')}<Input value={idColumn} onChange={event => setIdColumn(event.target.value)} maxLength={256} placeholder={t('Ví dụ: id')} /></label><Button variant="outline" disabled={busy || !selected.length || selected.some(id => detail.sources.find(source => source.id === id)?.revoked)} onClick={() => void profile()}>{busy ? t('Đang kiểm tra…') : t('Chạy checker local')}</Button></section>}
     {detail.sources.filter(source => source.format && !source.revoked).length >= 2 && <section className="form"><h3>{t('Tính exact-match accuracy')}</h3>
       <p className="muted">{t('Chọn rõ tệp predictions, tệp answers và ba cột. Chỉ tính khi ID ghép một-một và giá trị cùng kiểu; đây không phải điểm chính thức của challenge.')}</p>
       <Select label={t('Tệp predictions')} value={predictionSourceId} onChange={setPredictionSourceId} options={[{ value: '', label: t('Chọn tệp') }, ...detail.sources.filter(source => source.format && !source.revoked).map(source => ({ value: source.id, label: source.name, disabled: source.id === answerSourceId }))]} />
       <Select label={t('Tệp answers')} value={answerSourceId} onChange={setAnswerSourceId} options={[{ value: '', label: t('Chọn tệp') }, ...detail.sources.filter(source => source.format && !source.revoked).map(source => ({ value: source.id, label: source.name, disabled: source.id === predictionSourceId }))]} />
-      <label>{t('Cột ID')}<input value={scoreIdColumn} onChange={event => setScoreIdColumn(event.target.value)} maxLength={256} placeholder="id" /></label>
-      <label>{t('Cột prediction')}<input value={predictionColumn} onChange={event => setPredictionColumn(event.target.value)} maxLength={256} placeholder="prediction" /></label>
-      <label>{t('Cột answer')}<input value={answerColumn} onChange={event => setAnswerColumn(event.target.value)} maxLength={256} placeholder="answer" /></label>
+      <label>{t('Cột ID')}<Input value={scoreIdColumn} onChange={event => setScoreIdColumn(event.target.value)} maxLength={256} placeholder="id" /></label>
+      <label>{t('Cột prediction')}<Input value={predictionColumn} onChange={event => setPredictionColumn(event.target.value)} maxLength={256} placeholder="prediction" /></label>
+      <label>{t('Cột answer')}<Input value={answerColumn} onChange={event => setAnswerColumn(event.target.value)} maxLength={256} placeholder="answer" /></label>
       <Button variant="outline" disabled={busy || !predictionSourceId || !answerSourceId || predictionSourceId === answerSourceId || !scoreIdColumn.trim() || !predictionColumn.trim() || !answerColumn.trim()} onClick={() => void score()}>{busy ? t('Đang kiểm tra…') : t('Tính accuracy local')}</Button>
     </section>}
     {detail.sources.some(source => source.format) && <section className="form"><h3>{t('Kiểm tra run-log')}</h3>

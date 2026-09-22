@@ -7,6 +7,7 @@ import { providerLabel, type Readiness } from './providers';
 import { t } from '../i18n';
 import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
+import { Textarea } from '@codepawl/orglet-ui';
 
 export function RevisionEditor({ detail, workspace, connections, done }: { detail: TaskDetail; workspace: Workspace; connections: Readiness; done: () => void }) {
   const input = detail.task.currentInput ?? detail.task;
@@ -25,7 +26,7 @@ export function RevisionEditor({ detail, workspace, connections, done }: { detai
     } catch (error) { setError(error instanceof Error ? error.message : t('Không gửi được tin nhắn.')); }
     finally { setBusy(false); }
   }}>
-    <label><FieldLabel icon={MessageSquare} required>{t('Tin nhắn')}</FieldLabel><textarea value={brief} onChange={event => setBrief(event.target.value)} rows={5} maxLength={16000} required /></label>
+    <label><FieldLabel icon={MessageSquare} required>{t('Tin nhắn')}</FieldLabel><Textarea value={brief} onChange={event => setBrief(event.target.value)} rows={5} maxLength={16000} required /></label>
     <h3>{t('Tệp đính kèm ({0}/20)', [sources.length])}</h3>
     {!sources.length && <p>{t('Chưa chọn nguồn.')}</p>}
     {sources.map(source => <div className="actions" key={source.id}><span>{source.name}</span><Button type="button" disabled={busy} aria-label={t('Bỏ nguồn {0}', [source.name])} onClick={() => { setSources(current => current.filter(item => item.id !== source.id)); }}>{t('Bỏ nguồn')}</Button></div>)}

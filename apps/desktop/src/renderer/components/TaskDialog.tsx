@@ -11,6 +11,7 @@ import { formatMoney, toAmount, toMicros } from './money';
 import { toast } from './toast';
 import { t } from '../i18n';
 import { orglet } from '../api';
+import { Input } from '@codepawl/orglet-ui';
 
 type Tab = 'general' | 'limits';
 type InvalidField = 'assignees' | 'budget';
@@ -54,7 +55,7 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
 
   return <TabbedFormDialog open={open} onClose={onClose} title={t('Thiết lập công việc')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="task-panel" onSubmit={() => void submit()} submitLabel={t('Lưu công việc')} busy={busy || running} error={error}>
     {tab === 'general' && <>
-      <label><FieldLabel icon={Type}>{t('Tên công việc')}</FieldLabel><input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} placeholder={task.brief.split('\n')[0].slice(0, 120)} /></label>
+      <label><FieldLabel icon={Type}>{t('Tên công việc')}</FieldLabel><Input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} placeholder={task.brief.split('\n')[0].slice(0, 120)} /></label>
       <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={mode} onChange={value => { setMode(value); if (invalid === 'assignees') clearError(); }} invalid={invalid === 'assignees'} flash={flash} options={[
         { value: 'all', label: t('Toàn bộ Tí'), detail: t('{0} Tí, gồm cả người thêm sau', [workspace.workers.length]), icon: <UsersRound size={16} /> },
         { value: 'workers', label: t('Chọn Tí'), detail: t('Một hoặc nhiều người'), icon: <UserRound size={16} /> },

@@ -1,0 +1,47 @@
+/* The switch takes the application's accent when it is on, because "on" is the app's own state, not the kit's. */
+.org-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 38px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 11px;
+  background: var(--org-border, #e5e5e5);
+  transition: background var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-switch > span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px #0003;
+  transition: transform var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-switch[aria-checked=true] { background: var(--org-accent, #4f7fe0); }
+.org-switch[aria-checked=true] > span {
+  background: var(--org-accent-ink, #fff);
+  transform: translateX(16px);
+}
+
+.org-switch-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.org-switch-field-disabled { opacity: .55; }
+.org-switch-field-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.org-switch-field-title { font-size: 14px; }
+.org-switch-field-description {
+  font-size: 12px;
+  color: var(--org-muted, #666);
+}
