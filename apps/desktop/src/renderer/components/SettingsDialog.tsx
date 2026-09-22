@@ -22,6 +22,7 @@ import { toast } from './toast';
 import { confirmAction } from './confirm';
 import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../../shared/erase';
 import { Switch } from './Switch';
+import { CodeFontPreview, InterfaceFontSample } from './FontPreview';
 import { t, tMessage } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
@@ -137,7 +138,10 @@ function FontSetting({ role, title, description, value, busy, onPick }: {
     return () => { live = false; };
   }, [suggestions]);
   const bundled = bundledFont(role);
-  const families = [...new Set([...installed, ...(value && value !== bundled ? [value] : [])])];
+  // The interface default is SF Pro with Inter behind it, so Inter is a choice of its own and gets its row; the
+  // code default is the bundled face itself, so a second row would only repeat it.
+  const bundledRow = role === 'interface' ? [bundled] : [];
+  const families = [...new Set([...bundledRow, ...installed, ...(value && value !== bundled ? [value] : [])])];
   const submit = () => {
     const family = FontFamily.safeParse(typing);
     if (!family.success) return;
@@ -150,7 +154,7 @@ function FontSetting({ role, title, description, value, busy, onPick }: {
         onChange={next => { if (next === CUSTOM_FONT) setTyping(value ?? ''); else onPick(next || null); }}
         options={[
           { value: '', label: t('Mặc định'), detail: role === 'interface' ? t('SF Pro nếu máy có, không thì {0}', [bundled]) : t('{0}, đi kèm Orglet', [bundled]), labelStyle: { fontFamily: fontStack(role) } },
-          ...families.map(family => ({ value: family, label: family, labelStyle: { fontFamily: `"${family}"` } })),
+          ...families.map(family => ({ value: family, label: family, detail: family === bundled ? t('đi kèm Orglet') : undefined, labelStyle: { fontFamily: `"${family}"` } })),
           { value: CUSTOM_FONT, label: t('Phông khác…'), icon: <Pencil size={15} /> },
         ]} />
     </Row>
@@ -352,13 +356,11 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <FontSetting role="interface" busy={busy} value={workspace.interfaceFont}
                 title={t('Phông chữ')} description={t('Dùng cho toàn bộ chữ trong app.')}
                 onPick={family => void save({ interfaceFont: family })} />
+              <InterfaceFontSample />
               <FontSetting role="code" busy={busy} value={workspace.codeFont}
                 title={t('Phông chữ code')} description={t('Dùng cho code, đường dẫn và các giá trị kỹ thuật.')}
                 onPick={family => void save({ codeFont: family })} />
-              <div className="font-preview" role="group" aria-label={t('Xem trước phông chữ')}>
-                <p>{t('Tí đọc nguồn rồi trả lời bằng tiếng Việt có dấu đầy đủ.')}</p>
-                <code>const answer = review(sources); // 0123456789 il1 O0</code>
-              </div>
+              <CodeFontPreview />
             </>}
 
             {tab === 'chat' && <>
