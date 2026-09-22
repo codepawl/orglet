@@ -17,7 +17,7 @@ import { TeamDialog } from './components/TeamEditor';
 import { TaskDialog } from './components/TaskDialog';
 import { FormatPreferences } from './components/FormatAction';
 import { assigneeLabel, taskWorkers, teamRoster } from './assignees';
-import { liveTeamTask, liveWorkerTask } from '../shared/live-task';
+import { liveTeamTask, liveWorkerTask, newChatKey } from '../shared/live-task';
 import { ArchivedList, ArchivedRow, type ArchiveState } from './components/SidebarTree';
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
@@ -374,16 +374,28 @@ export function App() {
       finally { setToolPolicyBusy(false); }
     })();
   };
+  const toggledCapabilities = (previous: ToolCapability[], capability: ToolCapability, enabled: boolean) => {
+    const capabilities = previous.filter(item => item !== capability);
+    if (enabled) capabilities.push(capability);
+    return capabilities;
+  };
   const changeTaskCapability = (taskDetail: TaskDetail, capability: ToolCapability, enabled: boolean) => toolAction(() => {
     const provider = taskWorkers(taskDetail.task, workspace!)[0]?.provider ?? 'demo';
     const previous = taskDetail.task.toolCapabilities ?? snapshotCapabilities(provider);
-    const capabilities = previous.filter(item => item !== capability);
-    if (enabled) capabilities.push(capability);
-    return orglet.call('setToolCapabilities', { taskId: taskDetail.task.id, capabilities });
+    return orglet.call('setToolCapabilities', { taskId: taskDetail.task.id, capabilities: toggledCapabilities(previous, capability, enabled) });
   });
   const worker = workspace?.workers.find(item => item.id === workerId);
   const team = workspace?.teams.find(item => item.id === teamId);
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : worker ? [worker] : [];
+  // An empty chat has no row yet, so its permissions wait under the worker or team until the first message (COD-178).
+  const newChat = team ? { teamId: team.id, workerId: team.synthesizerId } : worker ? { workerId: worker.id } : undefined;
+  const newChatCapabilities = newChat ? workspace?.newChatCapabilities[newChatKey(newChat)] : undefined;
+  const changeNewChatCapability = (capability: ToolCapability, enabled: boolean) => toolAction(() => {
+    if (!newChat) return Promise.resolve();
+    const previous = newChatCapabilities ?? snapshotCapabilities(executionWorkers[0]?.provider ?? 'demo');
+    const capabilities = toggledCapabilities(previous, capability, enabled);
+    return orglet.call('setToolCapabilities', newChat.teamId ? { teamId: newChat.teamId, capabilities } : { workerId: newChat.workerId, capabilities });
+  });
   const nativeProviders = [...new Set(executionWorkers.map(item => item.provider).filter(provider => provider !== 'demo'))];
   const isDemo = nativeProviders.length === 0;
   const ready = readiness(connections, harnesses);
@@ -639,6 +651,16 @@ export function App() {
         onWorkspace: level => toolAction(() => level === 'none'
           ? orglet.call('revokeWorkspace', { taskId: detail.task.id })
           : orglet.pickWorkspace(detail.task.id, permissionsForLevel(level))),
+      } : !selected && newChat ? {
+        workers: executionWorkers,
+        connectedProviders: (Object.keys(ready) as Worker['provider'][]).filter(provider => ready[provider as keyof typeof ready]),
+        onConfigure: provider => openSettings(settingsTabFor([provider])),
+        capabilities: newChatCapabilities,
+        grant: null,
+        folderLocked: t('Chọn thư mục sau khi gửi tin đầu tiên.'),
+        busy: toolPolicyBusy,
+        onCapability: changeNewChatCapability,
+        onWorkspace: () => {},
       } : undefined}
       workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
     <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lỡ thì chạy bù một lần') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được. Gói nhập từ thư mục cần được review trước khi gắn cho Tí.') : t('Ghi chú dùng lại được. Chỉ mục đã duyệt mới được nạp vào context, và chỉ trong phạm vi đã chọn.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>

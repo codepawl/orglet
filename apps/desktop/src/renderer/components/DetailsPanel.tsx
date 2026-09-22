@@ -198,12 +198,18 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
   onClose: () => void;
   onOpenSources: () => void;
   onExport: (artifactId: string) => void;
-  /** The chat's permissions; the parent owns the bridge calls. `grant` is undefined while it is still being read. */
+  /**
+   * The chat's permissions; the parent owns the bridge calls. `grant` is undefined while it is still being read.
+   * An empty chat has them too (COD-178): `capabilities` is then the set its first message will start with, and
+   * `folderLocked` says why the folder alone waits for the chat row.
+   */
   tools?: {
     workers: Worker[];
     connectedProviders: Worker['provider'][];
     onConfigure: (provider: Exclude<Worker['provider'], 'demo'>) => void;
+    capabilities?: ToolCapability[];
     grant: WorkspaceGrantView | null | undefined;
+    folderLocked?: string;
     busy: boolean;
     onCapability: (capability: ToolCapability, enabled: boolean) => void;
     onWorkspace: (level: WorkspaceLevel) => void;
@@ -258,10 +264,11 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
         </>}
       </section>}
 
-      {detail && tools && <section className="details-section task-tools" aria-labelledby="task-tools-heading">
+      {tools && <section className="details-section task-tools" aria-labelledby="task-tools-heading">
         <h3 id="task-tools-heading"><ShieldCheck size={15} aria-hidden="true" />{t('Quyền công cụ')}</h3>
         <PermissionControls workers={tools.workers.map(person => ({ id: person.id, name: person.name, provider: person.provider, connected: tools.connectedProviders.includes(person.provider) }))}
-          capabilities={detail.task.toolCapabilities} grant={tools.grant} taskId={detail.task.id} sourceCount={detail.sources.length} busy={tools.busy}
+          capabilities={detail ? detail.task.toolCapabilities : tools.capabilities} grant={tools.grant} taskId={detail?.task.id} sourceCount={detail?.sources.length ?? 0}
+          busy={tools.busy} folderLocked={tools.folderLocked}
           onCapability={tools.onCapability} onWorkspace={tools.onWorkspace} onConfigure={tools.onConfigure} />
       </section>}
       {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs}

@@ -25,6 +25,8 @@ Work is a **chat**, not a pile of tasks or sessions.
 
 Under the hood the thread is still a `tasks` row. **Chi tiết** lists internal `runs` (plan, members, synthesis, or the single worker job) for retry, cost and cancel. Dollars sit next to **Chi tiết**.
 
+**Tool permissions** in Chi tiết belong to the chat and are there before anything is sent (COD-178). For an empty chat the three switches set what the first message will start with; the core keeps that set under the worker or team until `createTask` moves it onto the new row, and the folder is chosen after the first message because a grant is made for one task. Each run freezes its permissions when it starts, not when the message was sent: turning on the web while the lead is still routing reaches the member and report runs that have not started, and a run already working keeps what it started with. See [agent-tools.md](agent-tools.md).
+
 For a reassigned member, Chi tiết names the worker who actually ran the attempt and its original assignment owner. Lead context and recovery results carry both identities from saved runs and artifacts, plus failed attempt history; the original owner is never treated as the file author merely because the plan named them.
 
 ## Click a worker or team → that chat
