@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Bridge, Reply } from '../shared/contracts';
 import type { RunProgressUpdate } from '../shared/progress';
+import type { UpdateState } from '../shared/updates';
 
 async function invoke<T>(channel: string, args?: unknown): Promise<T> {
   const reply: Reply<T> = await ipcRenderer.invoke(channel, args);
@@ -27,6 +28,17 @@ const bridge: Bridge = {
   openPricing: provider => invoke('orglet:open-pricing', provider),
   backup: () => invoke('orglet:backup'),
   restore: () => invoke('orglet:restore'),
+  about: () => invoke('orglet:about'),
+  openLink: link => invoke('orglet:open-link', link),
+  changelog: (refresh = false) => invoke('orglet:changelog', refresh),
+  updateState: () => invoke('orglet:update-state'),
+  checkForUpdates: () => invoke('orglet:check-for-updates'),
+  installUpdate: () => invoke('orglet:install-update'),
+  onUpdate: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, state: UpdateState) => callback(state);
+    ipcRenderer.on('orglet:update', listener);
+    return () => ipcRenderer.removeListener('orglet:update', listener);
+  },
   onChange: callback => { const listener = () => callback(); ipcRenderer.on('orglet:changed', listener); return () => ipcRenderer.removeListener('orglet:changed', listener); },
   onProgress: callback => {
     const listener = (_event: Electron.IpcRendererEvent, update: RunProgressUpdate) => callback(update);

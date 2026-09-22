@@ -1,7 +1,9 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell, utilityProcess } from 'electron';
-import { join, relative, isAbsolute } from 'node:path';
+import { app, autoUpdater, BrowserWindow, clipboard, dialog, ipcMain, session, shell, utilityProcess } from 'electron';
+import { join, relative, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { mkdir, open } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { release as osRelease } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
@@ -17,10 +19,15 @@ import { readSkillDirectory, writeSkillDirectory } from './skill-files';
 import { isViteDevRequest, preferLoopbackIpv4 } from './vite-dev-url';
 import squirrelStartup from 'electron-squirrel-startup';
 import { executeProfile, cancelProfile, stopProfiles } from './profiler';
+import { Updater } from './updater';
+import { ChangelogFeed } from './changelog';
+import { ABOUT_LINKS, AboutLink, installKind, updateFeedUrl, type AboutInfo, type UpdateEnvironment } from '../shared/updates';
 import type { BackupSummary } from '../core/storage/backup';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
+/** Set by vite.main.config.ts from the macOS signing flag at make time. */
+declare const ORGLET_MACOS_SIGNED: boolean;
 if (process.env.ORGLET_DATA_DIR && !app.isPackaged) app.setPath('userData', process.env.ORGLET_DATA_DIR);
 // scripts/dev.ps1 points USERPROFILE at a flag folder for Forge; give the app and its child CLIs the real home back.
 if (process.env.ORGLET_USERPROFILE && !app.isPackaged) { process.env.USERPROFILE = process.env.ORGLET_USERPROFILE; delete process.env.ORGLET_USERPROFILE; }
@@ -29,6 +36,31 @@ let window: BrowserWindow;
 let core: Electron.UtilityProcess;
 let credentials: Credentials;
 let ready = false;
+let updater: Updater;
+let changelog: ChangelogFeed;
+/**
+ * How this build can update itself (COD-176). Squirrel.Windows keeps `Update.exe` one folder above the app folder
+ * and Electron's updater drives that file, so its presence is what separates a Setup install from a ZIP unpacked
+ * by hand; a dev run and a Linux build never update themselves.
+ */
+const updateEnvironment: UpdateEnvironment = {
+  packaged: app.isPackaged,
+  platform: process.platform,
+  squirrelUpdater: app.isPackaged && process.platform === 'win32' && existsSync(resolve(process.execPath, '..', '..', 'Update.exe')),
+  macosSigned: typeof ORGLET_MACOS_SIGNED === 'boolean' && ORGLET_MACOS_SIGNED,
+};
+function aboutInfo(): AboutInfo {
+  return {
+    version: app.getVersion(),
+    electron: process.versions.electron,
+    chromium: process.versions.chrome,
+    node: process.versions.node,
+    platform: process.platform,
+    osRelease: osRelease(),
+    arch: process.arch,
+    install: installKind(updateEnvironment),
+  };
+}
 function request(command: string, args: unknown): Promise<unknown> {
   if (!ready) return Promise.reject(new Error('Core chưa sẵn sàng. Khởi động lại app nếu lỗi vẫn còn.'));
   return new Promise((resolve, reject) => {
@@ -97,8 +129,18 @@ async function start() {
       pending.clear(); if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
     });
   });
-  language = await request('workspace', {}).then(workspace => (workspace as { language?: Language }).language ?? DEFAULT_LANGUAGE).catch(() => DEFAULT_LANGUAGE);
+  const startupSettings = await request('workspace', {}).then(workspace => workspace as { language?: Language; autoUpdate?: boolean }).catch(() => ({} as { language?: Language; autoUpdate?: boolean }));
+  language = startupSettings.language ?? DEFAULT_LANGUAGE;
   useSpellCheckerLanguage(language);
+  updater = new Updater({
+    engine: autoUpdater,
+    environment: updateEnvironment,
+    feedUrl: updateFeedUrl(process.platform, process.arch, app.getVersion()),
+    firstRun: process.argv.includes('--squirrel-firstrun'),
+    automatic: startupSettings.autoUpdate ?? true,
+    onChange: state => { if (window && !window.isDestroyed()) window.webContents.send('orglet:update', state); },
+  });
+  changelog = new ChangelogFeed({ cacheFile: join(directory, 'changelog-cache.json') });
   const rendererRoot = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
   const url = MAIN_WINDOW_VITE_DEV_SERVER_URL ? preferLoopbackIpv4(MAIN_WINDOW_VITE_DEV_SERVER_URL) : pathToFileURL(join(rendererRoot, 'index.html')).href;
   const expected = new URL(url);
@@ -152,8 +194,16 @@ async function start() {
       language = (args as { language: Language }).language;
       useSpellCheckerLanguage(language);
     }
+    if (command === 'settings' && typeof (args as { autoUpdate?: boolean }).autoUpdate === 'boolean') updater.setAutomatic((args as { autoUpdate: boolean }).autoUpdate);
     return result;
   });
+  handle('orglet:about', async () => aboutInfo());
+  // The renderer names a link; the address comes from the allowlist, so nothing shown in the window can choose one.
+  handle('orglet:open-link', async raw => { await shell.openExternal(ABOUT_LINKS[AboutLink.parse(raw)]); });
+  handle('orglet:changelog', async raw => changelog.read(z.boolean().default(false).parse(raw)));
+  handle('orglet:update-state', async () => updater.state);
+  handle('orglet:check-for-updates', async () => updater.check());
+  handle('orglet:install-update', async () => { updater.install(); });
   handle('orglet:pick', async () => {
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn nguồn: text 256 KB; CSV, JSONL, Parquet 32 MB; ảnh 20 MB; âm thanh 50 MB; video, PDF 200 MB'), properties: ['openFile', 'multiSelections'], filters: [
       { name: 'Sources, datasets and media', extensions: [...TEXT_SOURCE_EXTENSIONS, ...MEDIA_SOURCE_EXTENSIONS] },
@@ -304,11 +354,12 @@ async function start() {
     // Chromium reports ERR_ABORTED when a loopback alias is cancelled; did-fail-load retries the same URL.
     if (!devServer || !/ERR_ABORTED|-3/.test(error instanceof Error ? error.message : '')) throw error;
   }
+  updater.start();
 }
 if (squirrelStartup || !app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.focus(); } });
   app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
   app.on('window-all-closed', () => app.quit());
-  app.on('before-quit', () => { ready = false; stopProfiles(); core?.kill(); });
+  app.on('before-quit', () => { ready = false; updater?.stop(); stopProfiles(); core?.kill(); });
 }

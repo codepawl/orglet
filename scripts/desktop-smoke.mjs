@@ -120,6 +120,17 @@ try {
   await page.getByText('Đã lưu', { exact: true }).waitFor();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark', undefined, { timeout: 5000 });
   await page.screenshot({ path: join(output, 'desktop-dark-settings.png') });
+  // About shows the version the running build reports, and that version is package.json's (COD-176). A dev run
+  // cannot update itself and says so instead of pretending to check.
+  await page.getByRole('tab', { name: 'Giới thiệu', exact: true }).click();
+  const packageVersion = JSON.parse(await readFile('package.json', 'utf8')).version;
+  const about = await page.evaluate(() => window.orglet.about());
+  assert.equal(about.version, packageVersion, 'About must report the package.json version');
+  assert.equal(about.install, 'dev');
+  await page.getByText(`Phiên bản ${packageVersion}`, { exact: true }).waitFor();
+  await page.getByText('Bản chạy từ mã nguồn không tự cập nhật.', { exact: true }).waitFor();
+  assert.equal((await page.evaluate(() => window.orglet.updateState())).status, 'unsupported');
+  await page.screenshot({ path: join(output, 'desktop-about.png') });
   await page.keyboard.press('Escape');
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
   await page.getByRole('button', { name: 'Research Review', exact: true }).waitFor();

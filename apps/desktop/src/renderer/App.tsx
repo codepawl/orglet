@@ -244,6 +244,17 @@ export function App() {
     if (!window.orglet) { setError(t('Mở Orglet bằng pnpm dev để dùng desktop core. Bản web không có quyền truy cập dữ liệu.')); return; }
     return orglet.onChange(() => void refresh());
   }, [refresh]);
+  // A downloaded update asks once, quietly: a notice that stays in the centre, and the restart button in
+  // Settings → Giới thiệu. Nothing interrupts the chat, and Squirrel uses the new build on the next launch anyway (COD-176).
+  useEffect(() => {
+    if (!window.orglet) return;
+    return orglet.onUpdate(state => {
+      if (state.status !== 'ready') return;
+      toast(state.version
+        ? t('Orglet {0} đã tải xong. Khởi động lại từ Cài đặt → Giới thiệu.', [state.version])
+        : t('Bản Orglet mới đã tải xong. Khởi động lại từ Cài đặt → Giới thiệu.'), 'success', t('Cập nhật'));
+    });
+  }, []);
   useEffect(() => { if (window.orglet) void refresh(); }, [refresh, selected]);
   useEffect(() => { setLanguage(workspace?.language); }, [workspace?.language]);
   useEffect(() => {

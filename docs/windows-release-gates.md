@@ -33,7 +33,21 @@ The GitHub required check name remains `test`. That job does not run the suite a
 
 `extract-zip` has two high advisories with no patched release (`GHSA-jmr9-qjv8-65gv`, `GHSA-7pqw-9j4j-h8q3`), reached through `@electron/packager` when packaging. `pnpm-workspace.yaml` overrides it with `@electron-internal/extract-zip`, Electron's own drop-in fork, hardened against Zip Slip and symlink escapes; `electron` itself already depends on it. Packager only calls `extract(zipPath, { dir })`, which the fork supports. Drop the override once Electron Forge moves to a packager release that uses the fork directly.
 
-Not in this workflow: nightly extra Windows jobs, live API keys, paid provider calls, or running Squirrel Setup. The packaged job uploads Squirrel Setup and the win32 ZIP as Actions artifacts (`orglet-windows-signed-setup` and `orglet-windows-signed-zip` when it signed, `orglet-windows-unsigned-*` otherwise; 14-day retention).
+Not in this workflow: nightly extra Windows jobs, live API keys, paid provider calls, or running Squirrel Setup. The packaged job uploads Squirrel Setup together with Squirrel's `RELEASES` file and `orglet-<version>-full.nupkg`, and the win32 ZIP, as Actions artifacts (`orglet-windows-signed-setup` and `orglet-windows-signed-zip` when it signed, `orglet-windows-unsigned-*` otherwise; 14-day retention). A step after `pnpm make` fails the job when `RELEASES` or the `.nupkg` is missing, because the updater needs both (see [Updates](#updates)).
+
+## Updates
+
+Since COD-176 the app checks for new versions itself. The mechanism is Electron's built-in `autoUpdater` (Squirrel.Windows) pointed at the free [update.electronjs.org](https://github.com/electron/update.electronjs.org) service, which reads this repository's public GitHub Releases. The feed is `https://update.electronjs.org/codepawl/orglet/win32-x64/<running version>`. The service answers from the newest Release that carries Squirrel's `RELEASES` file and the matching `orglet-<version>-full.nupkg`, so **a Release without those two assets is invisible to the updater**. Setup.exe alone is enough for a new install and useless for an update.
+
+What the updater does on the person's machine is described in [technical-guide.md](technical-guide.md#updates). What matters for a release:
+
+- Attach `RELEASES` and `orglet-<version>-full.nupkg` from the same CI artifact as Setup (step 5 below). All three come out of one `pnpm make`; do not mix builds.
+- The version in `package.json` is the version Squirrel compares. A Release whose tag does not match the packaged version confuses nobody but the updater: it serves whatever `RELEASES` says.
+- **0.2.3 and earlier have no updater.** People on those builds never see a new version inside the app; they install the first updater release by hand from the Release page. Say so in that Release's notes. From that release on, a Setup install updates itself.
+- Only a Squirrel install (Setup.exe) updates itself. The ZIP has no `Update.exe`, so the app tells the person it cannot update and links the Release page. A dev run, Linux and an unsigned macOS build say the same.
+- The nupkg is not signed (it is a ZIP); Setup and the files inside it are. The signature check in CI covers what Windows checks.
+
+A real update cannot be proven until a Release carries `RELEASES` and the `.nupkg`: the unit tests cover the state machine and the feed URL, the desktop smoke checks the About tab against `package.json`, and nothing in CI runs Squirrel. Record the first successful in-app update (from which version, to which, on what machine) in [implementation_status.md](implementation_status.md).
 
 ## Signing
 
@@ -116,7 +130,8 @@ When a maintainer is ready to ship public 0.2.x:
 2. Confirm the Windows packaged CI job and required `test` aggregator passed on that commit. If a human ran the optional Setup checklist, record its machine, commit and result; never present CI as a clean-machine install.
 3. Set `package.json` `version` to the 0.2.x you are shipping if it is not already, and land that on `main`.
 4. Create an annotated tag on that commit for the new version, then push it. Only a maintainer does this; do not reuse an existing release tag.
-5. On GitHub: **Releases → Draft a new release**, choose that tag, and attach `Setup.exe` and the ZIP from that commit's `orglet-windows-signed-setup` / `orglet-windows-signed-zip` artifacts. A local `pnpm make` is unsigned and is not a release asset.
-6. Put the SmartScreen paragraph in the release notes (see [Signing](#signing)). Link this page. State AGPL-3.0 and that the public GitHub Release ships Windows only. macOS and Linux ZIP packaging exist for dogfood and are not Release assets; macOS signing and notarization depend on available credentials.
+5. On GitHub: **Releases → Draft a new release**, choose that tag, and attach from that commit's `orglet-windows-signed-setup` artifact **all three** of `Orglet-<version> Setup.exe`, `RELEASES` and `orglet-<version>-full.nupkg`, plus the ZIP from `orglet-windows-signed-zip`. Keep the file names as CI wrote them: `RELEASES` lists the `.nupkg` by name and update.electronjs.org looks both up in the Release assets. Without them, installed copies never learn about this version (see [Updates](#updates)). A local `pnpm make` is unsigned and is not a release asset.
+6. Put the SmartScreen paragraph in the release notes (see [Signing](#signing)). Link this page. State AGPL-3.0 and that the public GitHub Release ships Windows only. macOS and Linux ZIP packaging exist for dogfood and are not Release assets; macOS signing and notarization depend on available credentials. For the first release that carries the updater, add one line: 0.2.3 and earlier do not update themselves, so install this one by hand.
+7. After publishing, open `https://update.electronjs.org/codepawl/orglet/win32-x64/0.0.1` in a browser. It should answer with JSON naming the new version; a `204` means the service found no usable Release, so check the three assets.
 
 Do not attach builds from a different commit. Do not upload signing certificates or private keys.
