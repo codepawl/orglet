@@ -1,4 +1,5 @@
 import { spawn, execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HarnessId } from '../../shared/harness';
@@ -227,6 +228,7 @@ export const executeHarness: HarnessExecutor = async request => {
 
   const stdout = await new Promise<string>((resolve, reject) => {
     request.signal.throwIfAborted();
+    if (!existsSync(request.executable)) throw missingExecutableError(request.harness, request.executable);
     const command = commandLine(request.executable, harnessArgs(request));
     const child = spawn(command.file, command.args, { cwd: request.cwd, env: { ...cleanEnv(process.env), ...harnessAccountEnv(request.harness, request.configDir) }, windowsHide: true, windowsVerbatimArguments: command.verbatim, stdio: ['pipe', 'pipe', 'pipe'] });
     let outputBytes = 0;
@@ -280,7 +282,7 @@ export const executeHarness: HarnessExecutor = async request => {
       }
       if (errorOutput.length < 64_000) errorOutput += chunk;
     });
-    child.on('error', error => finish(() => reject(new HarnessError(`Không chạy được harness: ${error.message}`))));
+    child.on('error', error => finish(() => reject(existsSync(request.executable) ? new HarnessError(`Không chạy được harness: ${error.message}`) : missingExecutableError(request.harness, request.executable))));
     child.on('close', code => {
       if (stopping) return;
       finish(() => {
@@ -299,7 +301,7 @@ export const executeHarness: HarnessExecutor = async request => {
       }
       if (code !== 0 && !collected.trim()) {
         if (looksLikeAuth(errorOutput)) reject(new HarnessError(authHint('cursor')));
-        else reject(new HarnessError(`Cursor Agent thoát với mã ${code}.`));
+        else reject(exitError('Cursor Agent', code, errorOutput));
         return;
       }
       resolve(collected);
@@ -319,5 +321,34 @@ function claudeExitError(code: number | null, errorOutput: string, rateLimit: Cl
   if (looksLikeAuth(errorOutput)) return new HarnessError(authHint('claude-code'));
   const limit = claudeRejection(rateLimit) ?? detectUsageLimit(errorOutput);
   if (limit) return new HarnessError(usageLimitMessage('Claude Code', limit));
-  return new HarnessError(`Claude Code thoát với mã ${code}.`);
+  return exitError('Claude Code', code, errorOutput);
 }
+
+/**
+ * The CLI's own words about why it stopped, kept with the exit code (COD-165). Only the end of stderr is kept: that is
+ * where a stack trace or "command line is too long" lands, and the saved error stays bounded.
+ */
+export function exitError(harnessName: string, code: number | null, errorOutput: string) {
+  const cause = stderrTail(errorOutput);
+  if (!cause) return new HarnessError(`${harnessName} thoát với mã ${code}.`);
+  return new HarnessError(`${harnessName} thoát với mã ${code}: ${cause}`);
+}
+
+const STDERR_TAIL_CHARACTERS = 600;
+
+export function stderrTail(errorOutput: string) {
+  const withoutColours = errorOutput.replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
+  const collapsed = withoutColours.replace(/\s+/g, ' ').trim();
+  if (collapsed.length <= STDERR_TAIL_CHARACTERS) return collapsed;
+  return `…${collapsed.slice(-STDERR_TAIL_CHARACTERS)}`;
+}
+
+/**
+ * Detection is cached, and the Claude desktop app replaces the Claude Code build it bundles, so the path found a
+ * minute ago can be gone by the time a run starts. Naming that beats a bare exit code (COD-165).
+ */
+export function missingExecutableError(harness: HarnessId, executable: string) {
+  return new HarnessError(`Không còn thấy ${harnessDisplayNames[harness]} ở ${executable}; bản cài có thể vừa được thay. Bấm Dò lại trong Cài đặt → Harness trên máy rồi thử lại.`);
+}
+
+const harnessDisplayNames: Record<HarnessId, string> = { 'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor Agent' };
