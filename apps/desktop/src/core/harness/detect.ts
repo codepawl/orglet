@@ -72,8 +72,14 @@ export async function candidates(id: HarnessCatalogId, env: NodeJS.ProcessEnv = 
   }
   const found: string[] = [];
   for (const path of [...new Set(paths)]) if (await isFile(path)) found.push(path);
-  return found;
+  // A .cmd shim can only be started through cmd.exe, whose command line stops at 8191 characters — and the report
+  // schema alone is 5 KB before the double caret-escaping a shim forces. A real executable is spawned directly with
+  // no such ceiling, so one found anywhere outranks a shim found earlier on PATH (COD-170).
+  return [...found.filter(path => !isShim(path)), ...found.filter(isShim)];
 }
+
+/** A launcher Windows can only run through a shell: npm's `.cmd`, and the PowerShell wrapper beside it. */
+const isShim = (path: string) => /\.(cmd|bat|ps1)$/i.test(path);
 
 const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
 /**
