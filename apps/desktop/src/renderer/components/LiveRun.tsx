@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronRight, FileText, FolderSearch, Search, Wrench } from 'lucide-react';
 import type { Activity, Run } from '../../shared/contracts';
-import type { ActivityKind, ActivityStep, RunProgressUpdate } from '../../shared/progress';
+import type { ActivityKind, ActivityStep, HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 
+import { LiveIsland, type IslandState } from './LiveIsland';
 import { Markdown } from './Markdown';
-import { WorkingLine } from './Working';
 import { orglet } from '../api';
 import { t } from '../i18n';
 
@@ -48,26 +48,62 @@ function useElapsedSeconds(since: number) {
   return Math.max(0, Math.floor((now - since) / 1000));
 }
 
-
 /**
- * A worker's run as it happens, modelled on streaming coding agents: what it said it will do, the files it reads and
- * searches (open while it works, folded into one line once it writes), a timer while it thinks, and the answer
- * appearing as it is written.
+ * A worker's run as it happens: what it said it will do, one island for what it is doing now and the last thing it
+ * did, and the answer appearing as it is written. The full step list, the timer and the worker's notes are the
+ * receipt, not the headline, so they sit behind one quiet control below.
  */
 export function LiveRun({ update, pausing }: { update: RunProgressUpdate; pausing: boolean }) {
   const progress = update.progress!;
+  const island = islandOf(progress, pausing);
   const answering = progress.answer.length > 0;
 
   return <div className="live-run">
     {progress.preamble && <Markdown className="prose" text={progress.preamble} />}
-    {progress.activity.length > 0 && <ActivityGroup steps={progress.activity} folded={progress.writing} />}
+    <LiveIsland state={island.state} label={island.label} receipt={island.receipt} />
     {answering && <Markdown className="prose live-answer" text={progress.answer} />}
-    <WorkingRow
-      startedAt={update.startedAt}
-      label={pausing ? t('Đang dừng sau bước này…') : progress.writing ? t('Đang viết câu trả lời…') : t('Đang suy nghĩ…')}
-      thinking={progress.thinking}
-    />
+    <ActivityGroup steps={progress.activity}>
+      <ElapsedLine since={update.startedAt} />
+      {progress.thinking && <p className="activity-notes">{progress.thinking}</p>}
+    </ActivityGroup>
   </div>;
+}
+
+export type IslandView = { state: IslandState; label: string; receipt: string };
+
+/**
+ * The island's state from what the harness has streamed. Only steps the core observed are named: a read shows the
+ * file, a search its pattern, and any other step is just a step, because its target is the tool's name, which says
+ * nothing to the person reading. Pausing and writing win over an open step, since they are what happens next.
+ */
+export function islandOf(progress: HarnessProgress, pausing: boolean): IslandView {
+  const receipt = receiptOf(progress.activity.findLast(step => step.done));
+  if (pausing) return { state: 'pausing', label: t('Đang dừng sau bước này'), receipt };
+  if (progress.writing) return { state: 'writing', label: t('Đang viết câu trả lời'), receipt };
+  const current = progress.activity.findLast(step => !step.done);
+  if (current) return { ...stepView(current), receipt };
+  return { state: 'thinking', label: t('Đang suy nghĩ'), receipt };
+}
+
+function stepView(step: ActivityStep): { state: IslandState; label: string } {
+  if (step.kind === 'read') return { state: 'reading', label: step.target ? t('Đang đọc {0}', [step.target]) : t('Đang đọc tệp') };
+  if (step.kind === 'search') return { state: 'searching', label: step.target ? t('Đang tìm {0}', [step.target]) : t('Đang tìm') };
+  if (step.kind === 'list') return { state: 'listing', label: t('Đang liệt kê tệp') };
+  return { state: 'tool', label: t('Đang chạy một bước') };
+}
+
+/** The line above the pill: the last finished step, or nothing while none has finished. */
+function receiptOf(step: ActivityStep | undefined): string {
+  if (!step) return '';
+  if (step.kind === 'read') return step.target ? t('Đã đọc {0}', [step.target]) : t('Đã đọc một tệp');
+  if (step.kind === 'search') return step.target ? t('Đã tìm {0}', [step.target]) : t('Đã tìm xong');
+  if (step.kind === 'list') return t('Đã liệt kê tệp');
+  return t('Đã xong một bước');
+}
+
+function ElapsedLine({ since }: { since: number }) {
+  const seconds = useElapsedSeconds(since);
+  return <p className="activity-elapsed">{t('Đã chạy {0}s', [seconds])}</p>;
 }
 
 const savedStepPatterns: { kind: ActivityKind; pattern: RegExp }[] = [
@@ -89,34 +125,29 @@ export function savedSteps(events: Activity[], runId: string): ActivityStep[] {
   return steps;
 }
 
-export function ActivityGroup({ steps, folded }: { steps: ActivityStep[]; folded: boolean }) {
-  // The group follows the run (open while working, folded once writing) until the user opens or closes it.
-  const [choice, setChoice] = useState<boolean | null>(null);
-  const open = choice ?? !folded;
+/**
+ * The step list behind one quiet control, closed until the user opens it. `children` are shown after the steps when
+ * open, for anything else the run keeps out of the headline (the timer, the worker's notes). With no steps the
+ * control just says Chi tiết.
+ */
+export function ActivityGroup({ steps, children }: { steps: ActivityStep[]; children?: ReactNode }) {
+  const [open, setOpen] = useState(false);
 
   return <div className="activity-group">
-    <button type="button" className="activity-summary" aria-expanded={open} onClick={() => setChoice(!open)}>
+    <button type="button" className="activity-summary" aria-expanded={open} onClick={() => setOpen(!open)}>
       <ChevronRight size={14} aria-hidden="true" className="activity-chevron" />
-      <span>{activitySummary(steps)}</span>
+      <span>{activitySummary(steps) || t('Chi tiết')}</span>
     </button>
-    {open && <ul className="activity-steps">
-      {steps.map(step => <li key={step.id} className={step.done ? 'activity-step' : 'activity-step running'}>
-        <StepIcon kind={step.kind} />
-        <span className="activity-verb">{stepVerb(step.kind)}</span>
-        {step.target && <span className="activity-target">{step.target}</span>}
-      </li>)}
-    </ul>}
-  </div>;
-}
-
-function WorkingRow({ startedAt, label, thinking }: { startedAt: number; label: string; thinking: string }) {
-  const seconds = useElapsedSeconds(startedAt);
-  const [showThinking, setShowThinking] = useState(false);
-
-  return <div className="live-working">
-    <WorkingLine label={label} seconds={seconds} expanded={showThinking}
-      onToggleThinking={thinking ? () => setShowThinking(!showThinking) : undefined} />
-    {thinking && showThinking && <p className="thinking-notes">{thinking}</p>}
+    {open && <div className="activity-detail">
+      {steps.length > 0 && <ul className="activity-steps">
+        {steps.map(step => <li key={step.id} className={step.done ? 'activity-step' : 'activity-step running'}>
+          <StepIcon kind={step.kind} />
+          <span className="activity-verb">{stepVerb(step.kind)}</span>
+          {step.target && <span className="activity-target">{step.target}</span>}
+        </li>)}
+      </ul>}
+      {children}
+    </div>}
   </div>;
 }
 
