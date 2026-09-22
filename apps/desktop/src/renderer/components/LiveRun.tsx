@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronRight, FileText, FolderSearch, Search, Wrench } from 'lucide-react';
-import type { Activity, Run } from '../../shared/contracts';
+import type { Activity, Run, Worker } from '../../shared/contracts';
 import type { ActivityKind, ActivityStep, HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 
 import type { IslandState, IslandView } from './LiveIsland';
@@ -38,6 +38,20 @@ export function liveRunOf(runs: Run[], updates: Record<string, RunProgressUpdate
   return run ? { run, update: updates[run.id] } : undefined;
 }
 
+/**
+ * The workers whose runs of this turn are really running (COD-169): streaming now, or reported running by the core.
+ * The island shows their faces and counts them, so the count is evidence of work, never the team roster; a worker
+ * with two such runs is one worker.
+ */
+export function workingWorkers(runs: readonly Run[], updates: Record<string, RunProgressUpdate>): Worker[] {
+  const workers = new Map<string, Worker>();
+  for (const run of runs) {
+    const working = updates[run.id] !== undefined || run.status === 'running';
+    if (working && !workers.has(run.snapshot.worker.id)) workers.set(run.snapshot.worker.id, run.snapshot.worker);
+  }
+  return [...workers.values()];
+}
+
 /** Seconds since a moment, refreshed every second while shown. */
 function useElapsedSeconds(since: number) {
   const [now, setNow] = useState(() => Date.now());
@@ -73,20 +87,44 @@ export function LiveRun({ update }: { update: RunProgressUpdate }) {
  * file, a search its pattern, and any other step is just a step, because its target is the tool's name, which says
  * nothing to the person reading. Pausing and writing win over an open step, since they are what happens next.
  */
-export function islandOf(progress: HarnessProgress, pausing: boolean): IslandView {
+export function islandOf(progress: HarnessProgress, pausing: boolean, workers: readonly Worker[]): IslandView {
   const receipt = receiptOf(progress.activity.findLast(step => step.done));
-  if (pausing) return { state: 'pausing', label: t('Đang dừng sau bước này'), receipt };
-  if (progress.writing) return { state: 'writing', label: t('Đang viết câu trả lời'), receipt };
-  const current = progress.activity.findLast(step => !step.done);
-  if (current) return { ...stepView(current), receipt };
-  return { state: 'thinking', label: t('Đang suy nghĩ'), receipt };
+  return islandFor(doingOf(progress, pausing), workers, receipt);
 }
 
-function stepView(step: ActivityStep): { state: IslandState; label: string } {
-  if (step.kind === 'read') return { state: 'reading', label: step.target ? t('Đang đọc {0}', [step.target]) : t('Đang đọc tệp') };
-  if (step.kind === 'search') return { state: 'searching', label: step.target ? t('Đang tìm {0}', [step.target]) : t('Đang tìm') };
-  if (step.kind === 'list') return { state: 'listing', label: t('Đang liệt kê tệp') };
-  return { state: 'tool', label: t('Đang chạy một bước') };
+/** What a run is doing, with the sentence that names the worker doing it. */
+type Doing = { state: IslandState; sentence: (name: string) => string };
+
+const pausingDoing: Doing = { state: 'pausing', sentence: () => t('Đang dừng sau bước này…') };
+const thinkingDoing: Doing = { state: 'thinking', sentence: name => t('{0} đang suy nghĩ…', [name]) };
+const writingDoing: Doing = { state: 'writing', sentence: name => t('{0} đang viết câu trả lời…', [name]) };
+
+function doingOf(progress: HarnessProgress, pausing: boolean): Doing {
+  if (pausing) return pausingDoing;
+  if (progress.writing) return writingDoing;
+  const current = progress.activity.findLast(step => !step.done);
+  if (current) return stepDoing(current);
+  return thinkingDoing;
+}
+
+function stepDoing(step: ActivityStep): Doing {
+  const target = step.target;
+  if (step.kind === 'read') return { state: 'reading', sentence: name => target ? t('{0} đang đọc {1}…', [name, target]) : t('{0} đang đọc tệp…', [name]) };
+  if (step.kind === 'search') return { state: 'searching', sentence: name => target ? t('{0} đang tìm {1}…', [name, target]) : t('{0} đang tìm…', [name]) };
+  if (step.kind === 'list') return { state: 'listing', sentence: name => t('{0} đang liệt kê tệp…', [name]) };
+  return { state: 'tool', sentence: name => t('{0} đang chạy một bước…', [name]) };
+}
+
+/**
+ * The island says who (COD-169): one worker is named with what it is doing; several are counted, with every face
+ * shown, since the step on screen belongs to one of them. Pausing is the task's, not a worker's, so it has no name.
+ * `workers` are the ones whose runs are really running (`workingWorkers`), never the roster.
+ */
+function islandFor(doing: Doing, workers: readonly Worker[], receipt?: string): IslandView {
+  const label = doing.state === 'pausing' ? doing.sentence('')
+    : workers.length > 1 ? t('{0} Tí đang làm việc…', [workers.length])
+    : doing.sentence(workers[0]?.name ?? 'Orglet');
+  return { state: doing.state, label, receipt, workers };
 }
 
 /** The line above the label: the last finished step, or nothing while none has finished. */
@@ -101,18 +139,22 @@ function receiptOf(step: ActivityStep | undefined): string {
 /**
  * The island for a run that has not streamed anything yet, or never will: the few states the core's own events give
  * (planning, handing out, combining, a read it did itself, waiting for a turn). No receipt, because nothing finer
- * than these is observed. Details (versions, paths, costs) stay in Chi tiết.
+ * than these is observed. Details (versions, paths, costs) stay in Chi tiết. The first of `workers` is the run's own.
  */
-export function islandBeforeStreaming({ worker, stage, message, pausing }: { worker: Run['snapshot']['worker']; stage?: Run['stage']; message?: string; pausing: boolean }): IslandView {
+export function islandBeforeStreaming({ workers, stage, message, pausing }: { workers: readonly Worker[]; stage?: Run['stage']; message?: string; pausing: boolean }): IslandView {
+  return islandFor(doingBeforeStreaming({ stage, message, pausing }), workers);
+}
+
+function doingBeforeStreaming({ stage, message, pausing }: { stage?: Run['stage']; message?: string; pausing: boolean }): Doing {
   const read = message?.match(/^Đã đọc (.+)$/);
-  if (pausing) return { state: 'pausing', label: t('Đang dừng sau bước này') };
-  if (stage === 'plan' || message === 'Đang phân việc.') return { state: 'thinking', label: t('Đang phân việc') };
-  if (stage === 'member') return { state: 'thinking', label: t('Đang giao {0}', [worker.name]) };
-  if (stage === 'synthesis' || message?.startsWith('Đang tổng hợp')) return { state: 'writing', label: t('Đang tổng hợp') };
-  if (read) return { state: 'reading', label: t('Đang đọc {0}', [read[1]]) };
-  if (message?.startsWith('Đang chờ lượt')) return { state: 'waiting', label: t('Đang chờ lượt') };
-  if (message === 'Model đang trả kết quả…') return { state: 'writing', label: t('Đang viết câu trả lời') };
-  return { state: 'thinking', label: t('Đang suy nghĩ') };
+  if (pausing) return pausingDoing;
+  if (stage === 'plan' || message === 'Đang phân việc.') return { state: 'thinking', sentence: name => t('{0} đang phân việc…', [name]) };
+  if (stage === 'member') return { state: 'thinking', sentence: name => t('Đang giao {0}…', [name]) };
+  if (stage === 'synthesis' || message?.startsWith('Đang tổng hợp')) return { state: 'writing', sentence: name => t('{0} đang tổng hợp…', [name]) };
+  if (read) return { state: 'reading', sentence: name => t('{0} đang đọc {1}…', [name, read[1]]) };
+  if (message?.startsWith('Đang chờ lượt')) return { state: 'waiting', sentence: name => t('{0} đang chờ lượt…', [name]) };
+  if (message === 'Model đang trả kết quả…') return writingDoing;
+  return thinkingDoing;
 }
 
 function ElapsedLine({ since }: { since: number }) {
