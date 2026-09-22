@@ -1672,23 +1672,35 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   background:var(--bg); color:var(--text); box-shadow:0 2px 12px #00000008;
   /* The shadow stops at the seam: below it is the bar, which carries its own. The sides keep room for the fillets. */
   clip-path:inset(-24px calc(-24px - var(--island-fillet)) 0 calc(-24px - var(--island-fillet)));
-  animation:island-rise 220ms var(--ease-out);
+  transform-origin:50% 100%;
+  animation:island-rise 200ms var(--ease-out);
 }
 /* One outline for tab and bar: the same colour the bar's own focus rule sets. */
 .thread-composer:has(.composer:focus-within) .live-island { --island-line:color-mix(in srgb, var(--muted) 42%, var(--bg)); }
 .live-island::before,.live-island::after { content:""; position:absolute; bottom:0; width:calc(var(--island-fillet) + 1px); height:calc(var(--island-fillet) + 1px); }
 .live-island::before { left:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 0 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
 .live-island::after { right:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 100% 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
-/* Out of the bar's top edge and back into it: the tab moves as one and is cut at the seam, so it is poured rather
-   than faded. The resting rule above is the visible one, so nothing waits on either of these finishing; with
-   reduced motion the global rule below drops both and the tab simply is there, then is not. */
-.live-island.leaving { animation:island-sink 170ms var(--ease-out) forwards; }
-@keyframes island-rise { from { transform:translateY(100%); clip-path:inset(-24px calc(-24px - var(--island-fillet)) 100% calc(-24px - var(--island-fillet))); } }
-@keyframes island-sink { to { transform:translateY(100%); clip-path:inset(-24px calc(-24px - var(--island-fillet)) 100% calc(-24px - var(--island-fillet))); } }
+/* Out of the bar and back into it (COD-173). The tab is the bar's own material raised into a tab, so it moves the
+   way such a thing would: its base never leaves the bar. Arriving, it grows up out of the bar's edge, a scale from
+   the seam (`transform-origin` above), so the fillets stay planted and the top stays a pill as it comes, and the
+   faces and sentence surface inside it a beat later. Leaving, the sentence and faces fade first; then the empty
+   tab is drawn flat into the bar on one curve that starts slow (the content has that beat to go before the shape
+   moves), gathers speed and settles; and what is left of it, an outline thinned by the flattening, fades over the
+   last stretch, so the bar's edge is whole again without a line popping in. It used to slide down behind a mask,
+   which showed a flat-topped rectangle with straight sides half-way and the fillets clipped off. Nothing waits
+   on either animation: the resting rules are the visible ones, so under reduced motion (the global rule) the tab
+   simply is there, then is not; IslandDock drops the element a touch after `island-settle` ends. */
+.live-island.leaving { animation:island-settle 220ms cubic-bezier(.45, 0, .15, 1) forwards; }
+.live-island.leaving .live-island-body { animation:island-empty 110ms var(--ease-out) forwards; }
+@keyframes island-rise { from { transform:scaleY(0); } }
+@keyframes island-fill { from { opacity:0; } }
+@keyframes island-settle { 60% { opacity:1; } to { transform:scaleY(0); opacity:0; } }
+@keyframes island-empty { to { opacity:0; } }
 /* The width is set from the faces and label by LiveIsland, so a new label morphs the tab instead of cutting it. The
    receipt takes the width the label gives and never widens the tab; it opens its own row once it has something to
-   say, and the row's air under it opens with it, so an empty receipt costs no height (COD-169). */
-.live-island-body { display:flex; flex-direction:column; flex:0 1 auto; min-width:0; max-width:100%; overflow:hidden; transition:width 320ms var(--ease-out); }
+   say, and the row's air under it opens with it, so an empty receipt costs no height (COD-169). The body carries
+   the content's arrival, so the tab is up before the faces and sentence appear in it. */
+.live-island-body { display:flex; flex-direction:column; flex:0 1 auto; min-width:0; max-width:100%; overflow:hidden; transition:width 320ms var(--ease-out); animation:island-fill 160ms var(--ease-out) 60ms backwards; }
 .live-island-receipt-row { display:grid; grid-template-rows:1fr; padding-bottom:3px; transition:grid-template-rows 320ms var(--ease-out), padding-bottom 320ms var(--ease-out); }
 .live-island-receipt-row[data-empty] { grid-template-rows:0fr; padding-bottom:0; }
 /* Inset past the faces (measured by LiveIsland into --island-faces), so the line sits over the label. */

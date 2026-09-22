@@ -32,8 +32,11 @@ export function useDockedIsland() {
   return useSyncExternalStore(subscribe, () => docked, () => undefined);
 }
 
-/** How long the island stays mounted after the run ends, so its exit can play; matches `island-sink` in styles.css. */
-const EXIT_MS = 200;
+/**
+ * How long the island stays mounted after the run ends, so its exit can play: a touch over `island-settle` in
+ * styles.css, so the settle's last frame is painted before the element goes.
+ */
+const EXIT_MS = 240;
 
 /**
  * The island's place on the prompt bar. While a run is on, it shows the docked view; when the run ends it keeps the
