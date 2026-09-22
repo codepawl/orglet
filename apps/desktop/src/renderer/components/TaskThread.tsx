@@ -17,6 +17,7 @@ import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Markdown } from './Markdown';
 import { Attachment } from './Attachment';
+import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
 import { ActivityGroup, LiveRun, liveRunOf, savedSteps, useRunProgress } from './LiveRun';
@@ -42,7 +43,7 @@ function bylineRole(author: Run) {
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
 
-type Turn = { revision: number; runs: Run[]; brief: string; replyTo?: string; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
+type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; replyTo?: string; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
 
 /**
  * A task shown as one chat (user decision 2026-09-17): every message the user sent, oldest first, each followed by the
@@ -61,7 +62,7 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
     const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis')));
     // Group chat: each worker's latest answered run for this message, in the order they answered.
     const replies = runs.filter(run => run.stage === 'group').flatMap(run => { const reply = detail.artifacts.find(item => item.runId === run.id); return reply ? [{ run, artifact: reply }] : []; });
-    return { revision, runs, brief: input.brief, replyTo: 'replyTo' in input ? input.replyTo : undefined, sources: input.sourceIds.map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
+    return { revision, runs, sentAt: runs[0]?.startedAt ?? detail.task.createdAt, brief: input.brief, replyTo: 'replyTo' in input ? input.replyTo : undefined, sources: input.sourceIds.map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
   });
   const replyLabel = (messageId?: string) => {
     if (!messageId) return undefined;
@@ -104,7 +105,7 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
 
   return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
     <div className="thread-content">
-      {turns.map(turn => {
+      {turns.map((turn, index) => {
         const latest = turn.revision === current;
         const workFrame = turn.runs.find(run => run.stage === 'plan' && run.snapshot.workFrame)?.snapshot.workFrame
           ?? turn.runs.find(run => run.snapshot.workFrame)?.snapshot.workFrame;
@@ -129,7 +130,9 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
         // "Hoàn tất" carrying a line of internal validation text (user, 2026-09-19). A paused task keeps its own
         // explanation just below, so it is quiet here too.
         const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
+        const previousSentAt = turns[index - 1]?.sentAt;
         return <div className="chat-turn" key={turn.revision}>
+          {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
               of the text, rather than stacking one per line inside it (user, 2026-09-21). */}
           {turn.sources.length > 0 && <ul className="message-files" aria-label={t('Tệp đính kèm')}>
