@@ -215,3 +215,15 @@ it.each((['openai', 'claude-code', 'codex', 'cursor'] as const).flatMap(provider
     restored.close();
   }
 });
+
+it('keeps the working folder when a retried turn reassigns work (COD-188)', () => {
+  const { source, target, lead, task, input, recovery } = fixture();
+  const grant = { id: id(), taskId: task.id, revision: 1, permissions: ['read', 'write', 'execute'] as ('read' | 'write' | 'execute')[] };
+  const started = { frozenAt: now() } as unknown as NonNullable<Run['snapshot']['context']>;
+  store.update('runs', { ...source, snapshot: { ...source.snapshot, workspaceGrant: grant, context: started } });
+  // The retry's attempt for the recipient comes after the first, cancelled one that had no folder yet.
+  const retried: Run = { ...target, id: id(), status: 'failed', snapshot: { ...target.snapshot, workspaceGrant: grant, context: started } };
+  store.put('runs', retried, { column: 'task_id', value: task.id });
+  const prepared = recovery.prepare(lead, 'after-retry', input);
+  expect(prepared.snapshot.workspaceGrant).toEqual(grant);
+});

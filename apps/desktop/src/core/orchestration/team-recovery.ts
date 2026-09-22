@@ -3,6 +3,7 @@ import { ReassignTeamWork, TeamReassignment } from '../../shared/team-messages';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { Store, id, now } from '../storage/database';
 import { assignmentKey } from './assignments';
+import { WorkspaceGrants } from '../storage/workspace-grants';
 
 /** Lead decisions create bounded member attempts, never new workers or broader grants. */
 export class TeamRecovery {
@@ -33,7 +34,9 @@ export class TeamRecovery {
       const plan = runs.findLast(run => run.stage === 'plan' && run.status === 'completed')?.snapshot.plan;
       const assignment = plan?.assignments.find(item => item.workerId === input.assignmentWorkerId);
       const source = runs.findLast(run => run.stage === 'member' && assignmentKey(run) === input.assignmentWorkerId);
-      const recipient = runs.find(run => run.stage === 'member' && !run.snapshot.reassignment && run.snapshot.worker.id === input.newWorkerId);
+      // A retried turn keeps its input revision, so its first, cancelled attempt is still in this list; the latest
+      // attempt is the one that carries what the chat allows now (COD-188).
+      const recipient = runs.findLast(run => run.stage === 'member' && !run.snapshot.reassignment && run.snapshot.worker.id === input.newWorkerId);
       if (!assignment || !source || !recipient || !team.memberIds.includes(input.newWorkerId)
         || !['failed', 'interrupted', 'cancelled'].includes(source.status)
         || runs.some(run => run.stage === 'member' && assignmentKey(run) === input.assignmentWorkerId && run.status === 'completed')) {
@@ -45,7 +48,8 @@ export class TeamRecovery {
       const originalCapabilities = source.snapshot.toolCapabilities ?? snapshotCapabilities(source.snapshot.worker.provider);
       const recipientCapabilities = recipient.snapshot.toolCapabilities ?? snapshotCapabilities(recipient.snapshot.worker.provider);
       const originalGrant = source.snapshot.workspaceGrant;
-      const recipientGrant = recipient.snapshot.workspaceGrant;
+      // A run fixes its grant when it first starts (COD-178); one that has not started yet goes by the chat's current grant.
+      const recipientGrant = recipient.snapshot.context ? recipient.snapshot.workspaceGrant : new WorkspaceGrants(this.store).snapshot(task.id);
       const workspaceGrant = originalGrant && recipientGrant && originalGrant.id === recipientGrant.id
         && originalGrant.revision === recipientGrant.revision && originalGrant.taskId === recipientGrant.taskId
         ? { ...originalGrant, permissions: originalGrant.permissions.filter(permission => recipientGrant.permissions.includes(permission)) } : undefined;
