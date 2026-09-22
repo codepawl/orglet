@@ -848,6 +848,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .notice-filter:hover { color:var(--text); }
 .notice-filter.on { background:color-mix(in srgb, var(--accent) 18%, var(--bg)); color:var(--text); }
 .notice-list { list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.notice-empty { margin:24px 0 0; padding:0 10px; font-size:13px; }
 .notice-day { margin:14px 0 6px; color:var(--muted); font-size:11.5px; font-weight:600; }
 .notice-list > li:first-child .notice-day { margin-top:0; }
 /* A row is a div, or a button when it folds repeats (COD-174); both read the same, and only the icon carries the kind's colour. */

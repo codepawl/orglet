@@ -40,7 +40,7 @@ export function NoticeCentre({ open, onClose }: { open: boolean; onClose: () => 
       </button>)}
     </div>
     {rows.length === 0
-      ? <p className="muted">{notices.length === 0 ? t('Chưa có thông báo nào.') : t('Không có thông báo nào thuộc mục này.')}</p>
+      ? <p className="muted notice-empty">{notices.length === 0 ? t('Chưa có thông báo nào.') : t('Không có thông báo nào thuộc mục này.')}</p>
       : <ol className="notice-list">
         {rows.map((row, index) => {
           const day = dayLabel(row.notice.at);
