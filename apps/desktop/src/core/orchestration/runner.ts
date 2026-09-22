@@ -90,13 +90,29 @@ function addHarnessCost(accumulatedMicros: number | undefined, costUsd: number) 
   return accumulated;
 }
 
-/** The activity line for one CLI call: its own estimate counts toward this chat's cap, never toward an Orglet ledger. */
-function harnessCostLine(name: string, costUsd: number | null, stopped = false) {
+/** What a run's CLI calls have reported so far, kept on the checkpoint so a resumed run continues the same count. */
+type HarnessRunTotal = Pick<Checkpoint, 'harnessCostMicros' | 'harnessCallsWithoutCost'>;
+
+/** "total $0.5000 in this run", or a floor when some call of the run reported nothing. */
+function harnessRunTotalPhrase(total: HarnessRunTotal) {
+  const amount = `$${((total.harnessCostMicros ?? 0) / 1_000_000).toFixed(4)}`;
+  const callsWithoutCost = total.harnessCallsWithoutCost ?? 0;
+  if (!callsWithoutCost) return `tổng ${amount} trong lượt chạy này`;
+  return `tổng ít nhất ${amount} trong lượt chạy này, ${callsWithoutCost} lần gọi không báo chi phí`;
+}
+
+/**
+ * The activity line for one CLI call: its own estimate counts toward this chat's cap, never toward an Orglet ledger.
+ * In the tool loop every step is one CLI call, so the line also carries the run's running total (COD-183).
+ */
+function harnessCostLine(name: string, costUsd: number | null, stopped = false, total?: HarnessRunTotal) {
   if (stopped) {
     if (costUsd === null) return `${name} dừng ở giới hạn; không báo chi phí.`;
+    if (total) return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
     return `${name} dừng ở giới hạn; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
   }
   if (costUsd === null) return `${name} đã trả lời; không báo chi phí.`;
+  if (total) return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
   return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
 }
 
@@ -119,22 +135,29 @@ function stepLimit(run: Run) {
 
 const MAX_REQUEST_BYTES = 200_000;
 const TRIMMED_PAGE_CHARACTERS = 1_500;
+/**
+ * How many of the latest web pages keep their full text in every request. Each model step resends the whole
+ * conversation, and a CLI harness spawns a fresh process for it, so a page read ten steps ago was paid for ten times
+ * over; once the worker has moved on, the page's start is enough to remember what it said (COD-183).
+ */
+export const FULL_WEB_PAGES_KEPT = 2;
 
 /**
- * Shortens the text of every web page read before the latest one, so a research run that has read several pages can
- * keep going instead of failing on the context limit (COD-184). The address and title stay, and the worker is told it
- * can read the page again. Returns whether anything was trimmed.
+ * Shortens the text of every web page read before the latest `keepLatest` ones. The address, title and provenance
+ * stay, the page is marked truncated, and the worker is told it can read the page again. Before every model step this
+ * cuts the pages the worker has moved on from (COD-183); with `keepLatest` 1 it is the last resort before the request
+ * would exceed the context limit (COD-184). Returns whether anything was trimmed.
  */
-function trimOlderWebPages(messages: { role: string; content?: unknown }[]) {
+export function trimOlderWebPages(messages: { role: string; content?: unknown }[], keepLatest: number) {
   const pageIndexes = messages.flatMap((message, index) => message.role === 'tool' && isWebPage(message.content) ? [index] : []);
   let trimmed = false;
-  for (const index of pageIndexes.slice(0, -1)) {
+  for (const index of pageIndexes.slice(0, -keepLatest)) {
     const page = JSON.parse(messages[index].content as string);
     const characters = Array.from(String(page.content));
     if (characters.length <= TRIMMED_PAGE_CHARACTERS) continue;
     page.content = characters.slice(0, TRIMMED_PAGE_CHARACTERS).join('');
     page.truncated = true;
-    page.trimmedForContext = 'Only the start of this page is kept to fit the context limit. Call web_read_url again for the full text.';
+    page.trimmedForContext = 'Only the start of this page is kept: every step resends the whole conversation, so pages you have moved on from are shortened. Call web_read_url again for the full text.';
     messages[index] = { ...messages[index], content: JSON.stringify(page) };
     trimmed = true;
   }
@@ -276,6 +299,8 @@ export class Runner {
     const heartbeat = setInterval(() => this.checkpoints.claim(run.id), 5000);
     let harnessDirectory: string | undefined;
     let retainHarnessDirectory = false;
+    /** The tool loop's running CLI total, so a budget stop's activity line can say what the run had spent (COD-183). */
+    let harnessRunTotal: HarnessRunTotal | undefined;
     try {
       new WorkspaceRecovery(this.store).assertAvailable(run.id);
       const input = RunInput.parse(run.snapshot.input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources });
@@ -445,13 +470,16 @@ export class Runner {
         harnessDirectory = await mkdtemp(join(tmpdir(), 'orglet-tool-harness-'));
 
         model = harnessToolAdapter({ execute: async request => {
-          const callDirectory = await mkdtemp(join(harnessDirectory!, 'call-'));
+          // Codex and Cursor write their schema and policy files into a fresh directory per call. Claude Code writes
+          // nothing there and has no native tools to read it with, and its working directory is part of the fixed prompt
+          // it sends the provider, so one directory per run keeps that prompt identical from step to step (COD-183).
+          const callDirectory = provider === 'claude-code' ? harnessDirectory! : await mkdtemp(join(harnessDirectory!, 'call-'));
           try { return await this.harness.execute({ ...request, cwd: callDirectory, maxBudgetUsd: harnessRemainingUsd }); }
           catch (error) {
             if (error instanceof HarnessTerminationError) retainHarnessDirectory = true;
             throw error;
           } finally {
-            if (!retainHarnessDirectory) await rm(callDirectory, { recursive: true, force: true });
+            if (!retainHarnessDirectory && callDirectory !== harnessDirectory) await rm(callDirectory, { recursive: true, force: true });
           }
         },
           request: { harness: provider, executable: harness.executable, cwd: harnessDirectory,
@@ -459,12 +487,12 @@ export class Runner {
             ...(harness.configDir ? { configDir: harness.configDir } : {}),
             ...(run.snapshot.model ? { model: run.snapshot.model } : {}) },
           onResult: result => {
-            if (result.costUsd !== null) {
-              checkpoint = { ...checkpoint, harnessCostMicros: addHarnessCost(checkpoint.harnessCostMicros, result.costUsd) };
-              this.checkpoints.save({ ...checkpoint, phase: 'requesting' });
-            }
+            checkpoint = result.costUsd === null
+              ? { ...checkpoint, harnessCallsWithoutCost: (checkpoint.harnessCallsWithoutCost ?? 0) + 1 }
+              : { ...checkpoint, harnessCostMicros: addHarnessCost(checkpoint.harnessCostMicros, result.costUsd) };
+            this.checkpoints.save({ ...checkpoint, phase: 'requesting' });
             if (result.notice) this.event(run.id, result.notice);
-            this.event(run.id, harnessCostLine(harness.name, result.costUsd));
+            this.event(run.id, harnessCostLine(harness.name, result.costUsd, false, checkpoint));
           },
         });
       } else model = await this.adapter(run.snapshot.worker.provider, run.snapshot.model);
@@ -490,8 +518,10 @@ export class Runner {
         const requestTools = checkpoint.reportCorrections
           ? tools.filter(tool => tool.type === 'function' && tool.function.name === 'submit_report') : tools;
         const measureInput = () => Buffer.byteLength(JSON.stringify({ messages, tools: requestTools }), 'utf8') + 8192;
+        // Pages the worker has already moved on from go out as excerpts, so the request stops growing with each page read.
+        if (trimOlderWebPages(messages, FULL_WEB_PAGES_KEPT)) this.event(run.id, 'Đã rút gọn các trang web đọc trước đó; các bước sau chỉ gửi lại phần đầu của chúng.');
         let upperInput = measureInput();
-        if (upperInput > MAX_REQUEST_BYTES && trimOlderWebPages(messages)) {
+        if (upperInput > MAX_REQUEST_BYTES && trimOlderWebPages(messages, 1)) {
           this.event(run.id, 'Đã rút gọn các trang web đọc trước đó để vừa giới hạn context.');
           upperInput = measureInput();
         }
@@ -517,8 +547,11 @@ export class Runner {
                 // The CLI answered with a budget stop, so what it spent is known and the step can run again once the
                 // limit is raised; an unknown in-flight request would stay at 'requesting'.
                 if (error instanceof HarnessBudgetError) {
-                  if (error.costUsd !== null) checkpoint = { ...checkpoint, harnessCostMicros: addHarnessCost(checkpoint.harnessCostMicros, error.costUsd) };
+                  checkpoint = error.costUsd === null
+                    ? { ...checkpoint, harnessCallsWithoutCost: (checkpoint.harnessCallsWithoutCost ?? 0) + 1 }
+                    : { ...checkpoint, harnessCostMicros: addHarnessCost(checkpoint.harnessCostMicros, error.costUsd) };
                   this.checkpoints.save({ ...checkpoint, phase: 'ready' });
+                  harnessRunTotal = checkpoint;
                 }
                 throw error;
               }
@@ -774,7 +807,7 @@ export class Runner {
       }
       throw new Error(run.snapshot.workspaceGrant ? 'Đã chạm giới hạn 24 bước mà chưa hoàn tất công việc.' : `Đã chạm giới hạn ${maxSteps} bước mà chưa có báo cáo hợp lệ.`);
     } catch (error) {
-      if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true));
+      if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true, harnessRunTotal));
       const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error) : 'Lần chạy gặp lỗi.';
       const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
       if (options.keepTaskOpen) this.store.update('runs', { ...run, status, error: message });

@@ -166,7 +166,9 @@ it.each((['claude-code', 'codex', 'cursor'] as const).flatMap(provider =>
   expect(detail.task.status).toBe(mode === 'cancel-integration' ? 'cancelled' : mode === 'conflict' ? 'failed' : 'completed');
   expect(detail.artifacts).toHaveLength(['conflict', 'cancel-integration'].includes(mode) ? 0 : 1);
   expect(calls).toBe(mode === 'read' ? 2 : 3);
-  expect(new Set(directories).size).toBe(calls);
+  // Codex and Cursor write files into a fresh directory per call. Claude Code writes nothing and has no native tools,
+  // and its working directory is part of the fixed prompt it sends, so a run keeps one directory (COD-183).
+  expect(new Set(directories).size).toBe(provider === 'claude-code' ? 1 : calls);
   expect(store.db.prepare('SELECT state FROM tool_calls').all()).toEqual(Array.from({ length: calls - 1 }, () => ({ state: 'completed' })));
   expect(store.db.prepare('SELECT * FROM reservations').all()).toEqual([]);
   expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe(mode === 'edit' ? 'CLI edit' : mode === 'conflict' ? 'user edit' : 'original');
