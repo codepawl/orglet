@@ -117,6 +117,16 @@ Orglet ships with its own two fonts: **Inter** for the interface and **JetBrains
 **Cài đặt → Chung** can put another family in either role. The picker lists the bundled font first, then the suggested families this machine actually has — measured by drawing text in the family against a generic fallback, because `document.fonts.check` answers yes to any name — and **Phông khác…** takes a family typed by hand. A family name is letters, digits, spaces, periods and hyphens only (`shared/fonts.ts`), because the name is written into a CSS custom property; anything else is refused and the bundled font stays. Each option is drawn in the font it names, and the sample under the two rows shows the pair together with Vietnamese diacritics and the characters a code font is picked for.
 
 The choice is stored like the accent colour and applied to `--font` and `--font-mono` on the root element, so it reaches every surface at once and survives a restart. A picked family that is missing falls through to the bundled font, never to blank text.
+## Deleting data
+
+**Cài đặt → Dữ liệu** removes what the app has kept. Every deletion refuses while a task, routine or checker is running, runs in one transaction, and reports what it actually removed.
+
+- **Xóa lịch sử trò chuyện** deletes every chat through the same path a single chat uses, so the existing rules hold: a chat that cost money leaves a cost tombstone, and knowledge it taught keeps the artifact it cites. Workers, teams, skills and knowledge stay.
+- **Xóa kiến thức** clears `knowledge`, its revisions and its search rows, including proposals waiting for review.
+- **Xóa nguồn đã nhập** removes source rows. Orglet keeps no copy of an imported file — a source is a path plus a hash — so nothing of the person's own is touched. A source a chat still refers to cannot be removed, because opening that chat reads its sources; it is revoked and its path and hash are dropped instead, which leaves the app unable to read the file and the chat still able to open.
+- **Xóa toàn bộ dữ liệu** empties every table (`ERASE_TABLES` in `core/storage/erase.ts`, children before parents) and seeds the workspace again with the Researcher and its skill. It asks the person to type `Orglet` first. An integration test compares that list against `sqlite_master`, so a new table cannot be forgotten.
+
+API keys are not in the database — they are encrypted in the credential store beside it — so no deletion here touches them. Harness account folders belong to Settings → Harness and are not touched either.
 
 ## Current limits
 

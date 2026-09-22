@@ -19,6 +19,8 @@ import { StatusMark, type StatusMarkState } from './StatusMark';
 import { InfoTip } from './InfoTip';
 import { RowMenu } from './RowMenu';
 import { toast } from './toast';
+import { confirmAction } from './confirm';
+import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../../shared/erase';
 import { Switch } from './Switch';
 import { t, tMessage } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
@@ -163,6 +165,43 @@ function FontSetting({ role, title, description, value, busy, onPick }: {
   </div>;
 }
 
+/**
+ * One deletion. Three of them ask a plain yes/no; the full erase asks the person to type the app's name in a
+ * popover beside its own row, because it is the one that cannot be undone from inside Orglet.
+ */
+function EraseRow({ scope, title, description, question, busy, onErase }: {
+  scope: EraseScope; title: string; description: string; question: string; busy: boolean;
+  onErase: (scope: EraseScope, confirm?: string) => void;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+  const [typed, setTyped] = useState<string>();
+  const total = scope === 'everything';
+  const start = async () => {
+    if (total) { setTyped(''); return; }
+    if (await confirmAction({ title: question, description, confirmLabel: t('Xóa') })) onErase(scope);
+  };
+  return <div ref={row}>
+    <Row title={title} description={description}>
+      <Button variant="outline" className="danger" disabled={busy} onClick={() => void start()}><Trash2 size={14} />{t('Xóa')}</Button>
+    </Row>
+    <AnchoredPopover anchor={row} open={typed !== undefined} onClose={() => setTyped(undefined)} label={question}>
+      <form className="erase-form" onSubmit={event => {
+        event.preventDefault();
+        if (typed !== ERASE_CONFIRMATION) return;
+        setTyped(undefined);
+        onErase(scope, ERASE_CONFIRMATION);
+      }}>
+        <label htmlFor="erase-confirm">{t('Gõ {0} để xác nhận. Không hoàn tác được.', [ERASE_CONFIRMATION])}</label>
+        <div>
+          <input id="erase-confirm" autoFocus value={typed ?? ''} maxLength={20} disabled={busy} autoComplete="off" spellCheck={false}
+            onChange={event => setTyped(event.target.value)} />
+          <Button type="submit" variant="outline" className="danger" disabled={busy || typed !== ERASE_CONFIRMATION}>{t('Xóa toàn bộ')}</Button>
+        </div>
+      </form>
+    </AnchoredPopover>
+  </div>;
+}
+
 function Row({ title, description, children, id }: { title: string; description?: ReactNode; children?: ReactNode; id?: string }) {
   return <div className="setting-row">
     <div className="setting-text"><span id={id} className="setting-title">{title}</span>{description && <span className="setting-description">{description}</span>}</div>
@@ -240,6 +279,16 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, ...patch });
     return t('Đã lưu');
   });
+  const eraseMessage = (summary: EraseSummary) => {
+    if (summary.scope === 'everything') return t('Đã xóa toàn bộ dữ liệu. Orglet trở lại như mới cài.');
+    if (summary.scope === 'knowledge') return t('Đã xóa {0} mục kiến thức.', [summary.knowledge]);
+    if (summary.scope === 'chats') return t('Đã xóa {0} cuộc trò chuyện.', [summary.chats]);
+    return summary.sourcesForgotten
+      ? t('Đã xóa {0} nguồn, thu hồi {1} nguồn còn được trò chuyện nhắc tới.', [summary.sources, summary.sourcesForgotten])
+      : t('Đã xóa {0} nguồn.', [summary.sources]);
+  };
+  const erase = (scope: EraseScope, confirm?: string) => void act(async () =>
+    eraseMessage(await orglet.call('eraseData', { scope, ...(confirm ? { confirm } : {}) })));
   const commitLimit = () => {
     const micros = toMicros(limit);
     if (!Number.isFinite(micros) || micros < 1000 || micros > 1_000_000_000) { setLimitError(t('Nhập từ {0} đến {1}.', [formatMoney(1000), formatMoney(1_000_000_000)])); return; }
@@ -478,6 +527,22 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Khôi phục')} description={t('Bổ sung các mục còn thiếu, giữ nguyên dữ liệu và cài đặt hiện tại. Nguồn khôi phục cần được chọn lại để cấp quyền đọc.')}>
                 <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.restore()) ? t('Đã khôi phục các mục còn thiếu') : undefined)}><ArchiveRestore size={14} />{t('Khôi phục từ tệp')}</Button>
               </Row>
+              <EraseRow busy={busy} scope="chats" onErase={erase}
+                title={t('Xóa lịch sử trò chuyện')}
+                description={t('Mọi cuộc trò chuyện, câu trả lời và báo cáo. Tí, hội, skill và kiến thức được giữ lại; cuộc trò chuyện đã tốn phí chỉ giữ lại số liệu chi phí.')}
+                question={t('Xóa mọi cuộc trò chuyện và báo cáo?')} />
+              <EraseRow busy={busy} scope="knowledge" onErase={erase}
+                title={t('Xóa kiến thức')}
+                description={t('Mọi điều Tí đã học và được bạn duyệt, kể cả đề xuất đang chờ duyệt.')}
+                question={t('Xóa toàn bộ kiến thức đã tích lũy?')} />
+              <EraseRow busy={busy} scope="sources" onErase={erase}
+                title={t('Xóa nguồn đã nhập')}
+                description={t('Orglet chỉ quên các tệp đã nhập, không đụng đến tệp gốc trên máy. Nguồn còn được một cuộc trò chuyện nhắc tới sẽ bị thu hồi quyền đọc thay vì xóa, để cuộc trò chuyện đó vẫn mở được.')}
+                question={t('Quên mọi tệp nguồn đã nhập?')} />
+              <EraseRow busy={busy} scope="everything" onErase={erase}
+                title={t('Xóa toàn bộ dữ liệu')}
+                description={t('Đưa app về như mới cài: trò chuyện, Tí, hội, skill, lịch chạy, nguồn, kiến thức và cài đặt. API key nằm ngoài cơ sở dữ liệu nên không bị đụng tới.')}
+                question={t('Xóa sạch mọi thứ trong Orglet?')} />
               <Row title={t('Phiên bản')} description={`Orglet ${appVersion} · SQLite ${workspace.sqliteVersion}`} />
               <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi cuộc trò chuyện, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet, và không một bí mật nào bị tổn hại trong quá trình làm ra app này.')} />
             </>}
