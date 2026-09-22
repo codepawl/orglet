@@ -132,8 +132,9 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
   const accountEnv = harnessAccountEnv(id, selection.configDir);
   const describe = (auth: HarnessInfo['auth'], detail: string) => describeAuth(id, executable, platform, auth, detail, selection);
   const versionResult = await run(executable, ['--version'], accountEnv);
-  const version = output(versionResult).trim().split(/\r?\n/)[0]?.slice(0, 120) ?? '';
-  if (versionResult.code !== 0 || !/\d+\.\d+/.test(version)) return null;
+  // Keep only the number: "2.1.280 (Claude Code)" and "codex-cli 0.155.0" otherwise repeat the name the picker already shows.
+  const version = /\d+\.\d+[\w.+-]*/.exec(output(versionResult).trim().split(/\r?\n/)[0] ?? '')?.[0].slice(0, 120) ?? '';
+  if (versionResult.code !== 0 || !version) return null;
 
   const name = harnessNames[id];
   const signedOut = `Đã thấy ${name} trên máy, nhưng chưa đăng nhập nên chưa sẵn sàng chạy. Chạy lệnh bên dưới trong terminal.`;
