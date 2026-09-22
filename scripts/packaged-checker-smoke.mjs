@@ -124,9 +124,12 @@ try {
     const detail = await window.orglet.call('task', { id: taskId });
     const workspace = await window.orglet.call('workspace', {});
     const worker = workspace.workers.find(person => person.id === detail.task.workerId);
-    await window.orglet.call('saveWorker', { ...worker, provider: 'openai' });
+    await window.orglet.call('saveWorker', { ...worker, provider: 'ollama' });
     return worker;
   }, result.id);
+  // A provider that is not connected is a blocker of its own, so the controls stay disabled until one is: Ollama
+  // connects with a local sentinel and no key, which is the only connection a packaged smoke can make offline.
+  await page.evaluate(() => window.orglet.connect('ollama'));
   // Choosing a level opens the native picker straight away; the stubbed picker records the title it was given.
   await page.waitForFunction(() => !document.querySelector('.task-tools [role=combobox]')?.disabled);
   await folderAccess.focus();
@@ -149,6 +152,8 @@ try {
   await webAccess.press('Space');
   await page.waitForFunction(async taskId => !(await window.orglet.call('task', { id: taskId })).task.toolCapabilities?.includes('network.web'), result.id);
   await page.evaluate(async worker => { await window.orglet.call('saveWorker', worker); }, originalWorker);
+  // Put the connection back as it was, so the later assertion that a packaged app starts with none still holds.
+  await page.evaluate(() => window.orglet.disconnect('ollama'));
   // DOM geometry checks work without desktop screenshots or computer-use automation.
   await page.setViewportSize({ width: 780, height: 700 });
   const toolLayout = await toolsPanel.evaluate(panel => {
