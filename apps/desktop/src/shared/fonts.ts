@@ -10,6 +10,14 @@ export const BUNDLED_CODE_FONT = 'JetBrains Mono';
 
 export const FontFamily = z.string().trim().min(1).max(64).regex(/^[\p{L}\p{N} .-]+$/u, 'Font family');
 
+/**
+ * The interface default (owner's pick, 2026-09-22): SF Pro first, which macOS supplies itself and a person on
+ * another platform can install for their own machine. Orglet does not ship it — Apple licenses it for use on
+ * Apple platforms, so it cannot be bundled — and the bundled Inter stands right behind it, which is what a
+ * machine without SF Pro actually draws.
+ */
+const INTERFACE_PREFERRED = ['SF Pro Text', 'SF Pro Display'];
+
 /** Kept after the chosen family so text still renders when it is missing, and so emoji keep their own font. */
 const INTERFACE_FALLBACK = 'ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"';
 const CODE_FALLBACK = 'ui-monospace, "Cascadia Mono", Consolas, monospace';
@@ -21,7 +29,10 @@ export const bundledFont = (role: FontRole) => role === 'interface' ? BUNDLED_IN
 export function fontStack(role: FontRole, family?: string): string {
   const fallback = role === 'interface' ? INTERFACE_FALLBACK : CODE_FALLBACK;
   const chosen = FontFamily.safeParse(family);
-  const names = chosen.success && chosen.data !== bundledFont(role) ? [chosen.data, bundledFont(role)] : [bundledFont(role)];
+  // Nothing picked means the default stack; a pick replaces the preference, not the bundled face behind it.
+  const preferred = chosen.success ? [] : role === 'interface' ? INTERFACE_PREFERRED : [];
+  const picked = chosen.success && chosen.data !== bundledFont(role) ? [chosen.data] : [];
+  const names = [...preferred, ...picked, bundledFont(role)];
   return `${names.map(name => `"${name}"`).join(', ')}, ${fallback}`;
 }
 

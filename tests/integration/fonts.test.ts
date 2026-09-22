@@ -7,13 +7,16 @@ import { BUNDLED_CODE_FONT, BUNDLED_INTERFACE_FONT, FontFamily, fontStack } from
 import type { Workspace } from '../../apps/desktop/src/shared/contracts';
 
 describe('fonts', () => {
-  it('keeps the bundled font behind whatever the person picked', () => {
-    expect(fontStack('interface')).toMatch(new RegExp(`^"${BUNDLED_INTERFACE_FONT}", ui-sans-serif`));
+  it('leads with SF Pro by default and keeps the bundled font behind it', () => {
+    // SF Pro is not shipped: macOS supplies it, and anyone else installs it themselves, so Inter must stand behind it.
+    expect(fontStack('interface')).toMatch(new RegExp(`^"SF Pro Text", "SF Pro Display", "${BUNDLED_INTERFACE_FONT}", ui-sans-serif`));
+    // The code role was not part of that decision.
     expect(fontStack('code')).toMatch(new RegExp(`^"${BUNDLED_CODE_FONT}", ui-monospace`));
-    // A chosen family comes first, and the bundled one stays as the next fallback rather than being replaced.
-    expect(fontStack('interface', 'Segoe UI')).toBe(`"Segoe UI", "${BUNDLED_INTERFACE_FONT}", ${fontStack('interface').slice(`"${BUNDLED_INTERFACE_FONT}", `.length)}`);
+    // A picked family replaces the preference, not the bundled face behind it.
+    expect(fontStack('interface', 'Segoe UI')).toMatch(new RegExp(`^"Segoe UI", "${BUNDLED_INTERFACE_FONT}", ui-sans-serif`));
+    expect(fontStack('interface', 'Segoe UI')).not.toContain('SF Pro');
     // Picking the bundled font by name is not the same family twice.
-    expect(fontStack('code', BUNDLED_CODE_FONT)).toBe(fontStack('code'));
+    expect(fontStack('code', BUNDLED_CODE_FONT)).toMatch(new RegExp(`^"${BUNDLED_CODE_FONT}", ui-monospace`));
   });
 
   it('refuses a family name that could carry more CSS than a family name', () => {

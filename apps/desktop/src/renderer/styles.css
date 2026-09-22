@@ -11,7 +11,7 @@
 
 :root {
   /* Both fonts are set from the workspace in App.tsx; these are what the sheet uses until it arrives. */
-  --font: "Inter", ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font: "SF Pro Text", "SF Pro Display", "Inter", ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --font-sans: var(--font); --default-font-family: var(--font);
   font-family: var(--font); font-size: 14px; line-height: 1.5; color-scheme: light;
