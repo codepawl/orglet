@@ -100,7 +100,7 @@ export class CoreService {
     return grant;
   }
   async command(command: Command, raw: unknown): Promise<unknown> {
-    if (!Object.hasOwn(commands, command)) throw new Error('IPC command không được phép.');
+    if (!Object.hasOwn(commands, command)) throw new Error(`Bản Orglet đang chạy không có lệnh "${command}": giao diện và phần lõi đang khác phiên bản. Tải lại cửa sổ (Ctrl+R) hoặc khởi động lại app.`);
     const args = commands[command].parse(raw);
     switch (command) {
       case 'workspace': {

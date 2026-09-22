@@ -78,13 +78,13 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     setBusy(true); clearError();
     try {
       await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}) });
-      toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí')); onClose();
+      toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name); onClose();
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
 
   return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : tab === 'permissions' ? t('Áp dụng cho chat riêng của Tí. Chat hội có quyền riêng trong Chi tiết.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
     {tab === 'general' && <>
-      <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error'))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
+      <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} /></label>
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><Input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
       <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>
@@ -143,11 +143,11 @@ function WorkerChatPermissions({ worker, workspace, draft }: { worker?: Worker; 
   const readGrant = async (taskId: string) => setGrant(await orglet.call('workspaceAccess', { taskId }));
   useEffect(() => {
     if (!chat) return;
-    void readGrant(chat.id).catch(error => toast(tMessage(String(error)), 'error'));
+    void readGrant(chat.id).catch(error => toast(tMessage(String(error)), 'error', t('Quyền của {0}', [name])));
   }, [chat?.id]);
   const change = (perform: () => Promise<void>) => {
     setBusy(true);
-    void perform().catch(error => toast(tMessage(String(error)), 'error')).finally(() => setBusy(false));
+    void perform().catch(error => toast(tMessage(String(error)), 'error', t('Quyền của {0}', [name]))).finally(() => setBusy(false));
   };
   const onCapability = (capability: ToolCapability, enabled: boolean) => change(async () => {
     if (!chat || !worker) return;

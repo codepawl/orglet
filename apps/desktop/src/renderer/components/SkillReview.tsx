@@ -18,7 +18,7 @@ export function SkillLibraryActions({ onOpen }: { onOpen: (skill?: Skill) => voi
     <Button variant="outline" disabled={busy} onClick={async () => {
       setBusy(true);
       try { const skill = await orglet.importSkill(); if (skill) onOpen(skill); }
-      catch (err) { toast((err as Error).message, 'error'); } finally { setBusy(false); }
+      catch (err) { toast((err as Error).message, 'error', t('Nhập skill từ thư mục')); } finally { setBusy(false); }
     }}><FolderInput size={16} />{t('Nhập từ thư mục')}</Button>
     <Button variant="outline" onClick={() => onOpen()}><Plus size={16} />{t('Tạo skill')}</Button>
   </>;
@@ -74,7 +74,7 @@ export function SkillReview({ skill, done }: { skill: Skill; done: () => void })
       </>}
       <Button variant="outline" disabled={busy} onClick={async () => {
         setBusy(true); setError('');
-        try { if (await orglet.exportSkill(skill.id)) toast(t('Đã xuất gói skill vào thư mục mới')); }
+        try { if (await orglet.exportSkill(skill.id)) toast(t('Đã xuất gói skill vào thư mục mới'), 'success', skill.name); }
         catch (err) { setError((err as Error).message); } finally { setBusy(false); }
       }}>{t('Xuất gói skill')}</Button>
     </>}

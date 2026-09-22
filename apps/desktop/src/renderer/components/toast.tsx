@@ -11,11 +11,15 @@ let nextId = 1;
 const listeners = new Set<() => void>();
 const emit = () => { for (const listener of listeners) listener(); };
 
-/** Short-lived confirmation or failure message shown above everything, instead of text left inside a panel. */
-export function toast(text: string, tone: Toast['tone'] = 'success') {
+/**
+ * Short-lived confirmation or failure message shown above everything, instead of text left inside a panel.
+ * `about` is what the message concerns (the setting, the worker, the chat): the toast itself stays short, because
+ * the control it answers is under the cursor, and the notice centre shows it later, when that context is gone.
+ */
+export function toast(text: string, tone: Toast['tone'] = 'success', about?: string) {
   const id = nextId++;
   // Every toast is also kept, so a message missed while looking elsewhere can still be found (user, 2026-09-20).
-  recordNotice(text, tone === 'error' ? 'error' : 'done');
+  recordNotice(text, tone === 'error' ? 'error' : 'done', about);
   // A repeated message replaces its older copy; at most three are visible.
   toasts = [...toasts.filter(item => item.text !== text), { id, text, tone }].slice(-3);
   emit();

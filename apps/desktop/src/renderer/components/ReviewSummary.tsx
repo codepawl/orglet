@@ -3,8 +3,7 @@ import type { SourceTarget } from './SourcePanel';
 import { Button } from './ui';
 import { useState } from 'react';
 import { toast } from './toast';
-import { t } from '../i18n';
-import { translated } from '../i18n';
+import { t, tMessage, translated } from '../i18n';
 import { orglet } from '../api';
 
 const recommendations = translated({ ready_for_human_review: 'Sẵn sàng để người dùng review', revision_required: 'Cần chỉnh sửa', rerun_required: 'Cần chạy lại để kiểm chứng', insufficient_evidence: 'Chưa đủ bằng chứng' });
@@ -32,8 +31,8 @@ export function ReviewSummary({ report, artifactId, detail, showSources }: { rep
     <h3>{t('Feedback nháp')}</h3><p className="prose">{review.draftFeedback}</p>
     <Button variant="outline" disabled={copying} onClick={async () => {
       setCopying(true);
-      try { await orglet.copyFeedback(artifactId); toast(t('Đã sao chép feedback')); }
-      catch (error) { toast(error instanceof Error ? error.message : t('Không thể sao chép feedback'), 'error'); }
+      try { await orglet.copyFeedback(artifactId); toast(t('Đã sao chép feedback'), 'success', tMessage(report.title)); }
+      catch (error) { toast(error instanceof Error ? error.message : t('Không thể sao chép feedback'), 'error', tMessage(report.title)); }
       finally { setCopying(false); }
     }}>{t('Sao chép feedback')}</Button>
     <p className="muted">{t('Chưa gửi ra ngoài. Kiểm tra và chỉnh nội dung trước khi sử dụng.')}</p>

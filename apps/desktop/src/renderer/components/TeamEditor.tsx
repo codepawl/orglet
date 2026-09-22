@@ -69,12 +69,12 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
     if (shift && (!shiftDays.length || shiftStart === shiftEnd)) return fail('limits', t('Chọn ít nhất một ngày làm việc và giờ bắt đầu khác giờ kết thúc.'), 'shift');
     void run(async () => {
       await orglet.call('saveTeam', { ...(team ? { id: team.id } : {}), name, instructions, ...(reviewPolicy ? { reviewPolicy } : {}), memberIds: members, synthesizerId: synthesizer, workflow, monthlyBudgetMicros, taskBudgetMicros, maxConcurrentTasks: concurrency, ...(shift ? { workHours: { timeZone: shiftZone, start: shiftStart, end: shiftEnd, days: shiftDays } } : {}), ...(preflight ? { preflight } : {}) });
-      toast(team ? t('Đã lưu hội') : t('Đã tạo hội')); onClose();
+      toast(team ? t('Đã lưu hội') : t('Đã tạo hội'), 'success', name); onClose();
     });
   };
 
   const actions = tab === 'general' && team
-      ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.exportTemplate(team.id)) toast(t('Đã xuất template')); })}><Download size={16} />{t('Xuất template đã lưu')}</Button>
+      ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.exportTemplate(team.id)) toast(t('Đã xuất template'), 'success', team.name); })}><Download size={16} />{t('Xuất template đã lưu')}</Button>
       : tab === 'general'
         ? <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => { if (await orglet.importTemplate()) onClose(); })}><FileUp size={16} />{t('Nhập template')}</Button>
         : undefined;

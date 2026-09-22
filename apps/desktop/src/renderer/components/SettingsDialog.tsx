@@ -23,7 +23,7 @@ import { confirmAction } from './confirm';
 import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../../shared/erase';
 import { Switch } from './Switch';
 import { CodeFontPreview, InterfaceFontSample } from './FontPreview';
-import { t, tMessage } from '../i18n';
+import { t, tMessage, translated } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
 import { version as appVersion } from '../../../../../package.json';
@@ -42,6 +42,14 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'data', label: 'Dữ liệu', icon: <Database size={16} /> },
 ];
 // Section notes sit under the section title.
+/** What each saved setting is called, so a "Đã lưu" notice can say which one it was (COD-174). Same words as the rows. */
+const settingNames = translated({
+  language: 'Ngôn ngữ', theme: 'Giao diện', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Phông chữ', codeFont: 'Phông chữ code',
+  autoTitles: 'Tự đặt tên cuộc trò chuyện', copyFormat: 'Định dạng khi sao chép', downloadFormat: 'Định dạng khi tải xuống', confirmOpenTask: 'Hỏi trước khi mở công việc',
+  archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi connection / tháng', providerConcurrency: 'Request đồng thời mỗi provider', providerConsent: 'Provider được phép',
+});
+const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
+
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
   connections: 'Bật provider cần dùng rồi dán key hoặc chọn tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu. Ollama chỉ cần bật công tắc — không cần key.',
   harness: 'Chưa cài, đã thấy trên máy, và đã đăng nhập sẵn sàng chạy là ba trạng thái khác nhau. Lỗi đăng nhập hiện lệnh sửa; Orglet không chuyển sang Demo. Chọn harness ở mục Model khi thiết lập Tí.',
@@ -234,9 +242,9 @@ function statusPill(item: HarnessInfo): { className: string; label: string; mark
 async function copyCommand(command: string) {
   try {
     await orglet.copyText(command);
-    toast(t('Đã sao chép lệnh'));
+    toast(t('Đã sao chép lệnh'), 'success', command);
   } catch {
-    toast(t('Không sao chép được lệnh'), 'error');
+    toast(t('Không sao chép được lệnh'), 'error', command);
   }
 }
 
@@ -272,17 +280,24 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const savedLimit = useRef(workspace.connectionLimitMicros);
   useEffect(() => { if (!open) { setLimitError(''); setLimit(toAmount(workspace.connectionLimitMicros)); setKeyDrafts({}); setEditing({}); setReplacing({}); } }, [open, workspace.connectionLimitMicros, currency.code, currency.rate]);
 
-  const act = async (action: () => Promise<string | void>) => {
+  /** A budget reservation is named by the chat it belongs to, the way the reconciliation list names it. */
+  const reservationName = (reservationId: string) => {
+    const reservation = workspace.budgetReservations.find(item => item.id === reservationId);
+    const task = workspace.tasks.find(item => item.id === reservation?.taskId);
+    return task?.title || task?.brief.split('\n')[0] || reservation?.taskId;
+  };
+  /** Runs one change and toasts its outcome; `about` names the setting or provider it concerned, for the notice centre. */
+  const act = async (action: () => Promise<string | void>, about?: string) => {
     setBusy(true);
-    try { const text = await action(); if (text) toast(text); }
-    catch (err) { toast((err as Error).message, 'error'); }
+    try { const text = await action(); if (text) toast(text, 'success', about); }
+    catch (err) { toast((err as Error).message, 'error', about); }
     finally { setBusy(false); }
   };
   // Settings apply as soon as they change; the command always carries the full current set.
   const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null }>) => act(async () => {
     await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, ...patch });
     return t('Đã lưu');
-  });
+  }, Object.keys(patch).map(key => settingNames[key as keyof typeof settingNames]).filter(Boolean).join(', '));
   const eraseMessage = (summary: EraseSummary) => {
     if (summary.scope === 'everything') return t('Đã xóa toàn bộ dữ liệu. Orglet trở lại như mới cài.');
     if (summary.scope === 'knowledge') return t('Đã xóa {0} mục kiến thức.', [summary.knowledge]);
@@ -292,7 +307,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
       : t('Đã xóa {0} nguồn.', [summary.sources]);
   };
   const erase = (scope: EraseScope, confirm?: string) => void act(async () =>
-    eraseMessage(await orglet.call('eraseData', { scope, ...(confirm ? { confirm } : {}) })));
+    eraseMessage(await orglet.call('eraseData', { scope, ...(confirm ? { confirm } : {}) })), eraseNames[scope]);
   const commitLimit = () => {
     const micros = toMicros(limit);
     if (!Number.isFinite(micros) || micros < 1000 || micros > 1_000_000_000) { setLimitError(t('Nhập từ {0} đến {1}.', [formatMoney(1000), formatMoney(1_000_000_000)])); return; }
@@ -317,7 +332,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             {tabs.map(item => <button key={item.id} id={`settings-tab-${item.id}`} type="button" role="tab" aria-selected={tab === item.id} aria-controls="settings-panel" tabIndex={tab === item.id ? 0 : -1} onClick={() => onTab(item.id)}>{item.icon}<span>{t(item.label)}</span></button>)}
           </nav>
           <section className="settings-panel" id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
-            <PanelHeading title={t(current.label)} description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}>{tab === 'harness' && <Button disabled={busy} onClick={() => void act(async () => { onHarnesses(await orglet.call('harnesses', { refresh: true })); return t('Đã dò lại harness'); })}><RefreshCw size={13} />{t('Dò lại')}</Button>}</PanelHeading>
+            <PanelHeading title={t(current.label)} description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}>{tab === 'harness' && <Button disabled={busy} onClick={() => void act(async () => { onHarnesses(await orglet.call('harnesses', { refresh: true })); return t('Đã dò lại harness'); }, t('Harness trên máy'))}><RefreshCw size={13} />{t('Dò lại')}</Button>}</PanelHeading>
 
             {tab === 'general' && <>
               <Row title={t('Ngôn ngữ')} description={t('Áp dụng cho toàn bộ giao diện và thông báo.')}>
@@ -346,8 +361,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <AnchoredPopover anchor={customColorButton} open={colorPanel} onClose={closeColorPanel} label={t('Tạo màu')}>
                 <ColorPicker id="accent-colors" value={accent} presets={avatarPalette} saved={workspace.avatarColors ?? []}
                   onChange={color => void save({ accentColor: color })}
-                  onSave={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: [...new Set([...(workspace.avatarColors ?? []), color])] }); })}
-                  onRemove={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: (workspace.avatarColors ?? []).filter(item => item !== color) }); })}
+                  onSave={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: [...new Set([...(workspace.avatarColors ?? []), color])] }); }, t('Màu đã lưu'))}
+                  onRemove={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: (workspace.avatarColors ?? []).filter(item => item !== color) }); }, t('Màu đã lưu'))}
                   onClose={closeColorPanel} />
               </AnchoredPopover>
               <Row title={t('Màu logo')} description={t('Logo trong ứng dụng: màu chữ, hoặc màu nhấn bạn chọn.')}>
@@ -397,7 +412,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       ? (connections[provider] ? t('Đã bật Ollama tại 127.0.0.1:11434') : t('Tắt · bật công tắc nếu Ollama đang chạy trên máy này'))
                       : active
                         ? (connections[provider] ? t('Đã lưu API key') : t('Nhập key để kích hoạt'))
-                        : t('Tắt · bật công tắc để nhập key')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); })}>{local ? t('Tài liệu') : provider === 'opencode-go' ? t('Giá và hạn mức gói') : t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
+                        : t('Tắt · bật công tắc để nhập key')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); }, name)}>{local ? t('Tài liệu') : provider === 'opencode-go' ? t('Giá và hạn mức gói') : t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
                   </div>
                   <div className="setting-control">
                     <Switch checked={active} disabled={busy} labelledBy={titleId} onChange={on => {
@@ -405,7 +420,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         void act(async () => {
                           onConnections(on ? await orglet.connect('ollama') : await orglet.disconnect('ollama'));
                           return on ? t('Đã bật Ollama') : t('Đã ngắt {0}', [name]);
-                        });
+                        }, name);
                         return;
                       }
                       if (on) {
@@ -419,7 +434,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         void act(async () => {
                           onConnections(await orglet.disconnect(provider));
                           return t('Đã ngắt {0}', [name]);
-                        });
+                        }, name);
                       }
                     }} />
                   </div>
@@ -435,7 +450,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         setEditing(current => ({ ...current, [provider]: false }));
                         setReplacing(current => ({ ...current, [provider]: false }));
                         return t('Đã lưu API key {0}', [name]);
-                      });
+                      }, name);
                     }}>
                       <Button type="button" size="icon" variant="ghost" className="setting-key-file" disabled={busy} aria-label={t('Từ tệp')} onClick={() => void act(async () => {
                         const next = await orglet.connect(provider);
@@ -446,7 +461,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                           setReplacing(current => ({ ...current, [provider]: false }));
                           return t('Đã lưu API key {0}', [name]);
                         }
-                      })}><FileKey size={15} /></Button>
+                      }, name)}><FileKey size={15} /></Button>
                       <input type="password" name={`${provider}-api-key`} autoComplete="off" spellCheck={false} disabled={busy} value={showMask ? SAVED_KEY_MASK : draft} placeholder={connections[provider] ? t('Nhập key mới để thay') : t('Dán hoặc nhập API key')} aria-label={t('API key {0}', [name])} onFocus={() => { if (connections[provider] && !draft) setReplacing(current => ({ ...current, [provider]: true })); }} onBlur={() => { if (!draft) setReplacing(current => ({ ...current, [provider]: false })); }} onChange={event => setKeyDrafts(current => ({ ...current, [provider]: event.target.value }))} />
                       <Button type="submit" variant="outline" disabled={busy || !draft.trim()}>{t('Lưu key')}</Button>
                     </form>}
@@ -476,15 +491,15 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         onSelect={id => void act(async () => {
                           onHarnesses(await orglet.call('selectHarnessAccount', { harness: item.id, id }));
                           return t('Đã đổi tài khoản {0}', [item.name]);
-                        })}
+                        }, item.name)}
                         onSave={(id, label) => void act(async () => {
                           onHarnesses(await orglet.call('saveHarnessAccount', { harness: item.id, ...(id ? { id } : {}), label }));
                           return id ? t('Đã đổi tên tài khoản') : t('Đã thêm tài khoản {0}. Chạy lệnh đăng nhập bên dưới để đăng nhập vào tài khoản này.', [label]);
-                        })}
+                        }, item.name)}
                         onRemove={id => void act(async () => {
                           onHarnesses(await orglet.call('removeHarnessAccount', { harness: item.id, id }));
                           return t('Đã xóa tài khoản');
-                        })} />}
+                        }, item.name)} />}
                       {((item.status === 'not_installed' && item.installCommand) || showLogin) && <div className="harness-commands">
                         {item.status === 'not_installed' && item.installCommand && <CommandCopy command={item.installCommand} label={t('Lệnh cài (tài liệu chính thức)')} />}
                         {showLogin && <CommandCopy command={item.loginCommand} label={item.status === 'not_installed' ? t('Sau khi cài, đăng nhập bằng') : t('Lệnh đăng nhập')} />}
@@ -503,18 +518,18 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 <span className={`money-input ${limitError ? 'invalid' : ''}`}><span aria-hidden>{moneySymbol()}</span><input aria-labelledby="limit-label" aria-invalid={Boolean(limitError)} aria-describedby={limitError ? 'limit-error' : undefined} inputMode="decimal" value={limit} disabled={busy} onChange={event => setLimit(event.target.value)} onBlur={commitLimit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitLimit(); } }} /></span>
               </Row>
               <Row title={t('Tiền tệ')} description={currency.code === 'USD' ? t('Chi phí được lưu bằng USD theo giá của provider.') : t('1 USD = {0} {1}{2}. Chi phí vẫn lưu bằng USD, chỉ quy đổi khi hiển thị.', [new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(currency.rate), currency.code, currency.updatedAt ? t(' · cập nhật {0}', [new Date(currency.updatedAt).toLocaleString('vi-VN')]) : ''])}>
-                <Select ariaLabel={t('Tiền tệ')} className="setting-select" inlineDetail menuMinWidth={270} value={currency.code} disabled={busy} onChange={value => void act(async () => { await orglet.call('setCurrency', { code: CurrencyCode.parse(value) }); return value === 'USD' ? t('Đã đổi sang USD.') : t('Đã đổi sang {0} theo tỷ giá mới nhất.', [value]); })} options={(Object.keys(currencies) as CurrencyCode[]).map(code => ({ value: code, label: code, detail: t(currencies[code]), icon: <CurrencyFlag code={code} /> }))} />
+                <Select ariaLabel={t('Tiền tệ')} className="setting-select" inlineDetail menuMinWidth={270} value={currency.code} disabled={busy} onChange={value => void act(async () => { await orglet.call('setCurrency', { code: CurrencyCode.parse(value) }); return value === 'USD' ? t('Đã đổi sang USD.') : t('Đã đổi sang {0} theo tỷ giá mới nhất.', [value]); }, t('Tiền tệ'))} options={(Object.keys(currencies) as CurrencyCode[]).map(code => ({ value: code, label: code, detail: t(currencies[code]), icon: <CurrencyFlag code={code} /> }))} />
               </Row>
               {currency.code !== 'USD' && <Row title={t('Tỷ giá')} description={currency.error ? <span className="error">{t('{0} Đang dùng tỷ giá gần nhất.', [currency.error])}</span> : t('Tự làm mới mỗi 12 giờ từ open.er-api.com. Request không kèm dữ liệu của bạn.')}>
-                <Button disabled={busy} onClick={() => void act(async () => { await orglet.call('refreshCurrency', {}); return t('Đã cập nhật tỷ giá'); })}><RefreshCw size={14} />{t('Cập nhật')}</Button>
+                <Button disabled={busy} onClick={() => void act(async () => { await orglet.call('refreshCurrency', {}); return t('Đã cập nhật tỷ giá'); }, t('Tỷ giá'))}><RefreshCw size={14} />{t('Cập nhật')}</Button>
               </Row>}
               <BudgetReconciliation workspace={workspace} busy={busy} onReconcile={async (reservationId, amountMicros, source) => {
                 setBusy(true);
                 try {
                   await orglet.call('reconcileBudget', { reservationId, amountMicros, source });
-                  toast(t('Đã lưu đối soát ngân sách.'));
+                  toast(t('Đã lưu đối soát ngân sách.'), 'success', reservationName(reservationId));
                 } catch (error) {
-                  toast((error as Error).message, 'error');
+                  toast((error as Error).message, 'error', reservationName(reservationId));
                   throw error;
                 } finally {
                   setBusy(false);
@@ -524,10 +539,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
 
             {tab === 'data' && <>
               <Row title={t('Sao lưu')} description={t('Tí, hội, lịch sử, báo cáo và chi phí vào một tệp JSON. Không gồm API key hay nội dung tệp nguồn; báo cáo có thể chứa trích dẫn.')}>
-                <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.backup()) ? t('Đã lưu bản sao lưu') : undefined)}><Download size={14} />{t('Lưu bản sao lưu')}</Button>
+                <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.backup()) ? t('Đã lưu bản sao lưu') : undefined, t('Sao lưu'))}><Download size={14} />{t('Lưu bản sao lưu')}</Button>
               </Row>
               <Row title={t('Khôi phục')} description={t('Bổ sung các mục còn thiếu, giữ nguyên dữ liệu và cài đặt hiện tại. Nguồn khôi phục cần được chọn lại để cấp quyền đọc.')}>
-                <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.restore()) ? t('Đã khôi phục các mục còn thiếu') : undefined)}><ArchiveRestore size={14} />{t('Khôi phục từ tệp')}</Button>
+                <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.restore()) ? t('Đã khôi phục các mục còn thiếu') : undefined, t('Khôi phục từ tệp'))}><ArchiveRestore size={14} />{t('Khôi phục từ tệp')}</Button>
               </Row>
               <EraseRow busy={busy} scope="chats" onErase={erase}
                 title={t('Xóa lịch sử trò chuyện')}
