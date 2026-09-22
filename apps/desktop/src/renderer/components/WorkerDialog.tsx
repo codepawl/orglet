@@ -1,7 +1,11 @@
-import { useState } from 'react';
-import { AlignLeft, Smile, Cpu, ScrollText, Sparkles, UserRound, Wallet, SlidersHorizontal } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlignLeft, Smile, Cpu, ScrollText, ShieldCheck, Sparkles, UserRound, Wallet, SlidersHorizontal } from 'lucide-react';
 import { isPaidApi, type Connections, type Worker, type Workspace } from '../../shared/contracts';
 import { CATALOG_HINT_IDS } from '../../shared/models';
+import { liveWorkerTask } from '../../shared/live-task';
+import { permissionsForLevel, type WorkspaceLevel } from '../../shared/capability-status';
+import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
+import type { WorkspaceGrantView } from '../../shared/workspace-access';
 import { harnessNames, isHarness, type HarnessInfo } from '../../shared/harness';
 import { FieldLabel, MoneyInput } from './ui';
 import { Select } from './Select';
@@ -14,19 +18,20 @@ import { autoMascot } from './mascotSuggest';
 import { TabbedFormDialog } from './DialogTabs';
 import { readiness } from './providers';
 import { openCodeModelIssue } from './openCodeModel';
-import { CapabilityView } from './CapabilityView';
+import { PermissionControls } from './PermissionControls';
 import { toAmount, toMicros } from './money';
 import { toast } from './toast';
-import { t } from '../i18n';
+import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Input, Textarea } from '@codepawl/orglet-ui';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
-type Tab = 'general' | 'skill';
+type Tab = 'general' | 'skill' | 'permissions';
 type InvalidField = 'name' | 'instructions' | 'budget' | 'modelId';
 const tabs = [
   { id: 'general' as const, label: 'Chung', icon: <SlidersHorizontal size={16} /> },
   { id: 'skill' as const, label: 'Kỹ năng', icon: <Sparkles size={16} /> },
+  { id: 'permissions' as const, label: 'Quyền', icon: <ShieldCheck size={16} /> },
 ];
 
 /** Worker create/edit. Remount (via key) to reset the draft. */
@@ -77,7 +82,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
+  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : tab === 'permissions' ? t('Áp dụng cho chat riêng của Tí. Chat hội có quyền riêng trong Chi tiết.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
     {tab === 'general' && <>
       <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error'))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} /></label>
@@ -111,7 +116,6 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         }),
       ]} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} />}
-      <CapabilityView provider={provider} connected={provider === 'demo' || ready[provider]} sourceCount={0} grant={null} setup />
       {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
       {provider === 'ollama' && <p className="muted">{t('Gọi Ollama trên máy này tại 127.0.0.1:11434. Cài Ollama và kéo model trước. Orglet không giữ ngân sách cho lần chạy local.')}</p>}
       {provider === 'opencode-zen' && <p className="muted">{t('Dùng API key OpenCode Zen. Zen trừ số dư của bạn theo từng request. Orglet không theo dõi chi tiêu Zen và không áp giới hạn mỗi task, nên hãy đặt giới hạn chi tiêu trong console OpenCode Zen. Chỉ chạy được model mà tài liệu Zen ghi endpoint chat/completions.')}</p>}
@@ -122,5 +126,44 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       <Select ariaLabel={t('Kỹ năng')} value={skillId} onChange={setSkill} options={workspace.skills.map(item => { const pending = !!item.package && item.package.reviewedHash !== item.package.hash; return { value: item.id, label: item.name, detail: pending ? t('v{0} · Cần review trong Thư viện', [item.revision]) : `v${item.revision}`, icon: <Sparkles size={16} />, disabled: pending }; })} />
       {skill && <p className="prose muted">{skill.content}</p>}
     </>}
+    {tab === 'permissions' && <WorkerChatPermissions worker={worker} workspace={workspace} draft={{ id: worker?.id ?? seed, name: name || t('Tí mới'), provider, connected: provider === 'demo' || ready[provider] }} />}
   </TabbedFormDialog>;
+}
+
+/**
+ * The permissions of this worker's own chat, changed in place the way Details changes them. Permissions live on the
+ * chat, and the chat row only exists once the first message is sent, so until then the controls show the defaults
+ * a new chat would start with and one line says why they cannot be changed yet.
+ */
+function WorkerChatPermissions({ worker, workspace, draft }: { worker?: Worker; workspace: Workspace; draft: { id: string; name: string; provider: Worker['provider']; connected: boolean } }) {
+  const chat = worker ? liveWorkerTask(workspace.tasks, worker.id) : undefined;
+  const [capabilities, setCapabilities] = useState(chat?.toolCapabilities);
+  const [grant, setGrant] = useState<WorkspaceGrantView | null | undefined>(chat ? undefined : null);
+  const [busy, setBusy] = useState(false);
+  const readGrant = async (taskId: string) => setGrant(await orglet.call('workspaceAccess', { taskId }));
+  useEffect(() => {
+    if (!chat) return;
+    void readGrant(chat.id).catch(error => toast(tMessage(String(error)), 'error'));
+  }, [chat?.id]);
+  const change = (perform: () => Promise<void>) => {
+    setBusy(true);
+    void perform().catch(error => toast(tMessage(String(error)), 'error')).finally(() => setBusy(false));
+  };
+  const onCapability = (capability: ToolCapability, enabled: boolean) => change(async () => {
+    if (!chat || !worker) return;
+    const next = (capabilities ?? snapshotCapabilities(worker.provider)).filter(item => item !== capability);
+    if (enabled) next.push(capability);
+    await orglet.call('setToolCapabilities', { taskId: chat.id, capabilities: next });
+    setCapabilities(next);
+  });
+  const onWorkspace = (level: WorkspaceLevel) => change(async () => {
+    if (!chat) return;
+    if (level === 'none') await orglet.call('revokeWorkspace', { taskId: chat.id });
+    else await orglet.pickWorkspace(chat.id, permissionsForLevel(level));
+    await readGrant(chat.id);
+  });
+  const locked = chat ? undefined : worker ? t('Chat của Tí chưa bắt đầu. Gửi tin đầu tiên rồi mở lại đây để chọn quyền.')
+    : t('Lưu Tí, gửi tin đầu tiên rồi mở lại đây để chọn quyền.');
+  return <PermissionControls workers={[draft]} capabilities={capabilities} grant={grant} taskId={chat?.id} sourceCount={chat?.sourceIds.length ?? 0}
+    busy={busy} locked={locked} onCapability={onCapability} onWorkspace={onWorkspace} />;
 }

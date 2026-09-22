@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Copy, Cpu, FileText, ListOrdered, MessageSquare, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
+import { Clock, Copy, Cpu, FileText, ListOrdered, MessageSquare, ShieldCheck, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
 import { t, currentLocale, tMessage } from '../i18n';
 import { Avatar, RosterAvatars } from './Avatar';
 import { ProviderMark } from './ProviderMark';
@@ -15,9 +15,10 @@ import { teamRoster } from '../assignees';
 import { orglet } from '../api';
 import { toast } from './toast';
 import type { Run, TaskDetail, Team, Worker, Workspace } from '../../shared/contracts';
-import type { WorkspaceGrantView, WorkspacePermission } from '../../shared/workspace-access';
-import { TaskTools } from './TaskTools';
-import { CapabilityView } from './CapabilityView';
+import type { WorkspaceGrantView } from '../../shared/workspace-access';
+import type { WorkspaceLevel } from '../../shared/capability-status';
+import type { ToolCapability } from '../../shared/tool-policy';
+import { PermissionControls } from './PermissionControls';
 import { WorkspaceRecovery, type ReadProcessOutput, type ReadPrivateFile } from './WorkspaceRecovery';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { MessageActions } from './MessageActions';
@@ -197,21 +198,15 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
   onClose: () => void;
   onOpenSources: () => void;
   onExport: (artifactId: string) => void;
+  /** The chat's permissions; the parent owns the bridge calls. `grant` is undefined while it is still being read. */
   tools?: {
     workers: Worker[];
     connectedProviders: Worker['provider'][];
     onConfigure: (provider: Exclude<Worker['provider'], 'demo'>) => void;
     grant: WorkspaceGrantView | null | undefined;
-    sourceEnabled: boolean;
-    networkEnabled: boolean;
-    datasetEnabled: boolean;
-    supported: boolean;
     busy: boolean;
-    onGrant: (permissions: WorkspacePermission[]) => void;
-    onRevoke: () => void;
-    onSourceChange: (enabled: boolean) => void;
-    onNetworkChange: (enabled: boolean) => void;
-    onDatasetChange: (enabled: boolean) => void;
+    onCapability: (capability: ToolCapability, enabled: boolean) => void;
+    onWorkspace: (level: WorkspaceLevel) => void;
   };
 }) {
   const [technical, setTechnical] = useState(false);
@@ -263,16 +258,12 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
         </>}
       </section>}
 
-      {detail && tools && <section className="details-section" aria-label={t('Khả năng của Tí')}>
-        {tools.workers.length > 1 && <h3><Wrench size={15} aria-hidden="true" />{t('Khả năng theo từng Tí trong hội')}</h3>}
-        {tools.workers.map(person => <div key={person.id} className="capability-member">
-          {tools.workers.length > 1 && <strong>{person.name}</strong>}
-          <CapabilityView provider={person.provider} connected={person.provider === 'demo' || tools.connectedProviders.includes(person.provider)}
-            capabilities={detail.task.toolCapabilities} grant={tools.grant} grantLoaded={tools.grant !== undefined}
-            taskId={detail.task.id} sourceCount={detail.sources.length} onConfigure={tools.onConfigure} />
-        </div>)}
+      {detail && tools && <section className="details-section task-tools" aria-labelledby="task-tools-heading">
+        <h3 id="task-tools-heading"><ShieldCheck size={15} aria-hidden="true" />{t('Quyền công cụ')}</h3>
+        <PermissionControls workers={tools.workers.map(person => ({ id: person.id, name: person.name, provider: person.provider, connected: tools.connectedProviders.includes(person.provider) }))}
+          capabilities={detail.task.toolCapabilities} grant={tools.grant} taskId={detail.task.id} sourceCount={detail.sources.length} busy={tools.busy}
+          onCapability={tools.onCapability} onWorkspace={tools.onWorkspace} onConfigure={tools.onConfigure} />
       </section>}
-      {detail && tools && <TaskTools key={detail.task.id} {...tools} />}
       {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs}
         busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} readOutput={readProcessOutput} readFile={readPrivateFile} />}
 
