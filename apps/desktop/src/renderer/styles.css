@@ -14,15 +14,12 @@
   --font: "SF Pro Text", "SF Pro Display", "Inter", ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --font-sans: var(--font); --default-font-family: var(--font);
-  font-family: var(--font); font-size: 14px; line-height: 1.5; color-scheme: light;
-  --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
-  --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
-  --primary:#171717; --primary-text:#fff; --error:#a82626; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
+  font-family: var(--font); font-size: 14px; line-height: 1.5;
   /* Set from the workspace in App.tsx; these are what the sheet uses until it arrives. */
   --accent:#4f7fe0; --accent-ink:#ffffff;
   --control-height: 34px; --icon-size: 32px; --radius: 9px; --page-x: 20px; --chrome-y: 12px; --sidebar-width: 228px;
   /* Panels are rounded cards sitting apart on the window background (user, 2026-09-19). */
-  --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-radius: 16px; --shell-gap: 8px; --details-width: 320px; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
+  --panel-radius: 16px; --shell-gap: 8px; --details-width: 320px;
   /* How far a control stays from the end of a rounded panel. At less than the radius it sits beside the corner
      curve, and two curves that close read as fighting rather than nested (user, 2026-09-19). */
   --panel-inset: var(--panel-radius);
@@ -37,7 +34,17 @@
 }
 /* The eyes' vertical gaze, registered so a change of state glides instead of jumping. */
 @property --gaze-y { syntax:'<length>'; inherits:false; initial-value:0px; }
-:root[data-theme=dark] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; }
+/* The palette. The root carries the app's theme; `.theme-light` and `.theme-dark` put one theme on a subtree
+   whatever the app is set to, so a surface can show both at once (the font preview cards). Everything inside
+   reads the same tokens as usual. A token derived from another (`--border-subtle`) is declared in the same
+   block, because a custom property is resolved where it is declared and inherited already resolved. */
+:root, .theme-light {
+  color-scheme:light; --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
+  --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
+  --primary:#171717; --primary-text:#fff; --error:#a82626; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
+  --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
+}
+:root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; }
 @media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; } }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
@@ -791,11 +798,19 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Name on the left, state on the right, on the line the mark sits beside. */
 .harness-head { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:26px; }
 .harness-row .setting-title { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
-/* The font pair as it reads: a sentence with Vietnamese diacritics, then a code line with the characters a code
-   font is picked for. Both draw in the tokens the rest of the app uses, so this is the app, not a mock-up. */
-.font-preview { display:flex; flex-direction:column; gap:6px; padding:12px 14px; border-radius:12px; background:var(--surface); }
-.font-preview p { margin:0; font-size:14px; color:var(--text); }
-.font-preview code { font-family:var(--font-mono); font-size:12.5px; color:var(--muted); }
+/* Font samples under the two font rows (COD-172, from the owner's Claude "Code appearance" reference): one
+   sentence for the interface font, and the code font on a light card and a dark card side by side, each in its
+   own theme (`.theme-light` / `.theme-dark`) so both show whatever the app is set to. The card is the surface,
+   so the code sits straight on it with no tint of its own, and a diff line runs the card's full width with its
+   sign in the card's inset. The cards stack when the panel is too narrow to hold two readable columns. */
+.font-sample { margin:0 0 6px; padding:12px 14px; border:1px solid var(--border); border-radius:12px; font-size:14px; line-height:1.5; color:var(--text); }
+.font-preview-cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; margin-bottom:6px; }
+.font-preview-card { min-width:0; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--bg); color:var(--text); }
+.font-preview-card pre.source-preview { padding:10px 0; border-radius:0; background:transparent; max-height:none; overflow:hidden; }
+.font-preview-card pre.source-preview>span { position:relative; padding-left:calc(var(--line-number-width, 4ch) + 26px); padding-right:14px; }
+.font-preview-card .line-removed::before,.font-preview-card .line-added::before { position:absolute; left:0; width:14px; text-align:center; text-indent:0; color:var(--muted); }
+.font-preview-card .line-removed::before { content:"−"; }
+.font-preview-card .line-added::before { content:"+"; }
 .font-custom-form { display:flex; align-items:center; gap:6px; padding:10px; }
 .font-custom-form input { min-width:200px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
 
@@ -919,6 +934,9 @@ pre.source-preview { margin:0; }
 pre.source-preview>span { display:block; padding-left:calc(var(--line-number-width, 4ch) + 12px); text-indent:calc(-1 * (var(--line-number-width, 4ch) + 12px)); }
 /* Cited lines read as one soft band in the accent, not a box around each line (no rules between rows). */
 .line-highlight { background:color-mix(in srgb, var(--accent) 16%, transparent); }
+/* A diff pair: the line that went and the line that came, tinted in the status colours of the theme they sit in. */
+.line-removed { background:color-mix(in srgb, var(--error) 13%, transparent); }
+.line-added { background:color-mix(in srgb, var(--success) 14%, transparent); }
 .line-number { display:inline-block; width:var(--line-number-width, 4ch); margin-right:12px; text-align:right; text-indent:0; color:var(--muted); user-select:none; font-variant-numeric:tabular-nums; }
 .tok-comment { color:var(--muted); font-style:italic; }
 .tok-string { color:var(--success); }
@@ -1042,8 +1060,9 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 :root { --select-height:var(--control-height); --select-radius:var(--radius); --select-menu-radius:12px; --select-option-height:36px; }
 /* The kit (packages/orglet-ui) reads `--org-` tokens and never the app's own names, so that it can be dropped into
    an application that themes itself differently. Orglet is that application: it keeps its tokens above and hands
-   them over here, which is the whole adoption cost. */
-:root {
+   them over here, which is the whole adoption cost. A themed subtree hands them over again, resolved in its own
+   palette. */
+:root, .theme-light, .theme-dark {
   --org-bg:var(--bg); --org-surface:var(--surface); --org-text:var(--text); --org-muted:var(--muted);
   --org-border:var(--border); --org-border-subtle:var(--border-subtle);
   --org-row-hover:var(--row-hover); --org-row-active:var(--row-active);
@@ -1561,8 +1580,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .assignee-list { display:flex; flex-direction:column; gap:6px; margin:0; padding:0; border:0; }
 
 /* Archive: days left before automatic deletion, green to amber to red. */
-:root { --warning:#9a6700; }
-:root[data-theme=dark] { --warning:#d4a72c; }
+:root, .theme-light { --warning:#9a6700; }
+:root[data-theme=dark], .theme-dark { --warning:#d4a72c; }
 @media (prefers-color-scheme:dark) { :root[data-theme=system] { --warning:#d4a72c; } }
 .archive-age { margin-left:auto; flex-shrink:0; padding:1px 7px; border-radius:999px; font-size:11px; font-weight:500; white-space:nowrap; color:var(--tone); background:color-mix(in srgb, var(--tone) 14%, transparent); }
 .archive-age.fresh { --tone:var(--success); }

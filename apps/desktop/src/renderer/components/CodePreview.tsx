@@ -5,13 +5,19 @@ import { tokenizeLines, type Language } from './highlight';
 
 const INITIAL_LINES = 2000;
 
+/** What a diff did to a line: it went, or it came. Drawn as `.line-removed` / `.line-added`. */
+export type LineMark = 'removed' | 'added';
+
 /**
  * Text or code with a number on every line. `citedLines` marks the lines a finding pointed at, kept as the
- * `.line-highlight` / `data-line` shape the citation navigation scrolls to. Colour comes from the in-house
- * tokenizer; the text itself is never changed, so a cited line reads as written. Very long files render their
- * first two thousand lines and offer the rest on demand, unless a citation lies past that point.
+ * `.line-highlight` / `data-line` shape the citation navigation scrolls to; `lineMarks` tints single lines as a
+ * diff would. Colour comes from the in-house tokenizer; the text itself is never changed, so a cited line reads
+ * as written. Very long files render their first two thousand lines and offer the rest on demand, unless a
+ * citation lies past that point.
  */
-export function CodePreview({ text, language, citedLines }: { text: string; language: Language; citedLines?: [number, number] }) {
+export function CodePreview({ text, language, citedLines, lineMarks }: {
+  text: string; language: Language; citedLines?: [number, number]; lineMarks?: Partial<Record<number, LineMark>>;
+}) {
   const [showAll, setShowAll] = useState(false);
   // A file that ends with a newline has no extra empty line after it, the way an editor shows it.
   const lines = useMemo(() => tokenizeLines(text.replace(/\r?\n$/, ''), language), [text, language]);
@@ -24,7 +30,9 @@ export function CodePreview({ text, language, citedLines }: { text: string; lang
       {lines.slice(0, visible).map((tokens, index) => {
         const lineNumber = index + 1;
         const cited = citedLines !== undefined && lineNumber >= citedLines[0] && lineNumber <= citedLines[1];
-        return <span key={index} className={cited ? 'line-highlight' : undefined} data-line={lineNumber}>
+        const mark = lineMarks?.[lineNumber];
+        const classNames = [cited ? 'line-highlight' : '', mark ? `line-${mark}` : ''].filter(Boolean);
+        return <span key={index} className={classNames.length > 0 ? classNames.join(' ') : undefined} data-line={lineNumber}>
           <span className="line-number">{lineNumber}</span>
           {tokens.map((token, tokenIndex) => token.kind === 'plain' ? token.text : <span key={tokenIndex} className={`tok-${token.kind}`}>{token.text}</span>)}
           {'\n'}
