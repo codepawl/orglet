@@ -1,7 +1,7 @@
 import type { ToolCapability } from './tool-policy';
 import type { ProviderId } from './contracts';
 import { snapshotCapabilities } from './tool-policy';
-import type { WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermission } from './workspace-access';
+import type { NewChatWorkspaceView, WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermission } from './workspace-access';
 
 /**
  * How much of the working folder a chat may touch. The levels are cumulative because the grant schema
@@ -45,23 +45,26 @@ export type PermissionState = {
 
 /**
  * The same values core reads when it dispatches the next turn. A grant counts only while it is current: not revoked
- * and made for this task. Runtime still intersects these with the frozen run before every tool call.
+ * and made for this task. A chat with no row yet shows the folder waiting for its first message instead (COD-186).
+ * Runtime still intersects these with the frozen run before every tool call.
  */
 export function permissionState(input: {
   provider: ProviderId;
   capabilities?: ToolCapability[];
   grant?: WorkspaceGrantView | null;
+  pending?: NewChatWorkspaceView;
   taskId?: string;
 }): PermissionState {
   const capabilities = input.capabilities ?? snapshotCapabilities(input.provider);
   const grant = input.grant;
   const current = !!grant && !grant.revoked && (!input.taskId || grant.taskId === input.taskId);
+  const folder = current ? grant : !input.taskId ? input.pending : undefined;
   return {
     sources: capabilities.includes('source.read'),
     dataset: capabilities.includes('dataset.check'),
     web: capabilities.includes('network.web'),
-    workspace: current ? workspaceLevelOf(grant.permissions) : 'none',
-    ...(current ? { folder: grant.name } : {}),
+    workspace: folder ? workspaceLevelOf(folder.permissions) : 'none',
+    ...(folder ? { folder: folder.name } : {}),
   };
 }
 

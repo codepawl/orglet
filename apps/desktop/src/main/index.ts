@@ -222,7 +222,8 @@ async function start() {
   handle('orglet:connections', async () => credentials.status());
   handle('orglet:pick-workspace', async raw => {
     const input = PickWorkspace.parse(raw);
-    await request('workspaceAccess', { taskId: input.taskId });
+    // A chat row must still be open before the picker shows; a chat with no row yet is checked when the folder is kept.
+    if ('taskId' in input) await request('workspaceAccess', { taskId: input.taskId });
     const title = input.permissions.includes('execute') ? tr('Chọn workspace: đọc, sửa file và chạy lệnh')
       : input.permissions.includes('write') ? tr('Chọn workspace: đọc và sửa file') : tr('Chọn workspace: chỉ đọc');
     const result = await dialog.showOpenDialog(window, {

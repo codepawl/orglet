@@ -44,11 +44,30 @@ it('requires both frozen and current permissions and does not upgrade old runs',
   const before = grants.snapshot(task.id)!;
   expect(() => grants.assert(before, 'write')).toThrow('không cho phép');
   expect(() => grants.assert({ ...before, permissions: ['read', 'write'] }, 'write')).toThrow('không cho phép');
-  await grants.grant({ taskId: task.id, directory: workspace, permissions: ['read', 'write', 'execute'] });
-  expect(() => grants.assert(before, 'read')).toThrow('đã thay đổi');
+  // Widening on the same folder keeps the grant (COD-186): the old snapshot stays valid with what it froze.
+  const widened = await grants.grant({ taskId: task.id, directory: workspace, permissions: ['read', 'write', 'execute'] });
+  expect(widened).toMatchObject({ id: before.id, revision: before.revision });
+  expect(grants.assert(before, 'read')).toBe(workspace);
+  expect(() => grants.assert(before, 'write')).toThrow('không cho phép');
   expect(await grants.directory(grants.snapshot(task.id)!, 'execute')).toBe(workspace);
+  // Narrowing is a new grant: nothing frozen on the wider one may continue.
+  const wide = grants.snapshot(task.id)!;
+  const narrowed = await grants.grant({ taskId: task.id, directory: workspace, permissions: ['read'] });
+  expect(narrowed.id).not.toBe(wide.id);
+  expect(() => grants.assert(wide, 'read')).toThrow('đã thay đổi');
   grants.revoke(task.id);
   expect(grants.snapshot(task.id)).toBeUndefined();
+  expect(() => grants.assert(before, 'read')).toThrow('đã thay đổi');
+});
+
+it('changes folder with a new grant even at the same permissions', async () => {
+  await grants.grant({ taskId: task.id, directory: workspace, permissions: ['read', 'write'] });
+  const before = grants.snapshot(task.id)!;
+  const other = join(directory, 'other');
+  await mkdir(other);
+  const moved = await grants.grant({ taskId: task.id, directory: other, permissions: ['read', 'write'] });
+  expect(moved.name).toBe('other');
+  expect(moved.id).not.toBe(before.id);
   expect(() => grants.assert(before, 'read')).toThrow('đã thay đổi');
 });
 

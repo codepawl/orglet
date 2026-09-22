@@ -2,7 +2,7 @@ import { Database, FileText, FolderOpen, Globe } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { permissionBlocker, permissionState, workspaceLevels, type PermissionBlocker, type WorkspaceLevel } from '../../shared/capability-status';
 import type { ToolCapability } from '../../shared/tool-policy';
-import type { WorkspaceGrantView } from '../../shared/workspace-access';
+import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/workspace-access';
 import type { Worker } from '../../shared/contracts';
 import { Button } from './ui';
 import { Select } from './Select';
@@ -38,23 +38,25 @@ const partlyBlockedNotes: Record<PermissionBlocker, string> = {
  * A blocker (Demo, a model with no connection, a grant still loading) is never a third position on a control:
  * the control is disabled and one short line says why (user, COD-168).
  */
-export function PermissionControls({ workers, capabilities, grant, taskId, sourceCount, busy = false, locked, folderLocked, onCapability, onWorkspace, onConfigure }: {
+export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, busy = false, locked, folderLocked, onCapability, onWorkspace, onConfigure }: {
   workers: PermissionWorker[];
   capabilities?: ToolCapability[];
   /** `undefined` while the grant is still being read. */
   grant: WorkspaceGrantView | null | undefined;
+  /** For a chat with no row yet: the folder waiting for its first message (COD-186). */
+  pending?: NewChatWorkspaceView;
   taskId?: string;
   sourceCount: number;
   busy?: boolean;
   /** Why nothing here can be changed yet; every control renders disabled with this one line above them. */
   locked?: string;
-  /** Why only the folder cannot be chosen yet (a grant needs the chat row); the switches stay live and the line sits under the dropdown. */
+  /** Why only the folder cannot be kept yet (a worker not saved yet has nothing to keep it under); the switches stay live and the line sits under the dropdown. */
   folderLocked?: string;
   onCapability: (capability: ToolCapability, enabled: boolean) => void;
   onWorkspace: (level: WorkspaceLevel) => void;
   onConfigure?: (provider: Exclude<Worker['provider'], 'demo'>) => void;
 }) {
-  const state = permissionState({ provider: workers[0]?.provider ?? 'demo', capabilities, grant, taskId });
+  const state = permissionState({ provider: workers[0]?.provider ?? 'demo', capabilities, grant, pending, taskId });
   const blocked = workers.map(worker => ({ worker, blocker: permissionBlocker(worker.provider, worker.connected) }))
     .filter((item): item is { worker: PermissionWorker; blocker: PermissionBlocker } => item.blocker !== undefined);
   const everyoneBlocked = workers.length > 0 && blocked.length === workers.length;

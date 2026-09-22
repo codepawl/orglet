@@ -14,6 +14,7 @@ const bridge: Bridge = {
   pickFolder: () => invoke('orglet:pick-folder'),
   openSource: (taskId, id) => invoke('orglet:open-source', { taskId, id }),
   pickWorkspace: (taskId, permissions) => invoke('orglet:pick-workspace', { taskId, permissions }),
+  pickNewChatWorkspace: (chat, permissions) => invoke('orglet:pick-workspace', { ...chat, permissions }),
   connections: () => invoke('orglet:connections'),
   connect: (provider, key) => invoke('orglet:connect', key === undefined ? { provider } : { provider, key }),
   disconnect: provider => invoke('orglet:disconnect', provider),
