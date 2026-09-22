@@ -1605,7 +1605,7 @@ export const en: Dictionary = {
   'Ví dụ: Tài khoản công ty': 'For example: Work account',
   'Xóa tài khoản': 'Remove account',
   'Xóa tài khoản này cùng phần đăng nhập đã lưu trong thư mục của nó?': 'Remove this account and the sign-in stored in its folder?',
-  'Đăng nhập sẵn của CLI trên máy': 'The sign-in the CLI already has on this machine',
+  'Đã đăng nhập sẵn': 'Already signed in',
   'Đã thêm tài khoản {0}. Chạy lệnh đăng nhập bên dưới để đăng nhập vào tài khoản này.': 'Added {0}. Run the login command below to sign in to it.',
   'Đã xóa tài khoản': 'Account removed',
   'Đã đổi tài khoản {0}': 'Switched the {0} account',

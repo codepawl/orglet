@@ -68,10 +68,10 @@ function HarnessAccountPicker({ item, busy, onSelect, onSave, onRemove }: {
   };
   return <div className="harness-account" ref={row}>
     <Select size="sm" className="harness-account-select" ariaLabel={t('Tài khoản {0}', [item.name])} value={item.accountId} disabled={busy}
-      menuMinWidth={240}
+      menuMinWidth={240} showDetail={false}
       onChange={onSelect}
       options={[
-        { value: SYSTEM_ACCOUNT_ID, label: t('Tài khoản mặc định'), detail: t('Đăng nhập sẵn của CLI trên máy'), icon: <Laptop size={16} /> },
+        { value: SYSTEM_ACCOUNT_ID, label: t('Tài khoản mặc định'), detail: t('Đã đăng nhập sẵn'), icon: <Laptop size={16} /> },
         ...item.accounts.map(account => ({ value: account.id, label: account.label, icon: <UserRound size={16} /> })),
       ]} />
     {item.configDir && <InfoTip label={t('Chi tiết tài khoản')} rows={[
