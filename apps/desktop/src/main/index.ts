@@ -235,17 +235,23 @@ async function start() {
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn thư mục nguồn (tối đa 20 tệp, bỏ qua tệp không hỗ trợ)'), properties: ['openDirectory'] });
     return result.canceled ? { sources: [], skipped: [] } : request('importFolder', result.filePaths[0]);
   });
+  // A connection lives in main, not core, so core never announces it; every open view reads connections on
+  // orglet:changed, and without this one a Details panel opened before the connect kept its old state (COD-177).
+  const announceConnections = () => {
+    if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
+    return credentials.status();
+  };
   handle('orglet:connect', async raw => {
     const body = z.object({ provider: ApiProvider, key: z.string().min(1).max(500).optional() }).strict().parse(raw);
     if (body.provider === 'ollama' && body.key === undefined) {
       await credentials.save('ollama', OLLAMA_LOCAL_TOKEN);
       await request('invalidateModelList', 'ollama').catch(() => {});
-      return credentials.status();
+      return announceConnections();
     }
     if (body.key !== undefined) {
       await credentials.save(body.provider, body.key.trim());
       await request('invalidateModelList', body.provider).catch(() => {});
-      return credentials.status();
+      return announceConnections();
     }
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn tệp .txt chỉ chứa API key — key được mã hóa bằng Windows'), properties: ['openFile'], filters: [{ name: 'API key text', extensions: ['txt'] }] });
     if (!result.canceled) {
@@ -259,13 +265,13 @@ async function start() {
         await request('invalidateModelList', body.provider).catch(() => {});
       } finally { await file.close(); }
     }
-    return credentials.status();
+    return announceConnections();
   });
   handle('orglet:disconnect', async raw => {
     const provider = ApiProvider.parse(raw);
     await credentials.remove(provider);
     await request('invalidateModelList', provider).catch(() => {});
-    return credentials.status();
+    return announceConnections();
   });
   handle('orglet:backup', async () => {
     const result = await dialog.showSaveDialog(window, { title: tr('Lưu bản sao lưu'), defaultPath: 'orglet-backup.json', filters: [{ name: 'Orglet backup', extensions: ['json'] }] });
