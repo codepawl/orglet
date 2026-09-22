@@ -5,9 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { candidates, detectHarnesses, type Probe } from '../../apps/desktop/src/core/harness/detect';
+import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../../apps/desktop/src/core/harness/detect';
+import { HarnessAccounts } from '../../apps/desktop/src/core/harness/accounts';
 import { executeHarness, harnessArgs, HarnessError, HarnessTerminationError, stopHarnessProcess, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
-import { harnessReady, harnessStatus, loginCommand, missingHarness, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
+import { harnessReady, harnessStatus, loginCommand, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
 let directory: string;
@@ -269,9 +270,87 @@ it.runIf(process.platform === 'win32')('bounds stderr output and waits for the o
 const fixture = (item: Pick<HarnessInfo, 'id' | 'executable' | 'version' | 'auth' | 'authDetail'>): HarnessInfo => ({
   name: item.id === 'claude-code' ? 'Claude Code' : item.id === 'codex' ? 'Codex' : 'Cursor Agent',
   status: harnessStatus(item.auth),
+  accountId: SYSTEM_ACCOUNT_ID,
+  accounts: [],
   loginCommand: loginCommand(item.id, item.executable || undefined, 'win32'),
   runnable: true,
   ...item,
+});
+
+describe('accounts', () => {
+  const signedIn: Probe = (_executable, args) => Promise.resolve(
+    args[0] === '--version' ? { code: 0, stdout: '2.1.10 (Claude Code)', stderr: '' }
+      : { code: 0, stdout: JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' }), stderr: '' });
+
+  it('keeps one credential folder per account and falls back to the system account', async () => {
+    const store = new Store(':memory:');
+    const accounts = new HarnessAccounts(store, join(directory, 'harness-accounts'));
+    expect(accounts.selection('claude-code')).toEqual({ accountId: SYSTEM_ACCOUNT_ID, accounts: [] });
+
+    const work = await accounts.add('claude-code', 'Công ty');
+    const folder = join(directory, 'harness-accounts', 'claude-code', work.id);
+    expect(existsSync(folder)).toBe(true);
+    // Adding selects it, so the login command shown next signs into the new account.
+    expect(accounts.selection('claude-code')).toEqual({ accountId: work.id, accounts: [work], configDir: folder });
+    // Accounts are per harness: adding one to Claude Code leaves Codex on its own sign-in.
+    expect(accounts.selection('codex').accountId).toBe(SYSTEM_ACCOUNT_ID);
+
+    accounts.rename('claude-code', work.id, 'Cá nhân');
+    expect(accounts.selection('claude-code').accounts[0].label).toBe('Cá nhân');
+
+    accounts.select('claude-code', SYSTEM_ACCOUNT_ID);
+    expect(accounts.selection('claude-code').configDir).toBeUndefined();
+    expect(accounts.selection('claude-code').accounts).toHaveLength(1);
+
+    accounts.select('claude-code', work.id);
+    await accounts.remove('claude-code', work.id);
+    expect(existsSync(folder)).toBe(false);
+    expect(accounts.selection('claude-code')).toEqual({ accountId: SYSTEM_ACCOUNT_ID, accounts: [] });
+    expect(() => accounts.select('claude-code', work.id)).toThrow('Không còn tài khoản này.');
+  });
+
+  it('probes and signs in through the selected account folder', async () => {
+    const folder = join(directory, 'claude-work');
+    const probed: NodeJS.ProcessEnv[] = [];
+    const record: Probe = (executable, args, overrides) => { probed.push(overrides ?? {}); return signedIn(executable, args); };
+    const executable = join(directory, 'bin', 'claude.exe');
+    await touch(executable);
+    const [claude] = await detectHarnesses({ PATH: join(directory, 'bin') }, 'win32', record, {
+      'claude-code': { accountId: 'work', accounts: [{ id: 'work', label: 'Công ty' }], configDir: folder },
+      codex: { accountId: SYSTEM_ACCOUNT_ID, accounts: [] },
+      cursor: { accountId: SYSTEM_ACCOUNT_ID, accounts: [] },
+    });
+    expect(probed.every(overrides => overrides.CLAUDE_CONFIG_DIR === folder)).toBe(true);
+    expect(claude).toEqual(expect.objectContaining({ accountId: 'work', configDir: folder, auth: 'logged_in' }));
+    expect(claude.accounts).toEqual([{ id: 'work', label: 'Công ty' }]);
+    // The command the user pastes points the CLI at the same folder, so the sign-in lands in this account.
+    expect(claude.loginCommand).toBe(`$env:CLAUDE_CONFIG_DIR = "${folder}"; & "${executable}" auth login`);
+  });
+
+  it('names the folder variable each CLI reads', () => {
+    expect(harnessAccountEnv('claude-code', '/a')).toEqual({ CLAUDE_CONFIG_DIR: '/a' });
+    expect(harnessAccountEnv('codex', '/b')).toEqual({ CODEX_HOME: '/b' });
+    expect(harnessAccountEnv('cursor', '/c')).toEqual({ CURSOR_CONFIG_DIR: '/c' });
+    // The system account runs the CLI exactly as installed.
+    expect(harnessAccountEnv('claude-code', undefined)).toEqual({});
+  });
+
+  it.runIf(process.platform === 'win32')('runs the CLI inside the account folder', async () => {
+    const script = join(directory, 'fake-claude-account.mjs');
+    await writeFile(script, `
+      process.stdout.write(JSON.stringify({ is_error: false, structured_output: { configDir: process.env.CLAUDE_CONFIG_DIR ?? null }, total_cost_usd: 0 }));
+    `);
+    const shim = join(directory, 'claude-account.cmd');
+    await writeFile(shim, `@"${process.execPath}" "${script}" %*
+
+`);
+    const folder = join(directory, 'account-folder');
+    const request = { harness: 'claude-code', executable: shim, cwd: directory, prompt: 'x', schema: {}, signal: new AbortController().signal, maxBudgetUsd: 0.1 } as const;
+    const withAccount = await executeHarness({ ...request, configDir: folder });
+    expect((withAccount.output as { configDir: string }).configDir).toBe(folder);
+    const withoutAccount = await executeHarness(request);
+    expect((withoutAccount.output as { configDir: string | null }).configDir).toBe(process.env.CLAUDE_CONFIG_DIR ?? null);
+  });
 });
 
 describe('runner integration', () => {
@@ -331,6 +410,13 @@ describe('runner integration', () => {
     expect(Object.keys(request.files)).toEqual(['01-note.txt']);
     expect(request.prompt).toContain('Attached but not readable by you');
     expect(request.prompt).toContain('photo.png');
+  });
+
+  it('runs the worker through the account folder chosen in Settings', async () => {
+    const folder = join(directory, 'claude-work');
+    detected = detected.map(item => item.id === 'claude-code' ? { ...item, accountId: 'work', accounts: [{ id: 'work', label: 'Công ty' }], configDir: folder } : item);
+    await run('claude-code');
+    expect(requests[0].configDir).toBe(folder);
   });
 
   it('inlines source text for Codex, which has no file tool, and rejects out-of-range citations', async () => {

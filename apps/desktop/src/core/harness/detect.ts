@@ -4,17 +4,25 @@ import { delimiter, join } from 'node:path';
 import {
   harnessBinaries,
   harnessCatalog,
+  harnessConfigDirVariable,
+  systemAccountSelection,
   harnessNames,
   harnessRunnable,
   harnessStatus,
   installCommand,
   loginCommand,
   missingHarness,
+  type HarnessAccountSelection,
   type HarnessCatalogId,
   type HarnessInfo,
 } from '../../shared/harness';
+import type { HarnessAccountMap } from './accounts';
 
-export type Probe = (executable: string, args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>;
+export type Probe = (executable: string, args: string[], overrides?: NodeJS.ProcessEnv) => Promise<{ code: number; stdout: string; stderr: string }>;
+
+/** Variables that point a CLI at one account's folder. Empty for the system account, which runs the CLI as installed. */
+export const harnessAccountEnv = (id: HarnessCatalogId, configDir?: string): NodeJS.ProcessEnv =>
+  configDir ? { [harnessConfigDirVariable[id]]: configDir } : {};
 
 const isFile = async (path: string) => { try { return (await stat(path)).isFile(); } catch { return false; } };
 const children = async (path: string) => { try { return await readdir(path); } catch { return []; } };
@@ -80,9 +88,9 @@ export function commandLine(executable: string, args: string[]): { file: string;
   return { file: process.env.ComSpec ?? 'cmd.exe', args: ['/d', '/s', '/c', `"${line}"`], verbatim: true };
 }
 
-export const probe: Probe = (executable, args) => new Promise(resolve => {
+export const probe: Probe = (executable, args, overrides) => new Promise(resolve => {
   const command = commandLine(executable, args);
-  execFile(command.file, command.args, { timeout: 10_000, windowsHide: true, windowsVerbatimArguments: command.verbatim, maxBuffer: 256 * 1024, env: cleanEnv(process.env) }, (error, stdout, stderr) => {
+  execFile(command.file, command.args, { timeout: 10_000, windowsHide: true, windowsVerbatimArguments: command.verbatim, maxBuffer: 256 * 1024, env: { ...cleanEnv(process.env), ...overrides } }, (error, stdout, stderr) => {
     resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, stdout: String(stdout), stderr: String(stderr) });
   });
 });
@@ -94,7 +102,7 @@ export function cleanEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 
 const output = (result: { stdout: string; stderr: string }) => `${result.stdout}${result.stderr}`;
 
-function describeAuth(id: HarnessCatalogId, executable: string, platform: NodeJS.Platform, auth: HarnessInfo['auth'], detail: string): HarnessInfo {
+function describeAuth(id: HarnessCatalogId, executable: string, platform: NodeJS.Platform, auth: HarnessInfo['auth'], detail: string, selection: HarnessAccountSelection): HarnessInfo {
   const runnable = harnessRunnable(id);
   return {
     id,
@@ -104,14 +112,20 @@ function describeAuth(id: HarnessCatalogId, executable: string, platform: NodeJS
     auth,
     status: harnessStatus(auth),
     authDetail: detail,
-    loginCommand: loginCommand(id, executable, platform),
+    loginCommand: loginCommand(id, executable, platform, selection.configDir),
     installCommand: installCommand(id, platform),
     runnable,
+    accountId: selection.accountId,
+    accounts: selection.accounts,
+    ...(selection.configDir ? { configDir: selection.configDir } : {}),
   };
 }
 
-async function inspect(id: HarnessCatalogId, executable: string, run: Probe, platform: NodeJS.Platform): Promise<HarnessInfo | null> {
-  const versionResult = await run(executable, ['--version']);
+async function inspect(id: HarnessCatalogId, executable: string, run: Probe, platform: NodeJS.Platform, selection: HarnessAccountSelection): Promise<HarnessInfo | null> {
+  // Every probe reads the selected account's folder, so the version, the sign-in and the login command all describe it.
+  const accountEnv = harnessAccountEnv(id, selection.configDir);
+  const describe = (auth: HarnessInfo['auth'], detail: string) => describeAuth(id, executable, platform, auth, detail, selection);
+  const versionResult = await run(executable, ['--version'], accountEnv);
   const version = output(versionResult).trim().split(/\r?\n/)[0]?.slice(0, 120) ?? '';
   if (versionResult.code !== 0 || !/\d+\.\d+/.test(version)) return null;
 
@@ -120,48 +134,48 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
   const unread = `${name} có trên máy nhưng không đọc được trạng thái đăng nhập. Chạy lệnh bên dưới rồi bấm Dò lại. Orglet không chuyển sang Demo.`;
   let info: Omit<HarnessInfo, 'version'>;
   if (id === 'claude-code') {
-    const status = await run(executable, ['auth', 'status']);
+    const status = await run(executable, ['auth', 'status'], accountEnv);
     try {
       const parsed = JSON.parse(status.stdout) as { loggedIn?: boolean; authMethod?: string };
       info = parsed.loggedIn
-        ? describeAuth(id, executable, platform, 'logged_in', `Đăng nhập qua ${parsed.authMethod ?? 'Claude Code'}`)
-        : describeAuth(id, executable, platform, 'logged_out', signedOut);
+        ? describe('logged_in', `Đăng nhập qua ${parsed.authMethod ?? 'Claude Code'}`)
+        : describe('logged_out', signedOut);
     } catch {
       info = /not logged in|please run \/login/i.test(output(status))
-        ? describeAuth(id, executable, platform, 'logged_out', signedOut)
-        : describeAuth(id, executable, platform, 'unknown', unread);
+        ? describe('logged_out', signedOut)
+        : describe('unknown', unread);
     }
   } else if (id === 'codex') {
-    const status = await run(executable, ['login', 'status']);
+    const status = await run(executable, ['login', 'status'], accountEnv);
     const text = output(status).trim();
     if (/logged in/i.test(text) && status.code === 0) {
-      info = describeAuth(id, executable, platform, 'logged_in', text.split(/\r?\n/)[0].slice(0, 200));
+      info = describe('logged_in', text.split(/\r?\n/)[0].slice(0, 200));
     } else if (/not logged in/i.test(text)) {
-      info = describeAuth(id, executable, platform, 'logged_out', signedOut);
+      info = describe('logged_out', signedOut);
     } else {
-      info = describeAuth(id, executable, platform, 'unknown', unread);
+      info = describe('unknown', unread);
     }
   } else {
-    const status = await run(executable, ['status', '--format', 'json']);
+    const status = await run(executable, ['status', '--format', 'json'], accountEnv);
     const text = output(status).trim();
     try {
       const parsed = JSON.parse(status.stdout || '{}') as { loggedIn?: boolean; authenticated?: boolean; email?: string; user?: string };
       const loggedIn = parsed.loggedIn === true || parsed.authenticated === true || Boolean(parsed.email ?? parsed.user);
       const loggedOut = parsed.loggedIn === false || parsed.authenticated === false;
       if (loggedIn) {
-        info = describeAuth(id, executable, platform, 'logged_in', `Đăng nhập Cursor${parsed.email || parsed.user ? ` · ${parsed.email ?? parsed.user}` : ''}`);
+        info = describe('logged_in', `Đăng nhập Cursor${parsed.email || parsed.user ? ` · ${parsed.email ?? parsed.user}` : ''}`);
       } else if (loggedOut) {
-        info = describeAuth(id, executable, platform, 'logged_out', signedOut);
+        info = describe('logged_out', signedOut);
       } else {
-        info = describeAuth(id, executable, platform, 'unknown', unread);
+        info = describe('unknown', unread);
       }
     } catch {
       if (/not (logged in|authenticated)/i.test(text)) {
-        info = describeAuth(id, executable, platform, 'logged_out', signedOut);
+        info = describe('logged_out', signedOut);
       } else if (status.code === 0 && /(logged in|authenticated|login successful|email)/i.test(text)) {
-        info = describeAuth(id, executable, platform, 'logged_in', text.split(/\r?\n/)[0].slice(0, 200));
+        info = describe('logged_in', text.split(/\r?\n/)[0].slice(0, 200));
       } else {
-        info = describeAuth(id, executable, platform, 'unknown', unread);
+        info = describe('unknown', unread);
       }
     }
   }
@@ -169,14 +183,15 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
 }
 
 /** First working install of each catalog harness, including an explicit not-installed row when nothing probes. */
-export async function detectHarnesses(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, run: Probe = probe): Promise<HarnessInfo[]> {
+export async function detectHarnesses(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, run: Probe = probe, accounts?: HarnessAccountMap): Promise<HarnessInfo[]> {
   const result: HarnessInfo[] = [];
   for (const id of harnessCatalog) {
+    const selection = accounts?.[id] ?? systemAccountSelection();
     let found: HarnessInfo | null = null;    for (const executable of await candidates(id, env, platform)) {
-      found = await inspect(id, executable, run, platform);
+      found = await inspect(id, executable, run, platform, selection);
       if (found) break;
     }
-    result.push(found ?? missingHarness(id, platform));
+    result.push(found ?? missingHarness(id, platform, selection));
   }
   return result;
 }

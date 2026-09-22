@@ -10,7 +10,7 @@ import { acceptCustomModelId, hiddenOpenAIModel, MODEL_LISTS_SETTING } from '../
 import { canStoreModelListRow } from '../../apps/desktop/src/core/models/cache';
 import { catalogHint, parseCodexModels, parseCursorModels, parseOllamaTags, parseOpenAIModels, parseOpenRouterModels } from '../../apps/desktop/src/core/models/fetch';
 import { modelCatalog } from '../../apps/desktop/src/core/adapters/catalog';
-import { harnessNames, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
+import { harnessNames, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { ModelListResult } from '../../apps/desktop/src/shared/models';
 import type { Probe } from '../../apps/desktop/src/core/harness/detect';
 
@@ -30,7 +30,7 @@ function store() {
 function signedIn(id: 'claude-code' | 'codex' | 'cursor', executable: string): HarnessInfo {
   return {
     id, name: harnessNames[id], executable, version: '1.0.0', auth: 'logged_in', status: 'signed_in',
-    authDetail: 'ok', loginCommand: executable, runnable: true,
+    authDetail: 'ok', loginCommand: executable, runnable: true, accountId: SYSTEM_ACCOUNT_ID, accounts: [],
   };
 }
 

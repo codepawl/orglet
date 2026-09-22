@@ -1,12 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Check, Contrast, Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil } from 'lucide-react';
+import { Check, Contrast, Database, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
-import type { HarnessInfo } from '../../shared/harness';
+import { SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../shared/harness';
 import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
@@ -15,6 +15,8 @@ import { formatMoney, moneySymbol, toAmount, toMicros } from './money';
 import { currencies, CurrencyCode, usdCurrency } from '../../shared/currency';
 import { ProviderMark } from './ProviderMark';
 import { StatusMark, type StatusMarkState } from './StatusMark';
+import { InfoTip } from './InfoTip';
+import { RowMenu } from './RowMenu';
 import { toast } from './toast';
 import { Switch } from './Switch';
 import { t, tMessage } from '../i18n';
@@ -41,6 +43,58 @@ const sectionLabels: Partial<Record<SettingsTab, string>> = {
   harness: 'Chưa cài, đã thấy trên máy, và đã đăng nhập sẵn sàng chạy là ba trạng thái khác nhau. Lỗi đăng nhập hiện lệnh sửa; Orglet không chuyển sang Demo. Chọn harness ở mục Model khi thiết lập Tí.',
   usage: 'Chỉ tính request qua Orglet, không phải tổng hóa đơn API key. Harness trên máy dùng gói của chính nó nên không nằm trong các số này. Input cached được tính theo giá thường.',
 };
+
+/**
+ * Which account of one harness runs. An account is a folder the CLI signs in to, so switching is a folder swap:
+ * the status, the version and the login command above all follow the account picked here. Adding one selects it,
+ * so the login command shown next is the one that signs into it.
+ */
+function HarnessAccountPicker({ item, busy, onSelect, onSave, onRemove }: {
+  item: HarnessInfo; busy: boolean;
+  onSelect: (id: string) => void; onSave: (id: string | undefined, label: string) => void; onRemove: (id: string) => void;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState<{ id?: string; label: string }>();
+  const active = item.accounts.find(account => account.id === item.accountId);
+  const close = () => setEditing(undefined);
+  const submit = () => {
+    const label = editing?.label.trim();
+    if (!label) return;
+    onSave(editing?.id, label);
+    close();
+  };
+  return <div className="harness-account" ref={row}>
+    <Select size="sm" className="harness-account-select" ariaLabel={t('Tài khoản {0}', [item.name])} value={item.accountId} disabled={busy}
+      menuMinWidth={240}
+      onChange={onSelect}
+      options={[
+        { value: SYSTEM_ACCOUNT_ID, label: t('Tài khoản mặc định'), detail: t('Đăng nhập sẵn của CLI trên máy'), icon: <Laptop size={16} /> },
+        ...item.accounts.map(account => ({ value: account.id, label: account.label, icon: <UserRound size={16} /> })),
+      ]} />
+    {item.configDir && <InfoTip label={t('Chi tiết tài khoản')} rows={[
+      { label: t('Thư mục đăng nhập'), value: item.configDir, mono: true, onCopy: () => navigator.clipboard.writeText(item.configDir!) },
+    ]} />}
+    <RowMenu label={t('Tài khoản {0}', [item.name])} items={[
+      { label: t('Thêm tài khoản'), icon: UserPlus, onSelect: () => setEditing({ label: '' }) },
+      ...(active ? [
+        { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing({ id: active.id, label: active.label }) },
+        {
+          label: t('Xóa tài khoản'), icon: Trash2, danger: true,
+          confirm: { question: t('Xóa tài khoản này cùng phần đăng nhập đã lưu trong thư mục của nó?'), label: t('Xóa') },
+          onSelect: () => onRemove(active.id),
+        },
+      ] : []),
+    ]} />
+    <AnchoredPopover anchor={row} open={Boolean(editing)} onClose={close} label={editing?.id ? t('Đổi tên tài khoản') : t('Thêm tài khoản')}>
+      <form className="harness-account-form" onSubmit={event => { event.preventDefault(); submit(); }}>
+        <input autoFocus value={editing?.label ?? ''} maxLength={60} disabled={busy}
+          aria-label={t('Tên tài khoản')} placeholder={t('Ví dụ: Tài khoản công ty')}
+          onChange={event => setEditing(current => current && { ...current, label: event.target.value })} />
+        <Button type="submit" variant="outline" disabled={busy || !editing?.label.trim()}>{t('Lưu')}</Button>
+      </form>
+    </AnchoredPopover>
+  </div>;
+}
 
 function Row({ title, description, children, id }: { title: string; description?: ReactNode; children?: ReactNode; id?: string }) {
   return <div className="setting-row">
@@ -290,6 +344,19 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       {item.version && <span className="setting-description">{item.version}</span>}
                       <span className="setting-description">{tMessage(item.authDetail)}</span>
                       {item.executable ? <span className="setting-path" title={item.executable}>{item.executable}</span> : null}
+                      {item.runnable && <HarnessAccountPicker item={item} busy={busy}
+                        onSelect={id => void act(async () => {
+                          onHarnesses(await orglet.call('selectHarnessAccount', { harness: item.id, id }));
+                          return t('Đã đổi tài khoản {0}', [item.name]);
+                        })}
+                        onSave={(id, label) => void act(async () => {
+                          onHarnesses(await orglet.call('saveHarnessAccount', { harness: item.id, ...(id ? { id } : {}), label }));
+                          return id ? t('Đã đổi tên tài khoản') : t('Đã thêm tài khoản {0}. Chạy lệnh đăng nhập bên dưới để đăng nhập vào tài khoản này.', [label]);
+                        })}
+                        onRemove={id => void act(async () => {
+                          onHarnesses(await orglet.call('removeHarnessAccount', { harness: item.id, id }));
+                          return t('Đã xóa tài khoản');
+                        })} />}
                       {((item.status === 'not_installed' && item.installCommand) || showLogin) && <div className="harness-commands">
                         {item.status === 'not_installed' && item.installCommand && <CommandCopy command={item.installCommand} label={t('Lệnh cài (tài liệu chính thức)')} />}
                         {showLogin && <CommandCopy command={item.loginCommand} label={item.status === 'not_installed' ? t('Sau khi cài, đăng nhập bằng') : t('Lệnh đăng nhập')} />}

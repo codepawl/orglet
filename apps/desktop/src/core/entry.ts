@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { z } from 'zod';
 import { Store } from './storage/database';
-import { CoreService } from './service';
+import { CoreService, localHarnessRuntime } from './service';
 import { OpenAIAdapter } from './adapters/openai';
 import { AnthropicAdapter } from './adapters/anthropic';
 import { OpenCodeAdapter } from './adapters/opencode';
@@ -65,7 +65,7 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   if (provider === 'opencode-zen' || provider === 'opencode-go') return new OpenCodeAdapter(provider, key, model);
   if (provider === 'ollama') return new OpenAIAdapter(key, { baseURL: `${MODEL_LIST_ENDPOINTS.ollama}/v1`, model: model || CATALOG_HINT_IDS.ollama });
   return new OpenAIAdapter(key, { model });
-}, profile, undefined, undefined, undefined, {
+}, profile, undefined, localHarnessRuntime(join(process.argv[2], 'harness-accounts')), undefined, {
   readKey: provider => requestKey(provider),
 }, workspaceRuntime);
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
