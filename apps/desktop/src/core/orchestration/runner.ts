@@ -128,9 +128,21 @@ function webFailureEvent(toolName: string, reason: string) {
 
 /** Search, read a few pages and write the report does not fit in the six steps a sources-only run gets. */
 function stepLimit(run: Run) {
-  if (run.snapshot.workspaceGrant) return 24;
+  // Coding is many small tool calls: every file read, write and command is a step (COD-187).
+  if (run.snapshot.workspaceGrant) return 40;
   if (run.snapshot.toolCapabilities?.includes('network.web')) return 16;
   return 6;
+}
+
+/** Steps left when the worker is told to stop using tools and hand in what it has (COD-187). */
+const WRAP_UP_STEPS = 2;
+const WRAP_UP_INSTRUCTION = 'You are almost out of steps. Stop using tools and hand in now with what is done: what you changed or found, what you verified and how, and what is not finished. Do not start new work.';
+const FINISHING_TOOL_NAMES = ['reply', 'submit_report', 'submit_plan'];
+
+/** The tools that end a run, so a worker told to hand in cannot keep working instead. */
+function finishingTools<Tool extends { type: string; function?: { name: string } }>(tools: Tool[]) {
+  const finishing = tools.filter(tool => tool.type === 'function' && FINISHING_TOOL_NAMES.includes(tool.function?.name ?? ''));
+  return finishing.length ? finishing : tools;
 }
 
 const MAX_REQUEST_BYTES = 200_000;
@@ -515,8 +527,15 @@ export class Runner {
         }
         for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Quyền nguồn đã bị thu hồi; dừng gửi context.');
         // UTF-8 byte count bounds byte-fallback tokens; extra allowance covers chat framing/schema overhead.
+        if (!checkpoint.wrappingUp && !checkpoint.reportCorrections && step >= maxSteps - WRAP_UP_STEPS) {
+          messages.push({ role: 'user', content: JSON.stringify({ stepsLeft: maxSteps - step, instruction: WRAP_UP_INSTRUCTION }) });
+          checkpoint = { ...checkpoint, messages, wrappingUp: true };
+          this.checkpoints.save(checkpoint);
+          this.event(run.id, `Còn ${maxSteps - step} bước; yêu cầu nộp kết quả với phần đã làm.`);
+        }
         const requestTools = checkpoint.reportCorrections
-          ? tools.filter(tool => tool.type === 'function' && tool.function.name === 'submit_report') : tools;
+          ? tools.filter(tool => tool.type === 'function' && tool.function.name === 'submit_report')
+          : checkpoint.wrappingUp ? finishingTools(tools) : tools;
         const measureInput = () => Buffer.byteLength(JSON.stringify({ messages, tools: requestTools }), 'utf8') + 8192;
         // Pages the worker has already moved on from go out as excerpts, so the request stops growing with each page read.
         if (trimOlderWebPages(messages, FULL_WEB_PAGES_KEPT)) this.event(run.id, 'Đã rút gọn các trang web đọc trước đó; các bước sau chỉ gửi lại phần đầu của chúng.');
@@ -805,7 +824,7 @@ export class Runner {
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ sourceId, content, coverage: 'Full text, maximum 256 KB; no code execution or semantic guarantees.' }) });
         checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] }; this.checkpoints.committed(checkpoint);
       }
-      throw new Error(run.snapshot.workspaceGrant ? 'Đã chạm giới hạn 24 bước mà chưa hoàn tất công việc.' : `Đã chạm giới hạn ${maxSteps} bước mà chưa có báo cáo hợp lệ.`);
+      throw new Error(run.snapshot.workspaceGrant ? `Đã chạm giới hạn ${maxSteps} bước mà chưa hoàn tất công việc.` : `Đã chạm giới hạn ${maxSteps} bước mà chưa có báo cáo hợp lệ.`);
     } catch (error) {
       if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true, harnessRunTotal));
       const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error) : 'Lần chạy gặp lỗi.';

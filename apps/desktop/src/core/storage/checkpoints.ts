@@ -6,6 +6,8 @@ export type Checkpoint = {
   id: string; step: number; phase: 'ready' | 'requesting' | 'replied' | 'done';
   messages: ChatCompletionMessageParam[]; readIds: string[]; reply?: ModelReply;
   reportCorrections?: number;
+  /** Set once the run was told it is almost out of steps and must hand in now (COD-187). */
+  wrappingUp?: boolean;
   /** CLI-reported estimates, separate from settled API charges. */
   harnessCostMicros?: number;
   /** CLI calls in this run that reported no estimate, so the run total above is a floor, not the whole spend. */
