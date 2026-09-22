@@ -14,6 +14,7 @@ import type { MediaKind } from './source-kinds';
 import { Review, ReviewPolicy, type EvidenceRequest } from './review';
 import { KnowledgeInput, type Knowledge, type RunContext } from './knowledge';
 import { HarnessCatalogId, type HarnessInfo } from './harness';
+import { FontFamily } from './fonts';
 import { CurrencyCode, type CurrencyState } from './currency';
 import { Language } from './i18n';
 import { CustomModelId, type ModelListResult } from './models';
@@ -180,7 +181,7 @@ export type TaskDetail = { task: Task; runs: Run[]; events: Activity[]; artifact
 /** How the in-app brand mark is coloured: the text colour, or the user's accent (COD-154). */
 export const LogoColor = z.enum(['mono', 'accent']);
 export type LogoColor = z.infer<typeof LogoColor>;
-export type Workspace = { copyFormat: FormatPreference; downloadFormat: FormatPreference; archivedWorkers: (Worker & { archivedAt: string })[]; archivedTeams: (Team & { archivedAt: string })[]; language: Language; autoTitles: boolean; confirmOpenTask: boolean; archiveRetentionDays: ArchiveRetention; avatarColors: string[]; /** The one colour the user picks for the app; see shared/accent.ts. */ accentColor: string; logoColor: LogoColor; knowledge: Knowledge[]; workers: Worker[]; teams: Team[]; skills: Skill[]; tasks: Task[]; routines: Routine[]; usage: Usage; budgetReservations: BudgetReservationView[]; theme: 'system' | 'light' | 'dark'; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; currency: CurrencyState; sqliteVersion: string };
+export type Workspace = { copyFormat: FormatPreference; downloadFormat: FormatPreference; archivedWorkers: (Worker & { archivedAt: string })[]; archivedTeams: (Team & { archivedAt: string })[]; language: Language; autoTitles: boolean; confirmOpenTask: boolean; archiveRetentionDays: ArchiveRetention; avatarColors: string[]; /** The one colour the user picks for the app; see shared/accent.ts. */ accentColor: string; logoColor: LogoColor; /** Family names the person picked; absent keeps the fonts the app ships with (shared/fonts.ts). */ interfaceFont?: string; codeFont?: string; knowledge: Knowledge[]; workers: Worker[]; teams: Team[]; skills: Skill[]; tasks: Task[]; routines: Routine[]; usage: Usage; budgetReservations: BudgetReservationView[]; theme: 'system' | 'light' | 'dark'; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; currency: CurrencyState; sqliteVersion: string };
 export type Connections = Record<ApiProvider, boolean>;
 export const emptyConnections = (): Connections => ({ openai: false, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, ollama: false });
 
@@ -247,7 +248,7 @@ export const commands = {
   // Colours the user made in the avatar picker, newest first, offered to every worker.
   saveAvatarColors: z.object({ colors: z.array(z.string().regex(/^#[0-9a-f]{6}$/)).max(16).refine(items => new Set(items).size === items.length, 'Duplicate colour') }).strict(),
   refreshCurrency: z.object({}).strict(),
-  settings: z.object({ language: Language.optional(), autoTitles: z.boolean().optional(), confirmOpenTask: z.boolean().optional(), copyFormat: FormatPreference.optional(), downloadFormat: FormatPreference.optional(), archiveRetentionDays: ArchiveRetention.optional(), theme: z.enum(['system', 'light', 'dark']), connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000), providerConcurrency: z.number().int().min(1).max(4).optional(), providerConsent: z.array(ProviderScope).max(4).refine(items => new Set(items).size === items.length, 'Duplicate provider').optional(), accentColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), logoColor: LogoColor.optional() }),
+  settings: z.object({ language: Language.optional(), autoTitles: z.boolean().optional(), confirmOpenTask: z.boolean().optional(), copyFormat: FormatPreference.optional(), downloadFormat: FormatPreference.optional(), archiveRetentionDays: ArchiveRetention.optional(), theme: z.enum(['system', 'light', 'dark']), connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000), providerConcurrency: z.number().int().min(1).max(4).optional(), providerConsent: z.array(ProviderScope).max(4).refine(items => new Set(items).size === items.length, 'Duplicate provider').optional(), accentColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), logoColor: LogoColor.optional(), interfaceFont: FontFamily.nullable().optional(), codeFont: FontFamily.nullable().optional() }),
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;

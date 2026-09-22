@@ -477,6 +477,13 @@ export class CoreService {
         if (input.archiveRetentionDays !== undefined) this.store.setSetting('archiveRetentionDays', input.archiveRetentionDays);
         if (input.accentColor !== undefined) this.store.setSetting('accentColor', input.accentColor);
         if (input.logoColor !== undefined) this.store.setSetting('logoColor', input.logoColor);
+        // null puts a font back to the one the app ships with; absent leaves the current choice alone.
+        const saveFont = (key: 'interfaceFont' | 'codeFont', family: string | null | undefined) => {
+          if (family === undefined) return;
+          if (family) this.store.setSetting(key, family); else this.store.clearSetting(key);
+        };
+        saveFont('interfaceFont', input.interfaceFont);
+        saveFont('codeFont', input.codeFont);
         this.store.setSetting('connectionLimitMicros', input.connectionLimitMicros);
         if (input.providerConcurrency) this.store.setSetting('providerConcurrency', input.providerConcurrency);
         // Standing per-provider permission (plan §12: consent scoped by connection); backups never restore it.

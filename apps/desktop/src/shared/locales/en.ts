@@ -1604,6 +1604,17 @@ export const en: Dictionary = {
   'Đã đổi tên tài khoản': 'Account renamed',
   'Đổi tên': 'Rename',
   'Đổi tên tài khoản': 'Rename account',
+  'Dùng cho code, đường dẫn và các giá trị kỹ thuật.': 'Used for code, paths and technical values.',
+  'Dùng cho toàn bộ chữ trong app.': 'Used for all text in the app.',
+  'Dùng phông này': 'Use this font',
+  'Phông chữ': 'Font',
+  'Phông chữ code': 'Code font',
+  'Phông khác': 'Another font',
+  'Phông khác…': 'Another font…',
+  'Tên phông chữ': 'Font family name',
+  'Tí đọc nguồn rồi trả lời bằng tiếng Việt có dấu đầy đủ.': 'A worker reads the sources and answers in your own words.',
+  'Xem trước phông chữ': 'Font preview',
+  'đi kèm Orglet': 'ships with Orglet',
 };
 
 // British English differs from the US text only in these spellings, so it is derived instead of duplicated.
