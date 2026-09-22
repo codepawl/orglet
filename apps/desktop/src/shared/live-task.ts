@@ -49,3 +49,14 @@ export function nextWorkerMessage(tasks: readonly LiveThreadTask[], workerId: st
   const live = liveWorkerTask(tasks, workerId);
   return live ? { mode: 'revise', taskId: live.id } : { mode: 'create' };
 }
+
+/**
+ * Where the permissions of a chat that has not started yet are kept (`Workspace.newChatCapabilities`, COD-178).
+ * The row does not exist before the first message, so the set is keyed by the worker or team instead and
+ * `createTask` moves it onto the row it creates.
+ */
+export function newChatKey(chat: { teamId?: string; workerId?: string }): string {
+  if (chat.teamId) return `team:${chat.teamId}`;
+  if (chat.workerId) return `worker:${chat.workerId}`;
+  throw new Error('Chat cần một Tí hoặc một hội.');
+}

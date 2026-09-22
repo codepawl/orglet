@@ -38,7 +38,7 @@ const partlyBlockedNotes: Record<PermissionBlocker, string> = {
  * A blocker (Demo, a model with no connection, a grant still loading) is never a third position on a control:
  * the control is disabled and one short line says why (user, COD-168).
  */
-export function PermissionControls({ workers, capabilities, grant, taskId, sourceCount, busy = false, locked, onCapability, onWorkspace, onConfigure }: {
+export function PermissionControls({ workers, capabilities, grant, taskId, sourceCount, busy = false, locked, folderLocked, onCapability, onWorkspace, onConfigure }: {
   workers: PermissionWorker[];
   capabilities?: ToolCapability[];
   /** `undefined` while the grant is still being read. */
@@ -48,6 +48,8 @@ export function PermissionControls({ workers, capabilities, grant, taskId, sourc
   busy?: boolean;
   /** Why nothing here can be changed yet; every control renders disabled with this one line above them. */
   locked?: string;
+  /** Why only the folder cannot be chosen yet (a grant needs the chat row); the switches stay live and the line sits under the dropdown. */
+  folderLocked?: string;
   onCapability: (capability: ToolCapability, enabled: boolean) => void;
   onWorkspace: (level: WorkspaceLevel) => void;
   onConfigure?: (provider: Exclude<Worker['provider'], 'demo'>) => void;
@@ -61,6 +63,7 @@ export function PermissionControls({ workers, capabilities, grant, taskId, sourc
   const disconnected = blocked.find(item => item.blocker === 'connection')?.worker.provider;
   const loading = grant === undefined;
   const disabled = busy || locked !== undefined || everyoneBlocked;
+  const folderDisabled = disabled || loading || folderLocked !== undefined;
 
   let reason: ReactNode = null;
   if (locked !== undefined) reason = locked;
@@ -87,16 +90,17 @@ export function PermissionControls({ workers, capabilities, grant, taskId, sourc
       description={t('Cho phép kiểm tra cấu trúc và chất lượng nguồn dữ liệu đã đính kèm. Không cho phép chạy script.')}>
       <Database size={15} aria-hidden="true" />{t('Kiểm tra dữ liệu')}
     </SwitchField>
-    <div className={`permission-folder${disabled || loading ? ' permission-folder-disabled' : ''}`}>
+    <div className={`permission-folder${folderDisabled ? ' permission-folder-disabled' : ''}`}>
       <span className="permission-folder-text">
         <span className="permission-folder-title"><FolderOpen size={15} aria-hidden="true" />{t('Thư mục làm việc')}</span>
         <span className="permission-folder-description">{t('Tí làm trên bản sao riêng của thư mục; file gốc chỉ đổi sau khi Tí trả lời xong. Đổi mức sẽ chọn lại thư mục.')}</span>
       </span>
       <span className="permission-folder-control">
-        <Select ariaLabel={t('Thư mục làm việc')} size="sm" value={state.workspace} disabled={disabled || loading}
+        <Select ariaLabel={t('Thư mục làm việc')} size="sm" value={state.workspace} disabled={folderDisabled}
           onChange={value => onWorkspace(value as WorkspaceLevel)}
           options={workspaceLevels.map(level => ({ value: level, label: levelNames[level] }))} />
-        {loading ? <span className="permission-folder-name permission-folder-pending">{t('Đang tải quyền…')}</span>
+        {folderLocked !== undefined ? <span className="permission-folder-name permission-folder-pending">{folderLocked}</span>
+          : loading ? <span className="permission-folder-name permission-folder-pending">{t('Đang tải quyền…')}</span>
           : state.folder && <span className="permission-folder-name"><FolderOpen size={13} aria-hidden="true" />{state.folder}</span>}
       </span>
     </div>
@@ -104,6 +108,6 @@ export function PermissionControls({ workers, capabilities, grant, taskId, sourc
       description={t('Cho phép đọc URL công khai và gửi truy vấn tìm kiếm. Không mở mạng cho lệnh trong thư mục.')}>
       <Globe size={15} aria-hidden="true" />{t('Đọc và tìm kiếm web')}
     </SwitchField>
-    <p className="muted permission-footnote">{t('Quyền mới áp dụng cho lượt chạy mới. Thu hồi quyền sẽ dừng công việc đang chạy.')}</p>
+    <p className="muted permission-footnote">{t('Quyền mới áp dụng cho lần chạy chưa bắt đầu, kể cả phần việc còn chờ trong lượt này. Thu hồi quyền sẽ dừng công việc đang chạy.')}</p>
   </div>;
 }

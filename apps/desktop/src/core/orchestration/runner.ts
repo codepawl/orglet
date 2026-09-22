@@ -23,6 +23,7 @@ import { harnessToolAdapter } from '../harness/tool-adapter';
 import { assignmentKey } from './assignments';
 import { ToolCalls } from '../storage/tool-calls';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
+import { WorkspaceGrants } from '../storage/workspace-grants';
 import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { DecisionQuestion } from '../../shared/work-decisions';
@@ -153,6 +154,21 @@ export class Runner {
   }
   private event(runId: string, message: string) { this.store.event(runId, message); this.notify(); }
   /**
+   * A run fixes its permissions the moment it first starts, not when the turn was sent (COD-178). Member and
+   * synthesis runs of a team turn are created at send time and wait for the plan, so a run starting for the first
+   * time reads the chat's current capabilities and folder grant here. The frozen context marks a run that already
+   * started (a resume keeps the snapshot it ran with), and a reassignment attempt keeps the intersection of both
+   * workers that recovery gave it.
+   */
+  private startPermissions(task: Task, run: Run): Pick<Run['snapshot'], 'toolCapabilities' | 'workspaceGrant'> {
+    const fresh = !run.snapshot.context && !run.snapshot.reassignment;
+    if (!fresh) {
+      return { toolCapabilities: run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider, task.toolCapabilities), workspaceGrant: run.snapshot.workspaceGrant };
+    }
+    const current = this.store.get<Task>('tasks', task.id);
+    return { toolCapabilities: snapshotCapabilities(run.snapshot.worker.provider, current.toolCapabilities), workspaceGrant: new WorkspaceGrants(this.store).snapshot(task.id) };
+  }
+  /**
    * Saves the reads and searches a streaming harness made as run activity, so the answer keeps its folded
    * "Read 2 files" line after the live view ends. Native tool calls already record "Đã đọc" the same way.
    */
@@ -180,7 +196,7 @@ export class Runner {
       const input = RunInput.parse(run.snapshot.input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources });
       const replyTarget = input.replyTo ? new MessageInteractions(this.store).target(task.id, input.replyTo) : undefined;
       if (input.sourceIds.some(id => !task.sourceIds.includes(id))) throw new Error('Snapshot tham chiếu nguồn ngoài task.');
-      run = { ...run, snapshot: { ...run.snapshot, input, toolCapabilities: run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider, task.toolCapabilities) } };
+      run = { ...run, snapshot: { ...run.snapshot, input, ...this.startPermissions(task, run) } };
       task = { ...task, ...input };
       assertSkillReady(run.snapshot.skill, this.store);
       const resolved = resolveWorkerModel(run.snapshot.worker, readModelListCache(this.store));

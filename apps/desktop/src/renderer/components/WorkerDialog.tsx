@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlignLeft, Smile, Cpu, ScrollText, ShieldCheck, Sparkles, UserRound, Wallet, SlidersHorizontal } from 'lucide-react';
 import { isPaidApi, type Connections, type Worker, type Workspace } from '../../shared/contracts';
 import { CATALOG_HINT_IDS } from '../../shared/models';
-import { liveWorkerTask } from '../../shared/live-task';
+import { liveWorkerTask, newChatKey } from '../../shared/live-task';
 import { permissionsForLevel, type WorkspaceLevel } from '../../shared/capability-status';
 import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
 import type { WorkspaceGrantView } from '../../shared/workspace-access';
@@ -49,6 +49,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [description, setDescription] = useState(worker?.description ?? '');
   // New workers get a stable colour seed before they have an id.
   const [seed] = useState(() => worker?.id ?? crypto.randomUUID());
+  // Permissions chosen for a worker that is not saved yet; they reach the core once the worker has an id.
+  const [draftCapabilities, setDraftCapabilities] = useState<ToolCapability[]>();
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState<InvalidField>();
   const [flash, setFlash] = useState(0);
@@ -77,7 +79,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     if (modelIssue) return fail('general', modelIssue, 'modelId');
     setBusy(true); clearError();
     try {
-      await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}) });
+      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}) });
+      if (!worker && draftCapabilities) await orglet.call('setToolCapabilities', { workerId: saved.id, capabilities: draftCapabilities });
       toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name); onClose();
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
@@ -126,34 +129,41 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       <Select ariaLabel={t('Kỹ năng')} value={skillId} onChange={setSkill} options={workspace.skills.map(item => { const pending = !!item.package && item.package.reviewedHash !== item.package.hash; return { value: item.id, label: item.name, detail: pending ? t('v{0} · Cần review trong Thư viện', [item.revision]) : `v${item.revision}`, icon: <Sparkles size={16} />, disabled: pending }; })} />
       {skill && <p className="prose muted">{skill.content}</p>}
     </>}
-    {tab === 'permissions' && <WorkerChatPermissions worker={worker} workspace={workspace} draft={{ id: worker?.id ?? seed, name: name || t('Tí mới'), provider, connected: provider === 'demo' || ready[provider] }} />}
+    {tab === 'permissions' && <WorkerChatPermissions worker={worker} workspace={workspace} draft={{ id: worker?.id ?? seed, name: name || t('Tí mới'), provider, connected: provider === 'demo' || ready[provider] }}
+      draftCapabilities={draftCapabilities} onDraftCapabilities={setDraftCapabilities} />}
   </TabbedFormDialog>;
 }
 
 /**
  * The permissions of this worker's own chat, changed in place the way Details changes them. Permissions live on the
- * chat, and the chat row only exists once the first message is sent, so until then the controls show the defaults
- * a new chat would start with and one line says why they cannot be changed yet.
+ * chat; before its first message the switches set what that chat will start with (kept under the worker in the
+ * core, or in the dialog's draft while the worker has no id yet), and only the folder waits for the chat row,
+ * because a grant is made for one task (COD-178).
  */
-function WorkerChatPermissions({ worker, workspace, draft }: { worker?: Worker; workspace: Workspace; draft: { id: string; name: string; provider: Worker['provider']; connected: boolean } }) {
+function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, onDraftCapabilities }: {
+  worker?: Worker; workspace: Workspace; draft: { id: string; name: string; provider: Worker['provider']; connected: boolean };
+  draftCapabilities?: ToolCapability[]; onDraftCapabilities: (capabilities: ToolCapability[]) => void;
+}) {
   const chat = worker ? liveWorkerTask(workspace.tasks, worker.id) : undefined;
-  const [capabilities, setCapabilities] = useState(chat?.toolCapabilities);
+  const pending = worker && !chat ? workspace.newChatCapabilities[newChatKey({ workerId: worker.id })] : undefined;
+  const [capabilities, setCapabilities] = useState(chat ? chat.toolCapabilities : worker ? pending : draftCapabilities);
   const [grant, setGrant] = useState<WorkspaceGrantView | null | undefined>(chat ? undefined : null);
   const [busy, setBusy] = useState(false);
   const readGrant = async (taskId: string) => setGrant(await orglet.call('workspaceAccess', { taskId }));
   useEffect(() => {
     if (!chat) return;
-    void readGrant(chat.id).catch(error => toast(tMessage(String(error)), 'error', t('Quyền của {0}', [name])));
+    void readGrant(chat.id).catch(error => toast(tMessage(String(error)), 'error', t('Quyền của {0}', [draft.name])));
   }, [chat?.id]);
   const change = (perform: () => Promise<void>) => {
     setBusy(true);
-    void perform().catch(error => toast(tMessage(String(error)), 'error', t('Quyền của {0}', [name]))).finally(() => setBusy(false));
+    void perform().catch(error => toast(tMessage(String(error)), 'error', t('Quyền của {0}', [draft.name]))).finally(() => setBusy(false));
   };
   const onCapability = (capability: ToolCapability, enabled: boolean) => change(async () => {
-    if (!chat || !worker) return;
-    const next = (capabilities ?? snapshotCapabilities(worker.provider)).filter(item => item !== capability);
+    const next = (capabilities ?? snapshotCapabilities(draft.provider)).filter(item => item !== capability);
     if (enabled) next.push(capability);
-    await orglet.call('setToolCapabilities', { taskId: chat.id, capabilities: next });
+    if (chat) await orglet.call('setToolCapabilities', { taskId: chat.id, capabilities: next });
+    else if (worker) await orglet.call('setToolCapabilities', { workerId: worker.id, capabilities: next });
+    else onDraftCapabilities(next);
     setCapabilities(next);
   });
   const onWorkspace = (level: WorkspaceLevel) => change(async () => {
@@ -162,8 +172,6 @@ function WorkerChatPermissions({ worker, workspace, draft }: { worker?: Worker; 
     else await orglet.pickWorkspace(chat.id, permissionsForLevel(level));
     await readGrant(chat.id);
   });
-  const locked = chat ? undefined : worker ? t('Chat của Tí chưa bắt đầu. Gửi tin đầu tiên rồi mở lại đây để chọn quyền.')
-    : t('Lưu Tí, gửi tin đầu tiên rồi mở lại đây để chọn quyền.');
   return <PermissionControls workers={[draft]} capabilities={capabilities} grant={grant} taskId={chat?.id} sourceCount={chat?.sourceIds.length ?? 0}
-    busy={busy} locked={locked} onCapability={onCapability} onWorkspace={onWorkspace} />;
+    busy={busy} folderLocked={chat ? undefined : t('Chọn thư mục sau khi gửi tin đầu tiên.')} onCapability={onCapability} onWorkspace={onWorkspace} />;
 }

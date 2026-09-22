@@ -1,6 +1,7 @@
 import { WorkspaceRecovery } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
-import { snapshotCapabilities } from '../shared/tool-policy';
+import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
+import { newChatKey } from '../shared/live-task';
 import { WorkspaceGrants } from './storage/workspace-grants';
 import type { Knowledge } from '../shared/knowledge';
 import { commands, type ApiProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
@@ -307,6 +308,7 @@ export class CoreService {
       }
       case 'setToolCapabilities': {
         const input = commands.setToolCapabilities.parse(args);
+        if (!('taskId' in input)) { this.setNewChatCapabilities(input); return; }
         const task = this.liveTask(input.taskId);
         const workers = task.teamSnapshot
           ? [...new Set([...task.teamSnapshot.memberIds, task.teamSnapshot.synthesizerId])]
@@ -701,6 +703,38 @@ export class CoreService {
   private deleteEntity(kind: 'worker' | 'team', entityId: string) {
     this.assertRemovable(kind, entityId);
     this.setEntityState(kind, entityId, { deletedAt: this.clock().toISOString() });
+    this.takeNewChatCapabilities(kind === 'team' ? { teamId: entityId } : { workerId: entityId });
+  }
+  /**
+   * Permissions for a chat that has not started yet (COD-178). The `tasks` row only exists once the first message
+   * is sent, so until then the set waits under the worker or team and `createTask` moves it onto the new row.
+   */
+  private setNewChatCapabilities(input: { workerId: string; capabilities: ToolCapability[] } | { teamId: string; capabilities: ToolCapability[] }) {
+    const chat = 'teamId' in input ? { teamId: input.teamId } : { workerId: input.workerId };
+    let workerIds: string[];
+    if ('teamId' in input) {
+      const team = this.store.get<Team>('teams', input.teamId);
+      workerIds = [...team.memberIds, team.synthesizerId];
+    } else {
+      workerIds = [input.workerId];
+    }
+    for (const workerId of workerIds) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, input.capabilities);
+    const pending = { ...this.store.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}) };
+    pending[newChatKey(chat)] = [...input.capabilities];
+    this.store.setSetting('newChatCapabilities', pending);
+    this.notify();
+  }
+  /** The permissions waiting for this chat's first message, if any were chosen. */
+  private pendingNewChatCapabilities(chat: { teamId?: string; workerId?: string }): ToolCapability[] | undefined {
+    return this.store.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {})[newChatKey(chat)];
+  }
+  /** Drops the waiting set once the chat row carries it, or the worker or team is gone. */
+  private takeNewChatCapabilities(chat: { teamId?: string; workerId?: string }) {
+    const pending = { ...this.store.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}) };
+    const key = newChatKey(chat);
+    if (!(key in pending)) return;
+    delete pending[key];
+    this.store.setSetting('newChatCapabilities', pending);
   }
   /** Workers and teams chosen for new work must be active. */
   private assertAssignable(kind: 'worker' | 'team', entityId: string) {
@@ -804,7 +838,10 @@ export class CoreService {
     return task;
   }
   private createTask(input: TaskInput, routine?: Routine): string {
-    const task = this.prepareTask(input);
+    // The first message of a worker or team chat takes the permissions chosen while the chat was still empty.
+    const liveChat = !routine && !input.assignees && input.toolCapabilities === undefined;
+    const chosen = liveChat ? this.pendingNewChatCapabilities({ teamId: input.teamId, workerId: input.workerId }) : undefined;
+    const task = this.prepareTask(chosen ? { ...input, toolCapabilities: chosen } : input);
     const workerIds = task.teamSnapshot ? [...task.teamSnapshot.memberIds, task.teamSnapshot.synthesizerId] : task.assignees === 'all' ? this.store.all<Worker>('workers').map(worker => worker.id) : task.assignees ?? [task.workerId];
     for (const workerId of workerIds) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, task.toolCapabilities);
     this.policy.assertStart(task.teamId);
@@ -813,6 +850,7 @@ export class CoreService {
       this.store.put('tasks', task);
       this.store.db.prepare('INSERT INTO task_search VALUES(?,?)').run(task.id, task.brief);
       if (routine) this.store.update('routines', { ...routine, lastTaskId: task.id });
+      if (chosen) this.takeNewChatCapabilities({ teamId: input.teamId, workerId: input.workerId });
     });
     this.start(task, true); return task.id;
   }
