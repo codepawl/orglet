@@ -1644,6 +1644,7 @@ export const en: Dictionary = {
   'Đã xóa {0} nguồn, thu hồi {1} nguồn còn được trò chuyện nhắc tới.': 'Deleted {0} sources and revoked {1} still referred to by a chat.',
   'Đã xóa {0} nguồn.': 'Deleted {0} sources.',
   'Đưa app về như mới cài: trò chuyện, Tí, hội, skill, lịch chạy, nguồn, kiến thức và cài đặt. API key nằm ngoài cơ sở dữ liệu nên không bị đụng tới.': 'Back to a fresh install: chats, workers, teams, skills, routines, sources, knowledge and settings. API keys live outside the database and are untouched.',
+  'Hôm qua {0}': 'Yesterday {0}',
 };
 
 // British English differs from the US text only in these spellings, so it is derived instead of duplicated.
