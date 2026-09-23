@@ -31,6 +31,17 @@ import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { workOutcomes } from '../../shared/work-outcomes';
 import { groupRecoveryAttempts } from '../../shared/recovery-attempts';
 import { AppProposalCards, type ProposalActions } from './AppProposals';
+import { ChangedFilesLine, DiffDialog } from './DiffViewer';
+import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
+
+/** The runs of a turn that changed files in their working copy, with the counts the core kept (COD-163). */
+export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecoveryView | undefined): { run: Run; summary: WorkspaceDiffSummary }[] {
+  if (!recovery) return [];
+  return runs.flatMap(run => {
+    const summary = recovery.copies.find(copy => copy.runId === run.id)?.diff;
+    return summary && summary.files > 0 ? [{ run, summary }] : [];
+  });
+}
 
 /**
  * What this worker was doing for the team on this turn: assigning the work, doing a share of it, or combining the
@@ -72,6 +83,8 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
 export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames }: { detail: TaskDetail; /** The live workers and skills, so the app-change cards can name what an id or a same-reply ref points at (COD-212). */ workspace: Pick<Workspace, 'workers' | 'skills'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
+  // The run whose working-copy changes are open in the diff viewer (COD-163).
+  const [diffRun, setDiffRun] = useState<Run>();
   const current = detail.task.inputRevision ?? 0;
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === current && !request.answer && !request.interruptedAt);
   const turns: Turn[] = [...new Set([0, current, ...detail.runs.map(run => run.snapshot.inputRevision ?? 0)])].sort((a, b) => a - b).map(revision => {
@@ -203,7 +216,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
           {latest && outcomeText && <p className="muted" role="status">{outcomeText}</p>}
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
-            <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} />
+            <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} changes={changedFilesOf([reply.run], recovery)} onOpenDiff={setDiffRun} />
             {reply.artifact.report.format === 'chat'
               ? <ChatReply artifact={reply.artifact} author={reply.run.snapshot.worker.name} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
               : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
@@ -242,7 +255,9 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
             {!turn.artifact && !turn.replies.length && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
-            {turn.artifact && !turn.replies.length && <FinishedActivity steps={savedSteps(detail.events, turn.artifact.runId)} />}
+            {/* A team turn's members each work in their own copy, so their changes are named; a lone worker's are not. */}
+            {!turn.replies.length && <FinishedActivity steps={turn.artifact ? savedSteps(detail.events, turn.artifact.runId) : []}
+              changes={changedFilesOf(turn.runs, recovery)} named={run => run.id !== turn.artifact?.runId} onOpenDiff={setDiffRun} />}
             {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
               ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
@@ -264,14 +279,21 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         </div>;
       })}
     </div>
+    {diffRun && <DiffDialog taskId={detail.task.id} run={diffRun} onClose={() => setDiffRun(undefined)} />}
   </div>;
 }
 
 /** A normal chat answer: the message, with copy and export tucked into a quiet row. */
-/** The folded "Read 2 files" line above a finished answer; nothing when the worker read and searched nothing. */
-function FinishedActivity({ steps }: { steps: ReturnType<typeof savedSteps> }) {
-  if (steps.length === 0) return null;
-  return <div className="finished-activity"><ActivityGroup steps={steps} /></div>;
+/**
+ * The folded "Read 2 files" line above a finished answer, and under it one line per run that changed files in its
+ * working copy (COD-163); nothing when the worker read, searched and changed nothing.
+ */
+function FinishedActivity({ steps, changes, named, onOpenDiff }: { steps: ReturnType<typeof savedSteps>; changes: ReturnType<typeof changedFilesOf>; named?: (run: Run) => boolean; onOpenDiff: (run: Run) => void }) {
+  if (steps.length === 0 && changes.length === 0) return null;
+  return <div className="finished-activity">
+    {steps.length > 0 && <ActivityGroup steps={steps} />}
+    {changes.map(({ run, summary }) => <ChangedFilesLine key={run.id} summary={summary} workerName={named?.(run) ? run.snapshot.worker.name : undefined} onOpen={() => onOpenDiff(run)} />)}
+  </div>;
 }
 
 function ChatReply({ artifact, author, taskId, reactions, runs, action }: { artifact: Artifact; author: string; taskId: string; reactions: NonNullable<TaskDetail['task']['messageReactions']>; runs: readonly Run[]; action: (fn: () => Promise<unknown>) => void }) {

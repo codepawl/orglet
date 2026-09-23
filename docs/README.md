@@ -36,6 +36,7 @@ These pages are the contract. Keep their precise language. Do not rewrite them i
 | Page | What it is |
 |---|---|
 | [product.md](product.md) | Who it is for, how it should feel, **Not now** |
+| [worker-actions.md](worker-actions.md) | How a worker's actions read in the chat: the vocabulary, live vs afterwards, where the diff lives |
 | [capabilities.md](capabilities.md) | What each connection can and cannot do |
 | [team-chat-context.md](team-chat-context.md) | Long-chat context, memory, cost, fail-closed defaults |
 | [model-list-fetch.md](model-list-fetch.md) | Where model lists come from, cache, custom IDs, deprecation |

@@ -7,6 +7,8 @@ import { WindowsSandbox } from './sandbox';
 import type { SandboxRequest, SandboxResult } from './sandbox';
 import { StartWorkspaceProcess } from '../../shared/workspace-processes';
 import { prepareGitWorktree } from './workspace-git';
+import { diffWorkspaceCopy } from './workspace-diff';
+import type { WorkspaceDiff } from '../../shared/workspace-diff';
 
 const HelperReply = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), value: z.unknown() }).strict(),
@@ -40,6 +42,19 @@ export class WorkspaceFilesRuntime {
     const preparationSignal = AbortSignal.any([signal, AbortSignal.timeout(120000)]);
     await prepareGitWorktree(session, { operation: 'prepare_git', executable }, preparationSignal);
     return { directory: join(session, 'worktree'), manifest, kind: 'git-worktree' as const };
+  }
+
+  /**
+   * What a Git working copy changed since its snapshot (COD-163). The current inventory comes through the sandboxed
+   * helper, the same walk the snapshot used, so Git only ever receives paths that walk verified as plain files.
+   */
+  async diffCopy(directory: string, baseline: WorkspaceManifest, includeHunks: boolean, signal: AbortSignal): Promise<Omit<WorkspaceDiff, 'runId'>> {
+    if (!this.options.gitExecutable) throw new Error('Cần Git cho Windows để đọc thay đổi của bản làm việc này.');
+    const executable = await realpath(this.options.gitExecutable).catch(() => {
+      throw new Error('Cần Git cho Windows để đọc thay đổi của bản làm việc này.');
+    });
+    const current = WorkspaceManifest.parse(await this.execute(directory, { operation: 'manifest' }, signal));
+    return diffWorkspaceCopy({ executable, worktree: directory, baseline, current, includeHunks, signal });
   }
 
   async execute(directory: string, raw: unknown, signal: AbortSignal, readOnlyPaths: string[] = []): Promise<unknown> {

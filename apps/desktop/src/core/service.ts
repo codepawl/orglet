@@ -330,6 +330,10 @@ export class CoreService {
         if (!this.workspaceRuntime) throw new Error('Workspace runtime chưa được cấu hình.');
         return this.workspaceRuntime.inspectFile(args, taskId => this.runner.isActive(taskId) || this.teams.isActive(taskId));
       }
+      case 'workspaceDiff': {
+        if (!this.workspaceRuntime) throw new Error('Workspace runtime chưa được cấu hình.');
+        return this.workspaceRuntime.diff(args);
+      }
       case 'recoveryProcessOutput': return new WorkspaceRecovery(this.store).output(args);
       case 'retireWorkspaceAttempt': {
         new WorkspaceRecovery(this.store).retire(args, taskId => this.runner.isActive(taskId) || this.teams.isActive(taskId));

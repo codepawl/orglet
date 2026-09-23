@@ -9,6 +9,8 @@ import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import { WorkspaceGrants } from '../storage/workspace-grants';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { ReadRecoveryFile, RecoveryFile } from '../../shared/workspace-recovery';
+import { WorkspaceDiffRequest, WorkspaceDiffSummary, summarize, type WorkspaceDiff } from '../../shared/workspace-diff';
+import { WORKTREE_POINTER } from './workspace-diff';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
 import type { WorkspaceIntegration } from './workspace-integration';
 import { WorkspaceProcesses } from './workspace-processes';
@@ -24,6 +26,8 @@ const Copy = z.object({
    * that recorded this count at start ran either before or after each change with no wall-clock comparison (COD-189).
    */
   edits: z.number().int().min(0).default(0),
+  /** What the copy changed since its snapshot, counted when the run finished; only a Git worktree copy has one (COD-163). */
+  diff: WorkspaceDiffSummary.optional(),
   changes: z.array(WorkspaceFile.extend({
     expectedHash: z.string().nullable(), status: z.enum(['pending', 'applied', 'conflict', 'blocked']),
     backupPath: z.string().optional(), reason: z.string().optional(),
@@ -53,7 +57,7 @@ export class WorkspaceRuntime {
   private queues = new Map<string, Promise<unknown>>();
   private grants: WorkspaceGrants;
   private processes?: WorkspaceProcesses;
-  constructor(private store: Store, private files: Pick<WorkspaceFilesRuntime, 'createCopy' | 'execute'>,
+  constructor(private store: Store, private files: Pick<WorkspaceFilesRuntime, 'createCopy' | 'execute'> & Partial<Pick<WorkspaceFilesRuntime, 'diffCopy'>>,
     private integration: Pick<WorkspaceIntegration, 'apply'>, private notify: () => void = () => {},
     commands?: Pick<WorkspaceFilesRuntime, 'runCommand'>) {
     this.grants = new WorkspaceGrants(store);
@@ -95,6 +99,33 @@ export class WorkspaceRuntime {
       authorize();
       return RecoveryFile.parse(result);
     });
+  }
+
+  /**
+   * What a run changed in its copy, with hunks, for the person to read (COD-163). Read-only: nothing is applied,
+   * and the person's folder is never touched. It queues behind the run's own file operations so it never reads a
+   * file mid-write, and it follows the copy's read grant the way inspecting a file does.
+   */
+  async diff(raw: unknown): Promise<WorkspaceDiff> {
+    const input = WorkspaceDiffRequest.parse(raw);
+    const signal = AbortSignal.timeout(60_000);
+    return this.serial(input.runId, async () => {
+      const run = this.store.get<Run>('runs', input.runId);
+      if (run.taskId !== input.taskId) throw new Error('Lần chạy không thuộc cuộc trò chuyện này.');
+      const copy = this.saved(run.id);
+      if (!copy?.directory) throw new Error('Lần chạy này không có bản làm việc để so sánh.');
+      if (copy.kind !== 'git-worktree') throw new Error('Bản làm việc này không có bản gốc để so sánh.');
+      if (!this.files.diffCopy) throw new Error('Cần Git cho Windows để đọc thay đổi của bản làm việc này.');
+      this.grants.assert(copy.grant, 'read');
+      const diff = await this.files.diffCopy(copy.directory, copy.baseline, true, signal);
+      return { runId: run.id, ...diff };
+    });
+  }
+
+  /** The counts a finished run keeps beside its copy; absent when the copy is not a Git worktree. */
+  private async summarizeCopy(copy: Copy, signal: AbortSignal): Promise<WorkspaceDiffSummary | undefined> {
+    if (copy.kind !== 'git-worktree' || !copy.directory || !this.files.diffCopy) return undefined;
+    return summarize(await this.files.diffCopy(copy.directory, copy.baseline, false, signal));
   }
 
   private assertCopiesResolved(run: Run) {
@@ -322,11 +353,16 @@ export class WorkspaceRuntime {
       if (copy.state === 'integrated') return limitations;
       if (copy.state !== 'ready' || !copy.directory) throw new Error('Bản làm việc bị gián đoạn; cần kiểm tra trước khi tiếp tục.');
       const manifest = WorkspaceManifest.parse(await this.files.execute(copy.directory, { operation: 'manifest' }, signal));
+      // Counted before integration and kept even when integration is refused, so the chat can still show what changed.
+      copy.diff = await this.summarizeCopy(copy, signal);
       const baseline = new Map(copy.baseline.files.map(file => [file.path, file]));
       if (copy.baseline.files.some(file => !manifest.files.some(current => current.path === file.path))) {
+        this.save(copy);
         throw new Error('Bản làm việc có tệp bị xóa; chưa tích hợp thay đổi này.');
       }
-      copy.changes = manifest.files.filter(file => baseline.get(file.path)?.hash !== file.hash)
+      // A linked worktree carries Git's own `.git` pointer file at its root; it was never in the snapshot and must never
+      // be integrated over the person's repository.
+      copy.changes = manifest.files.filter(file => file.path !== WORKTREE_POINTER && baseline.get(file.path)?.hash !== file.hash)
         .map(file => ({ ...file, expectedHash: baseline.get(file.path)?.hash ?? null, status: 'pending' }));
       for (const file of copy.changes) this.owns(run, file.path);
       if (!copy.changes.length) { this.save({ ...copy, state: 'integrated' }); return limitations; }

@@ -9,6 +9,80 @@ import { sandboxEnvironment } from './sandbox';
 const ObjectId = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
 const GitRequest = z.object({ operation: z.literal('prepare_git'), executable: z.string().min(1).max(32768) }).strict();
 
+/** The branch that keeps the bytes a working copy started from, so a later diff has something to compare with. */
+export const SNAPSHOT_REF = 'refs/heads/orglet-snapshot';
+
+export type GitOutput = { output: string; limited: boolean };
+export type GitRun = (args: string[], options?: {
+  input?: string;
+  environment?: NodeJS.ProcessEnv;
+  /** Bytes of stdout and stderr read before the process is stopped. */
+  outputLimit?: number;
+  /** Return what was read when the limit stops the process, instead of failing. */
+  keepPartialOutput?: boolean;
+}) => Promise<GitOutput>;
+
+/**
+ * Git with every user-controlled input switched off: no system or global config, no attributes outside the
+ * repository, no hooks, no filters, no line-ending conversion, no prompts. `directory` is the copy's session folder,
+ * where `empty.config` and the empty `templates` hook folder live; Git treats either one missing as empty.
+ * The process starts in `cwd`, which is never the worker's directory, so no executable or DLL lookup starts there.
+ */
+export function isolatedGit(options: { executable: string; directory: string; cwd: string; signal: AbortSignal; failure: string }): GitRun {
+  const templates = join(options.directory, 'templates');
+  const configuration = join(options.directory, 'empty.config');
+  const environment: NodeJS.ProcessEnv = {
+    ...sandboxEnvironment(options.directory, []),
+    GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_SYSTEM: configuration, GIT_CONFIG_GLOBAL: configuration,
+    GIT_ATTR_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0',
+    GIT_AUTHOR_NAME: 'Orglet', GIT_AUTHOR_EMAIL: 'workspace@localhost',
+    GIT_COMMITTER_NAME: 'Orglet', GIT_COMMITTER_EMAIL: 'workspace@localhost',
+  };
+  const configurationArgs = ['-c', `core.hooksPath=${templates}`, '-c', 'core.fsmonitor=false',
+    '-c', 'core.autocrlf=false', '-c', 'core.quotePath=false', '-c', 'gc.auto=0', '-c', 'maintenance.auto=false',
+    '-c', 'protocol.allow=never', '-c', 'commit.gpgsign=false'];
+  return (args, runOptions = {}) => new Promise<GitOutput>((resolve, reject) => {
+    options.signal.throwIfAborted();
+    const outputLimit = runOptions.outputLimit ?? 1024 * 1024;
+    const child = spawn(options.executable, [...configurationArgs, ...args], {
+      cwd: options.cwd, env: { ...environment, ...runOptions.environment }, windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'], signal: options.signal,
+    });
+    const output: Buffer[] = [];
+    const errors: Buffer[] = [];
+    let bytes = 0;
+    let limited = false;
+    let launchError: Error | undefined;
+    const collect = (target: Buffer[], chunk: Buffer) => {
+      if (limited) return;
+      bytes += chunk.length;
+      if (bytes > outputLimit) {
+        limited = true;
+        target.push(chunk.subarray(0, chunk.length - (bytes - outputLimit)));
+        child.kill();
+        return;
+      }
+      target.push(chunk);
+    };
+    child.stdout.on('data', chunk => collect(output, chunk));
+    child.stderr.on('data', chunk => collect(errors, chunk));
+    child.stdin.on('error', () => {});
+    child.stdin.end(runOptions.input ?? '');
+    child.on('error', error => { launchError = error; });
+    child.on('close', code => {
+      if (launchError) {
+        reject(launchError);
+      } else if (limited && runOptions.keepPartialOutput) {
+        resolve({ output: Buffer.concat(output).toString('utf8'), limited: true });
+      } else if (limited || code !== 0) {
+        reject(new Error(`${options.failure}: ${Buffer.concat(errors).toString('utf8').slice(0, 2000)}`));
+      } else {
+        resolve({ output: Buffer.concat(output).toString('utf8'), limited: false });
+      }
+    });
+  });
+}
+
 /** Fixed core operation on a fresh snapshot, before any worker receives its directory. */
 export async function prepareGitWorktree(directory: string, raw: unknown, signal: AbortSignal) {
   signal.throwIfAborted();
@@ -22,51 +96,8 @@ export async function prepareGitWorktree(directory: string, raw: unknown, signal
   await mkdir(repository);
   await mkdir(templates);
   await writeFile(configuration, '', { flag: 'wx' });
-  const environment: NodeJS.ProcessEnv = {
-    ...sandboxEnvironment(directory, []),
-    GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_SYSTEM: configuration, GIT_CONFIG_GLOBAL: configuration,
-    GIT_ATTR_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0',
-    GIT_AUTHOR_NAME: 'Orglet', GIT_AUTHOR_EMAIL: 'workspace@localhost',
-    GIT_COMMITTER_NAME: 'Orglet', GIT_COMMITTER_EMAIL: 'workspace@localhost',
-  };
-  const configurationArgs = ['-c', `core.hooksPath=${templates}`, '-c', 'core.fsmonitor=false',
-    '-c', 'core.autocrlf=false', '-c', 'gc.auto=0', '-c', 'maintenance.auto=false',
-    '-c', 'protocol.allow=never', '-c', 'commit.gpgsign=false'];
-  const git = (args: string[], input = '') => new Promise<string>((resolve, reject) => {
-    signal.throwIfAborted();
-    const child = spawn(request.executable, [...configurationArgs, ...args], {
-      // No executable or DLL lookup starts in the untrusted snapshot.
-      cwd: repository, env: environment, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], signal,
-    });
-    const output: Buffer[] = [];
-    const errors: Buffer[] = [];
-    let bytes = 0;
-    let limited = false;
-    let launchError: Error | undefined;
-    const collect = (target: Buffer[], chunk: Buffer) => {
-      bytes += chunk.length;
-      if (bytes > 1024 * 1024) {
-        limited = true;
-        child.kill();
-        return;
-      }
-      target.push(chunk);
-    };
-    child.stdout.on('data', chunk => collect(output, chunk));
-    child.stderr.on('data', chunk => collect(errors, chunk));
-    child.stdin.on('error', () => {});
-    child.stdin.end(input);
-    child.on('error', error => { launchError = error; });
-    child.on('close', code => {
-      if (launchError) {
-        reject(launchError);
-      } else if (limited || code !== 0) {
-        reject(new Error(`Không tạo được Git worktree riêng: ${Buffer.concat(errors).toString('utf8').slice(0, 2000)}`));
-      } else {
-        resolve(Buffer.concat(output).toString('utf8').trim());
-      }
-    });
-  });
+  const run = isolatedGit({ executable: request.executable, directory, cwd: repository, signal, failure: 'Không tạo được Git worktree riêng' });
+  const git = async (args: string[], input = '') => (await run(args, { input })).output.trim();
   const manifest = WorkspaceManifest.parse(await executeWorkspaceOperation(seed, { operation: 'manifest' }));
   await git(['init', '--bare', '--quiet', `--template=${templates}`, '.']);
   await mkdir(join(repository, 'info'), { recursive: true });
@@ -81,7 +112,7 @@ export async function prepareGitWorktree(directory: string, raw: unknown, signal
   await git([...repositoryArgs, 'update-index', '-z', '--index-info'], entries);
   const tree = ObjectId.parse(await git([...repositoryArgs, 'write-tree']));
   const commit = ObjectId.parse(await git([...repositoryArgs, 'commit-tree', tree, '-m', 'Granted workspace snapshot']));
-  await git([...repositoryArgs, 'update-ref', 'refs/heads/orglet-snapshot', commit]);
+  await git([...repositoryArgs, 'update-ref', SNAPSHOT_REF, commit]);
   await git([...repositoryArgs, 'worktree', 'add', '--detach', '--no-checkout', worktree, commit]);
   await git(['-C', worktree, 'read-tree', commit]);
   for (const entry of await readdir(seed)) {

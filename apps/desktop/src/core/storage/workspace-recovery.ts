@@ -65,7 +65,7 @@ export class WorkspaceRecovery {
       copies: copies.slice(0, 100).map(row => {
         const copy = JSON.parse(String(row.data));
         return { runId: copy.runId, state: copy.state, kind: copy.kind ?? 'copy',
-          changes: copy.changes.slice(0, 100), changeCount: copy.changes.length };
+          changes: copy.changes.slice(0, 100), changeCount: copy.changes.length, ...(copy.diff ? { diff: copy.diff } : {}) };
       }),
       processes: processes.slice(0, 100).map(row => {
         const process = WorkspaceProcess.parse(JSON.parse(String(row.data)));
