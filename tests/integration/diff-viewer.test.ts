@@ -52,12 +52,12 @@ it('lists every changed file with its counts and draws the hunks with both line 
 
 it('words the turn line from the counts the core kept, naming the worker only when asked', () => {
   const summary = { files: 3, additions: 42, deletions: 7 };
-  expect(changedFilesLabel(summary)).toBe('Changed 3 files · +42 −7');
-  expect(changedFilesLabel(summary, 'Scout')).toBe('Scout changed 3 files · +42 −7');
+  expect(changedFilesLabel(summary)).toBe('Files changed: 3 · +42 −7');
+  expect(changedFilesLabel(summary, 'Scout')).toBe('Scout · files changed: 3 · +42 −7');
   const html = renderToStaticMarkup(createElement(ChangedFilesLine, { summary, onOpen: () => {} }));
   expect(html).toContain('class="activity-summary changed-files"');
   expect(html).toContain('aria-haspopup="dialog"');
-  expect(html).toContain('Changed 3 files · +42 −7');
+  expect(html).toContain('Files changed: 3 · +42 −7');
 });
 
 it('shows a line only for runs whose copy changed something', () => {
