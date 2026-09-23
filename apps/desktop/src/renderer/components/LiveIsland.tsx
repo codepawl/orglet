@@ -1,6 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { Lightbulb, X } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { RosterAvatars } from './Avatar';
+import { Button } from './ui';
+import { t } from '../i18n';
 
 /**
  * What the worker is doing right now. The faces move with it (COD-171: a head that turns is thinking, eyes on a
@@ -38,25 +41,9 @@ const FACES_GAP_PX = 8;
 export function LiveIsland({ state, label, receipt, workers, leaving }: { state: IslandState; label: string; receipt?: string; workers: readonly Worker[]; leaving?: boolean }) {
   const content = useRef<HTMLSpanElement>(null);
   const faces = useRef<HTMLSpanElement>(null);
-  const [width, setWidth] = useState<number>();
-  const [facesWidth, setFacesWidth] = useState(0);
+  const width = useMeasuredWidth(content);
+  const facesWidth = useMeasuredWidth(faces) ?? 0;
   const settledReceipt = useDelayed(receipt, RECEIPT_DELAY_MS);
-
-  useLayoutEffect(() => {
-    const contentElement = content.current;
-    const facesElement = faces.current;
-    if (!contentElement || !facesElement) return;
-    // Whole pixels, or a fractional width clips the last letter.
-    const measure = () => {
-      setWidth(Math.ceil(contentElement.getBoundingClientRect().width));
-      setFacesWidth(Math.ceil(facesElement.getBoundingClientRect().width));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(contentElement);
-    observer.observe(facesElement);
-    return () => observer.disconnect();
-  }, []);
 
   const bodyStyle = { width, '--island-faces': `${facesWidth}px`, '--island-faces-gap': `${FACES_GAP_PX}px` } as CSSProperties;
   return <div role="status" className={leaving ? 'live-island leaving' : 'live-island'} data-state={state}>
@@ -72,6 +59,43 @@ export function LiveIsland({ state, label, receipt, workers, leaving }: { state:
       </span>
     </div>
   </div>;
+}
+
+/**
+ * The chat's knowledge suggestions, offered from the island once the run is over (COD-208): the same tab on the bar,
+ * with a lightbulb where the faces sit, the count, one Review action and a dismiss. Review opens the one note or
+ * Thư viện → Knowledge; dismiss only hides the offer, the suggestions stay in the library. The parent decides when
+ * it shows (`showsKnowledgeIsland`) and what the actions do.
+ */
+export function KnowledgeIsland({ count, review, dismiss, leaving }: { count: number; review: () => void; dismiss: () => void; leaving?: boolean }) {
+  const content = useRef<HTMLSpanElement>(null);
+  const width = useMeasuredWidth(content);
+  const label = count === 1 ? t('1 gợi ý knowledge') : t('{0} gợi ý knowledge', [count]);
+  return <div role="status" className={leaving ? 'live-island live-island-knowledge leaving' : 'live-island live-island-knowledge'}>
+    <div className="live-island-body" style={{ width }}>
+      <span className="live-island-content" ref={content}>
+        <Lightbulb size={16} aria-hidden="true" />
+        <span className="live-island-label" key={label}>{label}</span>
+        <Button type="button" className="live-island-action" aria-label={t('Xem gợi ý knowledge')} onClick={review}>{t('Xem')}</Button>
+        <Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} title={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button>
+      </span>
+    </div>
+  </div>;
+}
+
+/** The element's width in whole pixels, kept up to date as it changes; a fractional width clips the last letter. */
+function useMeasuredWidth(target: RefObject<HTMLElement | null>) {
+  const [width, setWidth] = useState<number>();
+  useLayoutEffect(() => {
+    const element = target.current;
+    if (!element) return;
+    const measure = () => setWidth(Math.ceil(element.getBoundingClientRect().width));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [target]);
+  return width;
 }
 
 /** The value as it was `delayMs` ago, so a second line can follow the first instead of changing with it. */

@@ -73,7 +73,8 @@ async function main() {
     }, team.id, { timeout: 15_000 });
     await waitForTask(page, await taskHandle.jsonValue());
     await page.locator('.chat-reply, .report').first().waitFor();
-    await page.locator('.live-island').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
+    // The run's island settles into the bar when the run ends; the knowledge offer that may follow (COD-208) can stay in the shot.
+    await page.locator('.live-island:not(.live-island-knowledge)').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
     await page.waitForTimeout(600);
     await page.screenshot({ path: join(outputFolder, 'chat-light.png') });
 

@@ -1641,10 +1641,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .message-actions .button:hover:not(:disabled) { color:var(--text); }
 .message-usage { margin-left:auto; font-size:12px; font-variant-numeric:tabular-nums; color:var(--muted); white-space:nowrap; }
 .thread-usage { display:block; margin:6px 0 0 35px; }
-.knowledge-proposals { padding-left:35px; margin-top:16px; }
-/* One quiet line instead of a wall of chips: the review itself happens in Library → Knowledge (user, 2026-09-23). */
-.knowledge-proposals-line { gap:8px; height:auto; padding:6px 10px; font-size:13px; }
-.knowledge-proposals-line svg { color:var(--working); }
 /* A note's author: the orglet's face, its name, how the note got here and whether it waits for review (user, 2026-09-23). */
 .knowledge-author { display:flex; align-items:center; gap:12px; }
 .knowledge-author-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
@@ -1670,7 +1666,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .app-proposal-actions:empty { display:none; }
 .app-proposal-actions .button { min-height:32px; padding:5px 12px; font-size:13px; }
 .app-proposals-all { margin-top:0; }
-@media(max-width:1000px) { .chat-reply,.knowledge-proposals,.app-proposals { padding-left:0; } .thread-usage { margin-left:0; } }
+@media(max-width:1000px) { .chat-reply,.app-proposals { padding-left:0; } .thread-usage { margin-left:0; } }
 /* The auto-apply switch sits under the chat permissions in the worker dialog, spaced as a second group. */
 .worker-auto-apply { margin-top:22px; }
 
@@ -1853,6 +1849,16 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    padding and outline (21px) and the faces with their gap, so the widest label still fits the straight edge. */
 .live-island-label { min-width:0; max-width:min(46ch, calc(100cqw - 101px - var(--island-faces, 24px))); font-size:14px; font-weight:500; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in 260ms var(--ease-out); }
 @keyframes island-fade-in { from { opacity:0; transform:translateY(2px); } }
+/* The chat's knowledge suggestions on the same tab (COD-208), once no run is on: a lightbulb in the working colour
+   where the faces sit, the count in the label's own type, then Review and a dismiss. The controls are the content's
+   24px, centred on the label, and answer hover with colour only, since the tab is one surface (Review reads as the
+   old line's muted "Review in Library" did, darkening under the pointer). Dismiss only hides the offer. */
+.live-island-knowledge .live-island-content > svg { flex-shrink:0; color:var(--working); }
+.live-island-knowledge .live-island-label { margin-right:4px; }
+.live-island-knowledge .button { height:24px; min-height:24px; flex-shrink:0; border-radius:12px; color:var(--muted); }
+.live-island-knowledge .button:hover:not(:disabled) { background:transparent; color:var(--text); }
+.live-island-knowledge .live-island-action { padding:0 6px; font-size:13px; }
+.live-island-knowledge .live-island-dismiss { width:24px; padding:0; }
 /* The state, in the faces (COD-171). Thinking: the head turns from side to side, the eyes leading (the byline's
    Thinking without the hop, since the tab itself has just risen). Reading, listing files and running a step: the
    head leans in and the eyes read a line, jumping back with a blink. Searching: the eyes look about and the head

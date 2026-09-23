@@ -1,25 +1,34 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore } from 'react';
-import { LiveIsland, type IslandView } from './LiveIsland';
+import { KnowledgeIsland, LiveIsland, type IslandView } from './LiveIsland';
 
 /**
  * The island docks on the prompt bar, not in the thread (COD-167): it sits on the bar's top edge and moves with
  * it, so it never covers an answer and stays put while the chat scrolls. The thread knows what the worker is doing;
  * the bar owns the place it is shown. This store carries the view from one to the other, the way the reply target
  * travels from an answer to the bar in messageMarks.tsx.
+ *
+ * Two kinds of view take the tab (COD-208): a working run, and, once no run is on, the chat's knowledge suggestions
+ * waiting for review. The thread picks which one is docked (`showsKnowledgeIsland`); the dock only shows it.
  */
-let docked: IslandView | undefined;
+export type DockedIsland =
+  | ({ kind: 'run' } & IslandView)
+  | { kind: 'knowledge'; /** The set of suggestions, so a new set is a new view. */ key: string; count: number; review: () => void; dismiss: () => void };
+
+let docked: DockedIsland | undefined;
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 
-/** Sets what the island on the prompt bar shows, or clears it once the run is over. Same view, no change. */
-export function dockIsland(view: IslandView | undefined) {
+/** Sets what the island on the prompt bar shows, or clears it once there is nothing to show. Same view, no change. */
+export function dockIsland(view: DockedIsland | undefined) {
   if (sameView(docked, view)) return;
   docked = view;
   for (const listener of listeners) listener();
 }
 
-function sameView(a: IslandView | undefined, b: IslandView | undefined) {
+function sameView(a: DockedIsland | undefined, b: DockedIsland | undefined) {
   if (!a || !b) return a === b;
+  if (a.kind === 'knowledge') return b.kind === 'knowledge' && a.key === b.key && a.count === b.count;
+  if (b.kind === 'knowledge') return false;
   return a.state === b.state && a.label === b.label && a.receipt === b.receipt && sameWorkers(a, b);
 }
 
@@ -39,16 +48,19 @@ export function useDockedIsland() {
 const EXIT_MS = 240;
 
 /**
- * The island's place on the prompt bar. While a run is on, it shows the docked view; when the run ends it keeps the
- * last view on screen for one short exit and then lets it go. Under `prefers-reduced-motion` the exit is a cut: the
- * island is removed before the next paint, so nothing waits on an animation the stylesheet has switched off.
+ * The island's place on the prompt bar. While a view is docked, it shows it; when the view goes it keeps the last
+ * one on screen for one short exit and then lets it go. A view of the other kind (the suggestions after a run)
+ * waits for that exit too, then rises on its own, so the tab settles into the bar and comes back rather than
+ * changing its contents in place. Under `prefers-reduced-motion` the exit is a cut: the island is removed before
+ * the next paint, so nothing waits on an animation the stylesheet has switched off.
  */
 export function IslandDock() {
   const view = useDockedIsland();
-  const lastView = useRef<IslandView>(undefined);
+  const lastView = useRef<DockedIsland>(undefined);
   const [, rerender] = useReducer((count: number) => count + 1, 0);
-  if (view) lastView.current = view;
-  const leaving = !view && lastView.current !== undefined;
+  const handingOver = view !== undefined && lastView.current !== undefined && lastView.current.kind !== view.kind;
+  if (view && !handingOver) lastView.current = view;
+  const leaving = lastView.current !== undefined && (!view || handingOver);
 
   useLayoutEffect(() => {
     if (!leaving || !prefersReducedMotion()) return;
@@ -65,8 +77,9 @@ export function IslandDock() {
     return () => clearTimeout(timer);
   }, [leaving]);
 
-  const shown = view ?? lastView.current;
+  const shown = lastView.current;
   if (!shown) return null;
+  if (shown.kind === 'knowledge') return <KnowledgeIsland count={shown.count} review={shown.review} dismiss={shown.dismiss} leaving={leaving} />;
   return <LiveIsland state={shown.state} label={shown.label} receipt={shown.receipt} workers={shown.workers} leaving={leaving} />;
 }
 
