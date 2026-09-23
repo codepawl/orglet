@@ -16,9 +16,17 @@ async function within(root: string, path: string): Promise<string> {
   let current = root;
   for (const part of path.split('/').filter(Boolean)) {
     current = join(current, part);
-    if ((await lstat(current)).isSymbolicLink()) throw new Error('Đường dẫn vượt phạm vi workspace.');
+    const entry = await lstat(current).catch(missingAsUndefined);
+    // Nothing below a segment that does not exist yet can be a link, so the walk stops there (COD-190).
+    if (!entry) break;
+    if (entry.isSymbolicLink()) throw new Error('Đường dẫn vượt phạm vi workspace.');
   }
   return candidate;
+}
+
+function missingAsUndefined(error: NodeJS.ErrnoException): undefined {
+  if (error.code === 'ENOENT') return undefined;
+  throw error;
 }
 
 async function boundedFile(path: string): Promise<Buffer> {
@@ -91,6 +99,8 @@ export async function executeWorkspaceOperation(directory: string, raw: unknown)
     // Core serializes this private worktree. The user directory is integrated separately under an OS file lock.
     const parent = relative(root, dirname(path)).replaceAll('\\', '/');
     await within(root, parent);
+    // A new file may sit in folders the copy does not have yet; the walk above refused any link on the way (COD-190).
+    await mkdir(dirname(path), { recursive: true });
     const bytes = Buffer.from(request.content, 'utf8');
     if (bytes.length > MAX_FILE_BYTES) throw new Error('Tệp vượt giới hạn 1 MiB của workspace tools.');
     if (request.expectedHash === null) {

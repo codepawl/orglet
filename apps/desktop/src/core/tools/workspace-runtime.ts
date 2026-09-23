@@ -33,6 +33,21 @@ type Copy = z.infer<typeof Copy>;
 const ReadResult = z.object({ path: z.string(), hash: z.string(), content: z.string() }).passthrough();
 const WriteResult = z.object({ hash: z.string() }).passthrough();
 
+/**
+ * A path the worker guessed, or a folder it has not created yet, is something it can correct; the answer goes back
+ * as the tool's result instead of ending the run, and nothing was changed (COD-190).
+ */
+function missingPathResult(request: { operation: string; path?: string }, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!/ENOENT|no such file or directory/i.test(message)) throw error;
+  const path = request.path ?? '';
+  return { missing: true as const, path, error: `No such file or folder in the working copy: ${path || '.'}`, hint: 'List the parent folder, or write the file to create it.' };
+}
+
+function isMissingPathResult(result: unknown): result is ReturnType<typeof missingPathResult> {
+  return typeof result === 'object' && result !== null && (result as { missing?: unknown }).missing === true;
+}
+
 /** Coordinates isolated working copies. It never reads worker-controlled file paths on the host. */
 export class WorkspaceRuntime {
   private queues = new Map<string, Promise<unknown>>();
@@ -168,7 +183,12 @@ export class WorkspaceRuntime {
         perform: async () => {
           if (permission === 'write' && copy.state !== 'ready') throw new Error('Bản làm việc đã tích hợp hoặc đang chờ xử lý xung đột.');
           await this.grants.directory(run.snapshot.workspaceGrant!, permission);
-          const result = await this.files.execute(copy.directory!, request, signal);
+          const result = await this.files.execute(copy.directory!, request, signal).catch(error => missingPathResult(request, error));
+          if (isMissingPathResult(result)) {
+            this.store.event(run.id, `Không có tệp hoặc thư mục: ${result.path}`);
+            this.notify();
+            return result;
+          }
           if (request.operation === 'read') {
             const read = ReadResult.parse(result);
             const evidence = WorkspaceReadEvidence.parse({

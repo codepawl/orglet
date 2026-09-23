@@ -1351,6 +1351,7 @@ export const en: Dictionary = {
   'Đã bỏ qua lịch khi app không hoạt động hoặc còn lần chờ xử lý. Có thể chạy bù một lần.': 'A scheduled run was skipped because the app was not running or a run was still pending. You can catch up once.',
   'Đã chạm giới hạn {0} bước mà chưa có báo cáo hợp lệ.': 'Reached the {0}-step limit without a valid report.',
   'Tìm kiếm web không thành công: {0}': 'Web search failed: {0}',
+  'Không có tệp hoặc thư mục: {0}': 'No such file or folder: {0}',
   'Đã rút gọn các trang web đọc trước đó để vừa giới hạn context.': 'Shortened the web pages read earlier to fit the context limit.',
   'Không đọc được trang web: {0}': 'Could not read the web page: {0}',
   'Không đọc được kết quả web.': 'The web result could not be read.',
