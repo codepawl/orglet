@@ -13,6 +13,14 @@ export type MessageReaction = z.infer<typeof MessageReaction>;
 export const SetMessageReaction = z.object({ messageId: z.uuid(), emoji: Reaction, active: z.boolean() }).strict();
 export const SetUserReaction = SetMessageReaction.extend({ taskId: z.uuid() }).strict();
 
+/**
+ * How a one-shot CLI answer reacts (COD-216): the react_to_message tool only exists in the core tool loop, so the
+ * answer carries at most a few `{ messageId, emoji }` items, each recorded through the same check as the tool.
+ */
+export const MAX_ANSWER_REACTIONS = 3;
+export const AnswerReaction = z.object({ messageId: z.uuid(), emoji: Reaction }).strict();
+export const AnswerReactions = z.array(AnswerReaction).max(MAX_ANSWER_REACTIONS);
+
 /** Stable ID for a saved user turn, including turns created before explicit reply support. */
 export function turnMessageId(taskId: string, revision: number): string {
   const compact = taskId.replaceAll('-', '');
