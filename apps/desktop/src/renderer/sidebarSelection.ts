@@ -31,8 +31,9 @@ export function toggleSelection(current: SidebarSelection, section: SidebarSelec
 }
 
 /**
- * Adds every row between the anchor and this one. Rows already selected stay selected, and the anchor stays where
- * it is, so a second Shift-click ranges from the same place. Without an anchor in this section it selects the row.
+ * Selects exactly the rows from the anchor to this one, dropping earlier picks, the way a file list does (user,
+ * 2026-09-23). The anchor stays where it is, so a second Shift-click ranges from the same place. Without an anchor
+ * in this section it selects the row.
  */
 export function selectRange(current: SidebarSelection, section: SidebarSelectionSection, order: string[], id: string): SidebarSelection {
   const targetIndex = order.indexOf(id);
@@ -41,7 +42,7 @@ export function selectRange(current: SidebarSelection, section: SidebarSelection
   if (anchorIndex < 0) return { section, ids: [id], anchor: id };
   const start = Math.min(anchorIndex, targetIndex);
   const end = Math.max(anchorIndex, targetIndex);
-  const ids = inListOrder(order, [...current.ids, ...order.slice(start, end + 1)]);
+  const ids = order.slice(start, end + 1);
   return { section, ids, anchor: current.anchor };
 }
 

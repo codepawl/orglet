@@ -44,12 +44,13 @@ describe('selectRange', () => {
     expect(selectRange(workers(['d']), 'workers', order, 'b')).toEqual(workers(['b', 'c', 'd'], 'd'));
   });
 
-  it('keeps rows already selected and the anchor, so the next Shift-click ranges from the same place', () => {
-    const first = selectRange(workers(['a']), 'workers', order, 'b');
-    const second = selectRange(first, 'workers', order, 'e');
-    expect(second).toEqual(workers(['a', 'b', 'c', 'd', 'e'], 'a'));
-    const kept = selectRange(workers(['a', 'e'], 'a'), 'workers', order, 'b');
-    expect(kept).toEqual(workers(['a', 'b', 'e'], 'a'));
+  it('replaces the selection with the range and keeps the anchor, so the next Shift-click ranges from the same place', () => {
+    const first = selectRange(workers(['a']), 'workers', order, 'e');
+    expect(first).toEqual(workers(['a', 'b', 'c', 'd', 'e'], 'a'));
+    const shrunk = selectRange(first, 'workers', order, 'b');
+    expect(shrunk).toEqual(workers(['a', 'b'], 'a'));
+    const replaced = selectRange(workers(['a', 'e'], 'e'), 'workers', order, 'c');
+    expect(replaced).toEqual(workers(['c', 'd', 'e'], 'e'));
   });
 
   it('selects only the row when there is no anchor in that section', () => {
