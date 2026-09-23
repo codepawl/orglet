@@ -65,6 +65,15 @@ async function edit(runtime: WorkspaceRuntime, path = 'note.txt', content = 'upd
   return runtime.execute(run, id(), { operation: 'write', path, expectedHash: read.hash, content }, signal());
 }
 
+it('answers a read or list of a missing path as a tool result instead of failing (COD-190)', async () => {
+  const runtime = fixture();
+  expect(await runtime.execute(run, id(), { operation: 'read', path: 'lib/missing.js', offset: 0 }, signal()))
+    .toMatchObject({ missing: true, path: 'lib/missing.js' });
+  expect(await runtime.execute(run, id(), { operation: 'list', path: 'lib' }, signal())).toMatchObject({ missing: true, path: 'lib' });
+  expect(await runtime.execute(run, id(), { operation: 'write', path: 'lib/new.js', content: 'ok', expectedHash: null }, signal()))
+    .toMatchObject({ path: 'lib/new.js' });
+});
+
 it('mints a scoped read ID, reuses its committed result, and rejects forged, cross-run, changed and revoked citations', async () => {
   const runtime = fixture();
   const callId = id();

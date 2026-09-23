@@ -92,3 +92,13 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('packaged workspace help
     expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('first line\nsecond line');
   });
 });
+
+it('writes a new file into folders the copy does not have yet, and still refuses a linked folder (COD-190)', async () => {
+  await executeWorkspaceOperation(source, { operation: 'write', path: 'lib/store/index.js', content: 'export {};', expectedHash: null });
+  expect(await readFile(join(source, 'lib', 'store', 'index.js'), 'utf8')).toBe('export {};');
+  const outside = join(directory, 'outside');
+  await mkdir(outside);
+  await symlink(outside, join(source, 'linked'), 'junction');
+  await expect(executeWorkspaceOperation(source, { operation: 'write', path: 'linked/escape.js', content: 'x', expectedHash: null })).rejects.toThrow('vượt phạm vi');
+  await expect(executeWorkspaceOperation(source, { operation: 'read', path: 'missing/file.js', offset: 0 })).rejects.toThrow(/ENOENT/);
+});
