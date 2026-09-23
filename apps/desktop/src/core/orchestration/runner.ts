@@ -28,7 +28,7 @@ import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
-import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
+import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUnsupportedProcessChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, type Colleague } from '../context/compiler';
 import { applyThreadManifest, compactThread, fitThread, threadMessages } from '../context/thread';
@@ -273,6 +273,14 @@ export class Runner {
     return [];
   }
   private event(runId: string, message: string) { this.store.event(runId, message); this.notify(); }
+  /** A command this run started that has exited, or undefined when the id is foreign, unknown or still running. */
+  private finishedProcess(run: Run, processId: string): { exitCode: number } | undefined {
+    const raw = this.store.db.prepare('SELECT data FROM workspace_processes WHERE id=?').get(processId);
+    if (!raw) return undefined;
+    const process = WorkspaceProcess.parse(JSON.parse(String(raw.data)));
+    if (process.runId !== run.id || process.state !== 'exited' || process.exitCode === null) return undefined;
+    return { exitCode: process.exitCode };
+  }
   /**
    * A run fixes its permissions the moment it first starts, not when the turn was sent (COD-178). Member and
    * synthesis runs of a team turn are created at send time and wait for the plan, so a run starting for the first
@@ -875,6 +883,7 @@ export class Runner {
       downgradePrematureRecommendation(report, options.upstream ?? []);
     }
     if (!run.snapshot.workspaceGrant && run.snapshot.toolCapabilities?.includes('network.web')) downgradeUncitedWebChecks(report);
+    if (run.snapshot.workspaceGrant) downgradeUnsupportedProcessChecks(report, processId => this.finishedProcess(run, processId));
     const validateChecker =(checkerId: string, sourceIds: string[]) => {
       const profile = this.store.get<ProfileRecord>('profiles', checkerId);
       if (!profiles.some(available => available.id === checkerId)) throw new Error('Finding tham chiếu checker chưa được cung cấp cho lần chạy này.');
@@ -884,8 +893,7 @@ export class Runner {
       if (!run.snapshot.workspaceGrant) throw new Error('Check tham chiếu tiến trình ngoài workspace được cấp quyền.');
       const process = WorkspaceProcess.parse(this.store.get('workspace_processes', processId));
       if (process.runId !== run.id || process.state !== 'exited' || process.exitCode === null
-        || (status === 'pass' && process.exitCode !== 0)
-        || (status === 'fail' && process.exitCode === 0)) {
+        || (status === 'pass' && process.exitCode !== 0)) {
         throw new Error('Check tham chiếu tiến trình chưa hoàn tất hoặc không khớp kết quả.');
       }
       this.store.db.prepare('INSERT OR IGNORE INTO process_evidence(id,run_id,exit_code) VALUES(?,?,?)')

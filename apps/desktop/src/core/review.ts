@@ -60,6 +60,32 @@ function downgradeUncitedChecks(report: Report, coverageNote: string) {
   if (report.review.checks.some(check => check.status === 'not_assessed')) report.review.recommendation = 'insufficient_evidence';
 }
 
+/**
+ * A passed check must rest on commands of this run that exited 0. One that cites a command still running, one that
+ * failed, or one from elsewhere keeps its place in the report as not assessed, with only its valid commands, instead
+ * of throwing the whole report away (COD-192). A failed check may cite any finished command: the worker read the output.
+ */
+export function downgradeUnsupportedProcessChecks(report: Report, finishedProcess: (processId: string) => { exitCode: number } | undefined) {
+  if (!report.review) return;
+  for (const check of report.review.checks) {
+    if (!check.processIds?.length) continue;
+    const supports = (processId: string) => {
+      const process = finishedProcess(processId);
+      if (!process) return false;
+      return check.status !== 'pass' || process.exitCode === 0;
+    };
+    const valid = check.processIds.filter(supports);
+    if (valid.length === check.processIds.length) continue;
+    check.processIds = valid;
+    if (check.status !== 'not_assessed') {
+      check.status = 'not_assessed';
+      check.coverage += '\nLệnh được trích chưa kết thúc, không thuộc lần chạy này hoặc không thoát với mã 0.';
+      report.limitations.push(`Chưa xác minh độc lập check: ${check.name}.`);
+    }
+  }
+  if (report.review.checks.some(check => check.status === 'not_assessed')) report.review.recommendation = 'insufficient_evidence';
+}
+
 /** Workspace file reads lack a portable source ID; preserve their warning without claiming verified provenance. */
 export function downgradeUncitedWorkspaceFindings(report: Report) {
   const uncited = report.findings.filter(finding => !finding.sourceIds.length && !finding.workspaceEvidenceIds?.length

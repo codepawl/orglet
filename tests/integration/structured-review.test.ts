@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Report, type Artifact } from '../../apps/desktop/src/shared/contracts';
-import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../../apps/desktop/src/core/review';
+import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, downgradeUnsupportedProcessChecks, validateReview } from '../../apps/desktop/src/core/review';
 
 const source = randomUUID();
 const finding = () => ({ title: 'Observed issue', severity: 'warning' as const, detail: 'Evidence differs.', coverage: 'Selected source', sourceIds: [source], provenance: { findingId: randomUUID(), writerId: randomUUID(), runId: randomUUID() } });
@@ -166,4 +166,36 @@ it('creates conservative structured metadata for a legacy reply under a new requ
   const checked = applyReviewPolicy(value, { requiredChecks: [{ name: 'Objective', checker: 'none' }] }, []);
   expect(checked.review).toMatchObject({ recommendation: 'insufficient_evidence', checks: [{ name: 'Objective', status: 'not_assessed' }] });
   expect(applyReviewPolicy(value, undefined, [])).toBe(value);
+});
+
+describe('checks that cite commands (COD-192)', () => {
+  const processCheck = (status: 'pass' | 'fail', processIds: string[]) => Report.parse({ title: 'QA', summary: 'Ran the app', findings: [], limitations: [],
+    review: { checks: [{ name: 'Server starts', status, coverage: 'node -e smoke script', sourceIds: [], checkerIds: [], processIds }],
+      recommendation: 'insufficient_evidence', draftFeedback: 'See QA notes.', upstreamFindingIds: [], conflicts: [] } });
+  const clean = randomUUID();
+  const broken = randomUUID();
+  const running = randomUUID();
+  const exits: Record<string, number> = { [clean]: 0, [broken]: 1 };
+  const finished = (processId: string) => processId in exits ? { exitCode: exits[processId] } : undefined;
+
+  it('keeps a failed check that cites a command which exited 0: the worker judged the output', () => {
+    const checked = processCheck('fail', [clean]);
+    downgradeUnsupportedProcessChecks(checked, finished);
+    expect(checked.review?.checks[0]).toMatchObject({ status: 'fail', processIds: [clean] });
+    expect(checked.limitations).toEqual([]);
+  });
+
+  it('turns a passed check on a failed or unfinished command into not assessed, keeping only valid commands', () => {
+    const checked = processCheck('pass', [clean, broken, running]);
+    downgradeUnsupportedProcessChecks(checked, finished);
+    expect(checked.review?.checks[0]).toMatchObject({ status: 'not_assessed', processIds: [clean] });
+    expect(checked.limitations).toEqual(['Chưa xác minh độc lập check: Server starts.']);
+    expect(checked.review?.recommendation).toBe('insufficient_evidence');
+  });
+
+  it('leaves a passed check on a clean command alone', () => {
+    const checked = processCheck('pass', [clean]);
+    downgradeUnsupportedProcessChecks(checked, finished);
+    expect(checked.review?.checks[0].status).toBe('pass');
+  });
 });
