@@ -330,6 +330,23 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .sidebar-scroll .history:has(>.section-items[hidden]) { min-height:0; }
 .sidebar-footer>.button { justify-content:flex-start; }
 .sidebar-footer .status-mark { margin-left:auto; }
+/* Selecting several rows (COD-214). A section's edit button holds its Done state while the section is in select
+   mode. A picked row, or every row while picking, carries a checkbox in the status mark's slot, the same 29px it
+   took, so nothing shifts sideways; a picked row is tinted from the accent, so it is told from the open chat's
+   grey. The bar with the count and the actions sits between the list and the footer, ending on the footer's
+   right edge, a soft surface with a shadow and no line around it. */
+.section-heading .row-action[aria-pressed=true],.section-heading .row-action[aria-pressed=true]:hover:not(:disabled) { color:var(--text); background:var(--row-active); }
+.worker-row > .row-check { margin:0 3px 0 8px; }
+.worker-row > .row-check .checkbox-input { top:0; }
+.worker-row > .row-check .checkbox-box { margin-top:0; }
+.tree-item.selected .worker-row,.tree-item.selected .worker-row:hover { background:color-mix(in srgb, var(--accent) 14%, transparent); }
+.selection-bar { display:flex; align-items:center; gap:2px; margin:8px 12px 0 0; padding:3px 3px 3px 12px; border-radius:14px; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter:blur(10px) saturate(1.2); box-shadow:0 6px 20px #0000001f; animation:menu-in var(--motion-quick) var(--ease-out); }
+.selection-count { flex:1; min-width:0; font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.selection-bar .row-action { margin-right:0; color:var(--muted); }
+.selection-bar .row-action:hover:not(:disabled),.selection-bar .row-action:focus-visible,.selection-bar .row-action[aria-expanded=true] { color:var(--text); border-color:transparent; }
+.selection-bar .row-action.danger,.selection-bar .row-action.danger:hover:not(:disabled) { color:var(--error); }
+.selection-bar .row-action.danger:hover:not(:disabled) { background:var(--row-hover); border-color:transparent; }
+@media (prefers-reduced-motion:reduce) { .selection-bar { animation:none; } }
 /* Unread notices: a dot on the bell and an accent count, so a new notice is seen without reading the number. */
 .notice-bell { position:relative; display:inline-flex; }
 .notice-dot { position:absolute; top:-1px; right:-1px; width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 2px var(--window); animation:notice-dot-in var(--motion-base) var(--ease-out); }
@@ -1507,7 +1524,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Sidebar hierarchy: section headings sit furthest left, their rows one step in, and nested rows further in (user feedback 2026-09-17). */
 .section-heading { padding-left:4px; }
 .worker-row .row-disclosure { margin-left:0; }
-.worker-row:not(:has(> .status-mark)) .row-disclosure { margin-left:10px; }
+.worker-row:not(:has(> .status-mark, > .row-check)) .row-disclosure { margin-left:10px; }
 /* Avatar picker: category and Random on one row above the mascots. */
 .avatar-picker-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .avatar-action { min-height:32px; padding:4px 10px; flex-shrink:0; gap:6px; font-size:13px; }

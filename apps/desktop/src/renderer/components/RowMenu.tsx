@@ -10,6 +10,8 @@ export type RowMenuItem = { label: string; icon: LucideIcon; onSelect: () => voi
 /**
  * Vertical-dots menu. The panel is portaled to `document.body` so sidebar overflow and row `transform`
  * (reorder) cannot clip it to an empty sliver. It closes on selection, outside click, Escape or focus leaving.
+ * A menu whose only item asks first (a lone Delete) opens straight on its question, so the trigger reads as that
+ * action with its confirmation, not as a menu of one.
  */
 export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className = 'row-action', align = 'end' }: { label: string; items: RowMenuItem[]; icon?: LucideIcon; className?: string; align?: 'start' | 'end' }) {
   const [position, setPosition] = useState<CSSProperties>();
@@ -44,6 +46,7 @@ export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className
     const left = align === 'start' ? Math.min(rect.left, bounds.right - width - 8) : Math.max(bounds.left + 8, rect.right - width);
     const top = below ? rect.bottom + 4 : Math.max(bounds.top + 8, rect.top - 4 - height);
     setPosition({ position: host === document.body ? 'fixed' : 'absolute', left: left - bounds.left, top: top - bounds.top });
+    if (items.length === 1 && items[0].confirm) setAsking(items[0]);
   };
   const onMenuKey = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape') { event.stopPropagation(); if (asking) setAsking(undefined); else close(true); }
