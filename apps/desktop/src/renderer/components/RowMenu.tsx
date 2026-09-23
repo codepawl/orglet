@@ -10,8 +10,12 @@ export type RowMenuItem = { label: string; icon: LucideIcon; onSelect: () => voi
 /**
  * Vertical-dots menu. The panel is portaled to `document.body` so sidebar overflow and row `transform`
  * (reorder) cannot clip it to an empty sliver. It closes on selection, outside click, Escape or focus leaving.
+ * With `asksOnOpen`, a menu of one item that asks first (a lone Delete) opens straight on its question, so the
+ * trigger reads as that action with its confirmation, not as a menu of one. Other menus keep the two steps.
+ * With `contextMenuOf`, a right-click anywhere in the closest ancestor matching that selector opens the same menu at
+ * the pointer; the innermost menu takes the click, so a nested row's menu wins over its parent's.
  */
-export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className = 'row-action', align = 'end' }: { label: string; items: RowMenuItem[]; icon?: LucideIcon; className?: string; align?: 'start' | 'end' }) {
+export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className = 'row-action', align = 'end', asksOnOpen = false, contextMenuOf }: { label: string; items: RowMenuItem[]; icon?: LucideIcon; className?: string; align?: 'start' | 'end'; asksOnOpen?: boolean; contextMenuOf?: string }) {
   const [position, setPosition] = useState<CSSProperties>();
   const [asking, setAsking] = useState<RowMenuItem>();
   const root = useRef<HTMLDivElement>(null);
@@ -35,16 +39,34 @@ export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className
   const container = () => (trigger.current?.closest('[role=dialog]') as HTMLElement | null) ?? document.body;
   const toggle = () => {
     if (open) { close(); return; }
-    const rect = trigger.current!.getBoundingClientRect();
+    openBeside(trigger.current!.getBoundingClientRect());
+  };
+  /** Places the panel under `rect` (or above it when there is no room below) and opens it. */
+  const openBeside = (rect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>, side: 'start' | 'end' = align) => {
     const host = container();
     const bounds = host === document.body ? { left: 0, top: 0, right: innerWidth, bottom: innerHeight } : host.getBoundingClientRect();
     const height = (items.length + 1) * 40 + 12;
     const below = rect.bottom + 4 + height < bounds.bottom;
     const width = 240;
-    const left = align === 'start' ? Math.min(rect.left, bounds.right - width - 8) : Math.max(bounds.left + 8, rect.right - width);
+    const left = side === 'start' ? Math.min(rect.left, bounds.right - width - 8) : Math.max(bounds.left + 8, rect.right - width);
     const top = below ? rect.bottom + 4 : Math.max(bounds.top + 8, rect.top - 4 - height);
     setPosition({ position: host === document.body ? 'fixed' : 'absolute', left: left - bounds.left, top: top - bounds.top });
+    if (asksOnOpen && items.length === 1 && items[0].confirm) setAsking(items[0]);
   };
+  useEffect(() => {
+    if (!contextMenuOf) return;
+    const area = root.current?.closest<HTMLElement>(contextMenuOf);
+    if (!area) return;
+    const openAtPointer = (event: MouseEvent) => {
+      if (event.defaultPrevented) return;
+      event.preventDefault();
+      setAsking(undefined);
+      // At the pointer the panel opens to its right, the way a desktop context menu does.
+      openBeside({ left: event.clientX, right: event.clientX, top: event.clientY, bottom: event.clientY }, 'start');
+    };
+    area.addEventListener('contextmenu', openAtPointer);
+    return () => area.removeEventListener('contextmenu', openAtPointer);
+  });
   const onMenuKey = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape') { event.stopPropagation(); if (asking) setAsking(undefined); else close(true); }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {

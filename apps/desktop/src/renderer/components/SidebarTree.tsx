@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { GripVertical, Archive, ArchiveRestore, EllipsisVertical, Trash } from './icons';
 import { t } from '../i18n';
 import { RowMenu } from './RowMenu';
+import { Checkbox } from './Checkbox';
 import { StatusMark, type StatusMarkState } from './StatusMark';
+import { selectionPickMode, type SelectionPickMode } from '../sidebarSelection';
 
 export function statusMarkLabel(status: StatusMarkState): string {
   if (status.variant === 'busy') return t('Đang làm');
@@ -99,19 +101,36 @@ export function useReorder(ids: string[], commit: (ids: string[]) => void) {
 }
 
 /**
+ * Selecting several rows of a section (COD-214). `picking` is the section's select mode, where a plain click picks
+ * the row instead of opening its chat; Ctrl-click and Shift-click pick outside it too. A picked row, or any row while
+ * picking, shows a checkbox where its status mark sits.
+ */
+export type RowSelection = { picking: boolean; selected: boolean; onPick: (mode: SelectionPickMode) => void };
+
+/**
  * A team or worker row: the name opens that chat. A team lists its members in the chat details panel
  * (user, 2026-09-19), so no row expands here.
  * Optional `status` is the rolled-up mark from its subset (live thread for a worker, workers for a team).
  */
-export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, menu, reorder, arriving }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; menu?: ReactNode; reorder: RowBindings; arriving?: boolean }) {
+export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, menu, reorder, arriving, selection }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; menu?: ReactNode; reorder: RowBindings; arriving?: boolean; selection?: RowSelection }) {
   const { ref, style, dragging, onMoveKey, ...pointer } = reorder;
   const mark = dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : null;
-  return <div ref={ref} style={style} className={`tree-item ${dragging ? 'dragging' : ''}${arriving ? ' arriving' : ''}`} {...pointer} data-row-id={id}>
+  const selected = selection?.selected ?? false;
+  const showCheckbox = Boolean(selection && (selection.picking || selection.selected));
+  const onNameClick = (event: MouseEvent<HTMLButtonElement>) => {
+    const mode = selectionPickMode(event);
+    if (selection && (mode || selection.picking)) { selection.onPick(mode ?? 'toggle'); return; }
+    onSelect();
+  };
+  const onCheckboxClick = (event: MouseEvent<HTMLInputElement>) => { selection?.onPick(event.shiftKey ? 'range' : 'toggle'); };
+  return <div ref={ref} style={style} className={`tree-item ${dragging ? 'dragging' : ''}${arriving ? ' arriving' : ''}${selected ? ' selected' : ''}`} {...pointer} data-row-id={id}>
     <div className="worker-row">
-      {status && <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />}
+      {showCheckbox
+        ? <Checkbox className="row-check" checked={selected} onClick={onCheckboxClick} onChange={() => { /* the click handler picks, so Shift is read */ }}><span className="visually-hidden">{name}</span></Checkbox>
+        : status && <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />}
       <span className="row-disclosure" aria-hidden="true">{mark}{avatar}</span>
-      <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} title={description ? `${description}\n${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-        onClick={onSelect} onKeyDown={onMoveKey}>
+      <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} aria-pressed={selection?.picking ? selected : undefined} title={description ? `${description}\n${t('Nhấn giữ để kéo')}` : t('Nhấn giữ để kéo')} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+        onClick={onNameClick} onKeyDown={onMoveKey}>
         <span>{name}</span>
       </button>
       <span data-no-drag>{menu}</span>

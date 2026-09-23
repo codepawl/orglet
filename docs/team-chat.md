@@ -41,6 +41,12 @@ A **team** row is one row: clicking it opens that team's chat. Its members are l
 
 Ctrl+N focuses the current worker or team chat (it does not create a new session). Search (Ctrl+K) finds chats by their text, including archived ones.
 
+### Select several
+
+Each section's header has an edit (pencil) button beside **+**. It turns that section's select mode on: every row shows a checkbox where its status mark was, clicking a row picks it instead of opening its chat, and the pencil becomes a check (Done). Outside select mode, Ctrl-click (Cmd on macOS) picks or unpicks a row and Shift-click selects exactly the rows from the last Ctrl-picked one to it, replacing what was picked before; a plain click still opens the chat, and drops the selection. A selection belongs to one section: picking an orglet drops any crews picked. Right-clicking an orglet or a crew opens its menu at the pointer.
+
+While anything is picked, a bar between the list and the footer shows the count with **Archive**, **Delete** (which asks first, naming the count) and a clear button. Archive and delete run the same commands as a row's menu, one row at a time, and end in one toast: the count that went through, or the names of the rows that did not. Esc clears the selection and leaves select mode. Nothing is stored: the selection is forgotten when the app restarts, and a row that leaves the list (archived, deleted, another workspace) leaves the selection.
+
 Back and forward work like a browser. The side buttons on a mouse, or Alt+Left and Alt+Right, step through what you opened: a chat, then another chat, then back to the first; Library, a skill, back to Library, forward to the skill again; Settings tab to tab; Notifications open, then back closes it. Closing a panel is a step too, so back reopens it. A chat, skill or knowledge item deleted since is skipped. Alt+arrows do nothing while you type in a text box; the mouse buttons always work. Leaving a schedule you are editing asks about unsaved changes, the same as the panel's own Back.
 
 ## One live thread

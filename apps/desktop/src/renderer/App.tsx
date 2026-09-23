@@ -2,7 +2,7 @@ import { RevisionEditor } from './components/RevisionEditor';
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
-import { Bell, Archive, BookOpen, CalendarClock, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash } from './components/icons';
+import { Bell, Archive, BookOpen, CalendarClock, Check, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
 import { ArrowLeft, ChevronRight, Pencil as LucidePencil, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { emptyConnections, isPaidApi, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
@@ -58,6 +58,7 @@ import type { NewChatTarget, WorkspaceGrantView } from '../shared/workspace-acce
 import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { permissionsForLevel, type WorkspaceLevel } from '../shared/capability-status';
 import { appView, createHistory, recordView, replaceView, stepHistory, useNavigationInput, viewKey, type AppView, type NavigationDirection, type NavigationHistory } from './navigation';
+import { noSelection, pruneSelection, selectRange, toggleSelection, type SelectionPickMode, type SidebarSelection, type SidebarSelectionSection } from './sidebarSelection';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
 import { proposedMascot, type ProposalActions } from './components/AppProposals';
 
@@ -174,6 +175,17 @@ export function App() {
   // Chat details sit in the shell next to the conversation, not over it.
   const detailsOpen = panel === 'activity';
   const detailsOpenRef = useRef(detailsOpen); detailsOpenRef.current = detailsOpen;
+  // Several crews or orglets picked in the sidebar (COD-214), and the section whose edit button is in its Done
+  // state. Both live here only: nothing is stored, and rows that leave the workspace leave the selection.
+  const [selection, setSelection] = useState<SidebarSelection>(noSelection);
+  const [selecting, setSelecting] = useState<SidebarSelectionSection | null>(null);
+  const selectionActiveRef = useRef(false); selectionActiveRef.current = selection.section !== null || selecting !== null;
+  const clearSelection = () => { setSelection(noSelection); setSelecting(null); };
+  useEffect(() => {
+    if (!workspace) return;
+    const listed = (section: SidebarSelectionSection) => (section === 'teams' ? workspace.teams : workspace.workers).map(item => item.id);
+    setSelection(current => current.section ? pruneSelection(current, listed(current.section)) : current);
+  }, [workspace]);
   const [noticesOpen, setNoticesOpen] = useState(false);
   const unreadNotices = useUnreadNotices();
   useAppChangeNotices(workspace?.recentAppChanges);
@@ -375,6 +387,8 @@ export function App() {
         else if (workerId) openWorker(workerId);
       }
       if (event.ctrlKey && event.key.toLowerCase() === 'k') { event.preventDefault(); setSearchOpen(true); }
+      // A dialog or menu that took this Escape has already prevented it; otherwise a sidebar selection goes first.
+      if (event.key === 'Escape' && !event.defaultPrevented && selectionActiveRef.current) { event.preventDefault(); clearSelection(); return; }
       // The details panel is part of the page, not a dialog, so Escape has to close it here.
       if (event.key === 'Escape' && detailsOpenRef.current) { event.preventDefault(); setPanel(null); }
     };
@@ -580,6 +594,53 @@ export function App() {
   useNavigationInput(stepView, window.orglet?.onNavigate);
   const teamOrder = useReorder(workspace?.teams.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'teams', ids })));
   const workerOrder = useReorder(workspace?.workers.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'workers', ids })));
+  const sectionOrder = (section: SidebarSelectionSection) => section === 'teams' ? teamOrder.order : workerOrder.order;
+  const sectionKind = (section: SidebarSelectionSection) => section === 'teams' ? 'team' as const : 'worker' as const;
+  /** The edit button of a section: on, that section is in select mode; off again, or on for the other section, drops the selection. */
+  const toggleSelecting = (section: SidebarSelectionSection) => {
+    if (selecting === section) { clearSelection(); return; }
+    if (selection.section !== section) setSelection(noSelection);
+    setSelecting(section);
+  };
+  const pickRow = (section: SidebarSelectionSection, id: string, mode: SelectionPickMode) => {
+    // A pick in the other section moves the selection there, so that section's edit button is the one in its Done state.
+    if (selecting && selecting !== section) setSelecting(null);
+    setSelection(current => mode === 'range' ? selectRange(current, section, sectionOrder(section), id) : toggleSelection(current, section, sectionOrder(section), id));
+  };
+  const rowSelection = (section: SidebarSelectionSection, id: string) => ({
+    picking: selecting === section,
+    selected: selection.section === section && selection.ids.includes(id),
+    onPick: (mode: SelectionPickMode) => pickRow(section, id, mode),
+  });
+  /**
+   * Archives or deletes every selected row, one command each, and says what happened in one toast. A row that fails
+   * is named; the ones that went through are gone from the list, so nothing claims more than it did.
+   */
+  const applyToSelection = async (verb: 'archive' | 'delete') => {
+    const section = selection.section;
+    if (!section) return;
+    const kind = sectionKind(section);
+    const ids = selection.ids;
+    const failed: string[] = [];
+    clearSelection();
+    setError('');
+    for (const id of ids) {
+      try {
+        if (verb === 'archive') await orglet.call('archiveEntity', { kind, id, archived: true });
+        else await orglet.call('deleteEntity', { kind, id });
+      } catch {
+        failed.push(entityName(kind, id) ?? id);
+      }
+    }
+    await refresh();
+    if (failed.length) {
+      toast(verb === 'archive' ? t('Không lưu trữ được {0}', [failed.join(', ')]) : t('Không xóa được {0}', [failed.join(', ')]), 'error');
+      return;
+    }
+    const done = ids.length;
+    if (section === 'teams') toast(verb === 'archive' ? t('Đã lưu trữ {0} hội', [done]) : t('Đã xóa {0} hội', [done]), 'success');
+    else toast(verb === 'archive' ? t('Đã lưu trữ {0} Tí', [done]) : t('Đã xóa {0} Tí', [done]), 'success');
+  };
   const deleteTask = (taskId: string) => action(async () => {
     const name = taskName(taskId);
     await orglet.call('deleteTask', { id: taskId });
@@ -705,6 +766,24 @@ export function App() {
     leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
     trailing={composerTrailing}
     attachments={sources} onRemoveAttachment={id => setSources(sources.filter(source => source.id !== id))} />;
+  /** A section's header buttons: the edit button that turns select mode on (a check while it is), then create. */
+  const sectionActions = (section: SidebarSelectionSection, selectLabel: string, createLabel: string, create: () => void) => {
+    const done = selecting === section;
+    return <>
+      <Button size="icon" className="row-action" aria-pressed={done} aria-label={done ? t('Xong') : selectLabel} title={done ? t('Xong') : selectLabel} onClick={() => toggleSelecting(section)}>{done ? <Check size={16} /> : <Pencil size={16} />}</Button>
+      <Button size="icon" className="row-action" aria-label={createLabel} title={createLabel} onClick={create}><Plus size={16} /></Button>
+    </>;
+  };
+  const selectionCount = selection.ids.length;
+  const deleteSelectionQuestion = selection.section === 'teams'
+    ? t('Xóa {0} hội đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [selectionCount])
+    : t('Xóa {0} Tí đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [selectionCount]);
+  const selectionBar = selection.section && <div className="selection-bar" role="toolbar" aria-label={t('Mục đã chọn')}>
+    <span className="selection-count">{t('{0} đã chọn', [selectionCount])}</span>
+    <Button size="icon" className="row-action" aria-label={t('Lưu trữ')} title={t('Lưu trữ')} onClick={() => void applyToSelection('archive')}><Archive size={16} /></Button>
+    <RowMenu className="row-action danger" label={t('Xóa')} icon={Trash} asksOnOpen items={[{ label: t('Xóa'), icon: Trash, danger: true, onSelect: () => void applyToSelection('delete'), confirm: { question: deleteSelectionQuestion, label: t('Xóa') } }]} />
+    <Button size="icon" className="row-action" aria-label={t('Bỏ chọn')} title={t('Bỏ chọn')} onClick={clearSelection}><SidebarX size={16} /></Button>
+  </div>;
   const composerHint = isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}<button onClick={() => { if (team) { setEditingTeam(team); setPanel('team'); } else { setEditingWorker(worker); setPanel('worker'); } }}>{team ? t('Thiết lập hội') : t('Đổi model')}</button></p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p> : null;
   return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsPane.width}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
@@ -714,18 +793,19 @@ export function App() {
       <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong><Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button><Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={() => setSidebar(false)}><PanelLeft size={18} /></Button></div>
       <div className="sidebar-scroll">
       
-      <SidebarSection id="teams" title={t('Hội')} action={<Button size="icon" className="row-action" aria-label={t('Tạo hội')} onClick={() => { setEditingTeam(undefined); setPanel('team'); }}><Plus size={16} /></Button>}>
-        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} arriving={isArriving(`team-${item.id}`)} name={item.name} avatar={<RosterAvatars workers={teamRoster(item, workspace.workers)} size="sm" max={2} />} active={teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id)} status={teamStatus(item)} onSelect={() => openTeam(item.id)} reorder={teamOrder.bind(item.id)}
-          menu={<RowMenu label={t('Tùy chọn hội {0}', [item.name])} icon={EllipsisVertical} items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingTeam(item); setPanel('team'); } }, { label: t('Xuất template'), icon: Download, onSelect: () => action(() => orglet.exportTemplate(item.id)) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('team', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('team', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />} />
+      <SidebarSection id="teams" title={t('Hội')} action={sectionActions('teams', t('Chọn nhiều hội'), t('Tạo hội'), () => { setEditingTeam(undefined); setPanel('team'); })}>
+        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} arriving={isArriving(`team-${item.id}`)} name={item.name} avatar={<RosterAvatars workers={teamRoster(item, workspace.workers)} size="sm" max={2} />} active={teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id)} status={teamStatus(item)} onSelect={() => { clearSelection(); openTeam(item.id); }} reorder={teamOrder.bind(item.id)} selection={rowSelection('teams', item.id)}
+          menu={<RowMenu label={t('Tùy chọn hội {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingTeam(item); setPanel('team'); } }, { label: t('Xuất template'), icon: Download, onSelect: () => action(() => orglet.exportTemplate(item.id)) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('team', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('team', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />} />
         )}{!workspace.teams.length && <p className="empty-history">{t('Chưa có hội nào.')}</p>}
         <ArchivedList count={workspace.archivedTeams.length}>{workspace.archivedTeams.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('team', item.id, false)} onDelete={() => deleteEntity('team', item.id)} />)}</ArchivedList>
       </SidebarSection>
-      <SidebarSection id="workers" title={t('Tí')} action={<Button size="icon" className="row-action" aria-label={t('Tạo Tí')} onClick={() => { setEditingWorker(undefined); setPanel('worker'); }}><Plus size={16} /></Button>}>
-        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => openWorker(item.id)}
-          menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
+      <SidebarSection id="workers" title={t('Tí')} action={sectionActions('workers', t('Chọn nhiều Tí'), t('Tạo Tí'), () => { setEditingWorker(undefined); setPanel('worker'); })}>
+        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} selection={rowSelection('workers', item.id)}
+          menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
         <ArchivedList count={workspace.archivedWorkers.length}>{workspace.archivedWorkers.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('worker', item.id, false)} onDelete={() => deleteEntity('worker', item.id)} />)}</ArchivedList>
       </SidebarSection>
       </div>
+      {selectionBar}
       <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><Button onClick={() => openSettings()}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${Object.values(connections).some(Boolean) ? 'connected' : ''}`} /></Button></div>
     </aside>
     {/* Collapsed sidebar keeps its two most used actions in a narrow rail, stacked like ChatGPT. */}
