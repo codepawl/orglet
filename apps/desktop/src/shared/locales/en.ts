@@ -1559,7 +1559,7 @@ export const en: Dictionary = {
   'Kiểm tra các con số trong tệp đã đính kèm: chỗ nào không khớp, chỗ nào thiếu.': 'Check the numbers in the attached file: what does not add up, and what is missing.',
   'Tóm tắt tài liệu đã đính kèm': 'Summarize the attached documents',
   'Đọc các tài liệu đã đính kèm, tóm tắt những điểm chính và chỉ rõ phần còn thiếu bằng chứng.': 'Read the attached documents, summarize the main points, and say plainly where the evidence is thin.',
-  'Hỏi xem giúp được gì': 'Ask what it can help with',
+  'Hỏi xem giúp được gì': 'Ask what they can help with',
   'Với những gì bạn được giao, bạn giúp mình được những việc gì? Hỏi lại nếu cần biết thêm.': 'Given what you were set up to do, what can you help me with? Ask me back if you need more.',
   'Giao việc này cho cả hội': 'Give this to the whole crew',
   'Việc sau cần cả hội. Chia ra ai làm phần nào, rồi gộp lại thành một kết quả: ': 'The following needs the whole crew. Split who does what, then bring it back as one result: ',
