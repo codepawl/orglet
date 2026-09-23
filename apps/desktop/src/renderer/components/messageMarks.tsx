@@ -34,6 +34,20 @@ export function reactionGroups(marks: readonly MessageReaction[], runs: readonly
   });
 }
 
+/** The reaction this person left on a message, if any: at most one per message (COD-219). */
+export function userReactionOn(marks: readonly MessageReaction[], messageId: string): Reaction | undefined {
+  return marks.findLast(mark => mark.messageId === messageId && mark.actor === 'user')?.emoji;
+}
+
+/**
+ * What picking an emoji means next to the one already left (COD-219, the same rule in the picker and on the
+ * badges): the same one again takes it off, any other adds or switches to it. The core keeps one per person, so
+ * a switch is a single add.
+ */
+export function pickReaction(current: Reaction | undefined, picked: Reaction): { emoji: Reaction; active: boolean } {
+  return { emoji: picked, active: picked !== current };
+}
+
 /** Scrolls the original message into view and moves focus there, so a keyboard user lands on it too. */
 export function focusMessage(messageId: string) {
   const original = document.getElementById(`message-${messageId}`);

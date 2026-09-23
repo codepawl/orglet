@@ -210,17 +210,20 @@ describe('the mark on the person\'s bubble', () => {
         proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {},
         proposalActions: { busy: false, onApply: () => {}, onApplyAll: () => {}, onDismiss: () => {}, onDismissAll: () => {}, onUndo: () => {}, onOpen: () => {}, onOpenChat: () => {} },
       }));
-      // The user bubble, then its action row carrying the worker's mark, before the worker's own answer.
+      // The worker's mark sits on the user bubble itself (COD-219), before the action row and the worker's own answer.
       const bubble = html.indexOf(`id="message-${turnMessageId(task.id, 0)}"`);
-      const mark = html.indexOf('class="message-reaction"');
+      const mark = html.indexOf('class="reaction-badge"');
+      const actions = html.indexOf('class="message-actions"');
       const answer = html.indexOf('class="assistant-message"');
       expect(bubble).toBeGreaterThan(-1);
       expect(mark).toBeGreaterThan(bubble);
-      expect(answer).toBeGreaterThan(mark);
-      const markup = html.slice(mark, html.indexOf('</span>', mark));
+      expect(actions).toBeGreaterThan(mark);
+      expect(answer).toBeGreaterThan(actions);
+      const markup = html.slice(mark, html.indexOf('</button>', mark));
       expect(markup).toContain('👍');
       expect(markup).toContain('Researcher');
       expect(markup).not.toContain('Bạn');
+      expect(markup).toContain('aria-pressed="false"');
     } finally { store.close(); }
   });
 });

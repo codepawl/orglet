@@ -73,17 +73,26 @@ export class MessageInteractions {
     });
   }
 
+  /**
+   * One reaction per person per message (COD-219, the way a messenger works): adding a second emoji replaces the
+   * first, so a switch is one call from the renderer rather than a remove and an add that could half-land.
+   */
   private set(task: Task, messageId: string, emoji: MessageReaction['emoji'], active: boolean,
     actor: MessageReaction['actor'], run?: Run, callId?: string) {
     const existing = task.messageReactions ?? [];
-    const same = (item: MessageReaction) => item.messageId === messageId && item.emoji === emoji && item.actor === actor
+    const ownMark = (item: MessageReaction) => item.messageId === messageId && item.actor === actor
       && (actor === 'user' || item.workerId === run?.snapshot.worker.id);
-    const kept = existing.filter(item => !same(item));
-    if (active && !existing.some(same)) {
+    const same = (item: MessageReaction) => ownMark(item) && item.emoji === emoji;
+    if (active) {
+      if (existing.some(same)) return;
       if (existing.length >= 1000) throw new Error('Cuộc trò chuyện đã đủ tương tác.');
+      const kept = existing.filter(item => !ownMark(item));
       kept.push(MessageReaction.parse({ messageId, emoji, actor, ...(run ? { workerId: run.snapshot.worker.id, runId: run.id, callId } : {}), createdAt: now() }));
-    } else if (active) return;
-    else if (kept.length === existing.length) return;
+      this.store.update('tasks', { ...task, messageReactions: kept });
+      return;
+    }
+    const kept = existing.filter(item => !same(item));
+    if (kept.length === existing.length) return;
     this.store.update('tasks', { ...task, messageReactions: kept });
   }
 }

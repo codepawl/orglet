@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FileText, Check, RotateCcw, Reply, FolderOpen } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
@@ -18,7 +18,7 @@ import { orglet } from '../api';
 import { Markdown } from './Markdown';
 import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
-import { MessageActions } from './MessageActions';
+import { MessageActions, MessageBadges } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
 import { ActivityGroup, LiveRun, islandBeforeStreaming, islandOf, liveRunOf, savedSteps, useRunProgress, workingWorkers } from './LiveRun';
 import { dockIsland } from './islandDock';
@@ -197,13 +197,15 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       changes: changedFilesLines(runs, run => run.id !== artifact.runId),
       proposals: proposalCards(proposals),
       // A chat answer copies and downloads from its row; a report keeps those in its viewer's toolbar.
-      actions: <MessageActions key="actions" taskId={detail.task.id} messageId={artifact.id} author={authorName} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action}
+      actions: <MessageActions key="actions" taskId={detail.task.id} messageId={artifact.id} author={authorName} reactions={detail.task.messageReactions ?? []} action={action}
         text={chat ? tMessage(artifact.report.summary) : tMessage(artifact.report.title)}
         leading={chat ? <ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [authorName])} action={action} /> : undefined} />,
     });
+    // The reactions ride on the answer's own corner, whichever shape it takes (COD-219).
+    const badges = <MessageBadges taskId={detail.task.id} messageId={artifact.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="end" />;
     return chat
-      ? <ChatReply artifact={artifact} notices={notices} />
-      : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} />;
+      ? <ChatReply artifact={artifact} notices={notices} badges={badges} />
+      : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} badges={badges} />;
   };
 
   return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
@@ -251,9 +253,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
               <Reply size={13} aria-hidden="true" />{t('Mở tin gốc: {0}', [replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')])}
             </button>}
             <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
+            {/* On the bubble's start corner: the bubble is right-aligned, so that corner faces the thread. */}
+            <MessageBadges taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="start" />
           </div>
           {/* Under the bubble, as a worker's answer carries them, so both sides of the chat act the same way. */}
-          <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.brief} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
+          <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.brief} reactions={detail.task.messageReactions ?? []} action={action} />
           {latest && workFrame && <p className="muted" role="status">{t('Mục tiêu Tí hiểu: {0}', [workFrame.goal])}</p>}
           {latest && outcomeText && <p className="muted" role="status">{outcomeText}</p>}
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
@@ -323,10 +327,10 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
  * A normal chat answer: the message as a bubble, its limitations, and the turn's notices around it in their order
  * (COD-217): what was loaded before writing above, what came out of it and the action row below.
  */
-function ChatReply({ artifact, notices }: { artifact: Artifact; notices: TurnNotices }) {
+function ChatReply({ artifact, notices, badges }: { artifact: Artifact; notices: TurnNotices; badges: ReactNode }) {
   return <div className="chat-reply">
     {notices.before}
-    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={tMessage(artifact.report.summary)} /></div>
+    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={tMessage(artifact.report.summary)} />{badges}</div>
     {artifact.report.limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
@@ -361,7 +365,7 @@ function ArtifactActions({ artifactId, about, action }: { artifactId: string; ab
  * A structured report is sent like a file a colleague attaches (user decision 2026-09-17): a quiet file card in the chat
  * that opens in a macOS-style document viewer. The Demo sample has no summary worth showing, only its limits.
  */
-function ReportView({ artifact, author, latest, busy, detail, action, showSources, notices }: { artifact: Artifact; author?: Run; latest: boolean; busy: boolean; detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; notices: TurnNotices }) {
+function ReportView({ artifact, author, latest, busy, detail, action, showSources, notices, badges }: { artifact: Artifact; author?: Run; latest: boolean; busy: boolean; detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; notices: TurnNotices; badges: ReactNode }) {
   const [open, setOpen] = useState(false);
   const report = artifact.report;
   const sample = author?.snapshot.worker.provider === 'demo';
@@ -373,7 +377,8 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   return <>
     <div className="report-turn" id={`message-${artifact.id}`} tabIndex={-1}>
       {notices.before}
-      <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+      {/* The card is a button, so the badges sit beside it in a wrapper the size of the card, not inside it. */}
+      <div className="report-card"><DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />{badges}</div>
       {notices.after}
     </div>
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>

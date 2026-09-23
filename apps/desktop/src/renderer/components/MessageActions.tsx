@@ -1,45 +1,64 @@
 import { Reply } from 'lucide-react';
-import { useEffect, useRef, type ReactNode } from 'react';
-import type { MessageReaction } from '../../shared/message-interactions';
+import type { ReactNode } from 'react';
+import type { MessageReaction, Reaction } from '../../shared/message-interactions';
 import type { Run } from '../../shared/contracts';
 import { orglet } from '../api';
 import { t } from '../i18n';
 import { Button } from './ui';
-import { reactionEmoji, reactionGroups, reactionMeanings, reactionOrder, replyToAnswer } from './messageMarks';
-import { ReactionBar, ReactionChip } from './ReactionBar';
+import { pickReaction, reactionEmoji, reactionGroups, reactionMeanings, reactionOrder, replyToAnswer, userReactionOn } from './messageMarks';
+import { ReactionBadges, ReactionBar } from './ReactionBar';
 
-export function MessageActions({ taskId, messageId, author, text, reactions, runs, action, leading }: {
+/** The bridge call and the props every reaction control shares: which message, whose marks, and how to run a command. */
+type ReactionProps = {
   taskId: string;
   messageId: string;
+  reactions: readonly MessageReaction[];
+  action: (fn: () => Promise<unknown>) => void;
+};
+
+/** Built at render, not at import: the meanings are translated, and the language can change after the module loads. */
+function reactionOptions() {
+  return reactionOrder.map(name => ({ name, emoji: reactionEmoji[name], meaning: reactionMeanings[name] }));
+}
+
+function useReactionPick({ taskId, messageId, reactions, action }: ReactionProps) {
+  const current = userReactionOn(reactions, messageId);
+  const pick = (name: Reaction) => {
+    const { emoji, active } = pickReaction(current, name);
+    action(() => orglet.call('setMessageReaction', { taskId, messageId, emoji, active }));
+  };
+  return { current, pick };
+}
+
+/**
+ * The action row under a message: reply, react and whatever the caller leads with (copy and download for an
+ * answer). The reactions themselves are not here: they sit on the bubble's corner as `MessageBadges` (COD-219).
+ */
+export function MessageActions({ taskId, messageId, author, text, reactions, action, leading }: ReactionProps & {
   author: string;
   text: string;
-  reactions: readonly MessageReaction[];
-  runs: readonly Run[];
-  action: (fn: () => Promise<unknown>) => void;
   leading?: ReactNode;
 }) {
-  const options = reactionOrder.map(name => ({ name, emoji: reactionEmoji[name], meaning: reactionMeanings[name] }));
-  const marks = reactions.filter(item => item.messageId === messageId);
-  const userMarks = marks.filter(item => item.actor === 'user');
-  const root = useRef<HTMLDivElement>(null);
-  const restoreFocus = useRef(false);
-  useEffect(() => {
-    if (!restoreFocus.current) return;
-    const next = root.current?.querySelector<HTMLButtonElement>(userMarks.length > 0 ? '.reaction-chip' : '.reaction-bar > button');
-    if (!next) return;
-    next.focus();
-    restoreFocus.current = false;
-  }, [userMarks.length]);
-  const setReaction = (emoji: MessageReaction['emoji'], active: boolean) => action(() => orglet.call('setMessageReaction', { taskId, messageId, emoji, active }));
-  return <div className="message-actions" ref={root}>
+  const { current, pick } = useReactionPick({ taskId, messageId, reactions, action });
+  return <div className="message-actions">
     {leading}
     <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(taskId, messageId, author, text)}><Reply size={15} /></Button>
-    {userMarks.length === 0 && <ReactionBar options={options} onPick={emoji => { restoreFocus.current = true; setReaction(emoji, true); }} />}
-    {reactionGroups(marks, runs).map(group => group.includesUser
-      ? <ReactionChip key={group.emoji} options={options} picked={group.emoji} count={group.count} label={group.label}
-        onClear={() => { restoreFocus.current = true; setReaction(group.emoji, false); }} />
-      : <span key={group.emoji} className="message-reaction" title={group.label} aria-label={group.label}>
-        {reactionEmoji[group.emoji]}{group.count > 1 && <span>{group.count}</span>}
-      </span>)}
+    <ReactionBar options={reactionOptions()} picked={current} onPick={pick} />
   </div>;
+}
+
+/**
+ * The reactions one message wears, the person's and the workers' together, anchored to the bubble that renders
+ * it. `runs` name the workers behind their marks.
+ */
+export function MessageBadges({ taskId, messageId, reactions, runs, action, align }: ReactionProps & {
+  runs: readonly Run[];
+  align: 'start' | 'end' | 'inline';
+}) {
+  const { pick } = useReactionPick({ taskId, messageId, reactions, action });
+  const marks = reactions.filter(item => item.messageId === messageId);
+  const badges = reactionGroups(marks, runs).map(group => ({
+    name: group.emoji, emoji: reactionEmoji[group.emoji], count: group.count, mine: group.includesUser, label: group.label,
+  }));
+  return <ReactionBadges badges={badges} align={align} onPick={pick} />;
 }
