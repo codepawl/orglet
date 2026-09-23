@@ -652,31 +652,27 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .notice-banner>svg { color:var(--muted); flex-shrink:0; margin-top:3px; }
 .notice-banner>div { flex:1; min-width:0; }
 .notice-banner .actions { margin-top:8px; }
-.startup,.loading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:40px; flex:1; }
-.startup { height:100dvh; gap:22px; text-align:center; }
-/* Opening the workspace is the one moment the app has nothing to show, so the logo does the waiting: the 3D orglet
-   (Startup.tsx) in the brand mark's monochrome, hopping in, turning after the pointer and smiling at a tap. Its
-   canvas is out of layout, so the box is only the drawing and the copy sits close under the body. The copy rises
-   in once, like a message; reduced motion cuts every animation on this screen through the global rule and the
-   stage keeps the face still. */
-.startup-face { position:relative; width:80px; height:80px; color:var(--text); --mascot-ink:var(--bg); }
-.startup-copy { display:flex; flex-direction:column; align-items:center; gap:10px; animation:turn-in var(--motion-base) var(--ease-out); }
-.startup h1 { margin:0; font-size:1.5rem; font-weight:400; letter-spacing:-.3px; line-height:1.2; }
-.startup p { margin:0; max-width:40ch; color:var(--muted); text-wrap:balance; }
-.startup .button { margin-top:6px; }
+.loading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:40px; flex:1; }
+/* Opening the workspace: the shell is already drawn (Startup.tsx, COD-218), so the wait sits where the chat's face
+   will be: the 3D orglet in the brand mark's monochrome, hopping in, turning after the pointer and smiling at a
+   tap. Its canvas is out of layout, so the box is only the drawing and the copy sits close under the body. The
+   copy rises in once, like a message; reduced motion cuts every animation on this screen through the global rule
+   and the stage keeps the face still. The sidebar shows the shape of its rows (`.row-shape`, one face and one name
+   at a row's own height) until the workspace says what they are. */
+.startup-face { position:relative; width:80px; height:80px; margin-bottom:8px; color:var(--text); --mascot-ink:var(--bg); }
+.startup-copy { display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:22px; text-align:center; animation:turn-in var(--motion-base) var(--ease-out); }
+.startup-copy .welcome { margin-bottom:0; }
+.startup-copy p { margin:0; max-width:40ch; color:var(--muted); text-wrap:balance; }
+.startup-copy .button { margin-top:6px; }
+.row-shape { display:flex; align-items:center; gap:8px; padding:7px 10px 7px 12px; font-size:13px; }
+.row-shape-face { width:22px; height:22px; border-radius:6px; flex-shrink:0; }
 /* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */
 .thread-skeleton { display:flex; flex-direction:column; gap:26px; width:100%; max-width:768px; margin:0 auto; padding:28px var(--page-x); }
-.thread-skeleton span { display:block; border-radius:8px; background:var(--surface); animation:skeleton-pulse 1.6s ease-in-out infinite; }
 .thread-skeleton-ask { display:flex; justify-content:flex-end; }
-.thread-skeleton-ask span { width:min(58%,360px); height:44px; border-radius:16px; }
+.thread-skeleton-bubble { width:min(58%,360px); height:44px; border-radius:16px; }
 .thread-skeleton-reply { display:flex; gap:11px; }
-.thread-skeleton-reply > div { flex:1; display:flex; flex-direction:column; gap:9px; }
-.thread-skeleton-reply > div span:nth-child(1) { width:92%; height:13px; }
-.thread-skeleton-reply > div span:nth-child(2) { width:78%; height:13px; animation-delay:.18s; }
-.thread-skeleton-reply > div span:nth-child(3) { width:46%; height:13px; animation-delay:.36s; }
-.thread-skeleton-face { width:26px; height:26px; border-radius:50%; flex-shrink:0; }
-@keyframes skeleton-pulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
-@media(prefers-reduced-motion:reduce) { .thread-skeleton span { animation-duration:4.5s; } }
+.thread-skeleton-reply > div { flex:1; display:flex; flex-direction:column; gap:4px; }
+.thread-skeleton-face { width:26px; height:26px; flex-shrink:0; }
 /* Former side panels open as centred dialogs, matching Settings. */
 /* Dialogs are centred with auto margins, not translate(-50%,-50%): a transform left them on half pixels whenever their height was odd, which blurred hairlines and made outlined and filled buttons look out of line. */
 /* Every panel is the same size, whatever it holds, so switching panels or a panel's tabs never makes it jump (user, 2026-09-23). */
@@ -806,6 +802,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .setting-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
 .setting-title { font-size:14px; }
 .setting-description { font-size:13px; color:var(--muted); line-height:1.45; }
+/* A quiet word beside a title or a button while something is fetched again; never a spinner (COD-218). */
+.setting-checking { margin-left:8px; font-weight:400; }
+/* Both labels share one grid cell, so a button keeps the width of the longer one and nothing beside it reflows. */
+.steady-label { display:inline-grid; }
+.steady-label > span { grid-area:1 / 1; }
+button:not([data-checking]) .steady-label > span:last-child, button[data-checking] .steady-label > span:first-child { visibility:hidden; }
+.release-shape { margin-top:4px; }
+.skill-review-shape { height:8em; margin-top:10px; }
 .setting-control { display:flex; align-items:center; gap:8px; flex-shrink:0; }
 .setting-control .button { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; }
 /* Every select and number field in a settings row shares one width, so the right edge reads as one column. */
@@ -1000,6 +1004,10 @@ button.notice-body { cursor:pointer; }
 .source-viewer .doc-scroll { padding:20px 24px 40px; }
 .source-stage { display:flex; flex-direction:column; gap:12px; max-width:880px; margin:0 auto; min-width:0; }
 .source-stage>.preview-state { justify-content:center; padding:48px 0; font-size:14px; }
+/* The shape of a source or a diff on its way, at the width the content will take. */
+.source-stage>.source-shape,.source-stage>.diff-shape { width:100%; max-width:720px; padding:24px 0; font-size:14px; }
+.source-shape-media { height:240px; }
+.diff-shape-lines { margin-top:14px; }
 .source-viewer .source-preview,.source-viewer .preview-table-scroll,.source-viewer .media-preview,.source-viewer .pdf-pages { background:var(--bg); max-height:none; overflow:visible; }
 .source-viewer .preview-table-scroll { overflow-x:auto; }
 .source-viewer .preview-table-scroll th { background:var(--bg); }

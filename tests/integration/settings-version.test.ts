@@ -9,9 +9,12 @@ import { version } from '../../package.json';
  */
 it('shows the version the main process reports, never a number written into the renderer', () => {
   const about = readFileSync('apps/desktop/src/renderer/components/AboutSettings.tsx', 'utf8');
+  const caches = readFileSync('apps/desktop/src/renderer/caches.ts', 'utf8');
   const settings = readFileSync('apps/desktop/src/renderer/components/SettingsDialog.tsx', 'utf8');
   expect(about).not.toMatch(/Orglet 0\.\d/);
-  expect(about).toContain('orglet.about()');
+  // The tab reads the build through the session cache, which asks the main process (COD-218).
+  expect(about).toContain('useCached(aboutInfo');
+  expect(caches).toContain('orglet.about()');
   expect(settings).not.toContain('package.json');
   expect(version).toMatch(/^\d+\.\d+\.\d+$/);
 });

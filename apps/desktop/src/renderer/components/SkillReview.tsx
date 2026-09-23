@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import type { Skill } from '../../shared/contracts';
-import type { PackageReview } from '../../shared/skill-package';
 import { skillSummary } from '../../shared/skill-summary';
 import { Button } from './ui';
 import { FileText, FolderInput, Plus, Sparkles } from 'lucide-react';
@@ -9,7 +8,9 @@ import { toast } from './toast';
 import { t } from '../i18n';
 import { orglet } from '../api';
 import { Checkbox } from './Checkbox';
-import { Textarea } from '@codepawl/orglet-ui';
+import { Skeleton, SkeletonGroup, SkeletonText, Textarea } from '@codepawl/orglet-ui';
+import { skillReviews } from '../caches';
+import { dwellHandlers, useCached } from '../prefetch';
 
 /** Import and create actions for the Skills tab; they sit on the library's tab row. */
 export function SkillLibraryActions({ onOpen }: { onOpen: (skill?: Skill) => void }) {
@@ -28,7 +29,8 @@ export function SkillLibrary({ skills, onOpen }: { skills: Skill[]; onOpen: (ski
   return <div className="form">
     {skills.map(skill => {
       const summary = skillSummary(skill.content);
-      return <Button key={skill.id} variant="outline" className="library-item" onClick={() => onOpen(skill)}>
+      // An imported package is read from disk when its review opens; resting on the row reads it ahead of the click.
+      return <Button key={skill.id} variant="outline" className="library-item" onClick={() => onOpen(skill)} {...dwellHandlers(skill.package ? resting => skillReviews.dwell(skillReviewKey(skill), resting) : undefined)}>
         <Sparkles size={18} aria-hidden="true" className="library-icon" />
         <span className="library-text">
           <span className="library-title">{skill.name}</span>
@@ -41,19 +43,25 @@ export function SkillLibrary({ skills, onOpen }: { skills: Skill[]; onOpen: (ski
   </div>;
 }
 
+/** The key a package's review is kept under: the hash pins it to one immutable package. */
+export const skillReviewKey = (skill: Skill) => `${skill.id}:${skill.package?.hash ?? ''}`;
+
 export function SkillReview({ skill, done }: { skill: Skill; done: () => void }) {
-  const [review, setReview] = useState<PackageReview>();
+  // Kept for the session (COD-218): the Library row resting under the pointer reads the package ahead of the click.
+  const review = useCached(skillReviews, skillReviewKey(skill));
   const [path, setPath] = useState('SKILL.md');
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   useEffect(() => {
+    if (review) return;
     let active = true;
-    void orglet.call('inspectSkill', { id: skill.id }).then(result => { if (active) setReview(result); }).catch(err => { if (active) setError((err as Error).message); });
+    skillReviews.read(skillReviewKey(skill)).catch(err => { if (active) setError((err as Error).message); });
     return () => { active = false; };
-  }, [skill.id]);
+  }, [skill, review]);
   const file = review?.files.find(item => item.path === path);
   return <div className="form">
     <h3>{skill.name}</h3>
+    {!review && !error && <SkeletonGroup label={t('Đang đọc gói skill…')}><SkeletonText lines={4} /><Skeleton shape="block" className="skill-review-shape" /></SkeletonGroup>}
     {review && <>
       <p>{review.metadata.description}</p>
       {review.metadata.compatibility && <p>{t('Yêu cầu môi trường: {0}', [review.metadata.compatibility])}</p>}

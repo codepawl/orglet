@@ -24,7 +24,7 @@ export function relativeDay(iso: string, now = new Date()) {
 // Accent- and case-insensitive so "danh gia" finds "đánh giá".
 const fold = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLocaleLowerCase();
 
-export function SearchDialog({ open, onClose, tasks, teams, onOpenTask }: { open: boolean; onClose: () => void; tasks: Task[]; teams: Team[]; onOpenTask: (id: string) => void }) {
+export function SearchDialog({ open, onClose, tasks, teams, onOpenTask, onDwellTask }: { open: boolean; onClose: () => void; tasks: Task[]; teams: Team[]; onOpenTask: (id: string) => void; /** The result Enter or a click would open is resting under the pointer or the arrow keys, or no longer is (COD-218). */ onDwellTask?: (id: string, resting: boolean) => void }) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const list = useRef<HTMLUListElement>(null);
@@ -35,6 +35,13 @@ export function SearchDialog({ open, onClose, tasks, teams, onOpenTask }: { open
   useEffect(() => { if (!open) { setQuery(''); setActive(0); } }, [open]);
   useEffect(() => { setActive(0); }, [query]);
   useEffect(() => { list.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' }); }, [active]);
+  // The active result is the one about to open, whichever way it became active, so it is fetched ahead of Enter.
+  const activeId = open ? results[active]?.id : undefined;
+  useEffect(() => {
+    if (!activeId || !onDwellTask) return;
+    onDwellTask(activeId, true);
+    return () => onDwellTask(activeId, false);
+  }, [activeId, onDwellTask]);
   const choose = (index: number) => { const task = results[index]; if (!task) return; onClose(); onOpenTask(task.id); };
 
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>

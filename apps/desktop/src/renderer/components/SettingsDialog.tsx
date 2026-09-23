@@ -6,7 +6,7 @@ import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
-import { SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../shared/harness';
+import { harnessCatalog, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../shared/harness';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, type FontRole } from '../../shared/fonts';
 import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
@@ -27,6 +27,9 @@ import { AboutSettings } from './AboutSettings';
 import { t, tMessage, translated } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
+import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
+import { dwellAbout, modelLists } from '../caches';
+import { dwellHandlers } from '../prefetch';
 
 /** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
 const SAVED_KEY_MASK = '••••••••••••••••';
@@ -261,10 +264,36 @@ function CommandCopy({ command, label }: { command: string; label: string }) {
 }
 
 
-type Props = { open: boolean; tab: SettingsTab; onTab: (tab: SettingsTab) => void; onClose: () => void; workspace: Workspace; connections: Connections; onConnections: (next: Connections) => void; harnesses: HarnessInfo[]; onHarnesses: (next: HarnessInfo[]) => void };
+/** `harnesses` is undefined until the first detection lands, which runs each CLI and takes seconds on a cold start. */
+type Props = { open: boolean; tab: SettingsTab; onTab: (tab: SettingsTab) => void; onClose: () => void; workspace: Workspace; connections: Connections; onConnections: (next: Connections) => void; harnesses: HarnessInfo[] | undefined; onHarnesses: (next: HarnessInfo[]) => void };
+
+/** The shape of the three harness rows before detection has said what they are: never "not found" while it is still looking. */
+function HarnessRowShapes() {
+  return <SkeletonGroup label={t('Đang dò harness trên máy…')}>
+    {harnessCatalog.map((id, index) => <div key={id} className="setting-row harness-row">
+      <ProviderMark provider={id} />
+      <div className="setting-text">
+        <Skeleton width="38%" delay={index * 0.06} />
+        <Skeleton width="72%" delay={index * 0.06 + 0.04} />
+      </div>
+    </div>)}
+  </SkeletonGroup>;
+}
 
 export function SettingsDialog({ open, tab, onTab, onClose, workspace, connections, onConnections, harnesses, onHarnesses }: Props) {
   const [busy, setBusy] = useState(false);
+  // Dò lại keeps the last rows on screen and says it is looking again beside the button, rather than clearing them.
+  const [detecting, setDetecting] = useState(false);
+  const detectAgain = () => void act(async () => {
+    setDetecting(true);
+    try { onHarnesses(await orglet.call('harnesses', { refresh: true })); }
+    finally { setDetecting(false); }
+    // The core dropped the harness model lists with the detection; the session copies follow.
+    modelLists.invalidate();
+    return t('Đã dò lại harness');
+  }, t('Harness trên máy'));
+  /** A connection that changed makes the session's model lists for it wrong; the core already dropped its own. */
+  const changeConnections = (next: Connections) => { modelLists.invalidate(); onConnections(next); };
   const [keyDrafts, setKeyDrafts] = useState<Partial<Record<ApiProvider, string>>>({});
   /** Providers the user opened for editing before a key is saved. Saved connections stay “on” from `connections`. */
   const [editing, setEditing] = useState<Partial<Record<ApiProvider, boolean>>>({});
@@ -332,10 +361,14 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             const next = tabs[(index + (event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
             onTab(next.id); document.getElementById(`settings-tab-${next.id}`)?.focus();
           }}>
-            {tabs.map(item => <button key={item.id} id={`settings-tab-${item.id}`} type="button" role="tab" aria-selected={tab === item.id} aria-controls="settings-panel" tabIndex={tab === item.id ? 0 : -1} onClick={() => onTab(item.id)}>{item.icon}<span>{t(item.label)}</span></button>)}
+            {/* The About tab reads the build, the updater and the release list; resting on its tab fetches them ahead of the click. */}
+            {tabs.map(item => <button key={item.id} id={`settings-tab-${item.id}`} type="button" role="tab" aria-selected={tab === item.id} aria-controls="settings-panel" tabIndex={tab === item.id ? 0 : -1} onClick={() => onTab(item.id)} {...(item.id === 'about' ? dwellHandlers(dwellAbout) : {})}>{item.icon}<span>{t(item.label)}</span></button>)}
           </nav>
           <section className="settings-panel" id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
-            <PanelHeading title={t(current.label)} description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}>{tab === 'harness' && <Button disabled={busy} onClick={() => void act(async () => { onHarnesses(await orglet.call('harnesses', { refresh: true })); return t('Đã dò lại harness'); }, t('Harness trên máy'))}><RefreshCw size={13} />{t('Dò lại')}</Button>}</PanelHeading>
+            <PanelHeading title={t(current.label)} description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}>{tab === 'harness' && <>
+              {/* The button says it is checking instead of a line beside it, so the heading never reflows while it runs. */}
+              <Button disabled={busy || harnesses === undefined} onClick={detectAgain} aria-live="polite" data-checking={detecting || undefined}><RefreshCw size={13} /><span className="steady-label"><span aria-hidden={detecting}>{t('Dò lại')}</span><span aria-hidden={!detecting}>{t('Đang dò lại…')}</span></span></Button>
+            </>}</PanelHeading>
 
             {tab === 'general' && <>
               <Row title={t('Ngôn ngữ')} description={t('Áp dụng cho toàn bộ giao diện và thông báo.')}>
@@ -421,7 +454,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                     <Switch checked={active} disabled={busy} labelledBy={titleId} onChange={on => {
                       if (local) {
                         void act(async () => {
-                          onConnections(on ? await orglet.connect('ollama') : await orglet.disconnect('ollama'));
+                          changeConnections(on ? await orglet.connect('ollama') : await orglet.disconnect('ollama'));
                           return on ? t('Đã bật Ollama') : t('Đã ngắt {0}', [name]);
                         }, name);
                         return;
@@ -435,7 +468,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       setReplacing(current => ({ ...current, [provider]: false }));
                       if (connections[provider]) {
                         void act(async () => {
-                          onConnections(await orglet.disconnect(provider));
+                          changeConnections(await orglet.disconnect(provider));
                           return t('Đã ngắt {0}', [name]);
                         }, name);
                       }
@@ -448,7 +481,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       const key = draft.trim();
                       if (!key || key === SAVED_KEY_MASK) return;
                       void act(async () => {
-                        onConnections(await orglet.connect(provider, key));
+                        changeConnections(await orglet.connect(provider, key));
                         setKeyDrafts(current => ({ ...current, [provider]: '' }));
                         setEditing(current => ({ ...current, [provider]: false }));
                         setReplacing(current => ({ ...current, [provider]: false }));
@@ -457,7 +490,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                     }}>
                       <Button type="button" size="icon" variant="ghost" className="setting-key-file" disabled={busy} aria-label={t('Từ tệp')} onClick={() => void act(async () => {
                         const next = await orglet.connect(provider);
-                        onConnections(next);
+                        changeConnections(next);
                         if (next[provider]) {
                           setKeyDrafts(current => ({ ...current, [provider]: '' }));
                           setEditing(current => ({ ...current, [provider]: false }));
@@ -474,7 +507,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
 
             {tab === 'harness' && <>
               <div role="region" aria-label={t('Harness trên máy')}>
-                {harnesses.map(item => {
+                {harnesses === undefined && <HarnessRowShapes />}
+                {(harnesses ?? []).map(item => {
                   const pill = statusPill(item);
                   const showLogin = item.status !== 'signed_in';
                   return <div key={item.id} className="setting-row harness-row">
@@ -510,7 +544,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                     </div>
                   </div>;
                 })}
-                {!harnesses.length && <Row title={t('Chưa tìm thấy Claude Code, Codex hoặc Cursor Agent trên máy này.')} description={t('Cài một harness rồi bấm Dò lại.')} />}
+                {harnesses !== undefined && !harnesses.length && <Row title={t('Chưa tìm thấy Claude Code, Codex hoặc Cursor Agent trên máy này.')} description={t('Cài một harness rồi bấm Dò lại.')} />}
               </div>
             </>}
 

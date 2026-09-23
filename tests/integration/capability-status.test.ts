@@ -71,7 +71,8 @@ it('renders a blocker as a disabled control with one reason, never as a third po
   expect(mixed).not.toMatch(/role="switch"[^>]*disabled=""/);
   const loading = render({ grant: undefined });
   expect(loading).toMatch(/role="combobox"[^>]*disabled=""/);
-  expect(loading).toContain('Loading permissions…');
+  // A grant still on its way is the shape of the folder name, not a sentence and never a spinner (COD-218).
+  expect(loading).toMatch(/permission-folder-pending"><span aria-hidden="true" class="org-skeleton org-skeleton-line"/);
   expect(loading).not.toMatch(/role="switch"[^>]*disabled=""/);
   const locked = render({ locked: 'Save first.', taskId: undefined, grant: null });
   expect(locked).toContain('Save first.');

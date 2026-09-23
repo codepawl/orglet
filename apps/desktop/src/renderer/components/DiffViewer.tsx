@@ -7,6 +7,9 @@ import type { InfoTipRow } from './InfoTip';
 import { languageOf, tokenizeLines, type Language } from './highlight';
 import { currentLocale, t, tMessage, translated } from '../i18n';
 import { orglet } from '../api';
+import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawl/orglet-ui';
+import { workspaceDiffs } from '../caches';
+import { useCached } from '../prefetch';
 
 /*
  * What a run changed in its private working copy (COD-163), read the way a code review reads a patch: every changed
@@ -113,19 +116,30 @@ function HunkView({ hunk, language }: { hunk: DiffHunk; language: Language }) {
   </pre>;
 }
 
-type Loaded = { loading: boolean; diff?: WorkspaceDiff; error?: string };
+/** The shape of a diff on its way: a few file rows, then lines of code. */
+function DiffShape() {
+  return <SkeletonGroup label={t('Đang mở…')} className="diff-shape">
+    <Skeleton width="34%" /><Skeleton width="28%" delay={0.06} />
+    <SkeletonText lines={6} className="diff-shape-lines" />
+  </SkeletonGroup>;
+}
 
-/** The viewer wired to the core for one run of a chat: the diff comes through the bridge, never from the file system. */
+/**
+ * The viewer wired to the core for one run of a chat: the diff comes through the bridge, never from the file system.
+ * A diff already seen this session is drawn at once (COD-218); the kept copy goes when the workspace changes.
+ */
 export function DiffDialog({ taskId, run, onClose }: { taskId: string; run: Run; onClose: () => void }) {
-  const [loaded, setLoaded] = useState<Loaded>({ loading: true });
+  const key = `${taskId}:${run.id}`;
+  const diff = useCached(workspaceDiffs, key);
+  const [error, setError] = useState<string>();
   useEffect(() => {
+    if (diff) return;
     let active = true;
-    setLoaded({ loading: true });
-    void orglet.call('workspaceDiff', { taskId, runId: run.id })
-      .then(diff => { if (active) setLoaded({ loading: false, diff }); })
-      .catch(err => { if (active) setLoaded({ loading: false, error: (err as Error).message }); });
+    setError(undefined);
+    workspaceDiffs.read(key).catch(err => { if (active) setError((err as Error).message); });
     return () => { active = false; };
-  }, [taskId, run.id]);
+  }, [key, diff]);
+  const loaded = diff ? { loading: false, diff } : error ? { loading: false, error } : { loading: true };
   const workerName = run.snapshot.worker.name;
   const info: InfoTipRow[] = [
     { label: t('So với'), value: t('Bản chụp thư mục lúc lần chạy này bắt đầu') },
@@ -135,7 +149,7 @@ export function DiffDialog({ taskId, run, onClose }: { taskId: string; run: Run;
   if (loaded.loading || !loaded.diff) {
     return <SourceViewer open onClose={onClose} name={t('Thay đổi của {0}', [workerName])} meta={loaded.loading ? '' : t('Không mở được')}
       icon={FileDiff} info={info} infoLabel={t('Thông tin về thay đổi này')} menuLabel={t('Tùy chọn')}>
-      <p className="preview-state">{loaded.loading ? t('Đang mở…') : tMessage(loaded.error ?? '')}</p>
+      {loaded.loading ? <DiffShape /> : <p className="preview-state">{tMessage(loaded.error ?? '')}</p>}
     </SourceViewer>;
   }
   return <DiffViewer diff={loaded.diff} workerName={workerName} info={info} onClose={onClose} />;

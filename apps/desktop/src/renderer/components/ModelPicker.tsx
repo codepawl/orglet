@@ -10,7 +10,9 @@ import { Button, FieldLabel } from './ui';
 import { ProviderMark } from './ProviderMark';
 import { modelRunnable, openCodeModelIssue } from './openCodeModel';
 import { isOpenCodePlan } from '../../shared/opencode';
-import { Input } from '@codepawl/orglet-ui';
+import { Input, Skeleton } from '@codepawl/orglet-ui';
+import { modelLists } from '../caches';
+import { useCached } from '../prefetch';
 
 function deprecationChipLabel(sunsetAt?: string) {
   const day = formatSunsetDay(sunsetAt, currentLocale());
@@ -42,7 +44,11 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   flash?: number;
 }) {
   const id = useId();
-  const [list, setList] = useState<ModelListResult>();
+  // The list is kept for the session (COD-218): a worker row resting under the pointer fetches it, and switching
+  // provider back shows the earlier list at once. The core refreshes its own copy in the background when old.
+  const kept = useCached(modelLists, provider);
+  const [failed, setFailed] = useState<{ provider: string; list: ModelListResult }>();
+  const list = kept ?? (failed?.provider === provider ? failed.list : undefined);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -58,24 +64,25 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   const modelIssue = openCodeModelIssue(provider, value);
   const failOpen = t('Gõ ID model. Danh sách chưa tải được.');
 
+  /** Asks the core again; `refresh` makes it fetch from the provider rather than answer from its own copy. */
   const load = async (refresh = false) => {
     setBusy(true);
     try {
-      setList(await orglet.call('modelList', { provider, ...(refresh ? { refresh: true } : {}) }));
+      modelLists.set(provider, await orglet.call('modelList', { provider, ...(refresh ? { refresh: true } : {}) }));
     } catch {
-      setList(previous => previous ? { ...previous, error: previous.error ?? failOpen, customIdOk: true } : emptyList(failOpen));
+      setFailed({ provider, list: list ? { ...list, error: list.error ?? failOpen, customIdOk: true } : emptyList(failOpen) });
     } finally { setBusy(false); }
   };
 
+  // Nothing kept and nothing on its way means the first read failed: say so instead of showing the shape forever.
   useEffect(() => {
+    if (kept || failed?.provider === provider) return;
     let cancelled = false;
-    setList(undefined);
-    setBusy(true);
-    orglet.call('modelList', { provider }).then(result => { if (!cancelled) setList(result); }).catch(() => {
-      if (!cancelled) setList(emptyList(failOpen));
-    }).finally(() => { if (!cancelled) setBusy(false); });
+    modelLists.read(provider).catch(() => { if (!cancelled) setFailed({ provider, list: emptyList(failOpen) }); });
     return () => { cancelled = true; };
-  }, [provider, failOpen]);
+  }, [provider, kept, failed, failOpen]);
+  /** Nothing kept for this provider yet and no failure to report: the list is on its way. */
+  const pending = !list && failed?.provider !== provider;
 
   const close = () => { setOpen(false); setPlacement(undefined); };
   const openList = () => { setActive(Math.max(0, options.findIndex(entry => entry.id === value))); setOpen(true); };
@@ -137,7 +144,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   const defaultNote = isOpenCodePlan(provider)
     ? t('Chọn model trong gói hoặc gõ ID. Model ghi Chưa hỗ trợ dùng endpoint Orglet chưa gọi được.')
     : t('Gõ ID model hoặc chọn từ danh sách. Tên mặc định chỉ là gợi ý.');
-  const note = busy && !list ? t('Đang tải danh sách model…')
+  const note = pending ? <Skeleton width="60%" />
     : modelIssue || list?.error || (!models.length && !busy ? failOpen : undefined)
     || (list?.stale ? t('Danh sách model từ lần tải trước.') : defaultNote);
   const selected = pickerListedModel(models, value, hint);
@@ -174,7 +181,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
         }} />
       <ChevronDown size={16} className={`model-picker-chevron${open ? ' open' : ''}`} aria-hidden="true" />
       </div>
-      <Button type="button" size="icon" className="model-picker-refresh" disabled={busy} aria-label={t('Làm mới danh sách model')} title={t('Làm mới danh sách model')} onClick={() => void load(true)}>
+      <Button type="button" size="icon" className="model-picker-refresh" disabled={busy || pending} aria-label={t('Làm mới danh sách model')} title={t('Làm mới danh sách model')} onClick={() => void load(true)}>
         <RefreshCw size={13} className={busy ? 'spin' : undefined} />
       </Button>
     </div>
