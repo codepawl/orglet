@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, realpath, rm } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { WorkspaceManifest } from '../../shared/workspace-tools';
@@ -70,6 +70,11 @@ export async function diffWorkspaceCopy(options: WorkspaceDiffOptions): Promise<
   }
 }
 
+/** The path with symlinks followed, so macOS's /var and /private/var name the same place; as given when it is missing. */
+async function canonicalPath(path: string): Promise<string> {
+  return realpath(path).catch(() => resolve(path));
+}
+
 /**
  * The linked worktree's Git directory inside the bare repository, checked against Git's own back-reference so a
  * `.git` file rewritten inside the copy can never point the diff at another repository.
@@ -77,8 +82,8 @@ export async function diffWorkspaceCopy(options: WorkspaceDiffOptions): Promise<
 async function linkedWorktreeDirectory(repository: string, worktree: string): Promise<string> {
   const gitDirectory = join(repository, 'worktrees', basename(worktree));
   const backReference = await readFile(join(gitDirectory, 'gitdir'), 'utf8').catch(() => '');
-  const expected = resolve(join(worktree, '.git'));
-  if (resolve(backReference.trim()) !== expected) throw new Error('Bản làm việc này không có bản gốc để so sánh.');
+  const expected = await canonicalPath(join(worktree, '.git'));
+  if (!backReference.trim() || await canonicalPath(backReference.trim()) !== expected) throw new Error('Bản làm việc này không có bản gốc để so sánh.');
   return gitDirectory;
 }
 
