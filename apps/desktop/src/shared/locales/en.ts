@@ -1378,6 +1378,8 @@ export const en: Dictionary = {
   'Template hội': 'Crew template',
   'Mới': 'New',
   'Thông báo, {0} chưa đọc': 'Notifications, {0} unread',
+  'Lịch chạy, {0} cần xem': 'Schedules, {0} to review',
+  'Thư viện, {0} cần duyệt': 'Library, {0} to review',
   'Không có tệp hoặc thư mục: {0}': 'No such file or folder: {0}',
   'Đã rút gọn các trang web đọc trước đó để vừa giới hạn context.': 'Shortened the web pages read earlier to fit the context limit.',
   'Không đọc được trang web: {0}': 'Could not read the web page: {0}',

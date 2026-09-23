@@ -40,7 +40,7 @@ try {
   await app.evaluate(({ dialog }, path) => { globalThis.originalSave = dialog.showSaveDialog; globalThis.originalOpen = dialog.showOpenDialog; dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, templatePath);
   assert.equal(await page.evaluate(id => window.orglet.exportTemplate(id), team.id), true);
   const imported = await page.evaluate(() => window.orglet.importTemplate());
-  await page.getByRole('button', { name: /Thư viện\s*Cần duyệt/ }).waitFor();
+  await page.getByRole('button', { name: /^Thư viện, \d+ cần duyệt$/ }).waitFor();
   await page.getByRole('button', { name: /Thư viện/ }).click();
   await page.getByRole('region', { name: 'Chờ duyệt' }).getByRole('button', { name: /Evidence limits/ }).click();
   // The header names where the note came from and still waits for review (COD-203).
@@ -51,7 +51,7 @@ try {
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   const approved = (await workspace(page)).knowledge.find(item => item.scope.type === 'team' && item.scope.id === imported.id);
   assert.equal(approved.status, 'approved'); assert.equal(approved.revision, 2);
-  assert.equal(await page.getByRole('button', { name: /Thư viện\s*Cần duyệt/ }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: /^Thư viện, \d+ cần duyệt$/ }).count(), 0);
 
   // Keyword search reaches FTS in core.
   await page.getByRole('button', { name: /Thư viện/ }).click();
