@@ -1826,6 +1826,10 @@ export const en: Dictionary = {
   'Đề xuất thay đổi trong app bị từ chối: {0}': 'App-change proposal refused: {0}',
   'Đã ghi một đề xuất thay đổi trong app; chờ bạn áp dụng.': 'Stored one proposed app change; waiting for you to apply it.',
   'Không xử lý được đề xuất thay đổi trong app: {0}': 'Could not settle the proposed app changes: {0}',
+  'Đề xuất thay đổi trong app thứ {0} ({1}) bị từ chối: {2}': 'App-change proposal {0} ({1}) refused: {2}',
+  'Câu trả lời kèm {0} đề xuất thay đổi trong app nhưng lượt chạy này không được phép đề xuất; đã bỏ qua.': 'The answer carried {0} proposed app changes, but this run may not propose any; they were skipped.',
+  'Mỗi đề xuất thay đổi trong app cần tool và arguments.': 'Each proposed app change needs tool and arguments.',
+  'Không có tool đề xuất nào tên {0}.': 'No proposal tool is named {0}.',
 };
 
 // British English differs from the US text only in these spellings, so it is derived instead of duplicated.

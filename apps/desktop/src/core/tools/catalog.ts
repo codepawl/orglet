@@ -15,7 +15,7 @@ import { ReadWebUrl, SearchWeb } from '../../shared/web-tools';
 import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
 import { SetMessageReaction } from '../../shared/message-interactions';
-import { isProposalTool, ProposeCrew, ProposeCrewTemplate, ProposeOrglet, ProposeSchedule, ProposeSettings, ProposeSkill } from '../../shared/app-proposals';
+import { isProposalTool, ProposeCrew, ProposeCrewTemplate, ProposeOrglet, ProposeSchedule, ProposeSettings, ProposeSkill, ProposedAppChanges } from '../../shared/app-proposals';
 const ModelTeamPlan = TeamPlan.extend({ assignments: z.array(PlanAssignment.required({
   expectedOutput: true, dependsOn: true, writeResources: true,
 })).min(1).max(4) });
@@ -47,7 +47,18 @@ const ChatReplySchema = z.object({ message: z.string().min(1).max(16000), title:
 export const ChatReply = ChatReplySchema.extend({ title: ChatTitle.default(null), knowledgeProposals: Proposals.default([]) });
 // Local harnesses return one JSON answer: the message, plus a report only when one was asked for.
 export const HarnessAnswerSchema = z.object({ message: z.string().min(1).max(16000), title: ChatTitle, report: ModelReportSchema.nullable() }).strict();
-export const HarnessAnswer = z.object({ message: z.string().min(1).max(16000), title: ChatTitle.default(null), report: z.unknown().nullable() });
+export const HarnessAnswer = z.object({ message: z.string().min(1).max(16000), title: ChatTitle.default(null), report: z.unknown().nullable(), appProposals: z.array(z.unknown()).nullable().optional() });
+/** Whether this run may propose app changes: the same rules as the tool loop, read off the tools it would be offered. */
+export const proposalsAllowed = (run: Run, task: Task) => toolsFor(run, task).some(tool => tool.type === 'function' && isProposalTool(tool.function.name));
+/**
+ * The one-shot answer schema a CLI harness fills in (COD-206). The propose_* tools only exist in the core tool loop,
+ * so a run that may propose gets an optional `appProposals` array of `{ tool, arguments }` items instead, each item
+ * the exact argument object of that tool.
+ */
+export function harnessAnswerSchema(run: Run, withProposals: boolean) {
+  const answer = run.stage === 'member' ? HarnessAnswerSchema.extend({ report: MemberReportSchema }) : HarnessAnswerSchema;
+  return withProposals ? answer.extend({ appProposals: ProposedAppChanges.optional() }) : answer;
+}
 export const ReadArgs = z.object({ sourceId: z.string().uuid() }).strict();
 export const SkillResourceArgs = z.object({ path: z.string().min(1).max(240) }).strict();
 type ToolDefinition = {
