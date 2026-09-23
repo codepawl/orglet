@@ -1941,8 +1941,28 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* The timer on its own, when a live run has no steps or notes to fold: the folded control's place and colour, no chevron. */
 .activity-elapsed-plain { display:flex; align-items:center; min-height:28px; padding-left:4px; font-size:13px; color:var(--muted); }
 .activity-notes { margin:0; max-height:220px; overflow-y:auto; line-height:1.6; white-space:pre-wrap; }
-.finished-activity { margin:0 0 6px 29px; }
+.finished-activity { display:flex; flex-direction:column; align-items:flex-start; gap:2px; margin:0 0 6px 29px; }
 @media(max-width:1000px) { .finished-activity { margin-left:-6px; } }
+/* What a run changed in its working copy (COD-163): the line under the step line opens the viewer, where the files are
+   listed with their counts, then stacked with their hunks. Files are told apart by spacing and their heading, never by
+   a rule; a hunk reuses the source-preview surface with the snapshot's and the copy's numbers side by side, a sign
+   column, and CodePreview's removed/added tints. */
+.changed-files svg { flex-shrink:0; }
+.diff-view { display:flex; flex-direction:column; gap:20px; }
+.diff-files { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; }
+.diff-file-row { display:flex; align-items:center; gap:10px; width:100%; min-height:30px; padding:4px 10px; border:0; border-radius:8px; background:none; color:var(--text); font:inherit; text-align:left; cursor:pointer; }
+.diff-file-row:hover { background:var(--row-hover); }
+.diff-file-path { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono); font-size:12.5px; font-weight:400; }
+.diff-file-status { flex-shrink:0; font-size:12px; font-weight:400; color:var(--muted); }
+.diff-file-counts { flex-shrink:0; margin-left:auto; font-family:var(--font-mono); font-size:12px; font-weight:400; color:var(--muted); font-variant-numeric:tabular-nums; }
+.diff-file { display:flex; flex-direction:column; gap:8px; scroll-margin-top:12px; }
+.diff-file-heading { display:flex; align-items:center; gap:10px; margin:0; padding:0 10px; font-size:13px; }
+.diff-file-heading .diff-file-path { font-weight:600; }
+.diff-hunk-range { color:var(--muted); }
+.diff-sign { display:inline-block; width:2ch; text-indent:0; color:var(--muted); user-select:none; }
+.line-added .diff-sign { color:var(--success); }
+.line-removed .diff-sign { color:var(--error); }
+pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px + 2ch); padding-left:var(--diff-gutter); text-indent:calc(-1 * var(--diff-gutter)); }
 .activity-summary { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:2px 8px 2px 4px; border:0; border-radius:8px; background:none; color:var(--muted); }
 .activity-summary:hover { background:var(--row-hover); color:var(--text); }
 .activity-chevron { transition:transform .15s; }

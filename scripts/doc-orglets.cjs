@@ -46,6 +46,8 @@ const pageOrglets = [
   { name: 'template-ui-review', accessory: 'beret', colour: '#d65c73', face: 'wink', yaw: 0.3, pitch: 0.1 },
   { name: 'waiting-input-ui-review', accessory: 'bubble', colour: '#e9e7e2', face: 'curious', yaw: -0.3, pitch: 0.08 },
   { name: 'writing', accessory: 'pencil', colour: '#c9922e', face: 'happy', yaw: 0.34, pitch: 0.06 },
+  // Every accessory already has a page, so this one shares the glasses and takes a colour and face of its own.
+  { name: 'worker-actions', accessory: 'glasses', colour: '#3f9a68', face: 'curious', yaw: -0.32, pitch: 0.08 },
 ];
 
 // The README crew: five orglets side by side, the outer ones turned towards the middle.

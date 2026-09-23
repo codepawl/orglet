@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { WorkspacePath, WorkspaceRead, WorkspaceHash } from './workspace-tools';
+import { WorkspaceDiffSummary } from './workspace-diff';
 
 export const TOOL_CALL_SUMMARY_LENGTH = 300;
 const Change = z.object({ path: WorkspacePath, status: z.enum(['pending', 'applied', 'conflict', 'blocked']), reason: z.string().optional() });
@@ -7,7 +8,9 @@ export const WorkspaceRecoveryView = z.object({
   taskId: z.uuid(),
   attempts: z.array(z.object({ runId: z.uuid(), reviewToken: z.string().regex(/^[a-f0-9]{64}$/), retired: z.boolean() })),
   copies: z.array(z.object({ runId: z.uuid(), state: z.enum(['preparing', 'ready', 'integrating', 'integrated', 'conflict', 'uncertain']),
-    kind: z.enum(['copy', 'git-worktree']), changes: z.array(Change), changeCount: z.number().int().nonnegative() })),
+    kind: z.enum(['copy', 'git-worktree']), changes: z.array(Change), changeCount: z.number().int().nonnegative(),
+    /** Counts of what the copy changed since its snapshot, once the run finished; the `workspaceDiff` command has the hunks (COD-163). */
+    diff: WorkspaceDiffSummary.optional() })),
   processes: z.array(z.object({ id: z.uuid(), runId: z.uuid(), command: z.string().max(1000),
     state: z.enum(['running', 'exited', 'cancelled', 'timeout', 'output_limit', 'uncertain']), exitCode: z.number().int().nullable() })),
   // `tool`, `summary` and `at` are null for calls journaled before they were recorded (COD-191).
