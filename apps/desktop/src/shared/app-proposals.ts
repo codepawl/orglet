@@ -98,6 +98,26 @@ export type ProposalToolName = keyof typeof proposalToolSchemas;
 export const proposalToolNames = Object.keys(proposalToolSchemas) as ProposalToolName[];
 export const isProposalTool = (name: string): name is ProposalToolName => Object.hasOwn(proposalToolSchemas, name);
 
+/**
+ * How a one-shot CLI answer carries proposals (COD-206): a harness chat without a working folder, web or data checks
+ * makes one CLI call with a JSON schema and no tool loop, so the propose_* calls travel as items of an `appProposals`
+ * array in the answer instead, `{ tool, arguments }` with the same argument shapes as the tools. A plain union, not
+ * a discriminated one: it renders as `anyOf`, which Claude Code's structured outputs accept, where `oneOf` is not
+ * in their supported list.
+ */
+export const ProposedAppChange = z.union([
+  z.object({ tool: z.literal('propose_orglet'), arguments: ProposeOrglet }).strict(),
+  z.object({ tool: z.literal('propose_crew'), arguments: ProposeCrew }).strict(),
+  z.object({ tool: z.literal('propose_crew_template'), arguments: ProposeCrewTemplate }).strict(),
+  z.object({ tool: z.literal('propose_skill'), arguments: ProposeSkill }).strict(),
+  z.object({ tool: z.literal('propose_schedule'), arguments: ProposeSchedule }).strict(),
+  z.object({ tool: z.literal('propose_settings'), arguments: ProposeSettings }).strict(),
+]);
+export const MAX_ANSWER_PROPOSALS = 12;
+export const ProposedAppChanges = z.array(ProposedAppChange).max(MAX_ANSWER_PROPOSALS);
+/** The lenient read of one answer item: the tool name and arguments are checked one item at a time, not all at once. */
+export const AnswerAppChange = z.object({ tool: z.string(), arguments: z.unknown() });
+
 export const AppProposalKind = z.enum(['orglet', 'crew', 'crew_template', 'skill', 'schedule', 'settings']);
 export type AppProposalKind = z.infer<typeof AppProposalKind>;
 export const AppProposalAction = z.enum(['create', 'edit', 'export']);

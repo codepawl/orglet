@@ -4,9 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { toolsFor } from '../../apps/desktop/src/core/tools/catalog';
+import { harnessAnswerSchema, proposalsAllowed, toolsFor } from '../../apps/desktop/src/core/tools/catalog';
 import { ProposeOrglet, ProposeSettings, type AppProposal } from '../../apps/desktop/src/shared/app-proposals';
 import { snapshotCapabilities } from '../../apps/desktop/src/shared/tool-policy';
+import { missingHarness } from '../../apps/desktop/src/shared/harness';
+import type { HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import type { ModelReply } from '../../apps/desktop/src/core/adapters/openai';
 import type { Routine, Run, Skill, Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
 
@@ -302,5 +304,158 @@ describe('auto-apply', () => {
     store.put('checkpoints', { id: run.id, step: 1, phase: 'ready', messages: [], readIds: [], untrustedInputs: ['web'] });
     const checkpoint = store.get<{ untrustedInputs?: string[] }>('checkpoints', run.id);
     expect(checkpoint.untrustedInputs).toEqual(['web']);
+  });
+});
+
+/**
+ * A harness chat without a working folder, web or data checks is one CLI call with a JSON schema and no tool loop,
+ * so the proposals travel as an `appProposals` array in the answer (COD-206). The fixture CLI records what it was
+ * asked and answers with whatever the test queued.
+ */
+describe('one-shot harness answers', () => {
+  type Answer = Record<string, unknown>;
+  let harnessCore: CoreService; let harnessStore: Store; let requests: HarnessRequest[]; let answers: Answer[];
+  const orgletItem = (ref: string, name: string, instructions: string) => ({ tool: 'propose_orglet', arguments: { targetId: null, ref, name, description: null, instructions, provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null } });
+  const crewItem = (memberRefs: string[], leadRef: string | null = null) => ({ tool: 'propose_crew', arguments: { targetId: null, ref: 'desk', name: 'Fact Desk', instructions: 'Find, check, summarise.', memberIds: null, memberRefs, leadId: null, leadRef, workflow: 'sequential', monthlyBudgetMicros: null, taskBudgetMicros: null } });
+  const factDesk = () => [orgletItem('finder', 'Finder', 'Find documents.'), orgletItem('checker', 'Checker', 'Check the figures.'), orgletItem('writer', 'Writer', 'Write the summary.'), crewItem(['finder', 'checker', 'writer'], 'writer')];
+
+  function harnessFixture(provider: 'claude-code' | 'codex' | 'cursor') {
+    harnessStore = new Store(':memory:'); requests = []; answers = [];
+    harnessCore = new CoreService(harnessStore, () => {}, async () => { throw new Error('Native adapter must not be used'); }, undefined, undefined, {
+      detect: async () => [{ ...missingHarness(provider, 'win32'), executable: 'fixture.exe', version: 'fixture', auth: 'logged_in', status: 'signed_in' }],
+      execute: async request => {
+        requests.push(request);
+        const answer = answers.shift();
+        if (!answer) throw new Error('Fixture exhausted');
+        return { output: provider === 'codex' ? { payload: JSON.stringify(answer) } : answer, costUsd: null };
+      },
+    });
+  }
+  async function harnessWorker(provider: 'claude-code' | 'codex' | 'cursor', overrides: Partial<Worker> = {}) {
+    const worker = harnessStore.all<Worker>('workers')[0];
+    return harnessCore.command('saveWorker', { ...worker, provider, taskBudgetMicros: 400_000, ...overrides }) as Promise<Worker>;
+  }
+  async function harnessChat(workerId: string, provider: 'claude-code' | 'codex' | 'cursor', extra: Record<string, unknown> = {}) {
+    const taskId = await harnessCore.command('createTask', { workerId, brief: 'Tạo cho tôi một crew nghiên cứu 3 người tên Fact Desk.', sourceIds: [], consent: true, providerScopes: [provider], budgetMicros: 1_000_000, ...extra }) as string;
+    // The run's cleanup outlives the saved answer, so wait until the runner has let go of the task before the store closes.
+    const settled = () => ['completed', 'failed', 'partial'].includes(harnessStore.detail(taskId).task.status) && !harnessCore.runner.isActive(taskId);
+    for (let tries = 0; tries < 300 && !settled(); tries++) await new Promise(resolve => setTimeout(resolve, 10));
+    expect(settled()).toBe(true);
+    return taskId;
+  }
+  const harnessProposals = (taskId: string) => harnessStore.detail(taskId).appProposals;
+  afterEach(async () => { if (harnessCore) await harnessCore.runner.shutdown(); harnessStore?.close(); });
+
+  it('asks Claude Code for the field, explains it in the prompt, stores the items in order and applies them with their refs', async () => {
+    harnessFixture('claude-code');
+    const worker = await harnessWorker('claude-code');
+    answers.push({ message: 'Đã đề xuất crew Fact Desk.', title: 'Fact Desk', report: null, appProposals: factDesk() });
+    const taskId = await harnessChat(worker.id, 'claude-code');
+    expect(harnessStore.detail(taskId).task.status).toBe('completed');
+
+    const schema = requests[0].schema as { properties: Record<string, { items?: { anyOf?: { properties: { tool: { const: string } } }[] } }>; required: string[] };
+    expect(schema.properties.appProposals.items?.anyOf?.map(option => option.properties.tool.const)).toEqual(['propose_orglet', 'propose_crew', 'propose_crew_template', 'propose_skill', 'propose_schedule', 'propose_settings']);
+    expect(schema.required).not.toContain('appProposals');
+    expect(requests[0].prompt).toContain('put the calls in appProposals');
+    expect(requests[0].prompt).toContain('propose_crew: Propose creating a crew');
+    expect(requests[0].prompt).toContain('"appChanges"');
+
+    const proposals = harnessProposals(taskId);
+    expect(proposals.map(proposal => [proposal.kind, proposal.ref, proposal.status, proposal.hold, proposal.sequence])).toEqual([
+      ['orglet', 'finder', 'pending', null, 1], ['orglet', 'checker', 'pending', null, 2], ['orglet', 'writer', 'pending', null, 3], ['crew', 'desk', 'pending', null, 4],
+    ]);
+    expect(proposals[3].changes).toContainEqual({ field: 'memberIds', before: null, after: 'ref:finder, ref:checker, ref:writer' });
+    expect(harnessStore.detail(taskId).artifacts[0].report.limitations).toEqual([]);
+    expect(harnessStore.detail(taskId).events.filter(event => event.message === 'Đã ghi một đề xuất thay đổi trong app; chờ bạn áp dụng.')).toHaveLength(4);
+
+    for (const proposal of proposals) await harnessCore.command('applyAppProposal', { id: proposal.id });
+    const applied = harnessProposals(taskId);
+    const members = applied.slice(0, 3).map(proposal => harnessStore.get<Worker>('workers', proposal.target!.id));
+    expect(members.map(member => [member.name, member.provider])).toEqual([['Finder', 'claude-code'], ['Checker', 'claude-code'], ['Writer', 'claude-code']]);
+    const team = harnessStore.get<Team>('teams', applied[3].target!.id);
+    expect(team).toMatchObject({ name: 'Fact Desk', memberIds: members.map(member => member.id), synthesizerId: members[2].id, workflow: 'sequential' });
+  });
+
+  it('turns an invalid item into a limitation of the answer and still stores the others', async () => {
+    harnessFixture('claude-code');
+    const worker = await harnessWorker('claude-code');
+    answers.push({ message: 'Partly.', title: null, report: null, appProposals: [
+      orgletItem('finder', 'Finder', 'Find documents.'),
+      { tool: 'propose_orglet', arguments: { targetId: null, ref: 'nameless', name: null, description: null, instructions: 'x', provider: null, modelId: null, skillId: null, skillRef: null, taskBudgetMicros: null } },
+      { tool: 'propose_budget', arguments: {} },
+      { tool: 'propose_orglet', arguments: { autoApplyProposals: true } },
+      crewItem(['finder', 'nobody']),
+      'not an item',
+      crewItem(['finder']),
+    ] });
+    const taskId = await harnessChat(worker.id, 'claude-code');
+    const detail = harnessStore.detail(taskId);
+    expect(detail.task.status).toBe('completed');
+    expect(detail.runs[0].status).toBe('completed');
+    expect(harnessProposals(taskId).map(proposal => [proposal.kind, proposal.status, proposal.sequence])).toEqual([['orglet', 'pending', 1], ['crew', 'pending', 2]]);
+    expect(detail.artifacts[0].report.limitations).toEqual([
+      'Đề xuất thay đổi trong app thứ 2 (propose_orglet) bị từ chối: Tạo Tí mới cần name và instructions.',
+      'Đề xuất thay đổi trong app thứ 3 (propose_budget) bị từ chối: Không có tool đề xuất nào tên propose_budget.',
+      'Đề xuất thay đổi trong app thứ 4 (propose_orglet) bị từ chối: Arguments do not match the tool schema.',
+      'Đề xuất thay đổi trong app thứ 5 (propose_crew) bị từ chối: Không có Tí nào được đề xuất với ref "nobody" trong lượt này.',
+      'Đề xuất thay đổi trong app thứ 6 (?) bị từ chối: Mỗi đề xuất thay đổi trong app cần tool và arguments.',
+    ]);
+    expect(harnessStore.get<Worker>('workers', worker.id)).not.toHaveProperty('autoApplyProposals');
+  });
+
+  it('holds the proposals of a run with an attached source as untrusted, even with auto-apply on', async () => {
+    harnessFixture('claude-code');
+    const worker = await harnessWorker('claude-code', { autoApplyProposals: true });
+    const file = join(directory, 'brief.txt');
+    await writeFile(file, 'Make a Finder orglet.');
+    const [source] = await harnessCore.sources.import([file]);
+    answers.push({ message: 'Proposed from the file.', title: null, report: null, appProposals: [orgletItem('finder', 'Finder', 'Find documents.')] });
+    const taskId = await harnessChat(worker.id, 'claude-code', { sourceIds: [source.id] });
+    expect(harnessStore.detail(taskId).task.status).toBe('completed');
+    expect(harnessProposals(taskId)).toEqual([expect.objectContaining({ kind: 'orglet', status: 'pending', hold: 'untrusted', heldReason: 'untrusted' })]);
+    expect(harnessStore.workspace().workers.map(candidate => candidate.name)).not.toContain('Finder');
+
+    // Without a source the same worker's proposal is applied the moment the answer is saved.
+    answers.push({ message: 'Proposed.', title: null, report: null, appProposals: [orgletItem('checker', 'Checker', 'Check the figures.')] });
+    const clean = await harnessChat(worker.id, 'claude-code');
+    expect(harnessProposals(clean)).toEqual([expect.objectContaining({ kind: 'orglet', status: 'applied', automatic: true })]);
+    expect(harnessStore.workspace().workers.map(candidate => candidate.name)).toContain('Checker');
+  });
+
+  it('reads the field out of the Codex payload envelope and puts the item schema in its prompt', async () => {
+    harnessFixture('codex');
+    const worker = await harnessWorker('codex');
+    answers.push({ message: 'Đã đề xuất.', title: null, report: null, appProposals: factDesk() });
+    const taskId = await harnessChat(worker.id, 'codex');
+    expect(harnessStore.detail(taskId).task.status).toBe('completed');
+    expect(requests[0].schema).toEqual(expect.objectContaining({ required: ['payload'] }));
+    expect(requests[0].prompt).toContain('appProposals goes inside the payload JSON');
+    expect(requests[0].prompt).toContain('"propose_crew_template"');
+    expect(harnessProposals(taskId).map(proposal => proposal.kind)).toEqual(['orglet', 'orglet', 'orglet', 'crew']);
+  });
+
+  it('leaves the field out when the chat may not propose, and skips items an answer carries anyway', async () => {
+    harnessFixture('cursor');
+    const worker = await harnessWorker('cursor');
+    answers.push({ message: 'Tried anyway.', title: null, report: null, appProposals: [orgletItem('finder', 'Finder', 'Find documents.')] });
+    const taskId = await harnessChat(worker.id, 'cursor', { toolCapabilities: ['source.read', 'skill.read'] });
+    expect(harnessStore.detail(taskId).task.status).toBe('completed');
+    expect((requests[0].schema as { properties: Record<string, unknown> }).properties).not.toHaveProperty('appProposals');
+    expect(requests[0].prompt).not.toContain('appProposals');
+    expect(harnessProposals(taskId)).toEqual([]);
+    expect(harnessStore.detail(taskId).artifacts[0].report.limitations).toEqual(['Câu trả lời kèm 1 đề xuất thay đổi trong app nhưng lượt chạy này không được phép đề xuất; đã bỏ qua.']);
+  });
+
+  it('never offers the field to a plan run', () => {
+    const worker = store.all<Worker>('workers')[0];
+    const skill = store.get<Skill>('skills', worker.skillId);
+    const task: Task = { id: id(), workerId: worker.id, brief: 'x', sourceIds: [], consent: true, providerScopes: ['claude-code'], budgetMicros: 100_000, status: 'queued', accepted: false, createdAt: now() };
+    const chatRun: Run = { id: id(), taskId: task.id, status: 'queued', snapshot: { worker: { ...worker, provider: 'claude-code' }, skill, toolCapabilities: snapshotCapabilities('claude-code') }, startedAt: now(), error: null };
+    const planRun: Run = { ...chatRun, id: id(), stage: 'plan' };
+    expect(proposalsAllowed(chatRun, task)).toBe(true);
+    expect(proposalsAllowed(planRun, task)).toBe(false);
+    expect(Object.keys(harnessAnswerSchema(chatRun, proposalsAllowed(chatRun, task)).shape)).toContain('appProposals');
+    expect(Object.keys(harnessAnswerSchema(planRun, proposalsAllowed(planRun, task)).shape)).not.toContain('appProposals');
+    expect(proposalsAllowed(chatRun, { ...task, routineId: id() })).toBe(false);
   });
 });

@@ -2,7 +2,7 @@ import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { WebTools } from '../tools/web-tools';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
-import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, MemberReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswerSchema, HarnessAnswer, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
+import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
 import { z } from 'zod';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
@@ -50,7 +50,7 @@ import { WorkspaceProcess } from '../../shared/workspace-processes';
 import { codexOutputSchema, decodeCodexOutput } from '../harness/codex-output';
 import { MessageInteractions } from './message-interactions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { isProposalTool } from '../../shared/app-proposals';
+import { AnswerAppChange, isProposalTool, MAX_ANSWER_PROPOSALS, ProposedAppChanges, proposalToolNames } from '../../shared/app-proposals';
 import type { AppProposals } from './app-proposals';
 
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
@@ -205,7 +205,24 @@ export function sourceForModel(source: Source) {
 /** Told to the lead while planning: the final combining step already exists, so it must not become a member job. */
 const SYNTHESIS_STEP_INSTRUCTION = 'Combining, merging or summarising the members\' results into the final answer is your own synthesis step, which runs automatically after the members finish; never assign it as a member job, not even to yourself. Put notes for that final answer in synthesisBrief. Assign yourself (leadId) a member job only for distinct work of your own.';
 
-export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false, unreadable: UnreadableSource[] = []) {
+/**
+ * How a one-shot CLI answer proposes app changes (COD-206), in the words of the propose_* tool descriptions: the
+ * tools themselves only exist in the core tool loop, so the answer carries the calls as `appProposals` items.
+ */
+function appProposalsInstruction(codex: boolean) {
+  const tools = proposalToolNames.map(name => {
+    const definition = toolDefinitions[name].model;
+    const description = definition.type === 'function' ? definition.function.description : '';
+    return `${name}: ${description}`;
+  }).join('\n');
+  return [
+    `The propose_* tools named in the app context message are not callable here. Instead, when the user asks you to set up or change something in Orglet (an orglet, a crew, a template, a skill, a schedule, or one of the listed settings), put the calls in appProposals: an array of items { "tool": <one of the tool names below>, "arguments": <that tool's argument object, every field present, null leaves a field alone> }, one change per item, at most ${MAX_ANSWER_PROPOSALS}, in the order they should be applied. Each item only stores a card the user applies or dismisses; nothing changes until they do. Use the ids from the app context message for existing things; give a new orglet, crew or skill a short ref and point at it with the *Ref fields from a later item in the same answer. You cannot change API keys, connections, harness accounts, backups, tool permissions, working folders, budgets above the current caps, or the auto-apply switch; say so in message instead of trying. Omit appProposals or leave it empty when the user asked for no app change.`,
+    tools,
+    codex ? `appProposals goes inside the payload JSON next to message, title and report, and matches this schema: ${JSON.stringify(z.toJSONSchema(ProposedAppChanges, { target: 'draft-7' }))}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false, unreadable: UnreadableSource[] = [], appProposals = false) {
   return [
     'You are running inside Orglet as a read-only worker chatting with your user. When you describe what you can or cannot do, use everyday words about the work: you read the files the user attaches and write answers, and you cannot open links, run programs or change files. Do not mention tools, modes, sandboxes or providers unless the user asks about them. Write like a colleague messaging back, in the language and formality the user writes in, and ask one short question when the request is unclear or could go two sensible ways.',
     inline
@@ -216,6 +233,7 @@ export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { s
       ? `Your final answer must be only JSON matching the provided schema. Assign work with submit_plan fields: assignments of listed member ids plus briefs. ${SYNTHESIS_STEP_INSTRUCTION} Do not invent workers or missing results.`
       : `Your final answer must be only JSON matching the provided schema. Put your answer to the user in message, written as a normal chat reply (Markdown allowed). Set title to a short name for this chat (2 to 6 words, the user's language) when the latest message has nameChat true, otherwise null. Set report to null unless the user asked for a report or review document, or required review checks are given; then fill report following these rules: ${SUBMIT_REPORT_DESCRIPTION}`,
     codex ? 'The output schema has one payload string. Put the JSON text of the requested answer object inside payload, with message/title/report or the plan fields as instructed. Do not put Markdown around that JSON text.' : '',
+    appProposals && !plan ? appProposalsInstruction(codex) : '',
     files.length || inline?.length ? `Source manifest: ${JSON.stringify(files)}` : NO_SOURCES_INSTRUCTION,
     unreadable.length ? `Attached but not readable by you (no copy was made): ${JSON.stringify(unreadable)}. If the user asks about one of these, say you cannot read that kind of file yet; never guess at its contents or cite it.` : '',
     ...messages.map(message => typeof message.content === 'string' ? message.content : ''),
@@ -1012,6 +1030,9 @@ export class Runner {
       }
       const usage = this.store.usage(task.id);
       const remainingUsd = Math.max(0, task.budgetMicros - usage.chargedMicros - usage.reservedMicros) / 1_000_000;
+      // The propose_* tools live in the tool loop only, so a one-shot answer carries them as an appProposals array
+      // under the same rules the loop applies (capability, never a plan or scheduled run) (COD-206).
+      const withProposals = !!this.appProposals && proposalsAllowed(run, this.store.get<Task>('tasks', task.id));
       this.event(run.id, `Đang chạy ${tool.name} ${tool.version} trên máy · chỉ đọc bản sao nguồn của task`);
       const progress = new ProgressSender(task.id, run.id, update => this.onProgress(update));
       const showSourceNames = (update: HarnessProgress): HarnessProgress => ({
@@ -1026,9 +1047,9 @@ export class Runner {
           executable: tool.executable,
           ...(tool.configDir ? { configDir: tool.configDir } : {}),
           cwd: directory,
-          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable),
+          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable, withProposals),
           schema: provider === 'codex' ? codexOutputSchema : z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema
-            : run.stage === 'member' ? HarnessAnswerSchema.extend({ report: MemberReportSchema }) : HarnessAnswerSchema, { target: 'draft-7' }),
+            : harnessAnswerSchema(run, withProposals), { target: 'draft-7' }),
           signal,
           maxBudgetUsd: remainingUsd,
           ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
@@ -1053,11 +1074,15 @@ export class Runner {
       }
       // Older harness prompts (and team reports) return the report object itself.
       const answer = needsReport(run) ? undefined : HarnessAnswer.safeParse(output);
+      // Every source the harness could read is content nobody vetted: with any attached, the run's proposals wait
+      // for a click, the same hold the tool loop puts on a run that called read_source (COD-206).
+      const untrustedInputs = (provider === 'codex' ? inline : files).length ? ['attached sources'] : [];
+      const proposalLimitations = answer?.success ? this.recordAnswerProposals(run, task, answer.data.appProposals ?? [], withProposals) : [];
       if (answer?.success && answer.data.report === null) {
         if (run.stage === 'member') throw new Error('Phần việc cần báo cáo kết quả hoặc blocker, không thể hoàn tất bằng tin nhắn.');
         for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
-        this.commit(task, run, { ...chatReport(answer.data.message), limitations: [...(options.limitations ?? [])] }, options.keepTaskOpen, [], answer.data.title);
-      } else await this.finalize(task, run, answer?.success ? answer.data.report : output, readIds, scope, options, limitations);
+        this.commit(task, run, { ...chatReport(answer.data.message), limitations: [...(options.limitations ?? []), ...proposalLimitations] }, options.keepTaskOpen, [], answer.data.title, false, untrustedInputs);
+      } else await this.finalize(task, run, answer?.success ? answer.data.report : output, readIds, scope, { ...options, untrustedInputs }, [...limitations, ...proposalLimitations]);
     } catch (error) {
       retainDirectory = error instanceof HarnessTerminationError;
       throw error;
@@ -1066,6 +1091,47 @@ export class Runner {
       if (!retainDirectory) await rm(directory, { recursive: true, force: true });
     }
   }
+  /**
+   * Stores the app changes a one-shot CLI answer proposed, in order, through the same record the tool loop uses.
+   * An item the worker got wrong becomes a limitation of the answer and the rest are still stored; nothing here
+   * fails the run, in the spirit of the loop's "a mistake goes back as the tool's answer" (COD-206).
+   */
+  private recordAnswerProposals(run: Run, task: Task, items: unknown[], allowed: boolean): string[] {
+    if (!items.length) return [];
+    if (!allowed || !this.appProposals) {
+      const note = `Câu trả lời kèm ${items.length} đề xuất thay đổi trong app nhưng lượt chạy này không được phép đề xuất; đã bỏ qua.`;
+      this.event(run.id, note);
+      return [note];
+    }
+    const currentTask = this.store.get<Task>('tasks', task.id);
+    const limitations: string[] = [];
+    items.forEach((item, index) => {
+      const outcome = this.recordAnswerProposal(run, currentTask, item);
+      if ('error' in outcome) {
+        this.event(run.id, `Đề xuất thay đổi trong app bị từ chối: ${outcome.error}`);
+        limitations.push(`Đề xuất thay đổi trong app thứ ${index + 1} (${outcome.tool}) bị từ chối: ${outcome.error}`);
+        return;
+      }
+      this.event(run.id, 'Đã ghi một đề xuất thay đổi trong app; chờ bạn áp dụng.');
+    });
+    return limitations;
+  }
+
+  private recordAnswerProposal(run: Run, task: Task, item: unknown): { proposalId: string } | { tool: string; error: string } {
+    const shape = AnswerAppChange.safeParse(item);
+    if (!shape.success) return { tool: '?', error: 'Mỗi đề xuất thay đổi trong app cần tool và arguments.' };
+    const tool = shape.data.tool;
+    if (!isProposalTool(tool)) return { tool, error: `Không có tool đề xuất nào tên ${tool}.` };
+    try {
+      // The same gate as a tool call: the tool must be offered to this run and the arguments must fit its schema.
+      assertToolCall(run, task, tool, JSON.stringify(shape.data.arguments ?? null));
+      const recorded = this.appProposals!.record(run, task, tool, shape.data.arguments);
+      return { proposalId: recorded.proposalId };
+    } catch (error) {
+      return { tool, error: error instanceof z.ZodError ? 'Arguments do not match the tool schema.' : error instanceof Error ? error.message : 'Đề xuất không hợp lệ.' };
+    }
+  }
+
   /** The first answer of a task names it, unless the user turned this off or already named the task. */
   private wantsTitle(task: Task, run: Run) {
     return !(run.snapshot.inputRevision ?? 0) && (!run.stage || run.stage === 'synthesis' || run.stage === 'group') && this.store.setting('autoTitles', true) && !this.store.setting<Record<string, string>>('taskTitles', {})[task.id];
