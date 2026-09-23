@@ -1,4 +1,6 @@
 import type { Source, Task } from '../../shared/contracts';
+import { isMemory, type Knowledge } from '../../shared/knowledge';
+import { KnowledgeBase } from '../context/knowledge';
 import type { Store } from './database';
 
 /**
@@ -17,12 +19,23 @@ export const ERASE_TABLES = [
 
 const count = (store: Store, table: string) => Number(store.db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()!.count);
 
+/** Notes, with their revisions and search rows. Memories share the tables but are the person's own scope below. */
 export function eraseKnowledge(store: Store): number {
-  const removed = count(store, 'knowledge');
+  return eraseKnowledgeRows(store, item => !isMemory(item));
+}
+
+/** Everything workers remembered from chats, in every scope, including memories still waiting for review. */
+export function eraseMemory(store: Store): number {
+  return eraseKnowledgeRows(store, isMemory);
+}
+
+function eraseKnowledgeRows(store: Store, matches: (item: Knowledge) => boolean): number {
+  const knowledge = new KnowledgeBase(store);
+  const doomed = store.all<Knowledge>('knowledge').filter(matches);
   store.transaction(() => {
-    for (const table of ['knowledge_search', 'knowledge_revisions', 'knowledge']) store.db.prepare(`DELETE FROM ${table}`).run();
+    for (const item of doomed) knowledge.deleteRows(item.id);
   });
-  return removed;
+  return doomed.length;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, Brain } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -281,9 +281,20 @@ function ChatReply({ artifact, author, taskId, reactions, runs, action }: { arti
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
     </div>}
+    <UsedMemories artifact={artifact} />
     <MessageActions taskId={taskId} messageId={artifact.id} author={author} text={tMessage(artifact.report.summary)} reactions={reactions} runs={runs} action={action}
       leading={<ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [author])} action={action} />} />
   </div>;
+}
+
+/** Which memories an answer was written with (COD-161): one small line that opens the list, the way sources are named. */
+function UsedMemories({ artifact }: { artifact: Artifact }) {
+  const memories = artifact.usedMemories ?? [];
+  if (!memories.length) return null;
+  return <details className="used-memories">
+    <summary><Brain size={13} aria-hidden="true" />{t('Đã dùng {0} ghi nhớ', [memories.length])}</summary>
+    <ul>{memories.map(memory => <li key={memory.id}>{memory.text}</li>)}</ul>
+  </details>;
 }
 
 /**
@@ -323,6 +334,7 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
   return <>
     <div id={`message-${artifact.id}`} tabIndex={-1}><DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+      <UsedMemories artifact={artifact} />
       <MessageActions taskId={detail.task.id} messageId={artifact.id} author={author?.snapshot.worker.name ?? 'Orglet'} text={name} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
     </div>
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>

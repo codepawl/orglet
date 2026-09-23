@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { AlignLeft, Smile, Cpu, ScrollText, ShieldCheck, Sparkles, UserRound, Wallet, SlidersHorizontal } from 'lucide-react';
+import { AlignLeft, Brain, Smile, Cpu, ScrollText, ShieldCheck, Sparkles, UserRound, Wallet, SlidersHorizontal } from 'lucide-react';
+import { isMemory } from '../../shared/knowledge';
+import { MemoryList } from './Memories';
 import { isPaidApi, type Connections, type Worker, type Workspace } from '../../shared/contracts';
 import { CATALOG_HINT_IDS } from '../../shared/models';
 import { liveWorkerTask, newChatKey } from '../../shared/live-task';
@@ -27,16 +29,17 @@ import { Input, SwitchField, Textarea } from '@codepawl/orglet-ui';
 import { Zap } from 'lucide-react';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
-type Tab = 'general' | 'skill' | 'permissions';
+type Tab = 'general' | 'skill' | 'permissions' | 'memory';
 type InvalidField = 'name' | 'instructions' | 'budget' | 'modelId';
 const tabs = [
   { id: 'general' as const, label: 'Chung', icon: <SlidersHorizontal size={16} /> },
   { id: 'skill' as const, label: 'Kỹ năng', icon: <Sparkles size={16} /> },
   { id: 'permissions' as const, label: 'Quyền', icon: <ShieldCheck size={16} /> },
+  { id: 'memory' as const, label: 'Ghi nhớ', icon: <Brain size={16} /> },
 ];
 
 /** Worker create/edit. Remount (via key) to reset the draft. */
-export function WorkerDialog({ open, worker, workspace, connections, harnesses, onClose }: { open: boolean; worker?: Worker; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; onClose: () => void }) {
+export function WorkerDialog({ open, worker, workspace, connections, harnesses, onClose, onOpenChat }: { open: boolean; worker?: Worker; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; onClose: () => void; /** Opens the chat a memory came from; the dialog closes first. */ onOpenChat: (taskId: string) => void }) {
   const [tab, setTab] = useState<Tab>('general');
   // Faces other workers already show, so suggestions lean towards a different one.
   const takenMascots = workspace.workers.filter(item => item.id !== worker?.id).map(item => isMascot(item.avatar?.mascot) ? item.avatar.mascot : autoMascot(mascotIds, item.id, { name: item.name, description: item.description }));
@@ -90,7 +93,10 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : tab === 'permissions' ? t('Áp dụng cho chat riêng của Tí. Chat hội có quyền riêng trong Chi tiết.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
+  // What this worker remembered for itself, newest first; team and workspace memories live in Thư viện → Knowledge.
+  const memories = worker ? workspace.knowledge.filter(item => isMemory(item) && item.status !== 'archived' && item.scope.type === 'worker' && item.scope.id === worker.id).sort((first, second) => second.createdAt.localeCompare(first.createdAt)) : [];
+
+  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : tab === 'permissions' ? t('Áp dụng cho chat riêng của Tí. Chat hội có quyền riêng trong Chi tiết.') : tab === 'memory' ? t('Điều Tí tự ghi nhớ từ các cuộc trò chuyện và mang sang cuộc sau. Sửa, ghim hay xóa tại đây; thay đổi áp dụng từ lượt chạy kế tiếp.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
     {tab === 'general' && <>
       <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} /></label>
@@ -146,6 +152,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         </SwitchField>
       </div>
     </>}
+    {tab === 'memory' && <MemoryList memories={memories} workspace={workspace} onOpenChat={onOpenChat} />}
   </TabbedFormDialog>;
 }
 

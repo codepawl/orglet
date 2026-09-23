@@ -50,7 +50,7 @@ const settingNames = translated({
   archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi connection / tháng', providerConcurrency: 'Request đồng thời mỗi provider', providerConsent: 'Provider được phép',
   autoUpdate: 'Tự động cập nhật',
 });
-const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
+const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
 
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
   connections: 'Bật provider cần dùng rồi dán key hoặc chọn tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu. Ollama chỉ cần bật công tắc — không cần key.',
@@ -303,6 +303,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const eraseMessage = (summary: EraseSummary) => {
     if (summary.scope === 'everything') return t('Đã xóa toàn bộ dữ liệu. Orglet trở lại như mới cài.');
     if (summary.scope === 'knowledge') return t('Đã xóa {0} mục kiến thức.', [summary.knowledge]);
+    if (summary.scope === 'memory') return t('Đã xóa {0} ghi nhớ.', [summary.memory]);
     if (summary.scope === 'chats') return t('Đã xóa {0} cuộc trò chuyện.', [summary.chats]);
     return summary.sourcesForgotten
       ? t('Đã xóa {0} nguồn, thu hồi {1} nguồn còn được trò chuyện nhắc tới.', [summary.sources, summary.sourcesForgotten])
@@ -554,13 +555,17 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 title={t('Xóa kiến thức')}
                 description={t('Mọi điều Tí đã học và được bạn duyệt, kể cả đề xuất đang chờ duyệt.')}
                 question={t('Xóa toàn bộ kiến thức đã tích lũy?')} />
+              <EraseRow busy={busy} scope="memory" onErase={erase}
+                title={t('Xóa ghi nhớ')}
+                description={t('Mọi điều các Tí tự ghi nhớ từ các cuộc trò chuyện, ở mọi phạm vi, kể cả ghi nhớ đang chờ duyệt. Kiến thức bạn đã viết hoặc duyệt được giữ lại.')}
+                question={t('Xóa mọi ghi nhớ của các Tí?')} />
               <EraseRow busy={busy} scope="sources" onErase={erase}
                 title={t('Xóa nguồn đã nhập')}
                 description={t('Orglet chỉ quên các tệp đã nhập, không đụng đến tệp gốc trên máy. Nguồn còn được một cuộc trò chuyện nhắc tới sẽ bị thu hồi quyền đọc thay vì xóa, để cuộc trò chuyện đó vẫn mở được.')}
                 question={t('Quên mọi tệp nguồn đã nhập?')} />
               <EraseRow busy={busy} scope="everything" onErase={erase}
                 title={t('Xóa toàn bộ dữ liệu')}
-                description={t('Đưa app về như mới cài: trò chuyện, Tí, hội, skill, lịch chạy, nguồn, kiến thức và cài đặt. API key nằm ngoài cơ sở dữ liệu nên không bị đụng tới.')}
+                description={t('Đưa app về như mới cài: trò chuyện, Tí, hội, skill, lịch chạy, nguồn, kiến thức, ghi nhớ và cài đặt. API key nằm ngoài cơ sở dữ liệu nên không bị đụng tới.')}
                 question={t('Xóa sạch mọi thứ trong Orglet?')} />
               <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi cuộc trò chuyện, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet, và không một bí mật nào bị tổn hại trong quá trình làm ra app này.')} />
             </>}

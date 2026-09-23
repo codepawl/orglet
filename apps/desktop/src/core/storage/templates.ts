@@ -3,7 +3,7 @@ import { WorkerInput, SkillInput, TeamInput, type Worker, type Skill, type Team 
 import { Store, id } from './database';
 import { SkillPackage } from '../../shared/skill-package';
 import { packageForImport } from '../skill-package';
-import { KnowledgeInput, type Knowledge } from '../../shared/knowledge';
+import { isMemory, KnowledgeInput, type Knowledge } from '../../shared/knowledge';
 import { KnowledgeBase } from '../context/knowledge';
 
 const Key = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
@@ -24,8 +24,9 @@ export class TeamTemplates {
     const skills = [...new Set(workers.map(worker => worker.skillId))].map(skillId => this.store.get<Skill>('skills', skillId));
     const workerKeys = new Map(workers.map((worker, index) => [worker.id, `worker-${index + 1}`]));
     const skillKeys = new Map(skills.map((skill, index) => [skill.id, `skill-${index + 1}`]));
-    // Only this team's approved notes travel with it; workspace and worker knowledge stay local.
-    const knowledge = this.store.all<Knowledge>('knowledge').filter(item => item.status === 'approved' && item.scope.type === 'team' && item.scope.id === team.id).map(({ title, content, tags, pinned }) => ({ title, content, tags, pinned }));
+    // Only this team's approved notes travel with it; workspace and worker knowledge stay local, and so does memory:
+    // a template is a team to share, and what a team remembered is about this person (COD-161).
+    const knowledge = this.store.all<Knowledge>('knowledge').filter(item => item.status === 'approved' && !isMemory(item) && item.scope.type === 'team' && item.scope.id === team.id).map(({ title, content, tags, pinned }) => ({ title, content, tags, pinned }));
     const text = JSON.stringify(Template.parse({
       format: 'orglet-team-template', version: 1,
       team: { name: team.name, instructions: team.instructions, workflow: team.workflow, monthlyBudgetMicros: team.monthlyBudgetMicros, ...(team.reviewPolicy ? { reviewPolicy: team.reviewPolicy } : {}), ...(team.preflight ? { preflight: team.preflight } : {}), ...(team.workHours ? { workHours: team.workHours } : {}), ...(team.maxConcurrentTasks ? { maxConcurrentTasks: team.maxConcurrentTasks } : {}), memberKeys: team.memberIds.map(workerId => workerKeys.get(workerId)), synthesizerKey: workerKeys.get(team.synthesizerId) },

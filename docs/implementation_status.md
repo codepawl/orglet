@@ -216,6 +216,10 @@ The sidebar is **Nhóm** and **Nhân viên**, not a **Công việc** list. Click
 
 Team and group composers open a worker picker on `@`. Tagged names highlight in the user message. Group chat runs only tagged assignees that turn (`@all` / no tag keeps everyone). Demo team plans assign tagged members; a live planner receives `tagged` ids and a prefer-those-members instruction. Parser: `apps/desktop/src/shared/mentions.ts`. Tests: `tests/integration/mentions.test.ts`, group turn in `chat.test.ts`, Demo plan in `team.test.ts`.
 
+## Worker memory (COD-161)
+
+A worker remembers short lines from its chats into the knowledge store (`kind: 'memory'`, `turn` provenance): a `remember` tool in the tool loop, a `memories` array in a one-shot harness answer, active at once unless the run had read unvetted content (then `proposed`, reviewed in the Library). Per scope: 60 active, normalised and near duplicates merged, the oldest unpinned archived past the cap, pinned never evicted. A run freezes up to 30 lines / 6 000 characters (pinned then newest) as `context.memories`, sends them as one message and records them as `usedMemories` on the answer. The worker dialog's Ghi nhớ tab and Library → Knowledge → Ghi nhớ edit, pin and delete; deleting a chat drops the memories learned only there; Settings → Data has its own Xóa ghi nhớ scope. Tests: `tests/integration/memory.test.ts`. Page: [memory.md](memory.md).
+
 ## Thread context layers (COD-32)
 
 Each job hydrates a bounded prompt: compiled instructions, approved knowledge, an extractive rolling summary of older turns (≤ 8 KB), up to four keyword snippets from this thread only (≤ 8 KB), then the last 10 verbatim turns. If compacting still cannot fit 200 KB, the send is refused with no reservation. Frozen on `run.snapshot.context.manifest` (`verbatimTurns`, `summaryChars`, `retrievedSnippets`). Tests: `tests/integration/thread-context.test.ts`. Policy: [team-chat-context.md](team-chat-context.md).

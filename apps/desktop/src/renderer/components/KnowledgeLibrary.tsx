@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Globe, UserRound, Users, FileText, Pin, Search, Tag, Target, Type } from 'lucide-react';
 import type { Worker, Workspace } from '../../shared/contracts';
-import type { Knowledge, KnowledgeScope, RunContext } from '../../shared/knowledge';
+import { isMemory, type Knowledge, type KnowledgeScope, type RunContext } from '../../shared/knowledge';
+import { MemoryList } from './Memories';
 import { Button, FieldLabel } from './ui';
 import { Avatar } from './Avatar';
 import { Select } from './Select';
@@ -44,7 +45,7 @@ function KnowledgeAuthor({ item, workspace }: { item: Knowledge; workspace: Work
   </div>;
 }
 
-export function KnowledgeLibrary({ workspace, onOpen }: { workspace: Workspace; onOpen: (item?: Knowledge) => void }) {
+export function KnowledgeLibrary({ workspace, onOpen, onOpenChat }: { workspace: Workspace; onOpen: (item?: Knowledge) => void; /** Opens the chat a memory came from. */ onOpenChat: (taskId: string) => void }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Knowledge[]>(workspace.knowledge);
   const [error, setError] = useState('');
@@ -56,8 +57,10 @@ export function KnowledgeLibrary({ workspace, onOpen }: { workspace: Workspace; 
     return () => { active = false; clearTimeout(timer); };
   }, [query, workspace.knowledge]);
   const visible = results.filter(item => item.status !== 'archived');
+  // A memory waiting for review sits with the other proposals; an active one has its own list below the notes.
   const proposed = visible.filter(item => item.status === 'proposed');
-  const approved = visible.filter(item => item.status === 'approved');
+  const approved = visible.filter(item => item.status === 'approved' && !isMemory(item));
+  const memories = visible.filter(item => item.status === 'approved' && isMemory(item)).sort((first, second) => second.createdAt.localeCompare(first.createdAt));
   const row = (item: Knowledge) => <Button key={item.id} variant="outline" className="library-item" onClick={() => onOpen(item)}>
     <span className="library-text">{item.title}<small className="muted">{scopeLabel(item.scope, workspace)}{item.tags.length ? ` · ${item.tags.join(', ')}` : ''}</small></span>
     {item.pinned && <Pin size={14} aria-label={t('Luôn nạp')} />}<span className="badge">v{item.revision}</span>
@@ -66,6 +69,7 @@ export function KnowledgeLibrary({ workspace, onOpen }: { workspace: Workspace; 
     <label><FieldLabel icon={Search}>{t('Tìm knowledge')}</FieldLabel><Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={t('Từ khóa hoặc tag')} maxLength={200} /></label>
     {proposed.length > 0 && <section aria-label={t('Chờ duyệt')}><h3>{t('Chờ duyệt ({0})', [proposed.length])}</h3>{proposed.map(row)}</section>}
     <section aria-label={t('Đã duyệt')}><h3>{t('Đã duyệt ({0})', [approved.length])}</h3>{approved.map(row)}{!approved.length && <p className="muted">{query ? t('Không có mục khớp.') : t('Chưa có knowledge đã duyệt.')}</p>}</section>
+    {(memories.length > 0 || !query) && <section aria-label={t('Ghi nhớ')}><h3>{t('Ghi nhớ ({0})', [memories.length])}</h3><MemoryList memories={memories} workspace={workspace} showScope onOpenChat={onOpenChat} /></section>}
     {error && <p role="alert" className="error">{error}</p>}
   </div>;
 }
@@ -104,12 +108,14 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
 export function ContextManifestView({ run, workspace }: { run: { snapshot: { context?: RunContext } }; workspace: Workspace }) {
   const context = run.snapshot.context;
   if (!context) return null;
-  const names: Record<string, string> = { platform: t('Chính sách Orglet'), team: t('Hướng dẫn hội'), worker: t('Hướng dẫn Tí'), skill: t('Kỹ năng'), knowledge: 'Knowledge', summary: t('Tóm tắt hội thoại'), memory: t('Ghi nhớ hội thoại'), turn: t('Lượt cũ') };
+  const names: Record<string, string> = { platform: t('Chính sách Orglet'), team: t('Hướng dẫn hội'), worker: t('Hướng dẫn Tí'), skill: t('Kỹ năng'), knowledge: 'Knowledge', summary: t('Tóm tắt hội thoại'), memory: t('Đoạn hội thoại cũ'), remembered: t('Ghi nhớ'), turn: t('Lượt cũ') };
   const reasons: Record<string, string> = { duplicate: t('trùng nội dung đã nạp'), context_limit: t('vượt giới hạn context'), not_relevant: t('không khớp yêu cầu'), summarized: t('đã tóm tắt'), truncated: t('bị cắt') };
   const knowledgeTitle = (id?: string) => context.knowledge.find(entry => entry.id === id)?.title ?? workspace.knowledge.find(entry => entry.id === id)?.title;
+  const memoryText = (id?: string) => { const text = context.memories?.find(entry => entry.id === id)?.text ?? workspace.knowledge.find(entry => entry.id === id)?.content; return text && text.length > 80 ? `${text.slice(0, 80)}…` : text; };
+  const detail = (entry: { kind: string; id?: string }) => entry.kind === 'knowledge' ? `: ${knowledgeTitle(entry.id) ?? entry.id}` : entry.kind === 'remembered' ? `: ${memoryText(entry.id) ?? entry.id}` : '';
   return <details><summary>{t('Context đã nạp · {0} phần', [context.manifest.loaded.length])}</summary>
     {context.manifest.verbatimTurns != null && <p className="muted">{t('Lượt gần: {0} · tóm tắt {1} ký tự · {2} ghi chú cũ', [context.manifest.verbatimTurns, context.manifest.summaryChars ?? 0, context.manifest.retrievedSnippets ?? 0])}</p>}
-    <ul>{context.manifest.loaded.map((entry, index) => <li key={index}>{names[entry.kind]}{entry.kind === 'knowledge' ? `: ${knowledgeTitle(entry.id)}` : ''}{entry.revision ? ` · v${entry.revision}` : ''} · {entry.bytes} bytes</li>)}</ul>
-    {context.manifest.omitted.length > 0 && <><h4>{t('Không nạp')}</h4><ul>{context.manifest.omitted.map((entry, index) => <li key={index}>{names[entry.kind]}{entry.kind === 'knowledge' ? `: ${knowledgeTitle(entry.id) ?? entry.id}` : entry.revision ? ` · v${entry.revision}` : ''} · {reasons[entry.reason]}</li>)}</ul></>}
+    <ul>{context.manifest.loaded.map((entry, index) => <li key={index}>{names[entry.kind]}{detail(entry)}{entry.revision ? ` · v${entry.revision}` : ''} · {entry.bytes} bytes</li>)}</ul>
+    {context.manifest.omitted.length > 0 && <><h4>{t('Không nạp')}</h4><ul>{context.manifest.omitted.map((entry, index) => <li key={index}>{names[entry.kind]}{entry.kind === 'knowledge' || entry.kind === 'remembered' ? detail(entry) : entry.revision ? ` · v${entry.revision}` : ''} · {reasons[entry.reason]}</li>)}</ul></>}
   </details>;
 }
