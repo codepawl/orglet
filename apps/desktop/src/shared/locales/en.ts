@@ -1919,6 +1919,12 @@ export const en: Dictionary = {
   'Câu trả lời kèm {0} ghi nhớ nhưng lượt chạy này không được phép ghi nhớ; đã bỏ qua.': 'The answer carried memories ({0}), but this run may not remember, so they were skipped.',
   'Ghi nhớ thứ {0} bị từ chối: {1}': 'Memory {0} was rejected: {1}',
   'Mỗi ghi nhớ cần text và scope.': 'Each memory needs text and scope.',
+  // A worker's reactions carried by a one-shot harness answer (COD-216).
+  'Câu trả lời kèm {0} cảm xúc nhưng lượt chạy này không được phép thả cảm xúc; đã bỏ qua.': 'The answer carried reactions ({0}), but this run may not react, so they were skipped.',
+  'Cảm xúc thứ {0} bị từ chối: {1}': 'Reaction {0} was rejected: {1}',
+  'Mỗi cảm xúc cần messageId và emoji.': 'Each reaction needs messageId and emoji.',
+  'Cảm xúc không hợp lệ.': 'Invalid reaction.',
+  'Không thể thả cảm xúc cho tin của chính mình.': 'A worker cannot react to its own message.',
   // What a run changed in its working copy (COD-163).
   'Đã thay đổi {0} tệp · {1}': 'Files changed: {0} · {1}',
   '{0} đã thay đổi {1} tệp · {2}': '{0} · files changed: {1} · {2}',

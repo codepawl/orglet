@@ -66,11 +66,14 @@ it('lets an assigned worker react only while its run is active in the same turn'
     input: current.currentInput }, startedAt: now(), error: null };
   store.put('runs', run, { column: 'task_id', value: task.id });
   const interactions = new MessageInteractions(store);
-  interactions.workerReaction(run, 'react-1', { messageId: artifact.id, emoji: 'watching', active: true });
-  interactions.workerReaction(run, 'react-1', { messageId: artifact.id, emoji: 'watching', active: true });
+  const personsTurn = turnMessageId(task.id, 0);
+  interactions.workerReaction(run, 'react-1', { messageId: personsTurn, emoji: 'watching', active: true });
+  interactions.workerReaction(run, 'react-1', { messageId: personsTurn, emoji: 'watching', active: true });
   expect(store.get<Task>('tasks', task.id).messageReactions).toHaveLength(1);
+  // The saved answer is this same worker's own; a reaction is for someone else's message (COD-216).
+  expect(() => interactions.workerReaction(run, 'react-own', { messageId: artifact.id, emoji: 'agree', active: true })).toThrow('chính mình');
   store.update('runs', { ...run, status: 'completed' });
-  expect(() => interactions.workerReaction(run, 'react-2', { messageId: artifact.id, emoji: 'agree', active: true })).toThrow('không còn quyền');
+  expect(() => interactions.workerReaction(run, 'react-2', { messageId: personsTurn, emoji: 'agree', active: true })).toThrow('không còn quyền');
 });
 
 it('lets an API worker react through its tool loop and carries a verified reply into the next turn', async () => {

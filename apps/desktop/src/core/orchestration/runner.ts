@@ -2,7 +2,7 @@ import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { WebTools } from '../tools/web-tools';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
-import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
+import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, reactionsAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, REACTION_NUDGE, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
 import { z } from 'zod';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
@@ -50,7 +50,7 @@ import { savedArtifactContext, savedAssignmentAttempts } from './artifact-proven
 import { WorkspaceProcess } from '../../shared/workspace-processes';
 import { codexOutputSchema, decodeCodexOutput } from '../harness/codex-output';
 import { MessageInteractions } from './message-interactions';
-import { turnMessageId } from '../../shared/message-interactions';
+import { AnswerReaction, AnswerReactions, MAX_ANSWER_REACTIONS, turnMessageId } from '../../shared/message-interactions';
 import { AnswerAppChange, isProposalTool, MAX_ANSWER_PROPOSALS, ProposedAppChanges, proposalToolNames } from '../../shared/app-proposals';
 import { ProposeSelfImprovement } from '../../shared/self-improvement';
 import type { AppProposals } from './app-proposals';
@@ -264,7 +264,19 @@ function selfImprovementInstruction(codex: boolean) {
   ].filter(Boolean).join(' ');
 }
 
-export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false, unreadable: UnreadableSource[] = [], appProposals = false, memories = false, selfImprovement = false) {
+/**
+ * How a one-shot CLI answer reacts (COD-216): the react_to_message tool is not callable, so the answer carries a
+ * few `{ messageId, emoji }` items. The ids it may use are the ones already in the prompt: the latest message's
+ * messageId and the id of each earlier turn or colleague's answer.
+ */
+function reactionsInstruction(codex: boolean) {
+  return [
+    `The react_to_message tool is not callable here. Instead, put a reaction in reactions: an array of at most ${MAX_ANSWER_REACTIONS} items { "messageId": <the messageId of the latest message, or the id of an earlier message in this conversation>, "emoji": "agree" | "delighted" | "funny" | "unsure" | "watching" | "against" }. ${REACTION_NUDGE} Omit reactions or leave it empty on an ordinary turn.`,
+    codex ? `reactions goes inside the payload JSON next to message, title and report, and matches this schema: ${JSON.stringify(z.toJSONSchema(AnswerReactions, { target: 'draft-7' }))}` : '',
+  ].filter(Boolean).join(' ');
+}
+
+export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false, unreadable: UnreadableSource[] = [], appProposals = false, memories = false, selfImprovement = false, reactions = false) {
   return [
     'You are running inside Orglet as a read-only worker chatting with your user. When you describe what you can or cannot do, use everyday words about the work: you read the files the user attaches and write answers, and you cannot open links, run programs or change files. Do not mention tools, modes, sandboxes or providers unless the user asks about them. Write like a colleague messaging back, in the language and formality the user writes in, and ask one short question when the request is unclear or could go two sensible ways.',
     inline
@@ -278,6 +290,7 @@ export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { s
     appProposals && !plan ? appProposalsInstruction(codex) : '',
     memories && !plan ? memoriesInstruction(codex) : '',
     selfImprovement && !plan ? selfImprovementInstruction(codex) : '',
+    reactions && !plan ? reactionsInstruction(codex) : '',
     files.length || inline?.length ? `Source manifest: ${JSON.stringify(files)}` : NO_SOURCES_INSTRUCTION,
     unreadable.length ? `Attached but not readable by you (no copy was made): ${JSON.stringify(unreadable)}. If the user asks about one of these, say you cannot read that kind of file yet; never guess at its contents or cite it.` : '',
     ...messages.map(message => typeof message.content === 'string' ? message.content : ''),
@@ -1114,6 +1127,7 @@ export class Runner {
       const withProposals = !!this.appProposals && proposalsAllowed(run, this.store.get<Task>('tasks', task.id));
       const withMemories = memoriesAllowed(run, this.store.get<Task>('tasks', task.id));
       const withSelfImprovement = !!this.appProposals && selfImprovementAllowed(run, this.store.get<Task>('tasks', task.id));
+      const withReactions = reactionsAllowed(run, this.store.get<Task>('tasks', task.id));
       this.event(run.id, `Đang chạy ${tool.name} ${tool.version} trên máy · chỉ đọc bản sao nguồn của task`);
       const progress = new ProgressSender(task.id, run.id, update => this.onProgress(update));
       const showSourceNames = (update: HarnessProgress): HarnessProgress => ({
@@ -1128,9 +1142,9 @@ export class Runner {
           executable: tool.executable,
           ...(tool.configDir ? { configDir: tool.configDir } : {}),
           cwd: directory,
-          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable, withProposals, withMemories, withSelfImprovement),
+          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable, withProposals, withMemories, withSelfImprovement, withReactions),
           schema: provider === 'codex' ? codexOutputSchema : z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema
-            : harnessAnswerSchema(run, withProposals, withMemories, withSelfImprovement), { target: 'draft-7' }),
+            : harnessAnswerSchema(run, withProposals, withMemories, withSelfImprovement, withReactions), { target: 'draft-7' }),
           signal,
           maxBudgetUsd: remainingUsd,
           ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
@@ -1161,11 +1175,13 @@ export class Runner {
       const proposalLimitations = answer?.success ? this.recordAnswerProposals(run, task, answer.data.appProposals ?? [], withProposals) : [];
       const memoryLimitations = answer?.success ? this.recordAnswerMemories(run, answer.data.memories ?? [], withMemories, untrustedInputs.length > 0) : [];
       const improvementLimitations = answer?.success ? this.recordAnswerSelfImprovement(run, task, answer.data.selfImprovement, withSelfImprovement) : [];
+      const reactionLimitations = answer?.success ? this.recordAnswerReactions(run, answer.data.reactions ?? [], withReactions) : [];
+      const answerLimitations = [...proposalLimitations, ...memoryLimitations, ...improvementLimitations, ...reactionLimitations];
       if (answer?.success && answer.data.report === null) {
         if (run.stage === 'member') throw new Error('Phần việc cần báo cáo kết quả hoặc blocker, không thể hoàn tất bằng tin nhắn.');
         for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
-        this.commit(task, run, { ...chatReport(answer.data.message), limitations: [...(options.limitations ?? []), ...proposalLimitations, ...memoryLimitations, ...improvementLimitations] }, options.keepTaskOpen, [], answer.data.title, false, untrustedInputs);
-      } else await this.finalize(task, run, answer?.success ? answer.data.report : output, readIds, scope, { ...options, untrustedInputs }, [...limitations, ...proposalLimitations, ...memoryLimitations, ...improvementLimitations]);
+        this.commit(task, run, { ...chatReport(answer.data.message), limitations: [...(options.limitations ?? []), ...answerLimitations] }, options.keepTaskOpen, [], answer.data.title, false, untrustedInputs);
+      } else await this.finalize(task, run, answer?.success ? answer.data.report : output, readIds, scope, { ...options, untrustedInputs }, [...limitations, ...answerLimitations]);
     } catch (error) {
       retainDirectory = error instanceof HarnessTerminationError;
       throw error;
@@ -1233,6 +1249,38 @@ export class Runner {
     }
     this.event(run.id, 'Đã ghi một đề xuất sửa hướng dẫn của Tí; chờ bạn áp dụng.');
     return [];
+  }
+
+  /**
+   * Records the reactions a one-shot CLI answer carried, each through the same check the react_to_message tool
+   * passes (a running run in the current turn, a message it can see, never its own). A bad item becomes a
+   * limitation of the answer and the rest still land; nothing here fails the run (COD-216).
+   */
+  private recordAnswerReactions(run: Run, items: unknown[], allowed: boolean): string[] {
+    if (!items.length) return [];
+    if (!allowed) {
+      const note = `Câu trả lời kèm ${items.length} cảm xúc nhưng lượt chạy này không được phép thả cảm xúc; đã bỏ qua.`;
+      this.event(run.id, note);
+      return [note];
+    }
+    const limitations: string[] = [];
+    items.slice(0, MAX_ANSWER_REACTIONS).forEach((item, index) => {
+      const refusal = this.recordAnswerReaction(run, item, index);
+      if (refusal) limitations.push(`Cảm xúc thứ ${index + 1} bị từ chối: ${refusal}`);
+    });
+    return limitations;
+  }
+
+  /** One reaction of a one-shot answer; returns why it was refused, or nothing once it landed. */
+  private recordAnswerReaction(run: Run, item: unknown, index: number): string | undefined {
+    const shape = AnswerReaction.safeParse(item);
+    if (!shape.success) return 'Mỗi cảm xúc cần messageId và emoji.';
+    try {
+      new MessageInteractions(this.store).workerReaction(run, `answer-reaction-${index + 1}`, { ...shape.data, active: true });
+      return undefined;
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Cảm xúc không hợp lệ.';
+    }
   }
 
   /** One remember call: the outcome goes back to the worker as the tool's answer, so a bad line does not fail the run. */

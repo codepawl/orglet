@@ -2,7 +2,8 @@ import type { Run, Task } from '../../shared/contracts';
 import { MessageReaction, SetMessageReaction, SetUserReaction, turnMessageId } from '../../shared/message-interactions';
 import { Store, now } from '../storage/database';
 
-export type MessageTarget = { id: string; kind: 'user' | 'answer' | 'team'; author: string; excerpt: string };
+/** `workerId` names the worker who wrote an answer or team message, so a worker can be kept off its own messages. */
+export type MessageTarget = { id: string; kind: 'user' | 'answer' | 'team'; author: string; excerpt: string; workerId?: string };
 const excerpt = (value: string) => value.replace(/\s+/g, ' ').trim().slice(0, 180);
 
 /** Resolves message IDs from committed task history; renderer quotes and model text carry no authority. */
@@ -29,7 +30,7 @@ export class MessageInteractions {
         && owner.snapshot.worker.id !== actorRun.snapshot.worker.id
         && !actorRun.snapshot.upstreamArtifactIds?.includes(artifact.id)) throw new Error('Tin nhắn ngoài phạm vi được xem.');
       return { id: messageId, kind: 'answer', author: owner.snapshot.worker.name,
-        excerpt: excerpt(artifact.report.summary) };
+        excerpt: excerpt(artifact.report.summary), workerId: owner.snapshot.worker.id };
     }
     const event = detail.events.find(item => item.id === messageId && item.teamMessage);
     if (event?.teamMessage && event.teamMessage.teamId === task.teamId) {
@@ -41,7 +42,7 @@ export class MessageInteractions {
         throw new Error('Tin nhắn ngoài phạm vi được xem.');
       }
       const sender = detail.runs.find(run => run.id === event.runId)?.snapshot.worker.name ?? message.senderId;
-      return { id: messageId, kind: 'team', author: sender, excerpt: excerpt(message.body) };
+      return { id: messageId, kind: 'team', author: sender, excerpt: excerpt(message.body), workerId: message.senderId };
     }
     throw new Error('Không tìm thấy tin nhắn trong cuộc trò chuyện này.');
   }
@@ -65,7 +66,9 @@ export class MessageInteractions {
       if (current.status !== 'running' || current.snapshot.worker.provider === 'demo' || task.deletedAt
         || (current.snapshot.inputRevision ?? 0) !== (task.inputRevision ?? 0)
         || current.snapshot.worker.id !== run.snapshot.worker.id) throw new Error('Lượt chạy không còn quyền tương tác.');
-      this.target(task.id, input.messageId, current);
+      const resolved = this.target(task.id, input.messageId, current);
+      // A reaction is for someone else's message; a worker liking its own answer would only be noise (COD-216).
+      if (resolved.workerId === current.snapshot.worker.id) throw new Error('Không thể thả cảm xúc cho tin của chính mình.');
       this.set(task, input.messageId, input.emoji, input.active, 'worker', current, callId);
     });
   }
