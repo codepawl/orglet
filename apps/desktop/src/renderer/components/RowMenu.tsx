@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { EllipsisVertical, X, type LucideIcon } from 'lucide-react';
 import { Button } from './ui';
@@ -6,6 +6,29 @@ import { t } from '../i18n';
 
 /** `confirm` asks inside the same popover before running a destructive item; `danger` colours it. */
 export type RowMenuItem = { label: string; icon: LucideIcon; onSelect: () => void; danger?: boolean; confirm?: { question: string; label: string } };
+
+/** What the panel opens beside: the trigger's box, or a zero-size box at the pointer for a right-click. */
+type MenuAnchor = { rect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>; side: 'start' | 'end' };
+
+const GAP = 4;
+const EDGE = 8;
+const hiddenForMeasuring: CSSProperties = { position: 'fixed', left: 0, top: 0, visibility: 'hidden' };
+
+/**
+ * Where the panel goes, from its measured size: under the anchor, or above it when there is no room below, lined up
+ * with the anchor's start or end edge and kept inside the host (the window, or the dialog it lives in).
+ */
+function placePanel(anchor: MenuAnchor, panel: HTMLElement, host: HTMLElement): CSSProperties {
+  const bounds = host === document.body ? { left: 0, top: 0, right: innerWidth, bottom: innerHeight } : host.getBoundingClientRect();
+  const width = panel.offsetWidth;
+  const height = panel.offsetHeight;
+  const { rect, side } = anchor;
+  const fitsBelow = rect.bottom + GAP + height <= bounds.bottom - EDGE;
+  const top = fitsBelow ? rect.bottom + GAP : Math.max(bounds.top + EDGE, rect.top - GAP - height);
+  const preferredLeft = side === 'start' ? rect.left : rect.right - width;
+  const left = Math.min(Math.max(bounds.left + EDGE, preferredLeft), bounds.right - width - EDGE);
+  return { position: host === document.body ? 'fixed' : 'absolute', left: left - bounds.left, top: top - bounds.top };
+}
 
 /**
  * Vertical-dots menu. The panel is portaled to `document.body` so sidebar overflow and row `transform`
@@ -16,15 +39,18 @@ export type RowMenuItem = { label: string; icon: LucideIcon; onSelect: () => voi
  * the pointer; the innermost menu takes the click, so a nested row's menu wins over its parent's.
  */
 export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className = 'row-action', align = 'end', asksOnOpen = false, contextMenuOf }: { label: string; items: RowMenuItem[]; icon?: LucideIcon; className?: string; align?: 'start' | 'end'; asksOnOpen?: boolean; contextMenuOf?: string }) {
+  const [anchor, setAnchor] = useState<MenuAnchor>();
   const [position, setPosition] = useState<CSSProperties>();
   const [asking, setAsking] = useState<RowMenuItem>();
   const root = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
-  const open = Boolean(position);
-  const close = (restoreFocus = false) => { setPosition(undefined); setAsking(undefined); if (restoreFocus) trigger.current?.focus(); };
+  const open = Boolean(anchor);
+  const close = (restoreFocus = false) => { setAnchor(undefined); setPosition(undefined); setAsking(undefined); if (restoreFocus) trigger.current?.focus(); };
   const inside = (node: Node | null) => Boolean(node && (root.current?.contains(node) || panel.current?.contains(node)));
-  useEffect(() => { if (open) panel.current?.querySelector<HTMLButtonElement>('[role=menuitem]')?.focus(); }, [open, asking]);
+  // Focus moves in once the panel is placed and visible; a hidden element cannot take focus.
+  const placed = Boolean(position);
+  useEffect(() => { if (placed) panel.current?.querySelector<HTMLButtonElement>('[role=menuitem]')?.focus(); }, [placed, asking]);
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => { if (!inside(event.target as Node)) close(); };
@@ -41,18 +67,18 @@ export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className
     if (open) { close(); return; }
     openBeside(trigger.current!.getBoundingClientRect());
   };
-  /** Places the panel under `rect` (or above it when there is no room below) and opens it. */
-  const openBeside = (rect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>, side: 'start' | 'end' = align) => {
-    const host = container();
-    const bounds = host === document.body ? { left: 0, top: 0, right: innerWidth, bottom: innerHeight } : host.getBoundingClientRect();
-    const height = (items.length + 1) * 40 + 12;
-    const below = rect.bottom + 4 + height < bounds.bottom;
-    const width = 240;
-    const left = side === 'start' ? Math.min(rect.left, bounds.right - width - 8) : Math.max(bounds.left + 8, rect.right - width);
-    const top = below ? rect.bottom + 4 : Math.max(bounds.top + 8, rect.top - 4 - height);
-    setPosition({ position: host === document.body ? 'fixed' : 'absolute', left: left - bounds.left, top: top - bounds.top });
+  /** Opens the panel beside `rect`; it is placed once its real size is known (see the layout effect below). */
+  const openBeside = (rect: MenuAnchor['rect'], side: MenuAnchor['side'] = align) => {
+    setPosition(undefined);
+    setAnchor({ rect, side });
     if (asksOnOpen && items.length === 1 && items[0].confirm) setAsking(items[0]);
   };
+  // The panel first renders hidden, then sits against its button by its measured size, again when the confirm
+  // question changes its height. A guessed size left it floating far from the button (user, 2026-09-23).
+  useLayoutEffect(() => {
+    if (!anchor || !panel.current) return;
+    setPosition(placePanel(anchor, panel.current, container()));
+  }, [anchor, asking]);
   useEffect(() => {
     if (!contextMenuOf) return;
     const area = root.current?.closest<HTMLElement>(contextMenuOf);
@@ -77,7 +103,7 @@ export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className
     }
   };
   const menu = open && createPortal(
-    <div ref={panel} className="row-menu-popover" role="menu" aria-label={label} data-popup-open style={position}
+    <div ref={panel} className="row-menu-popover" role="menu" aria-label={label} data-popup-open style={position ?? hiddenForMeasuring}
       onBlur={event => { if (open && !inside(event.relatedTarget as Node | null)) close(); }} onKeyDown={onMenuKey}>
       {asking ? <>
         <p className="row-menu-question">{asking.confirm!.question}</p>
@@ -88,7 +114,7 @@ export function RowMenu({ label, items, icon: Icon = EllipsisVertical, className
     container(),
   );
   return <div ref={root} className="row-menu" onBlur={event => { if (open && !inside(event.relatedTarget as Node | null)) close(); }} onKeyDown={event => { if (open) onMenuKey(event); }}>
-    <Button ref={trigger} size="icon" className={className} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={toggle}><Icon size={16} /></Button>
+    <Button ref={trigger} type="button" size="icon" className={className} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={toggle}><Icon size={16} /></Button>
     {menu}
   </div>;
 }
