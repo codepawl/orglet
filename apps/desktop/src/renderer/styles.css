@@ -1650,7 +1650,27 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .knowledge-author-text .muted { font-size:12px; }
 .knowledge-author-mark { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:11px; background:var(--surface); color:var(--muted); }
 .badge.pending { color:var(--working); }
-@media(max-width:1000px) { .chat-reply,.knowledge-proposals { padding-left:0; } .thread-usage { margin-left:0; } }
+/* App-change proposal cards (COD-199): one quiet surface per proposal under the answer, indented like the reply.
+   The diff is a definition list, field on the left, value on the right, an arrow between before and after. */
+.app-proposals { display:flex; flex-direction:column; gap:10px; padding-left:35px; margin-top:14px; max-width:var(--bubble-max); }
+.app-proposal { background:var(--surface); border-radius:12px; padding:14px 16px 12px; }
+.app-proposal h4 { font-size:14px; font-weight:600; margin:0; overflow-wrap:anywhere; }
+.app-proposal-changes { display:grid; grid-template-columns:minmax(96px, max-content) minmax(0, 1fr); gap:5px 14px; margin:10px 0 0; font-size:13px; line-height:1.5; }
+.app-proposal-changes > div { display:contents; }
+.app-proposal-changes dt { color:var(--muted); }
+.app-proposal-changes dd { display:flex; flex-wrap:wrap; align-items:center; gap:4px 6px; margin:0; min-width:0; overflow-wrap:anywhere; white-space:pre-wrap; }
+.app-proposal-changes dd svg { flex-shrink:0; color:var(--muted); }
+.app-proposal-before { color:var(--muted); text-decoration:line-through; text-decoration-color:color-mix(in srgb, var(--muted) 60%, transparent); }
+.app-proposal-status { margin-top:10px; font-size:13px; color:var(--muted); }
+.app-proposal-settled .app-proposal-status { color:var(--success); }
+.app-proposal-error { margin-top:10px; font-size:13px; color:var(--error); }
+.app-proposal-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; }
+.app-proposal-actions:empty { display:none; }
+.app-proposal-actions .button { min-height:32px; padding:5px 12px; font-size:13px; }
+.app-proposals-all { margin-top:0; }
+@media(max-width:1000px) { .chat-reply,.knowledge-proposals,.app-proposals { padding-left:0; } .thread-usage { margin-left:0; } }
+/* The auto-apply switch sits under the chat permissions in the worker dialog, spaced as a second group. */
+.worker-auto-apply { margin-top:22px; }
 
 /* Task rows carry their own menu (rename lives there, not on double-click). */
 .task-row { display:flex; align-items:center; gap:1px; border-radius:10px; }

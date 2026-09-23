@@ -39,6 +39,8 @@ export type PermissionState = {
   sources: boolean;
   dataset: boolean;
   web: boolean;
+  /** May store app changes (a new orglet, a crew, a schedule, a setting) as cards for the user to apply (COD-199). */
+  propose: boolean;
   workspace: WorkspaceLevel;
   folder?: string;
 };
@@ -63,6 +65,7 @@ export function permissionState(input: {
     sources: capabilities.includes('source.read'),
     dataset: capabilities.includes('dataset.check'),
     web: capabilities.includes('network.web'),
+    propose: capabilities.includes('app.propose'),
     workspace: folder ? workspaceLevelOf(folder.permissions) : 'none',
     ...(folder ? { folder: folder.name } : {}),
   };

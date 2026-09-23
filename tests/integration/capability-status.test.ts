@@ -35,7 +35,8 @@ it('maps every grant the schema allows onto one folder level and back', () => {
 it('shows a folder level only while the current grant exists for this task', () => {
   const state = (override: Partial<Parameters<typeof permissionState>[0]> = {}) =>
     permissionState({ provider: 'codex', capabilities: ['source.read', 'skill.read'], grant, taskId, ...override });
-  expect(state()).toMatchObject({ workspace: 'execute', folder: 'project', sources: true, dataset: false, web: false });
+  expect(state()).toMatchObject({ workspace: 'execute', folder: 'project', sources: true, dataset: false, web: false, propose: false });
+  expect(state({ capabilities: ['app.propose'] })).toMatchObject({ sources: false, propose: true });
   expect(state({ grant: { ...grant, revoked: true } })).toMatchObject({ workspace: 'none' });
   expect(state({ grant: { ...grant, revoked: true } }).folder).toBeUndefined();
   expect(state({ grant: null }).workspace).toBe('none');
@@ -57,7 +58,7 @@ it('renders a blocker as a disabled control with one reason, never as a third po
   expect(html).not.toContain('disabled=""');
   const demoOnly = render({ workers: [demo] });
   expect(demoOnly).toContain('A Demo worker uses no tools, so access cannot be turned on.');
-  expect(demoOnly.match(/role="switch"[^>]*disabled=""/g)).toHaveLength(3);
+  expect(demoOnly.match(/role="switch"[^>]*disabled=""/g)).toHaveLength(4);
   expect(demoOnly).toMatch(/role="combobox"[^>]*disabled=""/);
   // The switch keeps its real value under the reason: Demo ignores the policy, it does not change it.
   expect(demoOnly).toMatch(/role="switch"[^>]*aria-checked="true"/);
@@ -74,7 +75,7 @@ it('renders a blocker as a disabled control with one reason, never as a third po
   expect(loading).not.toMatch(/role="switch"[^>]*disabled=""/);
   const locked = render({ locked: 'Save first.', taskId: undefined, grant: null });
   expect(locked).toContain('Save first.');
-  expect(locked.match(/role="switch"[^>]*disabled=""/g)).toHaveLength(3);
+  expect(locked.match(/role="switch"[^>]*disabled=""/g)).toHaveLength(4);
 });
 
 it('keeps task capability status aligned with the frozen execution policy on resume', () => {

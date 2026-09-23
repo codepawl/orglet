@@ -21,6 +21,7 @@ import { Language } from './i18n';
 import { CustomModelId, type ModelListResult } from './models';
 import { SetUserReaction, type MessageReaction } from './message-interactions';
 import type { AboutInfo, AboutLink, Changelog, UpdateState } from './updates';
+import type { AppProposal } from './app-proposals';
 
 export const Id = z.string().uuid();
 export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor']);
@@ -62,6 +63,9 @@ export const WorkerInput = z.object({
   // Presentation only: shown in the app and carried by templates, never sent to a model.
   avatar: z.object({ mascot: z.string().regex(/^[a-z-]{1,32}$/).optional(), letter: z.literal(true).optional(), emoji: z.string().min(1).max(16).optional(), color: z.string().regex(/^#[0-9a-f]{6}$/i).optional() }).strict().optional(),
   description: z.string().trim().max(160).optional(),
+  // Apply this worker's safe app-change proposals when its run finishes instead of waiting for a click (COD-199).
+  // Off unless the user turns it on; a worker's proposal tools cannot set it.
+  autoApplyProposals: z.boolean().optional(),
 });
 export type WorkerInput = z.infer<typeof WorkerInput>;
 export const TeamInput = z.object({
@@ -188,7 +192,7 @@ export type BudgetReservationView = {
   verifiedSource: 'provider_dashboard' | 'invoice' | null;
   resolvedAt: string | null;
 };
-export type TaskDetail = { task: Task; runs: Run[]; events: Activity[]; artifacts: Artifact[]; profiles: ProfileRecord[]; preflights: PreflightRecord[]; sources: Source[]; workspaceEvidence: (import('./workspace-evidence').WorkspaceReadEvidence & { grantCurrent: boolean })[]; usage: Usage };
+export type TaskDetail = { task: Task; runs: Run[]; events: Activity[]; artifacts: Artifact[]; profiles: ProfileRecord[]; preflights: PreflightRecord[]; sources: Source[]; workspaceEvidence: (import('./workspace-evidence').WorkspaceReadEvidence & { grantCurrent: boolean })[]; /** App changes the chat's workers proposed, with what became of each (COD-199). */ appProposals: AppProposal[]; usage: Usage };
 /** How the in-app brand mark is coloured: the text colour, or the user's accent (COD-154). */
 export const LogoColor = z.enum(['mono', 'accent']);
 export type LogoColor = z.infer<typeof LogoColor>;
@@ -243,6 +247,11 @@ export const commands = {
   markTaskSeen: z.object({ id: Id }),
   acknowledgeEvidence: z.object({ taskId: Id, requestId: Id }),
   saveKnowledge: KnowledgeInput,
+  // A worker's proposed app change (COD-199): apply it through the same commands the UI uses, drop it, or take an
+  // automatic apply back.
+  applyAppProposal: z.object({ id: Id }).strict(),
+  dismissAppProposal: z.object({ id: Id }).strict(),
+  undoAppProposal: z.object({ id: Id }).strict(),
   reviewKnowledge: z.object({ id: Id, revision: z.number().int().positive(), decision: z.enum(['approve', 'archive']) }).strict(),
   searchKnowledge: z.object({ query: z.string().max(200) }).strict(),
   harnesses: z.object({ refresh: z.boolean() }).strict(),
@@ -271,7 +280,7 @@ export const commands = {
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { reconcileBudget: void; recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; eraseData: EraseSummary; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
+export type Results = { applyAppProposal: AppProposal; dismissAppProposal: void; undoAppProposal: AppProposal; reconcileBudget: void; recoveryFile: RecoveryFile; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; eraseData: EraseSummary; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;

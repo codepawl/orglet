@@ -1,4 +1,4 @@
-import { Database, FileText, FolderOpen, Globe } from 'lucide-react';
+import { Database, FileText, FolderOpen, Globe, Lightbulb } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { permissionBlocker, permissionState, workspaceLevels, type PermissionBlocker, type WorkspaceLevel } from '../../shared/capability-status';
 import type { ToolCapability } from '../../shared/tool-policy';
@@ -109,6 +109,11 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
     <SwitchField checked={state.web} disabled={disabled} onChange={enabled => onCapability('network.web', enabled)}
       description={t('Cho phép đọc URL công khai và gửi truy vấn tìm kiếm. Không mở mạng cho lệnh trong thư mục.')}>
       <Globe size={15} aria-hidden="true" />{t('Đọc và tìm kiếm web')}
+    </SwitchField>
+    {/* Proposing is not doing: the switch lets the worker store a card, and the card still waits for Apply (COD-199). */}
+    <SwitchField checked={state.propose} disabled={disabled} onChange={enabled => onCapability('app.propose', enabled)}
+      description={t('Tí có thể đề xuất tạo hoặc sửa Tí, hội, skill, lịch chạy và một số cài đặt. Mỗi đề xuất là một thẻ trong chat; bạn bấm Áp dụng thì mới đổi.')}>
+      <Lightbulb size={15} aria-hidden="true" />{t('Đề xuất thay đổi trong app')}
     </SwitchField>
     <p className="muted permission-footnote">{t('Quyền mới áp dụng cho lần chạy chưa bắt đầu, kể cả phần việc còn chờ trong lượt này. Thu hồi quyền sẽ dừng công việc đang chạy.')}</p>
   </div>;

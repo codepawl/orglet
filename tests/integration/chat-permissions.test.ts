@@ -62,7 +62,8 @@ describe('a run fixes its permissions when it starts', () => {
     expect(atSend.map(run => run.stage).sort()).toEqual(['member', 'member', 'plan', 'synthesis']);
     for (const run of atSend) expect(run.snapshot.toolCapabilities).not.toContain('network.web');
 
-    await core.command('setToolCapabilities', { taskId, capabilities: ['source.read', 'dataset.check', 'skill.read', 'network.web'] });
+    // The whole current set plus the web: dropping a capability the runs froze (app.propose) would cancel them instead.
+    await core.command('setToolCapabilities', { taskId, capabilities: ['source.read', 'dataset.check', 'skill.read', 'app.propose', 'network.web'] });
     releasePlan();
     await settled(taskId);
 

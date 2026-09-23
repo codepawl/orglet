@@ -57,6 +57,8 @@ import type { NewChatTarget, WorkspaceGrantView } from '../shared/workspace-acce
 import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { permissionsForLevel, type WorkspaceLevel } from '../shared/capability-status';
 import { appView, createHistory, recordView, replaceView, stepHistory, useNavigationInput, viewKey, type AppView, type NavigationDirection, type NavigationHistory } from './navigation';
+import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
+import type { ProposalActions } from './components/AppProposals';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -413,6 +415,42 @@ export function App() {
     const previous = taskDetail.task.toolCapabilities ?? snapshotCapabilities(provider);
     return orglet.call('setToolCapabilities', { taskId: taskDetail.task.id, capabilities: toggledCapabilities(previous, capability, enabled) });
   });
+  /**
+   * The app-change cards' buttons (COD-199). Apply runs the core command; a template proposal then needs a save
+   * location, which only main can ask for, so the export dialog follows the apply. "Apply all" goes one by one in
+   * order, because a later card may point at what an earlier one creates.
+   */
+  const [proposalBusy, setProposalBusy] = useState(false);
+  const proposalWork = (perform: () => Promise<void>, about: string) => {
+    if (proposalBusy) return;
+    setProposalBusy(true);
+    errorAbout.current = about;
+    setError('');
+    void perform().catch(err => setError((err as Error).message)).finally(() => { setProposalBusy(false); void refresh(); });
+  };
+  const applyProposal = async (proposal: AppProposal) => {
+    const applied = await orglet.call('applyAppProposal', { id: proposal.id });
+    if (applied.target?.kind === 'template') {
+      const saved = await orglet.exportTemplate(applied.target.id);
+      toast(saved ? t('Đã lưu template') : t('Chưa lưu template. Xuất lại từ menu của hội khi cần.'), saved ? 'success' : 'error', proposal.title);
+    }
+  };
+  const openProposalTarget = (target: ProposalTarget) => {
+    if (!workspace) return;
+    if (target.kind === 'worker') { const found = workspace.workers.find(item => item.id === target.id); if (found) { setEditingWorker(found); setPanel('worker'); } return; }
+    if (target.kind === 'team' || target.kind === 'template') { const found = workspace.teams.find(item => item.id === target.id); if (found) { setEditingTeam(found); setPanel('team'); } return; }
+    if (target.kind === 'skill') { const found = workspace.skills.find(item => item.id === target.id); if (found) { setFromLibrary(false); setEditingSkill(found); setPanel('skill'); } return; }
+    if (target.kind === 'routine') { const found = workspace.routines.find(item => item.id === target.id); openRoutines(found ? { editing: true, routine: found } : { editing: false }); return; }
+    openSettings('general');
+  };
+  const proposalActions: ProposalActions = {
+    busy: proposalBusy,
+    onApply: proposal => proposalWork(() => applyProposal(proposal), proposal.title),
+    onApplyAll: proposals => proposalWork(async () => { for (const proposal of proposals) await applyProposal(proposal); }, t('Áp dụng tất cả ({0})', [proposals.length])),
+    onDismiss: proposal => proposalWork(() => orglet.call('dismissAppProposal', { id: proposal.id }), proposal.title),
+    onUndo: proposal => proposalWork(async () => { await orglet.call('undoAppProposal', { id: proposal.id }); }, proposal.title),
+    onOpen: openProposalTarget,
+  };
   const worker = workspace?.workers.find(item => item.id === workerId);
   const team = workspace?.teams.find(item => item.id === teamId);
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : worker ? [worker] : [];
@@ -712,7 +750,7 @@ export function App() {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
-      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openRevision={() => setPanel('revision')} openSettings={tab => openSettings(tab ?? 'connections')} action={action} /></> : <ThreadSkeleton />}</> : (team || worker) ? <div className="team-chat team-chat-fresh">
+      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openRevision={() => setPanel('revision')} openSettings={tab => openSettings(tab ?? 'connections')} action={action} /></> : <ThreadSkeleton />}</> : (team || worker) ? <div className="team-chat team-chat-fresh">
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">
