@@ -366,8 +366,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
           </nav>
           <section className="settings-panel" id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
             <PanelHeading title={t(current.label)} description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}>{tab === 'harness' && <>
-              {detecting && <span className="setting-description setting-checking" role="status">{t('Đang dò lại…')}</span>}
-              <Button disabled={busy || harnesses === undefined} onClick={detectAgain}><RefreshCw size={13} />{t('Dò lại')}</Button>
+              {/* The button says it is checking instead of a line beside it, so the heading never reflows while it runs. */}
+              <Button disabled={busy || harnesses === undefined} onClick={detectAgain} aria-live="polite" data-checking={detecting || undefined}><RefreshCw size={13} /><span className="steady-label"><span aria-hidden={detecting}>{t('Dò lại')}</span><span aria-hidden={!detecting}>{t('Đang dò lại…')}</span></span></Button>
             </>}</PanelHeading>
 
             {tab === 'general' && <>

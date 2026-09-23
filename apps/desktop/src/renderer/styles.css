@@ -804,6 +804,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .setting-description { font-size:13px; color:var(--muted); line-height:1.45; }
 /* A quiet word beside a title or a button while something is fetched again; never a spinner (COD-218). */
 .setting-checking { margin-left:8px; font-weight:400; }
+/* Both labels share one grid cell, so a button keeps the width of the longer one and nothing beside it reflows. */
+.steady-label { display:inline-grid; }
+.steady-label > span { grid-area:1 / 1; }
+button:not([data-checking]) .steady-label > span:last-child, button[data-checking] .steady-label > span:first-child { visibility:hidden; }
 .release-shape { margin-top:4px; }
 .skill-review-shape { height:8em; margin-top:10px; }
 .setting-control { display:flex; align-items:center; gap:8px; flex-shrink:0; }
