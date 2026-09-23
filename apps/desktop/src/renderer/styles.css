@@ -17,6 +17,8 @@
   font-family: var(--font); font-size: 14px; line-height: 1.5;
   /* Set from the workspace in App.tsx; these are what the sheet uses until it arrives. */
   --accent:#4f7fe0; --accent-ink:#ffffff;
+  /* One size for every panel and settings-style dialog (user, 2026-09-23). */
+  --panel-width: min(720px, calc(100vw - 32px)); --panel-height: min(640px, calc(100dvh - 32px));
   --control-height: 34px; --icon-size: 32px; --radius: 9px; --page-x: 20px; --chrome-y: 12px; --sidebar-width: 228px;
   /* Panels are rounded cards sitting apart on the window background (user, 2026-09-19). */
   --panel-radius: 16px; --shell-gap: 8px; --details-width: 320px;
@@ -646,13 +648,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @media(prefers-reduced-motion:reduce) { .thread-skeleton span { animation-duration:4.5s; } }
 /* Former side panels open as centred dialogs, matching Settings. */
 /* Dialogs are centred with auto margins, not translate(-50%,-50%): a transform left them on half pixels whenever their height was odd, which blurred hairlines and made outlined and filled buttons look out of line. */
-.drawer { position:fixed; inset:0; margin:auto; height:fit-content; z-index:11; width:min(640px, calc(100vw - 32px)); max-height:min(720px, calc(100dvh - 32px)); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; animation:drawer-in var(--motion-base) var(--ease-out); }
+/* Every panel is the same size, whatever it holds, so switching panels or a panel's tabs never makes it jump (user, 2026-09-23). */
+.drawer { position:fixed; inset:0; margin:auto; height:var(--panel-height); z-index:11; width:var(--panel-width); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; animation:drawer-in var(--motion-base) var(--ease-out); }
 @keyframes drawer-in { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }
 @keyframes fade-in { from { opacity:0; } to { opacity:1; } }
 .drawer-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px 24px; }
 .drawer-header h2 { font-size:18px; font-weight:600; }
 /* The body clips to the dialog's corners; the child inside it is what scrolls, so the scrollbar is clipped too. */
-.drawer-body { display:flex; min-height:0; overflow:hidden; }
+.drawer-body { display:flex; flex:1; min-height:0; overflow:hidden; }
 .drawer-scroll { flex:1; min-width:0; padding:18px 24px 24px; overflow:auto; }
 .drawer-scroll { overscroll-behavior:contain; }
 .form { display:flex; flex-direction:column; gap:22px; }
@@ -704,7 +707,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .search-result-time { font-size:13px; color:var(--muted); white-space:nowrap; }
 .search-result-enter { color:var(--muted); }
 .search-empty { padding:18px 24px 26px; color:var(--muted); font-size:14px; text-align:center; }
-.settings-dialog { position:fixed; inset:0; margin:auto; height:fit-content; z-index:11; width:min(720px, calc(100vw - 32px)); height:min(580px, calc(100dvh - 32px)); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; }
+.settings-dialog { position:fixed; inset:0; margin:auto; z-index:11; width:var(--panel-width); height:var(--panel-height); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; }
 .settings-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px 24px; }
 .settings-header h2 { font-size:18px; font-weight:600; }
 .settings-body { flex:1; min-height:0; display:grid; grid-template-columns:200px minmax(0,1fr); }
