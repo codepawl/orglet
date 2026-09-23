@@ -43,7 +43,8 @@ try {
   await page.getByRole('button', { name: /Thư viện\s*Cần duyệt/ }).waitFor();
   await page.getByRole('button', { name: /Thư viện/ }).click();
   await page.getByRole('region', { name: 'Chờ duyệt' }).getByRole('button', { name: /Evidence limits/ }).click();
-  await page.getByText('Nhập từ template hội · v1 · Chờ duyệt').waitFor();
+  // The header names where the note came from and still waits for review (COD-203).
+  await page.locator('.knowledge-author').filter({ hasText: 'Template hội' }).filter({ hasText: 'nhập từ template · v1' }).filter({ hasText: 'Chờ duyệt' }).waitFor();
   await page.getByRole('button', { name: 'Duyệt', exact: true }).click();
   await page.getByRole('button', { name: 'Tạo knowledge', exact: true }).waitFor();
   await page.keyboard.press('Escape');
