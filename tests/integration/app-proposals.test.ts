@@ -95,6 +95,8 @@ describe('proposal tools', () => {
     const created = store.get<Worker>('workers', applied.target!.id);
     expect(created).toMatchObject({ name: 'Research Scout', provider: 'openai', skillId: worker.skillId, taskBudgetMicros: 400_000, revision: 1, description: 'Finds papers' });
     expect(created).not.toHaveProperty('autoApplyProposals');
+    // The workspace lists the applied change so the renderer can announce it, naming the worker that proposed it.
+    expect(store.workspace().recentAppChanges[0]).toMatchObject({ id: proposal.id, taskId, kind: 'orglet', action: 'create', title: 'Research Scout', automatic: false, workerName: worker.name });
     await expect(core.command('applyAppProposal', { id: proposal.id })).rejects.toThrow('đã được xử lý');
   });
 

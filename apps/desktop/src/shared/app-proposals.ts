@@ -174,5 +174,17 @@ export const AppProposal = z.object({
 }).strict();
 export type AppProposal = z.infer<typeof AppProposal>;
 
+/** A change a worker's proposal made to the app, as the renderer announces it: who, what and whether it applied on its own. */
+export type AppChangeNotice = {
+  id: string;
+  taskId: string;
+  kind: AppProposalKind;
+  action: AppProposalAction;
+  title: string;
+  automatic: boolean;
+  appliedAt: string;
+  workerName: string;
+};
+
 /** Whether the labelled worker keeps this proposal waiting for a click: nothing pending applies on its own with a hold. */
 export const canAutoApply = (proposal: Pick<AppProposal, 'hold' | 'status'>) => proposal.status === 'pending' && proposal.hold === null;
