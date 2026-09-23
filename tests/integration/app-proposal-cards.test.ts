@@ -6,7 +6,7 @@ import type { AppProposal } from '../../apps/desktop/src/shared/app-proposals';
 import type { Worker } from '../../apps/desktop/src/shared/contracts';
 
 const noop = () => {};
-const actions: ProposalActions = { busy: false, onApply: noop, onApplyAll: noop, onDismiss: noop, onDismissAll: noop, onUndo: noop, onOpen: noop };
+const actions: ProposalActions = { busy: false, onApply: noop, onApplyAll: noop, onDismiss: noop, onDismissAll: noop, onUndo: noop, onOpen: noop, onOpenChat: noop };
 const base = { taskId: '11111111-1111-4111-8111-111111111111', runId: '22222222-2222-4222-8222-222222222222', inputRevision: 0, createdAt: '2026-09-23T09:00:00.000Z', payload: {} };
 const proposal = (overrides: Partial<AppProposal> & Pick<AppProposal, 'id' | 'sequence' | 'kind' | 'action' | 'title' | 'changes' | 'status' | 'hold'>): AppProposal => ({ ...base, ...overrides });
 const skillId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';

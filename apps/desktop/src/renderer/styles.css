@@ -1695,6 +1695,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .app-proposals-all { margin-top:0; }
 /* A secondary button on the card's own surface needs a shade of its own, or it vanishes into the card. */
 .app-proposal .button-outline { background:color-mix(in srgb, var(--text) 8%, transparent); }
+/* Why a self-improvement was proposed (COD-162): the signal as a chip, then the chats it came from, each a link. */
+.app-proposal-because { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:10px 0 0; font-size:13px; color:var(--muted); }
+.app-proposal-chat { padding:0; border:0; background:none; color:var(--text); font:inherit; text-decoration:underline; text-decoration-color:color-mix(in srgb, var(--text) 35%, transparent); text-underline-offset:2px; cursor:pointer; }
+.app-proposal-chat:hover { text-decoration-color:currentColor; }
 /* The new orglets of one reply (COD-212): a row each — face, name and one line, the model as a chip — with the
    row's state or its own Apply / Dismiss on the right. The row is the button that opens the dialog (or the orglet
    once it exists); the icon buttons sit beside it, so a button never nests in a button. */

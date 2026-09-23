@@ -493,6 +493,7 @@ export function App() {
     onDismissAll: proposals => proposalWork(async () => { for (const proposal of proposals) await orglet.call('dismissAppProposal', { id: proposal.id }); }, t('Bỏ qua {0} Tí', [proposals.length])),
     onUndo: proposal => proposalWork(async () => { await orglet.call('undoAppProposal', { id: proposal.id }); }, proposal.title),
     onOpen: openProposalTarget,
+    onOpenChat: openTask,
   };
   const worker = workspace?.workers.find(item => item.id === workerId);
   const team = workspace?.teams.find(item => item.id === teamId);

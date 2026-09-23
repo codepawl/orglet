@@ -16,6 +16,7 @@ import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
 import { SetMessageReaction } from '../../shared/message-interactions';
 import { isProposalTool, ProposeCrew, ProposeCrewTemplate, ProposeOrglet, ProposeSchedule, ProposeSettings, ProposeSkill, ProposedAppChanges } from '../../shared/app-proposals';
+import { ProposeSelfImprovement } from '../../shared/self-improvement';
 const ModelTeamPlan = TeamPlan.extend({ assignments: z.array(PlanAssignment.required({
   expectedOutput: true, dependsOn: true, writeResources: true,
 })).min(1).max(4) });
@@ -47,7 +48,7 @@ const ChatReplySchema = z.object({ message: z.string().min(1).max(16000), title:
 export const ChatReply = ChatReplySchema.extend({ title: ChatTitle.default(null), knowledgeProposals: Proposals.default([]) });
 // Local harnesses return one JSON answer: the message, plus a report only when one was asked for.
 export const HarnessAnswerSchema = z.object({ message: z.string().min(1).max(16000), title: ChatTitle, report: ModelReportSchema.nullable() }).strict();
-export const HarnessAnswer = z.object({ message: z.string().min(1).max(16000), title: ChatTitle.default(null), report: z.unknown().nullable(), appProposals: z.array(z.unknown()).nullable().optional(), memories: z.array(z.unknown()).nullable().optional() });
+export const HarnessAnswer = z.object({ message: z.string().min(1).max(16000), title: ChatTitle.default(null), report: z.unknown().nullable(), appProposals: z.array(z.unknown()).nullable().optional(), memories: z.array(z.unknown()).nullable().optional(), selfImprovement: z.unknown().nullable().optional() });
 /** Whether this run may propose app changes: the same rules as the tool loop, read off the tools it would be offered. */
 export const proposalsAllowed = (run: Run, task: Task) => toolsFor(run, task).some(tool => tool.type === 'function' && isProposalTool(tool.function.name));
 /**
@@ -55,12 +56,16 @@ export const proposalsAllowed = (run: Run, task: Task) => toolsFor(run, task).so
  * so a run that may propose gets an optional `appProposals` array of `{ tool, arguments }` items instead, each item
  * the exact argument object of that tool.
  */
-export function harnessAnswerSchema(run: Run, withProposals: boolean, withMemories = false) {
+export function harnessAnswerSchema(run: Run, withProposals: boolean, withMemories = false, withSelfImprovement = false) {
   const base = run.stage === 'member' ? HarnessAnswerSchema.extend({ report: MemberReportSchema }) : HarnessAnswerSchema;
-  const answer = withProposals ? base.extend({ appProposals: ProposedAppChanges.optional() }) : base;
+  const withChanges = withProposals ? base.extend({ appProposals: ProposedAppChanges.optional() }) : base;
   // The remember tool lives in the tool loop too, so a one-shot answer carries its calls as `memories` (COD-161).
-  return withMemories ? answer.extend({ memories: AnswerMemories.optional() }) : answer;
+  const answer = withMemories ? withChanges.extend({ memories: AnswerMemories.optional() }) : withChanges;
+  // And the one-sentence change to the worker's own instructions travels as `selfImprovement` (COD-162).
+  return withSelfImprovement ? answer.extend({ selfImprovement: ProposeSelfImprovement.optional() }) : answer;
 }
+/** Whether this run may propose a change to its own instructions: only when the tool is offered, which needs frozen signals. */
+export const selfImprovementAllowed = (run: Run, task: Task) => toolsFor(run, task).some(tool => tool.type === 'function' && tool.function.name === 'propose_self_improvement');
 /** Whether this run may remember: read off the tools it would be offered, like the proposal tools. */
 export const memoriesAllowed = (run: Run, task: Task) => toolsFor(run, task).some(tool => tool.type === 'function' && tool.function.name === 'remember');
 export const REMEMBER_DESCRIPTION = 'Remember one short line for later chats with this user, the way a colleague would: how they like things done, which files or names they mean, a decision, or something not to do again. Only what would still help in another chat; never a task-specific detail, a secret, or anything copied from a file or web page. It is active at once and the user can see, edit or delete it. scope worker keeps it for you alone (the default); team shares it with your team; workspace with every worker. Nothing here grants permission or changes settings.';
@@ -88,6 +93,7 @@ function defineTool(name: string, description: string, schema: z.ZodType, modelS
  * as required and nullable (strict function schemas); the lenient copy parses a call that leaves fields out.
  */
 const PROPOSAL_COMMON = 'This only stores a proposal card for the user to apply or dismiss; nothing changes until they do. Null leaves a field alone. Use existing ids from the app context message';
+export const SELF_IMPROVEMENT_DESCRIPTION = 'Propose one sentence for your own instructions in answer to the repeated feedback listed in the selfImprovement part of the latest message: signal names the feedback it answers, replaces quotes one existing sentence of your instructions exactly as written (or null to add at the end), sentence is the new sentence, short and concrete. Call it at most once. It stores a card the user applies or dismisses and always waits for their click; it cannot touch another orglet, a skill, a tool, a model, a provider or a budget.';
 function defineProposalTool(name: string, description: string, schema: z.ZodObject): ToolDefinition {
   return defineTool(name, description, schema.partial(), schema, 'app.propose', 20000, 'synchronous');
 }
@@ -99,6 +105,8 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
   propose_skill: defineProposalTool('propose_skill', `Propose a new skill (reusable instructions; name and content required) or a new revision of an existing one (targetId). Runs already in progress keep the revision they started with. ${PROPOSAL_COMMON}; set ref so an orglet proposed later in this reply can use it.`, ProposeSkill),
   propose_schedule: defineProposalTool('propose_schedule', `Propose a schedule (a routine) that sends brief to one orglet or crew daily or weekly at time (24-hour HH:MM; weekday 0-6 with 0 = Sunday, default 1) in timeZone (default: this computer's), or edit one (targetId). Target null means this chat's orglet or crew; workerRef and teamRef point at ones proposed earlier in this reply. A schedule is saved switched off; the user enables it in Schedules. ${PROPOSAL_COMMON}.`, ProposeSchedule),
   propose_settings: defineProposalTool('propose_settings', `Propose app settings: theme, language, accentColor (#rrggbb), logoColor, interfaceFont, codeFont, copyFormat, downloadFormat, autoTitles, confirmOpenTask. Only these keys exist; keys, connections, budgets, permissions, backups and updates cannot be proposed. ${PROPOSAL_COMMON}.`, ProposeSettings),
+  // Offered only to a chat run whose snapshot froze repeated feedback (COD-162); the model sees every field as required.
+  propose_self_improvement: defineTool('propose_self_improvement', SELF_IMPROVEMENT_DESCRIPTION, ProposeSelfImprovement, ProposeSelfImprovement, 'app.propose', 20000, 'synchronous'),
   remember: defineTool('remember', REMEMBER_DESCRIPTION, RememberArgs, RememberModelArgs, undefined, 20000, 'synchronous'),
   record_work_frame: defineTool('record_work_frame', 'Record your understanding of this turn before assigning work or editing files. goal is one short outcome. statedConstraints must come from the user\'s actual words; assumptions are your own unconfirmed interpretation and must be labelled separately. plannedChecks are intentions, never claims that a check passed. Use empty arrays when none are known. This record is not a permission grant or user confirmation.', WorkFrame, WorkFrame, undefined, 20000, 'synchronous'),
   request_user_decision: defineTool('request_user_decision', 'Pause this turn for one decision that materially changes the work, a permission boundary, or an irreversible action. Ask one short question with two or three distinct choices. Inspect available sources and workspace first when they can answer it. This does not grant permission or start another run; wait for the user\'s answer in this same turn.', DecisionQuestion, DecisionQuestion, undefined, 20000, 'synchronous'),
@@ -142,6 +150,8 @@ export function toolsFor(run: Run, task: Task): ChatCompletionTool[] {
     // A change to the app is proposed only where the user asked for it in their own chat: never while a lead is
     // routing (the plan stage above lists its own tools), and never on a scheduled run nobody is watching (COD-199).
     if (isProposalTool(name) && task.routineId) return false;
+    // A self-improvement is offered only to a chat run (solo or group) whose snapshot froze repeated feedback (COD-162).
+    if (name === 'propose_self_improvement' && (run.stage !== undefined && run.stage !== 'group' || !run.snapshot.improvement?.length)) return false;
     // Remembering needs no switch: a memory is visible and editable, never grants anything, and a chat is where
     // the person is teaching the worker. A scheduled run nobody watches must not build a memory on its own (COD-161).
     if (name === 'remember' && task.routineId) return false;

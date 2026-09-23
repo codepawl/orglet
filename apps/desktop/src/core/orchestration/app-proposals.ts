@@ -3,8 +3,10 @@ import {
   AppProposal, PROPOSED_SETTING_KEYS, ProposeCrew, ProposeCrewTemplate, ProposeOrglet, ProposeSchedule, ProposeSettings, ProposeSkill,
   type AppProposalKind, type ProposalChange, type ProposalHold, type ProposalTarget, type ProposalToolName, type ProposalUndo,
 } from '../../shared/app-proposals';
+import { ProposeSelfImprovement, type ImprovementSignal } from '../../shared/self-improvement';
 import { RoutineInput, SkillInput, TeamInput, WorkerInput, type Routine, type WorkerAvatar, type Run, type Skill, type Task, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
+import { SelfImprovement } from './self-improvement';
 
 /** The one spending cap a worker chat starts with when its worker has none of its own (WorkerDialog's default). */
 const DEFAULT_TASK_BUDGET_MICROS = 500_000;
@@ -36,6 +38,8 @@ export type ProposalApplier = {
 export class ProposalError extends Error {}
 
 type OrgletPayload = { fields: Partial<WorkerInput>; skillRef?: string };
+/** A self-improvement is an orglet edit whose only field is the instructions, plus the sentence it swaps in (COD-162). */
+type SelfImprovementPayload = OrgletPayload & { targetId: string; sentence: { replaces: string | null; sentence: string } };
 type MemberReference = { id: string } | { ref: string };
 type CrewPayload = { fields: Partial<Omit<z.infer<typeof TeamInput>, 'memberIds' | 'synthesizerId'>>; members?: MemberReference[]; lead?: MemberReference };
 type TemplatePayload = { team: MemberReference };
@@ -82,8 +86,24 @@ const workerFields = (worker: Worker): WorkerInput => WorkerInput.parse(worker);
 const teamFields = (team: Team): z.infer<typeof TeamInput> => TeamInput.parse(team);
 const skillFields = (skill: Skill): z.infer<typeof SkillInput> => SkillInput.parse({ id: skill.id, name: skill.name, content: skill.content });
 
+/** What the worker is told beside the evidence: one sentence, its own instructions only, and answer the user first. */
+const SELF_IMPROVEMENT_INSTRUCTION = 'This is repeated feedback on your earlier work in this app. If one short, concrete sentence added to or changed in your own instructions would prevent it next time, call propose_self_improvement once: name the signal it answers, quote in replaces the one existing sentence to change (exactly as written) or set replaces to null to add the sentence at the end, and put the new sentence in sentence. Do not rewrite your instructions, do not propose anything for another orglet, a skill, a tool, a model or a budget, and skip this when the feedback does not point at your instructions. It is stored as a card the user applies or dismisses; answer the user first as usual.';
+
 export class AppProposals {
-  constructor(private store: Store, private applier: ProposalApplier) {}
+  private readonly selfImprovement: SelfImprovement;
+  constructor(private store: Store, private applier: ProposalApplier) {
+    this.selfImprovement = new SelfImprovement(store);
+  }
+
+  /** The repeated feedback this worker has had, for the run to freeze on its snapshot before it starts (COD-162). */
+  improvementSignals(run: Run): ImprovementSignal[] {
+    return this.selfImprovement.signalsFor(run.snapshot.worker.id, run.id);
+  }
+
+  /** What the run's prompt carries when it may propose a self-improvement: the frozen signals and how to answer them. */
+  improvementContext(run: Run) {
+    return { signals: run.snapshot.improvement ?? [], instruction: SELF_IMPROVEMENT_INSTRUCTION };
+  }
 
   list(taskId: string): AppProposal[] {
     return this.store.db.prepare('SELECT data FROM app_proposals WHERE task_id=? ORDER BY rowid').all(taskId)
@@ -136,12 +156,14 @@ export class AppProposals {
       id: id(), taskId: task.id, runId: run.id, inputRevision: run.snapshot.inputRevision ?? 0, sequence, createdAt: now(),
       kind: draft.kind, action: draft.action, ...(draft.ref ? { ref: draft.ref } : {}),
       title: draft.title, changes: draft.changes, payload: draft.payload, hold: draft.hold, status: 'pending',
+      // A self-improvement says from the start that it waits for a click, whatever the worker's switch says.
+      ...(draft.improvement ? { heldReason: 'self', improvement: draft.improvement } : {}),
     };
     this.write(proposal);
     return { proposalId: proposal.id, ...(draft.ref ? { ref: draft.ref } : {}), status: 'pending', note: 'Stored for the user to apply or dismiss. It is not applied yet.' };
   }
 
-  private draft(run: Run, task: Task, name: ProposalToolName, rawArguments: unknown, earlier: AppProposal[]): { kind: AppProposalKind; action: AppProposal['action']; ref?: string; title: string; changes: ProposalChange[]; payload: Record<string, unknown>; hold: ProposalHold | null } {
+  private draft(run: Run, task: Task, name: ProposalToolName, rawArguments: unknown, earlier: AppProposal[]): { kind: AppProposalKind; action: AppProposal['action']; ref?: string; title: string; changes: ProposalChange[]; payload: Record<string, unknown>; hold: ProposalHold | null; improvement?: AppProposal['improvement'] } {
     const refOf = (ref: string | null | undefined, kind: AppProposalKind, what: string) => {
       const value = given(ref);
       if (value === undefined) return undefined;
@@ -276,6 +298,7 @@ export class AppProposals {
         const changes = creationChanges({ name, brief, schedule: describeSchedule(schedule), target: targetName ?? (task.teamId ? this.teamName(task.teamId) : proposer.name), enabled: 'false' });
         return { kind: 'schedule', action: 'create', title: name, changes, payload: { fields }, hold: null };
       }
+      case 'propose_self_improvement': return this.draftSelfImprovement(run, rawArguments);
       case 'propose_settings': {
         const args = ProposeSettings.partial().parse(rawArguments);
         const current = this.applier.currentSettings();
@@ -293,6 +316,33 @@ export class AppProposals {
   }
 
   /**
+   * One sentence for the proposing worker's own instructions (COD-162). The signal must be one the run froze, the
+   * sentence to replace must occur exactly once, and the result is an ordinary orglet edit of the instructions field,
+   * held for a click. There is no target: the payload's targetId is always the proposing worker.
+   */
+  private draftSelfImprovement(run: Run, rawArguments: unknown): ReturnType<AppProposals['draft']> {
+    const args = ProposeSelfImprovement.parse(rawArguments);
+    const signal = (run.snapshot.improvement ?? []).find(candidate => candidate.kind === args.signal);
+    if (!signal) throw new ProposalError('Tín hiệu này không có trong phản hồi lặp lại của lượt chạy.');
+    const current = this.liveWorker(run.snapshot.worker.id);
+    const instructions = this.instructionsWith(current.instructions, args.replaces, args.sentence);
+    if (instructions === current.instructions) throw new ProposalError('Đề xuất không thay đổi gì ở hướng dẫn của Tí này.');
+    if (instructions.length > 16000) throw new ProposalError('Hướng dẫn sau khi sửa vượt 16.000 ký tự.');
+    const payload: SelfImprovementPayload = { targetId: current.id, fields: { instructions }, sentence: { replaces: args.replaces, sentence: args.sentence } };
+    const changes: ProposalChange[] = [{ field: 'instructions', before: args.replaces === null ? null : describe(args.replaces), after: describe(args.sentence) }];
+    return { kind: 'orglet', action: 'edit', title: current.name, changes, payload, hold: 'self', improvement: { signal: signal.kind, because: signal.because } };
+  }
+
+  /** The instructions with one sentence swapped or added; the sentence to replace has to be there exactly once. */
+  private instructionsWith(current: string, replaces: string | null, sentence: string): string {
+    if (replaces === null) return `${current.trimEnd()}\n${sentence}`;
+    const first = current.indexOf(replaces);
+    if (first < 0) throw new ProposalError('Câu cần thay không có trong hướng dẫn hiện tại; trích đúng nguyên văn.');
+    if (current.indexOf(replaces, first + 1) >= 0) throw new ProposalError('Câu cần thay xuất hiện nhiều lần trong hướng dẫn; trích đoạn dài hơn để chỉ đúng một chỗ.');
+    return `${current.slice(0, first)}${sentence}${current.slice(first + replaces.length)}`;
+  }
+
+  /**
    * When a run finishes: a run that read unvetted content holds every proposal it made, then the safe ones are
    * applied at once if the worker's auto-apply switch is on. A held one records why it waited for a click.
    */
@@ -302,13 +352,16 @@ export class AppProposals {
     const worker = this.store.all<Worker>('workers').find(candidate => candidate.id === run.snapshot.worker.id);
     const automatic = worker?.autoApplyProposals === true;
     for (const proposal of pending) {
-      const hold: ProposalHold | null = untrustedInputs.length ? 'untrusted' : proposal.hold;
+      // A self-improvement keeps its own reason: it never applies on its own, read or not (COD-162).
+      const hold: ProposalHold | null = proposal.hold === 'self' ? 'self' : untrustedInputs.length ? 'untrusted' : proposal.hold;
       const settled: AppProposal = { ...proposal, hold, ...(automatic && hold ? { heldReason: hold } : {}) };
       this.write(settled);
       if (automatic && !hold) this.apply(proposal.id, true);
     }
-    this.store.event(run.id, automatic
-      ? `Đã áp dụng tự động ${pending.filter(proposal => this.get(proposal.id).status === 'applied').length}/${pending.length} đề xuất thay đổi trong app.`
+    // With the switch on but every card held (a self-improvement, say), "applied 0 of 1" would mislead: they wait.
+    const appliedCount = automatic ? pending.filter(proposal => this.get(proposal.id).status === 'applied').length : 0;
+    this.store.event(run.id, appliedCount
+      ? `Đã áp dụng tự động ${appliedCount}/${pending.length} đề xuất thay đổi trong app.`
       : `${pending.length} đề xuất thay đổi trong app đang chờ bạn áp dụng.`);
   }
 
@@ -319,7 +372,10 @@ export class AppProposals {
     try {
       // Each applier command is its own transaction, the same one the dialog would run; nothing wraps them.
       const applied = this.perform(proposal, avatar);
-      const record: AppProposal = { ...proposal, status: 'applied', appliedAt: now(), automatic, target: applied.target, error: undefined, ...(automatic && applied.undo ? { undo: applied.undo } : {}) };
+      // Undo is kept for an automatic apply, and for a self-improvement: it changed how the worker works, so one
+      // click takes it back the same way an automatic edit is taken back (COD-162).
+      const keepUndo = automatic || !!proposal.improvement;
+      const record: AppProposal = { ...proposal, status: 'applied', appliedAt: now(), automatic, target: applied.target, error: undefined, ...(keepUndo && applied.undo ? { undo: applied.undo } : {}) };
       this.write(record);
       return record;
     } catch (error) {
@@ -407,7 +463,11 @@ export class AppProposals {
   dismiss(proposalId: string) {
     const proposal = this.get(proposalId);
     if (proposal.status !== 'pending') throw new Error('Đề xuất này đã được xử lý.');
-    this.write({ ...proposal, status: 'dismissed' });
+    this.store.transaction(() => {
+      this.write({ ...proposal, status: 'dismissed' });
+      // Declining a self-improvement declines its reason for good: the worker is not asked again for that signal.
+      if (proposal.improvement) this.selfImprovement.decline((proposal.payload as SelfImprovementPayload).targetId, proposal.improvement.signal);
+    });
   }
 
   /** Takes an automatic apply back through the same commands; a created orglet or crew goes only if nothing uses it yet. */
