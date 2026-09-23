@@ -108,6 +108,10 @@ export function App() {
   // Undefined until the first detection finishes: it runs each CLI and takes about three seconds cold, so nothing waits on it.
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>();
   const [selected, setSelected] = useState<string | null>(null); const [detail, setDetail] = useState<TaskDetail>();
+  // Chats opened this session keep their last detail, so switching back shows it at once instead of a blank pane
+  // while the fresh copy loads (user, 2026-09-23). The fresh copy replaces it as soon as it arrives.
+  const openedDetails = useRef(new Map<string, TaskDetail>());
+  const showingCachedDetail = useRef<string | null>(null);
   const [workspaceAccess, setWorkspaceAccess] = useState<{ taskId: string; grant: WorkspaceGrantView | null }>();
   const [workspaceRecovery, setWorkspaceRecovery] = useState<WorkspaceRecoveryView>();
   // The attempt the chat asked to review (COD-191); `at` changes on every request so the same row scrolls again.
@@ -238,6 +242,7 @@ export function App() {
         return { ...task, ...(lastArtifactId ? { lastArtifactId } : {}), ...(seenStamp ? { seenStamp } : {}) };
       });
       writeSeenStorage(seenInfo.current);
+      if (taskDetail) showingCachedDetail.current = null;
       setWorkspace({ ...next, tasks }); setConnections(connectionState); setDetail(taskDetail); setWorkerId(value => value || next.workers[0]?.id || '');
       setWorkspaceAccess(selected ? { taskId: selected, grant } : undefined);
       setWorkspaceRecovery(recovery);
@@ -290,6 +295,14 @@ export function App() {
     const collapse = () => { if (media.matches) setSidebar(false); };
     media.addEventListener('change', collapse); return () => media.removeEventListener('change', collapse);
   }, []);
+  useEffect(() => {
+    if (!detail) return;
+    const cache = openedDetails.current;
+    cache.delete(detail.task.id);
+    cache.set(detail.task.id, detail);
+    // A handful of recent chats is enough to make switching instant; older ones load as before.
+    if (cache.size > 20) cache.delete(cache.keys().next().value!);
+  }, [detail]);
   const leaveThread = () => { setSelected(null); setDetail(undefined); setBrief(''); setSources([]); setSkippedSources([]); setError(''); };
   const hideTaskLocally = (taskId: string, field: 'archivedAt' | 'deletedAt') => {
     const stamp = new Date().toISOString();
@@ -297,7 +310,12 @@ export function App() {
   };
   // Re-opening the task already shown keeps its detail; clearing it would wait for a reload that never comes.
   const openTask = (id: string) => {
-    if (id !== selected) { setSelected(id); setDetail(undefined); }
+    if (id !== selected) {
+      const cached = openedDetails.current.get(id);
+      showingCachedDetail.current = cached ? id : null;
+      setSelected(id);
+      setDetail(cached);
+    }
     setError('');
     const opened = workspace?.tasks.find(task => task.id === id);
     if (opened?.teamId && !opened.routineId) setTeamId(opened.teamId);
@@ -308,7 +326,10 @@ export function App() {
     // The thread only needs its own detail, so fetch it now instead of waiting for the refresh below, which also
     // reads the workspace and the connections before it hands anything back.
     void orglet.call('task', { id }).then((opened: TaskDetail) => {
-      if (selectedRef.current === id) setDetail(current => current?.task.id === id ? current : opened);
+      if (selectedRef.current !== id) return;
+      const replacesCachedCopy = showingCachedDetail.current === id;
+      showingCachedDetail.current = null;
+      setDetail(current => current?.task.id === id && !replacesCachedCopy ? current : opened);
     }).catch(() => { /* the refresh below reports anything that is actually wrong */ });
     // Apply the returned stamp even after leaving — waiting for selected refresh drops the grey mark.
     void orglet.call('markTaskSeen', { id }).then((task: Task) => {
