@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { DecisionRequest } from './work-decisions';
 import type { WorkFrame } from './work-frame';
 import { ToolCapabilities, type ToolCapability } from './tool-policy';
-import type { NewChatTarget, NewChatWorkspaceView, WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermission } from './workspace-access';
+import { GroupChatWorkerIds, type NewChatTarget, type NewChatWorkspaceView, type WorkspaceGrantSnapshot, type WorkspaceGrantView, type WorkspacePermission } from './workspace-access';
 import type { WorkspaceRecoveryView } from './workspace-recovery';
 import { ReadRecoveryFile, type RecoveryFile, ReadRecoveryOutput, RetireWorkspaceAttempt, type RecoveryOutput } from './workspace-recovery';
 import { ExactMatchRequest, ProfileArgs, type DataFormat, type DatasetProfile, type ProfileRecord } from './profiles';
@@ -224,19 +224,20 @@ export const commands = {
   retry: z.object({ id: Id }),
   reconcileBudget: z.object({ reservationId: Id, amountMicros: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), source: z.enum(['provider_dashboard', 'invoice']) }).strict(),
   revoke: z.object({ id: Id }),
-  /** A chat's permissions; before its first message, the set the chat with this worker or team will start with (COD-178). */
+  /** A chat's permissions; before its first message, the set the chat with this worker, team or group of orglets will start with (COD-178, COD-215). */
   setToolCapabilities: z.union([
     z.object({ taskId: Id, capabilities: ToolCapabilities }).strict(),
     z.object({ workerId: Id, capabilities: ToolCapabilities }).strict(),
     z.object({ teamId: Id, capabilities: ToolCapabilities }).strict(),
+    z.object({ workerIds: GroupChatWorkerIds, capabilities: ToolCapabilities }).strict(),
   ]),
   workspaceAccess: z.object({ taskId: Id }).strict(),
   workspaceRecovery: z.object({ taskId: Id }).strict(),
   retireWorkspaceAttempt: RetireWorkspaceAttempt,
   recoveryProcessOutput: ReadRecoveryOutput,
   recoveryFile: ReadRecoveryFile,
-  /** Drops a chat's folder; with a `workerId` or `teamId`, the folder waiting for a chat that has not started (COD-186). */
-  revokeWorkspace: z.union([z.object({ taskId: Id }).strict(), z.object({ workerId: Id }).strict(), z.object({ teamId: Id }).strict()]),
+  /** Drops a chat's folder; with a `workerId`, `teamId` or `workerIds`, the folder waiting for a chat that has not started (COD-186). */
+  revokeWorkspace: z.union([z.object({ taskId: Id }).strict(), z.object({ workerId: Id }).strict(), z.object({ teamId: Id }).strict(), z.object({ workerIds: GroupChatWorkerIds }).strict()]),
   previewSource: z.object({ taskId: Id, id: Id }),
   sourceBytes: z.object({ taskId: Id, id: Id }).strict(),
   sourceOrigins: z.object({ taskId: Id }).strict(),

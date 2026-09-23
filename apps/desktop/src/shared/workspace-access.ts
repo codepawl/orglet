@@ -21,8 +21,17 @@ export type WorkspaceGrantView = z.infer<typeof WorkspaceGrantView>;
  */
 export const NewChatWorkspaceView = z.object({ name: z.string(), permissions: WorkspacePermissions }).strict();
 export type NewChatWorkspaceView = z.infer<typeof NewChatWorkspaceView>;
-/** Whose empty chat a pending folder belongs to; a team chat is keyed by the team, never by its lead. */
-export const NewChatTarget = z.union([z.object({ workerId: z.uuid() }).strict(), z.object({ teamId: z.uuid() }).strict()]);
+/** The orglets of a group chat that has not started yet (COD-215), in the order they were picked. */
+export const GroupChatWorkerIds = z.array(z.uuid()).min(2).max(50);
+/**
+ * Whose empty chat a pending folder belongs to; a team chat is keyed by the team, never by its lead, and a group
+ * chat by every orglet in it.
+ */
+export const NewChatTarget = z.union([
+  z.object({ workerId: z.uuid() }).strict(),
+  z.object({ teamId: z.uuid() }).strict(),
+  z.object({ workerIds: GroupChatWorkerIds }).strict(),
+]);
 export type NewChatTarget = z.infer<typeof NewChatTarget>;
 
 /** What the renderer may ask the native picker for: a folder for a chat row, or for a chat that has no row yet. */
@@ -30,6 +39,7 @@ export const PickWorkspace = z.union([
   z.object({ taskId: z.uuid(), permissions: WorkspacePermissions }).strict(),
   z.object({ workerId: z.uuid(), permissions: WorkspacePermissions }).strict(),
   z.object({ teamId: z.uuid(), permissions: WorkspacePermissions }).strict(),
+  z.object({ workerIds: GroupChatWorkerIds, permissions: WorkspacePermissions }).strict(),
 ]);
 export type PickWorkspace = z.infer<typeof PickWorkspace>;
 
@@ -39,5 +49,6 @@ export const GrantWorkspace = z.union([
   z.object({ taskId: z.uuid(), permissions: WorkspacePermissions, directory: Directory }).strict(),
   z.object({ workerId: z.uuid(), permissions: WorkspacePermissions, directory: Directory }).strict(),
   z.object({ teamId: z.uuid(), permissions: WorkspacePermissions, directory: Directory }).strict(),
+  z.object({ workerIds: GroupChatWorkerIds, permissions: WorkspacePermissions, directory: Directory }).strict(),
 ]);
 export type GrantWorkspace = z.infer<typeof GrantWorkspace>;

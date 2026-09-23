@@ -1230,6 +1230,8 @@ export const en: Dictionary = {
   'Chọn nhiều hội': 'Select crews',
   'Mục đã chọn': 'Selected items',
   '{0} đã chọn': '{0} selected',
+  'Trò chuyện nhóm': 'Group chat',
+  'Số Tí trong nhóm': 'Orglets in this group',
   'Bỏ chọn': 'Clear selection',
   'Xóa {0} Tí đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.': 'Delete the {0} selected orglets? Earlier chats keep their history.',
   'Xóa {0} hội đã chọn? Cuộc trò chuyện cũ vẫn giữ lịch sử.': 'Delete the {0} selected crews? Earlier chats keep their history.',

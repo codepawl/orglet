@@ -47,6 +47,12 @@ Each section's header has an edit (pencil) button beside **+**. It turns that se
 
 While anything is picked, a bar between the list and the footer shows the count with **Archive**, **Delete** (which asks first, naming the count) and a clear button. Archive and delete run the same commands as a row's menu, one row at a time, and end in one toast: the count that went through, or the names of the rows that did not. Esc clears the selection and leaves select mode. Nothing is stored: the selection is forgotten when the app restarts, and a row that leaves the list (archived, deleted, another workspace) leaves the selection.
 
+### Group chat from a selection
+
+With two or more orglets picked, the bar adds **Group chat** (crews get no such action: a crew already has its own chat, and one orglet is a plain chat). It clears the selection and opens an empty chat addressed to those orglets: their faces greet above the composer, the header shows their stacked avatars with their names (up to three) or "N orglets", and `@` in the composer offers the group. Nothing is created until the first message, which calls `createTask` with `assignees` set to those orglets in sidebar order and the first one picked as the row's `workerId`; from there it is an ordinary group chat, each orglet answering in turn. Later messages go through the chat's own composer (`reviseTask`), so a group chat never becomes the sidebar's live thread of any one orglet.
+
+Permissions and a working folder chosen in Details before the first message work the way they do for a worker or crew: they wait in the core under `newChatKey({ workerIds })`, the sorted ids, so the same orglets picked in another order share one entry, and the first message moves them onto the row. Deleting an orglet drops every waiting group entry it was part of. The group itself is renderer state only: opening any chat, orglet or crew drops it, and a step back through navigation history (recipient `group:<ids>`) reopens the same empty chat as long as every orglet is still listed. The pure parts live in `apps/desktop/src/renderer/groupChat.ts`.
+
 Back and forward work like a browser. The side buttons on a mouse, or Alt+Left and Alt+Right, step through what you opened: a chat, then another chat, then back to the first; Library, a skill, back to Library, forward to the skill again; Settings tab to tab; Notifications open, then back closes it. Closing a panel is a step too, so back reopens it. A chat, skill or knowledge item deleted since is skipped. Alt+arrows do nothing while you type in a text box; the mouse buttons always work. Leaving a schedule you are editing asks about unsaved changes, the same as the panel's own Back.
 
 ## One live thread
@@ -66,7 +72,7 @@ There is no separate `threads` table.
 | Later message in the same chat | `reviseTask` on that row (`inputRevision` + 1) |
 | Archive the thread | Next click is an empty chat; the next send creates a new live row |
 
-Find-or-create lives in `apps/desktop/src/shared/live-task.ts` (`liveWorkerTask`, `liveTeamTask`, `nextWorkerMessage`, `nextTeamMessage`). The renderer uses it when you click a worker or team and when you send from the empty composer. `createTask` itself is unchanged, so routines and explicit extra rows can still insert their own records. Group chats (`assignees`) stay reachable from search; they are not the primary sidebar.
+Find-or-create lives in `apps/desktop/src/shared/live-task.ts` (`liveWorkerTask`, `liveTeamTask`, `nextWorkerMessage`, `nextTeamMessage`). The renderer uses it when you click a worker or team and when you send from the empty composer. `createTask` itself is unchanged, so routines and explicit extra rows can still insert their own records. Group chats (`assignees`) stay reachable from search; they are not the primary sidebar, and are started from a selection as described above.
 
 ## Orchestrator: one message → workers → one report
 
