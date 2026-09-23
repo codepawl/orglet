@@ -65,6 +65,8 @@ function downgradeUncitedChecks(report: Report, coverageNote: string) {
  * failed, or one from elsewhere keeps its place in the report as not assessed, with only its valid commands, instead
  * of throwing the whole report away (COD-192). A failed check may cite any finished command: the worker read the output.
  */
+const UNSUPPORTED_PROCESS_NOTE = 'Lệnh được trích chưa kết thúc, không thuộc lần chạy này hoặc không thoát với mã 0.';
+
 export function downgradeUnsupportedProcessChecks(report: Report, finishedProcess: (processId: string) => { exitCode: number } | undefined) {
   if (!report.review) return;
   for (const check of report.review.checks) {
@@ -79,7 +81,7 @@ export function downgradeUnsupportedProcessChecks(report: Report, finishedProces
     check.processIds = valid;
     if (check.status !== 'not_assessed') {
       check.status = 'not_assessed';
-      check.coverage += '\nLệnh được trích chưa kết thúc, không thuộc lần chạy này hoặc không thoát với mã 0.';
+      check.coverage += `\n${UNSUPPORTED_PROCESS_NOTE}`;
       report.limitations.push(`Chưa xác minh độc lập check: ${check.name}.`);
     }
   }
