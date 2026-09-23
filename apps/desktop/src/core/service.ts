@@ -28,7 +28,7 @@ import type { HarnessInfo } from '../shared/harness';
 import { detectHarnesses, probe } from './harness/detect';
 import { HarnessAccounts } from './harness/accounts';
 import { executeHarness } from './harness/exec';
-import { eraseEverything, eraseKnowledge, eraseSources } from './storage/erase';
+import { eraseEverything, eraseKnowledge, eraseMemory, eraseSources } from './storage/erase';
 import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../shared/erase';
 import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
 import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/currency';
@@ -444,6 +444,11 @@ export class CoreService {
         this.knowledge.review(input.id, input.revision, input.decision); this.notify(); return;
       }
       case 'searchKnowledge': return this.knowledge.search(commands.searchKnowledge.parse(args).query);
+      case 'updateMemory': {
+        const input = commands.updateMemory.parse(args);
+        const item = this.knowledge.updateMemory(input.id, { text: input.text, pinned: input.pinned }); this.notify(); return item;
+      }
+      case 'deleteMemory': { this.knowledge.deleteMemory(commands.deleteMemory.parse(args).id); this.notify(); return; }
       case 'harnesses': return this.harnesses(commands.harnesses.parse(args).refresh);
       case 'saveHarnessAccount': {
         const input = commands.saveHarnessAccount.parse(args);
@@ -641,7 +646,7 @@ export class CoreService {
   eraseData(scope: EraseScope, confirm?: string): EraseSummary {
     if (this.isBusy()) throw new Error('Chờ hoặc hủy các task/checker đang chạy trước khi xóa.');
     if (scope === 'everything' && confirm !== ERASE_CONFIRMATION) throw new Error(`Gõ ${ERASE_CONFIRMATION} để xác nhận xóa toàn bộ.`);
-    const summary: EraseSummary = { scope, chats: 0, knowledge: 0, sources: 0, sourcesForgotten: 0, entities: 0 };
+    const summary: EraseSummary = { scope, chats: 0, knowledge: 0, memory: 0, sources: 0, sourcesForgotten: 0, entities: 0 };
     if (scope === 'chats' || scope === 'everything') {
       // A deleted chat that cost money leaves a tombstone row, which a full erase then drops with its table.
       for (const task of this.store.all<Task>('tasks')) {
@@ -651,9 +656,11 @@ export class CoreService {
       }
     }
     if (scope === 'knowledge') summary.knowledge = eraseKnowledge(this.store);
+    if (scope === 'memory') summary.memory = eraseMemory(this.store);
     if (scope === 'sources') Object.assign(summary, eraseSources(this.store));
     if (scope === 'everything') {
-      summary.knowledge = this.store.all('knowledge').length;
+      summary.memory = this.knowledge.memories().length;
+      summary.knowledge = this.store.all('knowledge').length - summary.memory;
       summary.sources = this.store.all('sources').length;
       Object.assign(summary, eraseEverything(this.store));
       // Settings went with the tables, so the model lists cached in memory no longer have a row behind them.
@@ -883,7 +890,8 @@ export class CoreService {
   /**
    * Deletes a task's chat: messages, answers, activity, checkpoints, checker results and its name. A task that already
    * cost money keeps an empty record of its runs so the cost ledger, monthly limits and backups stay correct. Knowledge
-   * proposed from it and not yet approved is deleted; approved knowledge keeps the answers it was learned from.
+   * proposed from it and not yet approved is deleted; approved knowledge keeps the answers it was learned from. A memory
+   * learned only in this chat goes with it; one also merged from another chat stays (COD-161).
    */
   private deleteTask(taskId: string) {
     const task = this.liveTask(taskId);
@@ -896,6 +904,7 @@ export class CoreService {
     const keptIds = learned.filter(item => item.status !== 'proposed').map(item => item.id);
     const origins = keptIds.flatMap(itemId => db.prepare('SELECT data FROM knowledge_revisions WHERE id=?').all(itemId).map(row => (JSON.parse(String(row.data)) as Knowledge).provenance));
     const keepArtifacts = new Set(origins.flatMap(origin => origin.kind === 'run' ? [origin.artifactId] : []));
+    const memoriesToDelete = this.knowledge.memoriesOnlyFrom(task.id);
     const tombstone = charged || keepArtifacts.size > 0;
     const removed = '(đã xóa)';
     this.store.transaction(() => {
@@ -914,7 +923,8 @@ export class CoreService {
       db.prepare('DELETE FROM preflights WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM task_search WHERE id=?').run(task.id);
       db.prepare('DELETE FROM workspace_grants WHERE task_id=?').run(task.id);
-      for (const item of proposed) for (const table of ['knowledge', 'knowledge_revisions', 'knowledge_search']) db.prepare(`DELETE FROM ${table} WHERE id=?`).run(item.id);
+      for (const item of proposed) this.knowledge.deleteRows(item.id);
+      for (const item of memoriesToDelete) this.knowledge.deleteRows(item.id);
       if (tombstone) {
         for (const run of runs) this.store.update('runs', { ...run, snapshot: { ...run.snapshot,
           ...(run.snapshot.input ? { input: { ...run.snapshot.input, brief: removed, replyTo: undefined } } : {}),

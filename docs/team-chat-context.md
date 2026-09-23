@@ -143,7 +143,7 @@ Do **not** do this list in the COD-23 PR.
 - @/tag polish (team chat shell, orchestrator and hide-task-pile UX are [team-chat.md](team-chat.md))
 - New SQLite `threads` table (reuse `tasks`)
 - LLM-billed summarization, embeddings, provider tokenizers
-- Cross-thread or workspace-wide auto-memory
+- Cross-thread or workspace-wide auto-memory (since shipped separately as [memory.md](memory.md), COD-161; this page's snippets stay inside one chat)
 - Signing, COD-19 assets, COD-20 notarize
 - Changing routine catch-up ([routines.md](routines.md))
 

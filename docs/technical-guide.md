@@ -116,6 +116,8 @@ In team settings, set **Số công việc chạy đồng thời** (1–4) and op
 
 Open **Thư viện → Knowledge** to save short reusable notes. Each note has a scope: the whole workspace, one team or one worker. A team's notes load only when that team runs, even if one of its workers also belongs to another team. Pinned notes load whenever there is room; unpinned notes load only when they share keywords with the task brief. Knowledge is guidance for the model, not source evidence, and cannot grant permissions or raise budgets.
 
+The same store holds **memory**: short lines a worker remembers during a chat (a `remember` tool in the tool loop, a `memories` array in a one-shot harness answer) and carries into its next chats, active at once unless the run had read unvetted content. Each worker's page has a **Ghi nhớ** tab to correct, pin or delete them, and **Thư viện → Knowledge → Ghi nhớ** lists every scope. How it works, the cap, and what reaches a run: [memory.md](memory.md).
+
 A model can suggest up to three notes when it submits a report. Suggestions and notes arriving in an imported team template wait under **Chờ duyệt** and never reach a model until approved; after a turn, the tab on the prompt bar says how many of that chat's suggestions wait and opens them (see the run island above). Editing, approving or archiving creates a new revision. Search uses SQLite FTS5 over title, content and tags.
 
 Before its first request, every run freezes the context it will use. **Chi tiết → Context đã nạp** lists the instruction and knowledge revisions loaded and anything left out as a duplicate, over the 12-note/16 KB limit, or unrelated to the brief. Later edits never change a finished or resumed run. Follow-up turns currently send a truncated recent window (10 turns, 24 000 characters), not a rolling summary; the long-chat policy is [team-chat-context.md](team-chat-context.md). Team chat UI (click team → one live thread) is [team-chat.md](team-chat.md). Team templates carry only that team's approved notes; backups carry all knowledge with its revision history.
@@ -154,7 +156,8 @@ Builds 0.2.3 and earlier have no updater and never learn about a newer version; 
 **Cài đặt → Dữ liệu** removes what the app has kept. Every deletion refuses while a task, routine or checker is running, runs in one transaction, and reports what it actually removed.
 
 - **Xóa lịch sử trò chuyện** deletes every chat through the same path a single chat uses, so the existing rules hold: a chat that cost money leaves a cost tombstone, and knowledge it taught keeps the artifact it cites. Workers, teams, skills and knowledge stay.
-- **Xóa kiến thức** clears `knowledge`, its revisions and its search rows, including proposals waiting for review.
+- **Xóa kiến thức** clears the notes in `knowledge`, with their revisions and search rows, including proposals waiting for review. Memory rows in the same table stay.
+- **Xóa ghi nhớ** clears every memory in every scope, including memories waiting for review; notes stay ([memory.md](memory.md#deleting)).
 - **Xóa nguồn đã nhập** removes source rows. Orglet keeps no copy of an imported file — a source is a path plus a hash — so nothing of the person's own is touched. A source a chat still refers to cannot be removed, because opening that chat reads its sources; it is revoked and its path and hash are dropped instead, which leaves the app unable to read the file and the chat still able to open.
 - **Xóa toàn bộ dữ liệu** empties every table (`ERASE_TABLES` in `core/storage/erase.ts`, children before parents) and seeds the workspace again with the Researcher and its skill. It asks the person to type `Orglet` first. An integration test compares that list against `sqlite_master`, so a new table cannot be forgotten.
 

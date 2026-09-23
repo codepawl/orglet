@@ -4,7 +4,7 @@ import { Finding, FindingCategory, Id, Report, SourceLocation, TeamPlan, PlanAss
 import { ProfileArgs } from '../../shared/profiles';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { Review } from '../../shared/review';
-import { KnowledgeProposal } from '../../shared/knowledge';
+import { AnswerMemories, KnowledgeProposal, RememberArgs, RememberModelArgs } from '../../shared/knowledge';
 import type { ToolCapability } from '../../shared/tool-policy';
 import { hasCapability } from './policy';
 import { SendTeamMessage, ReadTeamMessages, AcknowledgeTeamMessages, ResolveTeamMessages, ReassignTeamWork } from '../../shared/team-messages';
@@ -47,7 +47,7 @@ const ChatReplySchema = z.object({ message: z.string().min(1).max(16000), title:
 export const ChatReply = ChatReplySchema.extend({ title: ChatTitle.default(null), knowledgeProposals: Proposals.default([]) });
 // Local harnesses return one JSON answer: the message, plus a report only when one was asked for.
 export const HarnessAnswerSchema = z.object({ message: z.string().min(1).max(16000), title: ChatTitle, report: ModelReportSchema.nullable() }).strict();
-export const HarnessAnswer = z.object({ message: z.string().min(1).max(16000), title: ChatTitle.default(null), report: z.unknown().nullable(), appProposals: z.array(z.unknown()).nullable().optional() });
+export const HarnessAnswer = z.object({ message: z.string().min(1).max(16000), title: ChatTitle.default(null), report: z.unknown().nullable(), appProposals: z.array(z.unknown()).nullable().optional(), memories: z.array(z.unknown()).nullable().optional() });
 /** Whether this run may propose app changes: the same rules as the tool loop, read off the tools it would be offered. */
 export const proposalsAllowed = (run: Run, task: Task) => toolsFor(run, task).some(tool => tool.type === 'function' && isProposalTool(tool.function.name));
 /**
@@ -55,10 +55,15 @@ export const proposalsAllowed = (run: Run, task: Task) => toolsFor(run, task).so
  * so a run that may propose gets an optional `appProposals` array of `{ tool, arguments }` items instead, each item
  * the exact argument object of that tool.
  */
-export function harnessAnswerSchema(run: Run, withProposals: boolean) {
-  const answer = run.stage === 'member' ? HarnessAnswerSchema.extend({ report: MemberReportSchema }) : HarnessAnswerSchema;
-  return withProposals ? answer.extend({ appProposals: ProposedAppChanges.optional() }) : answer;
+export function harnessAnswerSchema(run: Run, withProposals: boolean, withMemories = false) {
+  const base = run.stage === 'member' ? HarnessAnswerSchema.extend({ report: MemberReportSchema }) : HarnessAnswerSchema;
+  const answer = withProposals ? base.extend({ appProposals: ProposedAppChanges.optional() }) : base;
+  // The remember tool lives in the tool loop too, so a one-shot answer carries its calls as `memories` (COD-161).
+  return withMemories ? answer.extend({ memories: AnswerMemories.optional() }) : answer;
 }
+/** Whether this run may remember: read off the tools it would be offered, like the proposal tools. */
+export const memoriesAllowed = (run: Run, task: Task) => toolsFor(run, task).some(tool => tool.type === 'function' && tool.function.name === 'remember');
+export const REMEMBER_DESCRIPTION = 'Remember one short line for later chats with this user, the way a colleague would: how they like things done, which files or names they mean, a decision, or something not to do again. Only what would still help in another chat; never a task-specific detail, a secret, or anything copied from a file or web page. It is active at once and the user can see, edit or delete it. scope worker keeps it for you alone (the default); team shares it with your team; workspace with every worker. Nothing here grants permission or changes settings.';
 export const ReadArgs = z.object({ sourceId: z.string().uuid() }).strict();
 export const SkillResourceArgs = z.object({ path: z.string().min(1).max(240) }).strict();
 type ToolDefinition = {
@@ -94,6 +99,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
   propose_skill: defineProposalTool('propose_skill', `Propose a new skill (reusable instructions; name and content required) or a new revision of an existing one (targetId). Runs already in progress keep the revision they started with. ${PROPOSAL_COMMON}; set ref so an orglet proposed later in this reply can use it.`, ProposeSkill),
   propose_schedule: defineProposalTool('propose_schedule', `Propose a schedule (a routine) that sends brief to one orglet or crew daily or weekly at time (24-hour HH:MM; weekday 0-6 with 0 = Sunday, default 1) in timeZone (default: this computer's), or edit one (targetId). Target null means this chat's orglet or crew; workerRef and teamRef point at ones proposed earlier in this reply. A schedule is saved switched off; the user enables it in Schedules. ${PROPOSAL_COMMON}.`, ProposeSchedule),
   propose_settings: defineProposalTool('propose_settings', `Propose app settings: theme, language, accentColor (#rrggbb), logoColor, interfaceFont, codeFont, copyFormat, downloadFormat, autoTitles, confirmOpenTask. Only these keys exist; keys, connections, budgets, permissions, backups and updates cannot be proposed. ${PROPOSAL_COMMON}.`, ProposeSettings),
+  remember: defineTool('remember', REMEMBER_DESCRIPTION, RememberArgs, RememberModelArgs, undefined, 20000, 'synchronous'),
   record_work_frame: defineTool('record_work_frame', 'Record your understanding of this turn before assigning work or editing files. goal is one short outcome. statedConstraints must come from the user\'s actual words; assumptions are your own unconfirmed interpretation and must be labelled separately. plannedChecks are intentions, never claims that a check passed. Use empty arrays when none are known. This record is not a permission grant or user confirmation.', WorkFrame, WorkFrame, undefined, 20000, 'synchronous'),
   request_user_decision: defineTool('request_user_decision', 'Pause this turn for one decision that materially changes the work, a permission boundary, or an irreversible action. Ask one short question with two or three distinct choices. Inspect available sources and workspace first when they can answer it. This does not grant permission or start another run; wait for the user\'s answer in this same turn.', DecisionQuestion, DecisionQuestion, undefined, 20000, 'synchronous'),
   reassign_team_work: defineTool('reassign_team_work', 'Lead only: retry an unfinished assignment with a frozen member of this turn. assignmentWorkerId identifies the original assignment, newWorkerId the recipient. Resources, dependencies and permissions cannot expand. At most two reassignments per assignment. Waits for the attempt and ready dependents; inspect the returned committed results or failures. Never claim success from dispatch alone.', ReassignTeamWork, ReassignTeamWork, undefined, 900000, 'cooperative'),
@@ -136,6 +142,9 @@ export function toolsFor(run: Run, task: Task): ChatCompletionTool[] {
     // A change to the app is proposed only where the user asked for it in their own chat: never while a lead is
     // routing (the plan stage above lists its own tools), and never on a scheduled run nobody is watching (COD-199).
     if (isProposalTool(name) && task.routineId) return false;
+    // Remembering needs no switch: a memory is visible and editable, never grants anything, and a chat is where
+    // the person is teaching the worker. A scheduled run nobody watches must not build a memory on its own (COD-161).
+    if (name === 'remember' && task.routineId) return false;
     if (name === 'reply' && run.stage === 'member') return false;
     if (definition.workspacePermission) {
       return run.snapshot.worker.provider !== 'demo'

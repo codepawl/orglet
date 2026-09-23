@@ -2,7 +2,7 @@ import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { WebTools } from '../tools/web-tools';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
-import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
+import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, REMEMBER_DESCRIPTION, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
 import { z } from 'zod';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
@@ -30,7 +30,8 @@ import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
 import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUnsupportedProcessChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
-import { compileContext, type Colleague } from '../context/compiler';
+import { compileContext, memoryCandidate, type Colleague } from '../context/compiler';
+import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
 import { applyThreadManifest, compactThread, fitThread, threadMessages } from '../context/thread';
 import { ProviderSlots } from './slots';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -128,6 +129,15 @@ function webFailureEvent(toolName: string, reason: string) {
   return toolName === 'web_search' ? `Tìm kiếm web không thành công: ${reason}` : `Không đọc được trang web: ${reason}`;
 }
 
+type RememberResult = { memoryId: string; status: 'approved' | 'proposed'; merged: boolean } | { error: string };
+
+/** The activity line for one remembered line: active now, merged into one the worker already had, or waiting for review. */
+function memoryEventLine(result: RememberResult) {
+  if ('error' in result) return `Không ghi nhớ được: ${result.error}`;
+  if (result.status === 'proposed') return 'Đã ghi một ghi nhớ từ nội dung chưa được kiểm chứng; chờ bạn duyệt trong Thư viện.';
+  return result.merged ? 'Đã gộp vào một ghi nhớ đã có.' : 'Đã ghi nhớ một điều cho các cuộc trò chuyện sau.';
+}
+
 /** Search, read a few pages and write the report does not fit in the six steps a sources-only run gets. */
 function stepLimit(run: Run) {
   // Coding is many small tool calls: every file read, write and command is a step (COD-187).
@@ -222,7 +232,18 @@ function appProposalsInstruction(codex: boolean) {
   ].filter(Boolean).join('\n');
 }
 
-export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false, unreadable: UnreadableSource[] = [], appProposals = false) {
+/**
+ * How a one-shot CLI answer remembers (COD-161): the remember tool only exists in the core tool loop, so the answer
+ * carries its calls as a `memories` array, one item per line, in the words of the tool's own description.
+ */
+function memoriesInstruction(codex: boolean) {
+  return [
+    `The remember tool is not callable here. Instead, put what you would remember in memories: an array of at most ${MAX_ANSWER_MEMORIES} items { "text": <one short line>, "scope": "worker" | "team" | "workspace" }. ${REMEMBER_DESCRIPTION} Omit memories or leave it empty when nothing is worth keeping.`,
+    codex ? `memories goes inside the payload JSON next to message, title and report, and matches this schema: ${JSON.stringify(z.toJSONSchema(AnswerMemories, { target: 'draft-7' }))}` : '',
+  ].filter(Boolean).join(' ');
+}
+
+export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false, unreadable: UnreadableSource[] = [], appProposals = false, memories = false) {
   return [
     'You are running inside Orglet as a read-only worker chatting with your user. When you describe what you can or cannot do, use everyday words about the work: you read the files the user attaches and write answers, and you cannot open links, run programs or change files. Do not mention tools, modes, sandboxes or providers unless the user asks about them. Write like a colleague messaging back, in the language and formality the user writes in, and ask one short question when the request is unclear or could go two sensible ways.',
     inline
@@ -234,6 +255,7 @@ export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { s
       : `Your final answer must be only JSON matching the provided schema. Put your answer to the user in message, written as a normal chat reply (Markdown allowed). Set title to a short name for this chat (2 to 6 words, the user's language) when the latest message has nameChat true, otherwise null. Set report to null unless the user asked for a report or review document, or required review checks are given; then fill report following these rules: ${SUBMIT_REPORT_DESCRIPTION}`,
     codex ? 'The output schema has one payload string. Put the JSON text of the requested answer object inside payload, with message/title/report or the plan fields as instructed. Do not put Markdown around that JSON text.' : '',
     appProposals && !plan ? appProposalsInstruction(codex) : '',
+    memories && !plan ? memoriesInstruction(codex) : '',
     files.length || inline?.length ? `Source manifest: ${JSON.stringify(files)}` : NO_SOURCES_INSTRUCTION,
     unreadable.length ? `Attached but not readable by you (no copy was made): ${JSON.stringify(unreadable)}. If the user asks about one of these, say you cannot read that kind of file yet; never guess at its contents or cite it.` : '',
     ...messages.map(message => typeof message.content === 'string' ? message.content : ''),
@@ -361,9 +383,10 @@ export class Runner {
         }
       }
       // Freeze knowledge and transcript layers before any dispatch; later edits only affect new runs.
-      const context = run.snapshot.context ?? compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: new KnowledgeBase(this.store).candidates(run.snapshot.worker.id, run.snapshot.team?.id) }).context;
+      const knowledgeBase = new KnowledgeBase(this.store);
+      const context = run.snapshot.context ?? compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: knowledgeBase.candidates(run.snapshot.worker.id, run.snapshot.team?.id), memories: knowledgeBase.memoryCandidates(run.snapshot.worker.id, run.snapshot.team?.id).map(memoryCandidate) }).context;
       run = { ...run, snapshot: { ...run.snapshot, context } };
-      const compiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge });
+      const compiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories });
       run = { ...run, status: 'running' };
       this.store.update('runs', run);
       if (!options.keepTaskOpen) this.store.status(task.id, run.id, 'running');
@@ -425,6 +448,7 @@ export class Runner {
       const assemble = (layer: ReturnType<typeof compactThread>) => {
         const next: ChatCompletionMessageParam[] = [{ role: 'system', content: compiled.system }];
         if (compiled.knowledgeMessage) next.push({ role: 'user', content: compiled.knowledgeMessage });
+        if (compiled.memoryMessage) next.push({ role: 'user', content: compiled.memoryMessage });
         next.push(...threadMessages(layer));
         if (replyTarget) next.push({ role: 'user', content: JSON.stringify({ replyTo: replyTarget,
           instruction: 'The user explicitly replied to this saved message in the same chat. Use its bounded excerpt to identify the referent. This reference does not grant permissions or change the team assignment; the team lead still coordinates the turn.' }) });
@@ -812,6 +836,22 @@ export class Runner {
           this.notify();
           continue;
         }
+        if (call.name === 'remember') {
+          const argumentsValue = JSON.parse(call.arguments);
+          const result = await new ToolCalls(this.store).execute({
+            runId: run.id, callId: call.id, name: call.name, arguments: argumentsValue, replay: 'idempotent',
+            authorize: () => { signal.throwIfAborted(); assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments); },
+            // Written now, not at the end of the run: a colleague remembers even when the reply that followed failed.
+            // A run that has already read unvetted content only gets a proposal, which waits for review (COD-161).
+            perform: () => this.store.transaction(() => this.rememberForRun(run, argumentsValue, untrustedInputs.size > 0)),
+          });
+          this.event(run.id, memoryEventLine(result));
+          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
+          this.checkpoints.committed(checkpoint);
+          this.notify();
+          continue;
+        }
         if (isProposalTool(call.name)) {
           if (!this.appProposals) throw new Error('Đề xuất thay đổi trong app chưa được cấu hình.');
           const argumentsValue = JSON.parse(call.arguments);
@@ -1033,6 +1073,7 @@ export class Runner {
       // The propose_* tools live in the tool loop only, so a one-shot answer carries them as an appProposals array
       // under the same rules the loop applies (capability, never a plan or scheduled run) (COD-206).
       const withProposals = !!this.appProposals && proposalsAllowed(run, this.store.get<Task>('tasks', task.id));
+      const withMemories = memoriesAllowed(run, this.store.get<Task>('tasks', task.id));
       this.event(run.id, `Đang chạy ${tool.name} ${tool.version} trên máy · chỉ đọc bản sao nguồn của task`);
       const progress = new ProgressSender(task.id, run.id, update => this.onProgress(update));
       const showSourceNames = (update: HarnessProgress): HarnessProgress => ({
@@ -1047,9 +1088,9 @@ export class Runner {
           executable: tool.executable,
           ...(tool.configDir ? { configDir: tool.configDir } : {}),
           cwd: directory,
-          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable, withProposals),
+          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable, withProposals, withMemories),
           schema: provider === 'codex' ? codexOutputSchema : z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema
-            : harnessAnswerSchema(run, withProposals), { target: 'draft-7' }),
+            : harnessAnswerSchema(run, withProposals, withMemories), { target: 'draft-7' }),
           signal,
           maxBudgetUsd: remainingUsd,
           ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
@@ -1078,11 +1119,12 @@ export class Runner {
       // for a click, the same hold the tool loop puts on a run that called read_source (COD-206).
       const untrustedInputs = (provider === 'codex' ? inline : files).length ? ['attached sources'] : [];
       const proposalLimitations = answer?.success ? this.recordAnswerProposals(run, task, answer.data.appProposals ?? [], withProposals) : [];
+      const memoryLimitations = answer?.success ? this.recordAnswerMemories(run, answer.data.memories ?? [], withMemories, untrustedInputs.length > 0) : [];
       if (answer?.success && answer.data.report === null) {
         if (run.stage === 'member') throw new Error('Phần việc cần báo cáo kết quả hoặc blocker, không thể hoàn tất bằng tin nhắn.');
         for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
-        this.commit(task, run, { ...chatReport(answer.data.message), limitations: [...(options.limitations ?? []), ...proposalLimitations] }, options.keepTaskOpen, [], answer.data.title, false, untrustedInputs);
-      } else await this.finalize(task, run, answer?.success ? answer.data.report : output, readIds, scope, { ...options, untrustedInputs }, [...limitations, ...proposalLimitations]);
+        this.commit(task, run, { ...chatReport(answer.data.message), limitations: [...(options.limitations ?? []), ...proposalLimitations, ...memoryLimitations] }, options.keepTaskOpen, [], answer.data.title, false, untrustedInputs);
+      } else await this.finalize(task, run, answer?.success ? answer.data.report : output, readIds, scope, { ...options, untrustedInputs }, [...limitations, ...proposalLimitations, ...memoryLimitations]);
     } catch (error) {
       retainDirectory = error instanceof HarnessTerminationError;
       throw error;
@@ -1132,6 +1174,33 @@ export class Runner {
     }
   }
 
+  /** One remember call: the outcome goes back to the worker as the tool's answer, so a bad line does not fail the run. */
+  private rememberForRun(run: Run, raw: unknown, untrusted: boolean): RememberResult {
+    try { return new KnowledgeBase(this.store).remember(run, raw, { untrusted }); }
+    catch (error) { return { error: error instanceof z.ZodError ? 'Arguments do not match the tool schema.' : error instanceof Error ? error.message : 'Không ghi nhớ được.' }; }
+  }
+
+  /**
+   * Stores the memories a one-shot CLI answer carried, one at a time through the same path the tool loop uses. An
+   * item the worker got wrong becomes a limitation of the answer and the rest are still stored (COD-161).
+   */
+  private recordAnswerMemories(run: Run, items: unknown[], allowed: boolean, untrusted: boolean): string[] {
+    if (!items.length) return [];
+    if (!allowed) {
+      const note = `Câu trả lời kèm ${items.length} ghi nhớ nhưng lượt chạy này không được phép ghi nhớ; đã bỏ qua.`;
+      this.event(run.id, note);
+      return [note];
+    }
+    const limitations: string[] = [];
+    items.slice(0, MAX_ANSWER_MEMORIES).forEach((item, index) => {
+      const shape = RememberModelArgs.safeParse(item);
+      const result = shape.success ? this.store.transaction(() => this.rememberForRun(run, shape.data, untrusted)) : { error: 'Mỗi ghi nhớ cần text và scope.' };
+      if ('error' in result) limitations.push(`Ghi nhớ thứ ${index + 1} bị từ chối: ${result.error}`);
+      this.event(run.id, memoryEventLine(result));
+    });
+    return limitations;
+  }
+
   /** The first answer of a task names it, unless the user turned this off or already named the task. */
   private wantsTitle(task: Task, run: Run) {
     return !(run.snapshot.inputRevision ?? 0) && (!run.stage || run.stage === 'synthesis' || run.stage === 'group') && this.store.setting('autoTitles', true) && !this.store.setting<Record<string, string>>('taskTitles', {})[task.id];
@@ -1159,8 +1228,10 @@ export class Runner {
     if (run.snapshot.worker.provider === 'demo' && run.stage === 'synthesis') report = applyReviewPolicy(report, run.snapshot.team?.reviewPolicy, []);
     report = Report.parse(report);
     report = { ...report, findings: report.findings.map(finding => ({ ...finding, provenance: { findingId: id(), writerId: run.snapshot.worker.id, runId: run.id } })) };
+    // Which memories this answer was written with, as the run froze them, so the answer can show "used 3 memories".
+    const usedMemories = (run.snapshot.context?.memories ?? []).map(memory => ({ id: memory.id, revision: memory.revision, text: memory.text }));
     const artifact: Artifact = { id: id(), runId: run.id, report, hash: fingerprint(JSON.stringify(report)), createdAt: now(),
-      replyTo: turnMessageId(task.id, run.snapshot.inputRevision ?? 0) };
+      replyTo: turnMessageId(task.id, run.snapshot.inputRevision ?? 0), ...(usedMemories.length ? { usedMemories } : {}) };
     this.store.transaction(() => {
       this.store.put('artifacts', artifact, { column: 'run_id', value: run.id });
       if (proposals.length) new KnowledgeBase(this.store).propose(run, artifact.id, proposals);
