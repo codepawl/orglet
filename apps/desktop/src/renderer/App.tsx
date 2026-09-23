@@ -53,6 +53,7 @@ import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
 import { t, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
+import { useAppChangeNotices } from './appChangeNotices';
 import type { NewChatTarget, WorkspaceGrantView } from '../shared/workspace-access';
 import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { permissionsForLevel, type WorkspaceLevel } from '../shared/capability-status';
@@ -175,6 +176,7 @@ export function App() {
   const detailsOpenRef = useRef(detailsOpen); detailsOpenRef.current = detailsOpen;
   const [noticesOpen, setNoticesOpen] = useState(false);
   const unreadNotices = useUnreadNotices();
+  useAppChangeNotices(workspace?.recentAppChanges);
   // Everything in the sidebar footer that waits for you reads the same way: a dot on the icon and a count (user, 2026-09-23).
   const pendingRoutines = workspace?.routines.filter(item => item.pending).length ?? 0;
   const knowledgeToReview = workspace?.knowledge.filter(item => item.status === 'proposed').length ?? 0;
