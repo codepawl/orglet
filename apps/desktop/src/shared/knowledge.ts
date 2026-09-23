@@ -20,7 +20,8 @@ export const KnowledgeInput = z.object({
 export type KnowledgeInput = z.infer<typeof KnowledgeInput>;
 export const KnowledgeProvenance = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('user') }).strict(),
-  z.object({ kind: z.literal('run'), taskId: Uuid, runId: Uuid, artifactId: Uuid }).strict(),
+  // workerId names who suggested it; items saved before it existed fall back to the chat's worker or crew lead.
+  z.object({ kind: z.literal('run'), taskId: Uuid, runId: Uuid, artifactId: Uuid, workerId: Uuid.optional() }).strict(),
   z.object({ kind: z.literal('template') }).strict(),
 ]);
 export const Knowledge = KnowledgeInput.extend({
