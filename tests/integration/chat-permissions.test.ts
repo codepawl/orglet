@@ -273,3 +273,75 @@ describe('granting a folder while a turn is routing', () => {
     expect(await core.command('workspaceAccess', { taskId })).toMatchObject({ name: 'other' });
   });
 });
+
+/* COD-215: a group chat started from orglets picked in the sidebar keeps what was chosen for it under the group. */
+describe('a group chat that has not started', () => {
+  /** Two orglets on a paid provider, the way the sidebar picks them. */
+  async function twoWorkers(): Promise<[Worker, Worker]> {
+    const first = store.all<Worker>('workers')[0];
+    const saved = await core.command('saveWorker', { ...first, provider: 'openai' }) as Worker;
+    const { id: _id, ...draft } = saved;
+    const second = await core.command('saveWorker', { ...draft, name: 'Second worker' }) as Worker;
+    return [saved, second];
+  }
+
+  it('takes its permissions on the first message, whichever order the orglets were picked in', async () => {
+    const [first, second] = await twoWorkers();
+    await core.command('setToolCapabilities', { workerIds: [second.id, first.id], capabilities: ['source.read', 'network.web'] });
+    expect(store.workspace().newChatCapabilities).toEqual({ [newChatKey({ workerIds: [first.id, second.id] })]: ['source.read', 'network.web'] });
+
+    const taskId = await core.command('createTask', { workerId: first.id, assignees: [first.id, second.id], brief: 'Compare notes', ...scope }) as string;
+    expect(store.workspace().newChatCapabilities).toEqual({});
+    await settled(taskId);
+
+    const detail = store.detail(taskId);
+    expect(detail.task.status).toBe('completed');
+    expect(detail.task.toolCapabilities).toEqual(['source.read', 'network.web']);
+    expect(detail.runs).toHaveLength(2);
+    for (const run of detail.runs) expect(run.snapshot.toolCapabilities).toEqual(['source.read', 'network.web']);
+  });
+
+  it('takes its working folder on the first message and gives it to every orglet', async () => {
+    const [first, second] = await twoWorkers();
+    const kept = await core.grantWorkspace({ workerIds: [first.id, second.id], directory: folder, permissions: ['read'] });
+    expect(kept).toEqual({ name: 'project', permissions: ['read'] });
+    expect(store.workspace().newChatWorkspace).toEqual({ [newChatKey({ workerIds: [first.id, second.id] })]: { name: 'project', permissions: ['read'] } });
+
+    const taskId = await core.command('createTask', { workerId: first.id, assignees: [first.id, second.id], brief: 'Read the project', ...scope }) as string;
+    expect(store.workspace().newChatWorkspace).toEqual({});
+    await settled(taskId);
+
+    const detail = store.detail(taskId);
+    expect(detail.runs).toHaveLength(2);
+    for (const run of detail.runs) expect(run.snapshot.workspaceGrant).toMatchObject({ taskId, permissions: ['read'] });
+  });
+
+  it('leaves a single worker chat and a chat with every orglet alone', async () => {
+    const [first, second] = await twoWorkers();
+    await core.command('setToolCapabilities', { workerIds: [first.id, second.id], capabilities: ['source.read'] });
+
+    const single = await core.command('createTask', { workerId: first.id, brief: 'Just you', ...scope }) as string;
+    await settled(single);
+    expect(store.detail(single).task.toolCapabilities).toBeUndefined();
+    const everyone = await core.command('createTask', { workerId: first.id, assignees: 'all', brief: 'Everyone', ...scope }) as string;
+    await settled(everyone);
+    expect(store.detail(everyone).task.toolCapabilities).toBeUndefined();
+    expect(store.workspace().newChatCapabilities).toEqual({ [newChatKey({ workerIds: [first.id, second.id] })]: ['source.read'] });
+  });
+
+  it('is dropped by choosing no folder, refused for an orglet that is gone, and dropped with one of its orglets', async () => {
+    const [first, second] = await twoWorkers();
+    await core.grantWorkspace({ workerIds: [first.id, second.id], directory: folder, permissions: ['read'] });
+    await core.command('revokeWorkspace', { workerIds: [second.id, first.id] });
+    expect(store.workspace().newChatWorkspace).toEqual({});
+
+    await expect(core.grantWorkspace({ workerIds: [first.id, id()], directory: folder, permissions: ['read'] })).rejects.toThrow('Không tìm thấy');
+
+    await core.grantWorkspace({ workerIds: [first.id, second.id], directory: folder, permissions: ['read'] });
+    await core.command('setToolCapabilities', { workerIds: [first.id, second.id], capabilities: ['source.read'] });
+    await core.command('setToolCapabilities', { workerId: first.id, capabilities: ['source.read'] });
+    await core.command('deleteEntity', { kind: 'worker', id: second.id });
+    expect(store.workspace().newChatWorkspace).toEqual({});
+    expect(store.workspace().newChatCapabilities).toEqual({ [newChatKey({ workerId: first.id })]: ['source.read'] });
+  });
+});

@@ -1,7 +1,7 @@
 import { WorkspaceRecovery } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
-import { newChatKey } from '../shared/live-task';
+import { newChatKey, newChatKeyNames } from '../shared/live-task';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
 import { GrantWorkspace, type NewChatTarget } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
@@ -55,6 +55,13 @@ export const localHarnessRuntime = (accountRoot?: string): HarnessRuntime => ({
 
 /** A folder waiting for a chat's first message, checked again at that moment (COD-186). */
 type NewChatFolder = { pending: PendingWorkspace; resolved: ResolvedDirectory; failure?: undefined } | { pending: PendingWorkspace; resolved?: undefined; failure: string };
+
+/** The empty chat a command names: one worker, a team, or the orglets of a group chat that has not started (COD-215). */
+function newChatTargetOf(input: { workerId: string } | { teamId: string } | { workerIds: string[] }): NewChatTarget {
+  if ('teamId' in input) return { teamId: input.teamId };
+  if ('workerIds' in input) return { workerIds: input.workerIds };
+  return { workerId: input.workerId };
+}
 
 export class CoreService {
   feedbackText(artifactId: string): string {
@@ -112,8 +119,9 @@ export class CoreService {
   async grantWorkspace(raw: unknown) {
     const input = GrantWorkspace.parse(raw);
     if (!('taskId' in input)) {
-      const chat: NewChatTarget = 'teamId' in input ? { teamId: input.teamId } : { workerId: input.workerId };
-      this.assertAssignable('teamId' in chat ? 'team' : 'worker', 'teamId' in chat ? chat.teamId : chat.workerId);
+      const chat = newChatTargetOf(input);
+      if ('teamId' in chat) this.assertAssignable('team', chat.teamId);
+      else for (const workerId of this.newChatWorkerIds(chat)) this.assertAssignable('worker', workerId);
       const view = await this.workspaceGrants.setPending(chat, input.directory, input.permissions);
       this.notify();
       return view;
@@ -332,7 +340,7 @@ export class CoreService {
       case 'revokeWorkspace': {
         const input = commands.revokeWorkspace.parse(args);
         if (!('taskId' in input)) {
-          this.workspaceGrants.takePending('teamId' in input ? { teamId: input.teamId } : { workerId: input.workerId });
+          this.workspaceGrants.takePending(newChatTargetOf(input));
           this.notify();
           return;
         }
@@ -801,37 +809,51 @@ export class CoreService {
     this.setEntityState(kind, entityId, { deletedAt: this.clock().toISOString() });
     this.takeNewChatCapabilities(kind === 'team' ? { teamId: entityId } : { workerId: entityId });
     this.workspaceGrants.takePending(kind === 'team' ? { teamId: entityId } : { workerId: entityId });
+    if (kind === 'worker') {
+      this.takeGroupChatCapabilities(entityId);
+      this.workspaceGrants.takePendingOfGroupsWith(entityId);
+    }
   }
   /**
    * Permissions for a chat that has not started yet (COD-178). The `tasks` row only exists once the first message
-   * is sent, so until then the set waits under the worker or team and `createTask` moves it onto the new row.
+   * is sent, so until then the set waits under the worker, team or group of orglets and `createTask` moves it onto
+   * the new row.
    */
-  private setNewChatCapabilities(input: { workerId: string; capabilities: ToolCapability[] } | { teamId: string; capabilities: ToolCapability[] }) {
-    const chat = 'teamId' in input ? { teamId: input.teamId } : { workerId: input.workerId };
-    let workerIds: string[];
-    if ('teamId' in input) {
-      const team = this.store.get<Team>('teams', input.teamId);
-      workerIds = [...team.memberIds, team.synthesizerId];
-    } else {
-      workerIds = [input.workerId];
-    }
-    for (const workerId of workerIds) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, input.capabilities);
+  private setNewChatCapabilities(input: { capabilities: ToolCapability[] } & ({ workerId: string } | { teamId: string } | { workerIds: string[] })) {
+    const chat = newChatTargetOf(input);
+    for (const workerId of this.newChatWorkerIds(chat)) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, input.capabilities);
     const pending = { ...this.store.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}) };
     pending[newChatKey(chat)] = [...input.capabilities];
     this.store.setSetting('newChatCapabilities', pending);
     this.notify();
   }
+  /** Every worker who will answer in this chat once it starts. */
+  private newChatWorkerIds(chat: NewChatTarget): string[] {
+    if ('teamId' in chat) {
+      const team = this.store.get<Team>('teams', chat.teamId);
+      return [...team.memberIds, team.synthesizerId];
+    }
+    if ('workerIds' in chat) return chat.workerIds;
+    return [chat.workerId];
+  }
   /** The permissions waiting for this chat's first message, if any were chosen. */
-  private pendingNewChatCapabilities(chat: { teamId?: string; workerId?: string }): ToolCapability[] | undefined {
+  private pendingNewChatCapabilities(chat: NewChatTarget): ToolCapability[] | undefined {
     return this.store.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {})[newChatKey(chat)];
   }
   /** Drops the waiting set once the chat row carries it, or the worker or team is gone. */
-  private takeNewChatCapabilities(chat: { teamId?: string; workerId?: string }) {
+  private takeNewChatCapabilities(chat: NewChatTarget) {
     const pending = { ...this.store.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}) };
     const key = newChatKey(chat);
     if (!(key in pending)) return;
     delete pending[key];
     this.store.setSetting('newChatCapabilities', pending);
+  }
+  /** Drops the waiting sets of every group chat this worker was part of: without the worker, that group cannot start. */
+  private takeGroupChatCapabilities(workerId: string) {
+    const pending = this.store.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {});
+    const kept = Object.fromEntries(Object.entries(pending).filter(([key]) => !newChatKeyNames(key, workerId)));
+    if (Object.keys(kept).length === Object.keys(pending).length) return;
+    this.store.setSetting('newChatCapabilities', kept);
   }
   /** Workers and teams chosen for new work must be active. */
   private assertAssignable(kind: 'worker' | 'team', entityId: string) {
@@ -945,12 +967,17 @@ export class CoreService {
     const task: Task = { ...input, workerId: worker.id, ...(team ? { teamSnapshot: team } : {}), sourceIds: [...new Set(input.sourceIds)], id: id(), status: 'queued', createdAt: now(), accepted: false };
     return task;
   }
-  /** The first message of a worker or team chat is the one that takes what was chosen while the chat was still empty. */
+  /**
+   * The first message of a worker, team or group chat is the one that takes what was chosen while the chat was
+   * still empty. A chat with every orglet ('all') has no empty chat to choose in, and a routine's rows are not chats.
+   */
   private isLiveChatStart(input: TaskInput, routine?: Routine): boolean {
-    return !routine && !input.assignees;
+    return !routine && input.assignees !== 'all';
   }
   private newChatTarget(input: TaskInput): NewChatTarget {
-    return input.teamId ? { teamId: input.teamId } : { workerId: input.workerId };
+    if (input.teamId) return { teamId: input.teamId };
+    if (Array.isArray(input.assignees)) return { workerIds: input.assignees };
+    return { workerId: input.workerId };
   }
   /**
    * Checks the folder waiting for this chat, if any, right before its first message creates the row (COD-186). A
@@ -968,9 +995,9 @@ export class CoreService {
     }
   }
   private createTask(input: TaskInput, routine?: Routine, folder?: NewChatFolder): string {
-    // The first message of a worker or team chat takes the permissions chosen while the chat was still empty.
+    // The first message of a worker, team or group chat takes the permissions chosen while the chat was still empty.
     const liveChat = this.isLiveChatStart(input, routine) && input.toolCapabilities === undefined;
-    const chosen = liveChat ? this.pendingNewChatCapabilities({ teamId: input.teamId, workerId: input.workerId }) : undefined;
+    const chosen = liveChat ? this.pendingNewChatCapabilities(this.newChatTarget(input)) : undefined;
     const task = this.prepareTask(chosen ? { ...input, toolCapabilities: chosen } : input);
     const workerIds = task.teamSnapshot ? [...task.teamSnapshot.memberIds, task.teamSnapshot.synthesizerId] : task.assignees === 'all' ? this.store.all<Worker>('workers').map(worker => worker.id) : task.assignees ?? [task.workerId];
     for (const workerId of workerIds) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, task.toolCapabilities);
@@ -980,7 +1007,7 @@ export class CoreService {
       this.store.put('tasks', task);
       this.store.db.prepare('INSERT INTO task_search VALUES(?,?)').run(task.id, task.brief);
       if (routine) this.store.update('routines', { ...routine, lastTaskId: task.id });
-      if (chosen) this.takeNewChatCapabilities({ teamId: input.teamId, workerId: input.workerId });
+      if (chosen) this.takeNewChatCapabilities(this.newChatTarget(input));
       if (folder) {
         if (folder.resolved) this.workspaceGrants.applyInsideTransaction(task.id, folder.resolved, folder.pending.permissions);
         this.workspaceGrants.takePending(this.newChatTarget(input));

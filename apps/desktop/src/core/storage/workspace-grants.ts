@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { GrantWorkspace, NewChatWorkspaceView, WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermissions, type NewChatTarget, type WorkspacePermission } from '../../shared/workspace-access';
 import { workspaceAllowed } from '../../shared/capability-status';
 import type { Task } from '../../shared/contracts';
-import { newChatKey } from '../../shared/live-task';
+import { newChatKey, newChatKeyNames } from '../../shared/live-task';
 import { Store, id } from './database';
 
 /** A folder as the picker resolved it: its canonical path and the identity that detects a swap at the same path. */
@@ -136,6 +136,14 @@ export class WorkspaceGrants {
     if (!(key in pending)) return;
     delete pending[key];
     this.store.setSetting(PENDING_SETTING, pending);
+  }
+
+  /** Drops the folders waiting for every group chat this worker was part of: without the worker, that group cannot start. */
+  takePendingOfGroupsWith(workerId: string) {
+    const pending = this.pendingAll();
+    const kept = Object.fromEntries(Object.entries(pending).filter(([key]) => !newChatKeyNames(key, workerId)));
+    if (Object.keys(kept).length === Object.keys(pending).length) return;
+    this.store.setSetting(PENDING_SETTING, kept);
   }
 
   /**

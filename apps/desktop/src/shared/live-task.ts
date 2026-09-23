@@ -50,13 +50,23 @@ export function nextWorkerMessage(tasks: readonly LiveThreadTask[], workerId: st
   return live ? { mode: 'revise', taskId: live.id } : { mode: 'create' };
 }
 
+const GROUP_KEY_PREFIX = 'group:';
+
 /**
  * Where the permissions of a chat that has not started yet are kept (`Workspace.newChatCapabilities`, COD-178).
  * The row does not exist before the first message, so the set is keyed by the worker or team instead and
- * `createTask` moves it onto the row it creates.
+ * `createTask` moves it onto the row it creates. A group chat started from several orglets (COD-215) is keyed by
+ * their sorted ids, so the same orglets picked in another order share one waiting set.
  */
-export function newChatKey(chat: { teamId?: string; workerId?: string }): string {
+export function newChatKey(chat: { teamId?: string; workerId?: string; workerIds?: readonly string[] }): string {
   if (chat.teamId) return `team:${chat.teamId}`;
+  if (chat.workerIds) return `${GROUP_KEY_PREFIX}${[...chat.workerIds].sort().join(',')}`;
   if (chat.workerId) return `worker:${chat.workerId}`;
   throw new Error('Chat cần một Tí hoặc một hội.');
+}
+
+/** True for the key of a group chat this worker is part of: once the worker is gone, that group cannot start. */
+export function newChatKeyNames(key: string, workerId: string): boolean {
+  if (!key.startsWith(GROUP_KEY_PREFIX)) return false;
+  return key.slice(GROUP_KEY_PREFIX.length).split(',').includes(workerId);
 }

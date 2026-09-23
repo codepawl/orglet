@@ -88,7 +88,7 @@ function Fact({ icon: Icon, children, title }: { icon: typeof Users; children: R
  * Who this chat is with: the face, the name, and the few facts worth knowing, as icons and values on one wrapping
  * line rather than a sentence per fact (user, 2026-09-19).
  */
-function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; members: readonly Worker[] }) {
+function ChatSubject({ team, worker, group, members }: { team?: Team; worker?: Worker; group?: readonly Worker[]; members: readonly Worker[] }) {
   if (team) {
     return <div className="details-subject">
       <p className="details-subject-name"><RosterAvatars workers={members} size="sm" max={2} /><strong>{team.name}</strong></p>
@@ -98,6 +98,15 @@ function ChatSubject({ team, worker, members }: { team?: Team; worker?: Worker; 
           {team.workflow === 'parallel' ? t('song song') : t('lần lượt')}
         </Fact>
         <Fact icon={Wallet} title={t('Ngân sách tháng')}>{formatMoney(team.monthlyBudgetMicros)}</Fact>
+      </div>
+    </div>;
+  }
+  // A group chat that has not started has no name of its own: its faces and their count say who it is.
+  if (group) {
+    return <div className="details-subject">
+      <p className="details-subject-name"><RosterAvatars workers={group} size="sm" max={2} /><strong>{t('Trò chuyện nhóm')}</strong></p>
+      <div className="details-facts">
+        <Fact icon={Users} title={t('Số Tí trong nhóm')}>{group.length}</Fact>
       </div>
     </div>;
   }
@@ -185,10 +194,12 @@ async function copyRunId(id: string) {
   }
 }
 
-export function DetailsPanel({ workspace, team, worker, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, readProcessOutput, readPrivateFile }: {
+export function DetailsPanel({ workspace, team, worker, group, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, readProcessOutput, readPrivateFile }: {
   workspace: Workspace;
   team?: Team;
   worker?: Worker;
+  /** The orglets of a group chat that has not started yet (COD-215), in the order they were picked. */
+  group?: readonly Worker[];
   detail?: TaskDetail;
   recovery?: WorkspaceRecoveryView;
   /** Set when the chat asked to review an attempt: Details scrolls to that attempt (or to the blocking one). */
@@ -218,7 +229,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
   };
 }) {
   const [technical, setTechnical] = useState(false);
-  const members = team ? teamRoster(team, workspace.workers) : [];
+  const members = team ? teamRoster(team, workspace.workers) : [...group ?? []];
   const spent = detail ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0;
   const tokens = detail ? detail.usage.inputTokens + detail.usage.outputTokens : 0;
   const firstRun = detail?.runs[0];
@@ -234,9 +245,9 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
       <Button size="icon" aria-label={t('Đóng panel')} onClick={onClose}><X size={18} /></Button>
     </div>
     <div className="details-body">
-      <ChatSubject team={team} worker={worker} members={members} />
+      <ChatSubject team={team} worker={worker} group={group} members={members} />
 
-      {team && <Section icon={Users} title={t('Thành viên')}>
+      {(team || group) && <Section icon={Users} title={t('Thành viên')}>
         <ShowMore items={members} empty={t('Hội chưa có Tí nào.')} render={member => {
           const mark = workerStatus(member.id);
           return <div key={member.id} className="details-member">
@@ -244,7 +255,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
             <Avatar name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xs"
               badge={member.provider === 'demo' ? undefined : <ProviderMark provider={member.provider} size="small" decorative />} />
             <div>
-              <p className="details-member-name">{member.name}{member.id === team.synthesizerId && <small>{t('tí trưởng')}</small>}</p>
+              <p className="details-member-name">{member.name}{member.id === team?.synthesizerId && <small>{t('tí trưởng')}</small>}</p>
               {member.description && <p className="muted">{member.description}</p>}
             </div>
           </div>;

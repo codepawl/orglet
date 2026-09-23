@@ -10,7 +10,7 @@ export type NavigationDirection = 'back' | 'forward';
 export type AppView = {
   /** The open chat, or null for the empty chat with `recipient`. */
   chat: string | null;
-  /** Who the empty chat talks to: a worker id, `team:<id>`, or '' before anyone is chosen. Empty while a chat is open. */
+  /** Who the empty chat talks to: a worker id, `team:<id>`, `group:<worker ids>` (COD-215), or '' before anyone is chosen. Empty while a chat is open. */
   recipient: string;
   panel: string | null;
   /** The settings or library tab. */
