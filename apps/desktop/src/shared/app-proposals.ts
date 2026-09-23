@@ -4,6 +4,7 @@ import { CustomModelId } from './models';
 import { FontFamily } from './fonts';
 import { Language } from './i18n';
 import { ClockTime, TimeZone } from './schedule';
+import { ProposalImprovement, ProposeSelfImprovement } from './self-improvement';
 
 /**
  * What a worker may propose to change in the app (COD-199). A proposal is stored with the chat and shown as a card
@@ -93,6 +94,9 @@ export const proposalToolSchemas = {
   propose_skill: ProposeSkill,
   propose_schedule: ProposeSchedule,
   propose_settings: ProposeSettings,
+  // A worker's one-sentence change to its own instructions after repeated feedback (COD-162). It rides on the same
+  // record, card, apply and undo as the others, and only ever waits for a click.
+  propose_self_improvement: ProposeSelfImprovement,
 } as const;
 export type ProposalToolName = keyof typeof proposalToolSchemas;
 export const proposalToolNames = Object.keys(proposalToolSchemas) as ProposalToolName[];
@@ -130,9 +134,10 @@ export const ProposalTarget = z.object({ kind: z.enum(['worker', 'team', 'skill'
 export type ProposalTarget = z.infer<typeof ProposalTarget>;
 /**
  * Why a proposal is never applied on its own, even for a worker whose auto-apply switch is on: the run read
- * content nobody vetted, the change raises a spending limit, or applying needs a save location.
+ * content nobody vetted, the change raises a spending limit, applying needs a save location, or it changes how
+ * the proposing worker itself works (COD-162).
  */
-export const ProposalHold = z.enum(['untrusted', 'budget', 'template']);
+export const ProposalHold = z.enum(['untrusted', 'budget', 'template', 'self']);
 export type ProposalHold = z.infer<typeof ProposalHold>;
 /** A failed apply stays pending with its error on the card, so the user can fix the cause and try again. */
 export const ProposalStatus = z.enum(['pending', 'applied', 'dismissed']);
@@ -163,8 +168,13 @@ export const AppProposal = z.object({
   payload: z.record(z.string(), z.unknown()),
   hold: ProposalHold.nullable(),
   status: ProposalStatus,
-  /** Set when the run finished with the worker's auto-apply switch on but a hold kept the card waiting for a click. */
+  /**
+   * Set when the run finished with the worker's auto-apply switch on but a hold kept the card waiting for a click,
+   * and from the start on a self-improvement, which waits whatever the switch says.
+   */
   heldReason: ProposalHold.optional(),
+  /** The feedback a self-improvement answers: which signal, and the chats it came from (COD-162). */
+  improvement: ProposalImprovement.optional(),
   automatic: z.boolean().optional(),
   appliedAt: z.iso.datetime().optional(),
   error: z.string().max(2000).optional(),

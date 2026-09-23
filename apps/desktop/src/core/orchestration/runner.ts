@@ -2,7 +2,7 @@ import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { WebTools } from '../tools/web-tools';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
-import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, REMEMBER_DESCRIPTION, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
+import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
 import { z } from 'zod';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
@@ -52,7 +52,16 @@ import { codexOutputSchema, decodeCodexOutput } from '../harness/codex-output';
 import { MessageInteractions } from './message-interactions';
 import { turnMessageId } from '../../shared/message-interactions';
 import { AnswerAppChange, isProposalTool, MAX_ANSWER_PROPOSALS, ProposedAppChanges, proposalToolNames } from '../../shared/app-proposals';
+import { ProposeSelfImprovement } from '../../shared/self-improvement';
 import type { AppProposals } from './app-proposals';
+
+/**
+ * A report the citation, checker, line-range or process gates refused (COD-162). The run fails as before; the code
+ * on the run lets the next run count the refusal as feedback on this worker's work.
+ */
+export class ReportRejectedError extends Error {
+  readonly code = 'report_rejected' as const;
+}
 
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = {
@@ -220,7 +229,8 @@ const SYNTHESIS_STEP_INSTRUCTION = 'Combining, merging or summarising the member
  * tools themselves only exist in the core tool loop, so the answer carries the calls as `appProposals` items.
  */
 function appProposalsInstruction(codex: boolean) {
-  const tools = proposalToolNames.map(name => {
+  // The self-improvement tool has its own answer field; it is not one of the appProposals items.
+  const tools = proposalToolNames.filter(name => name !== 'propose_self_improvement').map(name => {
     const definition = toolDefinitions[name].model;
     const description = definition.type === 'function' ? definition.function.description : '';
     return `${name}: ${description}`;
@@ -243,7 +253,18 @@ function memoriesInstruction(codex: boolean) {
   ].filter(Boolean).join(' ');
 }
 
-export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false, unreadable: UnreadableSource[] = [], appProposals = false, memories = false) {
+/**
+ * How a one-shot CLI answer proposes a change to its own instructions (COD-162): the tool is not callable, so the
+ * answer carries its one call as a `selfImprovement` object with the tool's own argument shape.
+ */
+function selfImprovementInstruction(codex: boolean) {
+  return [
+    `The propose_self_improvement tool is not callable here. Instead, when the selfImprovement part of the latest message lists repeated feedback and one sentence in your own instructions would prevent it, put that one call in selfImprovement: an object { "signal", "replaces", "sentence" }. ${SELF_IMPROVEMENT_DESCRIPTION} Omit selfImprovement when nothing in your instructions should change.`,
+    codex ? `selfImprovement goes inside the payload JSON next to message, title and report, and matches this schema: ${JSON.stringify(z.toJSONSchema(ProposeSelfImprovement, { target: 'draft-7' }))}` : '',
+  ].filter(Boolean).join(' ');
+}
+
+export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { sourceId: string; name: string; file: string; format: string }[], inline?: { sourceId: string; name: string; content: string }[], plan = false, codex = false, unreadable: UnreadableSource[] = [], appProposals = false, memories = false, selfImprovement = false) {
   return [
     'You are running inside Orglet as a read-only worker chatting with your user. When you describe what you can or cannot do, use everyday words about the work: you read the files the user attaches and write answers, and you cannot open links, run programs or change files. Do not mention tools, modes, sandboxes or providers unless the user asks about them. Write like a colleague messaging back, in the language and formality the user writes in, and ask one short question when the request is unclear or could go two sensible ways.',
     inline
@@ -256,6 +277,7 @@ export function harnessPrompt(messages: ChatCompletionMessageParam[], files: { s
     codex ? 'The output schema has one payload string. Put the JSON text of the requested answer object inside payload, with message/title/report or the plan fields as instructed. Do not put Markdown around that JSON text.' : '',
     appProposals && !plan ? appProposalsInstruction(codex) : '',
     memories && !plan ? memoriesInstruction(codex) : '',
+    selfImprovement && !plan ? selfImprovementInstruction(codex) : '',
     files.length || inline?.length ? `Source manifest: ${JSON.stringify(files)}` : NO_SOURCES_INSTRUCTION,
     unreadable.length ? `Attached but not readable by you (no copy was made): ${JSON.stringify(unreadable)}. If the user asks about one of these, say you cannot read that kind of file yet; never guess at its contents or cite it.` : '',
     ...messages.map(message => typeof message.content === 'string' ? message.content : ''),
@@ -386,6 +408,11 @@ export class Runner {
       const knowledgeBase = new KnowledgeBase(this.store);
       const context = run.snapshot.context ?? compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: knowledgeBase.candidates(run.snapshot.worker.id, run.snapshot.team?.id), memories: knowledgeBase.memoryCandidates(run.snapshot.worker.id, run.snapshot.team?.id).map(memoryCandidate) }).context;
       run = { ...run, snapshot: { ...run.snapshot, context } };
+      // Repeated feedback on this worker's earlier work, frozen with the context so a resume sees the same evidence and
+      // the tool policy can read it off the snapshot (COD-162). Only a chat run may act on it, never a scheduled one.
+      if (this.appProposals && run.snapshot.improvement === undefined && !task.routineId && (run.stage === undefined || run.stage === 'group') && run.snapshot.worker.provider !== 'demo') {
+        run = { ...run, snapshot: { ...run.snapshot, improvement: this.appProposals.improvementSignals(run) } };
+      }
       const compiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories });
       run = { ...run, status: 'running' };
       this.store.update('runs', run);
@@ -457,6 +484,8 @@ export class Runner {
           // What the worker may propose to change in the app, and the ids it can name (COD-199); it rides on the
           // brief like the other per-turn instructions, so the message order a plain chat run reads stays the same.
           ...(this.appProposals && tools.some(tool => tool.type === 'function' && isProposalTool(tool.function.name)) ? { appChanges: this.appProposals.context(run, task) } : {}),
+          // The feedback this worker keeps getting and how to answer it (COD-162), only when the tool is offered.
+          ...(this.appProposals && tools.some(tool => tool.type === 'function' && tool.function.name === 'propose_self_improvement') ? { selfImprovement: this.appProposals.improvementContext(run) } : {}),
           ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'record_work_frame') ? { workFrameInstruction: 'Before assigning team work or editing workspace files, record one short goal, constraints actually stated by the user, your unconfirmed assumptions, and checks you intend to run. Keep assumptions separate from user statements. Planned checks are not completed checks.' } : {}),
           ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'request_user_decision') ? { decisionInstruction: 'For work you can do within the current grant, proceed without asking. If a material choice has two sensible interpretations, a new permission is needed, or an action is hard to undo, use request_user_decision before making the dependent change. Inspect available evidence first. The answer resumes this same turn.' } : {}) }) });
         if (run.snapshot.workspaceGrant) next.push({ role: 'user', content: JSON.stringify({
@@ -934,7 +963,7 @@ export class Runner {
       if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true, harnessRunTotal));
       const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error) : 'Lần chạy gặp lỗi.';
       const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
-      const errorCode = error instanceof UnresolvedAttemptError ? error.code : undefined;
+      const errorCode = error instanceof UnresolvedAttemptError || error instanceof ReportRejectedError ? error.code : undefined;
       if (options.keepTaskOpen) this.store.update('runs', { ...run, status, error: message, errorCode });
       else this.store.status(task.id, run.id, status, message, errorCode);
       this.event(run.id, message);
@@ -986,26 +1015,35 @@ export class Runner {
       if (!profiles.some(available => available.id === checkerId)) throw new Error('Finding tham chiếu checker chưa được cung cấp cho lần chạy này.');
       if (!sourceIds.some(sourceId => Object.hasOwn(profile.sourceHashes, sourceId))) throw new Error('Checker không kiểm tra nguồn được trích trong finding.');
     };
-    validateReview(report, options.upstream ?? [], readIds, validateChecker, (processId, status) => {
-      if (!run.snapshot.workspaceGrant) throw new Error('Check tham chiếu tiến trình ngoài workspace được cấp quyền.');
-      const process = WorkspaceProcess.parse(this.store.get('workspace_processes', processId));
-      if (process.runId !== run.id || process.state !== 'exited' || process.exitCode === null
-        || (status === 'pass' && process.exitCode !== 0)) {
-        throw new Error('Check tham chiếu tiến trình chưa hoàn tất hoặc không khớp kết quả.');
-      }
-      this.store.db.prepare('INSERT OR IGNORE INTO process_evidence(id,run_id,exit_code) VALUES(?,?,?)')
-        .run(process.id, run.id, process.exitCode);
-    });
+    // Every refusal below is the worker's own report failing a gate, so it is marked as such (COD-162).
+    const rejected = (message: string) => new ReportRejectedError(message);
+    try {
+      validateReview(report, options.upstream ?? [], readIds, validateChecker, (processId, status) => {
+        if (!run.snapshot.workspaceGrant) throw new Error('Check tham chiếu tiến trình ngoài workspace được cấp quyền.');
+        const process = WorkspaceProcess.parse(this.store.get('workspace_processes', processId));
+        if (process.runId !== run.id || process.state !== 'exited' || process.exitCode === null
+          || (status === 'pass' && process.exitCode !== 0)) {
+          throw new Error('Check tham chiếu tiến trình chưa hoàn tất hoặc không khớp kết quả.');
+        }
+        this.store.db.prepare('INSERT OR IGNORE INTO process_evidence(id,run_id,exit_code) VALUES(?,?,?)')
+          .run(process.id, run.id, process.exitCode);
+      });
+    } catch (error) {
+      throw rejected(error instanceof Error ? error.message : String(error));
+    }
     const lineCounts = new Map<string, number>();
     for (const finding of report.findings) {
       if ((!finding.sourceIds.length && !finding.workspaceEvidenceIds?.length)
-        || finding.sourceIds.some(sourceId => !readIds.has(sourceId))) throw new Error('Finding chưa có nguồn đã đọc để đối chiếu.');
-      for (const checkerId of finding.checkerIds ?? []) validateChecker(checkerId, finding.sourceIds);
+        || finding.sourceIds.some(sourceId => !readIds.has(sourceId))) throw rejected('Finding chưa có nguồn đã đọc để đối chiếu.');
+      for (const checkerId of finding.checkerIds ?? []) {
+        try { validateChecker(checkerId, finding.sourceIds); }
+        catch (error) { throw rejected(error instanceof Error ? error.message : String(error)); }
+      }
       for (const location of finding.locations ?? []) {
-        if (!finding.sourceIds.includes(location.sourceId)) throw new Error('Vị trí dòng phải thuộc nguồn được trích trong finding.');
+        if (!finding.sourceIds.includes(location.sourceId)) throw rejected('Vị trí dòng phải thuộc nguồn được trích trong finding.');
         // Re-read through the permission/hash gate so a citation cannot point past the bytes that were reviewed.
         if (!lineCounts.has(location.sourceId)) lineCounts.set(location.sourceId, (await this.sources.read(location.sourceId, task.sourceIds)).split('\n').length);
-        if (location.endLine > lineCounts.get(location.sourceId)!) throw new Error('Vị trí dòng vượt quá nội dung nguồn.');
+        if (location.endLine > lineCounts.get(location.sourceId)!) throw rejected('Vị trí dòng vượt quá nội dung nguồn.');
       }
     }
     const workspaceEvidenceIds = report.findings.flatMap(finding => finding.workspaceEvidenceIds ?? []);
@@ -1013,7 +1051,8 @@ export class Runner {
       if (!this.workspace) throw new Error('Bằng chứng workspace không có runtime để đối chiếu.');
       const control = this.active.get(run.id);
       if (!control) throw new Error('Lần chạy không còn hoạt động.');
-      await this.workspace.validateEvidence(run, [...new Set(workspaceEvidenceIds)], control.signal);
+      try { await this.workspace.validateEvidence(run, [...new Set(workspaceEvidenceIds)], control.signal); }
+      catch (error) { throw rejected(error instanceof Error ? error.message : String(error)); }
     }
     for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu báo cáo.');
     for (const source of scope.manifest.filter(source => !readIds.has(source.id))) report.limitations.push(`Nguồn chưa được đọc: ${source.name.slice(0, 300)} (${source.id}). Không xem đây là đánh giá đầy đủ tệp này.`);
@@ -1074,6 +1113,7 @@ export class Runner {
       // under the same rules the loop applies (capability, never a plan or scheduled run) (COD-206).
       const withProposals = !!this.appProposals && proposalsAllowed(run, this.store.get<Task>('tasks', task.id));
       const withMemories = memoriesAllowed(run, this.store.get<Task>('tasks', task.id));
+      const withSelfImprovement = !!this.appProposals && selfImprovementAllowed(run, this.store.get<Task>('tasks', task.id));
       this.event(run.id, `Đang chạy ${tool.name} ${tool.version} trên máy · chỉ đọc bản sao nguồn của task`);
       const progress = new ProgressSender(task.id, run.id, update => this.onProgress(update));
       const showSourceNames = (update: HarnessProgress): HarnessProgress => ({
@@ -1088,9 +1128,9 @@ export class Runner {
           executable: tool.executable,
           ...(tool.configDir ? { configDir: tool.configDir } : {}),
           cwd: directory,
-          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable, withProposals, withMemories),
+          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable, withProposals, withMemories, withSelfImprovement),
           schema: provider === 'codex' ? codexOutputSchema : z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema
-            : harnessAnswerSchema(run, withProposals, withMemories), { target: 'draft-7' }),
+            : harnessAnswerSchema(run, withProposals, withMemories, withSelfImprovement), { target: 'draft-7' }),
           signal,
           maxBudgetUsd: remainingUsd,
           ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
@@ -1120,11 +1160,12 @@ export class Runner {
       const untrustedInputs = (provider === 'codex' ? inline : files).length ? ['attached sources'] : [];
       const proposalLimitations = answer?.success ? this.recordAnswerProposals(run, task, answer.data.appProposals ?? [], withProposals) : [];
       const memoryLimitations = answer?.success ? this.recordAnswerMemories(run, answer.data.memories ?? [], withMemories, untrustedInputs.length > 0) : [];
+      const improvementLimitations = answer?.success ? this.recordAnswerSelfImprovement(run, task, answer.data.selfImprovement, withSelfImprovement) : [];
       if (answer?.success && answer.data.report === null) {
         if (run.stage === 'member') throw new Error('Phần việc cần báo cáo kết quả hoặc blocker, không thể hoàn tất bằng tin nhắn.');
         for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
-        this.commit(task, run, { ...chatReport(answer.data.message), limitations: [...(options.limitations ?? []), ...proposalLimitations, ...memoryLimitations] }, options.keepTaskOpen, [], answer.data.title, false, untrustedInputs);
-      } else await this.finalize(task, run, answer?.success ? answer.data.report : output, readIds, scope, { ...options, untrustedInputs }, [...limitations, ...proposalLimitations, ...memoryLimitations]);
+        this.commit(task, run, { ...chatReport(answer.data.message), limitations: [...(options.limitations ?? []), ...proposalLimitations, ...memoryLimitations, ...improvementLimitations] }, options.keepTaskOpen, [], answer.data.title, false, untrustedInputs);
+      } else await this.finalize(task, run, answer?.success ? answer.data.report : output, readIds, scope, { ...options, untrustedInputs }, [...limitations, ...proposalLimitations, ...memoryLimitations, ...improvementLimitations]);
     } catch (error) {
       retainDirectory = error instanceof HarnessTerminationError;
       throw error;
@@ -1172,6 +1213,26 @@ export class Runner {
     } catch (error) {
       return { tool, error: error instanceof z.ZodError ? 'Arguments do not match the tool schema.' : error instanceof Error ? error.message : 'Đề xuất không hợp lệ.' };
     }
+  }
+
+  /**
+   * Stores the one self-improvement a one-shot CLI answer carried, through the same record as the tool (COD-162). A
+   * bad item becomes a limitation of the answer; the run completes either way.
+   */
+  private recordAnswerSelfImprovement(run: Run, task: Task, item: unknown, allowed: boolean): string[] {
+    if (item === undefined || item === null) return [];
+    if (!allowed || !this.appProposals) {
+      const note = 'Câu trả lời kèm một đề xuất sửa hướng dẫn của Tí nhưng lượt chạy này không được phép đề xuất; đã bỏ qua.';
+      this.event(run.id, note);
+      return [note];
+    }
+    const outcome = this.recordAnswerProposal(run, this.store.get<Task>('tasks', task.id), { tool: 'propose_self_improvement', arguments: item });
+    if ('error' in outcome) {
+      this.event(run.id, `Đề xuất sửa hướng dẫn của Tí bị từ chối: ${outcome.error}`);
+      return [`Đề xuất sửa hướng dẫn của Tí bị từ chối: ${outcome.error}`];
+    }
+    this.event(run.id, 'Đã ghi một đề xuất sửa hướng dẫn của Tí; chờ bạn áp dụng.');
+    return [];
   }
 
   /** One remember call: the outcome goes back to the worker as the tool's answer, so a bad line does not fail the run. */

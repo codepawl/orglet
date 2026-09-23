@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { ArrowRight, Check, Crown, ExternalLink, Undo2, X } from 'lucide-react';
 import type { AppProposal, AppProposalKind, ProposalChange, ProposalHold, ProposalTarget } from '../../shared/app-proposals';
-import type { Skill, Worker } from '../../shared/contracts';
+import type { ImprovementSignalKind } from '../../shared/self-improvement';
+import type { Skill, Task, Worker } from '../../shared/contracts';
 import { Avatar } from './Avatar';
 import { mascotIds } from './mascots';
 import { autoMascot } from './mascotSuggest';
@@ -16,6 +17,7 @@ import { t, tMessage, translated } from '../i18n';
  * fields behind the row. A new crew shows its members' faces with the lead marked. Everything else keeps a title, a
  * definition-list diff and Apply / Dismiss. Nothing here knows how to apply: the parent owns the bridge and hands
  * the outcome back through `proposals`, which the card then shows (applied, automatic, undone, or the plain error).
+ * A self-improvement (COD-162) is an edit card that also names the chats its feedback came from; `onOpenChat` opens one.
  */
 export type ProposalActions = {
   busy: boolean;
@@ -25,6 +27,7 @@ export type ProposalActions = {
   onDismissAll: (proposals: AppProposal[]) => void;
   onUndo: (proposal: AppProposal) => void;
   onOpen: (target: ProposalTarget) => void;
+  onOpenChat: (taskId: string) => void;
 };
 
 const createTitles: Record<AppProposalKind, string> = translated({
@@ -44,13 +47,18 @@ const holdReasons: Record<ProposalHold, string> = translated({
   untrusted: 'Chờ bạn bấm: lượt này đã đọc web, tệp hoặc tin của Tí khác.',
   budget: 'Chờ bạn bấm: đề xuất nâng một giới hạn chi tiêu.',
   template: 'Chờ bạn bấm: cần chọn nơi lưu tệp template.',
+  self: 'Chờ bạn bấm: đề xuất này đổi cách Tí làm việc.',
+});
+/** The feedback a self-improvement answers, as a short chip: "Yêu cầu sửa ×2". */
+const signalLabels: Record<ImprovementSignalKind, string> = translated({
+  revision: 'Yêu cầu sửa', thumbs_down: 'Không ổn', report_rejected: 'Báo cáo bị từ chối', run_failed: 'Lỗi lặp lại',
 });
 const openLabels: Record<ProposalTarget['kind'], string> = translated({
   worker: 'Mở Tí', team: 'Mở hội', skill: 'Mở skill', routine: 'Mở lịch', settings: 'Mở cài đặt', template: 'Mở hội',
 });
 
 function cardTitle(proposal: AppProposal) {
-  const kindTitle = proposal.action === 'create' ? createTitles[proposal.kind] : editTitles[proposal.kind];
+  const kindTitle = proposal.improvement ? t('Rút kinh nghiệm') : proposal.action === 'create' ? createTitles[proposal.kind] : editTitles[proposal.kind];
   if (proposal.kind === 'settings') return kindTitle;
   return `${kindTitle} · ${proposal.title}`;
 }
@@ -78,6 +86,27 @@ function ChangeList({ changes, context }: { changes: ProposalChange[]; context: 
       </dd>
     </div>)}
   </dl>;
+}
+
+/**
+ * Why a self-improvement was proposed: the signal, how often, and the chats it came from, each a link to that chat
+ * while it still exists (COD-162). One muted line, no field list.
+ */
+function Because({ proposal, tasks, onOpenChat }: { proposal: AppProposal; tasks: readonly Pick<Task, 'id' | 'title'>[]; onOpenChat: (taskId: string) => void }) {
+  const improvement = proposal.improvement;
+  if (!improvement) return null;
+  const total = improvement.because.reduce((sum, cause) => sum + cause.count, 0);
+  return <p className="app-proposal-because">
+    <span className="badge">{signalLabels[improvement.signal]} ×{total}</span>
+    <span>{t('vì')}</span>
+    {improvement.because.map(cause => {
+      const live = tasks.find(task => task.id === cause.taskId);
+      const label = `${live?.title ?? cause.title} ×${cause.count}`;
+      return live
+        ? <button key={cause.taskId} type="button" className="app-proposal-chat" onClick={() => onOpenChat(cause.taskId)}>{label}</button>
+        : <span key={cause.taskId} className="muted">{label}</span>;
+    })}
+  </p>;
 }
 
 /** The outcome line and the error, shared by every card and the orglet dialog. */
@@ -210,17 +239,18 @@ function cardChanges(proposal: AppProposal): ProposalChange[] {
   return proposal.changes.filter(change => !(change.field === 'name' && change.after === proposal.title));
 }
 
-function ProposalCard({ proposal, context, actions }: { proposal: AppProposal; context: ProposalContext; actions: ProposalActions }) {
+function ProposalCard({ proposal, context, tasks, actions }: { proposal: AppProposal; context: ProposalContext; tasks: readonly Pick<Task, 'id' | 'title'>[]; actions: ProposalActions }) {
   const newCrew = proposal.kind === 'crew' && proposal.action === 'create';
   return <section className={`app-proposal${isPending(proposal) ? '' : ' app-proposal-settled'}`} aria-label={cardTitle(proposal)}>
     <h4>{cardTitle(proposal)}</h4>
     {newCrew ? <CrewBody proposal={proposal} context={context} /> : <ChangeList changes={cardChanges(proposal)} context={context} />}
+    <Because proposal={proposal} tasks={tasks} onOpenChat={actions.onOpenChat} />
     <Outcome proposal={proposal} />
     <div className="app-proposal-actions"><ProposalButtons proposal={proposal} actions={actions} /></div>
   </section>;
 }
 
-export function AppProposalCards({ proposals, workers, skills, actions }: { proposals: AppProposal[]; workers: readonly Worker[]; skills: readonly Pick<Skill, 'id' | 'name'>[]; actions: ProposalActions }) {
+export function AppProposalCards({ proposals, workers, skills, tasks = [], actions }: { proposals: AppProposal[]; workers: readonly Worker[]; skills: readonly Pick<Skill, 'id' | 'name'>[]; tasks?: readonly Pick<Task, 'id' | 'title'>[]; actions: ProposalActions }) {
   if (!proposals.length) return null;
   const context: ProposalContext = { workers, skills, siblings: proposals };
   const pending = proposals.filter(isPending);
@@ -230,7 +260,7 @@ export function AppProposalCards({ proposals, workers, skills, actions }: { prop
   return <div className="app-proposals" role="group" aria-label={t('Đề xuất thay đổi trong app')}>
     {cards.map(card => card.kind === 'orglets'
       ? <OrgletGroupCard key={card.proposals[0].id} proposals={card.proposals} context={context} actions={actions} />
-      : <ProposalCard key={card.proposal.id} proposal={card.proposal} context={context} actions={actions} />)}
+      : <ProposalCard key={card.proposal.id} proposal={card.proposal} context={context} tasks={tasks} actions={actions} />)}
     {pending.length > 1 && !onlyNewOrglets && <div className="app-proposal-actions app-proposals-all">
       <Button variant="primary" disabled={actions.busy} onClick={() => actions.onApplyAll(pending)}><Check size={15} />{t('Áp dụng tất cả ({0})', [pending.length])}</Button>
     </div>}

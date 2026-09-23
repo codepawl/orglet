@@ -147,7 +147,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
           the core (a raised limit, a template, a run that read unvetted content), so the line says so plainly. */}
       <div className="permissions worker-auto-apply">
         <SwitchField checked={autoApplyProposals} onChange={setAutoApplyProposals}
-          description={t('Đề xuất an toàn được áp dụng ngay khi lượt chạy kết thúc, có nút Hoàn tác. Nâng giới hạn, xuất template, hay đề xuất từ lượt đã đọc web, tệp hoặc tin của Tí khác vẫn chờ bạn bấm.')}>
+          description={t('Đề xuất an toàn được áp dụng ngay khi lượt chạy kết thúc, có nút Hoàn tác. Nâng giới hạn, xuất template, sửa cách Tí này làm việc, hay đề xuất từ lượt đã đọc web, tệp hoặc tin của Tí khác vẫn chờ bạn bấm.')}>
           <Zap size={15} aria-hidden="true" />{t('Áp dụng thay đổi trong app mà không cần hỏi')}
         </SwitchField>
       </div>

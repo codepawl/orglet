@@ -16,7 +16,7 @@ Both live in the same store (the `knowledge` table), with the same scopes and re
 | Where you edit it | Library → Knowledge | The worker's own page (Edit → Memory), or Library → Memory |
 | What it is for | Telling workers how to do a kind of work | A fact learned about you and your work |
 
-A memory is a fact learned ("prefers short answers", "the quarterly file is report-q3.xlsx", "we decided to keep the old scoring script"). A change in how the worker works (new instructions, a new skill, a different model) is not a memory; that is COD-162 and goes through the worker's instructions and skill.
+A memory is a fact learned ("prefers short answers", "the quarterly file is report-q3.xlsx", "we decided to keep the old scoring script"). A change in how the worker works (new instructions, a new skill, a different model) is not a memory; a worker proposes one sentence for its own instructions after repeated feedback, and only your click applies it. See [self-improvement.md](self-improvement.md).
 
 A memory is also not the thread context of one chat. The extractive summary and the retrieved snippets in [team-chat-context.md](team-chat-context.md) stay inside the chat they came from. A memory crosses chats.
 
