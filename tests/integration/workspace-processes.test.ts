@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { WorkspaceProcesses } from '../../apps/desktop/src/core/tools/workspace-processes';
+import { LOOPBACK_BLOCKED_HINT, loopbackBlockedHint } from '../../apps/desktop/src/shared/workspace-processes';
 import { WorkspaceFilesRuntime } from '../../apps/desktop/src/core/tools/workspace-files-runtime';
 import { WindowsSandbox, type SandboxResult } from '../../apps/desktop/src/core/tools/sandbox';
 import type { Run, Skill, Task, Worker } from '../../apps/desktop/src/shared/contracts';
@@ -89,6 +90,34 @@ it('keeps a failed check visible until that same command passes', async () => {
   const retry = await start();
   await processes.status(run.id, retry.processId, 1000, signal(), () => {});
   expect(() => processes!.assertSuccessful(run.id, 0)).not.toThrow();
+});
+
+it.each([
+  ['connect EACCES 127.0.0.1:3123', true],
+  ['Error: connect ECONNREFUSED ::1:3123', true],
+  ['TypeError: fetch failed\n  [cause]: Error: connect EACCES 127.0.0.1:3123', true],
+  ['curl: (7) Failed to connect to localhost port 3123 after 0 ms: Could not connect to server', true],
+  ['Error: connect ECONNREFUSED 93.184.216.34:443', false],
+  ["EACCES: permission denied, open 'C:\\Windows\\hosts'", false],
+  ['Listening on http://localhost:3123', false],
+  ['', false],
+])('recognises a blocked loopback connection in %j', (text, blocked) => {
+  expect(loopbackBlockedHint({ stdout: '', stderr: text })).toBe(blocked ? LOOPBACK_BLOCKED_HINT : null);
+  expect(loopbackBlockedHint({ stdout: text, stderr: '' })).toBe(blocked ? LOOPBACK_BLOCKED_HINT : null);
+});
+
+it('tells the worker in status and output when a command hit the loopback block', async () => {
+  const stderr = 'TypeError: fetch failed\n  [cause]: Error: connect EACCES 127.0.0.1:3123\n';
+  let result: SandboxResult = { exitCode: 1, stdout: '', stderr, termination: 'exited' };
+  processes = new WorkspaceProcesses(store, { runCommand: async () => result });
+  const blocked = await start();
+  expect(await processes.status(run.id, blocked.processId, 1000, signal(), () => {})).toMatchObject({ state: 'exited', exitCode: 1, hint: LOOPBACK_BLOCKED_HINT });
+  expect(processes.output(run.id, blocked.processId, 'stderr', 0)).toMatchObject({ content: stderr, hint: LOOPBACK_BLOCKED_HINT });
+  expect(processes.output(run.id, blocked.processId, 'stdout', 0)).toMatchObject({ content: '', hint: LOOPBACK_BLOCKED_HINT });
+  result = success;
+  const passed = await start(id(), { ...command, arguments: ['check.cjs'] });
+  expect(await processes.status(run.id, passed.processId, 1000, signal(), () => {})).toMatchObject({ state: 'exited', exitCode: 0, hint: null });
+  expect(processes.output(run.id, passed.processId, 'stdout', 0)).toMatchObject({ hint: null });
 });
 
 it('recovers a persisted running command as uncertain and never relaunches its handle', async () => {

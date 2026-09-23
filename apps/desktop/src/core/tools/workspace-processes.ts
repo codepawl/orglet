@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { StartWorkspaceProcess, WorkspaceProcess, describeCommand } from '../../shared/workspace-processes';
+import { StartWorkspaceProcess, WorkspaceProcess, describeCommand, loopbackBlockedHint } from '../../shared/workspace-processes';
 import { Store, id } from '../storage/database';
 import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
@@ -126,8 +126,10 @@ export class WorkspaceProcesses {
     signal.throwIfAborted();
     authorize();
     const process = this.get(runId, processId);
+    // The hint rides on status and output alike, so a model that reads only one of them still sees why it failed.
     return { processId, state: process.state, exitCode: process.exitCode,
-      stdoutBytes: Buffer.byteLength(process.stdout), stderrBytes: Buffer.byteLength(process.stderr), error: process.error ?? null };
+      stdoutBytes: Buffer.byteLength(process.stdout), stderrBytes: Buffer.byteLength(process.stderr), error: process.error ?? null,
+      hint: loopbackBlockedHint(process) };
   }
 
   output(runId: string, processId: string, stream: 'stdout' | 'stderr', offset: number) {
@@ -135,7 +137,7 @@ export class WorkspaceProcesses {
     const characters = Array.from(process[stream]);
     const end = Math.min(characters.length, offset + 16000);
     return { processId, stream, state: process.state, content: characters.slice(offset, end).join(''),
-      nextOffset: end < characters.length ? end : null };
+      nextOffset: end < characters.length ? end : null, hint: loopbackBlockedHint(process) };
   }
 
   async cancel(runId: string, processId: string) {
