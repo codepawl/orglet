@@ -5,7 +5,7 @@
   <img src="images/orglets/macos-packaging-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-ZIP packaging of `Orglet.app` for dogfood. GitHub Actions on `macos-latest` **Developer ID signs and notarizes** the app, and the notarization ticket is stapled to it. This job is **not** the required merge check.
+ZIP packaging of `Orglet.app` for dogfood. GitHub Actions on `macos-latest` **Developer ID signs and notarizes** the app, and the notarization ticket is stapled to it. This job is **not** the required merge check. A pull request build is signed but not notarized: Apple's notary service sometimes times out or is slow to publish a ticket, and that should not fail an unrelated pull request. Notarization, stapling and the Gatekeeper check run on pushes to `main` and on manual runs (**Actions → macOS desktop → Run workflow**).
 
 Windows remains first: the required GitHub check is still the **Windows desktop** `test` aggregator. See [windows-release-gates.md](windows-release-gates.md). Do not treat a green macOS job as a substitute for that aggregator.
 

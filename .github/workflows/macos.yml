@@ -1,10 +1,13 @@
 name: macOS desktop
 # Dogfood packaging. This is not the required Windows `test` aggregator.
 # Pull requests are checked once; pushes to other branches wait for their pull request.
+# Pull requests sign but never notarize: Apple's notary service times out or is slow to publish a ticket often
+# enough to fail unrelated pull requests. Notarization and the Gatekeeper check run on main and on manual runs.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -15,6 +18,8 @@ jobs:
     name: typecheck, test and make
     runs-on: macos-latest
     timeout-minutes: 35
+    env:
+      NOTARIZE: ${{ github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: pnpm/action-setup@v6
@@ -34,7 +39,7 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: bash scripts/ci-macos-import-signing.sh
       - name: Prepare notarize API key file
-        if: steps.signing.outputs.enabled == 'true'
+        if: steps.signing.outputs.enabled == 'true' && env.NOTARIZE == 'true'
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
         run: |
@@ -51,10 +56,11 @@ jobs:
           APPLE_SIGNING_ENABLED: ${{ steps.signing.outputs.enabled }}
           APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          # Without these forge.macos.ts resolves no notarize credentials, so a pull request build is signed only.
+          APPLE_ID: ${{ env.NOTARIZE == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ env.NOTARIZE == 'true' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_API_KEY_ID: ${{ env.NOTARIZE == 'true' && secrets.APPLE_API_KEY_ID || '' }}
+          APPLE_API_ISSUER: ${{ env.NOTARIZE == 'true' && secrets.APPLE_API_ISSUER || '' }}
         run: pnpm make
       - name: Verify signature, staple and Gatekeeper
         if: steps.signing.outputs.enabled == 'true'
@@ -70,7 +76,9 @@ jobs:
           codesign --display --verbose=2 "${apps[0]}"
           # The runner is a real Mac, so it answers the question a download would: does Gatekeeper open this app?
           # Only a notarized build can pass, so this is a gate when notarization credentials exist and a note when they do not.
-          if [ -n "${APPLE_API_KEY:-}" ] || { [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; }; then
+          if [ "$NOTARIZE" != "true" ]; then
+            echo "Pull request build: signed, not notarized, so Gatekeeper is not checked here."
+          elif [ -n "${APPLE_API_KEY:-}" ] || { [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; }; then
             stapler validate "${apps[0]}"
             spctl --assess --type execute --verbose=4 "${apps[0]}"
           else
