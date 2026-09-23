@@ -51,6 +51,7 @@ export function isPaidApi(provider: string): boolean {
 export function isPlanApi(provider: string): provider is 'opencode-zen' | 'opencode-go' {
   return provider === 'opencode-zen' || provider === 'opencode-go';
 }
+export const WorkerAvatar = z.object({ mascot: z.string().regex(/^[a-z-]{1,32}$/).optional(), letter: z.literal(true).optional(), emoji: z.string().min(1).max(16).optional(), color: z.string().regex(/^#[0-9a-f]{6}$/i).optional() }).strict();
 export const WorkerInput = z.object({
   id: Id.optional(), name: z.string().trim().min(1).max(80),
   instructions: z.string().trim().min(1).max(16000),
@@ -61,13 +62,14 @@ export const WorkerInput = z.object({
   // Codex, Cursor Agent and Demo have no cap to give it to.
   taskBudgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
   // Presentation only: shown in the app and carried by templates, never sent to a model.
-  avatar: z.object({ mascot: z.string().regex(/^[a-z-]{1,32}$/).optional(), letter: z.literal(true).optional(), emoji: z.string().min(1).max(16).optional(), color: z.string().regex(/^#[0-9a-f]{6}$/i).optional() }).strict().optional(),
+  avatar: WorkerAvatar.optional(),
   description: z.string().trim().max(160).optional(),
   // Apply this worker's safe app-change proposals when its run finishes instead of waiting for a click (COD-199).
   // Off unless the user turns it on; a worker's proposal tools cannot set it.
   autoApplyProposals: z.boolean().optional(),
 });
 export type WorkerInput = z.infer<typeof WorkerInput>;
+export type WorkerAvatar = z.infer<typeof WorkerAvatar>;
 export const TeamInput = z.object({
   id: Id.optional(), name: z.string().trim().min(1).max(80),
   instructions: z.string().trim().min(1).max(16000),
@@ -249,7 +251,8 @@ export const commands = {
   saveKnowledge: KnowledgeInput,
   // A worker's proposed app change (COD-199): apply it through the same commands the UI uses, drop it, or take an
   // automatic apply back.
-  applyAppProposal: z.object({ id: Id }).strict(),
+  // The face the card showed for a new orglet, so the orglet keeps the avatar the person saw when they applied it.
+  applyAppProposal: z.object({ id: Id, avatar: WorkerAvatar.optional() }).strict(),
   dismissAppProposal: z.object({ id: Id }).strict(),
   undoAppProposal: z.object({ id: Id }).strict(),
   reviewKnowledge: z.object({ id: Id, revision: z.number().int().positive(), decision: z.enum(['approve', 'archive']) }).strict(),

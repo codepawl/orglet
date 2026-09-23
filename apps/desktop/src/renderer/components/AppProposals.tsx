@@ -1,20 +1,28 @@
-import { ArrowRight, Check, ExternalLink, Undo2, X } from 'lucide-react';
-import type { AppProposal, AppProposalKind, ProposalHold, ProposalTarget } from '../../shared/app-proposals';
-import { Button } from './ui';
+import { useState } from 'react';
+import { ArrowRight, Check, Crown, ExternalLink, Undo2, X } from 'lucide-react';
+import type { AppProposal, AppProposalKind, ProposalChange, ProposalHold, ProposalTarget } from '../../shared/app-proposals';
+import type { Skill, Worker } from '../../shared/contracts';
+import { Avatar } from './Avatar';
+import { mascotIds } from './mascots';
+import { autoMascot } from './mascotSuggest';
+import { Button, Drawer } from './ui';
 import { formatMoney } from './money';
+import { crewMembers, orgletDetailChanges, proposalCards, proposalModelLabel, showChangeValue, workflowName, workerOfProposal, type ProposalContext } from './proposalValues';
 import { t, tMessage, translated } from '../i18n';
 
 /**
- * The cards a worker's app-change proposals become in the chat (COD-199): a title, the fields a creation sets or
- * the before → after of an edit, and Apply / Dismiss. Nothing here knows how to apply: the parent owns the bridge
- * and hands the outcome back through `proposals`, which the card then shows (applied, automatic, undone, or the
- * plain error under the buttons).
+ * The cards a worker's app-change proposals become in the chat (COD-199, redrawn in COD-212). The new orglets of one
+ * reply share one card: a row per orglet with its face, name, one line and its model, and a dialog with the full
+ * fields behind the row. A new crew shows its members' faces with the lead marked. Everything else keeps a title, a
+ * definition-list diff and Apply / Dismiss. Nothing here knows how to apply: the parent owns the bridge and hands
+ * the outcome back through `proposals`, which the card then shows (applied, automatic, undone, or the plain error).
  */
 export type ProposalActions = {
   busy: boolean;
   onApply: (proposal: AppProposal) => void;
   onApplyAll: (proposals: AppProposal[]) => void;
   onDismiss: (proposal: AppProposal) => void;
+  onDismissAll: (proposals: AppProposal[]) => void;
   onUndo: (proposal: AppProposal) => void;
   onOpen: (target: ProposalTarget) => void;
 };
@@ -40,16 +48,6 @@ const holdReasons: Record<ProposalHold, string> = translated({
 const openLabels: Record<ProposalTarget['kind'], string> = translated({
   worker: 'Mở Tí', team: 'Mở hội', skill: 'Mở skill', routine: 'Mở lịch', settings: 'Mở cài đặt', template: 'Mở hội',
 });
-const moneyFields = new Set(['taskBudgetMicros', 'monthlyBudgetMicros']);
-
-/** A stored value as the person reads it: money in the display currency, flags as words, anything else as written. */
-function showValue(field: string, value: string) {
-  if (moneyFields.has(field) && /^\d+$/.test(value)) return formatMoney(Number(value));
-  if (value === 'true') return t('Bật');
-  if (value === 'false') return t('Tắt');
-  // A member list mixes existing names with refs to orglets proposed in the same reply.
-  return value.split(', ').map(part => part.startsWith('ref:') ? t('{0} (mới, cùng lượt này)', [part.slice(4)]) : part).join(', ');
-}
 
 function cardTitle(proposal: AppProposal) {
   const kindTitle = proposal.action === 'create' ? createTitles[proposal.kind] : editTitles[proposal.kind];
@@ -57,42 +55,183 @@ function cardTitle(proposal: AppProposal) {
   return `${kindTitle} · ${proposal.title}`;
 }
 
-function ProposalCard({ proposal, actions }: { proposal: AppProposal; actions: ProposalActions }) {
-  const pending = proposal.status === 'pending';
-  const applied = proposal.status === 'applied';
-  const undoable = applied && !!proposal.undo && !proposal.undoneAt;
-  const status = proposal.undoneAt ? t('Đã hoàn tác')
-    : applied ? (proposal.automatic ? t('Đã áp dụng tự động') : t('Đã áp dụng'))
-    : proposal.status === 'dismissed' ? t('Đã bỏ qua')
-    : proposal.heldReason ? holdReasons[proposal.heldReason] : undefined;
-  return <section className={`app-proposal${pending ? '' : ' app-proposal-settled'}`} aria-label={cardTitle(proposal)}>
-    <h4>{cardTitle(proposal)}</h4>
-    <dl className="app-proposal-changes">
-      {proposal.changes.map(change => <div key={change.field}>
-        <dt>{fieldNames[change.field] ?? change.field}</dt>
-        <dd>
-          {change.before !== null && <><span className="app-proposal-before">{showValue(change.field, change.before)}</span><ArrowRight size={13} aria-hidden="true" /></>}
-          <span>{showValue(change.field, change.after)}</span>
-        </dd>
-      </div>)}
-    </dl>
-    {status && <p className="app-proposal-status" role="status">{status}</p>}
-    {proposal.error && pending && <p className="app-proposal-error" role="status">{tMessage(proposal.error)}</p>}
-    <div className="app-proposal-actions">
-      {pending && <Button variant="primary" disabled={actions.busy} onClick={() => actions.onApply(proposal)}><Check size={15} />{t('Áp dụng')}</Button>}
-      {pending && <Button variant="outline" disabled={actions.busy} onClick={() => actions.onDismiss(proposal)}><X size={15} />{t('Bỏ qua')}</Button>}
-      {undoable && <Button variant="outline" disabled={actions.busy} onClick={() => actions.onUndo(proposal)}><Undo2 size={15} />{t('Hoàn tác')}</Button>}
-      {applied && !proposal.undoneAt && proposal.target && <Button variant="outline" onClick={() => actions.onOpen(proposal.target!)}><ExternalLink size={15} />{openLabels[proposal.target.kind]}</Button>}
+/** What became of a proposal, in one line: undone, applied (on its own or by a click), dismissed, or why it waits. */
+function outcomeText(proposal: AppProposal): string | undefined {
+  if (proposal.undoneAt) return t('Đã hoàn tác');
+  if (proposal.status === 'applied') return proposal.automatic ? t('Đã áp dụng tự động') : t('Đã áp dụng');
+  if (proposal.status === 'dismissed') return t('Đã bỏ qua');
+  return proposal.heldReason ? holdReasons[proposal.heldReason] : undefined;
+}
+
+const isPending = (proposal: AppProposal) => proposal.status === 'pending';
+const isUndoable = (proposal: AppProposal) => proposal.status === 'applied' && !!proposal.undo && !proposal.undoneAt;
+const openTarget = (proposal: AppProposal) => proposal.status === 'applied' && !proposal.undoneAt ? proposal.target : undefined;
+
+function ChangeList({ changes, context }: { changes: ProposalChange[]; context: ProposalContext }) {
+  if (!changes.length) return null;
+  return <dl className="app-proposal-changes">
+    {changes.map(change => <div key={change.field}>
+      <dt>{fieldNames[change.field] ?? change.field}</dt>
+      <dd>
+        {change.before !== null && <><span className="app-proposal-before">{showChangeValue(change.field, change.before, context)}</span><ArrowRight size={13} aria-hidden="true" /></>}
+        <span>{showChangeValue(change.field, change.after, context)}</span>
+      </dd>
+    </div>)}
+  </dl>;
+}
+
+/** The outcome line and the error, shared by every card and the orglet dialog. */
+function Outcome({ proposal }: { proposal: AppProposal }) {
+  const outcome = outcomeText(proposal);
+  return <>
+    {outcome && <p className="app-proposal-status" role="status">{outcome}</p>}
+    {proposal.error && isPending(proposal) && <p className="app-proposal-error" role="status">{tMessage(proposal.error)}</p>}
+  </>;
+}
+
+/** Apply / Dismiss while pending, Undo after an automatic apply, and Open for what was created. */
+function ProposalButtons({ proposal, actions }: { proposal: AppProposal; actions: ProposalActions }) {
+  const target = openTarget(proposal);
+  return <>
+    {isPending(proposal) && <Button variant="primary" disabled={actions.busy} onClick={() => actions.onApply(proposal)}><Check size={15} />{t('Áp dụng')}</Button>}
+    {isPending(proposal) && <Button variant="outline" disabled={actions.busy} onClick={() => actions.onDismiss(proposal)}><X size={15} />{t('Bỏ qua')}</Button>}
+    {isUndoable(proposal) && <Button variant="outline" disabled={actions.busy} onClick={() => actions.onUndo(proposal)}><Undo2 size={15} />{t('Hoàn tác')}</Button>}
+    {target && <Button variant="outline" onClick={() => actions.onOpen(target)}><ExternalLink size={15} />{openLabels[target.kind]}</Button>}
+  </>;
+}
+
+/**
+ * The mascot a proposed new orglet shows before it exists. Applying the card saves this same mascot on the new
+ * orglet, so its face does not change once it is created.
+ */
+export function proposedMascot(proposal: AppProposal) {
+  const description = proposal.changes.find(change => change.field === 'description')?.after;
+  return autoMascot(mascotIds, proposal.id, { name: proposal.title, description });
+}
+
+/** The face of a proposed orglet: the real worker once it exists, else the mascot it will be created with. */
+function ProposedFace({ proposal, context, size, motion }: { proposal: AppProposal; context: ProposalContext; size: 'md' | 'xl'; motion?: { follow: 'hover' } }) {
+  const worker = workerOfProposal(proposal, context);
+  if (worker) return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} motion={motion} />;
+  return <Avatar name={proposal.title} seed={proposal.id} mascot={proposedMascot(proposal)} defaultMascot size={size} motion={motion} />;
+}
+
+/** One line of state on an orglet row; the reason a held row waits sits in its tooltip and in the dialog. */
+function rowState(proposal: AppProposal): { text: string; tone: 'success' | 'muted'; title?: string } | undefined {
+  if (proposal.undoneAt) return { text: t('Đã hoàn tác'), tone: 'muted' };
+  if (proposal.status === 'applied') return { text: proposal.automatic ? t('Đã áp dụng tự động') : t('Đã áp dụng'), tone: 'success' };
+  if (proposal.status === 'dismissed') return { text: t('Đã bỏ qua'), tone: 'muted' };
+  if (proposal.heldReason) return { text: t('Chờ bạn bấm'), tone: 'muted', title: holdReasons[proposal.heldReason] };
+  return undefined;
+}
+
+function OrgletRow({ proposal, context, actions, onOpen }: { proposal: AppProposal; context: ProposalContext; actions: ProposalActions; onOpen: () => void }) {
+  const description = proposal.changes.find(change => change.field === 'description')?.after;
+  const state = rowState(proposal);
+  const target = openTarget(proposal);
+  const pending = isPending(proposal);
+  return <li className={`proposal-orglet${pending ? '' : ' proposal-orglet-settled'}`}>
+    <button type="button" className="proposal-orglet-open" onClick={() => target ? actions.onOpen(target) : onOpen()} aria-label={target ? t('Mở {0}', [proposal.title]) : t('Xem {0}', [proposal.title])}>
+      <ProposedFace proposal={proposal} context={context} size="md" />
+      <span className="proposal-orglet-text">
+        <strong>{proposal.title}</strong>
+        {description && <span className="proposal-orglet-description">{description}</span>}
+      </span>
+      <span className="badge">{proposalModelLabel(proposal)}</span>
+    </button>
+    {state && <span className={`proposal-orglet-state ${state.tone}`} title={state.title}>{state.text}</span>}
+    {pending && <Button size="icon" className="proposal-row-action" disabled={actions.busy} aria-label={t('Áp dụng {0}', [proposal.title])} title={t('Áp dụng')} onClick={() => actions.onApply(proposal)}><Check size={16} /></Button>}
+    {pending && <Button size="icon" className="proposal-row-action" disabled={actions.busy} aria-label={t('Bỏ qua {0}', [proposal.title])} title={t('Bỏ qua')} onClick={() => actions.onDismiss(proposal)}><X size={16} /></Button>}
+    {isUndoable(proposal) && <Button size="icon" className="proposal-row-action" disabled={actions.busy} aria-label={t('Hoàn tác {0}', [proposal.title])} title={t('Hoàn tác')} onClick={() => actions.onUndo(proposal)}><Undo2 size={16} /></Button>}
+    {proposal.error && pending && <p className="app-proposal-error proposal-orglet-error" role="status">{tMessage(proposal.error)}</p>}
+  </li>;
+}
+
+/** The full fields of one proposed orglet, opened from its row; Apply and Dismiss sit in the header like a form's actions. */
+function OrgletDialog({ proposal, context, actions, onClose }: { proposal: AppProposal; context: ProposalContext; actions: ProposalActions; onClose: () => void }) {
+  const description = proposal.changes.find(change => change.field === 'description')?.after;
+  return <Drawer open onClose={onClose} title={proposal.title} description={description ?? t('Tí mới')} actions={<ProposalButtons proposal={proposal} actions={actions} />}>
+    <div className="proposal-dialog-face">
+      <ProposedFace proposal={proposal} context={context} size="xl" motion={{ follow: 'hover' }} />
+      <span className="muted">{proposalModelLabel(proposal)}</span>
     </div>
+    <ChangeList changes={orgletDetailChanges(proposal)} context={context} />
+    <Outcome proposal={proposal} />
+  </Drawer>;
+}
+
+/** Every new orglet of one reply on one card: a row each, Apply and Dismiss for all of them at once underneath. */
+function OrgletGroupCard({ proposals, context, actions }: { proposals: AppProposal[]; context: ProposalContext; actions: ProposalActions }) {
+  const [openId, setOpenId] = useState<string>();
+  const open = proposals.find(proposal => proposal.id === openId);
+  const pending = proposals.filter(isPending);
+  const title = proposals.length > 1 ? t('{0} Tí mới', [proposals.length]) : t('Tí mới');
+  return <section className="app-proposal app-proposal-orglets" aria-label={title}>
+    <h4>{title}</h4>
+    <ul className="proposal-orglet-list">
+      {proposals.map(proposal => <OrgletRow key={proposal.id} proposal={proposal} context={context} actions={actions} onOpen={() => setOpenId(proposal.id)} />)}
+    </ul>
+    {pending.length > 1 && <div className="app-proposal-actions">
+      <Button variant="primary" disabled={actions.busy} onClick={() => actions.onApplyAll(pending)}><Check size={15} />{t('Áp dụng {0} Tí', [pending.length])}</Button>
+      <Button variant="outline" disabled={actions.busy} onClick={() => actions.onDismissAll(pending)}><X size={15} />{t('Bỏ qua {0} Tí', [pending.length])}</Button>
+    </div>}
+    {open && <OrgletDialog proposal={open} context={context} actions={actions} onClose={() => setOpenId(undefined)} />}
   </section>;
 }
 
-export function AppProposalCards({ proposals, actions }: { proposals: AppProposal[]; actions: ProposalActions }) {
+/** A new crew as its people: the members' faces with the lead marked, then how it runs and what it may spend. */
+function CrewBody({ proposal, context }: { proposal: AppProposal; context: ProposalContext }) {
+  const members = crewMembers(proposal, context);
+  const after = (field: string) => proposal.changes.find(change => change.field === field)?.after;
+  const workflow = after('workflow');
+  const monthly = after('monthlyBudgetMicros');
+  const perTask = after('taskBudgetMicros');
+  return <>
+    <ul className="proposal-crew-members" aria-label={t('Thành viên')}>
+      {members.map(member => <li key={member.key} className="proposal-crew-member">
+        {member.worker
+          ? <Avatar name={member.worker.name} seed={member.worker.id} mascot={member.worker.avatar?.mascot} defaultMascot hint={member.worker.description} color={member.worker.avatar?.color} size="sm" badge={member.lead ? <span className="proposal-crew-lead"><Crown size={9} aria-hidden="true" /></span> : undefined} />
+          : <Avatar name={member.name} seed={member.proposal?.id ?? member.key} mascot={member.proposal ? proposedMascot(member.proposal) : undefined} defaultMascot hint={member.description} size="sm" badge={member.lead ? <span className="proposal-crew-lead"><Crown size={9} aria-hidden="true" /></span> : undefined} />}
+        <span>{member.name}</span>
+        {member.lead && <span className="visually-hidden">{t('Tí trưởng')}</span>}
+      </li>)}
+    </ul>
+    <div className="proposal-crew-chips">
+      {workflow && <span className="badge">{workflowName(workflow)}</span>}
+      {monthly && /^\d+$/.test(monthly) && <span className="badge">{t('{0}/tháng', [formatMoney(Number(monthly))])}</span>}
+      {perTask && /^\d+$/.test(perTask) && <span className="badge">{t('{0} mỗi task', [formatMoney(Number(perTask))])}</span>}
+    </div>
+  </>;
+}
+
+/** The lines of a creation minus the name, which is already the title; an edit keeps every line it changes. */
+function cardChanges(proposal: AppProposal): ProposalChange[] {
+  if (proposal.action !== 'create') return proposal.changes;
+  return proposal.changes.filter(change => !(change.field === 'name' && change.after === proposal.title));
+}
+
+function ProposalCard({ proposal, context, actions }: { proposal: AppProposal; context: ProposalContext; actions: ProposalActions }) {
+  const newCrew = proposal.kind === 'crew' && proposal.action === 'create';
+  return <section className={`app-proposal${isPending(proposal) ? '' : ' app-proposal-settled'}`} aria-label={cardTitle(proposal)}>
+    <h4>{cardTitle(proposal)}</h4>
+    {newCrew ? <CrewBody proposal={proposal} context={context} /> : <ChangeList changes={cardChanges(proposal)} context={context} />}
+    <Outcome proposal={proposal} />
+    <div className="app-proposal-actions"><ProposalButtons proposal={proposal} actions={actions} /></div>
+  </section>;
+}
+
+export function AppProposalCards({ proposals, workers, skills, actions }: { proposals: AppProposal[]; workers: readonly Worker[]; skills: readonly Pick<Skill, 'id' | 'name'>[]; actions: ProposalActions }) {
   if (!proposals.length) return null;
-  const pending = proposals.filter(proposal => proposal.status === 'pending');
+  const context: ProposalContext = { workers, skills, siblings: proposals };
+  const pending = proposals.filter(isPending);
+  const cards = proposalCards(proposals);
+  // The orglet card applies its own rows; the turn's Apply all is for a reply that also proposes something else.
+  const onlyNewOrglets = cards.length === 1 && cards[0].kind === 'orglets';
   return <div className="app-proposals" role="group" aria-label={t('Đề xuất thay đổi trong app')}>
-    {proposals.map(proposal => <ProposalCard key={proposal.id} proposal={proposal} actions={actions} />)}
-    {pending.length > 1 && <div className="app-proposal-actions app-proposals-all">
+    {cards.map(card => card.kind === 'orglets'
+      ? <OrgletGroupCard key={card.proposals[0].id} proposals={card.proposals} context={context} actions={actions} />
+      : <ProposalCard key={card.proposal.id} proposal={card.proposal} context={context} actions={actions} />)}
+    {pending.length > 1 && !onlyNewOrglets && <div className="app-proposal-actions app-proposals-all">
       <Button variant="primary" disabled={actions.busy} onClick={() => actions.onApplyAll(pending)}><Check size={15} />{t('Áp dụng tất cả ({0})', [pending.length])}</Button>
     </div>}
   </div>;

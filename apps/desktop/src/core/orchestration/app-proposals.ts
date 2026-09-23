@@ -3,7 +3,7 @@ import {
   AppProposal, PROPOSED_SETTING_KEYS, ProposeCrew, ProposeCrewTemplate, ProposeOrglet, ProposeSchedule, ProposeSettings, ProposeSkill,
   type AppProposalKind, type ProposalChange, type ProposalHold, type ProposalTarget, type ProposalToolName, type ProposalUndo,
 } from '../../shared/app-proposals';
-import { RoutineInput, SkillInput, TeamInput, WorkerInput, type Routine, type Run, type Skill, type Task, type Team, type Worker } from '../../shared/contracts';
+import { RoutineInput, SkillInput, TeamInput, WorkerInput, type Routine, type WorkerAvatar, type Run, type Skill, type Task, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
 
 /** The one spending cap a worker chat starts with when its worker has none of its own (WorkerDialog's default). */
@@ -313,12 +313,12 @@ export class AppProposals {
   }
 
   /** Runs the proposal through the UI's own command. A failure stays on the card as text and leaves it pending. */
-  apply(proposalId: string, automatic = false): AppProposal {
+  apply(proposalId: string, automatic = false, avatar?: WorkerAvatar): AppProposal {
     const proposal = this.get(proposalId);
     if (proposal.status !== 'pending') throw new Error('Đề xuất này đã được xử lý.');
     try {
       // Each applier command is its own transaction, the same one the dialog would run; nothing wraps them.
-      const applied = this.perform(proposal);
+      const applied = this.perform(proposal, avatar);
       const record: AppProposal = { ...proposal, status: 'applied', appliedAt: now(), automatic, target: applied.target, error: undefined, ...(automatic && applied.undo ? { undo: applied.undo } : {}) };
       this.write(record);
       return record;
@@ -331,7 +331,7 @@ export class AppProposals {
     }
   }
 
-  private perform(proposal: AppProposal): { target: ProposalTarget; undo?: ProposalUndo } {
+  private perform(proposal: AppProposal, avatar?: WorkerAvatar): { target: ProposalTarget; undo?: ProposalUndo } {
     switch (proposal.kind) {
       case 'orglet': {
         const payload = proposal.payload as OrgletPayload & { targetId?: string };
@@ -342,7 +342,7 @@ export class AppProposals {
           const saved = this.applier.saveWorker(WorkerInput.parse({ ...previous, ...compact(payload.fields), ...(skillId ? { skillId } : {}), id: current.id }));
           return { target: { kind: 'worker', id: saved.id }, undo: { kind: 'restore', entity: 'worker', previous } };
         }
-        const saved = this.applier.saveWorker(WorkerInput.parse({ ...compact(payload.fields), skillId }));
+        const saved = this.applier.saveWorker(WorkerInput.parse({ ...(avatar ? { avatar } : {}), ...compact(payload.fields), skillId }));
         return { target: { kind: 'worker', id: saved.id }, undo: { kind: 'delete', entity: 'worker', id: saved.id } };
       }
       case 'crew': {
