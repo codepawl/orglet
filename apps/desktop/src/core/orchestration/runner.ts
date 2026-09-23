@@ -772,8 +772,8 @@ export class Runner {
           if (needsReport(run)) throw new Error('Hội có checklist bắt buộc cần báo cáo đầy đủ, không phải tin nhắn.');
           const { message, title, knowledgeProposals } = ChatReply.parse(JSON.parse(call.arguments));
           for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
-          await this.finishWorkspace(run);
-          this.commit(task, run, { ...chatReport(message), limitations: [...(options.limitations ?? [])] }, options.keepTaskOpen, knowledgeProposals, title); return;
+          const workspaceLimitations = await this.finishWorkspace(run);
+          this.commit(task, run, { ...chatReport(message), limitations: [...(options.limitations ?? []), ...workspaceLimitations] }, options.keepTaskOpen, knowledgeProposals, title); return;
         }
         if (call.name === 'submit_plan') {
           if (run.stage !== 'plan') throw new Error('Tool không được policy cho phép.');
@@ -851,14 +851,15 @@ export class Runner {
     }
   }
   /** Shared report gate for native tool calls and local harness output: schema, checklist, citations, then commit. */
-  private async finishWorkspace(run: Run) {
-    if (!run.snapshot.workspaceGrant) return;
+  private async finishWorkspace(run: Run): Promise<string[]> {
+    if (!run.snapshot.workspaceGrant) return [];
     if (!this.workspace) throw new Error('Workspace runtime chưa được cấu hình.');
     const control = this.active.get(run.id);
     if (!control) throw new Error('Lần chạy không còn hoạt động.');
     this.workspace.authorize(run, 'read', control.signal);
-    await this.workspace.finish(run, control.signal);
+    const limitations = await this.workspace.finish(run, control.signal);
     control.signal.throwIfAborted();
+    return limitations;
   }
   private async finalize(task: Task, run: Run, raw: unknown, readIds: ReadonlySet<string>, scope: { manifest: Source[]; preflight?: PreflightRecord; preflightLimits: string[] }, options: { keepTaskOpen?: boolean; upstream?: Artifact[]; limitations?: string[] }, runnerLimitations: string[] = []) {
     const { knowledgeProposals, assignmentOutcome, ...submitted } = ModelReport.parse(raw);
@@ -911,7 +912,7 @@ export class Runner {
     for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu báo cáo.');
     for (const source of scope.manifest.filter(source => !readIds.has(source.id))) report.limitations.push(`Nguồn chưa được đọc: ${source.name.slice(0, 300)} (${source.id}). Không xem đây là đánh giá đầy đủ tệp này.`);
     report.limitations.push(...runnerLimitations, ...scope.preflightLimits, ...(options.limitations ?? []));
-    await this.finishWorkspace(run);
+    report.limitations.push(...await this.finishWorkspace(run));
     const expectedFileChanges = run.stage === 'member' && !!run.snapshot.assignment?.writeResources?.length;
     const missingFileChanges = expectedFileChanges && !this.workspace?.integratedChangeCount(run.id);
     if (missingFileChanges) report.limitations.push('Phần việc được giao sửa tệp nhưng không tạo hoặc thay đổi tệp nào.');

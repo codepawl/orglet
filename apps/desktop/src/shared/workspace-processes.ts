@@ -16,5 +16,12 @@ export const WorkspaceProcess = z.object({
   state: z.enum(['running', 'exited', 'cancelled', 'timeout', 'output_limit', 'uncertain']),
   exitCode: z.number().int().nullable(), stdout: z.string().max(262144), stderr: z.string().max(262144),
   error: z.string().max(4000).optional(),
+  /** How many file changes the run's copy had when this command started (COD-189). Absent on older records. */
+  copyEditsAtStart: z.number().int().min(0).optional(),
 }).strict();
 export type WorkspaceProcess = z.infer<typeof WorkspaceProcess>;
+export type StartWorkspaceProcess = z.infer<typeof StartWorkspaceProcess>;
+
+export function describeCommand(command: StartWorkspaceProcess, maxLength = 1000): string {
+  return [command.program, ...command.arguments].join(' ').slice(0, maxLength);
+}

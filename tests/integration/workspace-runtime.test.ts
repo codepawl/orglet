@@ -439,6 +439,93 @@ it('blocks file access while a command owns the copy and waits for its cancellat
   } finally { await runtime.stopRun(run.id); }
 });
 
+describe('judges the code the run hands in, not every command it ever ran (COD-189)', () => {
+  let exitCode = 0;
+  let applied: string[] = [];
+  const staleFailure = 'Lệnh chạy trước lần sửa tệp cuối đã thất bại và chưa được chạy lại: node test --grep thumbnails (mã thoát 1).';
+  beforeEach(async () => {
+    exitCode = 0;
+    applied = [];
+    await grants.grant({ taskId: task.id, directory: source, permissions: ['read', 'write', 'execute'] });
+    run.snapshot.workspaceGrant = grants.snapshot(task.id);
+    store.update('runs', run);
+  });
+  const judged = () => fixture(async request => {
+    applied.push(request.path);
+    return { status: 'applied', hash: 'b'.repeat(64), backupPath: 'retained-original', created: false };
+  }, { runCommand: async () => ({ termination: 'exited', exitCode, stdout: '', stderr: '' }) });
+  async function command(runtime: WorkspaceRuntime, argumentsValue: string[], code: number) {
+    exitCode = code;
+    const status = await runtime.processTool(run, id(), 'workspace_start_process',
+      { program: 'node', arguments: argumentsValue, timeoutMs: 10000 }, signal(), signal()) as { state: string; exitCode: number };
+    expect(status).toMatchObject({ state: 'exited', exitCode: code });
+  }
+  const copyState = () => JSON.parse(String(store.db.prepare('SELECT data FROM workspace_copies').get()!.data)).state;
+
+  it('integrates when the same command passes after the edit', async () => {
+    const runtime = judged();
+    await command(runtime, ['test'], 1);
+    await edit(runtime);
+    await command(runtime, ['test'], 0);
+    expect(await runtime.finish(run, signal())).toEqual([]);
+    expect(copyState()).toBe('integrated');
+    expect(applied).toEqual(['note.txt']);
+  });
+
+  it('integrates when a different command passes after the edit and reports the stale failure', async () => {
+    const runtime = judged();
+    await command(runtime, ['test', '--grep', 'thumbnails'], 1);
+    await edit(runtime);
+    await command(runtime, ['test'], 0);
+    expect(await runtime.finish(run, signal())).toEqual([staleFailure]);
+    expect(copyState()).toBe('integrated');
+    expect(applied).toEqual(['note.txt']);
+  });
+
+  it('still blocks a failure after the last edit, and a write that changed nothing does not move it', async () => {
+    const runtime = judged();
+    await edit(runtime);
+    await command(runtime, ['test'], 1);
+    await expect(runtime.finish(run, signal())).rejects.toThrow('chưa hoàn tất thành công');
+    await edit(runtime, 'note.txt', 'updated');
+    await expect(runtime.finish(run, signal())).rejects.toThrow('chưa hoàn tất thành công');
+    expect(copyState()).toBe('ready');
+    expect(applied).toEqual([]);
+  });
+
+  it('still blocks a failed command when no file changed', async () => {
+    const runtime = judged();
+    await command(runtime, ['test'], 1);
+    await command(runtime, ['--version'], 0);
+    await expect(runtime.finish(run, signal())).rejects.toThrow('chưa hoàn tất thành công');
+    expect(applied).toEqual([]);
+  });
+
+  it('carries the stale failure into the report through Runner', async () => {
+    task = { ...task, providerScopes: ['openai'] };
+    store.update('tasks', task);
+    let step = 0;
+    const adapter: ModelAdapter = { request: async () => {
+      const calls = [
+        { name: 'workspace_write', arguments: { path: 'store.js', expectedHash: null, content: 'first' } },
+        { name: 'workspace_start_process', arguments: { program: 'node', arguments: ['test', '--grep', 'thumbnails'], timeoutMs: 10000 } },
+        { name: 'workspace_write', arguments: { path: 'store.js', expectedHash: createHash('sha256').update('first').digest('hex'), content: 'second' } },
+        { name: 'workspace_start_process', arguments: { program: 'node', arguments: ['test'], timeoutMs: 10000 } },
+        { name: 'reply', arguments: { message: 'Store fixed and tests pass.', title: null, knowledgeProposals: [] } },
+      ];
+      const call = calls[step++];
+      if (call.name === 'workspace_start_process') exitCode = step === 2 ? 1 : 0;
+      return { calls: [{ id: id(), name: call.name, arguments: JSON.stringify(call.arguments) }], usage: { input: 10, output: 10 } };
+    } };
+    const core = new CoreService(store, () => {}, async () => adapter, undefined, undefined, undefined, undefined, undefined, judged());
+    await core.runner.run(task, run);
+    const detail = store.detail(task.id);
+    expect(detail.task.status, JSON.stringify(detail.runs.map(item => item.error))).toBe('completed');
+    expect(detail.artifacts[0].report.limitations).toEqual([staleFailure]);
+    expect(applied).toEqual(['store.js']);
+  });
+});
+
 describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('API fixture using packaged workspace executors', () => {
   it.each(['openai', 'claude-code', 'codex', 'cursor'] as const)('plans, edits, checks, hands off, integrates and synthesizes one %s team request', async provider => {
     const files = new WorkspaceFilesRuntime({

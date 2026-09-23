@@ -19,6 +19,11 @@ const Copy = z.object({
   state: z.enum(['preparing', 'ready', 'integrating', 'integrated', 'conflict', 'uncertain']),
   baseline: WorkspaceManifest,
   kind: z.enum(['copy', 'git-worktree']).optional(),
+  /**
+   * Counts writes that changed a file's hash. Writes and command starts are both serialized per run, so a command
+   * that recorded this count at start ran either before or after each change with no wall-clock comparison (COD-189).
+   */
+  edits: z.number().int().min(0).default(0),
   changes: z.array(WorkspaceFile.extend({
     expectedHash: z.string().nullable(), status: z.enum(['pending', 'applied', 'conflict', 'blocked']),
     backupPath: z.string().optional(), reason: z.string().optional(),
@@ -26,6 +31,7 @@ const Copy = z.object({
 }).strict();
 type Copy = z.infer<typeof Copy>;
 const ReadResult = z.object({ path: z.string(), hash: z.string(), content: z.string() }).passthrough();
+const WriteResult = z.object({ hash: z.string() }).passthrough();
 
 /** Coordinates isolated working copies. It never reads worker-controlled file paths on the host. */
 export class WorkspaceRuntime {
@@ -129,7 +135,7 @@ export class WorkspaceRuntime {
     }
     const source = await this.grants.directory(run.snapshot.workspaceGrant!, 'read');
     const preparing: Copy = { runId: run.id, grant: run.snapshot.workspaceGrant!, directory: null,
-      state: 'preparing', baseline: { files: [], omitted: [] }, changes: [] };
+      state: 'preparing', baseline: { files: [], omitted: [] }, edits: 0, changes: [] };
     this.save(preparing);
     try {
       const copy = await this.files.createCopy(source, signal);
@@ -176,6 +182,10 @@ export class WorkspaceRuntime {
             this.store.event(run.id, `Workspace ${request.operation}: ${request.path}`);
             this.notify();
             return { ...read, evidenceId: evidence.id };
+          }
+          if (request.operation === 'write' && WriteResult.parse(result).hash !== request.expectedHash) {
+            copy.edits += 1;
+            this.save(copy);
           }
           this.store.event(run.id, `Workspace ${request.operation}: ${'path' in request ? request.path : ''}`);
           this.notify();
@@ -230,7 +240,7 @@ export class WorkspaceRuntime {
         if (copy.state !== 'ready') throw new Error('Bản làm việc đã tích hợp hoặc đang chờ xử lý xung đột.');
         await this.grants.directory(run.snapshot.workspaceGrant!, 'execute');
         const started = await processes.start({ runId: run.id, callId, directory: copy.directory!, command, signal: lifetime,
-          authorize: () => { this.authorize(run, 'execute', lifetime); } });
+          copyEdits: copy.edits, authorize: () => { this.authorize(run, 'execute', lifetime); } });
         return processes.status(run.id, started.processId, 1000, signal, authorize);
       });
     }
@@ -279,16 +289,17 @@ export class WorkspaceRuntime {
     return result;
   }
 
-  async finish(run: Run, signal: AbortSignal): Promise<void> {
+  /** Integrates the copy and returns the limitations to report: command failures the code has since moved past. */
+  async finish(run: Run, signal: AbortSignal): Promise<string[]> {
     signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
     new ToolCalls(this.store).assertEffectsResolved(run.id);
     this.assertCopiesResolved(run);
-    if (!this.saved(run.id)) return;
-    await this.serial(run.id, async () => {
+    if (!this.saved(run.id)) return [];
+    return this.serial(run.id, async () => {
       this.authorize(run, 'read', signal);
-      this.processes?.assertSuccessful(run.id);
       const copy = this.saved(run.id)!;
-      if (copy.state === 'integrated') return;
+      const limitations = this.processes?.assertSuccessful(run.id, copy.edits) ?? [];
+      if (copy.state === 'integrated') return limitations;
       if (copy.state !== 'ready' || !copy.directory) throw new Error('Bản làm việc bị gián đoạn; cần kiểm tra trước khi tiếp tục.');
       const manifest = WorkspaceManifest.parse(await this.files.execute(copy.directory, { operation: 'manifest' }, signal));
       const baseline = new Map(copy.baseline.files.map(file => [file.path, file]));
@@ -298,7 +309,7 @@ export class WorkspaceRuntime {
       copy.changes = manifest.files.filter(file => baseline.get(file.path)?.hash !== file.hash)
         .map(file => ({ ...file, expectedHash: baseline.get(file.path)?.hash ?? null, status: 'pending' }));
       for (const file of copy.changes) this.owns(run, file.path);
-      if (!copy.changes.length) { this.save({ ...copy, state: 'integrated' }); return; }
+      if (!copy.changes.length) { this.save({ ...copy, state: 'integrated' }); return limitations; }
       this.authorize(run, 'write', signal);
       // ponytail: one integration queue per core; use per-root queues if more than two concurrent workers are supported.
       await this.serial('integration', async () => {
@@ -325,6 +336,7 @@ export class WorkspaceRuntime {
           throw error;
         }
       });
+      return limitations;
     });
   }
 }

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ReadRecoveryOutput, RetireWorkspaceAttempt, WorkspaceRecoveryView, type RecoveryOutput } from '../../shared/workspace-recovery';
-import { WorkspaceProcess } from '../../shared/workspace-processes';
+import { WorkspaceProcess, describeCommand } from '../../shared/workspace-processes';
 import type { Run, Task } from '../../shared/contracts';
 import { Store, now } from './database';
 
@@ -69,7 +69,7 @@ export class WorkspaceRecovery {
       processes: processes.slice(0, 100).map(row => {
         const process = WorkspaceProcess.parse(JSON.parse(String(row.data)));
         return { id: process.id, runId: process.runId, state: process.state, exitCode: process.exitCode,
-          command: [process.command.program, ...process.command.arguments].join(' ').slice(0, 1000) };
+          command: describeCommand(process.command) };
       }),
       uncertainCalls: calls.slice(0, 100), truncated: [copies, processes, calls].some(rows => rows.length > 100),
     });

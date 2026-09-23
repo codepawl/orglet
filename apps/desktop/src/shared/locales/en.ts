@@ -68,6 +68,8 @@ export const en: Dictionary = {
   'Git trả về số lượng file không khớp snapshot.': 'The Git file count does not match the snapshot.',
   'Cần Git cho Windows để tạo worktree riêng cho repository này.': 'Git for Windows is required to create a private worktree for this repository.',
   'Có lệnh chưa hoàn tất thành công. Xem đầu ra và kiểm tra lại trước khi tích hợp.': 'A command has not completed successfully. Inspect its output and check again before integration.',
+  'Lệnh chạy trước lần sửa tệp cuối đã thất bại và chưa được chạy lại: {0} (mã thoát {1}).': 'A command run before the last file change failed and was not run again: {0} (exit code {1}).',
+  'Lệnh chạy trước lần sửa tệp cuối không hoàn tất và chưa được chạy lại: {0} ({1}).': 'A command run before the last file change did not finish and was not run again: {0} ({1}).',
   'Không nhận được kết quả tiến trình.': 'No process result was received.',
   'Lệnh shell cần đúng một chuỗi lệnh.': 'A shell command requires exactly one command string.',
   'Runtime tiến trình chưa được cấu hình.': 'The process runtime is not configured.',
