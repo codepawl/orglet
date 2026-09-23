@@ -62,6 +62,9 @@ import { noSelection, pruneSelection, selectRange, toggleSelection, type Selecti
 import { groupChatFromRecipient, groupChatFromSelection, groupChatKey, groupChatNames, groupChatRecipient, groupChatTaskInput, isGroupChatTask, pruneGroupChat, type PendingGroupChat } from './groupChat';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
 import { proposedMascot, type ProposalActions } from './components/AppProposals';
+import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
+import { dwellAbout, dwellChat, dwellModels, followWorkspace, taskDetails } from './caches';
+import { dwellHandlers } from './prefetch';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -94,17 +97,17 @@ function useArrivals(ids: readonly string[], ready: boolean): (id: string) => bo
 /**
  * The shape of a conversation while its detail is on the way. A sentence on an empty page made the app look like
  * it had stopped; blocks where the message and the answer are about to be say the same thing without the wait
- * reading as a fault (user, 2026-09-20). The sentence stays for screen readers, which cannot see a shape.
+ * reading as a fault (user, 2026-09-20). The sentence stays for screen readers, which cannot see a shape. With
+ * chats prefetched on hover and kept once opened (COD-218), this is only ever seen on a chat reached some other way.
  */
 function ThreadSkeleton() {
-  return <div className="thread-skeleton" role="status" aria-live="polite">
-    <span className="visually-hidden">{t('Đang mở cuộc trò chuyện…')}</span>
-    <div className="thread-skeleton-ask" aria-hidden="true"><span /></div>
-    <div className="thread-skeleton-reply" aria-hidden="true">
-      <span className="thread-skeleton-face" />
-      <div><span /><span /><span /></div>
+  return <SkeletonGroup className="thread-skeleton" label={t('Đang mở cuộc trò chuyện…')}>
+    <div className="thread-skeleton-ask"><Skeleton shape="block" className="thread-skeleton-bubble" /></div>
+    <div className="thread-skeleton-reply">
+      <Skeleton shape="circle" className="thread-skeleton-face" />
+      <div><Skeleton width="92%" /><Skeleton width="78%" delay={0.08} /><Skeleton width="46%" delay={0.16} /></div>
     </div>
-  </div>;
+  </SkeletonGroup>;
 }
 
 type Panel = 'task' | 'revision' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | 'sources' | null;
@@ -114,9 +117,9 @@ export function App() {
   // Undefined until the first detection finishes: it runs each CLI and takes about three seconds cold, so nothing waits on it.
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>();
   const [selected, setSelected] = useState<string | null>(null); const [detail, setDetail] = useState<TaskDetail>();
-  // Chats opened this session keep their last detail, so switching back shows it at once instead of a blank pane
-  // while the fresh copy loads (user, 2026-09-23). The fresh copy replaces it as soon as it arrives.
-  const openedDetails = useRef(new Map<string, TaskDetail>());
+  // Chats opened this session keep their last detail in `taskDetails`, and a sidebar row prefetches its chat while
+  // the pointer rests on it (COD-198, COD-218), so opening shows the kept copy at once instead of a blank pane
+  // while the fresh copy loads. The fresh copy replaces it as soon as it arrives.
   const showingCachedDetail = useRef<string | null>(null);
   const [workspaceAccess, setWorkspaceAccess] = useState<{ taskId: string; grant: WorkspaceGrantView | null }>();
   const [workspaceRecovery, setWorkspaceRecovery] = useState<WorkspaceRecoveryView>();
@@ -250,15 +253,19 @@ export function App() {
     const requestId = ++refreshId.current;
     const selected = selectedRef.current;
     try {
-      // Load the open task first so markTaskSeen lands in SQLite before workspace is read.
-      const taskDetail = selected ? await orglet.call('task', { id: selected }) : undefined;
       // Harness detection is cached after its first, slow run. Waiting for it here held every refresh — and so the first
       // settings change after launch — for about three seconds, so it lands on its own.
       void orglet.call('harnesses', { refresh: false }).then(setHarnesses).catch(() => undefined);
-      const [next, connectionState, grant, recovery] = await Promise.all([orglet.call('workspace', {}), orglet.connections(),
+      // Everything a refresh needs goes out at once (COD-218): reading the open task before the workspace was a
+      // waterfall on every change event. Its seen stamp is merged below from whichever copy is newer, so the
+      // order the two land in does not matter.
+      const [taskDetail, next, connectionState, grant, recovery] = await Promise.all([
+        selected ? taskDetails.refresh(selected) : Promise.resolve(undefined),
+        orglet.call('workspace', {}), orglet.connections(),
         selected ? orglet.call('workspaceAccess', { taskId: selected }) : Promise.resolve(null),
         selected ? orglet.call('workspaceRecovery', { taskId: selected }) : Promise.resolve(undefined)]);
       if (requestId !== refreshId.current) return;
+      followWorkspace(next);
       if (taskDetail?.task.seenStamp) {
         seenInfo.current[taskDetail.task.id] = { seenStamp: taskDetail.task.seenStamp, lastArtifactId: taskDetail.task.lastArtifactId };
       }
@@ -324,14 +331,8 @@ export function App() {
     const collapse = () => { if (media.matches) setSidebar(false); };
     media.addEventListener('change', collapse); return () => media.removeEventListener('change', collapse);
   }, []);
-  useEffect(() => {
-    if (!detail) return;
-    const cache = openedDetails.current;
-    cache.delete(detail.task.id);
-    cache.set(detail.task.id, detail);
-    // A handful of recent chats is enough to make switching instant; older ones load as before.
-    if (cache.size > 20) cache.delete(cache.keys().next().value!);
-  }, [detail]);
+  // The copy on screen is the one worth keeping: a handful of recent chats makes switching instant.
+  useEffect(() => { if (detail) taskDetails.set(detail.task.id, detail); }, [detail]);
   const leaveThread = () => { setSelected(null); setDetail(undefined); setGroupChat(undefined); setBrief(''); setSources([]); setSkippedSources([]); setError(''); };
   const hideTaskLocally = (taskId: string, field: 'archivedAt' | 'deletedAt') => {
     const stamp = new Date().toISOString();
@@ -340,7 +341,7 @@ export function App() {
   // Re-opening the task already shown keeps its detail; clearing it would wait for a reload that never comes.
   const openTask = (id: string) => {
     if (id !== selected) {
-      const cached = openedDetails.current.get(id);
+      const cached = taskDetails.get(id);
       showingCachedDetail.current = cached ? id : null;
       setSelected(id);
       setDetail(cached);
@@ -354,8 +355,9 @@ export function App() {
       if (opened && !opened.assignees) setWorkerId(opened.workerId);
     }
     // The thread only needs its own detail, so fetch it now instead of waiting for the refresh below, which also
-    // reads the workspace and the connections before it hands anything back.
-    void orglet.call('task', { id }).then((opened: TaskDetail) => {
+    // reads the workspace and the connections before it hands anything back. A prefetch still on its way is
+    // shared rather than repeated.
+    void taskDetails.refresh(id).then((opened: TaskDetail) => {
       if (selectedRef.current !== id) return;
       const replacesCachedCopy = showingCachedDetail.current === id;
       showingCachedDetail.current = null;
@@ -698,7 +700,19 @@ export function App() {
   // Phase 5 of the avatar animations: a row that was just created rises into the list once. This sits above the
   // loading return, because a hook must run on every render and the workspace arrives after the first one.
   const isArriving = useArrivals(workspace ? [...workspace.teams.map(item => `team-${item.id}`), ...workspace.workers.map(item => `worker-${item.id}`)] : [], Boolean(workspace));
-  if (!workspace) return <Startup error={error} onRetry={window.orglet ? () => void refresh() : undefined} />;
+  // The shell is drawn before the workspace arrives (COD-218): the same frame, the same sidebar width, the lists
+  // and the chat filled in as skeletons, so the window never opens on a blank page or a centred wait.
+  if (!workspace) return <Startup error={error} onRetry={window.orglet ? () => void refresh() : undefined} sidebar={sidebar} sidebarWidth={sidebarWidth} />;
+  /** A worker row resting under the pointer fetches its live chat and its model list ahead of the click. */
+  const dwellWorker = (item: Worker) => (resting: boolean) => {
+    const live = liveWorkerTask(workspace.tasks, item.id);
+    if (live) dwellChat(live.id, resting);
+    dwellModels(item.provider, resting);
+  };
+  const dwellTeam = (item: Team) => (resting: boolean) => {
+    const live = liveTeamTask(workspace.tasks, item.id);
+    if (live) dwellChat(live.id, resting);
+  };
   const recipientOptions = [
     ...workspace.workers.map(item => {
       const available = recipientReady([item.provider]);
@@ -840,19 +854,19 @@ export function App() {
       <div className="sidebar-scroll">
       
       <SidebarSection id="teams" title={t('Hội')} action={sectionActions('teams', t('Chọn nhiều hội'), t('Tạo hội'), () => { setEditingTeam(undefined); setPanel('team'); })}>
-        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} arriving={isArriving(`team-${item.id}`)} name={item.name} avatar={<RosterAvatars workers={teamRoster(item, workspace.workers)} size="sm" max={2} />} active={teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id)} status={teamStatus(item)} onSelect={() => { clearSelection(); openTeam(item.id); }} reorder={teamOrder.bind(item.id)} selection={rowSelection('teams', item.id)}
+        {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} arriving={isArriving(`team-${item.id}`)} name={item.name} avatar={<RosterAvatars workers={teamRoster(item, workspace.workers)} size="sm" max={2} />} active={teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id)} status={teamStatus(item)} onSelect={() => { clearSelection(); openTeam(item.id); }} onDwell={dwellTeam(item)} reorder={teamOrder.bind(item.id)} selection={rowSelection('teams', item.id)}
           menu={<RowMenu label={t('Tùy chọn hội {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingTeam(item); setPanel('team'); } }, { label: t('Xuất template'), icon: Download, onSelect: () => action(() => orglet.exportTemplate(item.id)) }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('team', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('team', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />} />
         )}{!workspace.teams.length && <p className="empty-history">{t('Chưa có hội nào.')}</p>}
         <ArchivedList count={workspace.archivedTeams.length}>{workspace.archivedTeams.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('team', item.id, false)} onDelete={() => deleteEntity('team', item.id)} />)}</ArchivedList>
       </SidebarSection>
       <SidebarSection id="workers" title={t('Tí')} action={sectionActions('workers', t('Chọn nhiều Tí'), t('Tạo Tí'), () => { setEditingWorker(undefined); setPanel('worker'); })}>
-        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !group && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} selection={rowSelection('workers', item.id)}
+        {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !group && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
           menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
         <ArchivedList count={workspace.archivedWorkers.length}>{workspace.archivedWorkers.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('worker', item.id, false)} onDelete={() => deleteEntity('worker', item.id)} />)}</ArchivedList>
       </SidebarSection>
       </div>
       {selectionBar}
-      <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><Button onClick={() => openSettings()}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${Object.values(connections).some(Boolean) ? 'connected' : ''}`} /></Button></div>
+      <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><Button onClick={() => openSettings()} {...dwellHandlers(dwellAbout)}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${Object.values(connections).some(Boolean) ? 'connected' : ''}`} /></Button></div>
     </aside>
     {/* Collapsed sidebar keeps its two most used actions in a narrow rail, stacked like ChatGPT. */}
 
@@ -965,7 +979,7 @@ export function App() {
     <NoticeCentre open={noticesOpen} onClose={() => setNoticesOpen(false)} />
     <Toaster />
     <Confirmer />
-    <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} tasks={workspace.tasks} teams={workspace.teams} onOpenTask={openTask} />
-    <SettingsDialog open={panel === 'settings'} tab={settingsTab} onTab={setSettingsTab} onClose={close} workspace={workspace} connections={connections} onConnections={setConnections} harnesses={harnesses ?? []} onHarnesses={setHarnesses} />
+    <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} tasks={workspace.tasks} teams={workspace.teams} onOpenTask={openTask} onDwellTask={dwellChat} />
+    <SettingsDialog open={panel === 'settings'} tab={settingsTab} onTab={setSettingsTab} onClose={close} workspace={workspace} connections={connections} onConnections={setConnections} harnesses={harnesses} onHarnesses={setHarnesses} />
   </div>;
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Copy, ExternalLink, Globe, RefreshCw, RotateCw } from 'lucide-react';
 import type { Workspace } from '../../shared/contracts';
-import { aboutDetailsText, osName, type AboutInfo, type AboutLink, type Changelog, type InstallKind, type Release, type UnsupportedReason, type UpdateState } from '../../shared/updates';
+import { aboutDetailsText, osName, type AboutLink, type InstallKind, type Release, type UnsupportedReason, type UpdateState } from '../../shared/updates';
 import { Button } from './ui';
 import { Switch } from './Switch';
 import { Markdown } from './Markdown';
@@ -9,6 +9,9 @@ import { BrandMark, type BrandName } from './brandMarks';
 import { clockLabel } from './TimeMark';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
+import { Skeleton, SkeletonText } from '@codepawl/orglet-ui';
+import { aboutInfo, APP_KEY, changelogs, updateStates } from '../caches';
+import { useCached } from '../prefetch';
 
 /** How the build got here, in the words the details line and the copied text use. */
 function installLabel(kind: InstallKind): string {
@@ -45,7 +48,7 @@ function Row({ title, description, children, id }: { title: string; description?
 
 /** What the update row says under its title. Every branch reads the state the main process pushed. */
 function updateDescription(state: UpdateState | undefined): ReactNode {
-  if (!state) return t('Đang đọc trạng thái…');
+  if (!state) return <Skeleton width="60%" />;
   if (state.status === 'unsupported') return unsupportedReason(state.reason);
   if (state.status === 'idle') return t('Chưa kiểm tra trong phiên này.');
   if (state.status === 'checking') return t('Đang kiểm tra…');
@@ -73,28 +76,31 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
   onAutoUpdate: (value: boolean) => void;
   act: (action: () => Promise<string | void>, about?: string) => Promise<void>;
 }) {
-  const [about, setAbout] = useState<AboutInfo>();
-  const [update, setUpdate] = useState<UpdateState>();
-  const [changelog, setChangelog] = useState<Changelog>();
+  // The build, the updater's state and the release list are kept for the session (COD-218): resting on the way
+  // here fetches them, and the tab draws what it has at once. The updater keeps pushing its state; the newest
+  // push wins over the kept copy.
+  const about = useCached(aboutInfo, APP_KEY);
+  const keptUpdate = useCached(updateStates, APP_KEY);
+  const [pushedUpdate, setPushedUpdate] = useState<UpdateState>();
+  const update = pushedUpdate ?? keptUpdate;
+  const changelog = useCached(changelogs, APP_KEY);
   const [changelogBusy, setChangelogBusy] = useState(false);
   const [showOlder, setShowOlder] = useState(false);
   const section = t('Giới thiệu');
 
-  const loadChangelog = useCallback(async (refresh: boolean) => {
+  const reloadChangelog = useCallback(async () => {
     setChangelogBusy(true);
-    try { setChangelog(await orglet.changelog(refresh)); }
-    catch (error) { setChangelog({ releases: [], fetchedAt: null, stale: true, error: (error as Error).message }); }
+    try { changelogs.set(APP_KEY, await orglet.changelog(true)); }
+    catch (error) { changelogs.set(APP_KEY, { releases: [], fetchedAt: null, stale: true, error: (error as Error).message }); }
     finally { setChangelogBusy(false); }
   }, []);
+  const takeUpdate = (state: UpdateState) => { updateStates.set(APP_KEY, state); setPushedUpdate(state); };
 
   useEffect(() => {
     let live = true;
-    void orglet.about().then(info => { if (live) setAbout(info); }).catch(() => undefined);
-    void orglet.updateState().then(state => { if (live) setUpdate(state); }).catch(() => undefined);
-    const stop = orglet.onUpdate(state => { if (live) setUpdate(state); });
-    void loadChangelog(false);
+    const stop = orglet.onUpdate(state => { if (live) takeUpdate(state); });
     return () => { live = false; stop(); };
-  }, [loadChangelog]);
+  }, []);
 
   const unsupported = update?.status === 'unsupported';
   const openLink = (link: AboutLink) => void act(async () => { await orglet.openLink(link); }, section);
@@ -103,7 +109,7 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
     await orglet.copyText(aboutDetailsText(about, workspace.sqliteVersion, installLabel(about.install)));
     return t('Đã sao chép chi tiết bản cài');
   }, section);
-  const checkNow = () => void act(async () => { setUpdate(await orglet.checkForUpdates()); }, section);
+  const checkNow = () => void act(async () => { takeUpdate(await orglet.checkForUpdates()); }, section);
   const restart = () => void act(async () => { await orglet.installUpdate(); }, section);
 
   const detailsLine = about
@@ -120,7 +126,7 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
       <span className="orglet-mark large" aria-hidden="true">o</span>
       <div className="about-name">
         <span className="about-title">Orglet</span>
-        <span className="setting-description">{about ? t('Phiên bản {0}', [about.version]) : t('Đang đọc phiên bản…')}</span>
+        <span className="setting-description">{about ? t('Phiên bản {0}', [about.version]) : <Skeleton width="9ch" />}</span>
       </div>
     </div>
 
@@ -151,11 +157,11 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
 
     <div className="setting-row about-changelog">
       <div className="setting-text">
-        <span className="setting-title">{t('Có gì mới')}</span>
+        <span className="setting-title">{t('Có gì mới')}{changelogBusy && <span className="setting-description setting-checking" role="status">{t('Đang tải lại…')}</span>}</span>
         {changelog?.error && <span className="setting-description">{fetchedAt
           ? t('Không tải được bản mới nhất; đang hiện danh sách lấy lúc {0}.', [fetchedAt])
           : t('Không tải được danh sách phát hành. Kiểm tra kết nối mạng rồi thử lại.')}</span>}
-        {!changelog && <span className="setting-description">{t('Đang tải…')}</span>}
+        {!changelog && <SkeletonText lines={3} className="release-shape" />}
         {shown.map(release => <article key={release.version} className="release">
           <div className="release-head">
             <span className="release-name">{release.name}</span>
@@ -169,7 +175,7 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
         </Button>}
       </div>
       <div className="setting-control">
-        <Button size="icon" aria-label={t('Tải lại danh sách phát hành')} title={t('Tải lại danh sách phát hành')} disabled={changelogBusy} onClick={() => void loadChangelog(true)}><RefreshCw size={14} /></Button>
+        <Button size="icon" aria-label={t('Tải lại danh sách phát hành')} title={t('Tải lại danh sách phát hành')} disabled={changelogBusy} onClick={() => void reloadChangelog()}><RefreshCw size={14} /></Button>
       </div>
     </div>
   </>;

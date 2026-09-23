@@ -5,6 +5,7 @@ import { RowMenu } from './RowMenu';
 import { Checkbox } from './Checkbox';
 import { StatusMark, type StatusMarkState } from './StatusMark';
 import { selectionPickMode, type SelectionPickMode } from '../sidebarSelection';
+import { dwellHandlers } from '../prefetch';
 
 export function statusMarkLabel(status: StatusMarkState): string {
   if (status.variant === 'busy') return t('Đang làm');
@@ -112,8 +113,9 @@ export type RowSelection = { picking: boolean; selected: boolean; onPick: (mode:
  * (user, 2026-09-19), so no row expands here.
  * Optional `status` is the rolled-up mark from its subset (live thread for a worker, workers for a team).
  */
-export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, menu, reorder, arriving, selection }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; menu?: ReactNode; reorder: RowBindings; arriving?: boolean; selection?: RowSelection }) {
+export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, onDwell, menu, reorder, arriving, selection }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; /** The pointer came to rest on the row, or left it: what the click will open is fetched ahead of it (COD-218). */ onDwell?: (resting: boolean) => void; menu?: ReactNode; reorder: RowBindings; arriving?: boolean; selection?: RowSelection }) {
   const { ref, style, dragging, onMoveKey, ...pointer } = reorder;
+  const dwell = dwellHandlers(onDwell);
   const mark = dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : null;
   const selected = selection?.selected ?? false;
   const showCheckbox = Boolean(selection && (selection.picking || selection.selected));
@@ -123,7 +125,7 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
     onSelect();
   };
   const onCheckboxClick = (event: MouseEvent<HTMLInputElement>) => { selection?.onPick(event.shiftKey ? 'range' : 'toggle'); };
-  return <div ref={ref} style={style} className={`tree-item ${dragging ? 'dragging' : ''}${arriving ? ' arriving' : ''}${selected ? ' selected' : ''}`} {...pointer} data-row-id={id}>
+  return <div ref={ref} style={style} className={`tree-item ${dragging ? 'dragging' : ''}${arriving ? ' arriving' : ''}${selected ? ' selected' : ''}`} {...pointer} {...dwell} data-row-id={id}>
     <div className="worker-row">
       {showCheckbox
         ? <Checkbox className="row-check" checked={selected} onClick={onCheckboxClick} onChange={() => { /* the click handler picks, so Shift is read */ }}><span className="visually-hidden">{name}</span></Checkbox>

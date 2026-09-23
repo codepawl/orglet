@@ -7,6 +7,7 @@ import type { Worker } from '../../shared/contracts';
 import { Button } from './ui';
 import { Select } from './Select';
 import { SwitchField } from './Switch';
+import { Skeleton } from '@codepawl/orglet-ui';
 import { t, translated } from '../i18n';
 
 export type PermissionWorker = Pick<Worker, 'id' | 'name' | 'provider'> & { connected: boolean };
@@ -102,7 +103,7 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
           onChange={value => onWorkspace(value as WorkspaceLevel)}
           options={workspaceLevels.map(level => ({ value: level, label: levelNames[level] }))} />
         {folderLocked !== undefined ? <span className="permission-folder-name permission-folder-pending">{folderLocked}</span>
-          : loading ? <span className="permission-folder-name permission-folder-pending">{t('Đang tải quyền…')}</span>
+          : loading ? <span className="permission-folder-name permission-folder-pending"><Skeleton width="12ch" /></span>
           : state.folder && <span className="permission-folder-name"><FolderOpen size={13} aria-hidden="true" />{state.folder}</span>}
       </span>
     </div>

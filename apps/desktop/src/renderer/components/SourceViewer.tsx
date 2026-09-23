@@ -10,6 +10,9 @@ import { fileKindIcon, fileKindLabel, fileSize } from './Attachment';
 import { SourcePreview, previewKindOf } from './SourcePreview';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
+import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawl/orglet-ui';
+import { sourcePreviews } from '../caches';
+import { useCached } from '../prefetch';
 import type { Icon } from './icons';
 
 /**
@@ -67,7 +70,10 @@ function extensionOf(name: string) {
 export function SourceDialog({ detail, sourceId, lines, onClose, refresh }: { detail: TaskDetail; sourceId: string; lines?: [number, number]; onClose: () => void; refresh: () => void }) {
   const source = detail.sources.find(item => item.id === sourceId);
   const taskId = detail.task.id;
-  const [content, setContent] = useState<Content>({ loading: true });
+  // A text source seen this session is drawn at once (COD-218); the hash in the key pins the copy to the file as it was.
+  const previewKey = source && !source.media ? `${taskId}:${sourceId}:${source.hash}` : undefined;
+  const keptText = useCached(sourcePreviews, previewKey);
+  const [content, setContent] = useState<Content>(() => (keptText !== undefined ? { loading: false, text: keptText } : { loading: true }));
   const [origin, setOrigin] = useState<string | null>(null);
   const [error, setError] = useState('');
   const state = source ? inlineState(source) : 'revoked';
@@ -78,15 +84,16 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh }: { de
   }, [taskId, sourceId]);
   useEffect(() => {
     if (!source || state !== 'ready') { setContent({ loading: false }); return; }
+    if (keptText !== undefined) { setContent({ loading: false, text: keptText }); return; }
     let active = true;
     setContent({ loading: true });
     const request = source.media
       ? orglet.call('sourceBytes', { taskId, id: sourceId }).then(media => ({ loading: false, media }))
-      : orglet.call('previewSource', { taskId, id: sourceId }).then(result => ({ loading: false, text: result.text }));
+      : sourcePreviews.read(previewKey!).then(text => ({ loading: false, text }));
     void request.then(next => { if (active) setContent(next); })
       .catch(err => { if (active) setContent({ loading: false, error: (err as Error).message }); });
     return () => { active = false; };
-  }, [taskId, sourceId, state, source?.hash]);
+  }, [taskId, sourceId, state, source?.hash, keptText]);
   useEffect(() => {
     if (lines && content.text !== undefined) document.querySelector('#source-viewer .line-highlight')?.scrollIntoView({ block: 'center' });
   }, [content, lines?.[0], lines?.[1]]);
@@ -120,7 +127,7 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh }: { de
     if (state === 'revoked') return <p className="preview-state">{t('Đã thu hồi quyền đọc')}</p>;
     if (state === 'parquet') return <p className="preview-state">{t('Parquet chưa xem trực tiếp được; chạy checker local trong Nguồn của cuộc trò chuyện để xem cột và số dòng.')}</p>;
     if (state === 'too-large') return <p className="preview-state">{t('Tệp quá lớn để xem trong Orglet.')}</p>;
-    if (content.loading) return <p className="preview-state">{t('Đang mở…')}</p>;
+    if (content.loading) return <SkeletonGroup label={t('Đang mở…')} className="source-shape">{source.media ? <Skeleton shape="block" className="source-shape-media" /> : <SkeletonText lines={8} />}</SkeletonGroup>;
     if (content.error) return <p className="preview-state">{tMessage(content.error)}</p>;
     return <SourcePreview name={source.name} kind={previewKindOf(source)} text={content.text} media={content.media} citedLines={lines} openExternally={externally} />;
   }

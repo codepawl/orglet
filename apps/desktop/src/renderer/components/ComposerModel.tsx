@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
 import type { Worker } from '../../shared/contracts';
 import { CATALOG_HINT_IDS, type ModelEntry } from '../../shared/models';
 import { t } from '../i18n';
-import { orglet } from '../api';
+import { modelLists } from '../caches';
+import { useCached } from '../prefetch';
 import { Select } from './Select';
 import { modelRunnable } from './openCodeModel';
 import { isOpenCodePlan } from '../../shared/opencode';
@@ -22,15 +22,9 @@ export function ComposerModel({ worker, onChange }: {
   worker: Worker & { provider: Exclude<Worker['provider'], 'demo'> };
   onChange: (modelId: string) => void;
 }) {
-  const [models, setModels] = useState<ModelEntry[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    orglet.call('modelList', { provider: worker.provider })
-      .then(result => { if (!cancelled) setModels(result.models); })
-      .catch(() => { if (!cancelled) setModels([]); });
-    return () => { cancelled = true; };
-  }, [worker.provider]);
+  // The session's copy of the list (COD-218): fetched while the worker's row rested under the pointer, or by the
+  // dialog, so the menu is full the first time it opens. Until it lands the menu offers the default and the saved id.
+  const models: ModelEntry[] = useCached(modelLists, worker.provider)?.models ?? [];
 
   const suggestion = suggestedId(worker.provider);
   // A model the user typed into the worker dialog may not be in the fetched list; it still belongs in the menu.

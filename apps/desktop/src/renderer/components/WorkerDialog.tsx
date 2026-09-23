@@ -26,6 +26,7 @@ import { toast } from './toast';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Input, SwitchField, Textarea } from '@codepawl/orglet-ui';
+import { taskGrants } from '../caches';
 import { Zap } from 'lucide-react';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
@@ -170,10 +171,11 @@ function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, on
   const chat = worker ? liveWorkerTask(workspace.tasks, worker.id) : undefined;
   const pending = worker && !chat ? workspace.newChatCapabilities[newChatKey({ workerId: worker.id })] : undefined;
   const [capabilities, setCapabilities] = useState(chat ? chat.toolCapabilities : worker ? pending : draftCapabilities);
-  const [grant, setGrant] = useState<WorkspaceGrantView | null | undefined>(chat ? undefined : null);
+  // The grant a hover on the worker's row already fetched is drawn first (COD-218); the fresh copy replaces it.
+  const [grant, setGrant] = useState<WorkspaceGrantView | null | undefined>(chat ? taskGrants.get(chat.id) : null);
   const [pendingFolder, setPendingFolder] = useState<NewChatWorkspaceView | undefined>(worker && !chat ? workspace.newChatWorkspace[newChatKey({ workerId: worker.id })] : undefined);
   const [busy, setBusy] = useState(false);
-  const readGrant = async (taskId: string) => setGrant(await orglet.call('workspaceAccess', { taskId }));
+  const readGrant = async (taskId: string) => setGrant(await taskGrants.refresh(taskId));
   useEffect(() => {
     if (!chat) return;
     void readGrant(chat.id).catch(error => toast(tMessage(String(error)), 'error', t('Quyền của {0}', [draft.name])));
