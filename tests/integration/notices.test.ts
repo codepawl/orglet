@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collapseNotices, type Notice } from '../../apps/desktop/src/renderer/components/notifications';
+import { collapseNotices, noticeGroupLabels, type Notice } from '../../apps/desktop/src/renderer/components/notifications';
 import { calendarDaysAgo, clockLabel, dayLabel } from '../../apps/desktop/src/renderer/components/TimeMark';
 
 let nextId = 1;
@@ -79,5 +79,17 @@ describe('day labels shared with the chat', () => {
 
   it('gives the time of day on its own', () => {
     expect(clockLabel(iso(new Date(2026, 8, 23, 9, 5)))).toMatch(/9[:.]05/);
+  });
+});
+
+describe('new notices in the centre', () => {
+  it('puts what arrived since the centre was last opened under "new", before the day groups', () => {
+    const older = notice('Đã lưu', '2026-09-23T09:00:00.000Z');
+    const newer = notice('Đã tạo hội', '2026-09-23T10:00:00.000Z');
+    const newest = notice('Đã sao chép', '2026-09-23T11:00:00.000Z');
+    const rows = collapseNotices([newest, newer, older]);
+    expect(noticeGroupLabels(rows, older.id, 'New', () => 'Today')).toEqual(['New', 'New', 'Today']);
+    expect(noticeGroupLabels(rows, newest.id, 'New', () => 'Today')).toEqual(['Today', 'Today', 'Today']);
+    expect(noticeGroupLabels(rows, null, 'New', () => 'Today')).toEqual(['Today', 'Today', 'Today']);
   });
 });

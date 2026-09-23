@@ -897,6 +897,9 @@ button.notice-body { cursor:pointer; }
 .notice-count svg { transition:transform var(--motion-base) var(--ease-out); }
 .notice-body[aria-expanded=true] .notice-count svg { transform:rotate(180deg); }
 .notice-body time { flex-shrink:0; margin-top:1px; color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
+/* What arrived since the centre was last opened sits under "New" with a dot, until the centre closes (user, 2026-09-23). */
+.notice-new-dot { flex-shrink:0; width:7px; height:7px; margin-top:7px; border-radius:50%; background:var(--accent); }
+.notice.is-new .notice-message { font-weight:500; }
 /* The times of a folded row, indented past the icon so they read as part of the row above. */
 .notice-times { list-style:none; margin:0 0 6px; padding:0 10px 0 34px; display:flex; flex-wrap:wrap; gap:2px 12px; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
 .toaster { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:60; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; width:max-content; max-width:calc(100vw - 32px); }

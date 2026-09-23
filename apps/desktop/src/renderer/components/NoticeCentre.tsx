@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, CircleAlert, CircleCheck, Info, Trash } from 'lucide-react';
 import { Button, Drawer } from './ui';
-import { clearNotices, collapseNotices, markNoticesSeen, noticeKindNames, noticeKinds, useNotices, type NoticeKind, type NoticeRow } from './notifications';
+import { clearNotices, collapseNotices, markNoticesSeen, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, useNotices, type NoticeKind, type NoticeRow } from './notifications';
 import { clockLabel, dayLabel } from './TimeMark';
 import { t, tMessage } from '../i18n';
 
@@ -18,12 +18,23 @@ const kindIcons: Record<NoticeKind, typeof Info> = { error: CircleAlert, done: C
 export function NoticeCentre({ open, onClose }: { open: boolean; onClose: () => void }) {
   const notices = useNotices();
   const [kind, setKind] = useState<NoticeKind | 'all'>('all');
-  useEffect(() => { if (open) markNoticesSeen(); }, [open, notices.length]);
+  // What was unread when the centre opened stays marked as new until it closes, even though opening marks it seen.
+  const [newSince, setNewSince] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open) {
+      setNewSince(null);
+      return;
+    }
+    const seenBeforeOpening = noticesSeenAt();
+    setNewSince(current => current ?? seenBeforeOpening);
+    markNoticesSeen();
+  }, [open, notices.length]);
 
   const rows = useMemo(() => {
     const newestFirst = [...notices].reverse().filter(notice => kind === 'all' || notice.kind === kind);
     return collapseNotices(newestFirst);
   }, [notices, kind]);
+  const groupLabels = useMemo(() => noticeGroupLabels(rows, newSince, t('Mới'), dayLabel), [rows, newSince]);
   const counts = useMemo(() => {
     const total: Record<string, number> = { all: notices.length };
     for (const name of noticeKinds) total[name] = notices.filter(notice => notice.kind === name).length;
@@ -43,11 +54,12 @@ export function NoticeCentre({ open, onClose }: { open: boolean; onClose: () => 
       ? <p className="muted notice-empty">{notices.length === 0 ? t('Chưa có thông báo nào.') : t('Không có thông báo nào thuộc mục này.')}</p>
       : <ol className="notice-list">
         {rows.map((row, index) => {
-          const day = dayLabel(row.notice.at);
-          const newDay = index === 0 || dayLabel(rows[index - 1].notice.at) !== day;
-          return <li key={row.notice.id} className={`notice notice-${row.notice.kind}`}>
-            {newDay && <p className="notice-day">{day}</p>}
-            <NoticeItem row={row} />
+          const label = groupLabels[index];
+          const startsGroup = index === 0 || groupLabels[index - 1] !== label;
+          const isNew = newSince !== null && row.notice.id > newSince;
+          return <li key={row.notice.id} className={`notice notice-${row.notice.kind}${isNew ? ' is-new' : ''}`}>
+            {startsGroup && <p className="notice-day">{label}</p>}
+            <NoticeItem row={row} isNew={isNew} />
           </li>;
         })}
       </ol>}
@@ -58,7 +70,7 @@ export function NoticeCentre({ open, onClose }: { open: boolean; onClose: () => 
  * One row: the icon carries the kind's colour, the message reads in full, the line under it says what it was
  * about, and the time on the right is the latest. A repeated notice says how many times and opens to the times.
  */
-function NoticeItem({ row }: { row: NoticeRow }) {
+function NoticeItem({ row, isNew }: { row: NoticeRow; isNew: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = kindIcons[row.notice.kind];
   const repeated = row.count > 1;
@@ -71,6 +83,7 @@ function NoticeItem({ row }: { row: NoticeRow }) {
       </span>
       {row.notice.about && <span className="notice-about">{tMessage(row.notice.about)}</span>}
     </span>
+    {isNew && <span className="notice-new-dot" aria-hidden="true" />}
     <time dateTime={row.notice.at}>{clockLabel(row.notice.at)}</time>
   </>;
   if (!repeated) return <div className="notice-body">{content}</div>;
