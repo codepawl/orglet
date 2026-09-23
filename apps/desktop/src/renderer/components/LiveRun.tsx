@@ -66,19 +66,23 @@ function useElapsedSeconds(since: number) {
  * A worker's run as it happens: what it said it will do, and the answer appearing as it is written. What it is doing
  * now is the island, which sits on the prompt bar rather than here (COD-167, `islandOf` below and `IslandDock`). The
  * full step list, the timer and the worker's notes are the receipt, not the headline, so they sit behind one quiet
- * control below.
+ * control above the text, where the finished answer keeps its step line, so nothing appears under an answer that
+ * already reads as complete (COD-212). With no steps and no notes there is nothing to open, and the timer is the line.
  */
 export function LiveRun({ update }: { update: RunProgressUpdate }) {
   const progress = update.progress!;
   const answering = progress.answer.length > 0;
+  const hasReceipt = progress.activity.length > 0 || !!progress.thinking;
 
   return <div className="live-run">
+    {hasReceipt
+      ? <ActivityGroup steps={progress.activity}>
+        <ElapsedLine since={update.startedAt} />
+        {progress.thinking && <p className="activity-notes">{progress.thinking}</p>}
+      </ActivityGroup>
+      : <ElapsedLine since={update.startedAt} plain />}
     {progress.preamble && <Markdown className="prose" text={progress.preamble} />}
     {answering && <Markdown className="prose live-answer" text={progress.answer} />}
-    <ActivityGroup steps={progress.activity}>
-      <ElapsedLine since={update.startedAt} />
-      {progress.thinking && <p className="activity-notes">{progress.thinking}</p>}
-    </ActivityGroup>
   </div>;
 }
 
@@ -157,9 +161,10 @@ function doingBeforeStreaming({ stage, message, pausing }: { stage?: Run['stage'
   return thinkingDoing;
 }
 
-function ElapsedLine({ since }: { since: number }) {
+/** The live timer; `plain` is the line standing on its own above the text, in the folded control's place and colour. */
+function ElapsedLine({ since, plain }: { since: number; plain?: boolean }) {
   const seconds = useElapsedSeconds(since);
-  return <p className="activity-elapsed">{t('Đã chạy {0}s', [seconds])}</p>;
+  return <p className={plain ? 'activity-elapsed activity-elapsed-plain' : 'activity-elapsed'}>{t('Đã chạy {0}s', [seconds])}</p>;
 }
 
 const savedStepPatterns: { kind: ActivityKind; pattern: RegExp }[] = [

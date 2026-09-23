@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText, Check, RotateCcw, Reply, FolderOpen } from 'lucide-react';
-import type { Artifact, Run, TaskDetail, TaskStatus } from '../../shared/contracts';
+import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
 import type { SourceTarget } from './SourcePanel';
@@ -69,7 +69,7 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames }: { detail: TaskDetail; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
+export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames }: { detail: TaskDetail; /** The live workers and skills, so the app-change cards can name what an id or a same-reply ref points at (COD-212). */ workspace: Pick<Workspace, 'workers' | 'skills'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   const current = detail.task.inputRevision ?? 0;
@@ -247,7 +247,7 @@ export function TaskThread({ detail, recovery, action, showSources, reviewRecove
               ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {/* App changes this turn's workers proposed, each a card with what became of it; historical turns keep theirs. */}
-            <AppProposalCards proposals={detail.appProposals.filter(proposal => proposal.inputRevision === turn.revision)} actions={proposalActions} />
+            <AppProposalCards proposals={detail.appProposals.filter(proposal => proposal.inputRevision === turn.revision)} workers={workspace.workers} skills={workspace.skills} actions={proposalActions} />
             {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
               {/* A run refused by the unknown-outcome guard (COD-191) says what to do, not which guard fired: the
                   attempt to review sits in Details, and the button below opens it there. */}
