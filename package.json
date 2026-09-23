@@ -1,7 +1,7 @@
 {
   "name": "orglet",
   "productName": "Orglet",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "A local workspace for AI workers and teams",
   "private": true,
   "main": ".vite/build/main.js",
