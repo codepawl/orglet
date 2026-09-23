@@ -1592,7 +1592,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .chat-reply .prose { font-size:14px; line-height:1.6; }
 .chat-reply .prose h1,.chat-reply .prose h2,.chat-reply .prose h3 { font-size:1.06em; }
 /* The actions stay outside the bubble, so a copy button never has to decide whether it is part of the answer. */
-.chat-reply .message-actions { padding-left:2px; }
+.chat-reply .message-actions,.report-turn .message-actions { padding-left:2px; }
 /* A sent message's actions sit under its bubble like an answer's, lined up with the bubble's right edge. */
 .user-message + .message-actions { justify-content:flex-end; }
 /* A table header is drawn in --surface, which inside the bubble sits at nearly the same lightness as the wash:
@@ -1678,9 +1678,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .knowledge-author-text .muted { font-size:12px; }
 .knowledge-author-mark { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:11px; background:var(--surface); color:var(--muted); }
 .badge.pending { color:var(--working); }
-/* App-change proposal cards (COD-199): one quiet surface per proposal under the answer, indented like the reply.
-   The diff is a definition list, field on the left, value on the right, an arrow between before and after. */
-.app-proposals { display:flex; flex-direction:column; gap:10px; padding-left:35px; margin-top:14px; max-width:var(--bubble-max); }
+/* App-change proposal cards (COD-199): one quiet surface per proposal under the answer, inside the reply's own
+   inset (`.turn-after`, COD-217). The diff is a definition list, field on the left, value on the right, an arrow
+   between before and after. */
+.app-proposals { display:flex; flex-direction:column; gap:10px; margin-top:12px; max-width:var(--bubble-max); }
 .app-proposal { background:var(--surface); border-radius:12px; padding:14px 16px 12px; }
 .app-proposal h4 { font-size:14px; font-weight:600; margin:0; overflow-wrap:anywhere; }
 .app-proposal-changes { display:grid; grid-template-columns:minmax(96px, max-content) minmax(0, 1fr); gap:5px 14px; margin:10px 0 0; font-size:13px; line-height:1.5; }
@@ -1726,7 +1727,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .proposal-crew-lead { display:grid; place-items:center; width:100%; height:100%; border-radius:50%; background:var(--bg); color:var(--working); }
 .proposal-crew-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
 .proposal-crew-chips:empty { display:none; }
-@media(max-width:1000px) { .chat-reply,.app-proposals { padding-left:0; } .thread-usage { margin-left:0; } }
+@media(max-width:1000px) { .chat-reply,.report-turn,.assistant-message > .turn-after { padding-left:0; } .thread-usage { margin-left:0; } }
 /* The auto-apply switch sits under the chat permissions in the worker dialog, spaced as a second group. */
 .worker-auto-apply { margin-top:22px; }
 
@@ -1799,6 +1800,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 
 /* Documents: a file card in the chat that opens in a macOS-style viewer (Quick Look / Preview). */
 .report-file { display:flex; align-items:center; gap:12px; margin-left:35px; width:min(420px, calc(100% - 35px)); padding:10px 16px 10px 10px; border:1px solid var(--border); border-radius:12px; background:var(--bg); color:var(--text); text-align:left; }
+/* A report turn carries the reply's inset itself (COD-217), so its notices and action row line up with the card. */
+.report-turn { padding-left:35px; }
+.report-turn .report-file { margin-left:0; width:min(420px, 100%); }
 .report-file:hover { background:var(--row-hover); }
 .file-icon { display:grid; place-items:center; flex-shrink:0; width:40px; height:46px; border-radius:7px; background:var(--surface); color:var(--muted); }
 .file-text { display:flex; flex-direction:column; gap:2px; min-width:0; }
@@ -1948,8 +1952,18 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* The timer on its own, when a live run has no steps or notes to fold: the folded control's place and colour, no chevron. */
 .activity-elapsed-plain { display:flex; align-items:center; min-height:28px; padding-left:4px; font-size:13px; color:var(--muted); }
 .activity-notes { margin:0; max-height:220px; overflow-y:auto; line-height:1.6; white-space:pre-wrap; }
-.finished-activity { display:flex; flex-direction:column; align-items:flex-start; gap:2px; margin:0 0 6px 29px; }
-@media(max-width:1000px) { .finished-activity { margin-left:-6px; } }
+/* A turn's notices in the order they happened (COD-217, `turnNotices`): above the answer what was loaded before
+   writing (memories, the folded step line), under it what came out of it (changed files, proposal cards, then the
+   action row last). Both groups share the bubble's left inset; the 4px pull matches the folded control's own padding,
+   so its icon and the memory line's start on the bubble's edge. Small muted lines, told apart by spacing only. */
+.turn-before { display:flex; flex-direction:column; align-items:flex-start; gap:2px; margin:0 0 6px -4px; }
+.live-run .turn-before { margin-bottom:0; }
+.turn-after { display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
+.turn-after .changed-files { margin-left:-4px; }
+.turn-after > .changed-files:first-child { margin-top:6px; }
+.turn-after .app-proposals { align-self:stretch; }
+/* Without an answer of its own to sit in, the group takes the reply's inset itself. */
+.assistant-message > .turn-after { padding-left:35px; }
 /* What a run changed in its working copy (COD-163): the line under the step line opens the viewer, where the files are
    listed with their counts, then stacked with their hunks. Files are told apart by spacing and their heading, never by
    a rule; a hunk reuses the source-preview surface with the snapshot's and the copy's numbers side by side, a sign
@@ -2003,9 +2017,10 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .memory-edit { display:flex; flex-direction:column; gap:8px; }
 .memory-edit-actions { display:flex; align-items:center; gap:6px; }
 .memory-empty { margin:0; }
-/* Under an answer: which memories it was written with, folded behind one small line like the step count above it. */
-.used-memories { margin-top:8px; font-size:12px; color:var(--muted); }
-.used-memories summary { display:inline-flex; align-items:center; gap:5px; cursor:pointer; list-style:none; padding:2px 0; }
+/* Above an answer (COD-217): which memories it was written with, folded behind one small line like the step count
+   under it. The 4px side padding is the folded control's, so the two icons line up. */
+.used-memories { font-size:12px; color:var(--muted); }
+.used-memories summary { display:inline-flex; align-items:center; gap:5px; cursor:pointer; list-style:none; padding:2px 4px; }
 .used-memories summary::-webkit-details-marker { display:none; }
 .used-memories summary:hover { color:var(--text); }
 .used-memories ul { margin:6px 0 0; padding-left:18px; display:flex; flex-direction:column; gap:3px; }

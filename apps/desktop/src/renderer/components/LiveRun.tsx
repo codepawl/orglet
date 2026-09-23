@@ -7,6 +7,7 @@ import type { IslandState, IslandView } from './LiveIsland';
 import { Markdown } from './Markdown';
 import { orglet } from '../api';
 import { t } from '../i18n';
+import { turnNotices, type NoticedMemory } from './turnNotices';
 
 /** Live progress for each streaming run of one task, keyed by run ID. */
 export function useRunProgress(taskId: string) {
@@ -68,19 +69,23 @@ function useElapsedSeconds(since: number) {
  * full step list, the timer and the worker's notes are the receipt, not the headline, so they sit behind one quiet
  * control above the text, where the finished answer keeps its step line, so nothing appears under an answer that
  * already reads as complete (COD-212). With no steps and no notes there is nothing to open, and the timer is the line.
+ * `memories` are the ones frozen with the run's context, shown above the text as soon as the run row carries them,
+ * in the same slot the finished answer keeps them (COD-217).
  */
-export function LiveRun({ update }: { update: RunProgressUpdate }) {
+export function LiveRun({ update, memories }: { update: RunProgressUpdate; memories?: readonly NoticedMemory[] }) {
   const progress = update.progress!;
   const answering = progress.answer.length > 0;
   const hasReceipt = progress.activity.length > 0 || !!progress.thinking;
+  const activity = hasReceipt
+    ? <ActivityGroup key="activity" steps={progress.activity}>
+      <ElapsedLine since={update.startedAt} />
+      {progress.thinking && <p className="activity-notes">{progress.thinking}</p>}
+    </ActivityGroup>
+    : <ElapsedLine key="activity" since={update.startedAt} plain />;
+  const notices = turnNotices({ memories, activity });
 
   return <div className="live-run">
-    {hasReceipt
-      ? <ActivityGroup steps={progress.activity}>
-        <ElapsedLine since={update.startedAt} />
-        {progress.thinking && <p className="activity-notes">{progress.thinking}</p>}
-      </ActivityGroup>
-      : <ElapsedLine since={update.startedAt} plain />}
+    {notices.before}
     {progress.preamble && <Markdown className="prose" text={progress.preamble} />}
     {answering && <Markdown className="prose live-answer" text={progress.answer} />}
   </div>;
