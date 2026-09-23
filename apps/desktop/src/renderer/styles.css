@@ -336,7 +336,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
    grey. The bar with the count and the actions sits between the list and the footer, ending on the footer's
    right edge, a soft surface with a shadow and no line around it. */
 .section-heading .row-action[aria-pressed=true],.section-heading .row-action[aria-pressed=true]:hover:not(:disabled) { color:var(--text); background:var(--row-active); }
-.worker-row > .row-check { margin:0 3px 0 8px; }
+.worker-row > .row-check { flex:0 0 18px; gap:0; margin:0 3px 0 8px; }
 .worker-row > .row-check .checkbox-input { top:0; }
 .worker-row > .row-check .checkbox-box { margin-top:0; }
 .tree-item.selected .worker-row,.tree-item.selected .worker-row:hover { background:color-mix(in srgb, var(--accent) 14%, transparent); }
