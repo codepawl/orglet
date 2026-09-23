@@ -21,7 +21,7 @@ import type { ToolCapability } from '../../shared/tool-policy';
 import { PermissionControls } from './PermissionControls';
 import { WorkspaceRecovery, type ReadProcessOutput, type ReadPrivateFile, type RecoveryFocus } from './WorkspaceRecovery';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
-import { MessageActions } from './MessageActions';
+import { MessageActions, MessageBadges } from './MessageActions';
 import { focusMessage, reactionGroups } from './messageMarks';
 import { turnMessageId } from '../../shared/message-interactions';
 
@@ -316,12 +316,13 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           const sender = detail.runs.find(run => run.snapshot.worker.id === message.senderId)?.snapshot.worker.name ?? message.senderId;
           const recipient = detail.runs.find(run => run.snapshot.worker.id === message.recipientId)?.snapshot.worker.name ?? message.recipientId;
           const parent = detail.events.find(item => item.id === message.replyTo)?.teamMessage;
+          const reactionAction = (fn: () => Promise<unknown>) => { void fn().catch(error => toast(tMessage(String(error)), 'error', t('Tin của {0}', [sender]))); };
           return <div className="details-team-message" key={event.id} id={`message-${event.id}`} tabIndex={-1}>
             <p><strong>{sender}</strong> → {recipient} · {t(message.kind === 'question' ? 'Câu hỏi' : message.kind === 'response' ? 'Phản hồi' : message.kind === 'blocker' ? 'Điểm chặn' : 'Bàn giao')}</p>
             {parent && <p className="muted">{t('Trả lời tin: {0}', [parent.body.slice(0, 140)])}</p>}
             <p>{message.body}</p>
-            <MessageActions taskId={detail.task.id} messageId={event.id} author={sender} text={message.body}
-              reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={fn => { void fn().catch(error => toast(tMessage(String(error)), 'error', t('Tin của {0}', [sender]))); }} />
+            <MessageBadges taskId={detail.task.id} messageId={event.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} align="inline" action={reactionAction} />
+            <MessageActions taskId={detail.task.id} messageId={event.id} author={sender} text={message.body} reactions={detail.task.messageReactions ?? []} action={reactionAction} />
           </div>;
         })}
       </Section>}
