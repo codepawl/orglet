@@ -56,6 +56,7 @@ import { orglet } from './api';
 import type { NewChatTarget, WorkspaceGrantView } from '../shared/workspace-access';
 import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { permissionsForLevel, type WorkspaceLevel } from '../shared/capability-status';
+import { appView, createHistory, recordView, replaceView, stepHistory, useNavigationInput, viewKey, type AppView, type NavigationDirection, type NavigationHistory } from './navigation';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -188,6 +189,10 @@ export function App() {
   const [dismissedCatchUpNotice, setDismissedCatchUpNotice] = useState('');
   const composer = useRef<HTMLTextAreaElement>(null); const refreshId = useRef(0);
   const bootedLiveThread = useRef(false);
+  // Where the user has been (COD-202). A view the app shows on its own, or one a step restored, rewrites the current
+  // entry instead of adding one, so a step is only ever something the user did.
+  const viewHistory = useRef<NavigationHistory<AppView> | undefined>(undefined);
+  const replaceNextView = useRef(false);
   /** Stamps from core + localStorage; renderer HMR can update before the core utility process restarts. */
   const seenInfo = useRef<Record<string, SeenInfo>>(readSeenStorage());
   const rememberSeen = useCallback((id: string, info: SeenInfo) => {
@@ -376,7 +381,7 @@ export function App() {
     bootedLiveThread.current = true;
     if (selected || teamId) return;
     const live = liveWorkerTask(workspace.tasks, workerId);
-    if (live) openTask(live.id);
+    if (live) { replaceNextView.current = true; openTask(live.id); }
   }, [workspace, selected, teamId, workerId]);
   /** Runs one command and shows its failure in the banner; `about` names what it concerned for the notice centre. */
   const action = (fn: () => Promise<unknown>, about?: string) => {
@@ -458,6 +463,75 @@ export function App() {
   };
   const close = () => { setPanel(null); void refresh(); };
   const openRoutines = (view: RoutineView = { editing: false }) => { setRoutineDraft(undefined); setRoutineView(view); setPanel('routines'); };
+  // Back and forward through what was opened (COD-202). The view is read off the state each render, so whatever
+  // changed it is the step; a data refresh changes none of these fields and records nothing.
+  const view = appView({ chat: selected, recipient: recipientValue, panel, settingsTab, libraryTab, fromLibrary, skillId: editingSkill?.id, knowledgeId: editingKnowledge?.id, workerId: editingWorker?.id, teamId: editingTeam?.id, taskId: editingTask, routineEditing: routineView.editing, routineId: routineView.editing ? routineView.routine?.id : undefined, noticesOpen, sourceId: viewingSource?.id });
+  const viewId = viewKey(view);
+  useEffect(() => {
+    if (!workspace) return;
+    if (!viewHistory.current) { viewHistory.current = createHistory(view, viewKey); return; }
+    if (replaceNextView.current) { replaceNextView.current = false; viewHistory.current = replaceView(viewHistory.current, view); return; }
+    viewHistory.current = recordView(viewHistory.current, view);
+  }, [viewId, Boolean(workspace)]);
+  /** A step is skipped when what it showed has since been deleted. */
+  const viewExists = (target: AppView): boolean => {
+    if (!workspace) return false;
+    if (target.chat) return workspace.tasks.some(task => task.id === target.chat && !task.deletedAt);
+    if (target.recipient) {
+      const known = target.recipient.startsWith('team:') ? workspace.teams.some(item => `team:${item.id}` === target.recipient) : workspace.workers.some(item => item.id === target.recipient);
+      if (!known) return false;
+    }
+    if (!target.item) return true;
+    switch (target.panel) {
+      case 'skill': return workspace.skills.some(item => item.id === target.item);
+      case 'knowledge': return workspace.knowledge.some(item => item.id === target.item);
+      case 'worker': return [...workspace.workers, ...workspace.archivedWorkers].some(item => item.id === target.item);
+      case 'team': return [...workspace.teams, ...workspace.archivedTeams].some(item => item.id === target.item);
+      case 'task': return workspace.tasks.some(item => item.id === target.item);
+      case 'routines': return workspace.routines.some(item => item.id === target.item);
+      default: return true;
+    }
+  };
+  const showView = (target: AppView) => {
+    if (!workspace) return;
+    if (target.chat) { if (target.chat !== selected) openTask(target.chat); }
+    else if (selected || target.recipient !== recipientValue) {
+      // The empty chat of that worker or team; if it has a live thread by now, that thread opens and the entry is rewritten.
+      if (target.recipient.startsWith('team:')) openTeam(target.recipient.slice('team:'.length));
+      else if (target.recipient) openWorker(target.recipient);
+      else leaveThread();
+    }
+    setPanel(target.panel as Panel);
+    switch (target.panel) {
+      case 'settings': setSettingsTab(target.tab as SettingsTab); break;
+      case 'library': setLibraryTab(target.tab as 'skills' | 'knowledge'); break;
+      case 'skill': setFromLibrary(Boolean(target.fromLibrary)); setEditingSkill(workspace.skills.find(item => item.id === target.item)); break;
+      case 'knowledge': setFromLibrary(Boolean(target.fromLibrary)); setEditingKnowledge(workspace.knowledge.find(item => item.id === target.item)); break;
+      case 'worker': setEditingWorker([...workspace.workers, ...workspace.archivedWorkers].find(item => item.id === target.item)); break;
+      case 'team': setEditingTeam([...workspace.teams, ...workspace.archivedTeams].find(item => item.id === target.item)); break;
+      case 'task': setEditingTask(target.item); break;
+      case 'routines': setRoutineDraft(undefined); setRoutineView(target.editing ? { editing: true, routine: workspace.routines.find(item => item.id === target.item) } : { editing: false }); break;
+      default: break;
+    }
+    setNoticesOpen(Boolean(target.notices));
+    setViewingSource(target.source ? { id: target.source } : undefined);
+  };
+  const stepView = (direction: NavigationDirection) => {
+    if (!viewHistory.current) return;
+    const moved = stepHistory(viewHistory.current, direction, viewExists);
+    if (!moved) return;
+    const go = () => {
+      viewHistory.current = moved.history;
+      // Nothing re-renders when the step shows what is already on screen, so nothing would clear the flag.
+      replaceNextView.current = viewKey(moved.view) !== viewId;
+      showView(moved.view);
+    };
+    // Leaving an edited schedule asks the same question every other way out does.
+    const staysInRoutineEditor = moved.view.panel === 'routines' && moved.view.editing && moved.view.item === view.item;
+    if (panel === 'routines' && routineView.editing && !staysInRoutineEditor) void leaveRoutine(go);
+    else go();
+  };
+  useNavigationInput(stepView, window.orglet?.onNavigate);
   const teamOrder = useReorder(workspace?.teams.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'teams', ids })));
   const workerOrder = useReorder(workspace?.workers.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'workers', ids })));
   const deleteTask = (taskId: string) => action(async () => {

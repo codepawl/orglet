@@ -49,6 +49,8 @@ On first launch the window is US English. A **Researcher** worker is already the
 
 To change language: **Settings** → **General** → **Language** (English (US), English (UK), or Tiếng Việt). To switch light or dark: **Settings** → **General** → **Appearance**.
 
+The side buttons on a mouse, or Alt+Left and Alt+Right, go back and forward through the chats and panels you opened, like a browser.
+
 ## 3. Send a Demo message
 
 1. Click **Researcher** in the sidebar.

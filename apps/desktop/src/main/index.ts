@@ -147,6 +147,12 @@ async function start() {
   const devServer = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL) : undefined;
   window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // A mouse's side button over the page reaches the renderer as a mouse event; over the window frame, or from a
+  // driver that sends the command itself, it arrives here as an app command instead (COD-202). Windows and Linux only.
+  window.on('app-command', (_event, command) => {
+    if (command !== 'browser-backward' && command !== 'browser-forward') return;
+    if (window && !window.isDestroyed()) window.webContents.send('orglet:navigate', command === 'browser-backward' ? 'back' : 'forward');
+  });
   window.webContents.on('will-navigate', event => {
     try {
       const target = new URL(event.url);
