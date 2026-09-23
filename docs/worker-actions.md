@@ -49,8 +49,9 @@ The live words come from `ActivityKind` in `shared/progress.ts` and the sentence
 
 ## Afterwards
 
-- **The step line** stays above the answer (`FinishedActivity` in `TaskThread`), built from the events the core saved (*Đã đọc …*, *Đã tìm …*, *Đã liệt kê tệp …*). It is folded; opening it lists the steps with their targets.
-- **The changed-files line** sits under the step line when the run changed files in its working copy: **Đã thay đổi 3 tệp · +42 −7** (`ChangedFilesLine`). It opens the diff viewer. Nothing is shown when nothing changed. In a crew turn each member's line is named ("Writer đã thay đổi 2 tệp · +10 −1"), because each member works in its own copy.
+- **The order** ([COD-217](https://linear.app/codepawl/issue/COD-217)): everything attached to one turn reads in the order it happened. Above the answer, what the run loaded before writing: the memories it used (*Đã dùng 1 ghi nhớ*), then the folded step line. Under it, what came out of the answer: the changed-files line, the proposal cards (self-improvements included), and last the copy / download / reply / react row. The same order holds while the answer streams, and a group-chat reply keeps its own notices with its own bubble. `turnNotices` in `renderer/components/turnNotices.tsx` is the one place that knows this order; a new notice goes into its slot there.
+- **The step line** stays above the answer, built from the events the core saved (*Đã đọc …*, *Đã tìm …*, *Đã liệt kê tệp …*). It is folded; opening it lists the steps with their targets.
+- **The changed-files line** sits under the answer when the run changed files in its working copy: **Đã thay đổi 3 tệp · +42 −7** (`ChangedFilesLine`). It opens the diff viewer. Nothing is shown when nothing changed. In a crew turn each member's line is named ("Writer đã thay đổi 2 tệp · +10 −1"), because each member works in its own copy.
 - **Commands** are summed in the turn's outcome line ("Lệnh: 2 thoát 0, 1 lỗi"), with their output under **Details**.
 - **A report** arrives as a `DocumentCard` that opens in `DocumentViewer`, never poured into the chat.
 - **What is kept**: the saved events, the answer or report, the working copy's counts (`WorkspaceRecoveryView.copies[].diff`), and the copy itself on disk until the chat is deleted, so the diff can be opened later. Thinking and the live progress are not kept.
@@ -59,7 +60,7 @@ The live words come from `ActivityKind` in `shared/progress.ts` and the sentence
 
 The diff is the first piece built against this page, because nothing showed one before.
 
-- **Entry point.** The changed-files line under the answer's step line. It is the only place; there is no diff in the report and no diff in the island.
+- **Entry point.** The changed-files line under the answer. It is the only place; there is no diff in the report and no diff in the island.
 - **Viewer.** `DiffViewer` (`renderer/components/DiffViewer.tsx`) opens like `SourceViewer`: close on the left, "Thay đổi của Scout" and "3 tệp · +42 −7" in the middle, the info button on the right. Inside: the list of changed files with their counts, then each file with its hunks, the snapshot's and the copy's line numbers side by side, removed lines tinted in the error colour and added lines in the success colour, with the same tokenizer as every other code view (`highlight.ts`). It is read-only. Applying, keeping current files and conflicts stay in **Details** (`WorkspaceRecovery`).
 - **Source.** The `workspaceDiff` command (`shared/contracts.ts`, handled in `core/service.ts` → `WorkspaceRuntime.diff`) compares the run's working copy with the `orglet-snapshot` commit the copy started from (`core/tools/workspace-diff.ts`). Only a copy of a Git repository has that snapshot, so only those runs can be diffed; a plain folder copy answers with a clear message. The comparison runs Git with the same isolation as the copy itself: no user config, no hooks, no filters, no line-ending conversion, and Git never walks the copy. The paths come from the same inventory the snapshot used, so a link a worker planted cannot lead outside the copy.
 - **Limits.** Binary files are listed without content. One file shows at most 2,000 hunk lines, the whole diff at most 10,000, and Git output stops at 4 MiB; anything past a cap is marked, never silently dropped. What the inventory skips (`.git`, `node_modules`, links) is not in the diff, and a copy holding a file over 1 MiB cannot be inventoried at all, so it cannot be diffed.
@@ -79,7 +80,7 @@ Built in COD-163:
 
 - The `workspaceDiff` command and `WorkspaceRuntime.diff`, with tests on a real Git worktree (modified, added, deleted, renamed and binary files; the caps; hooks and filters not run; a run without a copy refused).
 - The counts kept with the copy when a run finishes, exposed on the recovery view.
-- `DiffViewer`, `DiffDialog` and `ChangedFilesLine`, and the line's place under the step line in `TaskThread`.
+- `DiffViewer`, `DiffDialog` and `ChangedFilesLine`, and the line's place under the answer (`turnNotices`) in `TaskThread`.
 
 Later:
 

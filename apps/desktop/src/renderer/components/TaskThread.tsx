@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, Brain } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -33,6 +33,11 @@ import { groupRecoveryAttempts } from '../../shared/recovery-attempts';
 import { AppProposalCards, type ProposalActions } from './AppProposals';
 import { ChangedFilesLine, DiffDialog } from './DiffViewer';
 import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
+import type { AppProposal } from '../../shared/app-proposals';
+import { turnNotices } from './turnNotices';
+
+/** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
+type TurnNotices = ReturnType<typeof turnNotices>;
 
 /** The runs of a turn that changed files in their working copy, with the counts the core kept (COD-163). */
 export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecoveryView | undefined): { run: Run; summary: WorkspaceDiffSummary }[] {
@@ -169,6 +174,38 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   const bylineClass = (author?: Run, working = false) => working ? 'message-byline working' : author && landed(author) ? 'message-byline landed' : 'message-byline';
   const byline = (author?: Run, working = false) => <div className={bylineClass(author, working)}>{/* Agent marks sit left of the name. */}{author ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} /> : <span className="orglet-mark small">o</span>}<strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author && bylineRole(author)}{author && <span className="byline-provider">{providerName(author.snapshot.worker.provider)}</span>}</div>;
 
+  // One line per run of the turn that changed files in its working copy (COD-163); `named` says whose line carries
+  // the worker's name. Each opens the diff viewer.
+  const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary }) =>
+    <ChangedFilesLine key={run.id} summary={summary} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => setDiffRun(run)} />);
+  // The cards for app changes the workers proposed, each with what became of it; historical turns keep theirs.
+  const proposalCards = (proposals: AppProposal[]) => proposals.length > 0
+    ? <AppProposalCards key="proposals" proposals={proposals} workers={workspace.workers} skills={workspace.skills} tasks={workspace.tasks} actions={proposalActions} />
+    : undefined;
+  /**
+   * One worker's answer with every notice in its slot (COD-217, the order lives in `turnNotices`). `runs` are the runs
+   * whose changes belong with this answer: a crew turn's members each work in their own copy, so their lines are
+   * named, while the author's own line is not. `proposals` are the cards this answer's run proposed.
+   */
+  const answer = (artifact: Artifact, author: Run | undefined, runs: readonly Run[], proposals: AppProposal[], latest: boolean) => {
+    const authorName = author?.snapshot.worker.name ?? 'Orglet';
+    const chat = artifact.report.format === 'chat';
+    const steps = savedSteps(detail.events, artifact.runId);
+    const notices = turnNotices({
+      memories: artifact.usedMemories,
+      activity: steps.length > 0 ? <ActivityGroup key="activity" steps={steps} /> : undefined,
+      changes: changedFilesLines(runs, run => run.id !== artifact.runId),
+      proposals: proposalCards(proposals),
+      // A chat answer copies and downloads from its row; a report keeps those in its viewer's toolbar.
+      actions: <MessageActions key="actions" taskId={detail.task.id} messageId={artifact.id} author={authorName} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action}
+        text={chat ? tMessage(artifact.report.summary) : tMessage(artifact.report.title)}
+        leading={chat ? <ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [authorName])} action={action} /> : undefined} />,
+    });
+    return chat
+      ? <ChatReply artifact={artifact} notices={notices} />
+      : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} />;
+  };
+
   return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
     <div className="thread-content">
       {turns.map((turn, index) => {
@@ -197,6 +234,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         // explanation just below, so it is quiet here too.
         const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
         const previousSentAt = turns[index - 1]?.sentAt;
+        // A group-chat reply carries the cards its own run proposed; the rest of the turn's cards sit with the turn.
+        const turnProposals = detail.appProposals.filter(proposal => proposal.inputRevision === turn.revision);
+        const replyRunIds = new Set(turn.replies.map(reply => reply.run.id));
+        const remainingProposals = turnProposals.filter(proposal => !replyRunIds.has(proposal.runId));
+        const answered = !!turn.artifact && !turn.replies.length;
         return <div className="chat-turn" key={turn.revision}>
           {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
@@ -216,10 +258,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
           {latest && outcomeText && <p className="muted" role="status">{outcomeText}</p>}
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
-            <FinishedActivity steps={savedSteps(detail.events, reply.run.id)} changes={changedFilesOf([reply.run], recovery)} onOpenDiff={setDiffRun} />
-            {reply.artifact.report.format === 'chat'
-              ? <ChatReply artifact={reply.artifact} author={reply.run.snapshot.worker.name} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
-              : <ReportView artifact={reply.artifact} author={reply.run} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />}
+            {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest)}
           </section>)}
           {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
             {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
@@ -250,19 +289,16 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
                 </details> : <p className="muted" key={run.id}>{status} · {description}</p>;
               })}
             </div>}
-            {latest && busy && liveUpdate && <LiveRun update={liveUpdate} />}
+            {latest && busy && liveUpdate && <LiveRun update={liveUpdate} memories={live?.run.snapshot.context?.memories} />}
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
             {!turn.artifact && !turn.replies.length && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
-            {/* A team turn's members each work in their own copy, so their changes are named; a lone worker's are not. */}
-            {!turn.replies.length && <FinishedActivity steps={turn.artifact ? savedSteps(detail.events, turn.artifact.runId) : []}
-              changes={changedFilesOf(turn.runs, recovery)} named={run => run.id !== turn.artifact?.runId} onOpenDiff={setDiffRun} />}
-            {turn.artifact && !turn.replies.length && (turn.artifact.report.format === 'chat'
-              ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
-              : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
-            {/* App changes this turn's workers proposed, each a card with what became of it; historical turns keep theirs. */}
-            <AppProposalCards proposals={detail.appProposals.filter(proposal => proposal.inputRevision === turn.revision)} workers={workspace.workers} skills={workspace.skills} tasks={workspace.tasks} actions={proposalActions} />
+            {answered
+              ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest)
+              /* No answer of its own to hang them on (still running, failed, or a group turn whose replies carry
+                 theirs), so what the turn's runs produced still reads in the same order under the turn. */
+              : turnNotices({ changes: turn.replies.length ? undefined : changedFilesLines(turn.runs, () => true), proposals: proposalCards(remainingProposals) }).after}
             {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
               {/* A run refused by the unknown-outcome guard (COD-191) says what to do, not which guard fired: the
                   attempt to review sits in Details, and the button below opens it there. */}
@@ -283,40 +319,20 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   </div>;
 }
 
-/** A normal chat answer: the message, with copy and export tucked into a quiet row. */
 /**
- * The folded "Read 2 files" line above a finished answer, and under it one line per run that changed files in its
- * working copy (COD-163); nothing when the worker read, searched and changed nothing.
+ * A normal chat answer: the message as a bubble, its limitations, and the turn's notices around it in their order
+ * (COD-217): what was loaded before writing above, what came out of it and the action row below.
  */
-function FinishedActivity({ steps, changes, named, onOpenDiff }: { steps: ReturnType<typeof savedSteps>; changes: ReturnType<typeof changedFilesOf>; named?: (run: Run) => boolean; onOpenDiff: (run: Run) => void }) {
-  if (steps.length === 0 && changes.length === 0) return null;
-  return <div className="finished-activity">
-    {steps.length > 0 && <ActivityGroup steps={steps} />}
-    {changes.map(({ run, summary }) => <ChangedFilesLine key={run.id} summary={summary} workerName={named?.(run) ? run.snapshot.worker.name : undefined} onOpen={() => onOpenDiff(run)} />)}
-  </div>;
-}
-
-function ChatReply({ artifact, author, taskId, reactions, runs, action }: { artifact: Artifact; author: string; taskId: string; reactions: NonNullable<TaskDetail['task']['messageReactions']>; runs: readonly Run[]; action: (fn: () => Promise<unknown>) => void }) {
+function ChatReply({ artifact, notices }: { artifact: Artifact; notices: TurnNotices }) {
   return <div className="chat-reply">
+    {notices.before}
     <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={tMessage(artifact.report.summary)} /></div>
     {artifact.report.limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
     </div>}
-    <UsedMemories artifact={artifact} />
-    <MessageActions taskId={taskId} messageId={artifact.id} author={author} text={tMessage(artifact.report.summary)} reactions={reactions} runs={runs} action={action}
-      leading={<ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [author])} action={action} />} />
+    {notices.after}
   </div>;
-}
-
-/** Which memories an answer was written with (COD-161): one small line that opens the list, the way sources are named. */
-function UsedMemories({ artifact }: { artifact: Artifact }) {
-  const memories = artifact.usedMemories ?? [];
-  if (!memories.length) return null;
-  return <details className="used-memories">
-    <summary><Brain size={13} aria-hidden="true" />{t('Đã dùng {0} ghi nhớ', [memories.length])}</summary>
-    <ul>{memories.map(memory => <li key={memory.id}>{memory.text}</li>)}</ul>
-  </details>;
 }
 
 /**
@@ -345,7 +361,7 @@ function ArtifactActions({ artifactId, about, action }: { artifactId: string; ab
  * A structured report is sent like a file a colleague attaches (user decision 2026-09-17): a quiet file card in the chat
  * that opens in a macOS-style document viewer. The Demo sample has no summary worth showing, only its limits.
  */
-function ReportView({ artifact, author, latest, busy, detail, action, showSources }: { artifact: Artifact; author?: Run; latest: boolean; busy: boolean; detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void }) {
+function ReportView({ artifact, author, latest, busy, detail, action, showSources, notices }: { artifact: Artifact; author?: Run; latest: boolean; busy: boolean; detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; notices: TurnNotices }) {
   const [open, setOpen] = useState(false);
   const report = artifact.report;
   const sample = author?.snapshot.worker.provider === 'demo';
@@ -355,9 +371,10 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   // Evidence links leave the document for the sources panel.
   const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
   return <>
-    <div id={`message-${artifact.id}`} tabIndex={-1}><DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
-      <UsedMemories artifact={artifact} />
-      <MessageActions taskId={detail.task.id} messageId={artifact.id} author={author?.snapshot.worker.name ?? 'Orglet'} text={name} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
+    <div className="report-turn" id={`message-${artifact.id}`} tabIndex={-1}>
+      {notices.before}
+      <DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />
+      {notices.after}
     </div>
     <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}

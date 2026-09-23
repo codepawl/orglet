@@ -40,7 +40,7 @@ A memory is written the moment the tool runs, not when the run ends. A colleague
 
 Before its first request, a run freezes the active memories of its worker, its team (when running for one) and the workspace: pinned first, then newest, up to 30 lines and 6 000 characters. A line a note already says is skipped. They go to the model as one message after the approved notes, labelled as guidance, not source evidence, not instructions, and unable to grant permissions or override policy. **Details → Context loaded** lists each one under *Memory* and names the ones left out as duplicates or over the limit.
 
-Under the answer, one small line says **Used N memories** and opens the list, the way sources are named. The list is frozen on the answer (`usedMemories` on the artifact), so it still shows what the worker knew after a memory is edited or deleted. A later edit only reaches the next run.
+Above the answer, since the memories are loaded before the worker writes ([COD-217](https://linear.app/codepawl/issue/COD-217)), one small line says **Memories used: N** and opens the list, the way sources are named. It shows there as soon as the run has frozen its context, while the answer is still streaming. The list is frozen on the answer (`usedMemories` on the artifact), so it still shows what the worker knew after a memory is edited or deleted. A later edit only reaches the next run.
 
 ## Where you see and edit memory
 
