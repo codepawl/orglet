@@ -16,7 +16,10 @@ type ReactionProps = {
   action: (fn: () => Promise<unknown>) => void;
 };
 
-const options = reactionOrder.map(name => ({ name, emoji: reactionEmoji[name], meaning: reactionMeanings[name] }));
+/** Built at render, not at import: the meanings are translated, and the language can change after the module loads. */
+function reactionOptions() {
+  return reactionOrder.map(name => ({ name, emoji: reactionEmoji[name], meaning: reactionMeanings[name] }));
+}
 
 function useReactionPick({ taskId, messageId, reactions, action }: ReactionProps) {
   const current = userReactionOn(reactions, messageId);
@@ -40,7 +43,7 @@ export function MessageActions({ taskId, messageId, author, text, reactions, act
   return <div className="message-actions">
     {leading}
     <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(taskId, messageId, author, text)}><Reply size={15} /></Button>
-    <ReactionBar options={options} picked={current} onPick={pick} />
+    <ReactionBar options={reactionOptions()} picked={current} onPick={pick} />
   </div>;
 }
 
