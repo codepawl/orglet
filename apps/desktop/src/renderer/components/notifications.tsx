@@ -74,6 +74,11 @@ export function useUnreadNotices() {
   return useSyncExternalStore(subscribe, () => notices.filter(notice => notice.id > seenAt).length, () => 0);
 }
 
+/** The newest notice already seen, read before the centre marks everything seen so it can tell new rows from old. */
+export function noticesSeenAt() {
+  return seenAt;
+}
+
 export function markNoticesSeen() {
   const newest = notices.at(-1)?.id ?? 0;
   if (newest === seenAt) return;
@@ -113,4 +118,12 @@ export function collapseNotices(newestFirst: Notice[]): NoticeRow[] {
     rows.push({ notice, count: 1, times: [notice.at] });
   }
   return rows;
+}
+
+/**
+ * The heading each row sits under: "new" for what arrived since the centre was last opened, then the day for the
+ * rest, so a new notice never hides among old ones (user, 2026-09-23). Rows are newest first, so new ones lead.
+ */
+export function noticeGroupLabels(rows: NoticeRow[], newSince: number | null, newLabel: string, dayOf: (iso: string) => string) {
+  return rows.map(row => newSince !== null && row.notice.id > newSince ? newLabel : dayOf(row.notice.at));
 }
