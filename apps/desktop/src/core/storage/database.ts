@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
-import type { Artifact, Activity, Run, Skill, Task, TaskStatus, Worker, Team, Workspace, Usage, TaskDetail, Source, EntityState, BudgetReservationView } from '../../shared/contracts';
+import type { Artifact, Activity, Run, RunErrorCode, Skill, Task, TaskStatus, Worker, Team, Workspace, Usage, TaskDetail, Source, EntityState, BudgetReservationView } from '../../shared/contracts';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import type { ProfileRecord } from '../../shared/profiles';
@@ -10,7 +10,7 @@ import { usdCurrency } from '../../shared/currency';
 import type { ToolCapability } from '../../shared/tool-policy';
 import type { WorkspacePermission } from '../../shared/workspace-access';
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export class Store {
@@ -117,6 +117,15 @@ export class Store {
         data TEXT NOT NULL,
         UNIQUE(run_id,call_id)
       ); INSERT OR IGNORE INTO migrations VALUES (13);`);
+      // What an unknown call was, so Details can name it instead of showing its id (COD-191). Older rows keep NULLs.
+      // Each column is added only when missing, so a database rolled back past this version migrates again cleanly.
+      if (!this.db.prepare('SELECT version FROM migrations WHERE version=14').get()) {
+        const present = new Set(this.db.prepare('PRAGMA table_info(tool_calls)').all().map(row => String(row.name)));
+        for (const column of ['name', 'summary', 'started_at']) {
+          if (!present.has(column)) this.db.exec(`ALTER TABLE tool_calls ADD COLUMN ${column} TEXT`);
+        }
+        this.db.exec('INSERT INTO migrations VALUES (14)');
+      }
       this.db.prepare(`INSERT OR IGNORE INTO reservation_reviews (reservation_id,reason,noted_at)
         SELECT id,'legacy',? FROM reservations WHERE state='unknown'`).run(now());
     });
@@ -179,10 +188,10 @@ export class Store {
     this.update('tasks', { ...task, ...patch });
     return this.get<Task>('tasks', taskId);
   }
-  status(taskId: string, runId: string, status: TaskStatus, error: string | null = null) {
+  status(taskId: string, runId: string, status: TaskStatus, error: string | null = null, errorCode?: RunErrorCode) {
     this.transaction(() => {
       this.put('tasks', { ...this.get<Task>('tasks', taskId), status });
-      this.put('runs', { ...this.get<Run>('runs', runId), status, error }, { column: 'task_id', value: taskId });
+      this.put('runs', { ...this.get<Run>('runs', runId), status, error, errorCode }, { column: 'task_id', value: taskId });
     });
   }
   usage(taskId?: string): Usage {

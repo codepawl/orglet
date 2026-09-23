@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { StartWorkspaceProcess, WorkspaceProcess, describeCommand } from '../../shared/workspace-processes';
 import { Store, id } from '../storage/database';
-import { ToolCalls } from '../storage/tool-calls';
+import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
 
 type ActiveProcess = { runId: string; controller: AbortController; done: Promise<void> };
@@ -31,7 +31,7 @@ export class WorkspaceProcesses {
 
   assertKnown(taskId: string) {
     if (this.records(taskId).some(process => process.state === 'uncertain' && !this.store.setting(`workspace-retired:${process.runId}`, null))) {
-      throw new Error('Tiến trình bị gián đoạn chưa rõ kết quả; cần kiểm tra bản làm việc.');
+      throw new UnresolvedAttemptError('Tiến trình bị gián đoạn chưa rõ kết quả; cần kiểm tra bản làm việc.');
     }
   }
 

@@ -55,7 +55,8 @@ export class WorkspaceRecovery {
       WHERE runs.task_id=? ORDER BY copies.rowid DESC LIMIT 101`).all(taskId);
     const processes = this.store.db.prepare(`SELECT processes.data FROM workspace_processes processes JOIN runs ON runs.id=processes.run_id
       WHERE runs.task_id=? ORDER BY processes.rowid DESC LIMIT 101`).all(taskId);
-    const calls = this.store.db.prepare(`SELECT calls.run_id AS runId,calls.call_id AS callId,calls.replay FROM tool_calls calls
+    const calls = this.store.db.prepare(`SELECT calls.run_id AS runId,calls.call_id AS callId,calls.replay,
+      calls.name AS tool,calls.summary,calls.started_at AS at FROM tool_calls calls
       JOIN runs ON runs.id=calls.run_id WHERE runs.task_id=? AND calls.state='uncertain' ORDER BY calls.rowid DESC LIMIT 101`).all(taskId);
     const runIds = new Set([...copies.map(row => JSON.parse(String(row.data)).runId as string),
       ...processes.map(row => WorkspaceProcess.parse(JSON.parse(String(row.data))).runId), ...calls.map(row => String(row.runId))]);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Check, RotateCcw, Reply } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -28,6 +28,7 @@ import type { MentionPerson } from '../../shared/mentions';
 import { teamProgress } from '../../shared/team-progress';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { workOutcomes } from '../../shared/work-outcomes';
+import { groupRecoveryAttempts } from '../../shared/recovery-attempts';
 
 /**
  * What this worker was doing for the team on this turn: assigning the work, doing a share of it, or combining the
@@ -51,7 +52,7 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, recovery, action, showSources, openMessage, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
+export function TaskThread({ detail, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, mentionPeople, mentionAllNames }: { detail: TaskDetail; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   const current = detail.task.inputRevision ?? 0;
@@ -214,8 +215,14 @@ export function TaskThread({ detail, recovery, action, showSources, openMessage,
               ? <ChatReply artifact={turn.artifact} author={turn.author?.snapshot.worker.name ?? 'Orglet'} taskId={detail.task.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} />
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {latest && turn.artifact && proposals.length > 0 && <section className="knowledge-proposals" aria-label={t('Đề xuất knowledge')}><h3>{t('Đề xuất lưu thành knowledge')}</h3><p className="muted">{t('Chỉ được dùng cho lần chạy sau khi bạn duyệt.')}</p><div className="source-links">{proposals.map(item => <Button key={item.id} onClick={() => openKnowledge(item)}>{item.title}</Button>)}</div></section>}
-            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3><p>{unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p></div>}
+            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
+              {/* A run refused by the unknown-outcome guard (COD-191) says what to do, not which guard fired: the
+                  attempt to review sits in Details, and the button below opens it there. */}
+              <p>{unresolvedError.errorCode === 'unresolved_attempt' ? t('Một thay đổi file trước đó chưa rõ kết quả. Kiểm tra trong Chi tiết rồi giữ file hiện tại, sau đó Tí mới ghi tiếp được.')
+                : unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p>
+            </div>}
             {latest && <div className="actions">
+              {!busy && unresolvedError?.errorCode === 'unresolved_attempt' && reviewRecovery && <Button variant="primary" onClick={() => reviewRecovery(groupRecoveryAttempts(recovery, detail.runs).blocking?.runId)}><FolderOpen size={16} />{t('Xem trong Chi tiết')}</Button>}
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
               {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}
             </div>}

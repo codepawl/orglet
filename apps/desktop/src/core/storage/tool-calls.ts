@@ -1,7 +1,18 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { Store } from './database';
+import { Store, now } from './database';
 import { WorkspaceRecovery } from './workspace-recovery';
+import { describeToolCallArguments } from '../../shared/workspace-recovery';
+import type { RunErrorCode } from '../../shared/contracts';
+
+/**
+ * An earlier attempt in this chat holds an effect whose outcome is unknown: a write, a command or a working copy
+ * that was interrupted. The chat cannot write again until that attempt is reviewed and retired, so the run that
+ * hits this fails with a code the chat can point at (COD-191) instead of only a sentence.
+ */
+export class UnresolvedAttemptError extends Error {
+  readonly code: RunErrorCode = 'unresolved_attempt';
+}
 
 const RecordedCall = z.object({
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
@@ -24,7 +35,7 @@ export class ToolCalls {
       AND NOT EXISTS (SELECT 1 FROM settings WHERE id='workspace-retired:' || previous.run_id)
       LIMIT 1
     `).get(runId);
-    if (unresolved) throw new Error('Thao tác trước chưa rõ kết quả. Không tự chạy lại; cần kiểm tra đầu ra trước.');
+    if (unresolved) throw new UnresolvedAttemptError('Thao tác trước chưa rõ kết quả. Không tự chạy lại; cần kiểm tra đầu ra trước.');
   }
 
   async execute<Result>(options: {
@@ -46,13 +57,15 @@ export class ToolCalls {
         if (previous.fingerprint !== fingerprint) throw new Error('Tool call đã lưu có nội dung khác.');
         if (previous.state === 'completed') return { output: previous.output! };
         if (previous.state === 'started' || options.replay === 'never') {
-          throw new Error('Thao tác trước chưa rõ kết quả. Không tự chạy lại; cần kiểm tra đầu ra trước.');
+          throw new UnresolvedAttemptError('Thao tác trước chưa rõ kết quả. Không tự chạy lại; cần kiểm tra đầu ra trước.');
         }
         this.store.db.prepare("UPDATE tool_calls SET state='started' WHERE run_id=? AND call_id=?").run(options.runId, options.callId);
       } else {
         if (options.replay === 'never') this.assertEffectsResolved(options.runId);
-        this.store.db.prepare("INSERT INTO tool_calls(run_id,call_id,fingerprint,state,output,replay) VALUES(?,?,?,'started',NULL,?)")
-          .run(options.runId, options.callId, fingerprint, options.replay);
+        this.store.db.prepare(`INSERT INTO tool_calls(run_id,call_id,fingerprint,state,output,replay,name,summary,started_at)
+          VALUES(?,?,?,'started',NULL,?,?,?,?)`)
+          .run(options.runId, options.callId, fingerprint, options.replay, options.name,
+            describeToolCallArguments(options.name, options.arguments), now());
       }
       return undefined;
     });

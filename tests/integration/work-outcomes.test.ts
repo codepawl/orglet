@@ -12,7 +12,7 @@ it('counts only persisted command results from the requested turn and keeps unkn
       { id: 'd', runId: 'old', command: 'node old', state: 'exited', exitCode: 0 },
     ],
     copies: [{ runId: 'current', state: 'conflict', kind: 'copy', changes: [], changeCount: 0 }],
-    uncertainCalls: [{ runId: 'current', callId: 'write', replay: 'never' }],
+    uncertainCalls: [{ runId: 'current', callId: 'write', replay: 'never', tool: 'workspace_write', summary: 'note.txt', at: null }],
   } as WorkspaceRecoveryView;
   expect(workOutcomes(recovery, new Set(['current']))).toEqual({
     passedCommands: 1, failedCommands: 1, unfinishedCommands: 1,

@@ -65,6 +65,29 @@ async function edit(runtime: WorkspaceRuntime, path = 'note.txt', content = 'upd
   return runtime.execute(run, id(), { operation: 'write', path, expectedHash: read.hash, content }, signal());
 }
 
+it('fails a turn refused by the unknown-outcome guard with a code the chat can point at (COD-191)', async () => {
+  const earlier: Run = { ...run, id: id(), status: 'failed', error: 'interrupted' };
+  store.put('runs', earlier, { column: 'task_id', value: task.id });
+  store.db.prepare("INSERT INTO tool_calls(run_id,call_id,fingerprint,state,output,replay,name,summary,started_at) VALUES(?,?,?,'uncertain',NULL,'never',?,?,?)")
+    .run(earlier.id, 'write-1', 'a'.repeat(64), 'workspace_write', 'note.txt', now());
+  task = { ...task, providerScopes: ['openai'] };
+  store.update('tasks', task);
+  const adapter: ModelAdapter = { request: async () => ({
+    calls: [{ id: id(), name: 'workspace_write', arguments: JSON.stringify({ path: 'note.txt', expectedHash: null, content: 'retry' }) }],
+    usage: { input: 10, output: 10 },
+  }) };
+  const core = new CoreService(store, () => {}, async () => adapter, undefined, undefined, undefined, undefined, undefined, fixture());
+  await core.runner.run(task, run);
+  const detail = store.detail(task.id);
+  const failed = detail.runs.find(item => item.id === run.id)!;
+  expect(failed.status).toBe('failed');
+  expect(failed.errorCode).toBe('unresolved_attempt');
+  expect(failed.error).toContain('chưa rõ kết quả');
+  expect(detail.runs.find(item => item.id === earlier.id)!.errorCode).toBeUndefined();
+  const view = new WorkspaceRecovery(store).view(task.id);
+  expect(view.uncertainCalls).toEqual([{ runId: earlier.id, callId: 'write-1', replay: 'never', tool: 'workspace_write', summary: 'note.txt', at: expect.any(String) }]);
+});
+
 it('answers a read or list of a missing path as a tool result instead of failing (COD-190)', async () => {
   const runtime = fixture();
   expect(await runtime.execute(run, id(), { operation: 'read', path: 'lib/missing.js', offset: 0 }, signal()))

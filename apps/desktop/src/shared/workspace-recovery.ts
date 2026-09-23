@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { WorkspacePath, WorkspaceRead, WorkspaceHash } from './workspace-tools';
 
+export const TOOL_CALL_SUMMARY_LENGTH = 300;
 const Change = z.object({ path: WorkspacePath, status: z.enum(['pending', 'applied', 'conflict', 'blocked']), reason: z.string().optional() });
 export const WorkspaceRecoveryView = z.object({
   taskId: z.uuid(),
@@ -9,10 +10,36 @@ export const WorkspaceRecoveryView = z.object({
     kind: z.enum(['copy', 'git-worktree']), changes: z.array(Change), changeCount: z.number().int().nonnegative() })),
   processes: z.array(z.object({ id: z.uuid(), runId: z.uuid(), command: z.string().max(1000),
     state: z.enum(['running', 'exited', 'cancelled', 'timeout', 'output_limit', 'uncertain']), exitCode: z.number().int().nullable() })),
-  uncertainCalls: z.array(z.object({ runId: z.uuid(), callId: z.string(), replay: z.enum(['read', 'idempotent', 'never']) })),
+  // `tool`, `summary` and `at` are null for calls journaled before they were recorded (COD-191).
+  uncertainCalls: z.array(z.object({ runId: z.uuid(), callId: z.string(), replay: z.enum(['read', 'idempotent', 'never']),
+    tool: z.string().max(100).nullable(), summary: z.string().max(TOOL_CALL_SUMMARY_LENGTH).nullable(), at: z.string().nullable() })),
   truncated: z.boolean(),
 }).strict();
 export type WorkspaceRecoveryView = z.infer<typeof WorkspaceRecoveryView>;
+export type UncertainCall = WorkspaceRecoveryView['uncertainCalls'][number];
+
+/**
+ * The one argument worth showing for a journaled call: the path a write or an integration touched, or the command a
+ * process ran. Never the file's content, a hash or the root, so the journal stays safe to show and to keep.
+ */
+export function describeToolCallArguments(name: string, argumentsValue: unknown): string | null {
+  if (!argumentsValue || typeof argumentsValue !== 'object') return null;
+  const fields = argumentsValue as Record<string, unknown>;
+  if (name === 'workspace_start_process') {
+    const program = typeof fields.program === 'string' ? fields.program : '';
+    const programArguments = Array.isArray(fields.arguments) ? fields.arguments.filter(item => typeof item === 'string') : [];
+    return truncateSummary([program, ...programArguments].join(' '));
+  }
+  if (typeof fields.path === 'string') return truncateSummary(fields.path);
+  return null;
+}
+
+function truncateSummary(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const characters = [...trimmed];
+  return characters.length > TOOL_CALL_SUMMARY_LENGTH ? `${characters.slice(0, TOOL_CALL_SUMMARY_LENGTH - 1).join('')}…` : trimmed;
+}
 export const RetireWorkspaceAttempt = z.object({ taskId: z.uuid(), runId: z.uuid(),
   reviewToken: z.string().regex(/^[a-f0-9]{64}$/), keepCurrentFiles: z.literal(true) }).strict();
 export const ReadRecoveryOutput = z.object({ taskId: z.uuid(), processId: z.uuid(),
