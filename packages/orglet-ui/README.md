@@ -37,7 +37,11 @@ token like `--sidebar`, it is not general yet, and forcing it here only moves th
 
 The kit is deliberately thin today. Before it can be published it needs at least the controls an application cannot
 do without: `Input`, `Textarea`, `Label`, `Card`, `Badge`, `Dialog`, and a real `Tooltip`. After those: `Tabs`
-outside a dialog, `RadioGroup`, `Progress`, `Skeleton`, `Table`.
+outside a dialog, `RadioGroup`, `Progress`, `Table`.
+
+`Skeleton` is here already, and it is the only shape a wait may take: a bar where text will be, a block where a
+picture will be, a circle where a face will be, sweeping under a second per pass and still under reduced motion.
+The kit has no spinner and will not grow one.
 
 Two things it will not grow: a `Separator` and the alert with a coloured left border. Orglet separates with spacing,
 grouping and a quiet background instead, and that rule travels with the kit.
