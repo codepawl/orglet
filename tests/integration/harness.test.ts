@@ -7,13 +7,14 @@ import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../../apps/desktop/src/core/harness/detect';
 import { HarnessAccounts } from '../../apps/desktop/src/core/harness/accounts';
-import { executeHarness, harnessArgs, HarnessError, HarnessTerminationError, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
+import { executeHarness, harnessArgs, HarnessError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import { harnessReady, harnessStatus, loginCommand, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
 let directory: string;
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-harness-test-')); });
-afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
+// A process that was just killed can hold its folder open for a moment on Windows, so the cleanup retries.
+afterEach(async () => { await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
 const touch = async (path: string) => { await mkdir(join(path, '..'), { recursive: true }); await writeFile(path, ''); };
 
 describe('detection', () => {
@@ -476,6 +477,12 @@ describe('runner integration', () => {
     await core.command('cancel', { id: taskId }); await idle();
     expect(store.detail(taskId).task.status).toBe('cancelled'); expect(store.detail(taskId).artifacts).toEqual([]);
   });
+});
+
+it.runIf(process.platform === 'win32')('counts a process that is no longer running as stopped', async () => {
+  // taskkill fails with "not found" when the process exited before the kill, which a busy machine makes likely (COD-204).
+  // The pid is one Windows never hands out.
+  await expect(killTree(2_147_483_644)).resolves.toBeUndefined();
 });
 
 it('reports uncertain termination when the kill command fails or the process never closes', async () => {

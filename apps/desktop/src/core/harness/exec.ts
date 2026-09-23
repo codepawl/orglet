@@ -178,15 +178,45 @@ export function parseCodexOutput(jsonl: string, lastMessage: string | null): Har
   }
 }
 
-async function killTree(pid: number | undefined): Promise<void> {
-  if (!pid) return;
-  if (process.platform === 'win32') await new Promise<void>((resolve, reject) => {
+/** taskkill's exit code when the process it was given is not running. */
+const TASKKILL_NOT_FOUND = 128;
+
+function forceKillTree(pid: number): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true, timeout: 10_000 }, error => {
       if (error) reject(error);
       else resolve();
     });
   });
-  else { try { process.kill(pid, 'SIGTERM'); } catch { /* already exited */ } }
+}
+
+function processIsGone(error: unknown) {
+  return (error as { code?: unknown }).code === TASKKILL_NOT_FOUND;
+}
+
+/**
+ * Stops a process and everything it started. On Windows, taskkill also fails when the process has already exited,
+ * or when part of the tree exits on its own mid-kill, which a busy machine makes likely (COD-204). "Not running"
+ * counts as stopped. Any other failure gets one more try before it is reported. The caller still waits for the
+ * process's pipes to close before it trusts that the tree is gone.
+ */
+export async function killTree(pid: number | undefined): Promise<void> {
+  if (!pid) return;
+  if (process.platform !== 'win32') {
+    try { process.kill(pid, 'SIGTERM'); } catch { /* already exited */ }
+    return;
+  }
+  try {
+    await forceKillTree(pid);
+  } catch (error) {
+    if (processIsGone(error)) return;
+    await new Promise(resolve => setTimeout(resolve, 300));
+    try {
+      await forceKillTree(pid);
+    } catch (retryError) {
+      if (!processIsGone(retryError)) throw retryError;
+    }
+  }
 }
 
 export async function prepareHarnessToolPolicy(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'coreToolsOnly'>) {
