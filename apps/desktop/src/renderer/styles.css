@@ -68,7 +68,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .button:hover:not(:disabled) { background:var(--surface); }
 .button-primary { background:var(--accent); color:var(--accent-ink); }
 .button-primary:hover:not(:disabled) { background:var(--accent); opacity:.85; }
-.button-outline { border-color:var(--border); }
+/* A secondary button is a soft filled pill, not a ring: no border anywhere in the app (user, 2026-09-23). */
+.button-outline { background:var(--surface); }
+.button-outline:hover:not(:disabled) { background:color-mix(in srgb, var(--text) 10%, var(--bg)); }
 .button-icon { width:var(--icon-size); height:var(--icon-size); min-height:var(--icon-size); padding:6px; flex-shrink:0; }
 /* An icon-only button answers the pointer with its icon and nothing else (user, 2026-09-20). A tile lighting up
    behind a 20px glyph reads as a second surface arriving; the glyph going from muted to full text colour says the
