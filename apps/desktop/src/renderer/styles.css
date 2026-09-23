@@ -320,7 +320,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @keyframes status-mark-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion:reduce) { .status-mark.busy svg { animation:none; } }
 .empty-history { padding:12px; color:var(--muted); opacity:.7; font-size:13px; text-align:center; }
-.sidebar-footer { padding-top:10px; display:flex; flex-direction:column; gap:3px; }
+/* The footer sits a clear step below the list, and ends where the list's rows end: the list keeps a 12px gutter for
+   its scrollbar (COD-200), so the footer leaves the same space on the right (user, 2026-09-23). */
+.sidebar-footer { padding:18px 12px 0 0; display:flex; flex-direction:column; gap:3px; }
 .sidebar-scroll { flex:1; min-height:0; overflow:auto; padding-top:12px; }
 .sidebar-scroll .history { min-height:100px; overflow:visible; }
 .sidebar-scroll .history:has(>.section-items[hidden]) { min-height:0; }
