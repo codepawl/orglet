@@ -40,6 +40,8 @@ import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, Model
 import { mentionedPeople } from '../shared/mentions';
 import { assertOpenCodeModel, isOpenCodePlan } from '../shared/opencode';
 import { MessageInteractions } from './orchestration/message-interactions';
+import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
+import type { Args } from '../shared/contracts';
 
 /**
  * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
@@ -70,6 +72,8 @@ export class CoreService {
   readonly routines: Routines;
   readonly policy: WorkPolicy;
   readonly knowledge: KnowledgeBase;
+  /** App changes workers propose in chats, applied through this service's own commands (COD-199). */
+  readonly appProposals: AppProposals;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   readonly harnessAccounts: HarnessAccounts;
   private modelListMemory = emptyModelListCache();
@@ -84,10 +88,11 @@ export class CoreService {
     this.notify = () => { if (!this.store.db.isOpen) return; this.policy.captureHandoffs(); notify(); };
     this.sources = new Sources(store, profiler);
     this.workspaceGrants = new WorkspaceGrants(store);
-    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime);
+    this.templates = new TeamTemplates(store, this.notify);
+    this.appProposals = new AppProposals(store, this.proposalApplier());
+    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
-    this.templates = new TeamTemplates(store, this.notify);
     this.routines = new Routines(store, this.sources, this.notify, (input, next) => this.createTask(input, next), clock);
     this.policy.captureHandoffs();
   }
@@ -144,31 +149,34 @@ export class CoreService {
         return;
       }
       case 'saveWorker': {
-        const input = commands.saveWorker.parse(args);
-        assertSkillReady(this.store.get<Skill>('skills', input.skillId), this.store);
-        if (input.id) this.store.get<Worker>('workers', input.id);
-        const { modelId, ...fields } = input;
-        if (isOpenCodePlan(fields.provider)) assertOpenCodeModel(fields.provider, modelId);
-        const worker: Worker = {
-          ...fields,
-          id: input.id ?? id(),
-          revision: input.id ? this.store.nextRevision(input.id) : 1,
-          ...(fields.provider !== 'demo' && modelId ? { modelId } : {}),
-        };
-        this.store.version('workers', worker); this.notify(); return worker;
+        const worker = this.saveWorker(commands.saveWorker.parse(args));
+        this.notify();
+        return worker;
       }
       case 'saveSkill': {
-        const input = commands.saveSkill.parse(args);
-        if (input.id && this.store.get<Skill>('skills', input.id).package) throw new Error('Gói skill giữ nguyên nội dung đã nhập. Sửa thư mục gốc rồi nhập lại để tạo gói mới.');
-        const skill: Skill = { ...input, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
-        this.store.version('skills', skill); this.notify(); return skill;
+        const skill = this.saveSkill(commands.saveSkill.parse(args));
+        this.notify();
+        return skill;
       }
       case 'saveTeam': {
-        const input = commands.saveTeam.parse(args);
-        for (const workerId of [...input.memberIds, input.synthesizerId]) this.assertAssignable('worker', workerId);
-        if (input.id) this.store.get<Team>('teams', input.id);
-        const team: Team = { ...input, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
-        this.store.version('teams', team); this.notify(); return team;
+        const team = this.saveTeam(commands.saveTeam.parse(args));
+        this.notify();
+        return team;
+      }
+      case 'applyAppProposal': {
+        const applied = this.appProposals.apply(commands.applyAppProposal.parse(args).id);
+        this.notify();
+        return applied;
+      }
+      case 'dismissAppProposal': {
+        this.appProposals.dismiss(commands.dismissAppProposal.parse(args).id);
+        this.notify();
+        return;
+      }
+      case 'undoAppProposal': {
+        const undone = this.appProposals.undo(commands.undoAppProposal.parse(args).id);
+        this.notify();
+        return undone;
       }
       case 'inspectSkill': {
         const skill = this.store.get<Skill>('skills', (args as { id: string }).id);
@@ -249,11 +257,7 @@ export class CoreService {
         this.notify();
         return this.command('resume', { id: task.id });
       }
-      case 'saveRoutine': {
-        const input = commands.saveRoutine.parse(args);
-        if (input.enabled) this.prepareTask(input.task);
-        return this.routines.save(input);
-      }
+      case 'saveRoutine': return this.saveRoutine(commands.saveRoutine.parse(args));
       case 'dismissRoutine': this.routines.dismiss((args as { id: string }).id); return;
       case 'catchUpRoutine': return this.routines.catchUp((args as { id: string }).id);
       case 'cancel': {
@@ -506,31 +510,91 @@ export class CoreService {
       case 'setCurrency': return this.updateCurrency(commands.setCurrency.parse(args).code, true);
       case 'refreshCurrency': return this.updateCurrency(this.store.setting<CurrencyState>('currency', usdCurrency).code, true);
       case 'settings': {
-        const input = commands.settings.parse(args);
-        this.store.setSetting('theme', input.theme);
-        if (input.language) this.store.setSetting('language', input.language);
-        if (input.autoTitles !== undefined) this.store.setSetting('autoTitles', input.autoTitles);
-        if (input.copyFormat) this.store.setSetting('copyFormat', input.copyFormat);
-        if (input.downloadFormat) this.store.setSetting('downloadFormat', input.downloadFormat);
-        if (input.confirmOpenTask !== undefined) this.store.setSetting('confirmOpenTask', input.confirmOpenTask);
-        if (input.archiveRetentionDays !== undefined) this.store.setSetting('archiveRetentionDays', input.archiveRetentionDays);
-        if (input.accentColor !== undefined) this.store.setSetting('accentColor', input.accentColor);
-        if (input.logoColor !== undefined) this.store.setSetting('logoColor', input.logoColor);
-        // null puts a font back to the one the app ships with; absent leaves the current choice alone.
-        const saveFont = (key: 'interfaceFont' | 'codeFont', family: string | null | undefined) => {
-          if (family === undefined) return;
-          if (family) this.store.setSetting(key, family); else this.store.clearSetting(key);
-        };
-        saveFont('interfaceFont', input.interfaceFont);
-        saveFont('codeFont', input.codeFont);
-        if (input.autoUpdate !== undefined) this.store.setSetting('autoUpdate', input.autoUpdate);
-        this.store.setSetting('connectionLimitMicros', input.connectionLimitMicros);
-        if (input.providerConcurrency) this.store.setSetting('providerConcurrency', input.providerConcurrency);
-        // Standing per-provider permission (plan §12: consent scoped by connection); backups never restore it.
-        if (input.providerConsent) this.store.setSetting('providerConsent', input.providerConsent);
+        this.applySettings(commands.settings.parse(args));
         this.notify(); return;
       }
     }
+  }
+  /** Creates a worker or a new revision of one, validated the way the worker dialog is. */
+  private saveWorker(input: Args<'saveWorker'>): Worker {
+    assertSkillReady(this.store.get<Skill>('skills', input.skillId), this.store);
+    if (input.id) this.store.get<Worker>('workers', input.id);
+    const { modelId, ...fields } = input;
+    if (isOpenCodePlan(fields.provider)) assertOpenCodeModel(fields.provider, modelId);
+    const worker: Worker = {
+      ...fields,
+      id: input.id ?? id(),
+      revision: input.id ? this.store.nextRevision(input.id) : 1,
+      ...(fields.provider !== 'demo' && modelId ? { modelId } : {}),
+    };
+    this.store.version('workers', worker);
+    return worker;
+  }
+  private saveSkill(input: Args<'saveSkill'>): Skill {
+    if (input.id && this.store.get<Skill>('skills', input.id).package) throw new Error('Gói skill giữ nguyên nội dung đã nhập. Sửa thư mục gốc rồi nhập lại để tạo gói mới.');
+    const skill: Skill = { ...input, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
+    this.store.version('skills', skill);
+    return skill;
+  }
+  private saveTeam(input: Args<'saveTeam'>): Team {
+    for (const workerId of [...input.memberIds, input.synthesizerId]) this.assertAssignable('worker', workerId);
+    if (input.id) this.store.get<Team>('teams', input.id);
+    const team: Team = { ...input, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
+    this.store.version('teams', team);
+    return team;
+  }
+  private saveRoutine(input: Args<'saveRoutine'>): Routine {
+    if (input.enabled) this.prepareTask(input.task);
+    return this.routines.save(input);
+  }
+  /** Writes the settings given; a key left out keeps its value. The settings dialog and an applied proposal share this. */
+  private applySettings(input: Partial<Args<'settings'>>) {
+    if (input.theme) this.store.setSetting('theme', input.theme);
+    if (input.language) this.store.setSetting('language', input.language);
+    if (input.autoTitles !== undefined) this.store.setSetting('autoTitles', input.autoTitles);
+    if (input.copyFormat) this.store.setSetting('copyFormat', input.copyFormat);
+    if (input.downloadFormat) this.store.setSetting('downloadFormat', input.downloadFormat);
+    if (input.confirmOpenTask !== undefined) this.store.setSetting('confirmOpenTask', input.confirmOpenTask);
+    if (input.archiveRetentionDays !== undefined) this.store.setSetting('archiveRetentionDays', input.archiveRetentionDays);
+    if (input.accentColor !== undefined) this.store.setSetting('accentColor', input.accentColor);
+    if (input.logoColor !== undefined) this.store.setSetting('logoColor', input.logoColor);
+    // null puts a font back to the one the app ships with; absent leaves the current choice alone.
+    const saveFont = (key: 'interfaceFont' | 'codeFont', family: string | null | undefined) => {
+      if (family === undefined) return;
+      if (family) this.store.setSetting(key, family); else this.store.clearSetting(key);
+    };
+    saveFont('interfaceFont', input.interfaceFont);
+    saveFont('codeFont', input.codeFont);
+    if (input.autoUpdate !== undefined) this.store.setSetting('autoUpdate', input.autoUpdate);
+    if (input.connectionLimitMicros !== undefined) this.store.setSetting('connectionLimitMicros', input.connectionLimitMicros);
+    if (input.providerConcurrency) this.store.setSetting('providerConcurrency', input.providerConcurrency);
+    // Standing per-provider permission (plan §12: consent scoped by connection); backups never restore it.
+    if (input.providerConsent) this.store.setSetting('providerConsent', input.providerConsent);
+  }
+  /** The settings a worker may propose, as the app holds them now; the same reads `workspace()` makes. */
+  private currentSettings(): CurrentSettings {
+    const workspace = this.store.workspace();
+    return {
+      theme: workspace.theme, language: workspace.language, accentColor: workspace.accentColor, logoColor: workspace.logoColor,
+      interfaceFont: workspace.interfaceFont ?? null, codeFont: workspace.codeFont ?? null,
+      copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, autoTitles: workspace.autoTitles, confirmOpenTask: workspace.confirmOpenTask,
+    };
+  }
+  /**
+   * What Apply on a proposal card runs: this service's own save commands, so a proposal can do nothing the dialogs
+   * cannot and meets the same validation (COD-199). Deleting is only for taking an automatic apply back.
+   */
+  private proposalApplier(): ProposalApplier {
+    return {
+      saveWorker: input => this.saveWorker(commands.saveWorker.parse(input)),
+      saveTeam: input => this.saveTeam(commands.saveTeam.parse(input)),
+      saveSkill: input => this.saveSkill(commands.saveSkill.parse(input)),
+      saveRoutine: input => this.saveRoutine(commands.saveRoutine.parse(input)),
+      templateText: teamId => this.templates.export(teamId),
+      currentSettings: () => this.currentSettings(),
+      applySettings: patch => this.applySettings(patch),
+      deleteEntity: (kind, entityId) => this.deleteEntity(kind, entityId),
+    };
   }
   private currencyRefresh?: Promise<CurrencyState>;
   private currencyAttemptAt = 0;
@@ -821,6 +885,7 @@ export class CoreService {
         db.prepare('DELETE FROM workspace_processes WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM settings WHERE id=?').run(`workspace-retired:${run.id}`);
         db.prepare('DELETE FROM leases WHERE run_id=?').run(run.id);
+        db.prepare('DELETE FROM app_proposals WHERE run_id=?').run(run.id);
       }
       db.prepare('DELETE FROM profiles WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM preflights WHERE task_id=?').run(task.id);

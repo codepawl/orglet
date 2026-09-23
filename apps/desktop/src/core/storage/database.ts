@@ -6,11 +6,12 @@ import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import type { ProfileRecord } from '../../shared/profiles';
 import type { PreflightRecord } from '../../shared/preflight';
 import { WorkspaceReadEvidence } from '../../shared/workspace-evidence';
+import { AppProposal } from '../../shared/app-proposals';
 import { usdCurrency } from '../../shared/currency';
 import type { ToolCapability } from '../../shared/tool-policy';
 import type { WorkspacePermission } from '../../shared/workspace-access';
 
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export class Store {
@@ -126,6 +127,11 @@ export class Store {
         }
         this.db.exec('INSERT INTO migrations VALUES (14)');
       }
+      // App changes a worker proposed in a chat and what became of them (COD-199). Local only: a backup carries
+      // neither the proposals nor the automatic applies they record.
+      this.db.exec(`CREATE TABLE IF NOT EXISTS app_proposals (
+        id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id), run_id TEXT NOT NULL REFERENCES runs(id), data TEXT NOT NULL
+      ); INSERT OR IGNORE INTO migrations VALUES (15);`);
       this.db.prepare(`INSERT OR IGNORE INTO reservation_reviews (reservation_id,reason,noted_at)
         SELECT id,'legacy',? FROM reservations WHERE state='unknown'`).run(now());
     });
@@ -256,7 +262,9 @@ export class Store {
       .filter(evidence => runIds.has(evidence.runId))
       .map(evidence => ({ ...evidence, grantCurrent: !task.archivedAt && !task.deletedAt && !!currentGrant
         && !currentGrant.revoked && currentGrant.id === evidence.grantId && currentGrant.revision === evidence.grantRevision }));
-    return { task, runs, events: this.all<Activity>('events').filter(e => runIds.has(e.runId)), artifacts: this.all<Artifact>('artifacts').filter(a => runIds.has(a.runId)), profiles: this.all<ProfileRecord>('profiles').filter(p => p.taskId === taskId), preflights: this.all<PreflightRecord>('preflights').filter(p => p.taskId === taskId), sources: task.sourceIds.map(s => this.get<Source>('sources', s)), workspaceEvidence, usage: this.usage(taskId) };
+    const appProposals = this.db.prepare('SELECT data FROM app_proposals WHERE task_id=? ORDER BY rowid').all(taskId)
+      .map(row => AppProposal.parse(JSON.parse(String(row.data))));
+    return { task, runs, events: this.all<Activity>('events').filter(e => runIds.has(e.runId)), artifacts: this.all<Artifact>('artifacts').filter(a => runIds.has(a.runId)), profiles: this.all<ProfileRecord>('profiles').filter(p => p.taskId === taskId), preflights: this.all<PreflightRecord>('preflights').filter(p => p.taskId === taskId), sources: task.sourceIds.map(s => this.get<Source>('sources', s)), workspaceEvidence, appProposals, usage: this.usage(taskId) };
   }
   recover() {
     for (const run of this.all<Run>('runs')) {

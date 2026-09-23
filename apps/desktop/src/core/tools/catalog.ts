@@ -15,6 +15,7 @@ import { ReadWebUrl, SearchWeb } from '../../shared/web-tools';
 import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
 import { SetMessageReaction } from '../../shared/message-interactions';
+import { isProposalTool, ProposeCrew, ProposeCrewTemplate, ProposeOrglet, ProposeSchedule, ProposeSettings, ProposeSkill } from '../../shared/app-proposals';
 const ModelTeamPlan = TeamPlan.extend({ assignments: z.array(PlanAssignment.required({
   expectedOutput: true, dependsOn: true, writeResources: true,
 })).min(1).max(4) });
@@ -66,7 +67,22 @@ function defineTool(name: string, description: string, schema: z.ZodType, modelS
   };
 }
 
+/**
+ * A proposal tool stores a change for the user to apply; it never makes one (COD-199). The model sees every field
+ * as required and nullable (strict function schemas); the lenient copy parses a call that leaves fields out.
+ */
+const PROPOSAL_COMMON = 'This only stores a proposal card for the user to apply or dismiss; nothing changes until they do. Null leaves a field alone. Use existing ids from the app context message';
+function defineProposalTool(name: string, description: string, schema: z.ZodObject): ToolDefinition {
+  return defineTool(name, description, schema.partial(), schema, 'app.propose', 20000, 'synchronous');
+}
+
 export const toolDefinitions: Record<string, ToolDefinition> = {
+  propose_orglet: defineProposalTool('propose_orglet', `Propose creating an orglet (a worker) or editing one (targetId). name and instructions are required to create; provider null means your own provider and model; skillId null means your own skill, or skillRef for a skill proposed earlier in this reply. ${PROPOSAL_COMMON}; set ref so a later proposal (a crew member, a schedule) can point at this new orglet. You cannot set its permissions, working folder or auto-apply switch.`, ProposeOrglet),
+  propose_crew: defineProposalTool('propose_crew', `Propose creating a crew (a team of up to four orglets with a lead) or editing one (targetId). Members are existing orglet ids in memberIds and refs of orglets proposed earlier in this reply in memberRefs; the lead defaults to the first member; workflow defaults to parallel. Budgets above the current caps need the user's click. ${PROPOSAL_COMMON}; set ref so a template or schedule proposal can point at this new crew.`, ProposeCrew),
+  propose_crew_template: defineProposalTool('propose_crew_template', `Propose saving a crew as a template file the user can share or import later: teamId of an existing crew, or teamRef of a crew proposed earlier in this reply. The user picks where the file goes when they apply. ${PROPOSAL_COMMON}.`, ProposeCrewTemplate),
+  propose_skill: defineProposalTool('propose_skill', `Propose a new skill (reusable instructions; name and content required) or a new revision of an existing one (targetId). Runs already in progress keep the revision they started with. ${PROPOSAL_COMMON}; set ref so an orglet proposed later in this reply can use it.`, ProposeSkill),
+  propose_schedule: defineProposalTool('propose_schedule', `Propose a schedule (a routine) that sends brief to one orglet or crew daily or weekly at time (24-hour HH:MM; weekday 0-6 with 0 = Sunday, default 1) in timeZone (default: this computer's), or edit one (targetId). Target null means this chat's orglet or crew; workerRef and teamRef point at ones proposed earlier in this reply. A schedule is saved switched off; the user enables it in Schedules. ${PROPOSAL_COMMON}.`, ProposeSchedule),
+  propose_settings: defineProposalTool('propose_settings', `Propose app settings: theme, language, accentColor (#rrggbb), logoColor, interfaceFont, codeFont, copyFormat, downloadFormat, autoTitles, confirmOpenTask. Only these keys exist; keys, connections, budgets, permissions, backups and updates cannot be proposed. ${PROPOSAL_COMMON}.`, ProposeSettings),
   record_work_frame: defineTool('record_work_frame', 'Record your understanding of this turn before assigning work or editing files. goal is one short outcome. statedConstraints must come from the user\'s actual words; assumptions are your own unconfirmed interpretation and must be labelled separately. plannedChecks are intentions, never claims that a check passed. Use empty arrays when none are known. This record is not a permission grant or user confirmation.', WorkFrame, WorkFrame, undefined, 20000, 'synchronous'),
   request_user_decision: defineTool('request_user_decision', 'Pause this turn for one decision that materially changes the work, a permission boundary, or an irreversible action. Ask one short question with two or three distinct choices. Inspect available sources and workspace first when they can answer it. This does not grant permission or start another run; wait for the user\'s answer in this same turn.', DecisionQuestion, DecisionQuestion, undefined, 20000, 'synchronous'),
   reassign_team_work: defineTool('reassign_team_work', 'Lead only: retry an unfinished assignment with a frozen member of this turn. assignmentWorkerId identifies the original assignment, newWorkerId the recipient. Resources, dependencies and permissions cannot expand. At most two reassignments per assignment. Waits for the attempt and ready dependents; inspect the returned committed results or failures. Never claim success from dispatch alone.', ReassignTeamWork, ReassignTeamWork, undefined, 900000, 'cooperative'),
@@ -106,6 +122,9 @@ export function toolsFor(run: Run, task: Task): ChatCompletionTool[] {
       || run.snapshot.worker.id !== run.snapshot.team?.synthesizerId)) return false;
     if (name === 'reassign_team_work' && run.snapshot.worker.provider === 'demo') return false;
     if (['request_user_decision', 'record_work_frame'].includes(name) && run.stage) return false;
+    // A change to the app is proposed only where the user asked for it in their own chat: never while a lead is
+    // routing (the plan stage above lists its own tools), and never on a scheduled run nobody is watching (COD-199).
+    if (isProposalTool(name) && task.routineId) return false;
     if (name === 'reply' && run.stage === 'member') return false;
     if (definition.workspacePermission) {
       return run.snapshot.worker.provider !== 'demo'

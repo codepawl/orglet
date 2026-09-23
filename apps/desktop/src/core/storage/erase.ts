@@ -9,7 +9,7 @@ import type { Store } from './database';
 export const ERASE_TABLES = [
   'ledger', 'reservation_reviews', 'step_attempts', 'reservations',
   'workspace_read_evidence', 'process_evidence', 'workspace_processes', 'workspace_copies',
-  'tool_calls', 'checkpoints', 'leases', 'events', 'artifacts', 'runs',
+  'tool_calls', 'checkpoints', 'leases', 'events', 'artifacts', 'app_proposals', 'runs',
   'profiles', 'preflights', 'workspace_grants', 'task_search', 'tasks',
   'knowledge_search', 'knowledge_revisions', 'knowledge', 'revisions',
   'routines', 'workers', 'teams', 'skills', 'sources', 'settings',

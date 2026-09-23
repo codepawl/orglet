@@ -12,6 +12,11 @@ export type Checkpoint = {
   harnessCostMicros?: number;
   /** CLI calls in this run that reported no estimate, so the run total above is a floor, not the whole spend. */
   harnessCallsWithoutCost?: number;
+  /**
+   * What the run has read that nobody vetted (web pages, files, other workers' messages), kept so a resume still
+   * knows; an app change proposed by such a run is never applied without a click (COD-199).
+   */
+  untrustedInputs?: string[];
 };
 // Context may contain selected source text. It stays in core storage, outside renderer IPC and backups.
 export class Checkpoints {

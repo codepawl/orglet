@@ -46,6 +46,7 @@ All four of these matter. When two conflict, the order below breaks the tie.
 | Routine (Lịch chạy) | A request that repeats on a schedule |
 | Skill / Knowledge | Reusable instructions and notes workers can use |
 | Capability | A concrete action, such as reading an attachment, editing a granted folder, running a check, or reading the web. The chat Details shows whether each worker can do it now and what setup is missing. |
+| Proposal (Đề xuất) | An app change a worker suggests when you ask for one (a new orglet, a crew, a template, a skill, a schedule, a setting): a card in the chat you apply or dismiss. Setup help on request, not an agent running the workspace; see [agent-tools.md](agent-tools.md#proposing-app-changes). |
 | Connection | The API or signed-in local CLI that runs the model. A skill, imported package, or note never grants a capability. |
 
 Projects that group several tasks are postponed until real use shows a need (shared files or shared context across tasks).

@@ -23,7 +23,8 @@ import { toAmount, toMicros } from './money';
 import { toast } from './toast';
 import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
-import { Input, Textarea } from '@codepawl/orglet-ui';
+import { Input, SwitchField, Textarea } from '@codepawl/orglet-ui';
+import { Zap } from 'lucide-react';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
 type Tab = 'general' | 'skill' | 'permissions';
@@ -47,6 +48,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [budget, setBudget] = useState(toAmount(worker?.taskBudgetMicros ?? 500_000));
   const [avatar, setAvatar] = useState(worker?.avatar ?? {});
   const [description, setDescription] = useState(worker?.description ?? '');
+  // Saved with the worker, like its other fields; off for every worker until the person turns it on (COD-199).
+  const [autoApplyProposals, setAutoApplyProposals] = useState(worker?.autoApplyProposals ?? false);
   // New workers get a stable colour seed before they have an id.
   const [seed] = useState(() => worker?.id ?? crypto.randomUUID());
   // Permissions chosen for a worker that is not saved yet; they reach the core once the worker has an id.
@@ -81,7 +84,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     if (modelIssue) return fail('general', modelIssue, 'modelId');
     setBusy(true); clearError();
     try {
-      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}) });
+      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}) });
       if (!worker && draftCapabilities) await orglet.call('setToolCapabilities', { workerId: saved.id, capabilities: draftCapabilities });
       toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name); onClose();
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
@@ -131,8 +134,18 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       <Select ariaLabel={t('Kỹ năng')} value={skillId} onChange={setSkill} options={workspace.skills.map(item => { const pending = !!item.package && item.package.reviewedHash !== item.package.hash; return { value: item.id, label: item.name, detail: pending ? t('v{0} · Cần review trong Thư viện', [item.revision]) : `v${item.revision}`, icon: <Sparkles size={16} />, disabled: pending }; })} />
       {skill && <p className="prose muted">{skill.content}</p>}
     </>}
-    {tab === 'permissions' && <WorkerChatPermissions worker={worker} workspace={workspace} draft={{ id: worker?.id ?? seed, name: name || t('Tí mới'), provider, connected: provider === 'demo' || ready[provider] }}
-      draftCapabilities={draftCapabilities} onDraftCapabilities={setDraftCapabilities} />}
+    {tab === 'permissions' && <>
+      <WorkerChatPermissions worker={worker} workspace={workspace} draft={{ id: worker?.id ?? seed, name: name || t('Tí mới'), provider, connected: provider === 'demo' || ready[provider] }}
+        draftCapabilities={draftCapabilities} onDraftCapabilities={setDraftCapabilities} />
+      {/* Not a chat permission: it belongs to the worker and is saved with it. What it never covers is decided in
+          the core (a raised limit, a template, a run that read unvetted content), so the line says so plainly. */}
+      <div className="permissions worker-auto-apply">
+        <SwitchField checked={autoApplyProposals} onChange={setAutoApplyProposals}
+          description={t('Đề xuất an toàn được áp dụng ngay khi lượt chạy kết thúc, có nút Hoàn tác. Nâng giới hạn, xuất template, hay đề xuất từ lượt đã đọc web, tệp hoặc tin của Tí khác vẫn chờ bạn bấm.')}>
+          <Zap size={15} aria-hidden="true" />{t('Áp dụng thay đổi trong app mà không cần hỏi')}
+        </SwitchField>
+      </div>
+    </>}
   </TabbedFormDialog>;
 }
 

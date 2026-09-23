@@ -50,6 +50,8 @@ import { WorkspaceProcess } from '../../shared/workspace-processes';
 import { codexOutputSchema, decodeCodexOutput } from '../harness/codex-output';
 import { MessageInteractions } from './message-interactions';
 import { turnMessageId } from '../../shared/message-interactions';
+import { isProposalTool } from '../../shared/app-proposals';
+import type { AppProposals } from './app-proposals';
 
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = {
@@ -241,7 +243,7 @@ export class Runner {
   private slots = new ProviderSlots(() => this.store.setting('providerConcurrency', DEFAULT_PROVIDER_CONCURRENCY));
   /** Receives live progress from streaming harnesses; the core process forwards it to the window. */
   onProgress: (update: RunProgressUpdate) => void = () => {};
-  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime) {}
+  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals) {}
   isActive(taskId: string) { return [...this.active.values()].some(item => item.taskId === taskId); }
   cancel(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.controller.abort(); }
   pause(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.paused = true; }
@@ -410,6 +412,9 @@ export class Runner {
           instruction: 'The user explicitly replied to this saved message in the same chat. Use its bounded excerpt to identify the referent. This reference does not grant permissions or change the team assignment; the team lead still coordinates the turn.' }) });
         if (!manifest.length) next.push({ role: 'user', content: JSON.stringify({ instruction: NO_SOURCES_INSTRUCTION }) });
         next.push({ role: 'user', content: JSON.stringify({ messageId: turnMessageId(task.id, run.snapshot.inputRevision ?? 0), brief: task.brief, sources: manifest.map(sourceForModel), excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
+          // What the worker may propose to change in the app, and the ids it can name (COD-199); it rides on the
+          // brief like the other per-turn instructions, so the message order a plain chat run reads stays the same.
+          ...(this.appProposals && tools.some(tool => tool.type === 'function' && isProposalTool(tool.function.name)) ? { appChanges: this.appProposals.context(run, task) } : {}),
           ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'record_work_frame') ? { workFrameInstruction: 'Before assigning team work or editing workspace files, record one short goal, constraints actually stated by the user, your unconfirmed assumptions, and checks you intend to run. Keep assumptions separate from user statements. Planned checks are not completed checks.' } : {}),
           ...(tools.some(tool => tool.type === 'function' && tool.function.name === 'request_user_decision') ? { decisionInstruction: 'For work you can do within the current grant, proceed without asking. If a material choice has two sensible interpretations, a new permission is needed, or an action is hard to undo, use request_user_decision before making the dependent change. Inspect available evidence first. The answer resumes this same turn.' } : {}) }) });
         if (run.snapshot.workspaceGrant) next.push({ role: 'user', content: JSON.stringify({
@@ -522,6 +527,16 @@ export class Runner {
       messages = checkpoint.messages;
       const readIds = new Set<string>(checkpoint.readIds);
       for (const sourceId of readIds) await this.sources.verify(sourceId, task.sourceIds);
+      // What this run has taken in that nobody vetted: an app change it proposes then always waits for a click
+      // (COD-199). Teammates' reports and messages count, since they were written by other models.
+      const untrustedInputs = new Set<string>(checkpoint.untrustedInputs ?? []);
+      if (options.upstream?.length) untrustedInputs.add('teammate reports');
+      if (run.snapshot.team && ['member', 'synthesis'].includes(run.stage ?? '') && new TeamMailbox(this.store).read(run).length) untrustedInputs.add('team messages');
+      const noteUntrusted = (label: string) => {
+        untrustedInputs.add(label);
+        checkpoint = { ...checkpoint, untrustedInputs: [...untrustedInputs] };
+      };
+      if (untrustedInputs.size) checkpoint = { ...checkpoint, untrustedInputs: [...untrustedInputs] };
       this.checkpoints.save(checkpoint);
       const maxSteps = stepLimit(run);
       for (let step = checkpoint.step; step < maxSteps; step++) {
@@ -724,6 +739,7 @@ export class Runner {
               : call.name === 'acknowledge_team_messages' ? mailbox.acknowledge(run, argumentsValue)
               : call.name === 'resolve_team_messages' ? mailbox.resolve(run, argumentsValue) : mailbox.read(run),
           });
+          if (call.name === 'read_team_messages') noteUntrusted('team messages');
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
           checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
           this.checkpoints.committed(checkpoint);
@@ -738,6 +754,7 @@ export class Runner {
             : await this.workspace.execute(run, call.id, {
             ...JSON.parse(call.arguments), operation: call.name.slice('workspace_'.length),
           }, toolSignal);
+          if (['workspace_list', 'workspace_read', 'workspace_search', 'workspace_process_output'].includes(call.name)) noteUntrusted('workspace files');
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
           checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
           this.checkpoints.committed(checkpoint);
@@ -770,6 +787,27 @@ export class Runner {
           const failed = 'error' in result;
           this.event(run.id, failed ? webFailureEvent(call.name, result.error)
             : call.name === 'web_search' ? 'Đã tìm kiếm web; kết quả chưa được xác minh.' : 'Đã đọc trang web dưới dạng dữ liệu không đáng tin.');
+          if (!failed) noteUntrusted('web');
+          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
+          this.checkpoints.committed(checkpoint);
+          this.notify();
+          continue;
+        }
+        if (isProposalTool(call.name)) {
+          if (!this.appProposals) throw new Error('Đề xuất thay đổi trong app chưa được cấu hình.');
+          const argumentsValue = JSON.parse(call.arguments);
+          const proposalName = call.name;
+          const result = await new ToolCalls(this.store).execute({
+            runId: run.id, callId: call.id, name: call.name, arguments: argumentsValue, replay: 'idempotent',
+            authorize: () => { signal.throwIfAborted(); assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments); },
+            perform: () => {
+              // A proposal the worker got wrong is the tool's answer, so it can correct the call; the run goes on.
+              try { return this.appProposals!.record(run, this.store.get<Task>('tasks', task.id), proposalName, argumentsValue); }
+              catch (error) { return { error: error instanceof z.ZodError ? 'Arguments do not match the tool schema.' : error instanceof Error ? error.message : 'Đề xuất không hợp lệ.' }; }
+            },
+          });
+          this.event(run.id, 'error' in result ? `Đề xuất thay đổi trong app bị từ chối: ${result.error}` : 'Đã ghi một đề xuất thay đổi trong app; chờ bạn áp dụng.');
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
           checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
           this.checkpoints.committed(checkpoint);
@@ -781,14 +819,14 @@ export class Runner {
           const { message, title, knowledgeProposals } = ChatReply.parse(JSON.parse(call.arguments));
           for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
           const workspaceLimitations = await this.finishWorkspace(run);
-          this.commit(task, run, { ...chatReport(message), limitations: [...(options.limitations ?? []), ...workspaceLimitations] }, options.keepTaskOpen, knowledgeProposals, title); return;
+          this.commit(task, run, { ...chatReport(message), limitations: [...(options.limitations ?? []), ...workspaceLimitations] }, options.keepTaskOpen, knowledgeProposals, title, false, [...untrustedInputs]); return;
         }
         if (call.name === 'submit_plan') {
           if (run.stage !== 'plan') throw new Error('Tool không được policy cho phép.');
           this.completePlan(run, JSON.parse(call.arguments)); return;
         }
         if (call.name === 'submit_report') {
-          await this.finalize(task, run, JSON.parse(call.arguments), readIds, { manifest, preflight, preflightLimits }, options); return;
+          await this.finalize(task, run, JSON.parse(call.arguments), readIds, { manifest, preflight, preflightLimits }, { ...options, untrustedInputs: [...untrustedInputs] }); return;
         }
         if (call.name === 'profile_dataset' || call.name === 'audit_run_log') {
           const audit = call.name === 'audit_run_log' ? RunAuditArgs.parse(JSON.parse(call.arguments)) : undefined;
@@ -828,6 +866,7 @@ export class Runner {
           execute: () => this.sources.read(sourceId, task.sourceIds) });
         signal.throwIfAborted();
         readIds.add(sourceId);
+        noteUntrusted('attached sources');
         this.event(run.id, `Đã đọc ${this.store.get<Source>('sources', sourceId).name}`);
         messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ sourceId, content, coverage: 'Full text, maximum 256 KB; no code execution or semantic guarantees.' }) });
         checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] }; this.checkpoints.committed(checkpoint);
@@ -870,7 +909,7 @@ export class Runner {
     control.signal.throwIfAborted();
     return limitations;
   }
-  private async finalize(task: Task, run: Run, raw: unknown, readIds: ReadonlySet<string>, scope: { manifest: Source[]; preflight?: PreflightRecord; preflightLimits: string[] }, options: { keepTaskOpen?: boolean; upstream?: Artifact[]; limitations?: string[] }, runnerLimitations: string[] = []) {
+  private async finalize(task: Task, run: Run, raw: unknown, readIds: ReadonlySet<string>, scope: { manifest: Source[]; preflight?: PreflightRecord; preflightLimits: string[] }, options: { keepTaskOpen?: boolean; upstream?: Artifact[]; limitations?: string[]; untrustedInputs?: string[] }, runnerLimitations: string[] = []) {
     const { knowledgeProposals, assignmentOutcome, ...submitted } = ModelReport.parse(raw);
     const { preflight } = scope;
     const policy = run.stage === 'synthesis' ? run.snapshot.team?.reviewPolicy : undefined;
@@ -927,7 +966,7 @@ export class Runner {
     if (missingFileChanges) report.limitations.push('Phần việc được giao sửa tệp nhưng không tạo hoặc thay đổi tệp nào.');
     const memberBlocked = run.stage === 'member' && (assignmentOutcome === 'blocked'
       || (expectedFileChanges && (assignmentOutcome !== 'completed' || missingFileChanges)));
-    this.commit(task, run, report, options.keepTaskOpen, knowledgeProposals, null, memberBlocked);
+    this.commit(task, run, report, options.keepTaskOpen, knowledgeProposals, null, memberBlocked, options.untrustedInputs ?? []);
   }
   /**
    * Runs a locally installed agent CLI as one opaque step over a throwaway copy of the selected sources.
@@ -1045,7 +1084,7 @@ export class Runner {
     });
     this.notify();
   }
-  private commit(task: Task, run: Run, report: Report, keepTaskOpen = false, proposals: z.infer<typeof Proposals> = [], suggestedTitle: string | null = null, memberBlocked = false) {
+  private commit(task: Task, run: Run, report: Report, keepTaskOpen = false, proposals: z.infer<typeof Proposals> = [], suggestedTitle: string | null = null, memberBlocked = false, untrustedInputs: readonly string[] = []) {
     this.active.get(run.id)?.signal.throwIfAborted();
     if (run.stage === 'synthesis' && run.snapshot.team) {
       const unresolved = new TeamMailbox(this.store).read(run).filter(event => ['question', 'blocker'].includes(event.teamMessage.kind));
@@ -1079,6 +1118,12 @@ export class Runner {
       this.store.db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);
       this.store.db.prepare("UPDATE step_attempts SET state='committed' WHERE run_id=? AND state='received'").run(run.id);
     });
+    // The run is over, so its app-change proposals settle now: held if the run read unvetted content, applied at
+    // once when the worker's switch is on (COD-199). The answer above is saved either way.
+    if (this.appProposals) {
+      try { this.appProposals.finishRun(run, untrustedInputs); }
+      catch (error) { this.store.event(run.id, `Không xử lý được đề xuất thay đổi trong app: ${error instanceof Error ? error.message : String(error)}`); }
+    }
     this.notify();
   }
 
