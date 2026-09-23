@@ -164,7 +164,8 @@ export class CoreService {
         return team;
       }
       case 'applyAppProposal': {
-        const applied = this.appProposals.apply(commands.applyAppProposal.parse(args).id);
+        const request = commands.applyAppProposal.parse(args);
+        const applied = this.appProposals.apply(request.id, false, request.avatar);
         this.notify();
         return applied;
       }

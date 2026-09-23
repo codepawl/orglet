@@ -89,11 +89,12 @@ describe('proposal tools', () => {
     expect(store.workspace().workers).toHaveLength(1);
     expect(store.detail(taskId).events.some(event => event.message.includes('đang chờ bạn áp dụng'))).toBe(true);
 
-    const applied = await core.command('applyAppProposal', { id: proposal.id }) as AppProposal;
+    // The card sends the face it showed, so the new orglet keeps it.
+    const applied = await core.command('applyAppProposal', { id: proposal.id, avatar: { mascot: 'search' } }) as AppProposal;
     expect(applied).toMatchObject({ status: 'applied', automatic: false, target: { kind: 'worker' } });
     expect(applied.undo).toBeUndefined();
     const created = store.get<Worker>('workers', applied.target!.id);
-    expect(created).toMatchObject({ name: 'Research Scout', provider: 'openai', skillId: worker.skillId, taskBudgetMicros: 400_000, revision: 1, description: 'Finds papers' });
+    expect(created).toMatchObject({ name: 'Research Scout', provider: 'openai', skillId: worker.skillId, taskBudgetMicros: 400_000, revision: 1, description: 'Finds papers', avatar: { mascot: 'search' } });
     expect(created).not.toHaveProperty('autoApplyProposals');
     // The workspace lists the applied change so the renderer can announce it, naming the worker that proposed it.
     expect(store.workspace().recentAppChanges[0]).toMatchObject({ id: proposal.id, taskId, kind: 'orglet', action: 'create', title: 'Research Scout', automatic: false, workerName: worker.name });

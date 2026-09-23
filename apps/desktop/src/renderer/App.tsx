@@ -59,7 +59,7 @@ import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy
 import { permissionsForLevel, type WorkspaceLevel } from '../shared/capability-status';
 import { appView, createHistory, recordView, replaceView, stepHistory, useNavigationInput, viewKey, type AppView, type NavigationDirection, type NavigationHistory } from './navigation';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
-import type { ProposalActions } from './components/AppProposals';
+import { proposedMascot, type ProposalActions } from './components/AppProposals';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -434,7 +434,9 @@ export function App() {
     void perform().catch(err => setError((err as Error).message)).finally(() => { setProposalBusy(false); void refresh(); });
   };
   const applyProposal = async (proposal: AppProposal) => {
-    const applied = await orglet.call('applyAppProposal', { id: proposal.id });
+    const createsOrglet = proposal.kind === 'orglet' && proposal.action === 'create';
+    const avatar = createsOrglet ? { mascot: proposedMascot(proposal) } : undefined;
+    const applied = await orglet.call('applyAppProposal', { id: proposal.id, avatar });
     if (applied.target?.kind === 'template') {
       const saved = await orglet.exportTemplate(applied.target.id);
       toast(saved ? t('Đã lưu template') : t('Chưa lưu template. Xuất lại từ menu của hội khi cần.'), saved ? 'success' : 'error', proposal.title);
