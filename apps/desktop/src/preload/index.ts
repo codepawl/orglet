@@ -46,5 +46,10 @@ const bridge: Bridge = {
     ipcRenderer.on('orglet:progress', listener);
     return () => ipcRenderer.removeListener('orglet:progress', listener);
   },
+  onNavigate: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward') => callback(direction);
+    ipcRenderer.on('orglet:navigate', listener);
+    return () => ipcRenderer.removeListener('orglet:navigate', listener);
+  },
 };
 contextBridge.exposeInMainWorld('orglet', bridge);

@@ -313,6 +313,8 @@ export interface Bridge {
   onUpdate(callback: (state: UpdateState) => void): () => void;
   /** Live progress of streaming workers. The callback gets a null progress when a run stops streaming. */
   onProgress(callback: (update: import('./progress').RunProgressUpdate) => void): () => void;
+  /** A back or forward app command the window received: a mouse's side button over the frame, or a driver that sends the command itself (COD-202). */
+  onNavigate(callback: (direction: 'back' | 'forward') => void): () => void;
 }
 declare global { interface Window { orglet: Bridge } }
 
