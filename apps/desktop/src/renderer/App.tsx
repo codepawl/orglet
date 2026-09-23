@@ -29,6 +29,7 @@ import { Startup } from './components/Startup';
 import { Starters } from './components/Starters';
 import { DetailsPanel } from './components/DetailsPanel';
 import type { WorkspaceRecoveryView } from '../shared/workspace-recovery';
+import type { RecoveryFocus } from './components/WorkspaceRecovery';
 import { suggestStarters } from '../shared/starters';
 import { accentInk, DEFAULT_ACCENT_COLOR } from '../shared/accent';
 import { fontStack } from '../shared/fonts';
@@ -109,6 +110,8 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null); const [detail, setDetail] = useState<TaskDetail>();
   const [workspaceAccess, setWorkspaceAccess] = useState<{ taskId: string; grant: WorkspaceGrantView | null }>();
   const [workspaceRecovery, setWorkspaceRecovery] = useState<WorkspaceRecoveryView>();
+  // The attempt the chat asked to review (COD-191); `at` changes on every request so the same row scrolls again.
+  const [recoveryFocus, setRecoveryFocus] = useState<RecoveryFocus>();
   const [toolPolicyBusy, setToolPolicyBusy] = useState(false);
   const [workerId, setWorkerId] = useState(''); const [brief, setBrief] = useState(''); const [sources, setSources] = useState<Source[]>([]);
   const [skippedSources, setSkippedSources] = useState<{ name: string; reason: string }[]>([]);
@@ -610,7 +613,7 @@ export function App() {
       </header>
       {error && <div className="error-banner" role="alert"><span>{error}</span><Button size="icon" aria-label={t('Đóng thông báo')} onClick={() => setError('')}><X size={16} /></Button></div>}
       {catchUpNotice && <div className="notice-banner" role="status"><LucideCalendarClock size={16} aria-hidden="true" /><div><p>{singleCatchUp ? t('{0} đã bỏ qua lần chạy vì app tắt hoặc máy ngủ. Lịch không mất. Bạn có thể chạy bù một lần hoặc bỏ qua.', [singleCatchUp.name]) : t('{0} lịch đã bỏ qua lần chạy vì app tắt hoặc máy ngủ. Lịch không mất. Mỗi lịch chỉ chạy bù một lần.', [pendingCatchUp.length])}</p><div className="actions">{singleCatchUp?.enabled && <Button variant="primary" onClick={() => action(async () => openTask(await orglet.call('catchUpRoutine', { id: singleCatchUp.id })))}>{t('Chạy bù một lần')}</Button>}<Button onClick={() => openRoutines()}>{t('Xem lịch chạy')}</Button></div></div><Button size="icon" aria-label={t('Đóng thông báo lịch bị lỡ')} onClick={() => setDismissedCatchUpNotice(catchUpNoticeKey)}><X size={16} /></Button></div>}
-      {selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} recovery={workspaceRecovery} action={action} showSources={openSources} openMessage={messageId => {
+      {selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} recovery={workspaceRecovery} action={action} showSources={openSources} reviewRecovery={runId => { setRecoveryFocus({ runId, at: Date.now() }); setPanel('activity'); }} openMessage={messageId => {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
@@ -640,7 +643,7 @@ export function App() {
       <footer className="main-footer">{t('Orglet không đảm bảo câu trả lời luôn chính xác. Hãy kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
     </main>
     {detailsOpen && (detail || detailsTeam || detailsWorker) && <DetailsPanel workspace={workspace} team={detailsTeam} worker={detailsWorker} detail={detail}
-      recovery={workspaceRecovery}
+      recovery={workspaceRecovery} recoveryFocus={recoveryFocus}
       readProcessOutput={detail ? (processId, stream, offset) => orglet.call('recoveryProcessOutput', { taskId: detail.task.id, processId, stream, offset }) : undefined}
       readPrivateFile={detail ? (runId, path, offset) => orglet.call('recoveryFile', { taskId: detail.task.id, runId, path, offset }) : undefined}
       onRetireWorkspace={detail ? (runId, reviewToken) => toolAction(async () => {

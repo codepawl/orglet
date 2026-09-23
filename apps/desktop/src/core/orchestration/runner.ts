@@ -21,7 +21,7 @@ import { Checkpoints, type Checkpoint } from '../storage/checkpoints';
 import { TeamMailbox } from './mailbox';
 import { harnessToolAdapter } from '../harness/tool-adapter';
 import { assignmentKey } from './assignments';
-import { ToolCalls } from '../storage/tool-calls';
+import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { WorkspaceGrants } from '../storage/workspace-grants';
 import { assertSkillReady, skillResource } from '../skill-package';
@@ -829,8 +829,9 @@ export class Runner {
       if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true, harnessRunTotal));
       const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error) : 'Lần chạy gặp lỗi.';
       const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
-      if (options.keepTaskOpen) this.store.update('runs', { ...run, status, error: message });
-      else this.store.status(task.id, run.id, status, message);
+      const errorCode = error instanceof UnresolvedAttemptError ? error.code : undefined;
+      if (options.keepTaskOpen) this.store.update('runs', { ...run, status, error: message, errorCode });
+      else this.store.status(task.id, run.id, status, message, errorCode);
       this.event(run.id, message);
     } finally {
       try {

@@ -5,7 +5,7 @@ import { WorkspaceGrantSnapshot, type WorkspacePermission } from '../../shared/w
 import { WorkspaceBlob, WorkspaceFile, WorkspaceManifest, WorkspaceOperation } from '../../shared/workspace-tools';
 import { WorkspaceReadEvidence } from '../../shared/workspace-evidence';
 import { Store } from '../storage/database';
-import { ToolCalls } from '../storage/tool-calls';
+import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import { WorkspaceGrants } from '../storage/workspace-grants';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { ReadRecoveryFile, RecoveryFile } from '../../shared/workspace-recovery';
@@ -103,7 +103,7 @@ export class WorkspaceRuntime {
       JOIN runs ON runs.id=copies.run_id WHERE runs.task_id=?
       AND json_extract(copies.data,'$.state') IN ('uncertain','conflict')
       AND NOT EXISTS (SELECT 1 FROM settings WHERE id='workspace-retired:' || copies.run_id) LIMIT 1`).get(run.taskId);
-    if (unresolved) throw new Error('Bản làm việc bị gián đoạn; cần kiểm tra trước khi tiếp tục.');
+    if (unresolved) throw new UnresolvedAttemptError('Bản làm việc bị gián đoạn; cần kiểm tra trước khi tiếp tục.');
   }
 
   private save(copy: Copy) {

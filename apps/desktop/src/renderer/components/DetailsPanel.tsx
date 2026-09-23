@@ -19,7 +19,7 @@ import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/work
 import type { WorkspaceLevel } from '../../shared/capability-status';
 import type { ToolCapability } from '../../shared/tool-policy';
 import { PermissionControls } from './PermissionControls';
-import { WorkspaceRecovery, type ReadProcessOutput, type ReadPrivateFile } from './WorkspaceRecovery';
+import { WorkspaceRecovery, type ReadProcessOutput, type ReadPrivateFile, type RecoveryFocus } from './WorkspaceRecovery';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { MessageActions } from './MessageActions';
 import { focusMessage, reactionGroups } from './messageMarks';
@@ -185,12 +185,14 @@ async function copyRunId(id: string) {
   }
 }
 
-export function DetailsPanel({ workspace, team, worker, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, onRetireWorkspace, readProcessOutput, readPrivateFile }: {
+export function DetailsPanel({ workspace, team, worker, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, readProcessOutput, readPrivateFile }: {
   workspace: Workspace;
   team?: Team;
   worker?: Worker;
   detail?: TaskDetail;
   recovery?: WorkspaceRecoveryView;
+  /** Set when the chat asked to review an attempt: Details scrolls to that attempt (or to the blocking one). */
+  recoveryFocus?: RecoveryFocus;
   onRetireWorkspace?: (runId: string, reviewToken: string) => void;
   readProcessOutput?: ReadProcessOutput;
   readPrivateFile?: ReadPrivateFile;
@@ -271,7 +273,7 @@ export function DetailsPanel({ workspace, team, worker, detail, workerStatus, on
           busy={tools.busy} pending={tools.pending}
           onCapability={tools.onCapability} onWorkspace={tools.onWorkspace} onConfigure={tools.onConfigure} />
       </section>}
-      {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs}
+      {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs} focus={recoveryFocus}
         busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} readOutput={readProcessOutput} readFile={readPrivateFile} />}
 
       {detail && detail.runs.some(run => run.snapshot.workFrame) && <Section icon={MessageSquare} title={t('Mục tiêu của lượt')}>
