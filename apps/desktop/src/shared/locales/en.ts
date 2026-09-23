@@ -1736,7 +1736,8 @@ export const en: Dictionary = {
   'Đưa app về như mới cài: trò chuyện, Tí, hội, skill, lịch chạy, nguồn, kiến thức và cài đặt. API key nằm ngoài cơ sở dữ liệu nên không bị đụng tới.': 'Back to a fresh install: chats, workers, teams, skills, routines, sources, knowledge and settings. API keys live outside the database and are untouched.',
   'Hôm qua {0}': 'Yesterday {0}',
   'SF Pro nếu máy có, không thì {0}': 'SF Pro if this machine has it, otherwise {0}',
-  '{0}, đi kèm Orglet': '{0}, ships with Orglet',
+  'SF Pro hoặc {0}': 'SF Pro or {0}',
+  'mặc định': 'default',
   // Settings → About and updates (COD-176)
   'Giới thiệu': 'About',
   'Phiên bản {0}': 'Version {0}',

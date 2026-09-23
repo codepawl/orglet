@@ -3,8 +3,11 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { t } from '../i18n';
 
-/** `labelStyle` draws the label in what it names — a font family shown in that font, say — in the menu and in the trigger. */
-export type SelectOption = { value: string; label: string; detail?: string; icon?: ReactNode; disabled?: boolean; dimmed?: boolean; group?: string; badge?: ReactNode; labelStyle?: CSSProperties };
+/**
+ * `labelStyle` draws the label in what it names — a font family shown in that font, say — in the menu and in the trigger.
+ * `note` is a small muted word after the label, such as "default", kept in the interface font.
+ */
+export type SelectOption = { value: string; label: string; note?: string; detail?: string; icon?: ReactNode; disabled?: boolean; dimmed?: boolean; group?: string; badge?: ReactNode; labelStyle?: CSSProperties };
 
 type Placement = { style: CSSProperties; above: boolean };
 const GAP = 6, EDGE = 10, MAX_HEIGHT = 360, MIN_HEIGHT = 140;
@@ -129,7 +132,7 @@ export function Select({ value, options, onChange, label, ariaLabel, disabled, s
       else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(active); }
     }}>
     {showIcon && current?.icon && <span className="select-icon">{current.icon}</span>}
-    <span className="select-value">{current ? <><span style={current.labelStyle}>{current.label}</span>{showDetail && current.detail && <span className="select-detail"> · {current.detail}</span>}</> : <span className="select-placeholder">{t('Chọn')}</span>}</span>
+    <span className="select-value">{current ? <><span style={current.labelStyle}>{current.label}</span>{current.note && <span className="select-note"> ({current.note})</span>}{showDetail && current.detail && <span className="select-detail"> · {current.detail}</span>}</> : <span className="select-placeholder">{t('Chọn')}</span>}</span>
     <ChevronDown size={16} className="select-chevron" aria-hidden="true" />
   </button>;
 
@@ -143,7 +146,7 @@ export function Select({ value, options, onChange, label, ariaLabel, disabled, s
         className={`select-option${index === active ? ' active' : ''}${option.dimmed ? ' dimmed' : ''}`}
         onPointerMove={() => { if (!option.disabled && index !== active) setActive(index); }} onPointerDown={event => event.preventDefault()} onClick={() => choose(index)}>
         {option.icon && <span className="select-icon">{option.icon}</span>}
-        <span className="select-option-text"><span style={option.labelStyle}>{option.label}</span>{option.detail && <span className="select-detail">{option.detail}</span>}</span>
+        <span className="select-option-text"><span><span style={option.labelStyle}>{option.label}</span>{option.note && <span className="select-note"> ({option.note})</span>}</span>{option.detail && <span className="select-detail">{option.detail}</span>}</span>
         {option.badge && <span className="select-option-badge">{option.badge}</span>}
         <Check size={16} className="select-check" aria-hidden="true" />
       </li>];
