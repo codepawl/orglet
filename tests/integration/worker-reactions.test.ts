@@ -80,7 +80,9 @@ describe('one-shot harness answers', () => {
     await followUp(taskId, 'claude-code', 'Cảm ơn.');
     expect(requests[1].prompt).toContain(ownAnswer);
     expect(reactions(taskId)).toHaveLength(1);
-    expect(store.detail(taskId).artifacts[1].report.limitations).toEqual(['Cảm xúc thứ 1 bị từ chối: Không thể thả cảm xúc cho tin của chính mình.']);
+    // A refused reaction is noted in the run's activity, never under the answer.
+    expect(store.detail(taskId).artifacts[1].report.limitations).toEqual([]);
+    expect(store.detail(taskId).events.map(event => event.message)).toContain('Cảm xúc thứ 1 bị từ chối: Không thể thả cảm xúc cho tin của chính mình.');
     expect(store.detail(taskId).task.status).toBe('completed');
   });
 
@@ -96,10 +98,11 @@ describe('one-shot harness answers', () => {
     const taskId = await chat(worker.id, 'codex', 'Tôi thích trả lời ngắn.');
     expect(requests[0].prompt).toContain('reactions goes inside the payload JSON');
     expect(reactions(taskId)).toMatchObject([{ messageId: turnMessageId(taskId, 0), actor: 'worker', emoji: 'agree' }]);
-    expect(store.detail(taskId).artifacts[0].report.limitations).toEqual([
+    expect(store.detail(taskId).artifacts[0].report.limitations).toEqual([]);
+    expect(store.detail(taskId).events.map(event => event.message)).toEqual(expect.arrayContaining([
       'Cảm xúc thứ 1 bị từ chối: Không tìm thấy tin nhắn trong cuộc trò chuyện này.',
       'Cảm xúc thứ 2 bị từ chối: Mỗi cảm xúc cần messageId và emoji.',
-    ]);
+    ]));
     expect(store.detail(taskId).task.status).toBe('completed');
   });
 
@@ -117,7 +120,8 @@ describe('one-shot harness answers', () => {
     expect((requests[0].schema as { properties: Record<string, unknown> }).properties).not.toHaveProperty('reactions');
     expect(requests[0].prompt).not.toContain('put a reaction in reactions');
     expect(reactions(taskId)).toEqual([]);
-    expect(store.detail(taskId).artifacts[0].report.limitations).toContain('Câu trả lời kèm 1 cảm xúc nhưng lượt chạy này không được phép thả cảm xúc; đã bỏ qua.');
+    expect(store.detail(taskId).artifacts[0].report.limitations).toEqual([]);
+    expect(store.detail(taskId).events.map(event => event.message)).toContain('Câu trả lời kèm 1 cảm xúc nhưng lượt chạy này không được phép thả cảm xúc; đã bỏ qua.');
   });
 });
 

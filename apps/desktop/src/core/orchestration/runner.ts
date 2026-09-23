@@ -1256,19 +1256,21 @@ export class Runner {
    * passes (a running run in the current turn, a message it can see, never its own). A bad item becomes a
    * limitation of the answer and the rest still land; nothing here fails the run (COD-216).
    */
+  /**
+   * A reaction is a small gesture, so one that cannot land is noted in the run's activity (Details) and never shown
+   * under the answer as a limitation (user, 2026-09-23).
+   */
   private recordAnswerReactions(run: Run, items: unknown[], allowed: boolean): string[] {
     if (!items.length) return [];
     if (!allowed) {
-      const note = `Câu trả lời kèm ${items.length} cảm xúc nhưng lượt chạy này không được phép thả cảm xúc; đã bỏ qua.`;
-      this.event(run.id, note);
-      return [note];
+      this.event(run.id, `Câu trả lời kèm ${items.length} cảm xúc nhưng lượt chạy này không được phép thả cảm xúc; đã bỏ qua.`);
+      return [];
     }
-    const limitations: string[] = [];
     items.slice(0, MAX_ANSWER_REACTIONS).forEach((item, index) => {
       const refusal = this.recordAnswerReaction(run, item, index);
-      if (refusal) limitations.push(`Cảm xúc thứ ${index + 1} bị từ chối: ${refusal}`);
+      if (refusal) this.event(run.id, `Cảm xúc thứ ${index + 1} bị từ chối: ${refusal}`);
     });
-    return limitations;
+    return [];
   }
 
   /** One reaction of a one-shot answer; returns why it was refused, or nothing once it landed. */
