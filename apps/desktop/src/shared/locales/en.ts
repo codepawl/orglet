@@ -1904,10 +1904,10 @@ export const en: Dictionary = {
   'Ghi nhớ thứ {0} bị từ chối: {1}': 'Memory {0} was rejected: {1}',
   'Mỗi ghi nhớ cần text và scope.': 'Each memory needs text and scope.',
   // What a run changed in its working copy (COD-163).
-  'Đã thay đổi {0} tệp · {1}': 'Changed {0} files · {1}',
-  '{0} đã thay đổi {1} tệp · {2}': '{0} changed {1} files · {2}',
+  'Đã thay đổi {0} tệp · {1}': 'Files changed: {0} · {1}',
+  '{0} đã thay đổi {1} tệp · {2}': '{0} · files changed: {1} · {2}',
   'Thay đổi của {0}': '{0}’s changes',
-  '{0} tệp · {1}': '{0} files · {1}',
+  '{0} tệp · {1}': 'Files: {0} · {1}',
   'Thông tin về thay đổi này': 'About these changes',
   'Tùy chọn': 'Options',
   'Không có thay đổi nào trong bản làm việc.': 'Nothing changed in the working copy.',
