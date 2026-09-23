@@ -93,6 +93,21 @@ native('real Windows BaseContainer', () => {
     }
   });
 
+  // COD-193: the block is not about container identity. If a later executor or OS build lets processes of one
+  // sandbox talk over loopback, this fails and the loopback hint in shared/workspace-processes.ts needs revisiting.
+  it('blocks loopback even between processes of the same sandbox', async () => {
+    const result = await execute(`const http=require('http');const {spawnSync}=require('child_process');
+      const server=http.createServer((request,response)=>response.end('hello'));
+      server.listen(0,'127.0.0.1',async()=>{
+        const port=server.address().port;
+        const sameProcess=await fetch('http://127.0.0.1:'+port+'/').then(()=>'allowed').catch(error=>error.cause?.code??'denied');
+        const child=spawnSync(process.execPath,['-e',"fetch('http://127.0.0.1:'+process.argv[1]+'/').then(()=>console.log('allowed')).catch(error=>console.log(error.cause?.code??'denied'))",String(port)],{encoding:'utf8'});
+        console.log(JSON.stringify({sameProcess,childProcess:child.stdout.trim()}));server.close();
+      });`);
+    expect(result.exitCode, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ sameProcess: 'EACCES', childProcess: 'EACCES' });
+  });
+
   it('caps output and terminates a noisy process', async () => {
     const result = await execute(`for(;;)process.stdout.write('x'.repeat(8192));`);
     expect(result.termination).toBe('output_limit');

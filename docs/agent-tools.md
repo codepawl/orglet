@@ -132,7 +132,7 @@ Before publishing a worker's final answer, core computes the changed-file manife
 
 ## Commands and process results
 
-Execution-enabled workers can start a process, wait for status, read stdout or stderr in pages, and cancel it. The command uses either the bundled Node runtime with literal arguments or Windows cmd with one command string. The user PATH and shell profiles are not inherited; tools such as Python, Git or pnpm are not implicitly available. Commands have no network access.
+Execution-enabled workers can start a process, wait for status, read stdout or stderr in pages, and cancel it. The command uses either the bundled Node runtime with literal arguments or Windows cmd with one command string. The user PATH and shell profiles are not inherited; tools such as Python, Git or pnpm are not implicitly available. Commands have no network access, not even loopback: a server one command starts cannot be reached by another command or by its own process, so status and output results carry a hint that points the worker at in-process testing (see [Commands and loopback](technical-guide.md#commands-and-loopback)).
 
 Starting a process saves its identity before launch and returns a handle. The handle is not a completed result. Output is limited to 256 KiB across both streams; pages contain up to 16,000 Unicode characters. Status can wait up to ten seconds rather than repeatedly polling. While a process runs, file tools and integration cannot access the same working copy. Cancellation waits for the sandbox process tree to stop. Leaving a run, including pause or failure, stops its remaining processes.
 
