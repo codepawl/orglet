@@ -49,7 +49,7 @@ export class KnowledgeBase {
     for (const proposal of proposals.slice(0, 3)) {
       const parsed = KnowledgeInput.safeParse({ title: proposal.title, content: proposal.content, tags: proposal.tags, pinned: false, scope });
       if (!parsed.success || existing.some(item => sameText(item.content, parsed.data.content))) continue;
-      const item: Knowledge = { ...parsed.data, id: id(), revision: 1, status: 'proposed', hash: contentHash(parsed.data), provenance: { kind: 'run', taskId: run.taskId, runId: run.id, artifactId }, createdAt: now() };
+      const item: Knowledge = { ...parsed.data, id: id(), revision: 1, status: 'proposed', hash: contentHash(parsed.data), provenance: { kind: 'run', taskId: run.taskId, runId: run.id, artifactId, workerId: run.snapshot.worker.id }, createdAt: now() };
       this.write(item); existing.push(item);
     }
   }

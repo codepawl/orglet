@@ -605,6 +605,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .source-links .button { font-size:12px; padding:4px 8px; min-height:30px; max-width:100%; overflow-wrap:anywhere; }
 .actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:16px; }
 .actions .form-error { flex:1 1 100%; margin:0; order:-1; }
+/* A long skill or note never pushes its Save or Approve out of reach: the bar floats in the panel's bottom-right
+   corner, where a dialog's actions sit, and the text scrolls under it, blurred (user, 2026-09-23). */
+.floating-actions { position:sticky; bottom:12px; z-index:2; width:fit-content; max-width:100%; margin:20px 0 0 auto; padding:6px; border-radius:14px; background:color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter:blur(10px) saturate(1.2); box-shadow:0 8px 28px #0000001a, 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent); }
 @media (min-width: 420px) {
   .actions .form-error { flex:1 1 auto; order:0; margin-right:auto; }
 }
@@ -1640,6 +1643,13 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* One quiet line instead of a wall of chips: the review itself happens in Library → Knowledge (user, 2026-09-23). */
 .knowledge-proposals-line { gap:8px; height:auto; padding:6px 10px; font-size:13px; }
 .knowledge-proposals-line svg { color:var(--working); }
+/* A note's author: the orglet's face, its name, how the note got here and whether it waits for review (user, 2026-09-23). */
+.knowledge-author { display:flex; align-items:center; gap:12px; }
+.knowledge-author-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+.knowledge-author-text strong { font-size:14px; font-weight:500; }
+.knowledge-author-text .muted { font-size:12px; }
+.knowledge-author-mark { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:11px; background:var(--surface); color:var(--muted); }
+.badge.pending { color:var(--working); }
 @media(max-width:1000px) { .chat-reply,.knowledge-proposals { padding-left:0; } .thread-usage { margin-left:0; } }
 
 /* Task rows carry their own menu (rename lives there, not on double-click). */

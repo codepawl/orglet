@@ -37,7 +37,7 @@ it('stores model proposals for review and only loads them into context after app
   proposals = [{ title: 'Metric direction', content: 'Confirm scoring metric direction before comparing ranks.', tags: ['Scoring', 'scoring'] }];
   const { worker, taskId } = await standalone();
   const [proposed] = store.workspace().knowledge;
-  expect(proposed).toMatchObject({ status: 'proposed', revision: 1, tags: ['scoring'], scope: { type: 'worker', id: worker.id }, provenance: { kind: 'run', taskId } });
+  expect(proposed).toMatchObject({ status: 'proposed', revision: 1, tags: ['scoring'], scope: { type: 'worker', id: worker.id }, provenance: { kind: 'run', taskId, workerId: worker.id } });
   expect(store.detail(taskId).artifacts[0].report).not.toHaveProperty('knowledgeProposals');
 
   proposals = [];

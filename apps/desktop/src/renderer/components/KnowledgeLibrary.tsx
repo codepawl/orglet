@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Globe, UserRound, Users, FileText, Pin, Search, Tag, Target, Type } from 'lucide-react';
-import type { Workspace } from '../../shared/contracts';
+import type { Worker, Workspace } from '../../shared/contracts';
 import type { Knowledge, KnowledgeScope, RunContext } from '../../shared/knowledge';
 import { Button, FieldLabel } from './ui';
+import { Avatar } from './Avatar';
 import { Select } from './Select';
 import { t } from '../i18n';
 import { orglet } from '../api';
@@ -14,7 +15,34 @@ export function scopeLabel(scope: KnowledgeScope, workspace: Workspace) {
   if (scope.type === 'team') return t('Hội {0}', [workspace.teams.find(team => team.id === scope.id)?.name ?? scope.id]);
   return t('Tí {0}', [workspace.workers.find(worker => worker.id === scope.id)?.name ?? scope.id]);
 }
-const provenanceLabel = (item: Knowledge) => item.provenance.kind === 'run' ? t('Đề xuất từ một lần chạy') : item.provenance.kind === 'template' ? t('Nhập từ template hội') : t('Bạn tạo');
+/** Who wrote a note: the orglet that suggested it (recorded since 2026-09-23), else its chat's orglet or crew lead. */
+function knowledgeAuthor(item: Knowledge, workspace: Workspace): Worker | undefined {
+  if (item.provenance.kind !== 'run') return undefined;
+  const workers = [...workspace.workers, ...workspace.archivedWorkers];
+  const provenance = item.provenance;
+  const recorded = provenance.workerId ? workers.find(worker => worker.id === provenance.workerId) : undefined;
+  if (recorded) return recorded;
+  const task = workspace.tasks.find(candidate => candidate.id === provenance.taskId);
+  if (!task) return undefined;
+  const team = task.teamId ? workspace.teams.find(candidate => candidate.id === task.teamId) : undefined;
+  const workerId = team?.synthesizerId ?? task.workerId;
+  return workers.find(worker => worker.id === workerId);
+}
+
+/** The note's author with a face you can play with, how it got here, its version, and whether it still waits for review. */
+function KnowledgeAuthor({ item, workspace }: { item: Knowledge; workspace: Workspace }) {
+  const author = knowledgeAuthor(item, workspace);
+  const kind = item.provenance.kind;
+  const name = author?.name ?? (kind === 'user' ? t('Bạn') : kind === 'template' ? t('Template hội') : t('Tí đã xóa'));
+  const origin = kind === 'run' ? t('đề xuất') : kind === 'template' ? t('nhập từ template') : t('tạo');
+  return <div className="knowledge-author">
+    {author
+      ? <Avatar name={author.name} seed={author.id} mascot={author.avatar?.mascot} defaultMascot hint={author.description} color={author.avatar?.color} size="lg" alive motion={{ follow: 'hover' }} />
+      : <span className="knowledge-author-mark" aria-hidden="true">{kind === 'template' ? <Users size={18} /> : <UserRound size={18} />}</span>}
+    <div className="knowledge-author-text"><strong>{name}</strong><span className="muted">{origin} · v{item.revision}</span></div>
+    <span className={item.status === 'proposed' ? 'badge pending' : 'badge'}>{item.status === 'proposed' ? t('Chờ duyệt') : t('Đã duyệt')}</span>
+  </div>;
+}
 
 export function KnowledgeLibrary({ workspace, onOpen }: { workspace: Workspace; onOpen: (item?: Knowledge) => void }) {
   const [query, setQuery] = useState('');
@@ -57,15 +85,14 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
     return orglet.call('saveKnowledge', { ...(item ? { id: item.id } : {}), title, content, tags: tags.split(',').map(tag => tag.trim()).filter(Boolean), pinned, scope: type === 'workspace' ? { type: 'workspace' } : { type: type as 'team' | 'worker', id } });
   };
   return <form className="form" onSubmit={event => { event.preventDefault(); void run(save); }}>
-    {item && <p className="muted">{provenanceLabel(item)} · v{item.revision} · {item.status === 'proposed' ? t('Chờ duyệt') : t('Đã duyệt')}</p>}
-    {proposed && <p role="status">{t('Nội dung do model đề xuất hoặc đến từ template. Đọc kỹ trước khi duyệt; knowledge không cấp quyền hay tăng ngân sách.')}</p>}
+    {item && <KnowledgeAuthor item={item} workspace={workspace} />}
     <label><FieldLabel icon={Type} required>{t('Tiêu đề')}</FieldLabel><Input value={title} onChange={event => setTitle(event.target.value)} required maxLength={200} /></label>
     <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><Textarea rows={8} value={content} onChange={event => setContent(event.target.value)} required maxLength={8000} /></label>
     <label><FieldLabel icon={Tag}>Tags</FieldLabel><Input value={tags} onChange={event => setTags(event.target.value)} placeholder="scoring, dataset" /></label>
     <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
     <p className="muted">{t('Knowledge của hội chỉ nạp khi chạy trong hội đó, kể cả khi Tí tham gia nhiều hội.')}</p>
     <SwitchField checked={pinned} onChange={setPinned} description={t('Không ghim thì chỉ nạp khi yêu cầu có từ khóa khớp. Sửa xong, lần chạy cũ vẫn giữ nội dung nó đã đọc.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
-    <div className="actions">
+    <div className="actions floating-actions">
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       {proposed && !changed && <Button type="button" variant="primary" disabled={busy} onClick={() => void run(() => orglet.call('reviewKnowledge', { id: item.id, revision: item.revision, decision: 'approve' }))}>{t('Duyệt')}</Button>}
       {(!proposed || changed) && <Button variant="primary" disabled={busy}>{proposed ? t('Lưu chỉnh sửa và duyệt') : item ? t('Lưu revision mới') : t('Lưu knowledge')}</Button>}
