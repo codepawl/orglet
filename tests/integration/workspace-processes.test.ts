@@ -35,7 +35,7 @@ const command = { program: 'node', arguments: ['-e', 'console.log("ok")'], timeo
 const success: SandboxResult = { exitCode: 0, stdout: 'ok\n', stderr: '', termination: 'exited' };
 const signal = () => new AbortController().signal;
 function start(callId = id(), input = command, lifetime = signal()) {
-  return processes!.start({ runId: run.id, callId, directory: workingDirectory, command: input, signal: lifetime, authorize: () => {} });
+  return processes!.start({ runId: run.id, callId, directory: workingDirectory, command: input, copyEdits: 0, signal: lifetime, authorize: () => {} });
 }
 
 it('records a handle once, streams bounded pages and rejects foreign run access', async () => {
@@ -60,7 +60,7 @@ it('records a handle once, streams bounded pages and rejects foreign run access'
   expect(() => processes!.output(id(), first.processId, 'stdout', 0)).toThrow('không thuộc');
   finish(success);
   expect(await processes.status(run.id, first.processId, 1000, signal(), () => {})).toMatchObject({ state: 'exited', exitCode: 0 });
-  expect(() => processes!.assertSuccessful(run.id)).not.toThrow();
+  expect(() => processes!.assertSuccessful(run.id, 0)).not.toThrow();
 });
 
 it('waits for cancellation and does not present a cancelled check as success', async () => {
@@ -73,7 +73,7 @@ it('waits for cancellation and does not present a cancelled check as success', a
   const started = await start();
   expect(await processes.cancel(run.id, started.processId)).toMatchObject({ state: 'cancelled' });
   expect(stopped).toBe(true);
-  expect(() => processes!.assertSuccessful(run.id)).toThrow('chưa hoàn tất thành công');
+  expect(() => processes!.assertSuccessful(run.id, 0)).toThrow('chưa hoàn tất thành công');
 });
 
 it('keeps a failed check visible until that same command passes', async () => {
@@ -81,14 +81,14 @@ it('keeps a failed check visible until that same command passes', async () => {
   processes = new WorkspaceProcesses(store, { runCommand: async () => ({ ...success, exitCode }) });
   const failed = await start();
   await processes.status(run.id, failed.processId, 1000, signal(), () => {});
-  expect(() => processes!.assertSuccessful(run.id)).toThrow('chưa hoàn tất thành công');
+  expect(() => processes!.assertSuccessful(run.id, 0)).toThrow('chưa hoàn tất thành công');
   exitCode = 0;
   const unrelated = await start(id(), { ...command, arguments: ['--version'] });
   await processes.status(run.id, unrelated.processId, 1000, signal(), () => {});
-  expect(() => processes!.assertSuccessful(run.id)).toThrow('chưa hoàn tất thành công');
+  expect(() => processes!.assertSuccessful(run.id, 0)).toThrow('chưa hoàn tất thành công');
   const retry = await start();
   await processes.status(run.id, retry.processId, 1000, signal(), () => {});
-  expect(() => processes!.assertSuccessful(run.id)).not.toThrow();
+  expect(() => processes!.assertSuccessful(run.id, 0)).not.toThrow();
 });
 
 it('recovers a persisted running command as uncertain and never relaunches its handle', async () => {
@@ -144,6 +144,6 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('packaged command helper
     const source = outcome === 'timeout' ? 'setInterval(()=>{},1000)' : 'process.stdout.write("x".repeat(600000))';
     const started = await start(id(), { ...command, arguments: ['-e', source], timeoutMs: outcome === 'timeout' ? 500 : 5000 });
     expect(await processes!.status(run.id, started.processId, 10000, signal(), () => {})).toMatchObject({ state: outcome });
-    expect(() => processes!.assertSuccessful(run.id)).toThrow('chưa hoàn tất thành công');
+    expect(() => processes!.assertSuccessful(run.id, 0)).toThrow('chưa hoàn tất thành công');
   });
 });

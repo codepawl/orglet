@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { StartWorkspaceProcess, WorkspaceProcess } from '../../shared/workspace-processes';
+import { StartWorkspaceProcess, WorkspaceProcess, describeCommand } from '../../shared/workspace-processes';
 import { Store, id } from '../storage/database';
 import { ToolCalls } from '../storage/tool-calls';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
@@ -41,8 +41,15 @@ export class WorkspaceProcesses {
     if (running) throw new Error('Tiến trình còn chạy; chờ hoặc hủy trước khi thao tác trên bản làm việc.');
   }
 
-  assertSuccessful(runId: string) {
+  /**
+   * Judges the code the run hands in (COD-189). The latest run of each distinct command that started after the
+   * copy's last file change must have exited 0, or hand-in is blocked. A failure the copy has since moved past
+   * does not block; it comes back as a report limitation so nothing is hidden. With no file change at all, or on
+   * a record from before this rule, every command counts.
+   */
+  assertSuccessful(runId: string, copyEdits: number): string[] {
     this.assertIdle(runId);
+    // Rows are inserted once at start and updated in place, so rowid is start order.
     const records = this.store.db.prepare('SELECT data FROM workspace_processes WHERE run_id=? ORDER BY rowid').all(runId);
     const latest = new Map<string, WorkspaceProcess>();
     for (const row of records) {
@@ -50,12 +57,20 @@ export class WorkspaceProcesses {
       const key = createHash('sha256').update(JSON.stringify([process.command.program, process.command.arguments])).digest('hex');
       latest.set(key, process);
     }
-    if ([...latest.values()].some(process => process.state !== 'exited' || process.exitCode !== 0)) {
-      throw new Error('Có lệnh chưa hoàn tất thành công. Xem đầu ra và kiểm tra lại trước khi tích hợp.');
+    const superseded: string[] = [];
+    for (const process of latest.values()) {
+      if (process.state === 'exited' && process.exitCode === 0) continue;
+      const startedAfterLastEdit = copyEdits === 0 || process.copyEditsAtStart === undefined || process.copyEditsAtStart >= copyEdits;
+      if (startedAfterLastEdit) throw new Error('Có lệnh chưa hoàn tất thành công. Xem đầu ra và kiểm tra lại trước khi tích hợp.');
+      const command = describeCommand(process.command, 300);
+      superseded.push(process.state === 'exited'
+        ? `Lệnh chạy trước lần sửa tệp cuối đã thất bại và chưa được chạy lại: ${command} (mã thoát ${process.exitCode}).`
+        : `Lệnh chạy trước lần sửa tệp cuối không hoàn tất và chưa được chạy lại: ${command} (${process.state}).`);
     }
+    return superseded;
   }
 
-  async start(options: { runId: string; callId: string; directory: string; command: unknown;
+  async start(options: { runId: string; callId: string; directory: string; command: unknown; copyEdits: number;
     signal: AbortSignal; authorize: () => void }): Promise<{ processId: string }> {
     const command = StartWorkspaceProcess.parse(options.command);
     return new ToolCalls(this.store).execute({
@@ -65,7 +80,7 @@ export class WorkspaceProcesses {
         this.assertIdle(options.runId);
         options.signal.throwIfAborted();
         const process: WorkspaceProcess = { id: id(), runId: options.runId, command, state: 'running',
-          exitCode: null, stdout: '', stderr: '' };
+          exitCode: null, stdout: '', stderr: '', copyEditsAtStart: options.copyEdits };
         this.save(process);
         const controller = new AbortController();
         const lifetime = AbortSignal.any([options.signal, controller.signal]);
@@ -79,11 +94,11 @@ export class WorkspaceProcesses {
           });
         }).then(result => {
           this.save({ id: process.id, runId: process.runId, command, state: result.termination,
-            exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr });
+            exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, copyEditsAtStart: options.copyEdits });
           this.store.event(options.runId, `Tiến trình đã dừng: ${result.termination}, mã thoát ${result.exitCode ?? 'unknown'}`);
         }).catch(error => {
           const uncertain: WorkspaceProcess = { id: process.id, runId: process.runId, command,
-            state: 'uncertain', exitCode: null, stdout: process.stdout, stderr: process.stderr,
+            state: 'uncertain', exitCode: null, stdout: process.stdout, stderr: process.stderr, copyEditsAtStart: options.copyEdits,
             error: (error instanceof Error ? error.message : 'Không nhận được kết quả tiến trình.').slice(0, 4000) };
           // If storage itself failed, the durable running record becomes uncertain on restart.
           try { this.save(uncertain); } catch { /* Keep the start record; never report a completed command. */ }
