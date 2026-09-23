@@ -163,7 +163,7 @@ function FontSetting({ role, title, description, value, busy, onPick }: {
       <Select ariaLabel={title} className="setting-select" menuMinWidth={240} disabled={busy} value={value ?? ''}
         onChange={next => { if (next === CUSTOM_FONT) setTyping(value ?? ''); else onPick(next || null); }}
         options={[
-          { value: '', label: t('Mặc định'), detail: role === 'interface' ? t('SF Pro nếu máy có, không thì {0}', [bundled]) : t('{0}, đi kèm Orglet', [bundled]), labelStyle: { fontFamily: fontStack(role) } },
+          { value: '', label: role === 'interface' ? t('SF Pro hoặc {0}', [bundled]) : bundled, note: t('mặc định'), detail: role === 'interface' ? t('SF Pro nếu máy có, không thì {0}', [bundled]) : undefined, labelStyle: { fontFamily: fontStack(role) } },
           ...families.map(family => ({ value: family, label: family, detail: family === bundled ? t('đi kèm Orglet') : undefined, labelStyle: { fontFamily: `"${family}"` } })),
           { value: CUSTOM_FONT, label: t('Phông khác…'), icon: <Pencil size={15} /> },
         ]} />
