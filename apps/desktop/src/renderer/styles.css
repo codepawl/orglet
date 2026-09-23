@@ -1637,6 +1637,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .message-usage { margin-left:auto; font-size:12px; font-variant-numeric:tabular-nums; color:var(--muted); white-space:nowrap; }
 .thread-usage { display:block; margin:6px 0 0 35px; }
 .knowledge-proposals { padding-left:35px; margin-top:16px; }
+/* One quiet line instead of a wall of chips: the review itself happens in Library → Knowledge (user, 2026-09-23). */
+.knowledge-proposals-line { gap:8px; height:auto; padding:6px 10px; font-size:13px; }
+.knowledge-proposals-line svg { color:var(--working); }
 @media(max-width:1000px) { .chat-reply,.knowledge-proposals { padding-left:0; } .thread-usage { margin-left:0; } }
 
 /* Task rows carry their own menu (rename lives there, not on double-click). */
