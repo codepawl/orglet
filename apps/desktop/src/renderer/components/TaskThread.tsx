@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, Lightbulb } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -22,6 +22,7 @@ import { MessageActions } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
 import { ActivityGroup, LiveRun, islandBeforeStreaming, islandOf, liveRunOf, savedSteps, useRunProgress, workingWorkers } from './LiveRun';
 import { dockIsland } from './islandDock';
+import { knowledgeSuggestionKey, showsKnowledgeIsland } from '../../shared/knowledge-island';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
 import type { MentionPerson } from '../../shared/mentions';
@@ -41,6 +42,21 @@ function bylineRole(author: Run) {
   const name = author.stage && teamRoleNames[author.stage];
   if (!name || !author.snapshot.team) return null;
   return <span className="byline-role">{t(name)}</span>;
+}
+
+/** Per chat, the set of knowledge suggestions whose island offer was dismissed (COD-208): UI chrome, so localStorage. */
+const dismissedSuggestionsKey = 'orglet.knowledge-island-dismissed';
+function readDismissedSuggestions(taskId: string): string | undefined {
+  try {
+    const stored = JSON.parse(localStorage.getItem(dismissedSuggestionsKey) || '{}') as Record<string, string>;
+    return typeof stored[taskId] === 'string' ? stored[taskId] : undefined;
+  } catch { return undefined; }
+}
+function rememberDismissedSuggestions(taskId: string, suggestionKey: string) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(dismissedSuggestionsKey) || '{}') as Record<string, string>;
+    localStorage.setItem(dismissedSuggestionsKey, JSON.stringify({ ...stored, [taskId]: suggestionKey }));
+  } catch { /* a blocked store brings the offer back next time, nothing worse */ }
 }
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
@@ -114,7 +130,22 @@ export function TaskThread({ detail, recovery, action, showSources, reviewRecove
       : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
     : undefined;
   const islandWorkerKey = islandWorkers.map(worker => worker.id).join(',');
-  useEffect(() => { dockIsland(dockedIsland); }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, islandWorkerKey]);
+  // Once no run is on, the island offers this chat's knowledge suggestions instead (COD-208). Dismissing hides the
+  // offer for that set only, remembered per chat in localStorage; the notes themselves stay in Thư viện → Knowledge.
+  const [dismissedSuggestions, setDismissedSuggestions] = useState(() => readDismissedSuggestions(detail.task.id));
+  const suggestionKey = knowledgeSuggestionKey(proposals.map(item => item.id));
+  const knowledgeShown = showsKnowledgeIsland({ runLive: dockedIsland !== undefined, suggestionIds: proposals.map(item => item.id), dismissedKey: dismissedSuggestions });
+  // The dock keeps the actions it was first given for a set; delegating through a ref keeps them current.
+  const knowledgeActions = useRef({ review: () => {}, dismiss: () => {} });
+  knowledgeActions.current = {
+    review: () => proposals.length === 1 ? openKnowledge(proposals[0]) : reviewKnowledge(),
+    dismiss: () => { setDismissedSuggestions(suggestionKey); rememberDismissedSuggestions(detail.task.id, suggestionKey); },
+  };
+  useEffect(() => {
+    if (dockedIsland) dockIsland({ kind: 'run', ...dockedIsland });
+    else if (knowledgeShown) dockIsland({ kind: 'knowledge', key: suggestionKey, count: proposals.length, review: () => knowledgeActions.current.review(), dismiss: () => knowledgeActions.current.dismiss() });
+    else dockIsland(undefined);
+  }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, islandWorkerKey, knowledgeShown, suggestionKey]);
   useEffect(() => () => dockIsland(undefined), []);
 
   // A face nods when its answer lands, not when an old chat opens: the runs already finished when this chat was
@@ -217,7 +248,6 @@ export function TaskThread({ detail, recovery, action, showSources, reviewRecove
               : <ReportView artifact={turn.artifact} author={turn.author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} />)}
             {/* App changes this turn's workers proposed, each a card with what became of it; historical turns keep theirs. */}
             <AppProposalCards proposals={detail.appProposals.filter(proposal => proposal.inputRevision === turn.revision)} actions={proposalActions} />
-            {latest && turn.artifact && proposals.length > 0 && <div className="knowledge-proposals"><Button className="knowledge-proposals-line" onClick={() => proposals.length === 1 ? openKnowledge(proposals[0]) : reviewKnowledge()}><Lightbulb size={15} aria-hidden="true" /><span>{proposals.length === 1 ? t('1 gợi ý knowledge chờ duyệt') : t('{0} gợi ý knowledge chờ duyệt', [proposals.length])}</span><span className="muted">{proposals.length === 1 ? t('Xem') : t('Xem trong Thư viện')}</span></Button></div>}
             {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
               {/* A run refused by the unknown-outcome guard (COD-191) says what to do, not which guard fired: the
                   attempt to review sits in Details, and the button below opens it there. */}
