@@ -1,4 +1,16 @@
 import { SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessInfo } from './harness';
+import type { Run } from './contracts';
+
+/**
+ * The run whose account ran out, when the turn is still stuck on it: the latest run of some orglet in the turn is
+ * marked `plan_limit`. A retry adds a run to the same turn, so once that orglet has run again, whether it answered or
+ * failed for another reason, there is nothing left to offer (COD-226).
+ */
+export function outOfPlanRun(turnRuns: readonly Run[]): Run | undefined {
+  const latestByWorker = new Map<string, Run>();
+  for (const run of turnRuns) latestByWorker.set(run.snapshot.worker.id, run);
+  return [...latestByWorker.values()].findLast(run => run.errorCode === 'plan_limit');
+}
 
 /**
  * What the island offers when a harness account ran out of plan usage (COD-225): the account with the most room to
