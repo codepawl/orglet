@@ -78,6 +78,39 @@ export type HarnessInfo = {
   configDir?: string;
 };
 
+/** One rolling allowance of a subscription plan, as the CLI's vendor reports it for the signed-in account. */
+export type HarnessUsageWindow = {
+  kind: 'session' | 'weekly' | 'monthly';
+  /** The model this allowance is limited to, when it is not the whole plan (Claude's weekly allowance for one model). */
+  model?: string;
+  /** 0 to 100. */
+  usedPercent: number;
+  resetsAt?: string;
+};
+
+/**
+ * Why an account shows no allowance: the CLI reports none (Cursor Agent, an API-key sign-in), the account is
+ * signed out, its saved sign-in has expired until the CLI runs again, or the read failed this time.
+ */
+export type HarnessUsageGap = 'unsupported' | 'signed_out' | 'expired' | 'failed';
+
+/** What the vendor says about one account: who is signed in, on which plan, and how much of it is used. */
+export type HarnessAccountUsage = {
+  accountId: string;
+  email?: string;
+  plan?: string;
+  windows: HarnessUsageWindow[];
+  unavailable?: HarnessUsageGap;
+  checkedAt: string;
+};
+
+/** Every account of every installed harness, the system account first. */
+export type HarnessUsage = Partial<Record<HarnessCatalogId, HarnessAccountUsage[]>>;
+
+/** The allowance closest to running out: the one that stops the account first. */
+export const tightestWindow = (usage: Pick<HarnessAccountUsage, 'windows'>): HarnessUsageWindow | undefined =>
+  usage.windows.reduce<HarnessUsageWindow | undefined>((tightest, window) => !tightest || window.usedPercent > tightest.usedPercent ? window : tightest, undefined);
+
 export function harnessStatus(auth: HarnessAuth): HarnessStatus {
   if (auth === 'missing') return 'not_installed';
   if (auth === 'logged_out') return 'detected';

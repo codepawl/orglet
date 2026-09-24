@@ -166,9 +166,10 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
     const status = await run(executable, ['status', '--format', 'json'], accountEnv);
     const text = output(status).trim();
     try {
-      const parsed = JSON.parse(status.stdout || '{}') as { loggedIn?: boolean; authenticated?: boolean; email?: string; user?: string };
-      const loggedIn = parsed.loggedIn === true || parsed.authenticated === true || Boolean(parsed.email ?? parsed.user);
-      const loggedOut = parsed.loggedIn === false || parsed.authenticated === false;
+      // Cursor Agent answers `isAuthenticated`; the older names stay for builds that used them.
+      const parsed = JSON.parse(status.stdout || '{}') as { isAuthenticated?: boolean; loggedIn?: boolean; authenticated?: boolean; email?: string; user?: string };
+      const loggedIn = parsed.isAuthenticated === true || parsed.loggedIn === true || parsed.authenticated === true || Boolean(parsed.email ?? parsed.user);
+      const loggedOut = parsed.isAuthenticated === false || parsed.loggedIn === false || parsed.authenticated === false;
       if (loggedIn) {
         info = describe('logged_in', `Đăng nhập Cursor${parsed.email || parsed.user ? ` · ${parsed.email ?? parsed.user}` : ''}`);
       } else if (loggedOut) {

@@ -72,6 +72,12 @@ export class HarnessAccounts {
     this.write(harness, { ...state, activeId: id });
   }
 
+  /** The folder a CLI signs in to for one account; undefined for the system account, which sets no variable. */
+  configDir(harness: HarnessCatalogId, id: string): string | undefined {
+    if (id === SYSTEM_ACCOUNT_ID || !this.root) return undefined;
+    return this.directory(harness, id);
+  }
+
   /** One folder per account. The id is a UUID, so it is a safe path segment and the label stays free text. */
   private directory(harness: HarnessCatalogId, id: string) {
     if (!this.root) throw new Error('Orglet chưa có thư mục dữ liệu để giữ tài khoản harness.');

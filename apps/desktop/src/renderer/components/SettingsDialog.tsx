@@ -6,7 +6,8 @@ import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
-import { harnessCatalog, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../shared/harness';
+import { harnessCatalog, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage } from '../../shared/harness';
+import { PlanUsage } from './PlanUsage';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, type FontRole } from '../../shared/fonts';
 import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
@@ -61,15 +62,38 @@ const sectionLabels: Partial<Record<SettingsTab, string>> = {
   usage: 'Chỉ tính request qua Orglet; harness trên máy dùng gói riêng.',
 };
 
+/** Who is signed in and on which plan, as one line: "an@example.com · ChatGPT Plus". */
+const accountLine = (usage: HarnessAccountUsage) => [usage.email, usage.plan].filter(Boolean).join(' · ');
+
+/** An account in the picker: its address and how much of the allowance closest to its limit is used. */
+function accountSummary(usage: HarnessAccountUsage | undefined): string | undefined {
+  if (!usage) return undefined;
+  if (usage.unavailable === 'signed_out') return t('Chưa đăng nhập');
+  const tightest = tightestWindow(usage);
+  if (!tightest) return usage.email;
+  const used = t('đã dùng {0}%', [Math.round(tightest.usedPercent)]);
+  return usage.email ? `${usage.email} · ${used}` : used;
+}
+
+/** Why a signed-in account shows no allowance. Signed out says nothing here: the login command below already does. */
+function usageGapText(item: HarnessInfo, usage: HarnessAccountUsage): string | undefined {
+  if (usage.unavailable === 'unsupported') return item.id === 'cursor' ? t('Cursor Agent không cho biết gói đã dùng bao nhiêu.') : t('Kiểu đăng nhập này không có hạn mức gói.');
+  if (usage.unavailable === 'expired') return t('Phiên đăng nhập đã hết hạn. Mở {0} một lần rồi bấm Dò lại.', [item.name]);
+  if (usage.unavailable === 'failed') return t('Chưa đọc được hạn mức lúc này.');
+  return undefined;
+}
+
 /**
  * Which account of one harness runs. An account is a folder the CLI signs in to, so switching is a folder swap:
  * the status, the version and the login command above all follow the account picked here. Adding one selects it,
- * so the login command shown next is the one that signs into it.
+ * so the login command shown next is the one that signs into it. Each option names the address signed in to it
+ * and how much of its plan is used, so switching to the one with room is a choice made on sight.
  */
-function HarnessAccountPicker({ item, busy, onSelect, onSave, onRemove }: {
-  item: HarnessInfo; busy: boolean;
+function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove }: {
+  item: HarnessInfo; usage?: HarnessAccountUsage[]; busy: boolean;
   onSelect: (id: string) => void; onSave: (id: string | undefined, label: string) => void; onRemove: (id: string) => void;
 }) {
+  const summaryOf = (accountId: string) => accountSummary(usage?.find(row => row.accountId === accountId));
   const row = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<{ id?: string; label: string }>();
   const active = item.accounts.find(account => account.id === item.accountId);
@@ -82,11 +106,11 @@ function HarnessAccountPicker({ item, busy, onSelect, onSave, onRemove }: {
   };
   return <div className="harness-account" ref={row}>
     <Select size="sm" className="harness-account-select" ariaLabel={t('Tài khoản {0}', [item.name])} value={item.accountId} disabled={busy}
-      menuMinWidth={240} showDetail={false}
+      menuMinWidth={320} showDetail={false}
       onChange={onSelect}
       options={[
-        { value: SYSTEM_ACCOUNT_ID, label: t('Tài khoản mặc định'), detail: t('Đã đăng nhập sẵn'), icon: <Laptop size={16} /> },
-        ...item.accounts.map(account => ({ value: account.id, label: account.label, icon: <UserRound size={16} /> })),
+        { value: SYSTEM_ACCOUNT_ID, label: t('Tài khoản mặc định'), detail: summaryOf(SYSTEM_ACCOUNT_ID) ?? t('Đã đăng nhập sẵn'), icon: <Laptop size={16} /> },
+        ...item.accounts.map(account => ({ value: account.id, label: account.label, detail: summaryOf(account.id), icon: <UserRound size={16} /> })),
       ]} />
     {item.configDir && <InfoTip label={t('Chi tiết tài khoản')} rows={[
       { label: t('Thư mục đăng nhập'), value: item.configDir, mono: true, onCopy: () => navigator.clipboard.writeText(item.configDir!) },
@@ -288,10 +312,23 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const [busy, setBusy] = useState(false);
   // Dò lại keeps the last rows on screen and says it is looking again beside the button, rather than clearing them.
   const [detecting, setDetecting] = useState(false);
+  /** Plan usage per harness account; undefined until the first read lands. Read only while the Harness tab is open. */
+  const [usage, setUsage] = useState<HarnessUsage>();
+  const loadUsage = useCallback(async (refresh: boolean) => {
+    try {
+      setUsage(await orglet.call('harnessUsage', { refresh }));
+    } catch {
+      setUsage({});
+    }
+  }, []);
+  const readsUsage = open && tab === 'harness' && harnesses !== undefined;
+  useEffect(() => { if (readsUsage) void loadUsage(false); }, [readsUsage, loadUsage]);
   const detectAgain = () => void act(async () => {
     setDetecting(true);
     try { onHarnesses(await orglet.call('harnesses', { refresh: true })); }
     finally { setDetecting(false); }
+    // Usage goes over the network, so the rows come back first and the bars follow.
+    void loadUsage(true);
     // The core dropped the harness model lists with the detection; the session copies follow.
     modelLists.invalidate();
     return t('Đã dò lại harness');
@@ -515,6 +552,14 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 {(harnesses ?? []).map(item => {
                   const pill = statusPill(item);
                   const showLogin = item.status !== 'signed_in';
+                  const accountUsage = usage?.[item.id]?.find(row => row.accountId === item.accountId);
+                  const signedInAs = !showLogin && accountUsage?.email ? accountLine(accountUsage) : undefined;
+                  const usageGap = !showLogin && accountUsage ? usageGapText(item, accountUsage) : undefined;
+                  /** An account change re-detects in the core and drops its usage copy; the bars are read again after. */
+                  const changeAccount = async (change: () => Promise<HarnessInfo[]>) => {
+                    onHarnesses(await change());
+                    void loadUsage(false);
+                  };
                   return <div key={item.id} className="setting-row harness-row">
                     <ProviderMark provider={item.id} />
                     <div className="setting-text">
@@ -526,19 +571,25 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       </span>
                       {/* With nothing installed the version line only repeats what the detail line already says. */}
                       {item.version && <span className="setting-description">{item.version}</span>}
-                      <span className="setting-description">{tMessage(item.authDetail)}</span>
+                      {/* Signed in, the account itself says more than "signed in through claude.ai". */}
+                      <span className="setting-description">{signedInAs ?? tMessage(item.authDetail)}</span>
+                      {!showLogin && usage === undefined && <SkeletonGroup label={t('Đang đọc hạn mức gói…')}>
+                        <div className="plan-usage"><Skeleton width="70%" /></div>
+                      </SkeletonGroup>}
+                      {!showLogin && accountUsage && <PlanUsage windows={accountUsage.windows} label={t('Hạn mức gói {0}', [item.name])} />}
+                      {usageGap && <span className="setting-description">{usageGap}</span>}
                       {item.executable ? <span className="setting-path" title={item.executable}>{item.executable}</span> : null}
-                      {item.runnable && <HarnessAccountPicker item={item} busy={busy}
+                      {item.runnable && <HarnessAccountPicker item={item} usage={usage?.[item.id]} busy={busy}
                         onSelect={id => void act(async () => {
-                          onHarnesses(await orglet.call('selectHarnessAccount', { harness: item.id, id }));
+                          await changeAccount(() => orglet.call('selectHarnessAccount', { harness: item.id, id }));
                           return t('Đã đổi tài khoản {0}', [item.name]);
                         }, item.name)}
                         onSave={(id, label) => void act(async () => {
-                          onHarnesses(await orglet.call('saveHarnessAccount', { harness: item.id, ...(id ? { id } : {}), label }));
+                          await changeAccount(() => orglet.call('saveHarnessAccount', { harness: item.id, ...(id ? { id } : {}), label }));
                           return id ? t('Đã đổi tên tài khoản') : t('Đã thêm tài khoản {0}. Đăng nhập bằng lệnh bên dưới.', [label]);
                         }, item.name)}
                         onRemove={id => void act(async () => {
-                          onHarnesses(await orglet.call('removeHarnessAccount', { harness: item.id, id }));
+                          await changeAccount(() => orglet.call('removeHarnessAccount', { harness: item.id, id }));
                           return t('Đã xóa tài khoản');
                         }, item.name)} />}
                       {((item.status === 'not_installed' && item.installCommand) || showLogin) && <div className="harness-commands">

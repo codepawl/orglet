@@ -24,8 +24,9 @@ import { Routines } from './orchestration/routines';
 import { WorkPolicy } from './orchestration/work-policy';
 import { KnowledgeBase } from './context/knowledge';
 import type { HarnessRuntime } from './orchestration/runner';
-import type { HarnessInfo } from '../shared/harness';
+import { SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage } from '../shared/harness';
 import { detectHarnesses, probe } from './harness/detect';
+import { readHarnessUsage } from './harness/usage';
 import { HarnessAccounts } from './harness/accounts';
 import { executeHarness } from './harness/exec';
 import { eraseEverything, eraseKnowledge, eraseMemory, eraseSources } from './storage/erase';
@@ -50,6 +51,7 @@ import type { Args } from '../shared/contracts';
 export const localHarnessRuntime = (accountRoot?: string): HarnessRuntime => ({
   detect: accounts => detectHarnesses(process.env, process.platform, probe, accounts),
   execute: executeHarness,
+  usage: (harness, executable, configDir) => readHarnessUsage(harness, executable, configDir),
   ...(accountRoot ? { accountRoot } : {}),
 });
 
@@ -82,6 +84,7 @@ export class CoreService {
   /** App changes workers propose in chats, applied through this service's own commands (COD-199). */
   readonly appProposals: AppProposals;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
+  private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
   readonly harnessAccounts: HarnessAccounts;
   private modelListMemory = emptyModelListCache();
   private modelListLoaded = false;
@@ -454,6 +457,7 @@ export class CoreService {
       }
       case 'deleteMemory': { this.knowledge.deleteMemory(commands.deleteMemory.parse(args).id); this.notify(); return; }
       case 'harnesses': return this.harnesses(commands.harnesses.parse(args).refresh);
+      case 'harnessUsage': return this.harnessUsage(commands.harnessUsage.parse(args).refresh);
       case 'saveHarnessAccount': {
         const input = commands.saveHarnessAccount.parse(args);
         return this.harnessAccount(() => input.id
@@ -686,11 +690,43 @@ export class CoreService {
   }
 
   /**
+   * Plan usage of every account of every installed harness, not only the active one, so the account picker can
+   * show which one still has room. Kept apart from detection because it goes over the network and runs slower;
+   * reused for a minute like detection.
+   */
+  harnessUsage(refresh: boolean): Promise<HarnessUsage> {
+    if (refresh || !this.harnessUsageCache || Date.now() - this.harnessUsageCache.at > 60_000) {
+      const value = this.readHarnessUsage().catch(() => ({}));
+      this.harnessUsageCache = { at: Date.now(), value };
+    }
+    return this.harnessUsageCache.value;
+  }
+
+  /** Reads against the detection already cached: Dò lại has just refreshed it, and a second pass would spawn every CLI again. */
+  private async readHarnessUsage(): Promise<HarnessUsage> {
+    const read = this.harness.usage;
+    if (!read) return {};
+    const installed = (await this.harnesses(false)).filter(item => item.executable);
+    const perHarness = await Promise.all(installed.map(async item => {
+      const accountIds = [SYSTEM_ACCOUNT_ID, ...item.accounts.map(account => account.id)];
+      const rows: HarnessAccountUsage[] = [];
+      // One account at a time: every Codex read starts its own app server.
+      for (const accountId of accountIds) {
+        const found = await read(item.id, item.executable, this.harnessAccounts.configDir(item.id, accountId));
+        rows.push({ ...found, accountId, checkedAt: this.clock().toISOString() });
+      }
+      return [item.id, rows] as const;
+    }));
+    return Object.fromEntries(perHarness);
+  }
+
+  /**
    * Adds, renames, removes or selects one harness account, then detects again: a different account means a
    * different sign-in, so the cached status and model list no longer describe it.
    */
   private async harnessAccount(change: () => void | Promise<unknown>): Promise<HarnessInfo[]> {
     await change();
+    this.harnessUsageCache = undefined;
     const found = await this.harnesses(true);
     this.notify();
     return found;
