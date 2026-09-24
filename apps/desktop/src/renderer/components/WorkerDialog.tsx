@@ -97,7 +97,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   // What this worker remembered for itself, newest first; team and workspace memories live in Thư viện → Knowledge.
   const memories = worker ? workspace.knowledge.filter(item => isMemory(item) && item.status !== 'archived' && item.scope.type === 'worker' && item.scope.id === worker.id).sort((first, second) => second.createdAt.localeCompare(first.createdAt)) : [];
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói skill nhập từ thư mục cần được review trong Thư viện trước khi chọn.') : tab === 'permissions' ? t('Áp dụng cho chat riêng của Tí. Chat hội có quyền riêng trong Chi tiết.') : tab === 'memory' ? t('Điều Tí tự ghi nhớ từ các cuộc trò chuyện và mang sang cuộc sau. Sửa, ghim hay xóa tại đây; thay đổi áp dụng từ lượt chạy kế tiếp.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
+  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói nhập từ thư mục cần review trong Thư viện trước.') : tab === 'permissions' ? t('Cho chat riêng của Tí; chat hội có quyền riêng.') : tab === 'memory' ? t('Điều Tí mang theo giữa các cuộc trò chuyện.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
     {tab === 'general' && <>
       <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} /></label>
@@ -131,10 +131,10 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         }),
       ]} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} />}
-      {isHarness(provider) && <p className="muted">{t('Dùng bản {0} đã cài và tài khoản đang đăng nhập trên máy. Chi phí tính theo gói của harness, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
-      {provider === 'ollama' && <p className="muted">{t('Gọi Ollama trên máy này tại 127.0.0.1:11434. Cài Ollama và kéo model trước. Orglet không giữ ngân sách cho lần chạy local.')}</p>}
-      {provider === 'opencode-zen' && <p className="muted">{t('Dùng API key OpenCode Zen. Zen trừ số dư của bạn theo từng request. Orglet không theo dõi chi tiêu Zen và không áp giới hạn mỗi task, nên hãy đặt giới hạn chi tiêu trong console OpenCode Zen. Chỉ chạy được model mà tài liệu Zen ghi endpoint chat/completions.')}</p>}
-      {provider === 'opencode-go' && <p className="muted">{t('Dùng API key OpenCode Go, tính vào hạn mức 5 giờ, tuần và tháng của gói Go, không qua ngân sách Orglet. Nếu bật Use balance trên opencode.ai, phần vượt hạn mức trừ vào số dư Zen mà Orglet không thấy được. Chỉ chạy được model mà tài liệu Go ghi endpoint chat/completions.')}</p>}
+      {isHarness(provider) && <p className="muted">{t('Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
+      {provider === 'ollama' && <p className="muted">{t('Chạy Ollama tại 127.0.0.1:11434; không tính vào ngân sách Orglet.')}</p>}
+      {provider === 'opencode-zen' && <p className="muted">{t('Zen trừ số dư theo từng request; Orglet không theo dõi hay giới hạn khoản này.')}</p>}
+      {provider === 'opencode-go' && <p className="muted">{t('Tính vào hạn mức gói Go, không qua ngân sách Orglet. Bật Use balance thì phần vượt trừ vào số dư Zen.')}</p>}
       {capped && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
     </>}
     {tab === 'skill' && <>
@@ -148,7 +148,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
           the core (a raised limit, a template, a run that read unvetted content), so the line says so plainly. */}
       <div className="permissions worker-auto-apply">
         <SwitchField checked={autoApplyProposals} onChange={setAutoApplyProposals}
-          description={t('Đề xuất an toàn được áp dụng ngay khi lượt chạy kết thúc, có nút Hoàn tác. Nâng giới hạn, xuất template, sửa cách Tí này làm việc, hay đề xuất từ lượt đã đọc web, tệp hoặc tin của Tí khác vẫn chờ bạn bấm.')}>
+          description={t('Đề xuất an toàn áp dụng ngay, có Hoàn tác. Nâng giới hạn, template và đề xuất từ nội dung bên ngoài vẫn chờ bạn.')}>
           <Zap size={15} aria-hidden="true" />{t('Áp dụng thay đổi trong app mà không cần hỏi')}
         </SwitchField>
       </div>

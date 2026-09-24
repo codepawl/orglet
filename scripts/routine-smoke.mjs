@@ -59,14 +59,14 @@ try {
   const overdueAt = new Date(Date.now() - 30 * 86_400_000).toISOString();
   db.prepare('UPDATE routines SET data=? WHERE id=?').run(JSON.stringify({ ...saved, enabled: true, pending: null, nextDueAt: overdueAt }), routine.id); db.close();
   app = await launch(); page = await app.firstWindow(); await useVietnamese(page);
-  const notice = page.getByRole('status').filter({ hasText: 'Lịch không mất' });
+  const notice = page.getByRole('status').filter({ hasText: 'khi app tắt' });
   await notice.waitFor();
   assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).tasks.length, 1);
   await page.screenshot({ path: join(output, 'routine-reopen-notice.png') });
   await notice.getByRole('button', { name: 'Xem lịch chạy', exact: true }).click();
   const missedCard = page.getByRole('region', { name: 'Lịch Morning routine', exact: true });
   await missedCard.getByRole('heading', { name: 'Lần chạy bị lỡ', exact: true }).waitFor();
-  await missedCard.getByText(/Nhiều lần trong lúc máy tắt được gộp thành một lần chạy bù/).waitFor();
+  await missedCard.getByText(/Nhiều lần lỡ gộp thành một lần chạy bù/).waitFor();
   await page.getByText(/Đã bỏ qua lịch khi app không hoạt động/).waitFor();
   const missed = (await page.evaluate(() => window.orglet.call('workspace', {}))).routines[0];
   assert.equal(missed.pending.dueAt, overdueAt);

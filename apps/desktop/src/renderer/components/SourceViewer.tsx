@@ -125,7 +125,7 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh }: { de
     : undefined;
   function body(source: Source) {
     if (state === 'revoked') return <p className="preview-state">{t('Đã thu hồi quyền đọc')}</p>;
-    if (state === 'parquet') return <p className="preview-state">{t('Parquet chưa xem trực tiếp được; chạy checker local trong Nguồn của cuộc trò chuyện để xem cột và số dòng.')}</p>;
+    if (state === 'parquet') return <p className="preview-state">{t('Parquet chưa xem được; chạy checker local để xem cột và số dòng.')}</p>;
     if (state === 'too-large') return <p className="preview-state">{t('Tệp quá lớn để xem trong Orglet.')}</p>;
     if (content.loading) return <SkeletonGroup label={t('Đang mở…')} className="source-shape">{source.media ? <Skeleton shape="block" className="source-shape-media" /> : <SkeletonText lines={8} />}</SkeletonGroup>;
     if (content.error) return <p className="preview-state">{tMessage(content.error)}</p>;

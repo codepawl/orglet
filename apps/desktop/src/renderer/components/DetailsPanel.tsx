@@ -37,13 +37,20 @@ import { turnMessageId } from '../../shared/message-interactions';
 // Not the bare 'tí trưởng', which the dictionary already uses for the synthesizer role rather than this stage.
 const stageNames: Record<string, string> = { plan: 'phân việc', synthesis: 'gộp kết quả', member: 'phần việc', group: 'trả lời' };
 
-/** How long something took, in the shortest form that is still exact enough to be worth reading. */
-function elapsedLabel(fromIso: string, toIso: string) {
+/**
+ * How long something took, in the shortest form that is still exact enough to be worth reading: two units at most,
+ * so a chat open for days reads "5 days 23 h" rather than thousands of minutes.
+ */
+export function elapsedLabel(fromIso: string, toIso: string) {
   const seconds = Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 1000);
   if (!Number.isFinite(seconds) || seconds < 1) return undefined;
   if (seconds < 60) return t('{0} giây', [seconds]);
   const minutes = Math.floor(seconds / 60);
-  return seconds % 60 ? t('{0} phút {1} giây', [minutes, seconds % 60]) : t('{0} phút', [minutes]);
+  if (minutes < 60) return seconds % 60 ? t('{0} phút {1} giây', [minutes, seconds % 60]) : t('{0} phút', [minutes]);
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return minutes % 60 ? t('{0} giờ {1} phút', [hours, minutes % 60]) : t('{0} giờ', [hours]);
+  const days = Math.floor(hours / 24);
+  return hours % 24 ? t('{0} ngày {1} giờ', [days, hours % 24]) : t('{0} ngày', [days]);
 }
 
 /** When a run finished, as far as the panel can tell: the last thing that run reported. */
@@ -334,7 +341,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           return <div className="details-team-message" key={messageId}>
             {excerpt === undefined
               ? <p className="muted">{t('Tin nhắn trước không còn hiển thị')}</p>
-              : <button type="button" className="message-reply-context" onClick={() => focusMessage(messageId)}>{t('Mở tin gốc: {0}', [excerpt.slice(0, 100)])}</button>}
+              : <button type="button" className="message-reply-context" onClick={() => focusMessage(messageId)}><span className="details-reaction-source">{t('Mở tin gốc: {0}', [excerpt.slice(0, 200)])}</span></button>}
             {reactionGroups(marks, detail.runs).map(group => <p key={group.emoji}>{group.label}</p>)}
           </div>;
         })}
@@ -350,7 +357,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
         <Wrench size={16} />{t('Chi tiết kỹ thuật')}
       </Button>}
 
-      {detail && technical && <Drawer open onClose={() => setTechnical(false)} title={t('Chi tiết kỹ thuật')} description={t('Từng lần chạy: ai trả lời, đọc những gì, và mã để đối chiếu khi có gì đó sai.')}>
+      {detail && technical && <Drawer open onClose={() => setTechnical(false)} title={t('Chi tiết kỹ thuật')} description={t('Từng lần chạy: ai trả lời, đọc gì, và mã để đối chiếu.')}>
         <ol className="technical-runs">
           {detail.runs.map(run => <TechnicalRun key={run.id} run={run} detail={detail} workspace={workspace} onExport={onExport} />)}
         </ol>

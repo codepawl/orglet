@@ -142,7 +142,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   };
 
   const defaultNote = isOpenCodePlan(provider)
-    ? t('Chọn model trong gói hoặc gõ ID. Model ghi Chưa hỗ trợ dùng endpoint Orglet chưa gọi được.')
+    ? t('Chọn model trong gói hoặc gõ ID; mục Chưa hỗ trợ thì Orglet chưa gọi được.')
     : t('Gõ ID model hoặc chọn từ danh sách. Tên mặc định chỉ là gợi ý.');
   const note = pending ? <Skeleton width="60%" />
     : modelIssue || list?.error || (!models.length && !busy ? failOpen : undefined)

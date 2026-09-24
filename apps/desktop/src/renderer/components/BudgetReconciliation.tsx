@@ -61,7 +61,7 @@ export function BudgetReconciliation({ workspace, busy, onReconcile }: {
 
   return <section className="budget-reviews" aria-labelledby="budget-reviews-title">
     <h3 id="budget-reviews-title">{t('Khoản cần đối soát')}</h3>
-    <p className="muted">{t('Orglet giữ nguyên khoản dự phòng cho đến khi bạn kiểm tra phí thực tế trên provider. Nhập 0 chỉ khi provider xác nhận không tính phí.')}</p>
+    <p className="muted">{t('Nhập phí thực tế từ provider; nhập 0 chỉ khi provider xác nhận không tính phí.')}</p>
     {unknown.length === 0 ? <p className="muted">{t('Không có khoản chưa rõ chi phí.')}</p> : <ul className="budget-review-list">{unknown.map(item => <li key={item.id} className="budget-review-item">
       <div className="budget-review-heading">
         <div><strong>{item.provider} · {taskName(item)}</strong><p className="muted">{reasonLabel(item.reason)} · {item.month} · {t('Giữ chỗ {0}', [usd(item.originalMicros)])} · {t('Lượt {0}', [item.runId.slice(0, 8)])}</p></div>

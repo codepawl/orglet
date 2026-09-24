@@ -56,9 +56,9 @@ const settingNames = translated({
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
 
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
-  connections: 'Bật provider cần dùng rồi dán key hoặc chọn tệp .txt. Key được mã hóa trên máy và không nằm trong bản sao lưu. Ollama chỉ cần bật công tắc — không cần key.',
-  harness: 'Chưa cài, đã thấy trên máy, và đã đăng nhập sẵn sàng chạy là ba trạng thái khác nhau. Lỗi đăng nhập hiện lệnh sửa; Orglet không chuyển sang Demo. Chọn harness ở mục Model khi thiết lập Tí.',
-  usage: 'Chỉ tính request qua Orglet, không phải tổng hóa đơn API key. Harness trên máy dùng gói của chính nó nên không nằm trong các số này. Input cached được tính theo giá thường.',
+  connections: 'Key được mã hóa trên máy này và không vào bản sao lưu.',
+  harness: 'Đăng nhập lỗi thì Orglet dừng lại, không chuyển sang Demo.',
+  usage: 'Chỉ tính request qua Orglet; harness trên máy dùng gói riêng.',
 };
 
 /**
@@ -185,9 +185,12 @@ function FontSetting({ role, title, description, value, busy, onPick }: {
 /**
  * One deletion. Three of them ask a plain yes/no; the full erase asks the person to type the app's name in a
  * popover beside its own row, because it is the one that cannot be undone from inside Orglet.
+ *
+ * The row says only what goes (COD-221); what stays, and what the deletion cannot undo, is the `caveat`, read
+ * at the moment it matters: in the confirm question.
  */
-function EraseRow({ scope, title, description, question, busy, onErase }: {
-  scope: EraseScope; title: string; description: string; question: string; busy: boolean;
+function EraseRow({ scope, title, description, caveat, question, busy, onErase }: {
+  scope: EraseScope; title: string; description: string; caveat: string; question: string; busy: boolean;
   onErase: (scope: EraseScope, confirm?: string) => void;
 }) {
   const row = useRef<HTMLDivElement>(null);
@@ -195,7 +198,7 @@ function EraseRow({ scope, title, description, question, busy, onErase }: {
   const total = scope === 'everything';
   const start = async () => {
     if (total) { setTyped(''); return; }
-    if (await confirmAction({ title: question, description, confirmLabel: t('Xóa') })) onErase(scope);
+    if (await confirmAction({ title: question, description: caveat, confirmLabel: t('Xóa') })) onErase(scope);
   };
   return <div ref={row}>
     <Row title={title} description={description}>
@@ -208,6 +211,7 @@ function EraseRow({ scope, title, description, question, busy, onErase }: {
         setTyped(undefined);
         onErase(scope, ERASE_CONFIRMATION);
       }}>
+        <p className="erase-caveat">{caveat}</p>
         <label htmlFor="erase-confirm">{t('Gõ {0} để xác nhận. Không hoàn tác được.', [ERASE_CONFIRMATION])}</label>
         <div>
           <input id="erase-confirm" autoFocus value={typed ?? ''} maxLength={20} disabled={busy} autoComplete="off" spellCheck={false}
@@ -415,7 +419,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'chat' && <>
-              <Row id="auto-title-label" title={t('Tự đặt tên cuộc trò chuyện')} description={t('Sau câu trả lời đầu tiên, Tí đặt một tên ngắn. Tên bạn tự đổi luôn được giữ.')}>
+              <Row id="auto-title-label" title={t('Tự đặt tên cuộc trò chuyện')} description={t('Đặt tên sau câu trả lời đầu; tên bạn tự đổi được giữ.')}>
                 <Switch checked={workspace.autoTitles} disabled={busy} labelledBy="auto-title-label" onChange={value => void save({ autoTitles: value })} />
               </Row>
               <Row title={t('Định dạng khi sao chép')} description={t('Chọn sẵn để bấm một lần là sao chép, không hiện menu.')}>
@@ -424,7 +428,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Định dạng khi tải xuống')} description={t('Chọn sẵn để bấm một lần là tải, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi tải xuống')} className="setting-select" value={workspace.downloadFormat} disabled={busy} onChange={value => void save({ downloadFormat: value as Workspace['downloadFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản (.txt)') }, { value: 'markdown', label: 'Markdown (.md)' }]} />
               </Row>
-              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Áp dụng cho cuộc trò chuyện, Tí và hội, tính từ lúc lưu trữ. Cuộc trò chuyện đã tốn phí chỉ giữ lại số liệu chi phí.')}>
+              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Cuộc trò chuyện, Tí và hội; số liệu chi phí được giữ.')}>
                 <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
               </Row>
               <Row title={t('Request đồng thời mỗi provider')} description={t('Vượt giới hạn thì bước đó xếp hàng chờ, chưa trừ ngân sách.')}>
@@ -531,7 +535,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         }, item.name)}
                         onSave={(id, label) => void act(async () => {
                           onHarnesses(await orglet.call('saveHarnessAccount', { harness: item.id, ...(id ? { id } : {}), label }));
-                          return id ? t('Đã đổi tên tài khoản') : t('Đã thêm tài khoản {0}. Chạy lệnh đăng nhập bên dưới để đăng nhập vào tài khoản này.', [label]);
+                          return id ? t('Đã đổi tên tài khoản') : t('Đã thêm tài khoản {0}. Đăng nhập bằng lệnh bên dưới.', [label]);
                         }, item.name)}
                         onRemove={id => void act(async () => {
                           onHarnesses(await orglet.call('removeHarnessAccount', { harness: item.id, id }));
@@ -557,7 +561,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Tiền tệ')} description={currency.code === 'USD' ? t('Chi phí được lưu bằng USD theo giá của provider.') : t('1 USD = {0} {1}{2}. Chi phí vẫn lưu bằng USD, chỉ quy đổi khi hiển thị.', [new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(currency.rate), currency.code, currency.updatedAt ? t(' · cập nhật {0}', [new Date(currency.updatedAt).toLocaleString('vi-VN')]) : ''])}>
                 <Select ariaLabel={t('Tiền tệ')} className="setting-select" inlineDetail menuMinWidth={270} value={currency.code} disabled={busy} onChange={value => void act(async () => { await orglet.call('setCurrency', { code: CurrencyCode.parse(value) }); return value === 'USD' ? t('Đã đổi sang USD.') : t('Đã đổi sang {0} theo tỷ giá mới nhất.', [value]); }, t('Tiền tệ'))} options={(Object.keys(currencies) as CurrencyCode[]).map(code => ({ value: code, label: code, detail: t(currencies[code]), icon: <CurrencyFlag code={code} /> }))} />
               </Row>
-              {currency.code !== 'USD' && <Row title={t('Tỷ giá')} description={currency.error ? <span className="error">{t('{0} Đang dùng tỷ giá gần nhất.', [currency.error])}</span> : t('Tự làm mới mỗi 12 giờ từ open.er-api.com. Request không kèm dữ liệu của bạn.')}>
+              {currency.code !== 'USD' && <Row title={t('Tỷ giá')} description={currency.error ? <span className="error">{t('{0} Đang dùng tỷ giá gần nhất.', [currency.error])}</span> : t('Mỗi 12 giờ từ open.er-api.com, không gửi dữ liệu của bạn.')}>
                 <Button disabled={busy} onClick={() => void act(async () => { await orglet.call('refreshCurrency', {}); return t('Đã cập nhật tỷ giá'); }, t('Tỷ giá'))}><RefreshCw size={14} />{t('Cập nhật')}</Button>
               </Row>}
               <BudgetReconciliation workspace={workspace} busy={busy} onReconcile={async (reservationId, amountMicros, source) => {
@@ -575,33 +579,38 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'data' && <>
-              <Row title={t('Sao lưu')} description={t('Tí, hội, lịch sử, báo cáo và chi phí vào một tệp JSON. Không gồm API key hay nội dung tệp nguồn; báo cáo có thể chứa trích dẫn.')}>
+              <Row title={t('Sao lưu')} description={t('Lưu Tí, hội và cuộc trò chuyện vào một tệp.')}>
                 <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.backup()) ? t('Đã lưu bản sao lưu') : undefined, t('Sao lưu'))}><Download size={14} />{t('Lưu bản sao lưu')}</Button>
               </Row>
-              <Row title={t('Khôi phục')} description={t('Bổ sung các mục còn thiếu, giữ nguyên dữ liệu và cài đặt hiện tại. Nguồn khôi phục cần được chọn lại để cấp quyền đọc.')}>
+              <Row title={t('Khôi phục')} description={t('Thêm các mục còn thiếu từ một bản sao lưu.')}>
                 <Button variant="outline" disabled={busy} onClick={() => void act(async () => (await orglet.restore()) ? t('Đã khôi phục các mục còn thiếu') : undefined, t('Khôi phục từ tệp'))}><ArchiveRestore size={14} />{t('Khôi phục từ tệp')}</Button>
               </Row>
               <EraseRow busy={busy} scope="chats" onErase={erase}
                 title={t('Xóa lịch sử trò chuyện')}
-                description={t('Mọi cuộc trò chuyện, câu trả lời và báo cáo. Tí, hội, skill và kiến thức được giữ lại; cuộc trò chuyện đã tốn phí chỉ giữ lại số liệu chi phí.')}
+                description={t('Xóa mọi cuộc trò chuyện và báo cáo.')}
+                caveat={t('Tí, hội, skill và kiến thức được giữ lại. Số liệu chi phí được giữ.')}
                 question={t('Xóa mọi cuộc trò chuyện và báo cáo?')} />
               <EraseRow busy={busy} scope="knowledge" onErase={erase}
                 title={t('Xóa kiến thức')}
-                description={t('Mọi điều Tí đã học và được bạn duyệt, kể cả đề xuất đang chờ duyệt.')}
+                description={t('Xóa mọi kiến thức, kể cả đề xuất đang chờ.')}
+                caveat={t('Kể cả đề xuất đang chờ duyệt. Ghi nhớ của các Tí được giữ lại.')}
                 question={t('Xóa toàn bộ kiến thức đã tích lũy?')} />
               <EraseRow busy={busy} scope="memory" onErase={erase}
                 title={t('Xóa ghi nhớ')}
-                description={t('Mọi điều các Tí tự ghi nhớ từ các cuộc trò chuyện, ở mọi phạm vi, kể cả ghi nhớ đang chờ duyệt. Kiến thức bạn đã viết hoặc duyệt được giữ lại.')}
+                description={t('Xóa mọi ghi nhớ của các Tí.')}
+                caveat={t('Ở mọi phạm vi, kể cả ghi nhớ đang chờ duyệt. Kiến thức bạn viết hoặc duyệt được giữ lại.')}
                 question={t('Xóa mọi ghi nhớ của các Tí?')} />
               <EraseRow busy={busy} scope="sources" onErase={erase}
                 title={t('Xóa nguồn đã nhập')}
-                description={t('Orglet chỉ quên các tệp đã nhập, không đụng đến tệp gốc trên máy. Nguồn còn được một cuộc trò chuyện nhắc tới sẽ bị thu hồi quyền đọc thay vì xóa, để cuộc trò chuyện đó vẫn mở được.')}
+                description={t('Quên mọi tệp đã nhập; tệp gốc trên máy không đổi.')}
+                caveat={t('Tệp gốc trên máy không đổi. Nguồn còn được một cuộc trò chuyện nhắc tới chỉ bị thu hồi quyền đọc, để cuộc trò chuyện đó vẫn mở được.')}
                 question={t('Quên mọi tệp nguồn đã nhập?')} />
               <EraseRow busy={busy} scope="everything" onErase={erase}
                 title={t('Xóa toàn bộ dữ liệu')}
-                description={t('Đưa app về như mới cài: trò chuyện, Tí, hội, skill, lịch chạy, nguồn, kiến thức, ghi nhớ và cài đặt. API key nằm ngoài cơ sở dữ liệu nên không bị đụng tới.')}
+                description={t('Đưa Orglet về như mới cài.')}
+                caveat={t('Mọi trò chuyện, Tí, hội, skill, lịch, nguồn, kiến thức, ghi nhớ và cài đặt. API key được giữ lại.')}
                 question={t('Xóa sạch mọi thứ trong Orglet?')} />
-              <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi cuộc trò chuyện, báo cáo và cài đặt nằm trên máy này. Không có tài khoản Orglet, và không một bí mật nào bị tổn hại trong quá trình làm ra app này.')} />
+              <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi thứ nằm trên máy này. Không có tài khoản Orglet.')} />
             </>}
 
             {tab === 'about' && <AboutSettings workspace={workspace} busy={busy} act={act} onAutoUpdate={value => void save({ autoUpdate: value })} />}
