@@ -1,0 +1,73 @@
+# In a chat
+
+What you can do inside a chat once an orglet or crew is set up: attach files, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, and find what the app told you.
+
+Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
+
+## Attach files
+
+An orglet reads only what you attach to **that** chat, or what is inside the working folder you granted it ([Permissions](permissions-and-learning.md#permissions)).
+
+1. Click **+** next to the message box and choose **Attach files**.
+2. Pick **Files**, or **Folder** for up to 20 supported files from one folder (hidden and generated files are skipped, and the chat lists what was left out).
+3. Write what you want done, then send.
+
+Attached files sit as cards above your message; hover a card to remove it. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. Images, video, audio and PDF are preview-only for now: the orglet is told they exist but cannot read them.
+
+Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. CSV, JSONL and Parquet files can also be checked locally under **Details → Sources**: schema, row counts, duplicate and missing IDs, and, for two files, an exact-match accuracy. Demo cannot analyze files; switch **Model** off Demo first.
+
+## Reports as documents
+
+Ask for a report and it arrives as a card, not a wall of text. Open it to read it; **Copy** puts it on the clipboard and **Download** saves it. Whether copy and download give plain text or Markdown is set in **Settings → Chat**. A download of one answer carries its message ID, reply link and reactions; to move a whole conversation, use a backup.
+
+## What the orglet did
+
+While an orglet works, a tab docks onto the message box: the faces of the orglets at work, one sentence for what they are doing now ("Researcher is reading invoice.xlsx…"), and above it the last step that finished. What the tab can say depends on how the orglet runs, because the chat only names what Orglet itself saw:
+
+| Connection | What the chat can name |
+|---|---|
+| An API key, Ollama, OpenCode, or any orglet with a working folder | Every read, search, edit, command, web page and data check, exactly |
+| Claude Code without a working folder | The file it read and the pattern it searched, from the CLI's own stream |
+| Codex without a working folder | That it is thinking, then writing |
+| Cursor Agent | Working, then writing |
+
+Afterwards the answer keeps a folded line of the steps ("Read 2 files · Searched 1 time"); open it for the targets. Above it, **Memories used: N** opens the memories the orglet was given ([Memory](memory.md)). An orglet's thinking shows only inside the folded control, only when the model shares it, and is not saved.
+
+Commands the orglet ran are summed under the answer ("Commands: 2 exit 0, 1 failed"), with their full output under **Details**. Exit 0 means that command finished; it does not mean the task passed.
+
+## Diffs
+
+When a run changed files in its working copy, a line under the answer says **Files changed: 3 · +42 −7**. Click it for a read-only diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a crew turn each member has its own line, because each works in its own copy.
+
+The diff exists only when the working folder is a Git repository, because the comparison is against the snapshot the copy started from; a plain folder says so instead. Applying the changes to your folder, keeping your current files, and file conflicts are handled in **Details → Files and processes**, not in the viewer. Details: [worker-actions.md](worker-actions.md#where-a-diff-lives).
+
+## Details
+
+**Details** at the top of a chat opens the panel that holds everything the chat does not show inline:
+
+- **Tool permissions** and the working folder for this chat ([Permissions](permissions-and-learning.md#permissions)).
+- Cost so far, and for each internal job (a crew's plan, members and combining step) its status, retry and cancel. **Pause after this step** and **Continue from checkpoint** let you stop a long run and pick it up later; **Retry with current settings** starts a new run for what did not finish.
+- **What happened**: the run's activity, the sources it cited, and **Loaded context**, the exact instructions, skill, knowledge and memory the run started with.
+- **Chat decisions**: questions an orglet paused to ask you, with your answers. **Turn goal**: how an orglet understood the request, its assumptions, and the checks it planned (planned is not done).
+- **Files and processes**: every attempt that changed files, with its outcome, its commands and their output. An attempt whose outcome is unknown after a crash or cancel blocks the chat until you check your files and choose **Keep current files**. See [Reviewing an interrupted attempt](agent-tools.md#reviewing-an-interrupted-attempt).
+- **Messages between workers** and **Reactions** in a crew or group chat, and export of any job's report.
+
+## Schedules
+
+A schedule sends the same request to an orglet or crew daily or weekly, while Orglet is open.
+
+1. Click **Schedules** in the footer, then **New schedule**.
+2. Name it, write the repeating brief, choose the orglet or crew, the frequency, the weekday and run time, the time zone, and a limit per run. Attach sources if the request needs them.
+3. Choose **Enable schedule**. Enabling is your approval for that content and connection; a later change to the orglet, crew, model or sources turns the schedule off until you review and save it again.
+
+Orglet checks schedules only while it is open. If the computer was off or asleep at the time, the missed run becomes one **Run once to catch up** choice, or **Skip missed run**; missed days are never queued up, and the next time stays on the calendar. Scheduled runs cannot write memory, react, or propose app changes, since nobody is watching. There are at most 100 schedules. Policy detail: [routines.md](routines.md).
+
+You can also ask an orglet, in its chat, to schedule something ("run this every Monday at 9"); it answers with a proposal card, and the schedule it creates is saved switched off until you enable it ([App-change proposals](permissions-and-learning.md#app-change-proposals)).
+
+## Notifications
+
+Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked.
+
+The list is newest first, grouped by day, with new rows marked. Filter it by **All**, **Problems**, **Done** or **Info**. Each row says what happened and what it was about (the setting, the orglet, the chat, the command); a run of identical notices is one row with a count. Every app change an orglet makes through a proposal is announced here too. **Clear all** empties the list.
+
+Notifications are notes about this machine's session, stored in the window, not in the workspace: they are not in a backup and do not follow you to another computer. The **Schedules** and **Library** buttons in the footer show the same dot when something there waits for you: a missed run, or knowledge to review.

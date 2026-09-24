@@ -7,7 +7,9 @@
 
 Orglet is a desktop app. You keep a few AI workers, each with a name and a role, and you talk to them in a normal chat. There is no Orglet account and no Orglet server. Chats, workers and files stay on this computer.
 
-This page is the first walk-through. The [docs map](README.md) lists everything else. How teams work in detail: [team-chat.md](team-chat.md). How to run tests and connect providers in depth: [technical-guide.md](technical-guide.md).
+This page is the first walk-through. The [user guide](user-guide.md) is the map of everything else, one short page per part of the app. How teams work in detail: [team-chat.md](team-chat.md). How to run tests and connect providers in depth: [technical-guide.md](technical-guide.md).
+
+In the app, workers are called **orglets** and teams are called **crews**. This page uses both words.
 
 Orglet is early. Expect rough edges, and check answers against your own sources before you rely on them.
 
@@ -17,12 +19,12 @@ You need **Windows** or **macOS**. Linux is later. You do not need an Orglet log
 
 ### From a GitHub Release
 
-The [latest release](https://github.com/codepawl/orglet/releases/latest) is **v0.2.0**. Windows **Setup.exe** / **ZIP** on that release may still be empty. If they are missing, [run from source](#from-source) instead.
+The [latest release](https://github.com/codepawl/orglet/releases/latest) carries a Windows **Setup.exe** (installs per user and updates itself) and a **ZIP** (unzip and run; does not update itself).
 
 | If you use | Do this |
 |---|---|
-| Windows | Run Setup. SmartScreen may warn (unknown publisher). That is expected on unsigned 0.2.x: **More info** → **Run anyway**. Details: [windows-release-gates.md](windows-release-gates.md). |
-| macOS | Unzip `Orglet.app`. It is not a GitHub Release asset yet; use a CI ZIP or a local make. Gatekeeper will warn until notarization exists: right-click → **Open**. Details: [macos-packaging.md](macos-packaging.md). |
+| Windows | Run Setup. SmartScreen may show **Windows protected your PC** while the signing certificate is new: check that it names **Nguyen Xuan An** as the publisher, then **More info** → **Run anyway**. Details: [user guide → Install](user-guide.md#install). |
+| macOS | Unzip `Orglet.app`. It is not a GitHub Release asset yet; use a CI ZIP or a local make. Gatekeeper may warn on an unsigned build: right-click → **Open**. Details: [macos-packaging.md](macos-packaging.md). |
 
 ### From source
 
@@ -117,4 +119,4 @@ Demo cannot analyze files. Switch **Model** off Demo first. Reports can open lik
 
 ## What this page does not cover
 
-Schedules, the library, backup, and packaging checks have their own pages. See the [docs map](README.md). Product fit and the **Not now** list stay in [product.md](product.md).
+Everything else is one short page each in the [user guide](user-guide.md): crews and group chats, connections, permissions and the working folder, memory and knowledge, schedules, notifications, settings, backup, and troubleshooting. Product fit and the **Not now** list stay in [product.md](product.md).

@@ -2,14 +2,17 @@ name: Bug report
 description: Something in Orglet does not work as expected
 labels: [bug]
 body:
+  - type: markdown
+    attributes:
+      value: Check [Troubleshooting](https://github.com/codepawl/orglet/blob/main/docs/troubleshooting.md) first. Security problems go to a [private advisory](https://github.com/codepawl/orglet/security/advisories/new), not here.
   - type: textarea
     id: what-happened
     attributes:
       label: What happened?
       description: Include the steps to make it happen again.
       placeholder: |
-        1. Open a task with the Writer worker
-        2. Send a message
+        1. Open the Researcher orglet
+        2. Attach a CSV file and send a message
         3. The reply never appears
     validations:
       required: true
@@ -26,32 +29,49 @@ body:
       options:
         - Windows
         - macOS
-        - Other
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is Orglet installed?
+      options:
+        - Windows Setup.exe
+        - Windows ZIP
+        - macOS app
+        - Linux ZIP
+        - Run from source (pnpm dev)
     validations:
       required: true
   - type: dropdown
     id: provider
     attributes:
-      label: How does the worker run?
+      label: How does the orglet run?
       options:
         - Demo
         - Claude Code on this computer
         - Codex on this computer
+        - Cursor Agent on this computer
         - OpenAI API
         - Anthropic API
-        - Not related to a worker
+        - Grok (xAI) API
+        - OpenRouter API
+        - OpenCode Zen or Go API
+        - Ollama on this computer
+        - Not related to an orglet
     validations:
       required: true
-  - type: input
+  - type: textarea
     id: system
     attributes:
-      label: OS version and Orglet version or commit
-      description: Release tag (for example v0.2.0) or a commit SHA. Say if you built from source.
-      placeholder: Windows 11, v0.2.0 from source
+      label: Build details
+      description: Open Settings → About and choose Copy under Build details, then paste it here. If you built from source, give the commit SHA instead.
+      placeholder: Orglet 0.2.7 · Electron 44.3.0 · Windows 11 x64 · Installed with Setup (Squirrel)
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Error messages or screenshots
-      description: Remove API keys, file contents and anything private before you paste.
+      label: Error messages, notifications or screenshots
+      description: The Notifications panel in the sidebar footer keeps every error the app showed. Remove API keys, file contents and anything private before you paste.

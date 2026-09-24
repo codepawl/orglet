@@ -4,7 +4,7 @@ labels: [enhancement]
 body:
   - type: markdown
     attributes:
-      value: Check [product direction](https://github.com/codepawl/orglet/blob/main/docs/product.md) first, including the "Not now" list. For anything larger than a small fix, open the issue before a pull request ([CONTRIBUTING](https://github.com/codepawl/orglet/blob/main/CONTRIBUTING.md)).
+      value: Check [product direction](https://github.com/codepawl/orglet/blob/main/docs/product.md) first, including the "Not now" list, and the [user guide](https://github.com/codepawl/orglet/blob/main/docs/user-guide.md) in case it already exists. For anything larger than a small fix, open the issue before a pull request ([CONTRIBUTING](https://github.com/codepawl/orglet/blob/main/CONTRIBUTING.md)).
   - type: textarea
     id: problem
     attributes:
@@ -22,3 +22,12 @@ body:
     id: alternatives
     attributes:
       label: What do you do today instead?
+  - type: dropdown
+    id: fit
+    attributes:
+      label: Who is it for?
+      description: Orglet is built for one person on their own computer (see product direction).
+      options:
+        - Someone working alone (freelancer, creator, solo founder)
+        - An everyday ChatGPT or Claude user who wants more structure
+        - A team or company (probably "Not now"; say why it still fits)
