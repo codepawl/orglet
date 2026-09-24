@@ -42,19 +42,29 @@ The live words come from `ActivityKind` in `shared/progress.ts` and the sentence
 ## While work happens
 
 - **The island** on the prompt bar (`LiveIsland`, docked by `TaskThread`) carries the faces of the workers really running, one sentence for what they do now, and above it one grey line for the last step that finished. It says who, and it says the action in the vocabulary above. No dots, colours or marks to learn.
-- **The step list, the timer and the worker's notes** sit behind one folded control above the streaming text (`ActivityGroup` in `LiveRun`). The control is the step count ("Đọc 2 tệp · Tìm 1 lần"), or *Chi tiết* when only notes are there.
+- **The step list, the timer and the worker's notes** sit behind one folded control above the streaming text: the same trace the finished answer keeps (`TurnTrace`, below), with the memories the run froze as its first rows. The control counts what has happened so far ("Dùng 1 ghi nhớ · Đọc 2 tệp · Tìm 1 lần"), or says *Chi tiết* when only notes are there.
 - **The answer** appears as it is written, as a normal message.
 - **Thinking** shows only inside that folded control, as the worker's notes, and only when the model shares it. It is not on the page by default. It is never saved: `HarnessProgress` lives in memory and is dropped when the run stops.
 - **A crew run** reads as one island counting the workers at work ("3 Tí đang làm việc…"), with every face. The lead's planning and combining use the same island with the core's own states. Members' internal jobs stay under **Details**.
 
 ## Afterwards
 
-- **The order** ([COD-217](https://linear.app/codepawl/issue/COD-217)): everything attached to one turn reads in the order it happened. Above the answer, what the run loaded before writing: the memories it used (*Đã dùng 1 ghi nhớ*), then the folded step line. Under it, what came out of the answer: the changed-files line, the proposal cards (self-improvements included), and last the copy / download / reply / react row. The same order holds while the answer streams, and a group-chat reply keeps its own notices with its own bubble. `turnNotices` in `renderer/components/turnNotices.tsx` is the one place that knows this order; a new notice goes into its slot there.
-- **The step line** stays above the answer, built from the events the core saved (*Đã đọc …*, *Đã tìm …*, *Đã liệt kê tệp …*). It is folded; opening it lists the steps with their targets.
+- **The order** ([COD-217](https://linear.app/codepawl/issue/COD-217)): everything attached to one turn reads in the order it happened. Above the answer, one folded trace of what the run did before writing (next section). Under it, what came out of the answer: the changed-files line, the proposal cards (self-improvements included), and last the copy / download / reply / react row. The same order holds while the answer streams, and a group-chat reply keeps its own notices with its own bubble. `turnNotices` in `renderer/components/turnNotices.tsx` is the one place that knows this order; a new notice goes into its slot there.
+- **The trace** is the only control above the answer; it is built from what the run froze and the events the core saved, and there is none when there is nothing (below).
 - **The changed-files line** sits under the answer when the run changed files in its working copy: **Đã thay đổi 3 tệp · +42 −7** (`ChangedFilesLine`). It opens the diff viewer. Nothing is shown when nothing changed. In a crew turn each member's line is named ("Writer đã thay đổi 2 tệp · +10 −1"), because each member works in its own copy.
 - **Commands** are summed in the turn's outcome line ("Lệnh: 2 thoát 0, 1 lỗi"), with their output under **Details**.
 - **A report** arrives as a `DocumentCard` that opens in `DocumentViewer`, never poured into the chat.
 - **What is kept**: the saved events, the answer or report, the working copy's counts (`WorkspaceRecoveryView.copies[].diff`), and the copy itself on disk until the chat is deleted, so the diff can be opened later. Thinking and the live progress are not kept.
+
+## The trace above an answer
+
+Decided 2026-09-24 ([COD-220](https://linear.app/codepawl/issue/COD-220), user: "memories used should sit inside another collapsible section that holds all of the worker's actions, for users who like clear transparency about what each worker does"). It replaced the separate *Đã dùng 1 ghi nhớ* line and the folded step line, so a finished turn shows exactly one control before the bubble, and a crew or group chat gives each member's answer its own.
+
+- **Collapsed**, one muted line counts each kind of thing that happened, in a fixed order, each count with its own words for one and for several: *Dùng 1 ghi nhớ · Nạp 2 ghi chú · Đọc 2 tệp · Tìm 1 lần · Lên web 1 lần · Ghi nhớ thêm 1 điều* ("Used 1 memory · Loaded 2 notes · Read 2 files · Searched once · Went online once · Remembered 1 thing"). With nothing to count there is no control at all.
+- **Open**, the rows in the order they happened, an icon and plain words each: the memories used (each one's text, with *Mở tab Ghi nhớ* under the rows), the notes loaded (their titles, from the manifest the run froze), a crew's handoffs (one row per member, and a reassignment), then the steps the core saved: files read, patterns searched, folders listed, skill resources read, web searches and pages, dataset checks, files edited and commands ended in a working copy, a memory or an app change stored, and, as quieter rows, what did not go through (a refused reaction or memory, an unreadable page, a missing file). The rows use the vocabulary of the table above; a row is worded as what the worker did, never as which tool it called, so a step the core could not name shows as *Dùng công cụ* with no target.
+- **The rule holds.** A row is something the core recorded: a memory frozen on the answer, a note in the manifest, a saved event. The runner's status lines (calling the model, saving the answer, costs) are not actions and never appear. A Codex or Cursor Agent run that streamed nothing and saved no reads has no trace, and the chat does not pretend it did. Members' own steps in a crew stay in **Details** with their jobs; the synthesis answer's trace names the handoffs and its own steps.
+- **Live**, the same control holds the memories first and the steps streamed so far, an open step pulsing, with the timer and the worker's notes after the rows; once the run ends the saved trace takes its place.
+- **Where.** `renderer/turnTrace.ts` turns memories, the run context and events into the ordered rows and the summary line (`traceOf`, `liveTraceOf`, `traceSummary`; the event sentences it reads are listed there). `renderer/components/TurnTrace.tsx` draws them as a native `<details>` (reachable and announced without state of its own, the rows an ordered list). Tests: `tests/integration/turn-trace.test.ts`.
 
 ## Where a diff lives
 
@@ -71,7 +81,7 @@ The diff is the first piece built against this page, because nothing showed one 
 A native API run, a Codex run and a Cursor Agent run must never be a blank pause.
 
 - The island always has a state from the core's own events: planning, handing out, reading a source the core read itself, waiting for a turn, the model returning. The faces move with that state.
-- The folded control shows the timer as one plain line when there are no steps and no notes.
+- The folded control shows the timer as one plain line when there are no memories, no steps and no notes.
 - Afterwards the answer keeps whatever the core saved: reads of attached sources, the changed-files line, the outcome line. When there is nothing, there is nothing, and the chat does not pretend.
 
 ## Built now and later

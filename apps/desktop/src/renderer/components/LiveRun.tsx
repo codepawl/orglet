@@ -1,13 +1,15 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, FileText, FolderSearch, Search, Wrench } from 'lucide-react';
-import type { Activity, Run, Worker } from '../../shared/contracts';
-import type { ActivityKind, ActivityStep, HarnessProgress, RunProgressUpdate } from '../../shared/progress';
+import { useEffect, useState } from 'react';
+import type { Run, Worker } from '../../shared/contracts';
+import type { RunMemory } from '../../shared/knowledge';
+import type { ActivityStep, HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 
 import type { IslandState, IslandView } from './LiveIsland';
 import { Markdown } from './Markdown';
 import { orglet } from '../api';
 import { t } from '../i18n';
-import { turnNotices, type NoticedMemory } from './turnNotices';
+import { liveTraceOf } from '../turnTrace';
+import { turnNotices } from './turnNotices';
+import { TurnTrace } from './TurnTrace';
 
 /** Live progress for each streaming run of one task, keyed by run ID. */
 export function useRunProgress(taskId: string) {
@@ -66,23 +68,23 @@ function useElapsedSeconds(since: number) {
 /**
  * A worker's run as it happens: what it said it will do, and the answer appearing as it is written. What it is doing
  * now is the island, which sits on the prompt bar rather than here (COD-167, `islandOf` below and `IslandDock`). The
- * full step list, the timer and the worker's notes are the receipt, not the headline, so they sit behind one quiet
- * control above the text, where the finished answer keeps its step line, so nothing appears under an answer that
- * already reads as complete (COD-212). With no steps and no notes there is nothing to open, and the timer is the line.
- * `memories` are the ones frozen with the run's context, shown above the text as soon as the run row carries them,
- * in the same slot the finished answer keeps them (COD-217).
+ * step list, the timer and the worker's notes are the receipt, not the headline, so they sit behind the same trace
+ * control the finished answer keeps above its text (COD-220), so nothing appears under an answer that already reads
+ * as complete (COD-212). With no rows and no notes there is nothing to open, and the timer is the line. `memories`
+ * are the ones frozen with the run's context, the trace's first rows as soon as the run row carries them (COD-217).
  */
-export function LiveRun({ update, memories }: { update: RunProgressUpdate; memories?: readonly NoticedMemory[] }) {
+export function LiveRun({ update, memories }: { update: RunProgressUpdate; memories?: readonly RunMemory[] }) {
   const progress = update.progress!;
   const answering = progress.answer.length > 0;
-  const hasReceipt = progress.activity.length > 0 || !!progress.thinking;
-  const activity = hasReceipt
-    ? <ActivityGroup key="activity" steps={progress.activity}>
+  const entries = liveTraceOf(memories, progress.activity);
+  const hasReceipt = entries.length > 0 || !!progress.thinking;
+  const trace = hasReceipt
+    ? <TurnTrace key="trace" entries={entries}>
       <ElapsedLine since={update.startedAt} />
       {progress.thinking && <p className="activity-notes">{progress.thinking}</p>}
-    </ActivityGroup>
-    : <ElapsedLine key="activity" since={update.startedAt} plain />;
-  const notices = turnNotices({ memories, activity });
+    </TurnTrace>
+    : <ElapsedLine key="trace" since={update.startedAt} plain />;
+  const notices = turnNotices({ trace });
 
   return <div className="live-run">
     {notices.before}
@@ -170,83 +172,4 @@ function doingBeforeStreaming({ stage, message, pausing }: { stage?: Run['stage'
 function ElapsedLine({ since, plain }: { since: number; plain?: boolean }) {
   const seconds = useElapsedSeconds(since);
   return <p className={plain ? 'activity-elapsed activity-elapsed-plain' : 'activity-elapsed'}>{t('Đã chạy {0}s', [seconds])}</p>;
-}
-
-const savedStepPatterns: { kind: ActivityKind; pattern: RegExp }[] = [
-  { kind: 'read', pattern: /^Đã đọc (.+)$/ },
-  { kind: 'search', pattern: /^Đã tìm (.+)$/ },
-  { kind: 'list', pattern: /^Đã liệt kê tệp (.+)$/ },
-];
-
-/** The reads and searches a finished run saved as activity, oldest first. */
-export function savedSteps(events: Activity[], runId: string): ActivityStep[] {
-  const steps: ActivityStep[] = [];
-  for (const event of events) {
-    if (event.runId !== runId) continue;
-    for (const { kind, pattern } of savedStepPatterns) {
-      const match = pattern.exec(event.message);
-      if (match) steps.push({ id: event.id, kind, target: match[1], done: true });
-    }
-  }
-  return steps;
-}
-
-/**
- * The step list behind one quiet control, closed until the user opens it. `children` are shown after the steps when
- * open, for anything else the run keeps out of the headline (the timer, the worker's notes). With no steps the
- * control just says Chi tiết.
- */
-export function ActivityGroup({ steps, children }: { steps: ActivityStep[]; children?: ReactNode }) {
-  const [open, setOpen] = useState(false);
-
-  return <div className="activity-group">
-    <button type="button" className="activity-summary" aria-expanded={open} onClick={() => setOpen(!open)}>
-      <ChevronRight size={14} aria-hidden="true" className="activity-chevron" />
-      <span>{activitySummary(steps) || t('Chi tiết')}</span>
-    </button>
-    {open && <div className="activity-detail">
-      {steps.length > 0 && <ul className="activity-steps">
-        {steps.map(step => <li key={step.id} className={step.done ? 'activity-step' : 'activity-step running'}>
-          <StepIcon kind={step.kind} />
-          <span className="activity-verb">{stepVerb(step.kind)}</span>
-          {step.target && <span className="activity-target">{step.target}</span>}
-        </li>)}
-      </ul>}
-      {children}
-    </div>}
-  </div>;
-}
-
-function StepIcon({ kind }: { kind: ActivityKind }) {
-  const size = 14;
-  if (kind === 'read') return <FileText size={size} aria-hidden="true" />;
-  if (kind === 'search') return <Search size={size} aria-hidden="true" />;
-  if (kind === 'list') return <FolderSearch size={size} aria-hidden="true" />;
-  return <Wrench size={size} aria-hidden="true" />;
-}
-
-function stepVerb(kind: ActivityKind) {
-  if (kind === 'read') return t('Đọc');
-  if (kind === 'search') return t('Tìm');
-  if (kind === 'list') return t('Liệt kê tệp');
-  return t('Dùng công cụ');
-}
-
-function activitySummary(steps: ActivityStep[]) {
-  const count = (kind: ActivityKind) => steps.filter(step => step.kind === kind).length;
-  const reads = count('read');
-  const searches = count('search');
-  const lists = count('list');
-  const others = count('other');
-
-  const parts: string[] = [];
-  if (reads === 1) parts.push(t('Đọc 1 tệp'));
-  if (reads > 1) parts.push(t('Đọc {0} tệp', [reads]));
-  if (searches === 1) parts.push(t('Tìm 1 lần'));
-  if (searches > 1) parts.push(t('Tìm {0} lần', [searches]));
-  if (lists === 1) parts.push(t('Liệt kê tệp 1 lần'));
-  if (lists > 1) parts.push(t('Liệt kê tệp {0} lần', [lists]));
-  if (others === 1) parts.push(t('1 bước khác'));
-  if (others > 1) parts.push(t('{0} bước khác', [others]));
-  return parts.join(' · ');
 }

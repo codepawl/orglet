@@ -37,8 +37,8 @@ export function changedFilesLabel(summary: WorkspaceDiffSummary, workerName?: st
 }
 
 /**
- * The one quiet line a turn shows when its run changed files: it sits with the folded step line above the answer
- * and opens the viewer. Nothing is shown when nothing changed, so the line itself is the claim.
+ * The one quiet line a turn shows when its run changed files: it sits under the answer, shaped like the folded trace
+ * above it, and opens the viewer. Nothing is shown when nothing changed, so the line itself is the claim.
  */
 export function ChangedFilesLine({ summary, workerName, onOpen }: { summary: WorkspaceDiffSummary; workerName?: string; onOpen: () => void }) {
   return <button type="button" className="activity-summary changed-files" aria-haspopup="dialog" onClick={onOpen}>

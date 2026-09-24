@@ -9,9 +9,9 @@ import type { Artifact, Run, Skill, Task, TaskDetail, Worker } from '../../apps/
 import type { WorkspaceRecoveryView } from '../../apps/desktop/src/shared/workspace-recovery';
 
 /*
- * COD-217: a turn's notices read in the order they happened. What the run loaded before writing (memories, the step
- * line) sits above the answer; what came out of it (changed files, proposal cards) sits under it, and the message
- * actions row stays last. The same order holds while the answer streams.
+ * COD-217: a turn's notices read in the order they happened. What the run loaded before writing sits above the answer
+ * as one trace control (COD-220: memories, then the steps, inside it); what came out of it (changed files, proposal
+ * cards) sits under it, and the message actions row stays last. The same order holds while the answer streams.
  */
 
 const taskId = '11111111-1111-4111-8111-111111111111';
@@ -57,21 +57,19 @@ function positions(html: string, markers: Record<string, string>) {
 }
 
 const answerMarkers = {
-  memories: 'class="used-memories"',
-  steps: 'class="activity-summary"',
+  trace: 'class="turn-trace"',
   bubble: `id="message-${artifactId}"`,
   changes: 'class="activity-summary changed-files"',
   proposals: 'class="app-proposals"',
   actions: 'class="message-actions"',
 };
 
-it('orders a finished chat turn: memories and steps, the answer, then changed files, proposals and the action row', () => {
+it('orders a finished chat turn: the trace, the answer, then changed files, proposals and the action row', () => {
   const html = renderTurn('chat');
   // The person's own action row comes first; the answer's is the one after the bubble.
   const answerStart = html.indexOf('class="assistant-message"');
   const found = positions(html.slice(answerStart), answerMarkers);
-  expect(found.memories).toBeLessThan(found.steps);
-  expect(found.steps).toBeLessThan(found.bubble);
+  expect(found.trace).toBeLessThan(found.bubble);
   expect(found.bubble).toBeLessThan(found.changes);
   expect(found.changes).toBeLessThan(found.proposals);
   expect(found.proposals).toBeLessThan(found.actions);
@@ -79,39 +77,40 @@ it('orders a finished chat turn: memories and steps, the answer, then changed fi
   const reply = html.slice(html.indexOf('class="chat-reply"'));
   expect(reply).toContain('class="turn-before"');
   expect(reply).toContain('class="turn-after"');
-  expect(html).toContain('Memories used: 1');
+  expect(html).toContain('Used 1 memory · Read 1 file');
   expect(html).toContain('Files changed: 2 · +5 −1');
   // Nothing of the turn is drawn twice.
-  expect(html.match(/class="used-memories"/g)).toHaveLength(1);
+  expect(html.match(/class="turn-trace"/g)).toHaveLength(1);
   expect(html.match(/class="app-proposals"/g)).toHaveLength(1);
 });
 
 it('keeps the same order around a report card', () => {
   const html = renderTurn('report');
   const found = positions(html.slice(html.indexOf('class="assistant-message"')), { ...answerMarkers, bubble: 'class="report report-file"' });
-  expect(found.memories).toBeLessThan(found.steps);
-  expect(found.steps).toBeLessThan(found.bubble);
+  expect(found.trace).toBeLessThan(found.bubble);
   expect(found.bubble).toBeLessThan(found.changes);
   expect(found.changes).toBeLessThan(found.proposals);
   expect(found.proposals).toBeLessThan(found.actions);
   expect(html).toContain('class="report-turn"');
 });
 
-it('shows the memories above the streaming text as soon as the run carries them', () => {
+it('shows the memories at the top of the trace above the streaming text as soon as the run carries them', () => {
   const html = renderToStaticMarkup(createElement(LiveRun, {
     update: { taskId, runId, startedAt: Date.now(), progress: { thinking: '', preamble: '', answer: 'Hóa đơn tháng 9', activity: [{ id: 's1', kind: 'read', target: 'invoice.xlsx', done: true }], writing: true } },
     memories: run.snapshot.context!.memories,
   }));
-  const found = positions(html, { memories: 'class="used-memories"', steps: 'class="activity-summary"', text: 'live-answer' });
-  expect(found.memories).toBeLessThan(found.steps);
-  expect(found.steps).toBeLessThan(found.text);
+  const found = positions(html, { trace: 'class="turn-trace"', memory: 'Thích câu trả lời ngắn.', step: 'invoice.xlsx', text: 'live-answer' });
+  expect(found.trace).toBeLessThan(found.memory);
+  expect(found.memory).toBeLessThan(found.step);
+  expect(found.step).toBeLessThan(found.text);
+  expect(html.match(/class="turn-trace"/g)).toHaveLength(1);
 });
 
 it('takes no space for a slot that is empty', () => {
   const empty = turnNotices({});
   expect(empty.before).toBeNull();
   expect(empty.after).toBeNull();
-  const onlyMemories = turnNotices({ memories: [memory] });
-  expect(onlyMemories.after).toBeNull();
-  expect(renderToStaticMarkup(createElement('div', null, onlyMemories.before))).toContain('class="turn-before"');
+  const onlyTrace = turnNotices({ trace: createElement('p', { key: 'trace' }, 'trace') });
+  expect(onlyTrace.after).toBeNull();
+  expect(renderToStaticMarkup(createElement('div', null, onlyTrace.before))).toContain('class="turn-before"');
 });

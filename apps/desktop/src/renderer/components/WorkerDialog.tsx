@@ -40,8 +40,8 @@ const tabs = [
 ];
 
 /** Worker create/edit. Remount (via key) to reset the draft. */
-export function WorkerDialog({ open, worker, workspace, connections, harnesses, onClose, onOpenChat }: { open: boolean; worker?: Worker; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; onClose: () => void; /** Opens the chat a memory came from; the dialog closes first. */ onOpenChat: (taskId: string) => void }) {
-  const [tab, setTab] = useState<Tab>('general');
+export function WorkerDialog({ open, worker, workspace, connections, harnesses, initialTab, onClose, onOpenChat }: { open: boolean; worker?: Worker; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; /** The tab to open on; the trace above an answer opens straight onto Memory (COD-220). */ initialTab?: Tab; onClose: () => void; /** Opens the chat a memory came from; the dialog closes first. */ onOpenChat: (taskId: string) => void }) {
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'general');
   // Faces other workers already show, so suggestions lean towards a different one.
   const takenMascots = workspace.workers.filter(item => item.id !== worker?.id).map(item => isMascot(item.avatar?.mascot) ? item.avatar.mascot : autoMascot(mascotIds, item.id, { name: item.name, description: item.description }));
   const [name, setName] = useState(worker?.name ?? '');
