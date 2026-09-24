@@ -1,0 +1,100 @@
+name: Release
+# Publishes the GitHub Release from the Windows build CI already made for the tagged commit, so the
+# Setup, the updater files and the ZIP never travel through a maintainer's machine.
+# Push an annotated tag vX.Y.Z whose message is the release notes. A tag made before this workflow
+# existed carries an older copy of the repository, so publish it by hand: Actions -> Release -> Run
+# workflow, with that tag.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing annotated tag to publish, for example v0.2.7
+        required: true
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+jobs:
+  publish:
+    name: publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Resolve the tagged commit and check its version
+        run: |
+          set -euo pipefail
+          commit=$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)
+          version=$(gh api "repos/$GH_REPO/contents/package.json?ref=$commit" --jq .content | base64 -d | jq -r .version)
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::$TAG does not match package.json version $version at $commit"
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::$TAG already has a release"
+            exit 1
+          fi
+          echo "COMMIT=$commit" >> "$GITHUB_ENV"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Wait for a green Windows build of that commit
+        run: |
+          set -euo pipefail
+          # The tag is usually pushed while the build of its commit is still running.
+          for attempt in $(seq 1 80); do
+            run=$(gh run list --workflow desktop.yml --commit "$COMMIT" --event push --limit 20 \
+              --json databaseId,status,conclusion \
+              --jq 'map(select(.status == "completed" and .conclusion == "success"))[0].databaseId // empty')
+            if [ -n "$run" ]; then
+              echo "RUN=$run" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 60
+          done
+          echo "::error::no green Windows desktop build for $COMMIT"
+          exit 1
+      - name: Download its Setup and ZIP
+        run: |
+          set -euo pipefail
+          gh run download "$RUN" --dir artifacts --pattern 'orglet-windows-*'
+          find artifacts -type f -printf '%s %p\n'
+      - name: Check the files the updater needs
+        run: |
+          set -euo pipefail
+          releases=$(find artifacts -name RELEASES -print -quit)
+          setup_dir=$(dirname "$releases")
+          package="$setup_dir/orglet-$VERSION-full.nupkg"
+          test -f "$package"
+          # update.electronjs.org serves whatever RELEASES names, so it has to name this version's package.
+          grep -q "orglet-$VERSION-full.nupkg" "$releases"
+          setup=$(find "$setup_dir" -name '*Setup.exe' -print -quit)
+          zip=$(find artifacts -name "Orglet-win32-x64-$VERSION.zip" -print -quit)
+          test -n "$setup"
+          test -n "$zip"
+          {
+            echo "SETUP=$setup"
+            echo "RELEASES_FILE=$releases"
+            echo "PACKAGE=$package"
+            echo "ZIP=$zip"
+          } >> "$GITHUB_ENV"
+      - name: Publish
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" --verify-tag --title "Orglet $VERSION" --notes-from-tag \
+            "$SETUP" "$RELEASES_FILE" "$PACKAGE" "$ZIP"
+      - name: Check the update feed
+        run: |
+          set -euo pipefail
+          # The feed caches for a while, so a stale answer here is a note, not a failed release.
+          sleep 30
+          answer=$(curl -fsS "https://update.electronjs.org/$GH_REPO/win32-x64/0.0.1" || true)
+          if echo "$answer" | jq -e --arg name "Orglet $VERSION" '.name == $name' >/dev/null 2>&1; then
+            echo "update.electronjs.org serves Orglet $VERSION"
+          else
+            echo "::warning::update.electronjs.org does not serve Orglet $VERSION yet"
+          fi
