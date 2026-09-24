@@ -324,7 +324,7 @@ export const en: Dictionary = {
   'Chưa đăng nhập': 'Signed out',
   'Chưa đăng nhập {0}. Vẫn có thể gõ ID model tùy chỉnh.': '{0} is not signed in. You can still type a custom model ID.',
   'Chưa cài': 'Not installed',
-  'Chọn harness ở mục Model khi thiết lập Tí.': 'Pick a harness under Model when setting up an orglet.',
+  'Đăng nhập lỗi thì Orglet dừng lại, không chuyển sang Demo.': 'If sign-in fails, Orglet stops; it never falls back to Demo.',
   'Chưa cài {0} trên máy này. Cài xong bấm Dò lại.': '{0} is not installed on this computer. Install it, then click Rescan.',
   'Chưa cài {0} trên máy này. Vẫn có thể gõ ID model tùy chỉnh.': '{0} is not installed on this computer. You can still type a custom model ID.',
   'Chưa đối chiếu được hai dataset. Không suy ra ID/schema khớp.': 'The two datasets could not be compared. Do not assume IDs or schemas match.',

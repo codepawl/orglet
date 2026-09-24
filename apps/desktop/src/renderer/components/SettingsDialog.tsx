@@ -57,7 +57,7 @@ const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch 
 
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
   connections: 'Key được mã hóa trên máy này và không vào bản sao lưu.',
-  harness: 'Chọn harness ở mục Model khi thiết lập Tí.',
+  harness: 'Đăng nhập lỗi thì Orglet dừng lại, không chuyển sang Demo.',
   usage: 'Chỉ tính request qua Orglet; harness trên máy dùng gói riêng.',
 };
 
