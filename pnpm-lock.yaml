@@ -35,6 +35,9 @@ importers:
       electron-squirrel-startup:
         specifier: 1.0.1
         version: 1.0.1(supports-color@8.1.1)
+      gemoji:
+        specifier: 8.1.0
+        version: 8.1.0
       lucide-react:
         specifier: 1.47.0
         version: 1.47.0(react@19.3.0)
@@ -1609,6 +1612,9 @@ packages:
   galactus@1.0.0:
     resolution: {integrity: sha512-R1fam6D4CyKQGNlvJne4dkNF+PvUUl7TAJInvTGa9fti9qAv95quQz29GXapA4d8Ec266mJJxFVh82M4GIIGDQ==}
     engines: {node: '>= 12'}
+
+  gemoji@8.1.0:
+    resolution: {integrity: sha512-HA4Gx59dw2+tn+UAa7XEV4ufUKI4fH1KgcbenVA9YKSj1QJTT0xh5Mwv5HMFNN3l2OtUe3ZIfuRwSyZS5pLIWw==}
 
   get-caller-file@2.0.5:
     resolution: {integrity: sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg==}
@@ -4675,6 +4681,8 @@ snapshots:
       fs-extra: 10.1.0
     transitivePeerDependencies:
       - supports-color
+
+  gemoji@8.1.0: {}
 
   get-caller-file@2.0.5: {}
 
