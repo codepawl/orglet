@@ -837,16 +837,19 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 /* Notes introduce the group they sit under. */
 .settings-subheading+.setting-note,.settings-subheading-row+.setting-note { margin-top:2px; }
 .panel-heading+.setting-note { margin-top:0; }
-.setting-command { font-size:12px; background:var(--surface); border-radius:6px; padding:4px 8px; overflow-wrap:anywhere; min-width:0; flex:1; }
-.setting-repair { display:flex; flex-direction:column; gap:4px; margin-top:4px; max-width:100%; }
-.setting-repair-label { font-size:11px; color:var(--muted); }
-/* A login line's label with the terminal picker beside it (COD-230), centred on one line. */
-.setting-repair-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.setting-repair-head .setting-repair-label { white-space:nowrap; }
-.setting-repair-head .login-shell-select { flex:0 0 auto; width:170px; max-width:170px; }
-/* The copy button is 32px and the command block 26px; centred, or they sit on different lines. */
-.setting-repair-row { display:flex; align-items:center; gap:4px; max-width:100%; }
-.setting-repair-row .button { flex-shrink:0; }
+/* A command to paste (install, sign-in): the label, then the command on a quiet card. With a terminal picker the
+   card has a top bar: the picker on the left, small, borderless and in the card's colour (user, 2026-09-25), and
+   copy on the right. Both answer hover with colour only, never a background: they sit on the card's tint. Without a
+   picker, copy keeps the card's top corner. The command breaks only after a path separator or a space
+   (breakableCommand). */
+/* The terminal picker in a command card's top bar: a small chip in the card's own colour, no border, colour-only hover. */
+.login-shell-select.select-trigger { width:auto; min-height:24px; padding:0 6px; gap:5px; border:0; background:transparent; box-shadow:none; }
+.login-shell-select.select-trigger:hover:not(:disabled),
+.login-shell-select.select-trigger[aria-expanded=true] { background:transparent; border-color:transparent; }
+.login-shell-select .select-value { font-size:12px; font-weight:500; color:var(--muted); }
+.login-shell-select.select-trigger:is(:hover, [aria-expanded=true]) .select-value { color:var(--text); }
+.login-shell-select .select-icon { display:flex; color:var(--muted); }
+.login-shell-select .select-chevron { width:13px; height:13px; color:var(--muted); }
 .budget-reviews { display:flex; flex-direction:column; gap:10px; margin-top:22px; }
 .budget-reviews h3 { margin:0; font-size:15px; }
 .budget-reviews>p { margin:0; }
@@ -869,6 +872,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 /* Name on the left, state on the right, on the line the mark sits beside. */
 .harness-head { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:26px; }
 .harness-row .setting-title { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.harness-version { font-size:12px; font-weight:400; color:var(--muted); font-variant-numeric:tabular-nums; }
 /* Font samples under the two font rows (COD-172, from the owner's Claude "Code appearance" reference): one
    sentence for the interface font, and the code font on a light card and a dark card side by side, each in its
    own theme (`.theme-light` / `.theme-dark`) so both show whatever the app is set to. The card is the surface,
@@ -890,8 +894,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .harness-account-select { max-width:240px; }
 .harness-account-form { display:flex; align-items:center; gap:6px; padding:10px; }
 .harness-account-form input { min-width:220px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
-.harness-commands { display:flex; flex-direction:column; gap:6px; margin-top:7px; }
-.harness-commands .setting-repair { margin-top:0; }
+.harness-commands { display:flex; flex-direction:column; gap:12px; margin-top:10px; }
+
 /* How much of each plan allowance the account has used (COD-223): the allowance, a slim bar, the percentage and
    when it resets, in four columns so every bar starts and ends at the same place, across harnesses too. The bar is the
    accent until the allowance nears its end, then the warning and the error colour. */
@@ -1191,6 +1195,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    them over here, which is the whole adoption cost. A themed subtree hands them over again, resolved in its own
    palette. */
 :root, .theme-light, .theme-dark {
+  --org-font-mono:var(--font-mono);
   --org-bg:var(--bg); --org-surface:var(--surface); --org-text:var(--text); --org-muted:var(--muted);
   --org-border:var(--border); --org-border-subtle:var(--border-subtle);
   --org-row-hover:var(--row-hover); --org-row-active:var(--row-active);

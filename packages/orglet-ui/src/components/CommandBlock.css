@@ -1,0 +1,73 @@
+/* The card is told apart from the page by its surface alone, never a border; the copy button answers the pointer
+   with colour only, because a background inside the card's background reads as a box in a box. */
+.org-command-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.org-command-block-label {
+  font-size: 12px;
+  color: var(--org-muted, #666);
+}
+.org-command-block-card {
+  position: relative;
+  min-width: 0;
+  padding: 8px 40px 8px 12px;
+  border-radius: 10px;
+  background: var(--org-surface, #f1f1f1);
+}
+/* With a toolbar the bar spans the card's top and the command gets a little air below it. */
+.org-command-block-with-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 4px 10px 12px;
+}
+.org-command-block-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  margin-left: -6px;
+}
+.org-command-block-text {
+  display: block;
+  font-family: var(--org-font-mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--org-text, #1f1f1f);
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.org-command-block-with-toolbar .org-command-block-text { padding-right: 8px; }
+.org-command-block-piece { white-space: nowrap; }
+.org-command-block-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--org-muted, #666);
+  cursor: pointer;
+  transition: color var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-command-block-copy:hover { color: var(--org-text, #1f1f1f); }
+.org-command-block-copy:focus-visible {
+  outline: 2px solid var(--org-focus, #576b99);
+  outline-offset: 1px;
+  color: var(--org-text, #1f1f1f);
+}
+.org-command-block-card:not(.org-command-block-with-toolbar) > .org-command-block-copy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}

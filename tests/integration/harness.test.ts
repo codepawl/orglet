@@ -62,7 +62,7 @@ describe('detection', () => {
       id: 'cursor', version: '2026.1.0', auth: 'logged_in', status: 'signed_in',
       executable: expect.stringContaining('agent.exe'), runnable: true,
     }));
-    expect(found[0].authDetail).toContain('chưa đăng nhập nên chưa sẵn sàng chạy');
+    expect(found[0].authDetail).toContain('chưa đăng nhập. Lấy lệnh đăng nhập ở Cài đặt');
     expect(found[0].loginCommand).toMatch(/^& "/);
     // Probing is limited to version and the CLI's own login status command.
     expect(calls.every(call => /(--version|auth status|login status|status(?: --format json)?)$/.test(call))).toBe(true);
