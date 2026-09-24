@@ -43,11 +43,13 @@
 :root, .theme-light {
   color-scheme:light; --bg:#fff; --sidebar:#f7f7f8; --surface:#f1f1f1; --text:#1f1f1f; --muted:#666; --border:#e5e5e5;
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
+  /* The prompt bar and the island's shared outline (COD-228): --border read as white on white. */
+  --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg));
   --primary:#171717; --primary-text:#fff; --error:#a82626; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
   --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
 }
-:root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; } }
+:root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; } }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
 button,input,textarea,select { font:inherit; color:inherit; }
@@ -384,7 +386,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Prompt bar: a one-line pill (add · input · [who] · send) that grows into a box when the text wraps or sources are attached.
    Grown, it is three zones stacked: the attached files, the text, then the controls. The zones are told apart by
    what they are made of (cards on a surface, bare text, round buttons) and by spacing, never by a line. */
-.composer { position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"lead input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--border); border-radius:24px; background:var(--bg); box-shadow:0 2px 12px #00000008; }
+.composer { position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"lead input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--bar-line); border-radius:24px; background:var(--bg); box-shadow:0 1px 2px #0000000d, 0 6px 20px #00000014; }
 .composer.has-trailing { grid-template-columns:auto minmax(0,1fr) auto auto; grid-template-areas:"lead input trail send"; }
 /* The controls row holds a 36px add button, a shorter chip and the 36px send button, so it centres them explicitly. */
 .composer.expanded { grid-template-areas:"attach attach attach" "input input input" "lead . send"; align-items:center; row-gap:6px; border-radius:22px; padding:7px; }
@@ -394,7 +396,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer.expanded.has-context.has-trailing { grid-template-areas:"context context context context" "attach attach attach attach" "input input input input" "lead . trail send"; }
 .composer-context { grid-area:context; min-width:0; }
 /* Focus shows as a slightly stronger outline of the whole bar, plus the caret. */
-.composer:focus-within { border-color:color-mix(in srgb, var(--muted) 42%, var(--bg)); }
+.composer:focus-within { border-color:var(--bar-line-focus); }
 /* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
    text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
@@ -1909,21 +1911,23 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    the run pausing. That is motion a person reads without a legend, it is the vocabulary the app already has, and
    it costs a transform on a 24px drawing. The rules sit after the tab's own, below. */
 .live-island {
-  /* The bar's own outline, --border: the subtle one (about #efefef on white) left the tab without a visible edge. */
-  --island-fillet:12px; --island-line:var(--border);
+  --island-fillet:12px; --island-line:var(--bar-line);
   position:relative; z-index:1; display:flex; align-items:flex-end; justify-content:center;
   width:fit-content; min-width:150px; max-width:calc(100% - 2 * (24px + var(--island-fillet)));
-  margin:0 auto -1px; padding:5px 10px 5px 9px;
+  /* Tab and bar are one shape with one outline round the outside (COD-228): the tab reaches 2px into the bar, past
+     its 1px top line, so no part of that line shows under the tab even when the seam lands on half a pixel. The
+     extra pixel comes off the padding, so the content sits where it did. */
+  margin:0 auto -2px; padding:5px 10px 6px 9px;
   border:1px solid var(--island-line); border-bottom:0; border-radius:18px 18px 0 0;
-  background:var(--bg); color:var(--text); box-shadow:0 2px 12px #00000008;
+  background:var(--bg); color:var(--text); box-shadow:0 -3px 14px #00000012;
   /* The shadow stops at the seam: below it is the bar, which carries its own. The sides keep room for the fillets. */
   clip-path:inset(-24px calc(-24px - var(--island-fillet)) 0 calc(-24px - var(--island-fillet)));
   transform-origin:50% 100%;
   animation:island-rise 200ms var(--ease-out);
 }
 /* One outline for tab and bar: the same colour the bar's own focus rule sets. */
-.thread-composer:has(.composer:focus-within) .live-island { --island-line:color-mix(in srgb, var(--muted) 42%, var(--bg)); }
-.live-island::before,.live-island::after { content:""; position:absolute; bottom:0; width:calc(var(--island-fillet) + 1px); height:calc(var(--island-fillet) + 1px); }
+.thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); }
+.live-island::before,.live-island::after { content:""; position:absolute; bottom:1px; width:calc(var(--island-fillet) + 1px); height:calc(var(--island-fillet) + 1px); }
 .live-island::before { left:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 0 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
 .live-island::after { right:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 100% 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
 /* Out of the bar and back into it (COD-173). The tab is the bar's own material raised into a tab, so it moves the
