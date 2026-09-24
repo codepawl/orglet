@@ -79,7 +79,7 @@ API keys are encrypted with your system's secure storage and never reach the app
 
 Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, using attached files and workspace folders you explicitly grant. If a worker submits a malformed report, Details shows the invalid field and Orglet allows one report-only correction without repeating completed file operations.
 
-Start here: [Getting started](docs/getting-started.md). The [docs map](docs/README.md) lists how-it-works pages, product decisions, and ship records. Product fit is [product.md](docs/product.md). How to run and test is [technical-guide.md](docs/technical-guide.md). How a worker's reads, searches, edits and commands appear in the chat, and where the diff of what it changed lives, is [worker-actions.md](docs/worker-actions.md).
+Start here: the [user guide](docs/user-guide.md), one short page per part of the app, or the [getting started](docs/getting-started.md) walk-through. The [docs map](docs/README.md) lists how-it-works pages, product decisions, and ship records. Product fit is [product.md](docs/product.md). How to run and test is [technical-guide.md](docs/technical-guide.md). How a worker's reads, searches, edits and commands appear in the chat, and where the diff of what it changed lives, is [worker-actions.md](docs/worker-actions.md).
 
 [Agent tools and permissions](docs/agent-tools.md) explains task permissions, workspace grants and revocation. A worker's **Permissions** tab and a chat's **Details → Tool permissions** are the same controls: switches for attached sources, data checks and public web reads, and one dropdown for the working folder (no folder, read, read and edit, or read, edit and run). A control a worker cannot use yet is disabled with the reason beside it. Core can edit that folder and run isolated checks through private copies and conflict checks. API workers and the CLI tool bridge dispatch through these handlers; native CLI permission enforcement still needs live verification. Git workspace roots use separate worktrees based on the current files, including uncommitted edits. Search may be unavailable when its provider requires human verification.
 
@@ -142,7 +142,7 @@ On Windows that writes a ZIP and Squirrel Setup (unsigned). On macOS it writes a
 
 ## Contributing
 
-Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first. Coding agents should start at [AGENTS.md](AGENTS.md). Contributions need the [Contributor License Agreement](CLA.md), and everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first; it covers setup, checks, the pull request flow, and how to work with an AI coding agent in this repo. Coding agents should start at [AGENTS.md](AGENTS.md). Contributions need the [Contributor License Agreement](CLA.md), and everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
 
 Questions and ideas go to [Discussions](https://github.com/codepawl/orglet/discussions).
 
@@ -162,6 +162,6 @@ The Windows workspace backend provides bounded file operations and isolated comm
 
 Ask a worker to set the app up and it proposes rather than acts: a new orglet, a crew, a template, a skill, a schedule or a setting each arrive as a card in the chat that you apply or dismiss, through the same validation the dialogs use. A per-orglet switch can apply the safe ones automatically with Undo; raising a limit or anything proposed after reading the web, files or other workers' messages still waits for your click, and keys, connections, permissions and backups cannot be proposed at all. See [proposing app changes](docs/agent-tools.md#proposing-app-changes).
 
-Team workers can exchange durable questions, responses, blockers and handoffs within one turn. The lead resolves blockers or reassigns unfinished work to an existing member without expanding its permissions. See [team coordination](docs/agent-tools.md#team-coordination).
+Team workers can exchange durable questions, responses, blockers and handoffs within one turn. The lead resolves blockers or reassigns unfinished work to an existing member without expanding its permissions. See [worker messages](docs/team-chat.md#worker-messages).
 
 Workspace edits are integrated from private copies with version checks. Conflicts and interrupted writes remain visible and block automatic replay. Git workspaces use private worktrees; the original checkout is not used for worker commands. API workers and the three CLI adapters share the core tool dispatcher.

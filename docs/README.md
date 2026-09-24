@@ -5,7 +5,7 @@
   <img src="images/orglets/README-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-This folder is the map. Start with [Getting started](getting-started.md) if you want to use Orglet. Coding agents start at [AGENTS.md](../AGENTS.md); humans who want to contribute start at [CONTRIBUTING.md](../CONTRIBUTING.md). Do not copy those files here.
+This folder is the map. Start with the [User guide](user-guide.md) if you want to use Orglet. Coding agents start at [AGENTS.md](../AGENTS.md); humans who want to contribute start at [CONTRIBUTING.md](../CONTRIBUTING.md). Do not copy those files here.
 
 How to write new pages: [writing.md](writing.md).
 
@@ -13,8 +13,22 @@ How to write new pages: [writing.md](writing.md).
 
 | Page | What it is |
 |---|---|
-| [getting-started.md](getting-started.md) | Install or run from source, Demo chat, then a real model |
+| [user-guide.md](user-guide.md) | What Orglet is, install on Windows, first chat, and the map of the user pages |
+| [getting-started.md](getting-started.md) | The first walk-through with screenshots: Demo chat, a real model, a crew, files |
 | [../README.md](../README.md) | What Orglet is, platforms, and how to contribute |
+
+## Using Orglet
+
+One short page per part of the app, in the words on screen.
+
+| Page | What it is |
+|---|---|
+| [orglets-and-crews.md](orglets-and-crews.md) | Create an orglet or a crew, how a crew turn runs, group chats, `@` tags, replies, reactions |
+| [connections.md](connections.md) | Claude Code, Codex and Cursor Agent on this computer, API keys, Ollama, Demo, model IDs, cost limits |
+| [chat-guide.md](chat-guide.md) | Attach files, reports as documents, the trace of what an orglet did, diffs, Details, schedules, notifications |
+| [permissions-and-learning.md](permissions-and-learning.md) | Permission switches and the working folder, memory, knowledge and the Library, self-improvement, app-change proposals |
+| [settings.md](settings.md) | Every settings tab: appearance, chat, connections, costs, backup and erase, About and updates |
+| [troubleshooting.md](troubleshooting.md) | Sign-in errors, SmartScreen, a harness not found, budget, blocked attempts, commands and `localhost` |
 
 ## How it works
 
@@ -70,8 +84,5 @@ Point at an existing page until a dedicated guide exists. Do not add empty stub 
 
 | Guide | Until then |
 |---|---|
-| Connect a model | [Getting started](getting-started.md) step 4 and [technical-guide.md](technical-guide.md) |
-| Teams in more depth | [team-chat.md](team-chat.md) |
-| Files, reports, and Details | [Getting started](getting-started.md) step 6 and [team-chat.md](team-chat.md) |
-| Schedules | [routines.md](routines.md) |
-| Backup and restore | [technical-guide.md](technical-guide.md) (Current limits) |
+| Dataset checks and structured reviews in depth | [technical-guide.md](technical-guide.md) (Current limits, Structured run logs) |
+| Writing a good skill | [permissions-and-learning.md](permissions-and-learning.md#knowledge-and-the-library) and the [Agent Skills specification](https://agentskills.io/specification) |
