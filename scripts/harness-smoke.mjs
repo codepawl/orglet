@@ -132,7 +132,7 @@ try {
   await page.keyboard.press('Escape');
 
   await model.click(); await page.getByRole('option', { name: /^Claude Code/ }).click();
-  await page.getByText('Dùng bản Claude Code đã cài', { exact: false }).waitFor();
+  await page.getByText('Chạy bằng Claude Code trên máy', { exact: false }).waitFor();
   await page.getByRole('button', { name: 'Lưu Tí', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Harness send gate');
@@ -151,7 +151,7 @@ try {
 
   const authFailModel = await editResearcher();
   await authFailModel.click(); await page.getByRole('option', { name: /^Codex/ }).click();
-  await page.getByText('Dùng bản Codex đã cài', { exact: false }).waitFor();
+  await page.getByText('Chạy bằng Codex trên máy', { exact: false }).waitFor();
   await page.getByRole('button', { name: 'Lưu Tí', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await noDemo(page);
