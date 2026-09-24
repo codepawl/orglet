@@ -50,7 +50,7 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
         {item.pending && <div className="routine-alert" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>
           <h4>{t('Lần chạy bị lỡ')}</h4>
           <p>{tMessage(item.pending.reason)}</p>
-          <p className="muted">{t('Lần bị lỡ {0}. Nhiều lần trong lúc máy tắt được gộp thành một lần chạy bù; lịch tới không mất.', [formatRoutineTime(item.pending.dueAt, item.schedule.timeZone)])}</p>
+          <p className="muted">{t('Lần bị lỡ {0}. Nhiều lần lỡ gộp thành một lần chạy bù.', [formatRoutineTime(item.pending.dueAt, item.schedule.timeZone)])}</p>
           <div className="actions">
           <Button disabled={busy || !item.enabled} variant="primary" onClick={() => void action(async () => openTask(await orglet.call('catchUpRoutine', { id: item.id })))}>{t('Chạy bù một lần')}</Button>
           <Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Bỏ qua lần lỡ')}</Button>
@@ -119,7 +119,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
           }}><FilePlus size={15} />{t('Chọn nguồn cho lịch')}</Button>
         </PanelHeading>
         {sources.length > 0 ? <ul className="attachment-list">{sources.map(source => <Attachment key={source.id} name={source.name} bytes={source.bytes} removeLabel={t('Bỏ nguồn {0}', [source.name])} onRemove={() => { setSources(sources.filter(item => item.id !== source.id)); }} />)}</ul> : <p className="muted">{t('Chưa chọn nguồn. Lịch vẫn chạy được chỉ với brief.')}</p>}
-        <p className="muted">{t('Chỉ dùng các tệp đã chọn với nội dung hiện tại. Tệp thay đổi hoặc bị thu hồi sẽ chặn lần chạy; chọn lại nguồn và lưu lịch để cấp quyền mới.')}</p>
+        <p className="muted">{t('Tệp đã đổi hoặc bị thu hồi sẽ chặn lần chạy; chọn lại rồi lưu lịch.')}</p>
       </div>
     </section>
 
@@ -132,7 +132,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><Input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError || undefined} aria-describedby={zoneError ? 'routine-zone-error' : undefined} data-flash={zoneError ? 1 : undefined} /></label>
       </div>
       {zoneError && <p id="routine-zone-error" role="alert" className="error">{error}</p>}
-      <p className="muted">{t('App tắt hoặc máy ngủ thì không chạy. Lịch không mất: khi mở lại, các lần lỡ gộp thành một lần chạy bù. Giờ bị bỏ qua do đổi giờ mùa hè không được chạy bù; giờ lặp chỉ chạy một lần.')}</p>
+      <p className="muted">{t('Chỉ chạy khi Orglet đang mở; các lần lỡ gộp thành một lần chạy bù.')}</p>
     </section>
 
     <section className="routine-group" aria-labelledby="routine-group-limits">
@@ -142,7 +142,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       {/* Where the data goes is worth saying; it just is not worth asking about twice, since saving is the
           permission (user, 2026-09-19). It stays as a plain line rather than a tick. */}
       {enabled && <p className="muted">{t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo')])}</p>}
-      <p className="muted">{t('Đổi Tí, skill, hội hoặc model thì phải mở lịch và lưu lại. Tắt lịch không hủy task đang chạy.')}</p>
+      <p className="muted">{t('Đổi Tí, skill, hội hay model thì cần lưu lịch lại.')}</p>
     </section>
     <div className="sticky-actions">{error && !zoneError ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
   </form>;

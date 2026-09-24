@@ -25,9 +25,9 @@ function installLabel(kind: InstallKind): string {
 /** Why this build cannot replace itself, so the row says the reason rather than pretending to check. */
 function unsupportedReason(reason: UnsupportedReason): string {
   if (reason === 'dev') return t('Bản chạy từ mã nguồn không tự cập nhật.');
-  if (reason === 'portable') return t('Bản ZIP không tự cập nhật. Tải bản mới từ trang phát hành, hoặc cài bằng Setup để được tự cập nhật.');
-  if (reason === 'linux') return t('Chưa có tự cập nhật trên Linux. Tải bản mới từ trang phát hành.');
-  return t('Bản macOS này chưa được ký nên không tự cập nhật được. Tải bản mới từ trang phát hành.');
+  if (reason === 'portable') return t('Bản ZIP không tự cập nhật.');
+  if (reason === 'linux') return t('Chưa có tự cập nhật trên Linux.');
+  return t('Bản macOS này chưa được ký nên không tự cập nhật.');
 }
 
 /** The places the About tab links to, each with its own mark. `releases` is not here: it belongs to the update row. */
@@ -56,8 +56,8 @@ function updateDescription(state: UpdateState | undefined): ReactNode {
   if (state.status === 'up-to-date') return t('Đang dùng bản mới nhất. Kiểm tra lúc {0}.', [clockLabel(state.checkedAt)]);
   if (state.status === 'ready') {
     return state.version
-      ? t('Bản {0} đã tải xong. Khởi động lại để dùng; nếu không, lần mở tiếp theo sẽ dùng bản mới.', [state.version])
-      : t('Bản mới đã tải xong. Khởi động lại để dùng; nếu không, lần mở tiếp theo sẽ dùng bản mới.');
+      ? t('Bản {0} đã tải xong. Khởi động lại để dùng, hoặc đợi lần mở sau.', [state.version])
+      : t('Bản mới đã tải xong. Khởi động lại để dùng, hoặc đợi lần mở sau.');
   }
   return <span className="error">{t('Không kiểm tra được: {0}', [tMessage(state.message)])}</span>;
 }
@@ -137,7 +137,7 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
           ? <Button variant="outline" disabled={busy} onClick={restart}><RotateCw size={14} />{t('Khởi động lại')}</Button>
           : <Button variant="outline" disabled={busy || !update || update.status === 'checking' || update.status === 'downloading'} onClick={checkNow}><RefreshCw size={14} />{t('Kiểm tra')}</Button>}
     </Row>
-    <Row id="auto-update-label" title={t('Tự động cập nhật')} description={t('Kiểm tra sau khi mở app và vài giờ một lần, tải ngầm rồi báo để bạn khởi động lại. Tắt thì chỉ kiểm tra khi bạn bấm.')}>
+    <Row id="auto-update-label" title={t('Tự động cập nhật')} description={t('Tải ngầm bản mới rồi báo để bạn khởi động lại.')}>
       <Switch checked={workspace.autoUpdate} disabled={busy || unsupported} labelledBy="auto-update-label" onChange={onAutoUpdate} />
     </Row>
     <Row title={t('Chi tiết bản cài')} description={<span className="about-details">{detailsLine}</span>}>

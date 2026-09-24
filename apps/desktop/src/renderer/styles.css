@@ -533,6 +533,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @keyframes reaction-badge-in { from { transform:scale(.6); opacity:0; } to { transform:scale(1); opacity:1; } }
 .message-reply-context { display:flex; align-items:center; gap:6px; max-width:100%; padding:0; border:0; background:none; color:var(--muted); font:inherit; font-size:12px; text-align:start; overflow-wrap:anywhere; cursor:pointer; }
 .message-reply-context:hover { color:var(--text); }
+/* The quoted message under a reaction is one clamped line (COD-221), never the whole message. */
+.details-reaction-source { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:1; overflow:hidden; }
 .details-team-message { padding:8px 0; overflow-wrap:anywhere; }
 .details-team-message p + p { margin-top:4px; }
 /* The wrapper is only as wide as the bubble, so a badge anchored to its corner lands on the bubble. */
@@ -913,6 +915,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .button.danger:hover:not(:disabled) { border-color:color-mix(in srgb, var(--error) 45%, var(--border)); background:color-mix(in srgb, var(--error) 7%, var(--bg)); }
 .erase-form { display:flex; flex-direction:column; gap:8px; padding:12px; max-width:320px; }
 .erase-form label { font-size:12.5px; color:var(--muted); }
+/* What the full erase keeps, read where the decision is made rather than in the row (COD-221). */
+.erase-caveat { font-size:12.5px; line-height:1.45; color:var(--muted); }
 .erase-form div { display:flex; align-items:center; gap:6px; }
 .erase-form input { flex:1; min-width:120px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
 .settings-message { font-size:13px; margin-top:14px; color:var(--muted); }

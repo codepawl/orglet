@@ -99,7 +99,7 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
           </div>
         </div>
       </div>
-      <footer className="main-footer">{t('Orglet không đảm bảo câu trả lời luôn chính xác. Hãy kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
+      <footer className="main-footer">{t('Câu trả lời có thể sai. Kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
     </main>
   </div>;
 }

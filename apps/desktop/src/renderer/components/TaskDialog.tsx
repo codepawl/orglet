@@ -66,11 +66,11 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
           <span className="inline-mark"><Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />{worker.name}</span>
         </Checkbox>)}
       </fieldset>}
-      <p className="muted">{mode === 'all' || (mode === 'workers' && chosen.length > 1) ? t('Mỗi tin nhắn được từng người trả lời lần lượt; người sau đọc được câu trả lời của người trước.') : t('Người được giao trả lời tin nhắn tiếp theo và đọc được cuộc trò chuyện trước đó.')}</p>
+      <p className="muted">{mode === 'all' || (mode === 'workers' && chosen.length > 1) ? t('Từng người trả lời lần lượt, đọc được câu trả lời trước đó.') : t('Người được giao trả lời tin nhắn tiếp theo và đọc được cuộc trò chuyện trước đó.')}</p>
     </>}
     {tab === 'limits' && <>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn chi phí của công việc')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>
-      <p className="muted">{t('Đã dùng {0}, tính cả các tin nhắn trước. Khi giao cho nhiều người, mọi câu trả lời dùng chung giới hạn này.', [formatMoney(usedMicros)])}</p>
+      <p className="muted">{t('Đã dùng {0}; mọi người được giao dùng chung giới hạn này.', [formatMoney(usedMicros)])}</p>
     </>}
     {running && <p role="status">{t('Công việc đang chạy. Đợi xong rồi hãy đổi thiết lập.')}</p>}
   </TabbedFormDialog>;

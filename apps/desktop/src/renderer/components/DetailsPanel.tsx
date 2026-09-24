@@ -334,7 +334,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           return <div className="details-team-message" key={messageId}>
             {excerpt === undefined
               ? <p className="muted">{t('Tin nhắn trước không còn hiển thị')}</p>
-              : <button type="button" className="message-reply-context" onClick={() => focusMessage(messageId)}>{t('Mở tin gốc: {0}', [excerpt.slice(0, 100)])}</button>}
+              : <button type="button" className="message-reply-context" onClick={() => focusMessage(messageId)}><span className="details-reaction-source">{t('Mở tin gốc: {0}', [excerpt.slice(0, 200)])}</span></button>}
             {reactionGroups(marks, detail.runs).map(group => <p key={group.emoji}>{group.label}</p>)}
           </div>;
         })}
@@ -350,7 +350,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
         <Wrench size={16} />{t('Chi tiết kỹ thuật')}
       </Button>}
 
-      {detail && technical && <Drawer open onClose={() => setTechnical(false)} title={t('Chi tiết kỹ thuật')} description={t('Từng lần chạy: ai trả lời, đọc những gì, và mã để đối chiếu khi có gì đó sai.')}>
+      {detail && technical && <Drawer open onClose={() => setTechnical(false)} title={t('Chi tiết kỹ thuật')} description={t('Từng lần chạy: ai trả lời, đọc gì, và mã để đối chiếu.')}>
         <ol className="technical-runs">
           {detail.runs.map(run => <TechnicalRun key={run.id} run={run} detail={detail} workspace={workspace} onExport={onExport} />)}
         </ol>

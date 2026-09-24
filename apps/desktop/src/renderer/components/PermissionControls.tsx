@@ -84,19 +84,19 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
     </p>}
     <SwitchField checked={state.sources} disabled={disabled} onChange={enabled => onCapability('source.read', enabled)}
       description={<>
-        {t('Chỉ đọc nguồn được đính kèm trong chat; không cho phép sửa file gốc.')}
+        {t('Đọc các tệp đính kèm trong chat này.')}
         {taskId && sourceCount === 0 && <span className="permission-note">{t('Chat chưa có nguồn nào để đọc.')}</span>}
       </>}>
       <FileText size={15} aria-hidden="true" />{t('Đọc nguồn đính kèm')}
     </SwitchField>
     <SwitchField checked={state.dataset} disabled={disabled} onChange={enabled => onCapability('dataset.check', enabled)}
-      description={t('Cho phép kiểm tra cấu trúc và chất lượng nguồn dữ liệu đã đính kèm. Không cho phép chạy script.')}>
+      description={t('Kiểm tra cấu trúc dữ liệu đã đính kèm.')}>
       <Database size={15} aria-hidden="true" />{t('Kiểm tra dữ liệu')}
     </SwitchField>
     <div className={`permission-folder${folderDisabled ? ' permission-folder-disabled' : ''}`}>
       <span className="permission-folder-text">
         <span className="permission-folder-title"><FolderOpen size={15} aria-hidden="true" />{t('Thư mục làm việc')}</span>
-        <span className="permission-folder-description">{t('Tí làm trên bản sao riêng của thư mục; file gốc chỉ đổi sau khi Tí trả lời xong. Đổi mức sẽ chọn lại thư mục.')}</span>
+        <span className="permission-folder-description">{t('Làm trên bản sao riêng của một thư mục.')}</span>
       </span>
       <span className="permission-folder-control">
         <Select ariaLabel={t('Thư mục làm việc')} size="sm" value={state.workspace} disabled={folderDisabled}
@@ -108,14 +108,14 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
       </span>
     </div>
     <SwitchField checked={state.web} disabled={disabled} onChange={enabled => onCapability('network.web', enabled)}
-      description={t('Cho phép đọc URL công khai và gửi truy vấn tìm kiếm. Không mở mạng cho lệnh trong thư mục.')}>
+      description={t('Tìm và đọc trang web công khai.')}>
       <Globe size={15} aria-hidden="true" />{t('Đọc và tìm kiếm web')}
     </SwitchField>
     {/* Proposing is not doing: the switch lets the worker store a card, and the card still waits for Apply (COD-199). */}
     <SwitchField checked={state.propose} disabled={disabled} onChange={enabled => onCapability('app.propose', enabled)}
-      description={t('Tí có thể đề xuất tạo hoặc sửa Tí, hội, skill, lịch chạy và một số cài đặt. Mỗi đề xuất là một thẻ trong chat; bạn bấm Áp dụng thì mới đổi.')}>
+      description={t('Đề xuất Tí, hội, skill và cài đặt mới.')}>
       <Lightbulb size={15} aria-hidden="true" />{t('Đề xuất thay đổi trong app')}
     </SwitchField>
-    <p className="muted permission-footnote">{t('Quyền mới áp dụng cho lần chạy chưa bắt đầu, kể cả phần việc còn chờ trong lượt này. Thu hồi quyền sẽ dừng công việc đang chạy.')}</p>
+    <p className="muted permission-footnote">{t('Áp dụng từ lần chạy kế tiếp. Tắt một quyền sẽ dừng việc đang dùng nó.')}</p>
   </div>;
 }
