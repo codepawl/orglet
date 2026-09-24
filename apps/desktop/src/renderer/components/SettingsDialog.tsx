@@ -112,8 +112,10 @@ function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove }:
         { value: SYSTEM_ACCOUNT_ID, label: t('Tài khoản mặc định'), detail: summaryOf(SYSTEM_ACCOUNT_ID) ?? t('Đã đăng nhập sẵn'), icon: <Laptop size={16} /> },
         ...item.accounts.map(account => ({ value: account.id, label: account.label, detail: summaryOf(account.id), icon: <UserRound size={16} /> })),
       ]} />
-    {item.configDir && <InfoTip label={t('Chi tiết tài khoản')} rows={[
-      { label: t('Thư mục đăng nhập'), value: item.configDir, mono: true, onCopy: () => navigator.clipboard.writeText(item.configDir!) },
+    {/* Where the CLI lives and which folder this account signs in from: detail behind the "i", not a line in the row. */}
+    {(item.executable || item.configDir) && <InfoTip label={t('Chi tiết tài khoản')} rows={[
+      ...(item.executable ? [{ label: t('Chương trình'), value: item.executable, mono: true, onCopy: () => void copyText(item.executable) }] : []),
+      ...(item.configDir ? [{ label: t('Thư mục đăng nhập'), value: item.configDir, mono: true, onCopy: () => void copyText(item.configDir!) }] : []),
     ]} />}
     <RowMenu label={t('Tài khoản {0}', [item.name])} items={[
       { label: t('Thêm tài khoản'), icon: UserPlus, onSelect: () => setEditing({ label: '' }) },
@@ -281,6 +283,28 @@ async function copyCommand(command: string) {
   }
 }
 
+/** A path or value from a detail popover, through the same main-process clipboard as the commands. */
+async function copyText(value: string) {
+  try {
+    await orglet.copyText(value);
+    toast(t('Đã sao chép'), 'success', value);
+  } catch {
+    toast(t('Không sao chép được'), 'error', value);
+  }
+}
+
+/**
+ * A long command read in a narrow column: it may break after a path separator or a space, never inside a word, so
+ * "harness-accounts" stays whole. The text copied is the command itself.
+ */
+function breakableCommand(command: string): ReactNode[] {
+  // Each piece keeps together (the browser would otherwise also break after a hyphen); the breaks sit between them.
+  return command.split(/(?<=[\\/ ])/).flatMap((piece, index) => {
+    const whole = <span key={`piece-${index}`} className="command-copy-piece">{piece}</span>;
+    return index ? [<wbr key={`break-${index}`} />, whole] : [whole];
+  });
+}
+
 /** The terminal the person picked for login commands (COD-230): UI chrome, so localStorage. */
 const loginShellKey = 'orglet.login-shell';
 function readLoginShell(): LoginShell | undefined {
@@ -292,24 +316,32 @@ function rememberLoginShell(shell: LoginShell) {
 
 /**
  * The login line for the terminal the person uses. PowerShell, Command Prompt and Git Bash each need their own form
- * on Windows, so a small picker beside the label switches between them and is remembered for every row.
+ * on Windows. The terminal picker sits under the label in the row's one left-hand column, as wide as the account
+ * picker above it, and the choice is remembered for every row.
  */
 function LoginCommandCopy({ commands, label }: { commands: LoginCommand[]; label: string }) {
   const [shell, setShell] = useState(readLoginShell);
   const current = commands.find(item => item.shell === shell) ?? commands[0];
   if (!current) return null;
-  const picker = commands.length > 1 && <Select size="sm" className="login-shell-select" ariaLabel={t('Chọn terminal')} value={current.shell} showDetail={false}
+  // The trigger is a small chip, so the menu gets its own width rather than the chip's.
+  const picker = commands.length > 1 && <Select size="sm" className="login-shell-select" ariaLabel={t('Chọn terminal')} value={current.shell} showDetail={false} menuMinWidth={220}
     onChange={next => { setShell(next as LoginShell); rememberLoginShell(next as LoginShell); }}
     options={commands.map(item => ({ value: item.shell, label: loginShellNames[item.shell], icon: <SquareTerminal size={15} /> }))} />;
-  return <CommandCopy command={current.command} label={label} aside={picker || undefined} />;
+  return <CommandCopy command={current.command} label={label} picker={picker || undefined} />;
 }
 
-function CommandCopy({ command, label, aside }: { command: string; label: string; aside?: ReactNode }) {
-  return <div className="setting-repair">
-    {aside ? <div className="setting-repair-head"><span className="setting-repair-label">{label}</span>{aside}</div> : <span className="setting-repair-label">{label}</span>}
-    <div className="setting-repair-row">
-      <code className="setting-command">{command}</code>
-      <Button type="button" size="icon" aria-label={t('Sao chép lệnh')} title={t('Sao chép lệnh')} onClick={() => void copyCommand(command)}><Copy size={13} /></Button>
+/**
+ * A command to paste: its label, then the command on a quiet card. The card's top bar carries the terminal picker,
+ * small and borderless in the card's own colour (user, 2026-09-25), and the copy button on the right, where the eye
+ * already is; without a picker the copy button keeps the card's top corner.
+ */
+function CommandCopy({ command, label, picker }: { command: string; label: string; picker?: ReactNode }) {
+  const copy = <Button type="button" size="icon" variant="ghost" className="command-copy-button" aria-label={t('Sao chép lệnh')} title={t('Sao chép lệnh')} onClick={() => void copyCommand(command)}><Copy size={14} /></Button>;
+  return <div className="command-copy">
+    <span className="command-copy-label">{label}</span>
+    <div className={picker ? 'command-copy-card with-bar' : 'command-copy-card'}>
+      {picker ? <div className="command-copy-bar">{picker}{copy}</div> : copy}
+      <code className="command-copy-text">{breakableCommand(command)}</code>
     </div>
   </div>;
 }
@@ -589,19 +621,20 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       {/* The mark, the name and the state read as one line, so the eye does not have to travel
                           down the row to learn whether this harness is usable (user, 2026-09-19). */}
                       <span className="harness-head">
-                        <span className="setting-title"><span>{item.name}</span>{!item.runnable && <span className="badge">{t('Chỉ trạng thái')}</span>}</span>
+                        {/* The version rides on the name's line: a line of its own only pushed the row down. */}
+                        <span className="setting-title"><span>{item.name}</span>{item.version && <span className="harness-version">{item.version}</span>}{!item.runnable && <span className="badge">{t('Chỉ trạng thái')}</span>}</span>
                         <span className={`status-pill ${pill.className}`}><StatusMark variant={pill.mark.variant} tone={pill.mark.tone} label={pill.label} decorative />{pill.label}</span>
                       </span>
-                      {/* With nothing installed the version line only repeats what the detail line already says. */}
-                      {item.version && <span className="setting-description">{item.version}</span>}
                       {/* Signed in, the account itself says more than "signed in through claude.ai". */}
-                      <span className="setting-description">{signedInAs ?? tMessage(item.authDetail)}</span>
+                      {/* Found but signed out, the state says so and the command follows: one short line points at it. */}
+                      <span className="setting-description">{signedInAs ?? (item.status === 'detected' ? t('Chạy lệnh bên dưới trong terminal rồi bấm Dò lại.') : tMessage(item.authDetail))}</span>
                       {!showLogin && usage === undefined && <SkeletonGroup label={t('Đang đọc hạn mức gói…')}>
                         <div className="plan-usage"><Skeleton width="70%" /></div>
                       </SkeletonGroup>}
                       {!showLogin && accountUsage && <PlanUsage windows={accountUsage.windows} label={t('Hạn mức gói {0}', [item.name])} />}
                       {usageGap && <span className="setting-description">{usageGap}</span>}
-                      {item.executable ? <span className="setting-path" title={item.executable}>{item.executable}</span> : null}
+                      {/* A harness that cannot hold accounts still shows where it lives; the others keep it behind the "i". */}
+                      {item.executable && !item.runnable ? <span className="setting-path" title={item.executable}>{item.executable}</span> : null}
                       {item.runnable && <HarnessAccountPicker item={item} usage={usage?.[item.id]} busy={busy}
                         onSelect={id => void act(async () => {
                           await changeAccount(() => orglet.call('selectHarnessAccount', { harness: item.id, id }));

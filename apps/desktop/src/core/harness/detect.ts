@@ -142,7 +142,8 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
   if (versionResult.code !== 0 || !version) return null;
 
   const name = harnessNames[id];
-  const signedOut = `Đã thấy ${name} trên máy, nhưng chưa đăng nhập nên chưa sẵn sàng chạy. Chạy lệnh bên dưới trong terminal.`;
+  // Also the error a chat shows when it tries to run this harness, so it points at Settings rather than "below".
+  const signedOut = `Đã thấy ${name} trên máy nhưng chưa đăng nhập. Lấy lệnh đăng nhập ở Cài đặt → Harness trên máy.`;
   const unread = `${name} có trên máy nhưng không đọc được trạng thái đăng nhập. Chạy lệnh bên dưới rồi bấm Dò lại. Orglet không chuyển sang Demo.`;
   let info: Omit<HarnessInfo, 'version'>;
   if (id === 'claude-code') {
