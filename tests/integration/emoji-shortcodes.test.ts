@@ -38,7 +38,7 @@ describe('emoji shortcodes', () => {
 
   it('offers names that start with the query first, then later words, then names that contain it', () => {
     const names = emojiChoices('sk').map(choice => choice.name);
-    expect(names.length).toBeLessThanOrEqual(8);
+    expect(names.length).toBeLessThanOrEqual(6);
     expect(names[0]).toBe('skull');
     expect(names).toContain('skull_and_crossbones');
     const firstLoose = names.findIndex(name => !name.startsWith('sk'));

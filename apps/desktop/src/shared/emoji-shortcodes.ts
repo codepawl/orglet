@@ -14,7 +14,7 @@ export type EmojiChoice = { emoji: string; name: string };
 export type ShortcodeQuery = { start: number; query: string };
 
 const MINIMUM_QUERY_LENGTH = 2;
-const MAXIMUM_CHOICES = 8;
+const MAXIMUM_CHOICES = 6;
 const SHORTCODE_NAME = /^[a-z0-9_+-]+$/;
 
 /**
