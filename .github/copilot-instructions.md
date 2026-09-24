@@ -1,0 +1,1 @@
+Read and follow `AGENTS.md` at the repository root before making any change. It is the map of this repo for coding agents: layout, commands, conventions, and what not to do. Human process is `CONTRIBUTING.md`. Nothing is restated here.
