@@ -1973,16 +1973,14 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Live run: preamble, the answer as it streams, then the folded step list. Space only, no lines. */
 .live-run { display:flex; flex-direction:column; gap:12px; padding-left:35px; }
 .live-run .prose { line-height:1.65; }
-.activity-group { font-size:13px; color:var(--muted); }
-.activity-detail { display:flex; flex-direction:column; gap:6px; margin-top:4px; padding-left:24px; }
 .activity-elapsed { margin:0; font-variant-numeric:tabular-nums; }
 /* The timer on its own, when a live run has no steps or notes to fold: the folded control's place and colour, no chevron. */
 .activity-elapsed-plain { display:flex; align-items:center; min-height:28px; padding-left:4px; font-size:13px; color:var(--muted); }
 .activity-notes { margin:0; max-height:220px; overflow-y:auto; line-height:1.6; white-space:pre-wrap; }
-/* A turn's notices in the order they happened (COD-217, `turnNotices`): above the answer what was loaded before
-   writing (memories, the folded step line), under it what came out of it (changed files, proposal cards, then the
-   action row last). Both groups share the bubble's left inset; the 4px pull matches the folded control's own padding,
-   so its icon and the memory line's start on the bubble's edge. Small muted lines, told apart by spacing only. */
+/* A turn's notices in the order they happened (COD-217, `turnNotices`): above the answer one folded trace of what
+   happened before writing (memories, notes, steps; COD-220), under it what came out of it (changed files, proposal
+   cards, then the action row last). Both groups share the bubble's left inset; the 4px pull matches the folded
+   control's own padding, so its icon starts on the bubble's edge. Small muted lines, told apart by spacing only. */
 .turn-before { display:flex; flex-direction:column; align-items:flex-start; gap:2px; margin:0 0 6px -4px; }
 .live-run .turn-before { margin-bottom:0; }
 .turn-after { display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
@@ -2011,18 +2009,38 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .line-added .diff-sign { color:var(--success); }
 .line-removed .diff-sign { color:var(--error); }
 pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px + 2ch); padding-left:var(--diff-gutter); text-indent:calc(-1 * var(--diff-gutter)); }
-.activity-summary { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:2px 8px 2px 4px; border:0; border-radius:8px; background:none; color:var(--muted); }
+/* The folded line above an answer, shared by the trace and the changed-files line: one quiet control with an icon
+   left of its words, a row tint on hover and nothing else. */
+.activity-summary { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:2px 8px 2px 4px; border:0; border-radius:8px; background:none; color:var(--muted); font-size:13px; }
 .activity-summary:hover { background:var(--row-hover); color:var(--text); }
 .activity-chevron { transition:transform .15s; }
-.activity-summary[aria-expanded=true] .activity-chevron { transform:rotate(90deg); }
-.activity-steps { display:flex; flex-direction:column; gap:4px; margin:0; padding:0; list-style:none; }
-.activity-step { display:flex; align-items:center; gap:8px; min-height:26px; min-width:0; }
-.activity-verb { flex-shrink:0; }
-.activity-target { min-width:0; padding:1px 8px; border-radius:6px; background:var(--surface); color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.activity-step.running .activity-verb { animation:thinking-pulse 1.4s ease-in-out infinite; }
+/* The turn's trace (COD-220, `TurnTrace`): everything the run did before writing behind one disclosure. Collapsed,
+   the summary counts each kind of thing that happened; open, the rows in the order they happened, an icon and plain
+   words each. It is a native <details>, so the summary needs its marker hidden and its cursor set. Open, it takes
+   the reply's width so a memory line can wrap, while the collapsed control keeps its own width. A file name or a
+   pattern is a chip that truncates; a memory or a note title is prose that wraps; a refusal is the same row, quieter.
+   Rows share one line box: the icon is set 3px down to sit on the first line's centre, and a chip is exactly the
+   text's height, so nothing tugs the row off its line. */
+.turn-trace { font-size:13px; color:var(--muted); }
+.turn-trace[open] { align-self:stretch; }
+.turn-trace > summary { list-style:none; cursor:pointer; }
+.turn-trace > summary::-webkit-details-marker { display:none; }
+.turn-trace[open] > summary .activity-chevron { transform:rotate(90deg); }
+.trace-detail { display:flex; flex-direction:column; align-items:flex-start; gap:6px; margin-top:4px; padding-left:24px; }
+.trace-list { display:flex; flex-direction:column; align-self:stretch; gap:4px; margin:0; padding:0; list-style:none; }
+.trace-row { display:flex; align-items:flex-start; gap:8px; min-width:0; line-height:1.5; }
+.trace-row > svg { flex-shrink:0; margin-top:3px; }
+.trace-row-muted { opacity:.7; }
+.trace-verb { flex-shrink:0; }
+.trace-note,.trace-text { min-width:0; overflow-wrap:anywhere; }
+.trace-text { color:var(--text); }
+.trace-target { min-width:0; padding:0 8px; border-radius:6px; background:var(--surface); color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.trace-row.running .trace-verb { animation:thinking-pulse 1.4s ease-in-out infinite; }
+.trace-link { padding:0; border:0; background:none; font:inherit; font-size:12px; color:var(--muted); text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+.trace-link:hover { color:var(--text); }
 @keyframes thinking-pulse { 50% { opacity:.45; } }
 @media(max-width:1000px) { .live-run { padding-left:0; } }
-@media (prefers-reduced-motion: reduce) { .activity-step.running .activity-verb { animation:none; } .activity-chevron { transition:none; } }
+@media (prefers-reduced-motion: reduce) { .trace-row.running .trace-verb { animation:none; } .activity-chevron { transition:none; } }
 
 /* Memory (COD-161): what a worker remembered from its chats, one quiet row each, corrected in place. Rows are told
    apart by spacing, never a line; the menu shows on hover or a visible focus ring like every other row. */
@@ -2044,11 +2062,3 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .memory-edit { display:flex; flex-direction:column; gap:8px; }
 .memory-edit-actions { display:flex; align-items:center; gap:6px; }
 .memory-empty { margin:0; }
-/* Above an answer (COD-217): which memories it was written with, folded behind one small line like the step count
-   under it. The 4px side padding is the folded control's, so the two icons line up. */
-.used-memories { font-size:12px; color:var(--muted); }
-.used-memories summary { display:inline-flex; align-items:center; gap:5px; cursor:pointer; list-style:none; padding:2px 4px; }
-.used-memories summary::-webkit-details-marker { display:none; }
-.used-memories summary:hover { color:var(--text); }
-.used-memories ul { margin:6px 0 0; padding-left:18px; display:flex; flex-direction:column; gap:3px; }
-.used-memories li { overflow-wrap:anywhere; }

@@ -20,7 +20,9 @@ import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { ActivityGroup, LiveRun, islandBeforeStreaming, islandOf, liveRunOf, savedSteps, useRunProgress, workingWorkers } from './LiveRun';
+import { LiveRun, islandBeforeStreaming, islandOf, liveRunOf, useRunProgress, workingWorkers } from './LiveRun';
+import { TurnTrace } from './TurnTrace';
+import { traceOf } from '../turnTrace';
 import { dockIsland } from './islandDock';
 import { knowledgeSuggestionKey, showsKnowledgeIsland } from '../../shared/knowledge-island';
 import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
@@ -85,7 +87,7 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
+export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   // The run whose working-copy changes are open in the diff viewer (COD-163).
@@ -185,15 +187,16 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   /**
    * One worker's answer with every notice in its slot (COD-217, the order lives in `turnNotices`). `runs` are the runs
    * whose changes belong with this answer: a crew turn's members each work in their own copy, so their lines are
-   * named, while the author's own line is not. `proposals` are the cards this answer's run proposed.
+   * named, while the author's own line is not; the same runs give a crew answer its handoff rows in the trace
+   * (COD-220). `proposals` are the cards this answer's run proposed.
    */
   const answer = (artifact: Artifact, author: Run | undefined, runs: readonly Run[], proposals: AppProposal[], latest: boolean) => {
     const authorName = author?.snapshot.worker.name ?? 'Orglet';
     const chat = artifact.report.format === 'chat';
-    const steps = savedSteps(detail.events, artifact.runId);
+    const trace = traceOf({ memories: artifact.usedMemories, context: author?.snapshot.context, runId: artifact.runId, events: detail.events, crew: author?.stage === 'synthesis' ? runs : [] });
+    const workerId = author?.snapshot.worker.id;
     const notices = turnNotices({
-      memories: artifact.usedMemories,
-      activity: steps.length > 0 ? <ActivityGroup key="activity" steps={steps} /> : undefined,
+      trace: trace.length > 0 ? <TurnTrace key="trace" entries={trace} onOpenMemories={openMemories && workerId ? () => openMemories(workerId) : undefined} /> : undefined,
       changes: changedFilesLines(runs, run => run.id !== artifact.runId),
       proposals: proposalCards(proposals),
       // A chat answer copies and downloads from its row; a report keeps those in its viewer's toolbar.

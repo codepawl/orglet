@@ -40,7 +40,7 @@ A memory is written the moment the tool runs, not when the run ends. A colleague
 
 Before its first request, a run freezes the active memories of its worker, its team (when running for one) and the workspace: pinned first, then newest, up to 30 lines and 6 000 characters. A line a note already says is skipped. They go to the model as one message after the approved notes, labelled as guidance, not source evidence, not instructions, and unable to grant permissions or override policy. **Details → Context loaded** lists each one under *Memory* and names the ones left out as duplicates or over the limit.
 
-Above the answer, since the memories are loaded before the worker writes ([COD-217](https://linear.app/codepawl/issue/COD-217)), one small line says **Memories used: N** and opens the list, the way sources are named. It shows there as soon as the run has frozen its context, while the answer is still streaming. The list is frozen on the answer (`usedMemories` on the artifact), so it still shows what the worker knew after a memory is edited or deleted. A later edit only reaches the next run.
+Above the answer, since the memories are loaded before the worker writes ([COD-217](https://linear.app/codepawl/issue/COD-217)), they are the first rows of the turn's trace ([COD-220](https://linear.app/codepawl/issue/COD-220), [worker-actions.md](worker-actions.md#the-trace-above-an-answer)): one folded line counts them with everything else the run did ("Used 1 memory · Read 2 files"), and opening it lists each memory's text in the order it was given, before the notes loaded and the steps taken, with a link to the worker's **Memory** tab under the rows. They show there as soon as the run has frozen its context, while the answer is still streaming. The list is frozen on the answer (`usedMemories` on the artifact), so it still shows what the worker knew after a memory is edited or deleted. A later edit only reaches the next run.
 
 ## Where you see and edit memory
 
@@ -66,5 +66,5 @@ Cloud sync, sharing memory between machines, and reading files without a grant.
 - Store: `apps/desktop/src/core/context/knowledge.ts` (`remember`, `updateMemory`, `deleteMemory`, cap and eviction, `memoriesOnlyFrom`).
 - Compilation: `apps/desktop/src/core/context/compiler.ts` (`memories`, `memoryMessage`, the `remembered` manifest kind).
 - Runner: `apps/desktop/src/core/orchestration/runner.ts` (`remember` tool call, `memories` in the harness answer, `usedMemories` on the artifact).
-- UI: `apps/desktop/src/renderer/components/Memories.tsx`, the worker dialog's Memory tab, the Library's Memory section, `UsedMemories` in the thread.
+- UI: `apps/desktop/src/renderer/components/Memories.tsx`, the worker dialog's Memory tab, the Library's Memory section, the memory rows of `TurnTrace` in the thread (`renderer/turnTrace.ts` builds them).
 - Tests: `tests/integration/memory.test.ts`.
