@@ -55,8 +55,11 @@ export async function candidates(id: HarnessCatalogId, env: NodeJS.ProcessEnv = 
   if (id === 'claude-code') {
     paths.push(join(home, '.claude', 'local', windows ? 'claude.exe' : 'claude'));
     // Claude desktop downloads its own Claude Code build; the MSIX install keeps AppData under its package folder.
-    const bundles = [join(roaming, 'Claude', 'claude-code')];
+    // That package folder comes first: `%APPDATA%\Claude` is only a view processes inside the package see, so a path
+    // through it would be copied into a login command the person's own terminal cannot open (COD-224).
+    const bundles: string[] = [];
     for (const entry of await children(join(local, 'Packages'))) if (entry.startsWith('Claude_')) bundles.push(join(local, 'Packages', entry, 'LocalCache', 'Roaming', 'Claude', 'claude-code'));
+    bundles.push(join(roaming, 'Claude', 'claude-code'));
     if (platform === 'darwin') bundles.push(join(home, 'Library', 'Application Support', 'Claude', 'claude-code'));
     for (const bundle of bundles) for (const version of (await children(bundle)).sort(byVersionDesc)) paths.push(join(bundle, version, windows ? 'claude.exe' : 'claude'));
   } else if (id === 'codex') {
@@ -189,14 +192,42 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
   return { ...info, version };
 }
 
+/**
+ * A build the Claude or Codex desktop app downloaded for itself: a folder named for its version or its content hash,
+ * which the app's next update replaces.
+ */
+export const isDesktopAppBuild = (path: string) =>
+  /[\\/]Claude[\\/]claude-code[\\/][^\\/]+[\\/]claude(\.exe)?$/i.test(path) || /[\\/]OpenAI[\\/]Codex[\\/]bin[\\/][^\\/]+[\\/]codex\.exe$/i.test(path);
+
+/**
+ * The install a login command should name. Runs prefer the desktop app's build, which starts without a shell; a
+ * command the person pastes should outlive the app's next update, so a working install of their own (PATH, npm) is
+ * named when there is one, and the app's build only when nothing else answers (COD-224).
+ */
+async function loginExecutable(id: HarnessCatalogId, running: string, installs: string[], run: Probe, selection: HarnessAccountSelection): Promise<string> {
+  if (!isDesktopAppBuild(running)) return running;
+  for (const path of installs) {
+    if (isDesktopAppBuild(path)) continue;
+    const version = await run(path, ['--version'], harnessAccountEnv(id, selection.configDir));
+    if (version.code === 0) return path;
+  }
+  return running;
+}
+
 /** First working install of each catalog harness, including an explicit not-installed row when nothing probes. */
 export async function detectHarnesses(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, run: Probe = probe, accounts?: HarnessAccountMap): Promise<HarnessInfo[]> {
   const result: HarnessInfo[] = [];
   for (const id of harnessCatalog) {
     const selection = accounts?.[id] ?? systemAccountSelection();
-    let found: HarnessInfo | null = null;    for (const executable of await candidates(id, env, platform)) {
+    const installs = await candidates(id, env, platform);
+    let found: HarnessInfo | null = null;
+    for (const executable of installs) {
       found = await inspect(id, executable, run, platform, selection);
       if (found) break;
+    }
+    if (found) {
+      const loginPath = await loginExecutable(id, found.executable, installs, run, selection);
+      found = { ...found, loginCommand: loginCommand(id, loginPath, platform, selection.configDir) };
     }
     result.push(found ?? missingHarness(id, platform, selection));
   }
