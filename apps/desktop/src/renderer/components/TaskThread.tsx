@@ -15,6 +15,8 @@ import { DocumentCard, DocumentViewer } from './DocumentViewer';
 import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
+import { isHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../shared/harness';
+import { accountSwitchFor, type AccountSwitch } from '../../shared/account-switch';
 import { Markdown } from './Markdown';
 import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
@@ -75,6 +77,27 @@ function rememberDismissedSuggestions(taskId: string, suggestionKey: string) {
     const stored = JSON.parse(localStorage.getItem(dismissedSuggestionsKey) || '{}') as Record<string, string>;
     localStorage.setItem(dismissedSuggestionsKey, JSON.stringify({ ...stored, [taskId]: suggestionKey }));
   } catch { /* a blocked store brings the offer back next time, nothing worse */ }
+}
+
+/** Per chat, the run whose "account ran out" island offer was dismissed (COD-225): UI chrome, so localStorage. */
+const dismissedLimitRunKey = 'orglet.account-island-dismissed';
+function readDismissedLimitRun(taskId: string): string | undefined {
+  try {
+    const stored = JSON.parse(localStorage.getItem(dismissedLimitRunKey) || '{}') as Record<string, string>;
+    return typeof stored[taskId] === 'string' ? stored[taskId] : undefined;
+  } catch { return undefined; }
+}
+function rememberDismissedLimitRun(taskId: string, runId: string) {
+  try {
+    const stored = JSON.parse(localStorage.getItem(dismissedLimitRunKey) || '{}') as Record<string, string>;
+    localStorage.setItem(dismissedLimitRunKey, JSON.stringify({ ...stored, [taskId]: runId }));
+  } catch { /* a blocked store brings the offer back next time, nothing worse */ }
+}
+
+/** How the account picker names an account: its label, or the default account's name. */
+function accountLabel(harness: HarnessInfo, accountId: string) {
+  if (accountId === SYSTEM_ACCOUNT_ID) return t('Tài khoản mặc định');
+  return harness.accounts.find(account => account.id === accountId)?.label ?? t('Tài khoản mặc định');
 }
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
@@ -161,11 +184,53 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     review: () => proposals.length === 1 ? openKnowledge(proposals[0]) : reviewKnowledge(),
     dismiss: () => { setDismissedSuggestions(suggestionKey); rememberDismissedSuggestions(detail.task.id, suggestionKey); },
   };
+  // A harness account that ran out of plan usage (COD-225): the latest turn's run the core marked `plan_limit`, once
+  // no run is on. Usage is read fresh, because the account in use has just run out, and the island offers the account
+  // with the most room; switching selects it and runs the turn again. It takes the tab before the knowledge offer.
+  const limitRun = !busy && latestTurn ? latestTurn.runs.findLast(run => run.errorCode === 'plan_limit') : undefined;
+  const limitProvider = limitRun?.snapshot.worker.provider;
+  const limitHarness = limitProvider && isHarness(limitProvider) ? limitProvider : undefined;
+  const [dismissedLimitRun, setDismissedLimitRun] = useState(() => readDismissedLimitRun(detail.task.id));
+  const [accountOffer, setAccountOffer] = useState<{ runId: string; harness: HarnessInfo; offer: AccountSwitch }>();
+  useEffect(() => {
+    if (!limitRun || !limitHarness || dismissedLimitRun === limitRun.id) return;
+    let live = true;
+    const runId = limitRun.id;
+    void Promise.all([orglet.call('harnesses', { refresh: false }), orglet.call('harnessUsage', { refresh: true })]).then(([harnesses, usage]) => {
+      const harness = harnesses.find(item => item.id === limitHarness);
+      if (live && harness) setAccountOffer({ runId, harness, offer: accountSwitchFor(harness, usage[limitHarness]) });
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, [limitRun?.id, limitHarness, dismissedLimitRun]);
+  const accountShown = !dockedIsland && limitRun && accountOffer?.runId === limitRun.id && dismissedLimitRun !== limitRun.id ? accountOffer : undefined;
+  const switchTarget = accountShown?.offer.kind === 'switch' ? { accountId: accountShown.offer.accountId, label: accountLabel(accountShown.harness, accountShown.offer.accountId), usedPercent: accountShown.offer.usedPercent } : undefined;
+  const switchResetsAt = accountShown?.offer.kind === 'wait' ? accountShown.offer.resetsAt : undefined;
+  const accountActions = useRef({ switchAccount: () => {}, dismiss: () => {} });
+  accountActions.current = {
+    switchAccount: () => {
+      if (!accountShown || !switchTarget) return;
+      action(async () => {
+        await orglet.call('selectHarnessAccount', { harness: accountShown.harness.id, id: switchTarget.accountId });
+        await orglet.call('retry', { id: detail.task.id });
+      });
+    },
+    dismiss: () => {
+      if (!limitRun) return;
+      setDismissedLimitRun(limitRun.id);
+      rememberDismissedLimitRun(detail.task.id, limitRun.id);
+    },
+  };
   useEffect(() => {
     if (dockedIsland) dockIsland({ kind: 'run', ...dockedIsland });
+    else if (accountShown) dockIsland({
+      kind: 'account', key: accountShown.runId, harnessName: accountShown.harness.name,
+      ...(switchTarget ? { target: { label: switchTarget.label, usedPercent: switchTarget.usedPercent } } : {}),
+      ...(switchResetsAt ? { resetsAt: switchResetsAt } : {}),
+      switchAccount: () => accountActions.current.switchAccount(), dismiss: () => accountActions.current.dismiss(),
+    });
     else if (knowledgeShown) dockIsland({ kind: 'knowledge', key: suggestionKey, count: proposals.length, review: () => knowledgeActions.current.review(), dismiss: () => knowledgeActions.current.dismiss() });
     else dockIsland(undefined);
-  }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, islandWorkerKey, knowledgeShown, suggestionKey]);
+  }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt]);
   useEffect(() => () => dockIsland(undefined), []);
 
   // A face nods when its answer lands, not when an old chat opens: the runs already finished when this chat was

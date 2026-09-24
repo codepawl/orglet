@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore } from 'react';
-import { KnowledgeIsland, LiveIsland, type IslandView } from './LiveIsland';
+import { AccountIsland, KnowledgeIsland, LiveIsland, type IslandView } from './LiveIsland';
 
 /**
  * The island docks on the prompt bar, not in the thread (COD-167): it sits on the bar's top edge and moves with
@@ -8,11 +8,13 @@ import { KnowledgeIsland, LiveIsland, type IslandView } from './LiveIsland';
  * travels from an answer to the bar in messageMarks.tsx.
  *
  * Two kinds of view take the tab (COD-208): a working run, and, once no run is on, the chat's knowledge suggestions
- * waiting for review. The thread picks which one is docked (`showsKnowledgeIsland`); the dock only shows it.
+ * waiting for review. The thread picks which one is docked (`showsKnowledgeIsland`); the dock only shows it. A third,
+ * a harness account that ran out of plan usage (COD-225), takes the tab before the suggestions: it blocks the chat.
  */
 export type DockedIsland =
   | ({ kind: 'run' } & IslandView)
-  | { kind: 'knowledge'; /** The set of suggestions, so a new set is a new view. */ key: string; count: number; review: () => void; dismiss: () => void };
+  | { kind: 'knowledge'; /** The set of suggestions, so a new set is a new view. */ key: string; count: number; review: () => void; dismiss: () => void }
+  | { kind: 'account'; /** The run that ran out, so a later one is a new view. */ key: string; harnessName: string; target?: { label: string; usedPercent: number }; resetsAt?: string; switchAccount: () => void; dismiss: () => void };
 
 let docked: DockedIsland | undefined;
 const listeners = new Set<() => void>();
@@ -28,7 +30,8 @@ export function dockIsland(view: DockedIsland | undefined) {
 function sameView(a: DockedIsland | undefined, b: DockedIsland | undefined) {
   if (!a || !b) return a === b;
   if (a.kind === 'knowledge') return b.kind === 'knowledge' && a.key === b.key && a.count === b.count;
-  if (b.kind === 'knowledge') return false;
+  if (a.kind === 'account') return b.kind === 'account' && a.key === b.key && a.target?.label === b.target?.label && a.target?.usedPercent === b.target?.usedPercent && a.resetsAt === b.resetsAt;
+  if (b.kind !== 'run') return false;
   return a.state === b.state && a.label === b.label && a.receipt === b.receipt && sameWorkers(a, b);
 }
 
@@ -80,6 +83,7 @@ export function IslandDock() {
   const shown = lastView.current;
   if (!shown) return null;
   if (shown.kind === 'knowledge') return <KnowledgeIsland count={shown.count} review={shown.review} dismiss={shown.dismiss} leaving={leaving} />;
+  if (shown.kind === 'account') return <AccountIsland harnessName={shown.harnessName} target={shown.target} resetsAt={shown.resetsAt} switchAccount={shown.switchAccount} dismiss={shown.dismiss} leaving={leaving} />;
   return <LiveIsland state={shown.state} label={shown.label} receipt={shown.receipt} workers={shown.workers} leaving={leaving} />;
 }
 

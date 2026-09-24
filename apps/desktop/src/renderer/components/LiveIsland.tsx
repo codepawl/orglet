@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { Lightbulb, X } from 'lucide-react';
+import { Gauge, Lightbulb, X } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { RosterAvatars } from './Avatar';
 import { Button } from './ui';
+import { usageResetLabel } from './PlanUsage';
 import { t } from '../i18n';
 
 /**
@@ -77,6 +78,39 @@ export function KnowledgeIsland({ count, review, dismiss, leaving }: { count: nu
         <Lightbulb size={16} aria-hidden="true" />
         <span className="live-island-label" key={label}>{label}</span>
         <Button type="button" className="live-island-action" aria-label={t('Xem gợi ý knowledge')} onClick={review}>{t('Xem')}</Button>
+        <Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} title={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button>
+      </span>
+    </div>
+  </div>;
+}
+
+/**
+ * A harness account ran out of plan usage (COD-225), offered from the island where the chat's next message is typed:
+ * the harness that stopped, then either one action that switches to the account with the most room and runs the turn
+ * again, or, when no other account has any, when the one in use resets. The parent picks the account and does the
+ * switching; this only shows it.
+ */
+export function AccountIsland({ harnessName, target, resetsAt, switchAccount, dismiss, leaving }: {
+  harnessName: string;
+  /** The account to switch to and how much of its tightest allowance is used; absent when none has room. */
+  target?: { label: string; usedPercent: number };
+  resetsAt?: string;
+  switchAccount: () => void;
+  dismiss: () => void;
+  leaving?: boolean;
+}) {
+  const content = useRef<HTMLSpanElement>(null);
+  const width = useMeasuredWidth(content);
+  const label = t('{0} hết hạn mức', [harnessName]);
+  return <div role="status" className={leaving ? 'live-island live-island-knowledge live-island-account leaving' : 'live-island live-island-knowledge live-island-account'}>
+    <div className="live-island-body" style={{ width }}>
+      <span className="live-island-content" ref={content}>
+        <Gauge size={16} aria-hidden="true" />
+        <span className="live-island-label">{label}</span>
+        {target
+          ? <Button type="button" className="live-island-action" onClick={switchAccount}
+            aria-label={t('Chuyển sang {0} rồi chạy lại', [target.label])}>{t('Dùng {0} · còn {1}%', [target.label, 100 - Math.round(target.usedPercent)])}</Button>
+          : resetsAt && <span className="live-island-meta">{usageResetLabel(resetsAt)}</span>}
         <Button type="button" size="icon" className="live-island-dismiss" aria-label={t('Bỏ qua')} title={t('Bỏ qua')} onClick={dismiss}><X size={14} /></Button>
       </span>
     </div>

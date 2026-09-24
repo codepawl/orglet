@@ -40,7 +40,7 @@ import { dirname, join } from 'node:path';
 import { harnessNames, isHarness, type HarnessCatalogId, type HarnessId, type HarnessInfo } from '../../shared/harness';
 import type { HarnessAccountMap } from '../harness/accounts';
 import type { AccountUsageRead } from '../harness/usage';
-import { HarnessBudgetError, HarnessTerminationError, type HarnessExecutor } from '../harness/exec';
+import { HarnessBudgetError, HarnessLimitError, HarnessTerminationError, type HarnessExecutor } from '../harness/exec';
 import { ProgressSender } from './progress';
 import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 import { detectUsageLimit, usageLimitMessage } from '../usageLimits';
@@ -979,7 +979,8 @@ export class Runner {
       if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true, harnessRunTotal));
       const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error) : 'Lần chạy gặp lỗi.';
       const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
-      const errorCode = error instanceof UnresolvedAttemptError || error instanceof ReportRejectedError ? error.code : undefined;
+      // A harness account out of plan usage is marked, so the chat can offer an account that still has room (COD-225).
+      const errorCode = error instanceof UnresolvedAttemptError || error instanceof ReportRejectedError ? error.code : error instanceof HarnessLimitError && error.limit.kind === 'quota' ? 'plan_limit' : undefined;
       if (options.keepTaskOpen) this.store.update('runs', { ...run, status, error: message, errorCode });
       else this.store.status(task.id, run.id, status, message, errorCode);
       this.event(run.id, message);

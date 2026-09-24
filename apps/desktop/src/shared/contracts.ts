@@ -179,7 +179,8 @@ export type RunStage = 'plan' | 'member' | 'synthesis' | 'group';
  * worker handed in failed the citation, checker, line-range or process gates, which counts as feedback on the worker's
  * own work (COD-162).
  */
-export type RunErrorCode = 'unresolved_attempt' | 'report_rejected';
+/** plan_limit: a harness account ran out of plan usage (COD-225). */
+export type RunErrorCode = 'unresolved_attempt' | 'report_rejected' | 'plan_limit';
 export type Run = { id: string; taskId: string; stage?: RunStage; status: TaskStatus; errorCode?: RunErrorCode; snapshot: { workspaceGrant?: WorkspaceGrantSnapshot; assignment?: z.infer<typeof PlanAssignment>; reassignment?: import('./team-messages').TeamReassignment; toolCapabilities?: ToolCapability[]; worker: Worker; skill: Skill; team?: Team; input?: RunInput; context?: RunContext; workFrame?: WorkFrame; inputRevision?: number; upstreamArtifactIds?: string[]; preflightId?: string; scoreProfileIds?: string[]; model?: string; pricingVersion?: string; plan?: TeamPlan; /** Repeated feedback on this worker's earlier work, frozen when the run started (COD-162); present only on a chat run that may act on it. */ improvement?: import('./self-improvement').ImprovementSignal[] }; startedAt: string; error: string | null };
 export type Activity = { id: string; runId: string; sequence?: number; message: string; createdAt: string; teamMessage?: import('./team-messages').TeamMessage };
 /** A memory the answer was written with, as the run froze it (COD-161); the row may have been edited or deleted since. */

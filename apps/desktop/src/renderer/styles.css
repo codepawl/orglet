@@ -1966,6 +1966,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .live-island-knowledge .button:hover:not(:disabled) { background:transparent; color:var(--text); }
 .live-island-knowledge .live-island-action { padding:0 6px; font-size:13px; }
 .live-island-knowledge .live-island-dismiss { width:24px; padding:0; }
+/* A harness account that ran out (COD-225) wears the suggestions' tab: the gauge where the bulb sits, the switch as its
+   one action, or when the account resets in the quiet colour of a second line. */
+.live-island-account .live-island-meta { margin-right:4px; color:var(--muted); font-size:13px; white-space:nowrap; }
 /* The state, in the faces (COD-171). Thinking: the head turns from side to side, the eyes leading (the byline's
    Thinking without the hop, since the tab itself has just risen). Reading, listing files and running a step: the
    head leans in and the eyes read a line, jumping back with a blink. Searching: the eyes look about and the head
