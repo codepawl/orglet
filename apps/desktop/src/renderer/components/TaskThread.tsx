@@ -16,7 +16,7 @@ import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { isHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../shared/harness';
-import { accountSwitchFor, type AccountSwitch } from '../../shared/account-switch';
+import { accountSwitchFor, outOfPlanRun, type AccountSwitch } from '../../shared/account-switch';
 import { Markdown } from './Markdown';
 import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
@@ -187,7 +187,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   // A harness account that ran out of plan usage (COD-225): the latest turn's run the core marked `plan_limit`, once
   // no run is on. Usage is read fresh, because the account in use has just run out, and the island offers the account
   // with the most room; switching selects it and runs the turn again. It takes the tab before the knowledge offer.
-  const limitRun = !busy && latestTurn ? latestTurn.runs.findLast(run => run.errorCode === 'plan_limit') : undefined;
+  const limitRun = !busy && latestTurn ? outOfPlanRun(latestTurn.runs) : undefined;
   const limitProvider = limitRun?.snapshot.worker.provider;
   const limitHarness = limitProvider && isHarness(limitProvider) ? limitProvider : undefined;
   const [dismissedLimitRun, setDismissedLimitRun] = useState(() => readDismissedLimitRun(detail.task.id));
