@@ -66,7 +66,8 @@ export class ReportRejectedError extends Error {
 
 export const DEFAULT_PROVIDER_CONCURRENCY = 2;
 export type HarnessRuntime = {
-  detect(accounts?: HarnessAccountMap): Promise<HarnessInfo[]>;
+  /** Every harness, or only those in `only`; a runtime may return more than asked, and the caller picks. */
+  detect(accounts?: HarnessAccountMap, only?: readonly HarnessCatalogId[]): Promise<HarnessInfo[]>;
   execute: HarnessExecutor;
   /** Where account folders are created. Absent when the core has no data directory, leaving only the system account. */
   accountRoot?: string;

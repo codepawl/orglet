@@ -24,7 +24,7 @@ import { Routines } from './orchestration/routines';
 import { WorkPolicy } from './orchestration/work-policy';
 import { KnowledgeBase } from './context/knowledge';
 import type { HarnessRuntime } from './orchestration/runner';
-import { SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage } from '../shared/harness';
+import { SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessUsage } from '../shared/harness';
 import { detectHarnesses, probe } from './harness/detect';
 import { readHarnessUsage } from './harness/usage';
 import { HarnessAccounts } from './harness/accounts';
@@ -49,7 +49,7 @@ import type { Args } from '../shared/contracts';
  * account; without it only the system account exists, which is what the tests want.
  */
 export const localHarnessRuntime = (accountRoot?: string): HarnessRuntime => ({
-  detect: accounts => detectHarnesses(process.env, process.platform, probe, accounts),
+  detect: (accounts, only) => detectHarnesses(process.env, process.platform, probe, accounts, only),
   execute: executeHarness,
   usage: (harness, executable, configDir) => readHarnessUsage(harness, executable, configDir),
   ...(accountRoot ? { accountRoot } : {}),
@@ -460,17 +460,19 @@ export class CoreService {
       case 'harnessUsage': return this.harnessUsage(commands.harnessUsage.parse(args).refresh);
       case 'saveHarnessAccount': {
         const input = commands.saveHarnessAccount.parse(args);
-        return this.harnessAccount(() => input.id
-          ? this.harnessAccounts.rename(input.harness, input.id, input.label)
-          : this.harnessAccounts.add(input.harness, input.label));
+        // A new name is a label only; a new account is selected, so that harness signs in from another folder.
+        if (input.id) return this.harnessAccount(input.harness, 'label', () => this.harnessAccounts.rename(input.harness, input.id!, input.label));
+        return this.harnessAccount(input.harness, 'sign-in', () => this.harnessAccounts.add(input.harness, input.label));
       }
       case 'removeHarnessAccount': {
         const input = commands.removeHarnessAccount.parse(args);
-        return this.harnessAccount(() => this.harnessAccounts.remove(input.harness, input.id));
+        // Removing the account in use hands the harness back to the default account; any other is a list change.
+        const active = this.harnessAccounts.selection(input.harness).accountId === input.id;
+        return this.harnessAccount(input.harness, active ? 'sign-in' : 'label', () => this.harnessAccounts.remove(input.harness, input.id));
       }
       case 'selectHarnessAccount': {
         const input = commands.selectHarnessAccount.parse(args);
-        return this.harnessAccount(() => this.harnessAccounts.select(input.harness, input.id));
+        return this.harnessAccount(input.harness, 'sign-in', () => this.harnessAccounts.select(input.harness, input.id));
       }
       case 'eraseData': {
         const input = commands.eraseData.parse(args);
@@ -724,12 +726,36 @@ export class CoreService {
    * Adds, renames, removes or selects one harness account, then detects again: a different account means a
    * different sign-in, so the cached status and model list no longer describe it.
    */
-  private async harnessAccount(change: () => void | Promise<unknown>): Promise<HarnessInfo[]> {
+  private async harnessAccount(harness: HarnessCatalogId, effect: 'label' | 'sign-in', change: () => void | Promise<unknown>): Promise<HarnessInfo[]> {
     await change();
-    this.harnessUsageCache = undefined;
-    const found = await this.harnesses(true);
+    const found = effect === 'label' ? await this.withStoredAccounts() : await this.detectAgain(harness);
+    if (effect === 'sign-in') this.harnessUsageCache = undefined;
     this.notify();
     return found;
+  }
+
+  /**
+   * The detected rows as they are, with each harness's account list read again from the store. A rename, or removing
+   * an account nobody signs in from, changes nothing a CLI would report, so no CLI runs (COD-229): this used to detect
+   * all three harnesses again, one CLI after another, and took seconds.
+   */
+  private async withStoredAccounts(): Promise<HarnessInfo[]> {
+    const detected = await (this.harnessCache?.value ?? this.harnesses(false));
+    const accounts = this.harnessAccounts.map();
+    const rows = detected.map(row => ({ ...row, accounts: accounts[row.id].accounts }));
+    this.harnessCache = { at: this.harnessCache?.at ?? Date.now(), value: Promise.resolve(rows) };
+    return rows;
+  }
+
+  /** Detects one harness again, when it signs in from another folder, and keeps the other rows as they were. */
+  private async detectAgain(harness: HarnessCatalogId): Promise<HarnessInfo[]> {
+    this.invalidateModelList(harness);
+    const detected = await (this.harnessCache?.value ?? this.harnesses(false));
+    const fresh = (await this.harness.detect(this.harnessAccounts.map(), [harness]).catch(() => [] as HarnessInfo[])).find(row => row.id === harness);
+    const rows = fresh ? detected.map(row => row.id === harness ? fresh : row) : detected;
+    const withFresh = fresh && !rows.some(row => row.id === harness) ? [...rows, fresh] : rows;
+    this.harnessCache = { at: Date.now(), value: Promise.resolve(withFresh) };
+    return withFresh;
   }
   /**
    * Native or alias model list for one connection. Returns the last cache immediately when present;

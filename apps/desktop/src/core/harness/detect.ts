@@ -215,10 +215,13 @@ async function loginExecutable(id: HarnessCatalogId, running: string, installs: 
   return running;
 }
 
-/** First working install of each catalog harness, including an explicit not-installed row when nothing probes. */
-export async function detectHarnesses(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, run: Probe = probe, accounts?: HarnessAccountMap): Promise<HarnessInfo[]> {
+/**
+ * First working install of each catalog harness, including an explicit not-installed row when nothing probes.
+ * `only` limits it to some harnesses, when one account change leaves the others as they were (COD-229).
+ */
+export async function detectHarnesses(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, run: Probe = probe, accounts?: HarnessAccountMap, only?: readonly HarnessCatalogId[]): Promise<HarnessInfo[]> {
   const result: HarnessInfo[] = [];
-  for (const id of harnessCatalog) {
+  for (const id of only ?? harnessCatalog) {
     const selection = accounts?.[id] ?? systemAccountSelection();
     const installs = await candidates(id, env, platform);
     let found: HarnessInfo | null = null;
