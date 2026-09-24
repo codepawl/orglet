@@ -14,7 +14,7 @@ import { RunAuditArgs } from './run-audit';
 import type { MediaKind } from './source-kinds';
 import { Review, ReviewPolicy, type EvidenceRequest } from './review';
 import { KnowledgeInput, MEMORY_TEXT_LIMIT, type Knowledge, type RunContext } from './knowledge';
-import { HarnessCatalogId, type HarnessInfo } from './harness';
+import { HarnessCatalogId, type HarnessInfo, type HarnessUsage } from './harness';
 import { FontFamily } from './fonts';
 import { EraseScope, type EraseSummary } from './erase';
 import { CurrencyCode, type CurrencyState } from './currency';
@@ -269,6 +269,8 @@ export const commands = {
   updateMemory: z.object({ id: Id, text: z.string().trim().min(1).max(MEMORY_TEXT_LIMIT).optional(), pinned: z.boolean().optional() }).strict(),
   deleteMemory: z.object({ id: Id }).strict(),
   harnesses: z.object({ refresh: z.boolean() }).strict(),
+  // Plan usage and the signed-in account for every harness account; read over the network, so apart from detection.
+  harnessUsage: z.object({ refresh: z.boolean() }).strict(),
   // A harness account is a folder the CLI signs in to; adding one selects it so the next login command is its own.
   saveHarnessAccount: z.object({ harness: HarnessCatalogId, id: z.string().min(1).max(64).optional(), label: z.string().trim().min(1).max(60) }).strict(),
   removeHarnessAccount: z.object({ harness: HarnessCatalogId, id: z.string().min(1).max(64) }).strict(),
@@ -294,7 +296,7 @@ export const commands = {
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { applyAppProposal: AppProposal; dismissAppProposal: void; undoAppProposal: AppProposal; reconcileBudget: void; recoveryFile: RecoveryFile; workspaceDiff: WorkspaceDiff; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; eraseData: EraseSummary; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; updateMemory: Knowledge; deleteMemory: void; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
+export type Results = { applyAppProposal: AppProposal; dismissAppProposal: void; undoAppProposal: AppProposal; reconcileBudget: void; recoveryFile: RecoveryFile; workspaceDiff: WorkspaceDiff; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; harnessUsage: HarnessUsage; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; eraseData: EraseSummary; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; updateMemory: Knowledge; deleteMemory: void; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;

@@ -21,7 +21,7 @@ Turn a provider on, paste its key or pick a `.txt` file, save. Ollama is a switc
 
 ## Local harnesses
 
-Claude Code, Codex and Cursor Agent: whether each is installed and signed in, its login command, its accounts, and **Rescan**. See [Connections → Local harnesses](connections.md#local-harnesses-claude-code-codex-cursor-agent).
+Claude Code, Codex and Cursor Agent: whether each is installed and signed in, its login command, its accounts with how much of each plan is used, and **Rescan**. See [Connections → Local harnesses](connections.md#local-harnesses-claude-code-codex-cursor-agent).
 
 ## Costs & limits
 

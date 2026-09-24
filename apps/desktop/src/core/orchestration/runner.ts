@@ -37,8 +37,9 @@ import { ProviderSlots } from './slots';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { harnessNames, isHarness, type HarnessId, type HarnessInfo } from '../../shared/harness';
+import { harnessNames, isHarness, type HarnessCatalogId, type HarnessId, type HarnessInfo } from '../../shared/harness';
 import type { HarnessAccountMap } from '../harness/accounts';
+import type { AccountUsageRead } from '../harness/usage';
 import { HarnessBudgetError, HarnessTerminationError, type HarnessExecutor } from '../harness/exec';
 import { ProgressSender } from './progress';
 import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
@@ -69,6 +70,8 @@ export type HarnessRuntime = {
   execute: HarnessExecutor;
   /** Where account folders are created. Absent when the core has no data directory, leaving only the system account. */
   accountRoot?: string;
+  /** Reads who is signed in to one account folder and how much of the plan is used. Absent, Settings shows no usage. */
+  usage?: (harness: HarnessCatalogId, executable: string, configDir?: string) => Promise<AccountUsageRead>;
 };
 
 const providerNames: Record<string, string> = { ...API_PROVIDER_NAMES, ...harnessNames };

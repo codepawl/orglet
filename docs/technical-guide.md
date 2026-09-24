@@ -60,7 +60,17 @@ A harness row runs with one account, picked on the row itself. **Tài khoản m�
 
 The row menu adds, renames and removes accounts. An account is a folder: Orglet creates one under `<userData>/harness-accounts/<harness>/<id>` and points the CLI at it with the variable that CLI reads for its own config and credentials — `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `CURSOR_CONFIG_DIR`. Signing in is still the CLI's job: the login command the row copies sets that variable first, so the sign-in lands in the selected account. The status, version and login command above the picker all describe the selected account, and every run of that harness uses it.
 
-Orglet never reads or copies the credentials in those folders. Removing an account deletes its folder, and with it that sign-in; the default account takes over. On macOS, Claude Code may keep credentials in the Keychain rather than in its config folder, so separate accounts are only verified on Windows.
+Orglet never copies, stores or writes the credentials in those folders; the one it reads is Claude Code's, for plan usage below. Removing an account deletes its folder, and with it that sign-in; the default account takes over. On macOS, Claude Code may keep credentials in the Keychain rather than in its config folder, so separate accounts are only verified on Windows.
+
+### Plan usage
+
+Under each signed-in row, Settings shows who the selected account is (address and plan) and how much of each plan allowance it has used, with when that allowance resets. The account picker shows the same for every account, as the address and the percentage of the allowance closest to its limit, so a switch can go to the account that still has room. The core reads this through the `harnessUsage` command, apart from detection because it goes over the network: every account of every installed harness, the default account first, one account at a time, reused for a minute, and read again on **Dò lại** or after an account changes (`apps/desktop/src/core/harness/usage.ts`).
+
+- **Claude Code:** `claude auth status` for the address and plan, then the access token in that account's `.credentials.json` goes to `https://api.anthropic.com/api/oauth/usage`, the endpoint Claude Code's own `/usage` reads. The token stays in the core and is sent nowhere else. An expired token is not renewed (Orglet never writes Claude Code's credentials): the row asks you to open Claude Code once and rescan. An API-key sign-in has no plan allowance, and a sign-in kept in the macOS Keychain shows the account without usage.
+- **Codex:** `codex app-server` in that account's `CODEX_HOME`, asked `account/read` and `account/rateLimits/read`. Only the plan's own `codex` limit is shown; a model-specific one is not.
+- **Cursor Agent:** `agent about --format json` for the address and plan tier. The CLI reports no usage, and the row says so.
+
+Every percentage is the vendor's own number; nothing is estimated. Detection reads Cursor Agent's `status --format json` through its `isAuthenticated` field.
 
 Pick **Claude Code trên máy này**, **Codex trên máy này** or **Cursor Agent trên máy này** as a worker's connection, then optionally a model ID (`--model` / Codex `-m`). Empty ID keeps the CLI default. Each task still needs explicit consent for that harness. Core lists models for those CLIs (`codex debug models`, `agent --list-models`, Claude Code aliases) and always accepts a typed custom ID. A standalone source-only run copies the permitted, hash-checked sources and the skill's reference files into a temporary folder, sends the compiled context as the prompt and requires the same JSON report schema; Orglet then applies the same citation, checker, checklist and line-range checks as native runs and deletes the folder.
 

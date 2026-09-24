@@ -886,6 +886,18 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .harness-account-form input { min-width:220px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
 .harness-commands { display:flex; flex-direction:column; gap:6px; margin-top:7px; }
 .harness-commands .setting-repair { margin-top:0; }
+/* How much of each plan allowance the account has used (COD-223): the allowance, a slim bar, the percentage and
+   when it resets, in four columns so every bar starts and ends at the same place, across harnesses too. The bar is the
+   accent until the allowance nears its end, then the warning and the error colour. */
+.plan-usage { display:grid; grid-template-columns:minmax(8.5em, max-content) minmax(64px, 1fr) 4ch max-content; align-items:center; gap:5px 10px; margin:4px 0 2px; font-size:12px; color:var(--muted); }
+.plan-usage-row { display:contents; }
+.plan-usage-bar { position:relative; height:6px; overflow:hidden; border-radius:999px; background:color-mix(in srgb, var(--text) 10%, transparent); }
+.plan-usage-bar>span { position:absolute; inset:0 auto 0 0; border-radius:inherit; background:var(--accent); }
+.plan-usage-bar>span[data-tone=warning] { background:var(--warning); }
+.plan-usage-bar>span[data-tone=critical] { background:var(--error); }
+.plan-usage-value { text-align:right; font-variant-numeric:tabular-nums; color:var(--text); }
+.plan-usage-reset { white-space:nowrap; }
+.plan-usage .org-skeleton { grid-column:1 / -1; }
 /* Settings → Giới thiệu (COD-176): the mark and the name lead, then the same rows as every other section. The links
    are a wrapping row of outline buttons, each mark left of its name; the changelog is the release name, the date and
    the notes as rendered Markdown, one release at a time. */
