@@ -6,7 +6,7 @@ import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
-import { harnessCatalog, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage } from '../../shared/harness';
+import { harnessCatalog, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
 import { PlanUsage } from './PlanUsage';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, type FontRole } from '../../shared/fonts';
 import { Button, PanelHeading, keepOpenForPopup } from './ui';
@@ -281,9 +281,32 @@ async function copyCommand(command: string) {
   }
 }
 
-function CommandCopy({ command, label }: { command: string; label: string }) {
+/** The terminal the person picked for login commands (COD-230): UI chrome, so localStorage. */
+const loginShellKey = 'orglet.login-shell';
+function readLoginShell(): LoginShell | undefined {
+  try { return (localStorage.getItem(loginShellKey) as LoginShell | null) ?? undefined; } catch { return undefined; }
+}
+function rememberLoginShell(shell: LoginShell) {
+  try { localStorage.setItem(loginShellKey, shell); } catch { /* a blocked store only forgets the choice */ }
+}
+
+/**
+ * The login line for the terminal the person uses. PowerShell, Command Prompt and Git Bash each need their own form
+ * on Windows, so a small picker beside the label switches between them and is remembered for every row.
+ */
+function LoginCommandCopy({ commands, label }: { commands: LoginCommand[]; label: string }) {
+  const [shell, setShell] = useState(readLoginShell);
+  const current = commands.find(item => item.shell === shell) ?? commands[0];
+  if (!current) return null;
+  const picker = commands.length > 1 && <Select size="sm" className="login-shell-select" ariaLabel={t('Chọn terminal')} value={current.shell} showDetail={false}
+    onChange={next => { setShell(next as LoginShell); rememberLoginShell(next as LoginShell); }}
+    options={commands.map(item => ({ value: item.shell, label: loginShellNames[item.shell], icon: <SquareTerminal size={15} /> }))} />;
+  return <CommandCopy command={current.command} label={label} aside={picker || undefined} />;
+}
+
+function CommandCopy({ command, label, aside }: { command: string; label: string; aside?: ReactNode }) {
   return <div className="setting-repair">
-    <span className="setting-repair-label">{label}</span>
+    {aside ? <div className="setting-repair-head"><span className="setting-repair-label">{label}</span>{aside}</div> : <span className="setting-repair-label">{label}</span>}
     <div className="setting-repair-row">
       <code className="setting-command">{command}</code>
       <Button type="button" size="icon" aria-label={t('Sao chép lệnh')} title={t('Sao chép lệnh')} onClick={() => void copyCommand(command)}><Copy size={13} /></Button>
@@ -594,7 +617,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         }, item.name)} />}
                       {((item.status === 'not_installed' && item.installCommand) || showLogin) && <div className="harness-commands">
                         {item.status === 'not_installed' && item.installCommand && <CommandCopy command={item.installCommand} label={t('Lệnh cài (tài liệu chính thức)')} />}
-                        {showLogin && <CommandCopy command={item.loginCommand} label={item.status === 'not_installed' ? t('Sau khi cài, đăng nhập bằng') : t('Lệnh đăng nhập')} />}
+                        {showLogin && <LoginCommandCopy commands={item.loginCommands} label={item.status === 'not_installed' ? t('Sau khi cài, đăng nhập bằng') : t('Lệnh đăng nhập')} />}
                       </div>}
                     </div>
                   </div>;

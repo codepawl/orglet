@@ -11,6 +11,7 @@ import {
   harnessStatus,
   installCommand,
   loginCommand,
+  loginCommands,
   missingHarness,
   type HarnessAccountSelection,
   type HarnessCatalogId,
@@ -122,6 +123,7 @@ function describeAuth(id: HarnessCatalogId, executable: string, platform: NodeJS
     status: harnessStatus(auth),
     authDetail: detail,
     loginCommand: loginCommand(id, executable, platform, selection.configDir),
+    loginCommands: loginCommands(id, executable, platform, selection.configDir),
     installCommand: installCommand(id, platform),
     runnable,
     accountId: selection.accountId,
@@ -231,7 +233,7 @@ export async function detectHarnesses(env: NodeJS.ProcessEnv = process.env, plat
     }
     if (found) {
       const loginPath = await loginExecutable(id, found.executable, installs, run, selection);
-      found = { ...found, loginCommand: loginCommand(id, loginPath, platform, selection.configDir) };
+      found = { ...found, loginCommand: loginCommand(id, loginPath, platform, selection.configDir), loginCommands: loginCommands(id, loginPath, platform, selection.configDir) };
     }
     result.push(found ?? missingHarness(id, platform, selection));
   }

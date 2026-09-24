@@ -1703,6 +1703,7 @@ export const en: Dictionary = {
   'Đã thêm tài khoản {0}. Đăng nhập bằng lệnh bên dưới.': 'Added {0}. Sign in with the command below.',
   'Đã xóa tài khoản': 'Account removed',
   'Đã đổi tài khoản {0}': 'Switched the {0} account',
+  'Chọn terminal': 'Choose terminal',
   // The island offers another harness account when one ran out (COD-225).
   '{0} hết hạn mức': '{0} ran out',
   'Dùng {0} · còn {1}%': 'Use {0} · {1}% left',

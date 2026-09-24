@@ -30,7 +30,7 @@ function store() {
 function signedIn(id: 'claude-code' | 'codex' | 'cursor', executable: string): HarnessInfo {
   return {
     id, name: harnessNames[id], executable, version: '1.0.0', auth: 'logged_in', status: 'signed_in',
-    authDetail: 'ok', loginCommand: executable, runnable: true, accountId: SYSTEM_ACCOUNT_ID, accounts: [],
+    authDetail: 'ok', loginCommand: executable, loginCommands: [], runnable: true, accountId: SYSTEM_ACCOUNT_ID, accounts: [],
   };
 }
 

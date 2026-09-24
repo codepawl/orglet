@@ -20,7 +20,7 @@ A harness runs the orglet through the CLI's own account, so the cost lands on th
 
 1. Install the CLI and sign in to it in your own terminal (`claude auth login`, `codex login` or `agent login`).
 2. Open **Settings → Local harnesses**. Each row shows one of four states: **Not installed**, **Found on disk** (installed, not signed in), **Signed in** (ready to run) or **Sign-in error** (the status check failed). Found on disk is not ready.
-3. If a row is not signed in, copy the login command it shows and run it, then choose **Rescan**. Orglet never switches an orglet to Demo when sign-in fails.
+3. If a row is not signed in, copy the login command it shows and run it, then choose **Rescan**. On Windows, pick your terminal beside the command first (PowerShell, Command Prompt or Git Bash); each needs its own line, and Orglet remembers the one you pick. Orglet never switches an orglet to Demo when sign-in fails.
 4. Open the orglet's settings and set **Model** to that harness. The model ID is optional; empty keeps the CLI's default.
 
 Orglet finds each CLI on `PATH` and in its usual install locations, including the copy the Claude or Codex desktop app downloaded. It only ever runs each CLI's `--version` and login-status command to detect it. The desktop app's own session is not reused; the CLI must be signed in itself.
