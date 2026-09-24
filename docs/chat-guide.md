@@ -1,6 +1,6 @@
 # In a chat
 
-What you can do inside a chat once an orglet or crew is set up: attach files, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, and find what the app told you.
+What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, and find what the app told you.
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
@@ -15,6 +15,12 @@ An orglet reads only what you attach to **that** chat, or what is inside the wor
 Attached files sit as cards above your message; hover a card to remove it. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. Images, video, audio and PDF are preview-only for now: the orglet is told they exist but cannot read them.
 
 Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. CSV, JSONL and Parquet files can also be checked locally under **Details → Sources**: schema, row counts, duplicate and missing IDs, and, for two files, an exact-match accuracy. Demo cannot analyze files; switch **Model** off Demo first.
+
+## Emoji
+
+Type a colon and at least two letters of an emoji's name, such as `:sk`, and a small menu lists the emoji that fit. Arrow keys move through it, Enter or Tab inserts the one highlighted, Escape closes it. A full name such as `:skull:` becomes 💀 as soon as you type the closing colon.
+
+The names are GitHub's, which Slack and Discord mostly share. The menu only opens at the start of the message or after a space or bracket, and only when an emoji matches, so times like `10:30` and links stay as you typed them.
 
 ## Reports as documents
 

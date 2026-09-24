@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { ArrowUp, Plus, Reply, Square, X } from 'lucide-react';
 import type { TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
+import { completeShortcodeAt, emojiChoices, insertEmoji, shortcodeQueryAt } from '../../shared/emoji-shortcodes';
 import { Button } from './ui';
 import { Avatar } from './Avatar';
 import { Attachment } from './Attachment';
@@ -39,7 +40,8 @@ function restingScrollLeft(strip: HTMLUListElement) {
  * It grows into a multi-line box once the text wraps or attachments appear, and stays grown until cleared
  * so the layout does not flip back and forth at the wrap point. Grown, it reads as three zones from the top:
  * the attached files as a strip of cards that scrolls sideways, the text, and the controls (add, who, send).
- * Team and group chats can pass `mentions` so `@` opens a worker picker.
+ * Team and group chats can pass `mentions` so `@` opens a worker picker. In every chat `:sk` offers matching emoji
+ * and a finished `:skull:` turns into its emoji (COD-233).
  */
 export function Composer({ value, onChange, onSubmit, label, placeholder, sendLabel, leading, trailing, attachments, onRemoveAttachment, context, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: readonly ComposerAttachment[]; onRemoveAttachment?: (id: string) => void;
   /** The top zone of the grown bar, above the files: what this message answers, for example. */
@@ -101,9 +103,18 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
   const mentionable = Boolean(mentions && (mentions.people.length > 1 || mentions.allNames?.length));
   const query = mentionable && !disabled ? mentionQueryAt(value, cursor) : undefined;
   const options = query && query.start !== dismissed ? mentionOptions(query.query, mentions!.people) : [];
-  const menuOpen = options.length > 0;
-  const selected = options[Math.min(active, Math.max(0, options.length - 1))];
-  useLayoutEffect(() => { setActive(0); }, [query?.start, query?.query]);
+  const mentionOpen = options.length > 0;
+  // A shortcode only opens its menu when an emoji fits, so ordinary writing never sets it off.
+  const emojiQuery = !mentionOpen && !disabled ? shortcodeQueryAt(value, cursor) : undefined;
+  const emojis = emojiQuery && emojiQuery.start !== dismissed ? emojiChoices(emojiQuery.query) : [];
+  const emojiOpen = emojis.length > 0;
+  const menuOpen = mentionOpen || emojiOpen;
+  const optionCount = mentionOpen ? options.length : emojis.length;
+  const activeIndex = Math.min(active, Math.max(0, optionCount - 1));
+  const selected = mentionOpen ? options[activeIndex] : undefined;
+  const selectedEmoji = emojiOpen ? emojis[activeIndex] : undefined;
+  const activeOptionId = selected ? `${listId}-${selected.kind}-${selected.name}` : selectedEmoji ? `${listId}-emoji-${selectedEmoji.name}` : undefined;
+  useLayoutEffect(() => { setActive(0); }, [query?.start, query?.query, emojiQuery?.start, emojiQuery?.query]);
   useLayoutEffect(() => {
     const element = textarea.current; if (!element) return;
     const measure = () => {
@@ -121,34 +132,71 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
     return () => observer.disconnect();
   }, [value, grown, textarea]);
   const syncCursor = (element: HTMLTextAreaElement) => setCursor(element.selectionStart ?? 0);
+  const placeCursor = (position: number) => {
+    requestAnimationFrame(() => {
+      const element = textarea.current; if (!element) return;
+      element.focus();
+      element.setSelectionRange(position, position);
+      setCursor(position);
+    });
+  };
   const pick = (option: typeof selected) => {
     if (!option) return;
     const next = insertMention(value, cursor, option.name);
     onChange(next.text);
     setDismissed(query?.start);
-    requestAnimationFrame(() => {
-      const element = textarea.current; if (!element) return;
-      element.focus();
-      element.setSelectionRange(next.cursor, next.cursor);
-      setCursor(next.cursor);
-    });
+    placeCursor(next.cursor);
+  };
+  const pickEmoji = (choice: typeof selectedEmoji) => {
+    if (!choice || !emojiQuery) return;
+    const next = insertEmoji(value, cursor, emojiQuery, choice.emoji);
+    onChange(next.text);
+    placeCursor(next.cursor);
+  };
+  const changeText = (element: HTMLTextAreaElement) => {
+    const completed = completeShortcodeAt(element.value, element.selectionStart ?? 0);
+    if (completed) {
+      onChange(completed.text);
+      placeCursor(completed.cursor);
+    } else {
+      onChange(element.value);
+      syncCursor(element);
+    }
+    setDismissed(undefined);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (menuOpen) {
-      if (event.key === 'ArrowDown') { event.preventDefault(); setActive(index => (index + 1) % options.length); return; }
-      if (event.key === 'ArrowUp') { event.preventDefault(); setActive(index => (index - 1 + options.length) % options.length); return; }
-      if (event.key === 'Escape') { event.preventDefault(); setDismissed(query?.start); return; }
-      if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); pick(selected); return; }
+      if (event.key === 'ArrowDown') { event.preventDefault(); setActive(index => (index + 1) % optionCount); return; }
+      if (event.key === 'ArrowUp') { event.preventDefault(); setActive(index => (index - 1 + optionCount) % optionCount); return; }
+      if (event.key === 'Escape') { event.preventDefault(); setDismissed(mentionOpen ? query?.start : emojiQuery?.start); return; }
+      if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        if (mentionOpen) pick(selected);
+        else pickEmoji(selectedEmoji);
+        return;
+      }
     }
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); if (canSend) onSubmit(); }
   };
   return <form className={`composer${expanded ? ' expanded' : ''}${trailing ? ' has-trailing' : ''}${context ? ' has-context' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) onSubmit(); }}>
-    {menuOpen && <ul id={listId} className="mention-menu" role="listbox" aria-label={t('Gắn thẻ Tí')}>
+    {emojiOpen && <ul id={listId} className="mention-menu emoji-menu" role="listbox" aria-label={t('Chèn emoji')}>
+      {emojis.map((choice, index) => {
+        const optionId = `${listId}-emoji-${choice.name}`;
+        return <li key={optionId} role="presentation">
+          <button type="button" id={optionId} role="option" aria-selected={choice === selectedEmoji} className={index === activeIndex ? 'active' : undefined}
+            onMouseDown={event => event.preventDefault()} onClick={() => pickEmoji(choice)}>
+            <span className="emoji-glyph" aria-hidden="true">{choice.emoji}</span>
+            <strong>:{choice.name}:</strong>
+          </button>
+        </li>;
+      })}
+    </ul>}
+    {mentionOpen && <ul id={listId} className="mention-menu" role="listbox" aria-label={t('Gắn thẻ Tí')}>
       {options.map((option, index) => {
         const worker = option.kind === 'worker' ? mentions!.people.find(item => item.id === option.id) : undefined;
         const optionId = `${listId}-${option.kind}-${option.name}`;
         return <li key={optionId} role="presentation">
-          <button type="button" id={optionId} role="option" aria-selected={option === selected} className={index === Math.min(active, options.length - 1) ? 'active' : undefined}
+          <button type="button" id={optionId} role="option" aria-selected={option === selected} className={index === activeIndex ? 'active' : undefined}
             onMouseDown={event => event.preventDefault()} onClick={() => pick(option)}>
             {worker
               ? <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" />
@@ -168,8 +216,8 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
     {mentionable && <div className="composer-highlight" ref={highlight} aria-hidden="true"><MentionText text={value} people={mentions!.people} allNames={mentions!.allNames} />{'\n'}</div>}
     <textarea ref={textarea} className={mentionable ? 'has-highlight' : undefined} aria-label={label} placeholder={placeholder} value={value} disabled={disabled} rows={1} maxLength={16000}
       onScroll={event => { if (highlight.current) highlight.current.scrollTop = event.currentTarget.scrollTop; }}
-      aria-autocomplete={mentionable ? 'list' : undefined} aria-controls={menuOpen ? listId : undefined} aria-expanded={mentionable ? menuOpen : undefined} aria-activedescendant={menuOpen && selected ? `${listId}-${selected.kind}-${selected.name}` : undefined}
-      onChange={event => { onChange(event.target.value); syncCursor(event.target); setDismissed(undefined); }}
+      aria-autocomplete="list" aria-controls={menuOpen ? listId : undefined} aria-expanded={menuOpen} aria-activedescendant={menuOpen ? activeOptionId : undefined}
+      onChange={event => changeText(event.target)}
       onKeyUp={event => syncCursor(event.currentTarget)} onClick={event => syncCursor(event.currentTarget)} onSelect={event => syncCursor(event.currentTarget)}
       onKeyDown={onKeyDown} />
     {trailing && <div className="composer-trailing">{trailing}</div>}

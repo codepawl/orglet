@@ -856,6 +856,7 @@ export const en: Dictionary = {
   'Cần kết nối {0} trước khi gửi.': 'Connect {0} before sending.',
   'Gửi tin nhắn': 'Send message',
   'Gắn thẻ Tí': 'Tag an orglet',
+  'Chèn emoji': 'Insert emoji',
   'Tất cả trong cuộc trò chuyện này': 'Everyone in this chat',
   'tất cả': 'all',
   'Giao các thành viên được gắn thẻ.': 'Assign the tagged members.',
