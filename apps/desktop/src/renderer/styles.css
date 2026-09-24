@@ -840,6 +840,10 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .setting-command { font-size:12px; background:var(--surface); border-radius:6px; padding:4px 8px; overflow-wrap:anywhere; min-width:0; flex:1; }
 .setting-repair { display:flex; flex-direction:column; gap:4px; margin-top:4px; max-width:100%; }
 .setting-repair-label { font-size:11px; color:var(--muted); }
+/* A login line's label with the terminal picker beside it (COD-230), centred on one line. */
+.setting-repair-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.setting-repair-head .setting-repair-label { white-space:nowrap; }
+.setting-repair-head .login-shell-select { flex:0 0 auto; width:170px; max-width:170px; }
 /* The copy button is 32px and the command block 26px; centred, or they sit on different lines. */
 .setting-repair-row { display:flex; align-items:center; gap:4px; max-width:100%; }
 .setting-repair-row .button { flex-shrink:0; }

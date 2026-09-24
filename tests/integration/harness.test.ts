@@ -8,7 +8,7 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../../apps/desktop/src/core/harness/detect';
 import { HarnessAccounts } from '../../apps/desktop/src/core/harness/accounts';
 import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
-import { harnessReady, harnessStatus, loginCommand, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
+import { harnessReady, harnessStatus, loginCommand, loginCommands, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
 let directory: string;
@@ -306,6 +306,7 @@ const fixture = (item: Pick<HarnessInfo, 'id' | 'executable' | 'version' | 'auth
   accountId: SYSTEM_ACCOUNT_ID,
   accounts: [],
   loginCommand: loginCommand(item.id, item.executable || undefined, 'win32'),
+  loginCommands: loginCommands(item.id, item.executable || undefined, 'win32'),
   runnable: true,
   ...item,
 });

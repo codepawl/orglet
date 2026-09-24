@@ -66,8 +66,10 @@ export type HarnessInfo = {
   auth: HarnessAuth;
   status: HarnessStatus;
   authDetail: string;
-  /** Copy-paste login command using the detected path, or the PATH name when missing. */
+  /** Copy-paste login command using the detected path, or the PATH name when missing: the default terminal's. */
   loginCommand: string;
+  /** The same login for every terminal of this platform, the default one first (COD-230). */
+  loginCommands: LoginCommand[];
   /** Official install command when one is documented; omitted rather than invented. */
   installCommand?: string;
   /** False for catalog rows Orglet cannot start (none today — Cursor Agent is runnable). */
@@ -121,24 +123,56 @@ export function harnessStatus(auth: HarnessAuth): HarnessStatus {
 /** A worker can actually start only when the CLI is signed in and Orglet knows how to run it. */
 export const harnessReady = (item: Pick<HarnessInfo, 'auth' | 'runnable'>) => item.runnable && item.auth === 'logged_in';
 
-export function quoteLoginCommand(executable: string, args: readonly string[], platform: NodeJS.Platform): string {
-  if (platform === 'win32') return `& "${executable}" ${args.join(' ')}`;
+/**
+ * The terminals a login command is written for (COD-230). Windows people sign in from PowerShell, Command Prompt or
+ * Git Bash, and each needs its own line; macOS and Linux share one POSIX line for bash and zsh.
+ */
+export type LoginShell = 'powershell' | 'cmd' | 'bash' | 'sh';
+export type LoginCommand = { shell: LoginShell; command: string };
+export const loginShells = (platform: NodeJS.Platform): LoginShell[] => (platform === 'win32' ? ['powershell', 'cmd', 'bash'] : ['sh']);
+/** Names shown in the terminal picker; they are product names, so they are not translated. */
+export const loginShellNames: Record<LoginShell, string> = { powershell: 'PowerShell', cmd: 'Command Prompt', bash: 'Git Bash', sh: 'Terminal' };
+
+const posixQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+/** `C:\Users\an\claude.exe` as Git Bash writes it, `/c/Users/an/claude.exe`. */
+const gitBashPath = (path: string) => path.replace(/^([A-Za-z]):[\\/]/, (_match, drive: string) => `/${drive.toLowerCase()}/`).replaceAll('\\', '/');
+
+/** The program and its login arguments as one shell would write them, or the bare command name when nothing is installed. */
+function loginProgram(shell: LoginShell, id: HarnessCatalogId, executable: string | undefined): string {
+  const args = harnessLoginArgs[id].join(' ');
+  if (!executable) return `${harnessBinaries[id]} ${args}`;
+  if (shell === 'powershell') return `& "${executable}" ${args}`;
+  if (shell === 'cmd') return `"${executable}" ${args}`;
+  if (shell === 'bash') return `${posixQuote(gitBashPath(executable))} ${args}`;
   const quote = (value: string) => /[\s"$\\]/.test(value) ? `"${value.replace(/(["\\$])/g, '\\$1')}"` : value;
-  return [executable, ...args].map(quote).join(' ');
+  return [executable, ...harnessLoginArgs[id]].map(quote).join(' ');
 }
 
 /**
- * The line the user pastes into a terminal to sign in. With an account folder it sets that CLI's config-dir
- * variable first, so the sign-in lands in the selected account instead of the CLI's own home folder.
+ * The line one terminal needs to sign in. With an account folder it sets that CLI's config-dir variable first, so
+ * the sign-in lands in the selected account instead of the CLI's own home folder. Every form is run in its real
+ * shell by tests/integration/login-commands.test.ts.
  */
-export function loginCommand(id: HarnessCatalogId, executable: string | undefined, platform: NodeJS.Platform, configDir?: string): string {
-  const args = harnessLoginArgs[id];
-  const command = executable ? quoteLoginCommand(executable, args, platform) : `${harnessBinaries[id]} ${args.join(' ')}`;
-  if (!configDir) return command;
+export function loginCommandFor(shell: LoginShell, id: HarnessCatalogId, executable: string | undefined, configDir?: string): string {
+  const program = loginProgram(shell, id, executable);
+  if (!configDir) return program;
   const variable = harnessConfigDirVariable[id];
-  // PowerShell is what Settings tells Windows users to paste into; every other platform gets a POSIX shell line.
-  if (platform === 'win32') return `$env:${variable} = "${configDir.replaceAll('"', '`"')}"; ${command}`;
-  return `${variable}="${configDir.replace(/(["\\$`])/g, '\\$1')}" ${command}`;
+  if (shell === 'powershell') return `$env:${variable} = "${configDir.replaceAll('"', '`"')}"; ${program}`;
+  // The quotes round the whole assignment keep a trailing space out of the value.
+  if (shell === 'cmd') return `set "${variable}=${configDir}" && ${program}`;
+  // The folder stays a Windows path: the CLI is a Windows program, and Git Bash hands it the value as written.
+  if (shell === 'bash') return `${variable}=${posixQuote(configDir)} ${program}`;
+  return `${variable}="${configDir.replace(/(["\\$`])/g, '\\$1')}" ${program}`;
+}
+
+/** The login line for every terminal of this platform, the default one first. */
+export function loginCommands(id: HarnessCatalogId, executable: string | undefined, platform: NodeJS.Platform, configDir?: string): LoginCommand[] {
+  return loginShells(platform).map(shell => ({ shell, command: loginCommandFor(shell, id, executable, configDir) }));
+}
+
+/** The default terminal's login line: PowerShell on Windows, the POSIX line elsewhere. */
+export function loginCommand(id: HarnessCatalogId, executable: string | undefined, platform: NodeJS.Platform, configDir?: string): string {
+  return loginCommands(id, executable, platform, configDir)[0].command;
 }
 
 /**
@@ -162,6 +196,7 @@ export function missingHarness(id: HarnessCatalogId, platform: NodeJS.Platform, 
     status: 'not_installed',
     authDetail: `Chưa cài ${harnessNames[id]} trên máy này. Cài xong bấm Dò lại.`,
     loginCommand: loginCommand(id, undefined, platform, selection.configDir),
+    loginCommands: loginCommands(id, undefined, platform, selection.configDir),
     installCommand: installCommand(id, platform),
     runnable: harnessRunnable(id),
     accountId: selection.accountId,
