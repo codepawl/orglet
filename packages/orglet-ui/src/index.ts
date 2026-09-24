@@ -6,3 +6,4 @@ export { cn } from './cn';
 export { Input, Textarea } from './components/Field';
 export { Switch, SwitchField } from './components/Switch';
 export { Skeleton, SkeletonGroup, SkeletonText } from './components/Skeleton';
+export { CommandBlock } from './components/CommandBlock';

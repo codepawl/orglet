@@ -28,7 +28,7 @@ import { AboutSettings } from './AboutSettings';
 import { t, tMessage, translated } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
-import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
+import { CommandBlock, Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import { dwellAbout, modelLists } from '../caches';
 import { dwellHandlers } from '../prefetch';
 
@@ -293,18 +293,6 @@ async function copyText(value: string) {
   }
 }
 
-/**
- * A long command read in a narrow column: it may break after a path separator or a space, never inside a word, so
- * "harness-accounts" stays whole. The text copied is the command itself.
- */
-function breakableCommand(command: string): ReactNode[] {
-  // Each piece keeps together (the browser would otherwise also break after a hyphen); the breaks sit between them.
-  return command.split(/(?<=[\\/ ])/).flatMap((piece, index) => {
-    const whole = <span key={`piece-${index}`} className="command-copy-piece">{piece}</span>;
-    return index ? [<wbr key={`break-${index}`} />, whole] : [whole];
-  });
-}
-
 /** The terminal the person picked for login commands (COD-230): UI chrome, so localStorage. */
 const loginShellKey = 'orglet.login-shell';
 function readLoginShell(): LoginShell | undefined {
@@ -316,8 +304,8 @@ function rememberLoginShell(shell: LoginShell) {
 
 /**
  * The login line for the terminal the person uses. PowerShell, Command Prompt and Git Bash each need their own form
- * on Windows. The terminal picker sits under the label in the row's one left-hand column, as wide as the account
- * picker above it, and the choice is remembered for every row.
+ * on Windows. The terminal picker sits in the command card's top bar, small and borderless in the card's own colour
+ * (user, 2026-09-25), and the choice is remembered for every row.
  */
 function LoginCommandCopy({ commands, label }: { commands: LoginCommand[]; label: string }) {
   const [shell, setShell] = useState(readLoginShell);
@@ -330,20 +318,9 @@ function LoginCommandCopy({ commands, label }: { commands: LoginCommand[]; label
   return <CommandCopy command={current.command} label={label} picker={picker || undefined} />;
 }
 
-/**
- * A command to paste: its label, then the command on a quiet card. The card's top bar carries the terminal picker,
- * small and borderless in the card's own colour (user, 2026-09-25), and the copy button on the right, where the eye
- * already is; without a picker the copy button keeps the card's top corner.
- */
+/** A command to paste, from the kit's `CommandBlock`, copied through the main process. */
 function CommandCopy({ command, label, picker }: { command: string; label: string; picker?: ReactNode }) {
-  const copy = <Button type="button" size="icon" variant="ghost" className="command-copy-button" aria-label={t('Sao chép lệnh')} title={t('Sao chép lệnh')} onClick={() => void copyCommand(command)}><Copy size={14} /></Button>;
-  return <div className="command-copy">
-    <span className="command-copy-label">{label}</span>
-    <div className={picker ? 'command-copy-card with-bar' : 'command-copy-card'}>
-      {picker ? <div className="command-copy-bar">{picker}{copy}</div> : copy}
-      <code className="command-copy-text">{breakableCommand(command)}</code>
-    </div>
-  </div>;
+  return <CommandBlock command={command} label={label} toolbar={picker} copyLabel={t('Sao chép lệnh')} copyIcon={<Copy size={14} />} onCopy={next => void copyCommand(next)} />;
 }
 
 

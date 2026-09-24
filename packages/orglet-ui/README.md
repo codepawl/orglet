@@ -43,6 +43,10 @@ outside a dialog, `RadioGroup`, `Progress`, `Table`.
 picture will be, a circle where a face will be, sweeping under a second per pass and still under reduced motion.
 The kit has no spinner and will not grow one.
 
+`CommandBlock` is a command for someone to paste into a terminal: a label, the command on a quiet card that breaks
+only after a path separator or a space, and a copy button. A small control that changes the command, such as a
+terminal picker, goes in its `toolbar`, on the card's top bar. The application does the copying in `onCopy`.
+
 Two things it will not grow: a `Separator` and the alert with a coloured left border. Orglet separates with spacing,
 grouping and a quiet background instead, and that rule travels with the kit.
 

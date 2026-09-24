@@ -842,24 +842,14 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    copy on the right. Both answer hover with colour only, never a background: they sit on the card's tint. Without a
    picker, copy keeps the card's top corner. The command breaks only after a path separator or a space
    (breakableCommand). */
-.command-copy { display:flex; flex-direction:column; align-items:stretch; gap:6px; max-width:100%; }
-.command-copy-label { font-size:12px; color:var(--muted); }
-.command-copy-card { position:relative; min-width:0; padding:8px 40px 8px 12px; border-radius:10px; background:var(--surface); }
-.command-copy-card.with-bar { padding:4px 4px 10px 12px; }
-.command-copy-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:28px; margin:0 0 2px -6px; }
-.command-copy-bar .login-shell-select.select-trigger { width:auto; min-height:24px; padding:0 6px; gap:5px; border:0; background:transparent; box-shadow:none; }
-.command-copy-bar .login-shell-select.select-trigger:hover:not(:disabled),
-.command-copy-bar .login-shell-select.select-trigger[aria-expanded=true] { background:transparent; border-color:transparent; }
-.command-copy-bar .login-shell-select .select-value { font-size:12px; font-weight:500; color:var(--muted); }
-.command-copy-bar .login-shell-select.select-trigger:is(:hover, [aria-expanded=true]) .select-value { color:var(--text); }
-.command-copy-bar .login-shell-select .select-icon { display:flex; color:var(--muted); }
-.command-copy-bar .login-shell-select .select-chevron { width:13px; height:13px; color:var(--muted); }
-.command-copy-text { display:block; font-size:12px; line-height:1.55; color:var(--text); white-space:normal; word-break:normal; overflow-wrap:normal; }
-.command-copy-card.with-bar .command-copy-text { padding-right:8px; }
-.command-copy-piece { white-space:nowrap; }
-.command-copy-button { width:28px; height:28px; min-height:28px; flex-shrink:0; color:var(--muted); }
-.command-copy-card:not(.with-bar) > .command-copy-button { position:absolute; top:4px; right:4px; }
-.command-copy-button:hover:not(:disabled) { background:transparent; color:var(--text); }
+/* The terminal picker in a command card's top bar: a small chip in the card's own colour, no border, colour-only hover. */
+.login-shell-select.select-trigger { width:auto; min-height:24px; padding:0 6px; gap:5px; border:0; background:transparent; box-shadow:none; }
+.login-shell-select.select-trigger:hover:not(:disabled),
+.login-shell-select.select-trigger[aria-expanded=true] { background:transparent; border-color:transparent; }
+.login-shell-select .select-value { font-size:12px; font-weight:500; color:var(--muted); }
+.login-shell-select.select-trigger:is(:hover, [aria-expanded=true]) .select-value { color:var(--text); }
+.login-shell-select .select-icon { display:flex; color:var(--muted); }
+.login-shell-select .select-chevron { width:13px; height:13px; color:var(--muted); }
 .budget-reviews { display:flex; flex-direction:column; gap:10px; margin-top:22px; }
 .budget-reviews h3 { margin:0; font-size:15px; }
 .budget-reviews>p { margin:0; }
@@ -1205,6 +1195,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    them over here, which is the whole adoption cost. A themed subtree hands them over again, resolved in its own
    palette. */
 :root, .theme-light, .theme-dark {
+  --org-font-mono:var(--font-mono);
   --org-bg:var(--bg); --org-surface:var(--surface); --org-text:var(--text); --org-muted:var(--muted);
   --org-border:var(--border); --org-border-subtle:var(--border-subtle);
   --org-row-hover:var(--row-hover); --org-row-active:var(--row-active);

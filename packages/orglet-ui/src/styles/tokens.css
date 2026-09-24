@@ -11,6 +11,7 @@
  */
 :root {
   --org-font: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --org-font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   --org-font-size: 14px;
   --org-line-height: 1.5;
 
