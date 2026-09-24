@@ -384,7 +384,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Prompt bar: a one-line pill (add · input · [who] · send) that grows into a box when the text wraps or sources are attached.
    Grown, it is three zones stacked: the attached files, the text, then the controls. The zones are told apart by
    what they are made of (cards on a surface, bare text, round buttons) and by spacing, never by a line. */
-.composer { position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"lead input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--border-subtle); border-radius:24px; background:var(--bg); box-shadow:0 2px 12px #00000008; }
+.composer { position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"lead input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--border); border-radius:24px; background:var(--bg); box-shadow:0 2px 12px #00000008; }
 .composer.has-trailing { grid-template-columns:auto minmax(0,1fr) auto auto; grid-template-areas:"lead input trail send"; }
 /* The controls row holds a 36px add button, a shorter chip and the 36px send button, so it centres them explicitly. */
 .composer.expanded { grid-template-areas:"attach attach attach" "input input input" "lead . send"; align-items:center; row-gap:6px; border-radius:22px; padding:7px; }
@@ -1909,7 +1909,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    the run pausing. That is motion a person reads without a legend, it is the vocabulary the app already has, and
    it costs a transform on a 24px drawing. The rules sit after the tab's own, below. */
 .live-island {
-  --island-fillet:12px; --island-line:var(--border-subtle);
+  /* The bar's own outline, --border: the subtle one (about #efefef on white) left the tab without a visible edge. */
+  --island-fillet:12px; --island-line:var(--border);
   position:relative; z-index:1; display:flex; align-items:flex-end; justify-content:center;
   width:fit-content; min-width:150px; max-width:calc(100% - 2 * (24px + var(--island-fillet)));
   margin:0 auto -1px; padding:5px 10px 5px 9px;
