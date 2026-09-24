@@ -7,7 +7,7 @@ import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../../apps/desktop/src/core/harness/detect';
 import { HarnessAccounts } from '../../apps/desktop/src/core/harness/accounts';
-import { executeHarness, harnessArgs, HarnessError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
+import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import { harnessReady, harnessStatus, loginCommand, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
@@ -445,6 +445,17 @@ describe('runner integration', () => {
     expect(report).not.toHaveProperty('cwd');
     expect(detail.usage).toEqual({ chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 });
     expect(detail.events.map(event => event.message).join(' ')).toContain('$0.0030');
+  });
+
+  it('marks a run whose harness account ran out of plan usage, so the chat can offer another account (COD-225)', async () => {
+    reply = async () => { throw new HarnessLimitError('Claude Code', { kind: 'quota', resetsAt: null }); };
+    const outOfPlan = await run('claude-code');
+    expect(outOfPlan.runs.at(-1)).toEqual(expect.objectContaining({ status: 'failed', errorCode: 'plan_limit' }));
+    expect(outOfPlan.runs.at(-1)?.error).toContain('Claude Code đã hết lượt dùng của gói');
+    // A rate limit passes in minutes; switching accounts is not the answer to it.
+    reply = async () => { throw new HarnessLimitError('Claude Code', { kind: 'rate', resetsAt: null }); };
+    const busy = await run('claude-code');
+    expect(busy.runs.at(-1)?.errorCode).toBeUndefined();
   });
 
   it('keeps media on the person\'s screen: no copy for the harness, and the prompt says it is unreadable', async () => {
