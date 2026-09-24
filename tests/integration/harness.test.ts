@@ -68,6 +68,37 @@ describe('detection', () => {
     expect(calls.every(call => /(--version|auth status|login status|status(?: --format json)?)$/.test(call))).toBe(true);
   });
 
+  it('names a login path the person can open: the MSIX package copy over %APPDATA%, and their own install over the app build (COD-224)', async () => {
+    const home = join(directory, 'home'); const local = join(home, 'AppData', 'Local'); const roaming = join(home, 'AppData', 'Roaming');
+    const packaged = join(local, 'Packages', 'Claude_abc', 'LocalCache', 'Roaming', 'Claude', 'claude-code', '2.1.280', 'claude.exe');
+    const viewOnly = join(roaming, 'Claude', 'claude-code', '2.1.280', 'claude.exe');
+    const npmClaude = join(roaming, 'npm', 'claude.cmd');
+    const codexApp = join(local, 'OpenAI', 'Codex', 'bin', 'bffc', 'codex.exe');
+    const npmCodex = join(roaming, 'npm', 'codex.cmd');
+    for (const path of [packaged, viewOnly, npmClaude, codexApp, npmCodex]) await touch(path);
+    const env = { USERPROFILE: home, LOCALAPPDATA: local, APPDATA: roaming, PATH: '' };
+    expect(await candidates('claude-code', env, 'win32')).toEqual([packaged, viewOnly, npmClaude]);
+
+    const probe: Probe = async (executable, args) => {
+      if (args[0] === '--version') {
+        // The npm Codex shim is broken, so its login command stays on the app's build.
+        if (executable === npmCodex) return { code: 1, stdout: '', stderr: 'broken shim' };
+        return { code: 0, stdout: executable.includes('claude') ? '2.1.280 (Claude Code)\n' : 'codex-cli 0.155.0\n', stderr: '' };
+      }
+      if (args.join(' ') === 'auth status') return { code: 0, stdout: JSON.stringify({ loggedIn: false }), stderr: '' };
+      return { code: 0, stdout: 'Not logged in\n', stderr: '' };
+    };
+    const accounts = new HarnessAccounts(new Store(':memory:'), join(directory, 'accounts'));
+    await accounts.add('claude-code', 'Work');
+    const [claude, codex] = await detectHarnesses(env, 'win32', probe, accounts.map());
+    // Runs keep the app's build, which starts without a shell (COD-170).
+    expect(claude.executable).toBe(packaged);
+    expect(claude.loginCommand).toContain(`& "${npmClaude}" auth login`);
+    expect(claude.loginCommand).toMatch(/^\$env:CLAUDE_CONFIG_DIR = /);
+    expect(codex.executable).toBe(codexApp);
+    expect(codex.loginCommand).toBe(`& "${codexApp}" login`);
+  });
+
   it('finds Claude desktop bundles and PATH installs on macOS', async () => {
     const home = join(directory, 'home');
     const bin = join(directory, 'bin');
