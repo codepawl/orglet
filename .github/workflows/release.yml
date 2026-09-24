@@ -85,7 +85,14 @@ jobs:
       - name: Publish
         run: |
           set -euo pipefail
-          gh release create "$TAG" --verify-tag --title "Orglet $VERSION" --notes-from-tag \
+          # The notes are the annotated tag's message, read through the API because nothing is checked out.
+          tag_object=$(gh api "repos/$GH_REPO/git/ref/tags/$TAG" --jq 'select(.object.type == "tag") | .object.sha')
+          if [ -z "$tag_object" ]; then
+            echo "::error::$TAG is a lightweight tag; push an annotated tag whose message is the release notes"
+            exit 1
+          fi
+          gh api "repos/$GH_REPO/git/tags/$tag_object" --jq .message > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --verify-tag --title "Orglet $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
             "$SETUP" "$RELEASES_FILE" "$PACKAGE" "$ZIP"
       - name: Check the update feed
         run: |
