@@ -317,7 +317,7 @@ export class CoreService {
           if (!run) throw new Error('Không có lần chạy để tiếp tục.');
           this.runner.assertResumable(run);
           task.pauseReason = undefined; task.handoff = undefined; this.store.update('tasks', task);
-          void this.runner.run(task, run).catch(() => { this.store.status(task.id, run.id, 'interrupted', 'Core không thể hoàn tất ghi trạng thái.'); this.notify(); });
+          void this.runner.run(task, run).catch(() => this.markInterrupted(task.id, run.id));
         }
         return;
       }
@@ -679,6 +679,17 @@ export class CoreService {
     }
     this.notify();
     return summary;
+  }
+
+  /**
+   * A run that failed past the runner's own handling is marked interrupted, unless the store has closed under it:
+   * the app quitting mid-run, or a test tearing down. Then there is nothing left to record into, and writing anyway
+   * threw a second time from this handler, as an unhandled rejection.
+   */
+  private markInterrupted(taskId: string, runId: string) {
+    if (!this.store.db.isOpen) return;
+    this.store.status(taskId, runId, 'interrupted', 'Core không thể hoàn tất ghi trạng thái.');
+    this.notify();
   }
 
   /** Probing spawns each CLI, so results are reused for a minute unless the user asks to detect again. */
@@ -1157,9 +1168,7 @@ export class CoreService {
     const run: Run = { id: id(), taskId: task.id, status: 'queued', snapshot: { workspaceGrant: this.workspaceGrants.snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, inputRevision: task.inputRevision ?? 0, input: task.currentInput ?? { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };
     this.store.put('runs', run, { column: 'task_id', value: task.id });
     // Runner records terminal failures itself; never launch an unobserved provider promise.
-    void this.runner.run(task, run).catch(() => {
-      this.store.status(task.id, run.id, 'interrupted', 'Core không thể hoàn tất ghi trạng thái.'); this.notify();
-    });
+    void this.runner.run(task, run).catch(() => this.markInterrupted(task.id, run.id));
   }
   private dispatchPendingRevision(task: Task) {
     if (!task.pendingStart) return;

@@ -6,7 +6,14 @@ import { DEFAULT_ACCENT_COLOR } from '../../apps/desktop/src/shared/accent';
 
 let store: Store; let core: CoreService;
 beforeEach(() => { store = new Store(':memory:'); core = new CoreService(store, () => {}, async () => { throw new Error('no model'); }); });
-afterEach(() => store.close());
+// A task started here keeps running after the test's own checks; closing the store under it made the run's last write
+// throw after the test had ended, on a busy machine only. Let every run settle first.
+afterEach(async () => {
+  for (let attempt = 0; attempt < 300 && store.all<Task>('tasks').some(task => core.runner.isActive(task.id) || core.teams.isActive(task.id)); attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  store.close();
+});
 const workspace = () => core.command('workspace', {}) as Promise<Workspace>;
 
 it('keeps the chosen sidebar order and lists items created later after the placed ones', async () => {
