@@ -255,6 +255,39 @@ describe('usage in Settings', () => {
     expect(reads).toHaveLength(6);
   });
 
+  it('runs no CLI for a rename, and detects only the harness whose sign-in changed (COD-229)', async () => {
+    const calls: (readonly HarnessCatalogId[] | 'all')[] = [];
+    let core: CoreService | undefined;
+    const rows = (): HarnessInfo[] => (['claude-code', 'codex', 'cursor'] as const).map(id =>
+      ({ ...missingHarness(id, 'win32', core?.harnessAccounts.selection(id)), executable: `${id}.exe`, auth: 'logged_in' as const, status: 'signed_in' as const }));
+    core = new CoreService(store, () => {}, async () => { throw new Error('unused'); }, undefined, undefined, {
+      detect: async (_accounts, only) => { calls.push(only ?? 'all'); return rows(); },
+      accountRoot: join(directory, 'harness-accounts'),
+      execute: async () => { throw new Error('unused'); },
+    });
+    await core.command('harnesses', { refresh: true });
+    expect(calls).toEqual(['all']);
+
+    // Adding selects the new account, so only Codex is asked again.
+    const added = await core.command('saveHarnessAccount', { harness: 'codex', label: 'Work' }) as HarnessInfo[];
+    const [work] = core.harnessAccounts.selection('codex').accounts;
+    expect(calls).toEqual(['all', ['codex']]);
+    expect(added.find(row => row.id === 'codex')?.accountId).toBe(work.id);
+
+    // A new name runs nothing, and the rows carry it at once.
+    const renamed = await core.command('saveHarnessAccount', { harness: 'codex', id: work.id, label: 'Company' }) as HarnessInfo[];
+    expect(calls).toHaveLength(2);
+    expect(renamed.find(row => row.id === 'codex')?.accounts).toEqual([{ id: work.id, label: 'Company' }]);
+    expect(renamed.map(row => row.id)).toEqual(['claude-code', 'codex', 'cursor']);
+
+    // Switching back asks Codex again; removing an account nobody signs in from runs nothing.
+    await core.command('selectHarnessAccount', { harness: 'codex', id: SYSTEM_ACCOUNT_ID });
+    expect(calls).toEqual(['all', ['codex'], ['codex']]);
+    const removed = await core.command('removeHarnessAccount', { harness: 'codex', id: work.id }) as HarnessInfo[];
+    expect(calls).toHaveLength(3);
+    expect(removed.find(row => row.id === 'codex')?.accounts).toEqual([]);
+  });
+
   it('shows no usage when the runtime cannot read any', async () => {
     const core = new CoreService(store, () => {}, async () => { throw new Error('unused'); }, undefined, undefined, {
       detect: async () => [], execute: async () => { throw new Error('unused'); },
