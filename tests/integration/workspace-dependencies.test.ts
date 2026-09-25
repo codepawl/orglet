@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { dependencyFolders, linkDependencies, unlinkDependencies } from '../../apps/desktop/src/core/tools/workspace-dependencies';
@@ -29,9 +29,11 @@ function manifest(paths: string[]): WorkspaceManifest {
 describe('installed dependencies for commands (COD-271)', () => {
   it('finds the node_modules next to each package.json the copy started with, root first', async () => {
     const links = await dependencyFolders(source, copy, manifest(['packages/web/package.json', 'package.json', 'packages/docs/package.json', 'src/index.js']));
+    // The target is the real path the sandbox grants; a temporary folder can itself sit behind a link (macOS /var).
+    const realSource = await realpath(source);
     expect(links).toEqual([
-      { link: join(copy, 'node_modules'), target: join(source, 'node_modules') },
-      { link: join(copy, 'packages', 'web', 'node_modules'), target: join(source, 'packages', 'web', 'node_modules') },
+      { link: join(copy, 'node_modules'), target: join(realSource, 'node_modules') },
+      { link: join(copy, 'packages', 'web', 'node_modules'), target: join(realSource, 'packages', 'web', 'node_modules') },
     ]);
   });
 
