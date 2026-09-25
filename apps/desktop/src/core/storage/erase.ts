@@ -7,13 +7,14 @@ import { readCustomConnections, writeCustomConnections } from './custom-connecti
 /**
  * Every table a full erase empties, children before parents so the foreign keys hold. `migrations` is left alone —
  * the schema stays where it is — and the FTS shadow tables are cleared by their virtual table, never directly.
+ * `chat_messages` goes before `chat_search`: its triggers take each row out of the index, which is then already empty.
  * `tests/integration/erase.test.ts` fails when a new table is added and not listed here.
  */
 export const ERASE_TABLES = [
   'ledger', 'reservation_reviews', 'step_attempts', 'reservations',
   'workspace_read_evidence', 'process_evidence', 'workspace_processes', 'workspace_copies',
   'tool_calls', 'checkpoints', 'leases', 'events', 'artifacts', 'app_proposals', 'runs',
-  'profiles', 'preflights', 'workspace_grants', 'task_search', 'tasks',
+  'profiles', 'preflights', 'workspace_grants', 'chat_messages', 'chat_search', 'tasks',
   'knowledge_search', 'knowledge_revisions', 'knowledge', 'revisions',
   'routine_arrivals', 'routine_folders', 'routines', 'workers', 'teams', 'skills', 'sources', 'settings', 'mcp_servers',
 ] as const;

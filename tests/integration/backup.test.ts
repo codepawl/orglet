@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
+import { ChatSearch } from '../../apps/desktop/src/core/storage/chat-search';
 import { BudgetLedger } from '../../apps/desktop/src/core/budgets/ledger';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { Report, type Run, type Task, type Worker, type Skill, type Source } from '../../apps/desktop/src/shared/contracts';
@@ -144,7 +145,7 @@ describe('workspace backup and additive restore', () => {
     expect(restored.db.prepare('SELECT path FROM sources WHERE id=?').get(f.source.id)?.path).toBe('');
     expect(restored.usage()).toEqual({ reservedMicros: 1000, chargedMicros: 0, uncertainCount: 1, inputTokens: 0, outputTokens: 0 });
     expect(restored.setting('theme', '')).toBe('dark');
-    expect(restored.db.prepare('SELECT id FROM task_search WHERE task_search MATCH ?').all('Restore')).toHaveLength(1);
+    expect(new ChatSearch(restored).search('Restore').chats.map(hit => hit.taskId)).toEqual([f.task.id]);
     manager.restore(manager.preview(text).token);
     expect(restored.all('tasks')).toHaveLength(1); expect(restored.all('events')).toHaveLength(1);
   });

@@ -12,8 +12,9 @@ import type { ToolCapability } from '../../shared/tool-policy';
 import type { WorkspacePermission } from '../../shared/workspace-access';
 import { readCustomConnections } from './custom-connections';
 import { McpServer, type McpServerView } from '../../shared/mcp';
+import { CHAT_SEARCH_BACKFILL } from './chat-search';
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export class Store {
@@ -48,7 +49,6 @@ export class Store {
       CREATE TABLE IF NOT EXISTS reservations (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), task_id TEXT NOT NULL, provider TEXT NOT NULL, month TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>=0), state TEXT NOT NULL CHECK(state IN ('held','unknown','settled')));
       CREATE TABLE IF NOT EXISTS ledger (id TEXT PRIMARY KEY, reservation_id TEXT NOT NULL UNIQUE REFERENCES reservations(id), amount INTEGER NOT NULL CHECK(amount>=0), input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, pricing_version TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-      CREATE VIRTUAL TABLE IF NOT EXISTS task_search USING fts5(id UNINDEXED, brief);
       INSERT OR IGNORE INTO migrations VALUES (1);
     `);
     this.transaction(() => {
@@ -146,6 +146,35 @@ export class Store {
           routine_id TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, modified_ms INTEGER NOT NULL, handled_at TEXT NOT NULL,
           PRIMARY KEY(routine_id,name,size,modified_ms)
         ); INSERT OR IGNORE INTO migrations VALUES (17);`);
+      // Search across every chat (COD-267). `chat_messages` holds each message and answer as the chat shows it (`text`)
+      // and folded for matching (`body`); `chat_search` indexes `body` and its triggers keep it in step. `id` is an
+      // INTEGER PRIMARY KEY because the index finds rows by rowid, which VACUUM keeps only for such a column. It
+      // replaces `task_search`, which held first messages only and was never read. Chats that already exist are
+      // indexed after the app has started (`ChatSearch.backfill`), so the upgrade does not wait for them. The block
+      // stands alone, so its number can move if another migration lands first.
+      if (!this.db.prepare('SELECT version FROM migrations WHERE version=18').get()) {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY, message_id TEXT NOT NULL UNIQUE, task_id TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK(kind IN ('message','answer')), author TEXT, at TEXT NOT NULL, text TEXT NOT NULL, body TEXT NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS chat_messages_task ON chat_messages(task_id);
+          CREATE VIRTUAL TABLE IF NOT EXISTS chat_search USING fts5(body, content='chat_messages', content_rowid='id', tokenize='unicode61 remove_diacritics 2');
+          CREATE TRIGGER IF NOT EXISTS chat_messages_insert AFTER INSERT ON chat_messages BEGIN
+            INSERT INTO chat_search(rowid, body) VALUES (new.id, new.body);
+          END;
+          CREATE TRIGGER IF NOT EXISTS chat_messages_delete AFTER DELETE ON chat_messages BEGIN
+            INSERT INTO chat_search(chat_search, rowid, body) VALUES ('delete', old.id, old.body);
+          END;
+          CREATE TRIGGER IF NOT EXISTS chat_messages_update AFTER UPDATE ON chat_messages BEGIN
+            INSERT INTO chat_search(chat_search, rowid, body) VALUES ('delete', old.id, old.body);
+            INSERT INTO chat_search(rowid, body) VALUES (new.id, new.body);
+          END;
+          DROP TABLE IF EXISTS task_search;
+          INSERT OR REPLACE INTO settings (id,data) SELECT '${CHAT_SEARCH_BACKFILL}', '{"afterRowid":0}' WHERE EXISTS (SELECT 1 FROM tasks);
+          INSERT INTO migrations VALUES (18);
+        `);
+      }
       // The orglet form used to force the $0.50 default limit on Claude Code orglets, which stopped real work after a
       // few calls. An orglet on Claude Code now runs on the person's plan unless it has a limit of its own (COD-253),
       // so that forced default is dropped once; any other limit someone picked is kept. A settings row, not a schema

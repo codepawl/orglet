@@ -374,13 +374,28 @@ export function App() {
   }, []);
   // The copy on screen is the one worth keeping: a handful of recent chats makes switching instant.
   useEffect(() => { if (detail) taskDetails.set(detail.task.id, detail); }, [detail]);
+  // A search result opens its chat at the message it found (COD-267), the way a reply's quote jumps to the original.
+  // A kept copy of the chat can be older than that message, so the jump waits for the fresh copy before giving up.
+  const [messageToShow, setMessageToShow] = useState<{ taskId: string; messageId: string }>();
+  useEffect(() => {
+    if (!messageToShow) return;
+    if (selected !== messageToShow.taskId) { setMessageToShow(undefined); return; }
+    if (detail?.task.id !== messageToShow.taskId) return;
+    const frame = requestAnimationFrame(() => {
+      const found = document.getElementById(`message-${messageToShow.messageId}`);
+      if (found) focusMessage(messageToShow.messageId);
+      if (found || showingCachedDetail.current !== messageToShow.taskId) setMessageToShow(undefined);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [detail, selected, messageToShow]);
   const leaveThread = () => { setSelected(null); setDetail(undefined); setGroupChat(undefined); setBrief(''); setSources([]); setSkippedSources([]); setError(''); };
   const hideTaskLocally = (taskId: string, field: 'archivedAt' | 'deletedAt') => {
     const stamp = new Date().toISOString();
     setWorkspace(current => current ? { ...current, tasks: current.tasks.map(task => task.id === taskId ? { ...task, [field]: task[field] ?? stamp } : task) } : current);
   };
   // Re-opening the task already shown keeps its detail; clearing it would wait for a reload that never comes.
-  const openTask = (id: string) => {
+  // `toMessage` is set when a message in the chat takes focus instead of the main pane (a search result, COD-267).
+  const openTask = (id: string, { toMessage = false }: { toMessage?: boolean } = {}) => {
     if (id !== selected) {
       const cached = taskDetails.get(id);
       showingCachedDetail.current = cached ? id : null;
@@ -409,7 +424,14 @@ export function App() {
       if (task.seenStamp) rememberSeen(task.id, { seenStamp: task.seenStamp, lastArtifactId: task.lastArtifactId });
       if (selectedRef.current === id) void refresh();
     }).catch(err => { if (selectedRef.current === id) { errorAbout.current = taskName(id); setError((err as Error).message); } });
-    if (matchMedia('(max-width: 780px)').matches) { setSidebar(false); setTimeout(() => document.getElementById('main-content')?.focus(), 0); }
+    if (matchMedia('(max-width: 780px)').matches) {
+      setSidebar(false);
+      if (!toMessage) setTimeout(() => document.getElementById('main-content')?.focus(), 0);
+    }
+  };
+  const openChatAt = (taskId: string, messageId?: string) => {
+    openTask(taskId, { toMessage: Boolean(messageId) });
+    setMessageToShow(messageId ? { taskId, messageId } : undefined);
   };
   const openTeam = (id: string) => {
     setTeamId(id);
@@ -1292,7 +1314,7 @@ export function App() {
     <RunningCentre open={runningOpen} items={workspace.running ?? []} tasks={workspace.tasks} teams={workspace.teams} onClose={() => setRunningOpen(false)} onOpenChat={taskId => { setRunningOpen(false); openTask(taskId); }} />
     <Toaster />
     <Confirmer />
-    <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} tasks={workspace.tasks} teams={workspace.teams} onOpenTask={openTask} onDwellTask={dwellChat} />
+    <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} workspace={workspace} onOpenChat={openChatAt} onOpenOrglet={openWorker} onOpenCrew={openTeam} onDwellTask={dwellChat} />
     <SendToPicker open={Boolean(sentFiles)} count={sentFiles?.count ?? 0} names={sentFiles?.names ?? []} options={sentFiles ? sendToOptions(workspace) : []} onChoose={option => void sendFilesTo(option)} onClose={closeSendTo} />
     <SettingsDialog open={panel === 'settings'} tab={settingsTab} onTab={setSettingsTab} onClose={close} workspace={workspace} connections={connections} onConnections={setConnections} harnesses={harnesses} onHarnesses={setHarnesses} />
   </div>;

@@ -310,20 +310,22 @@ function downgrade(version: number, tables: string[]) {
 }
 
 it('migrates a v15 database (0.4.0) and a v16 database (MCP) to the routine tables of v17', async () => {
-  expect(SCHEMA_VERSION).toBe(17);
+  // The routine tables arrived in v17; later versions (v18: chat search) migrate on top of them.
+  expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(17);
   const clock = await core.command('saveRoutine', { name: 'Kept', enabled: true, schedule, task: task() }) as Routine;
 
   downgrade(15, ['mcp_servers', 'routine_arrivals', 'routine_folders']);
   reopen();
   expect(tableNames()).toEqual(expect.arrayContaining(['mcp_servers', 'routine_folders', 'routine_arrivals']));
-  expect(store.db.prepare('SELECT version FROM migrations WHERE version >= 16 ORDER BY version').all().map(row => Number(row.version))).toEqual([16, 17]);
+  expect(store.db.prepare('SELECT version FROM migrations WHERE version IN (16,17) ORDER BY version').all().map(row => Number(row.version))).toEqual([16, 17]);
+  expect(Number(store.db.prepare('SELECT MAX(version) AS version FROM migrations').get()!.version)).toBe(SCHEMA_VERSION);
   expect(store.get<Routine>('routines', clock.id).approvedConfig).toBe(clock.approvedConfig);
 
   downgrade(16, ['routine_arrivals', 'routine_folders']);
   store.db.exec(`INSERT INTO mcp_servers(id,data) VALUES('kept','{}')`);
   reopen();
   expect(tableNames()).toEqual(expect.arrayContaining(['routine_folders', 'routine_arrivals']));
-  expect(Number(store.db.prepare('SELECT MAX(version) AS version FROM migrations').get()!.version)).toBe(17);
+  expect(Number(store.db.prepare('SELECT MAX(version) AS version FROM migrations').get()!.version)).toBe(SCHEMA_VERSION);
   expect(store.db.prepare(`SELECT id FROM mcp_servers`).all().map(row => String(row.id))).toEqual(['kept']);
   // The row only proves the v16 table survived; it is not a real server, so the workspace would refuse to read it.
   store.db.exec(`DELETE FROM mcp_servers`);

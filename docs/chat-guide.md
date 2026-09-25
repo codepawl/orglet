@@ -1,6 +1,6 @@
 # In a chat
 
-What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, ask something on the side, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, and find what the app told you.
+What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, ask something on the side, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
@@ -122,6 +122,23 @@ Each row has its controls on the right:
 3. **Open chat** to go to that conversation. A chat waiting for your answer offers only this, because the answer card is in the chat.
 
 The controls act on the whole turn of that chat. In a crew, stopping one member's row stops the crew's turn, the same as **Stop** in the chat. The list follows the sidebar: a chat whose mark shows it working or waiting is always in it. With nothing running, the view says so in one line. How the queue is kept: [technical guide](technical-guide.md#what-is-running-and-the-queue).
+
+## Search
+
+Search finds any message in any chat, not only how a chat started.
+
+1. Press **Ctrl+K**, or click the magnifier at the top of the sidebar.
+2. Type a few words. Case and accents do not matter, so "hop dong" finds "hợp đồng", and a word can be the start of a longer one, so "inv" finds "invoice".
+3. Move with the arrow keys and press Enter, or click a result.
+
+It looks through every message you sent, every answer and report an orglet wrote, side threads, scheduled chats, chat names, and the names of your orglets and crews. With nothing typed, it lists your chats, newest first.
+
+- **Orglets and crews** whose name matches come first. Choosing one opens its chat.
+- **Chats** come next, one row each: the orglet's or crew's face, the chat's name (its title, or the orglet's or crew's name), whose chat it is when the name is a title, when the message was written, and a short piece of that message after **You** or the orglet's name, with your words in bold. Choosing it opens the chat scrolled to that message.
+
+A chat where your words appear together, in the order you typed them, comes before one where they appear apart. Within each of those, the chat with the newest matching message comes first, and each chat shows its best message once.
+
+Archived chats are found too; deleted chats are not. A crew's chat is found by its combined answer, not by the reports its members handed in. Search runs on this computer only. After an update from a version that searched only first messages, Orglet adds your existing chats in the background once it has started; until then the search window says a few results may be missing. How it works: [technical guide](technical-guide.md#search).
 
 ## Notifications
 

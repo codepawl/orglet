@@ -137,3 +137,5 @@ port.on('message', async ({ data }) => {
 void core.tick();
 setInterval(() => { void core.tick().catch(() => port.postMessage({ type: 'changed' })); }, 5000);
 port.postMessage({ type: 'ready', sqliteVersion: store.sqliteVersion });
+// Chats from before search covered every message are indexed now, a few at a time, behind the window (COD-267).
+void core.chatSearch.backfill().catch(() => undefined);

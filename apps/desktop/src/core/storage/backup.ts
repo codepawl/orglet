@@ -21,6 +21,7 @@ import { MessageReaction, turnMessageId } from '../../shared/message-interaction
 import { ImprovementSignals } from '../../shared/self-improvement';
 import { CustomConnection, CustomProviderId, MAX_CUSTOM_CONNECTIONS } from '../../shared/custom-connections';
 import { readCustomConnections, writeCustomConnections } from './custom-connections';
+import { ChatSearch } from './chat-search';
 import { McpGrant, McpRunTool } from '../../shared/mcp';
 import { ChatQuote, MAX_CHAT_QUOTES, SideOf } from '../../shared/side-threads';
 
@@ -536,8 +537,7 @@ export class Backups {
       for (const row of merged.knowledgeRevisions ?? []) this.store.db.prepare('INSERT OR IGNORE INTO knowledge_revisions VALUES(?,?,?)').run(row.id, row.revision, JSON.stringify(row.data));
       const knowledge = new KnowledgeBase(this.store);
       for (const item of merged.knowledge ?? []) { this.store.put('knowledge', item); knowledge.index(item); }
-      this.store.db.exec('DELETE FROM task_search');
-      for (const task of merged.tasks) this.store.db.prepare('INSERT INTO task_search VALUES(?,?)').run(task.id, task.brief);
+      new ChatSearch(this.store).rebuild();
     });
     this.pending = undefined; this.notify();
   }

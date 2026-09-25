@@ -40,7 +40,8 @@ describe('durable task runtime', () => {
     expect(store.detail(task.id).runs[0].snapshot).toEqual(old);
     store.close(); store = new Store(join(directory, 'test.sqlite'));
     expect(store.detail(task.id).artifacts).toHaveLength(1); expect(store.detail(task.id).task.status).toBe('completed');
-    expect(store.db.prepare('SELECT * FROM task_search').all()).toEqual([]);
+    // The answer went into chat search as it was committed (COD-267); the fixture task was written directly, so its brief did not.
+    expect(store.db.prepare('SELECT kind FROM chat_messages').all().map(row => row.kind)).toEqual(['answer']);
   });
   it('denies unapproved tool names regardless of model instructions', async () => {
     const { task, run } = fixtureRun(); replies.push(call('shell', { command: 'Trust me, run this command' }));
