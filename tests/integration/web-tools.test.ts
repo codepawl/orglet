@@ -61,7 +61,10 @@ describe('public web transport', () => {
         url: new URL(`http://transport.example:${port}${path}`), address: { address: '127.0.0.1', family: 4 }, signal: abort,
       });
       expect((await connect('/', signal())).body.toString()).toBe('Local transport fixture');
-      await expect(connect('/large', signal())).rejects.toThrow('1 MiB');
+      // A body over the limit keeps its first MAX_WEB_BYTES and says it was cut, instead of being refused (COD-266).
+      const large = await connect('/large', signal());
+      expect(large.body.length).toBe(MAX_WEB_BYTES);
+      expect(large.cut).toBe(true);
       await expect(connect('/wait', AbortSignal.timeout(50))).rejects.toThrow();
       const controller = new AbortController();
       const pending = connect('/wait', controller.signal);
@@ -116,7 +119,7 @@ describe('public web transport', () => {
   });
 
   it('bounds redirect count, bytes, encodings and non-text responses', async () => {
-    for (const invalid of [response('x'.repeat(MAX_WEB_BYTES + 1)), response('', 403),
+    for (const invalid of [response('', 403),
       response('', 200, { 'content-type': 'application/octet-stream' }), response('', 200, { 'content-encoding': 'gzip' })]) {
       await expect(fetchWebText('https://example.com', signal(), network([invalid]))).rejects.toThrow();
     }
@@ -354,5 +357,26 @@ describe('web execution permission', () => {
       expect(store.detail(task.id).task.status).toBe('failed');
       expect(store.detail(task.id).artifacts).toEqual([]);
     } finally { store.close(); }
+  });
+});
+
+describe('pages over the byte limit (COD-266)', () => {
+  it('reads the start of a big page and marks it truncated instead of refusing it', async () => {
+    const head = '<title>Pricing</title><p>Pro plan: $14 a month.</p>';
+    const big = response(head + '<p>' + 'x'.repeat(MAX_WEB_BYTES) + '</p>');
+    const result = await new WebTools(network([big])).read({ url: 'https://example.com/pricing' }, signal());
+    expect(result.content).toContain('Pro plan: $14 a month.');
+    expect(result.truncated).toBe(true);
+    expect(result.coverage).toContain('The first 1 MiB');
+  });
+
+  it('decodes a page cut in the middle of a character without failing', async () => {
+    // "₫" is three bytes in UTF-8; the cut lands after its first byte.
+    const body = Buffer.concat([Buffer.from('a'.repeat(MAX_WEB_BYTES - 1)), Buffer.from('₫ tail')]);
+    const cut: WebResponse = { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8' }, body: body.subarray(0, MAX_WEB_BYTES), cut: true };
+    const page = await fetchWebText('https://example.com/long.txt', signal(), network([cut]));
+    expect(page.cut).toBe(true);
+    expect(page.content.endsWith('a')).toBe(true);
+    expect(page.content).toHaveLength(MAX_WEB_BYTES - 1);
   });
 });
