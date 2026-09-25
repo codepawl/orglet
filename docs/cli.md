@@ -22,6 +22,8 @@
 
 It cannot grant a folder, touch API keys or connections, change settings or permissions, create or edit a schedule, back up, archive or delete anything. Those stay in the window, where you can see what you are agreeing to. The app refuses any other request, even one that carries the right token.
 
+File Explorer's **Send to** menu and `orglet://` links are other ways in, on [their own page](integrations.md).
+
 ## Install
 
 ### Windows

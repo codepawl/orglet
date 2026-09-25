@@ -63,5 +63,15 @@ const bridge: Bridge = {
     ipcRenderer.on('orglet:open-chat', listener);
     return () => ipcRenderer.removeListener('orglet:open-chat', listener);
   },
+  takeIncoming: () => invoke('orglet:incoming'),
+  onIncoming: callback => {
+    const listener = () => callback();
+    ipcRenderer.on('orglet:incoming', listener);
+    return () => ipcRenderer.removeListener('orglet:incoming', listener);
+  },
+  takeSentFiles: id => invoke('orglet:sent-files', id),
+  dropSentFiles: id => invoke('orglet:drop-sent-files', id),
+  sendToState: () => invoke('orglet:send-to-state'),
+  setSendTo: enabled => invoke('orglet:send-to', enabled),
 };
 contextBridge.exposeInMainWorld('orglet', bridge);

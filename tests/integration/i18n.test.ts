@@ -25,6 +25,8 @@ it('translates finished core messages, including ones with values already filled
   expect(translateMessage(en, 'Run-log dòng 12: completed cần score hợp lệ.')).toBe('Run log row 12: completed rows need a valid score.');
   expect(translateMessage(en, 'Bản sao lưu không hợp lệ: Hội thiếu Tí.')).toBe('Invalid backup: The crew is missing orglets.');
   expect(translateMessage(en, 'Something the core never says.')).toBe('Something the core never says.');
+  // A message with its own key is not answered by the general "{0}: {1}" one (COD-246).
+  expect(translateMessage(en, 'Không có Tí hay hội nào tên "Nobody". Có: Researcher.')).toBe('No orglet or crew is named "Nobody". Available: Researcher.');
 });
 
 it('derives British English spellings from the US text', () => {

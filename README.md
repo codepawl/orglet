@@ -75,6 +75,8 @@ A worker also learns from the feedback it already gets. When you keep asking it 
 
 The `orglet` command talks to the running app from a terminal, like VS Code's `code`: `orglet send "Summarise this" --to Researcher --file notes.txt` sends a message into that chat and prints the answer, and `orglet read`, `list`, `status` and `open` do what they say. Run `orglet` on its own to pick an orglet and chat with it in the terminal, with its face drawn in its colour. Keys, chats and files stay in the app, and the command cannot change settings, permissions or folders. On Windows, **Settings → About → Add to PATH** installs it. Details: [the orglet command](docs/cli.md).
 
+On Windows you can also select files in File Explorer and choose **Send to → Orglet**: Orglet asks which chat, then puts the files in its message box. `orglet://chat/Researcher` and `orglet://new?to=Researcher&text=…` links open a chat or prefill a message; they never send. Details: [Send to and orglet:// links](docs/integrations.md).
+
 **Settings → MCP** adds MCP servers by hand, run on this computer or remote, so an orglet can use other services such as GitHub or a database. An orglet uses only the servers picked in its settings and asks you in the chat before it calls a tool; secret values are encrypted on this computer. Details: [MCP servers](docs/mcp.md).
 
 **Settings → Data** backs the workspace up, restores it, and deletes what you no longer want kept: the chat history, the knowledge your workers built up, what they remembered, the sources you imported, or everything at once. Nothing there touches your API keys or your own files. Details: [technical guide](docs/technical-guide.md#deleting-data).

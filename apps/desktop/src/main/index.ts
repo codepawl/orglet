@@ -1,14 +1,14 @@
 import { app, autoUpdater, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, session, shell, utilityProcess } from 'electron';
-import { basename, join, relative, isAbsolute, resolve } from 'node:path';
+import { basename, dirname, join, relative, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { mkdir, open } from 'node:fs/promises';
+import { mkdir, open, rm, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { release as osRelease } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
 import { en, enGB } from '../shared/locales/en';
-import { commands, Id, ApiProvider, CredentialProvider, type Reply, type Command, type Workspace, TextFormat } from '../shared/contracts';
+import { commands, Id, ApiProvider, CredentialProvider, type Reply, type Command, type Workspace, TextFormat, type Source } from '../shared/contracts';
 import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
 import { PickWorkspace } from '../shared/workspace-access';
 import { OPENCODE_DOCS_URLS } from '../shared/opencode';
@@ -27,12 +27,15 @@ import { translateMessage } from '../shared/i18n';
 import type { CliInstallState, OpenChatTarget } from '../shared/cli';
 import { cliEndpoint, type CliChat } from '../cli/protocol';
 import { CliServer, createCliToken, writeCliToken } from './cli-server';
-import { CliOperations } from './cli-operations';
+import { chatsOf, CliOperations } from './cli-operations';
 import { CliPathInstaller, isKeptOffPath, keepOffPath } from './cli-path';
 import { runSquirrelEvent, runUpdateExecutable, squirrelEventOf, type SquirrelEvent } from './squirrel-events';
 import { McpSecretStore, stopProcessTrees } from './mcp-secrets';
 import type { ProcessIdentity } from '../core/tools/process-identity';
 import { McpServerDraft, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
+import type { Incoming, SendToState } from '../shared/incoming';
+import { LINK_SCHEME, parseLaunchArguments, resolveLinkChat, type LaunchRequest } from './launch-requests';
+import { importSentFiles, isKeptOffSendTo, keepOffSendTo, SendToInstaller, SentFilesHandOff, type PathKind, type ShortcutFiles } from './send-to';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -128,6 +131,112 @@ function cliState(): CliInstallState {
   const installer = cliInstaller();
   if (installer) return { mode: 'windows', installed: installer.isInstalled() };
   return { mode: 'manual', command: `export PATH="$PATH:${join(process.resourcesPath, 'bin')}"` };
+}
+/**
+ * What Explorer's Send to menu and `orglet://` links start (COD-246). A Setup install has the Squirrel stub one folder
+ * above the `app-x.y.z` folder: its path never changes between updates, it starts the newest version with the same
+ * arguments, and it is a windowed program, so no console flashes. Squirrel copies it there before it runs the install
+ * hook. A ZIP copy has no stub and uses its own executable.
+ */
+function launcherPath(): string {
+  if (!updateEnvironment.squirrelUpdater) return process.execPath;
+  return resolve(process.execPath, '..', '..', basename(process.execPath));
+}
+/** Electron's own .lnk reader and writer; the shortcut logic itself is in send-to.ts. */
+const electronShortcuts: ShortcutFiles = {
+  read: path => {
+    if (!existsSync(path)) return undefined;
+    try {
+      const link = shell.readShortcutLink(path);
+      return { target: link.target, args: link.args ?? '', description: link.description ?? '', icon: link.icon ?? '' };
+    } catch {
+      return undefined;
+    }
+  },
+  write: async (path, shortcut) => {
+    await mkdir(dirname(path), { recursive: true });
+    const written = shell.writeShortcutLink(path, 'create', { target: shortcut.target, args: shortcut.args, description: shortcut.description, icon: shortcut.icon, iconIndex: 0 });
+    if (!written) throw new Error('Không tạo được lối tắt Gửi tới.');
+  },
+  remove: async path => { await rm(path, { force: true }); },
+};
+/** Only a packaged Windows build adds itself to Send to, in the person's own SendTo folder. */
+function sendToInstaller(): SendToInstaller | undefined {
+  if (!app.isPackaged || process.platform !== 'win32') return undefined;
+  const sendToFolder = join(app.getPath('appData'), 'Microsoft', 'Windows', 'SendTo');
+  return new SendToInstaller(sendToFolder, launcherPath(), electronShortcuts);
+}
+function sendToState(): SendToState {
+  const installer = sendToInstaller();
+  if (!installer) return { mode: 'unavailable' };
+  return { mode: 'windows', installed: installer.isInstalled() };
+}
+/**
+ * The command Windows runs for a link is `"<stub>" -- "%1"`. The `--` ends Chromium's switches, so nothing in a link
+ * can be read as one. Electron writes it under HKCU\Software\Classes\orglet and removes it only when the command
+ * there is still this one, so another program's handler is never touched. A ZIP copy registers nothing: it has no
+ * uninstall step to take it away again.
+ */
+const LINK_ARGUMENTS = ['--'];
+async function registerLinks(): Promise<void> {
+  if (!updateEnvironment.squirrelUpdater) return;
+  app.setAsDefaultProtocolClient(LINK_SCHEME, launcherPath(), LINK_ARGUMENTS);
+}
+async function unregisterLinks(): Promise<void> {
+  if (!updateEnvironment.squirrelUpdater) return;
+  app.removeAsDefaultProtocolClient(LINK_SCHEME, launcherPath(), LINK_ARGUMENTS);
+}
+const sentFiles = new SentFilesHandOff();
+/** What came from outside and waits for the window to take it. Links open in order; a newer Send to replaces an older one. */
+let incomingQueue: Incoming[] = [];
+const INCOMING_QUEUE_LIMIT = 10;
+/** Starts that arrived while the app was still starting, handled once the core and the window are there. */
+const launchesBeforeStart: (readonly string[])[] = [];
+let started = false;
+function queueIncoming(item: Incoming) {
+  const withoutOlderFiles = item.kind === 'files' ? incomingQueue.filter(queued => queued.kind !== 'files') : incomingQueue;
+  incomingQueue = [...withoutOlderFiles, item].slice(-INCOMING_QUEUE_LIMIT);
+  if (window && !window.isDestroyed()) window.webContents.send('orglet:incoming');
+}
+async function incomingFor(launch: LaunchRequest): Promise<Incoming> {
+  if (launch.kind === 'send-to') return sentFiles.offer(launch.paths);
+  if (launch.kind === 'refused') return { kind: 'notice', message: launch.message };
+  const workspace = await request('workspace', {}) as Workspace;
+  const found = resolveLinkChat(launch.link.target, chatsOf(workspace));
+  if (!found.ok) return { kind: 'notice', message: found.message };
+  const chat = { kind: found.chat.kind, id: found.chat.id };
+  if (launch.link.action === 'new' && launch.link.text) return { kind: 'chat', chat, text: launch.link.text };
+  return { kind: 'chat', chat };
+}
+/** Files from Send to or a link, from a cold start or a second instance. */
+async function receiveLaunch(argv: readonly string[], bringForward: boolean) {
+  const launch = parseLaunchArguments(argv);
+  if (bringForward) showWindow();
+  if (!launch) return;
+  try {
+    queueIncoming(await incomingFor(launch));
+  } catch (error) {
+    console.warn('Orglet could not take what was sent to it:', error instanceof Error ? error.message : error);
+  }
+}
+/** The arguments the second instance sent itself: `argv` in the event may be reordered and gain Chromium's switches. */
+const ForwardedLaunch = z.object({ argv: z.array(z.string().max(32_768)).max(1_000) });
+function forwardedArguments(additionalData: unknown, argv: string[]): readonly string[] {
+  const forwarded = ForwardedLaunch.safeParse(additionalData);
+  return forwarded.success ? forwarded.data.argv : argv;
+}
+async function pathKind(path: string): Promise<PathKind> {
+  try {
+    const status = await stat(path);
+    if (status.isDirectory()) return 'folder';
+    return status.isFile() ? 'file' : 'missing';
+  } catch {
+    return 'missing';
+  }
+}
+async function importOneSentFile(path: string): Promise<Source> {
+  const imported = await request('importSources', [path]) as Source[];
+  return imported[0];
 }
 const spellCheckerDictionaries: Record<Language, string> = { vi: 'vi', en: 'en-US', 'en-GB': 'en-GB' };
 /**
@@ -490,9 +599,39 @@ async function start() {
     else await installer.remove();
     return cliState();
   });
+  // What Explorer or a link sent (COD-246). The window takes the queue; files stay here as paths until it names a chat.
+  handle('orglet:incoming', async () => {
+    const taken = incomingQueue;
+    incomingQueue = [];
+    return taken;
+  });
+  handle('orglet:sent-files', async raw => {
+    const id = z.string().uuid().parse(raw);
+    const paths = sentFiles.take(id);
+    if (!paths) throw new Error('Các tệp này không còn chờ nữa. Gửi lại từ Explorer.');
+    return importSentFiles(paths, { kindOf: pathKind, importFile: importOneSentFile });
+  });
+  handle('orglet:drop-sent-files', async raw => { sentFiles.drop(z.string().uuid().parse(raw)); });
+  handle('orglet:send-to-state', async () => sendToState());
+  handle('orglet:send-to', async raw => {
+    const enabled = z.boolean().parse(raw);
+    const installer = sendToInstaller();
+    if (!installer) throw new Error('Chỉ bản cài trên Windows mới thêm Orglet vào menu Gửi tới.');
+    // Recorded first, so an update that lands while this runs already knows the choice.
+    await keepOffSendTo(app.getPath('userData'), !enabled);
+    if (enabled) await installer.install();
+    else await installer.remove();
+    return sendToState();
+  });
   // The app works without its command line, so a pipe that cannot open does not stop the start.
   await startCliServer(directory).catch(error => console.warn('orglet CLI server did not start:', error instanceof Error ? error.message : error));
   void cliInstaller()?.refresh().catch(() => undefined);
+  void sendToInstaller()?.refresh().catch(() => undefined);
+  void registerLinks().catch(() => undefined);
+  // Queued before the page loads: the window takes the queue as soon as it mounts.
+  started = true;
+  await receiveLaunch(process.argv, false);
+  for (const argv of launchesBeforeStart.splice(0)) await receiveLaunch(argv, true);
   if (devServer) {
     // Forge can start Electron before Vite finishes the first renderer build, which leaves a blank window.
     for (let attempt = 0; attempt < 60; attempt++) {
@@ -509,12 +648,14 @@ async function start() {
   updater.start();
 }
 /**
- * Setup's install, update and uninstall steps (COD-235): the Start menu shortcuts, as before, and the `orglet`
- * command on the user PATH, unless the person took it off in Settings. No window opens for these.
+ * Setup's install, update and uninstall steps (COD-235): the Start menu shortcuts, as before, the `orglet` command on
+ * the user PATH and Orglet in Explorer's Send to menu, unless the person took either off in Settings, and the
+ * `orglet://` links (COD-246). No window opens for these.
  */
 function handleSquirrelEvent(event: SquirrelEvent) {
   const shortcutTarget = basename(process.execPath);
   const installer = cliInstaller();
+  const sendTo = sendToInstaller();
   const userData = app.getPath('userData');
   const work = runSquirrelEvent(event, {
     createShortcuts: () => runUpdateExecutable(process.execPath, [`--createShortcut=${shortcutTarget}`]),
@@ -522,14 +663,27 @@ function handleSquirrelEvent(event: SquirrelEvent) {
     putOnPath: async () => { await installer?.install(); },
     takeOffPath: async () => { await installer?.remove(); },
     keptOffPath: () => isKeptOffPath(userData),
+    addSendTo: async () => { await sendTo?.install(); },
+    removeSendTo: async () => { await sendTo?.remove(); },
+    keptOffSendTo: () => isKeptOffSendTo(userData),
+    registerLinks,
+    unregisterLinks,
   });
   void work.finally(() => app.quit());
 }
 const squirrelEvent = squirrelEventOf(process.argv, process.platform);
 if (squirrelEvent) handleSquirrelEvent(squirrelEvent);
-else if (!app.requestSingleInstanceLock()) app.quit();
+// The second instance passes its own arguments along, untouched, for Send to and links to read (COD-246).
+else if (!app.requestSingleInstanceLock({ argv: process.argv })) app.quit();
 else {
-  app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.focus(); } });
+  app.on('second-instance', (_event, argv, _workingDirectory, additionalData) => {
+    const forwarded = forwardedArguments(additionalData, argv);
+    if (!started) {
+      launchesBeforeStart.push(forwarded);
+      return;
+    }
+    void receiveLaunch(forwarded, true);
+  });
   app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', () => {

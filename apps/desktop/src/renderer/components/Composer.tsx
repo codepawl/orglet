@@ -234,12 +234,29 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
   </form>;
 }
 
+/** Text an `orglet://new` link puts in the bar (COD-246). `at` tells two links with the same text apart. */
+export type ComposerPrefill = { text: string; at: number };
+
+/** A link's text goes after a draft already in the bar, never over it. */
+export function withPrefill(current: string, prefill: string): string {
+  if (!current.trim()) return prefill;
+  return `${current}\n\n${prefill}`;
+}
+
 /**
  * Follow-up bar under a task: the text becomes an extra instruction for a new review of the same sources. While a
  * run is on, the island saying what the worker is doing sits on the bar's top edge (COD-167, `IslandDock`).
+ * `prefill` fills it without sending; `onPrefilled` lets the caller forget it once it is in.
  */
-export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, action }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: (tab?: 'connections' | 'harness') => void; action: (fn: () => Promise<unknown>) => void }) {
+export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, action, prefill, onPrefilled }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: (tab?: 'connections' | 'harness') => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void }) {
   const [text, setText] = useState('');
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!prefill) return;
+    setText(current => withPrefill(current, prefill.text));
+    textarea.current?.focus();
+    onPrefilled?.();
+  }, [prefill?.at]);
   const [submitting, setSubmitting] = useState(false);
   const input = detail.task.currentInput ?? detail.task;
   const workers = taskWorkers(detail.task, workspace);
@@ -267,7 +284,7 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   };
   return <div className="thread-composer">
     <IslandDock />
-    <Composer value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(detail.task.pendingStart) || submitting} sendDisabled={blocked}
+    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(detail.task.pendingStart) || submitting} sendDisabled={blocked}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
       context={reply && !pendingDecision ? <div className="composer-reply">

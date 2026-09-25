@@ -64,6 +64,8 @@ The Orglet face and the version you run. The face says hello when the tab opens,
 
 **orglet command in the terminal** is the `orglet` command for sending messages and reading answers from a terminal. On Windows, Setup already put it on your PATH; **Remove from PATH** takes it off and keeps it off through updates, and **Add to PATH** puts it back. On macOS the row shows the line to add yourself. See [the orglet command](cli.md).
 
+**Send to Orglet in Explorer** (Windows only) is the switch for Orglet in File Explorer's **Send to** menu. Setup turns it on. Turning it off removes the entry and keeps it off through updates; turning it on puts it back. See [Send to and orglet:// links](integrations.md).
+
 **What is new** lists the last ten releases, the one you run marked. Each shows its version, its date and what changed; the install advice every release page repeats is left out. It is fetched from GitHub once an hour; offline, it shows the last copy and when it was fetched.
 
 **Check for updates** shows one state at a time: not checked yet, checking, up to date with the time, downloading, ready with **Restart now**, or the error. **Automatic updates** (on by default) checks 30 seconds after launch and every four hours, downloads in the background, then asks you to restart; if you do not, the next launch uses the new version. Off, it checks only when you click.

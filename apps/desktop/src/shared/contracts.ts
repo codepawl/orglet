@@ -397,6 +397,18 @@ export interface Bridge {
   importMcpServers(): Promise<{ imported: string[]; skipped: { name: string; reason: string }[] } | null>;
   /** A chat `orglet open --to` asked the window to show. */
   onOpenChat(callback: (target: import('./cli').OpenChatTarget) => void): () => void;
+  /** Takes what Explorer's Send to menu or `orglet://` links sent since the last call (COD-246). */
+  takeIncoming(): Promise<import('./incoming').Incoming[]>;
+  /** Something new is waiting for `takeIncoming`. */
+  onIncoming(callback: () => void): () => void;
+  /** Imports the files of a Send to hand-off, by its id; main holds the paths. Refused once taken or replaced. */
+  takeSentFiles(id: string): Promise<FolderIntake>;
+  /** The person closed the picker: main forgets that hand-off's paths. */
+  dropSentFiles(id: string): Promise<void>;
+  /** Whether Explorer's Send to menu offers Orglet on this build. */
+  sendToState(): Promise<import('./incoming').SendToState>;
+  /** Adds Orglet to Send to or takes it off, and keeps that choice across updates; Windows packaged builds only. */
+  setSendTo(enabled: boolean): Promise<import('./incoming').SendToState>;
 }
 declare global { interface Window { orglet: Bridge } }
 

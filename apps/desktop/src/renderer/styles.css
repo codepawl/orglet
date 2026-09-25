@@ -766,6 +766,37 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .search-result-time { font-size:13px; color:var(--muted); white-space:nowrap; }
 .search-result-enter { color:var(--muted); }
 .search-empty { padding:18px 24px 26px; color:var(--muted); font-size:14px; text-align:center; }
+/* Send to picker (COD-246): the search palette's shape, opened by files sent from Explorer. The title and the file
+   names head it, the list is grouped by spacing and a quiet group name, and a note at the foot says nothing is sent yet.
+   The title, the search icon, the group names, the faces and the note share one left edge, 26px in, and the faces
+   sit in a slot two overlapped faces wide, so every name starts at the same x. */
+.send-to-dialog { position:fixed; left:50%; top:14vh; transform:translateX(-50%); z-index:11; width:min(560px, calc(100vw - 32px)); max-height:min(600px, calc(100dvh - 14vh - 24px)); display:flex; flex-direction:column; background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; outline:none; overflow:hidden; }
+.send-to-head { display:flex; align-items:center; gap:12px; padding:16px 14px 0 26px; }
+.send-to-heading { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.send-to-title { margin:0; font-size:17px; font-weight:600; line-height:24px; color:var(--text); }
+.send-to-files { margin:0; font-size:13px; line-height:18px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.send-to-search { display:flex; align-items:center; gap:10px; margin:14px 14px 4px; padding:0 12px; height:40px; border-radius:10px; background:var(--surface); color:var(--muted); }
+.send-to-search input { flex:1; min-width:0; border:0; outline:none; background:transparent; font-size:15px; color:var(--text); }
+.send-to-search input::placeholder { color:var(--muted); }
+.send-to-options { list-style:none; margin:0; padding:4px 10px 6px; overflow:auto; overscroll-behavior:contain; }
+.send-to-group { display:block; padding:6px 16px 4px; font-size:12px; font-weight:500; line-height:16px; color:var(--muted); }
+.send-to-group-start:not(:first-child) { margin-top:8px; }
+.send-to-option { display:flex; align-items:center; gap:12px; min-height:44px; padding:6px 14px 6px 16px; border-radius:10px; cursor:pointer; color:var(--text); }
+.send-to-option[aria-selected=true] { background:var(--surface); }
+.send-to-option > .avatar, .send-to-option > .composer-to-avatars { flex:0 0 auto; }
+.send-to-option > .avatar { margin-right:14px; }
+.send-to-option > .composer-to-avatars { width:38px; }
+.send-to-option-text { flex:1; min-width:0; display:flex; align-items:baseline; gap:8px; }
+.send-to-option-name { flex:0 1 auto; min-width:0; font-size:15px; line-height:20px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.send-to-option-detail { flex:1 1 0; min-width:0; font-size:13px; line-height:20px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.send-to-option-time { flex:0 0 auto; font-size:13px; color:var(--muted); white-space:nowrap; }
+.send-to-option-enter { flex:0 0 auto; color:var(--muted); }
+.send-to-empty { margin:0; padding:14px 24px 10px; color:var(--muted); font-size:14px; text-align:center; }
+/* Files a picker, a folder or Send to left out, with the reason: quiet text, the list indented under its summary. */
+.intake-skipped { font-size:13px; line-height:18px; color:var(--muted); }
+.intake-skipped summary { cursor:pointer; }
+.intake-skipped ul { margin:4px 0 0; padding-left:18px; }
+.send-to-note { margin:0; padding:6px 26px 16px; font-size:13px; line-height:18px; color:var(--muted); }
 .settings-dialog { position:fixed; inset:0; margin:auto; z-index:11; width:var(--panel-width); height:var(--panel-height); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; }
 .settings-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px 24px; }
 .settings-header h2 { font-size:18px; font-weight:600; }
