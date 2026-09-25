@@ -159,11 +159,12 @@ export function GroupChatRow({ name, faces, active, status, onOpen, onDwell, onR
       <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} title={name} onClick={onOpen}>
         <span>{name}</span>
       </button>
-      <RowMenu label={t('Tùy chọn nhóm chat {0}', [name])} icon={EllipsisVertical} contextMenuOf=".group-chat-row" items={[
+      {/* Wrapped like an orglet row's menu, so it floats over the row's end instead of taking the name's room. */}
+      <span data-no-drag><RowMenu label={t('Tùy chọn nhóm chat {0}', [name])} icon={EllipsisVertical} contextMenuOf=".group-chat-row" items={[
         { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing(true) },
         { label: t('Lưu trữ'), icon: Archive, onSelect: onArchive },
         { label: t('Xóa'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: t('Xóa nhóm chat này? Không thể hoàn tác.'), label: t('Xóa') } },
-      ]} />
+      ]} /></span>
     </div>
   </div>;
 }
