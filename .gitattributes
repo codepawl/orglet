@@ -1,3 +1,5 @@
 # The shipped `orglet` shims (COD-234): cmd wants CRLF, sh breaks on it, whatever the checkout's autocrlf says.
 *.cmd text eol=crlf
 apps/desktop/bin/orglet text eol=lf
+# Release-note fixtures (COD-237) are compared byte for byte with what releaseHighlights() returns, which is LF.
+tests/fixtures/releases/*.md text eol=lf
