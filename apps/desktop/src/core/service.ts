@@ -19,6 +19,7 @@ import { TeamRunner } from './orchestration/team';
 import templates from '../../../../templates/catalog.json';
 import type { ProfileExecutor, ProfileRecord } from '../shared/profiles';
 import { Backups } from './storage/backup';
+import { ChatSearch } from './storage/chat-search';
 import { ReviewPolicy } from '../shared/review';
 import { Preflight } from './orchestration/preflight';
 import { PreflightPolicy, type PreflightRecord } from '../shared/preflight';
@@ -104,6 +105,8 @@ export class CoreService {
   readonly mcp: McpServers;
   /** Side threads of orglets' main chats and how their permissions follow the main chat (COD-247). */
   readonly sideThreads: SideThreads;
+  /** Search across every message, answer and name (COD-267). */
+  readonly chatSearch: ChatSearch;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
   readonly harnessAccounts: HarnessAccounts;
@@ -115,6 +118,7 @@ export class CoreService {
   constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
+    this.chatSearch = new ChatSearch(store);
     this.harnessAccounts = new HarnessAccounts(store, harness.accountRoot);
     this.notify = () => { if (!this.store.db.isOpen) return; this.policy.captureHandoffs(); notify(); };
     this.sources = new Sources(store, profiler, pdfText);
@@ -302,6 +306,7 @@ export class CoreService {
           // Preserve readable input for older runs before expanding the task's history scope.
           for (const run of this.store.detail(task.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources } } });
           this.store.update('tasks', revised);
+          this.chatSearch.indexTurn(revised.id, revised.inputRevision ?? 0, input.brief, now());
         });
         if (active) { this.teams.cancel(task.id); this.runner.cancel(task.id); this.notify(); return; }
         this.start(revised, true); return;
@@ -557,6 +562,7 @@ export class CoreService {
         this.knowledge.review(input.id, input.revision, input.decision); this.notify(); return;
       }
       case 'searchKnowledge': return this.knowledge.search(commands.searchKnowledge.parse(args).query);
+      case 'searchChats': return this.chatSearch.search(commands.searchChats.parse(args).query);
       case 'updateMemory': {
         const input = commands.updateMemory.parse(args);
         const item = this.knowledge.updateMemory(input.id, { text: input.text, pinned: input.pinned }); this.notify(); return item;
@@ -1112,7 +1118,7 @@ export class CoreService {
     snapshotCapabilities(this.store.get<Worker>('workers', task.workerId).provider, task.toolCapabilities);
     this.store.transaction(() => {
       this.store.put('tasks', task);
-      this.store.db.prepare('INSERT INTO task_search VALUES(?,?)').run(task.id, task.brief);
+      this.chatSearch.indexTurn(task.id, 0, task.brief, task.createdAt);
       this.workspaceGrants.copyInsideTransaction(main.id, task.id);
     });
     this.start(task, true);
@@ -1177,7 +1183,7 @@ export class CoreService {
       }
       db.prepare('DELETE FROM profiles WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM preflights WHERE task_id=?').run(task.id);
-      db.prepare('DELETE FROM task_search WHERE id=?').run(task.id);
+      this.chatSearch.removeChat(task.id);
       db.prepare('DELETE FROM workspace_grants WHERE task_id=?').run(task.id);
       for (const item of proposed) this.knowledge.deleteRows(item.id);
       for (const item of memoriesToDelete) this.knowledge.deleteRows(item.id);
@@ -1271,7 +1277,7 @@ export class CoreService {
     if (routine) task.routineId = routine.id;
     this.store.transaction(() => {
       this.store.put('tasks', task);
-      this.store.db.prepare('INSERT INTO task_search VALUES(?,?)').run(task.id, task.brief);
+      this.chatSearch.indexTurn(task.id, 0, task.brief, task.createdAt);
       if (routine) this.store.update('routines', { ...routine, lastTaskId: task.id });
       if (chosen) this.takeNewChatCapabilities(this.newChatTarget(input));
       if (folder) {

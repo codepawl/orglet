@@ -26,6 +26,7 @@ import { assignmentKey } from './assignments';
 import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { WorkspaceGrants } from '../storage/workspace-grants';
+import { ChatSearch } from '../storage/chat-search';
 import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { DecisionQuestion } from '../../shared/work-decisions';
@@ -1747,6 +1748,7 @@ export class Runner {
       replyTo: turnMessageId(task.id, run.snapshot.inputRevision ?? 0), ...(usedMemories.length ? { usedMemories } : {}) };
     this.store.transaction(() => {
       this.store.put('artifacts', artifact, { column: 'run_id', value: run.id });
+      new ChatSearch(this.store).indexAnswer(artifact, run);
       if (proposals.length) new KnowledgeBase(this.store).propose(run, artifact.id, proposals);
       if (this.wantsTitle(task, run)) {
         const title = taskTitle(suggestedTitle, report, this.store.get<Task>('tasks', task.id).brief);
