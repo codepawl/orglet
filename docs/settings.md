@@ -58,7 +58,7 @@ Where the data lives: `%APPDATA%\orglet\orglet.sqlite` on Windows, `~/Library/Ap
 
 The version you run, and **Build details** (Electron, Chromium, Node and SQLite versions, the OS, and how the build was installed) with a **Copy** button for bug reports. Links to the website, GitHub, Discord, X and Threads.
 
-**orglet command in the terminal** puts the `orglet` command on your PATH so you can send messages and read answers from a terminal. On Windows it is **Add to PATH** and **Remove from PATH**; on macOS the row shows the line to add yourself. See [the orglet command](cli.md).
+**orglet command in the terminal** is the `orglet` command for sending messages and reading answers from a terminal. On Windows, Setup already put it on your PATH; **Remove from PATH** takes it off and keeps it off through updates, and **Add to PATH** puts it back. On macOS the row shows the line to add yourself. See [the orglet command](cli.md).
 
 **What is new** lists the last ten releases with their notes, the one you run marked. It is fetched from GitHub once an hour; offline, it shows the last copy and when it was fetched.
 

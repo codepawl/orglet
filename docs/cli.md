@@ -23,12 +23,14 @@ It cannot grant a folder, touch API keys or connections, change settings or perm
 
 ### Windows
 
-1. Install Orglet with Setup.exe (or unpack the ZIP).
-2. Open **Settings → About**.
-3. Click **Add to PATH** on the **orglet command in the terminal** row.
-4. Open a new terminal and run `orglet status`.
+1. Install Orglet with Setup.exe.
+2. Open a new terminal and run `orglet status`.
 
-Orglet writes a small `orglet.cmd` into `%LOCALAPPDATA%\Orglet\bin` and adds that folder to your own user PATH (not the system one). Every time the app starts it rewrites that file, so the command keeps working after an update. **Remove from PATH** deletes the file and the PATH entry. Uninstalling Orglet removes the file; the PATH entry stays behind and does nothing.
+Setup writes a small `orglet.cmd` into `%LOCALAPPDATA%\Orglet\bin` and adds that folder to your own user PATH (not the system one), the way VS Code's installer does. Each update and every start of the app rewrite that file, so the command keeps working after an update. A terminal that was already open does not see the new PATH; open a new one.
+
+**Settings → About → Remove from PATH** deletes the file and the PATH entry, and later updates leave it off. **Add to PATH** there puts it back. Uninstalling Orglet removes both the file and the PATH entry.
+
+Unpacked the ZIP instead of running Setup? Nothing is added by itself: click **Add to PATH** in **Settings → About**.
 
 ### macOS
 
