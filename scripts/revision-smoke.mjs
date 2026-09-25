@@ -22,8 +22,13 @@ try {
     return window.orglet.call('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Revision UI fixture', sourceIds: sources.map(source => source.id), consent: false, budgetMicros: 1000 });
   });
   await openThreadByBrief(page, 'Revision UI fixture');
-  // The follow-up bar's add button is enabled once the run has finished.
-  await page.locator('button[aria-label="Đính kèm tệp"]:not([disabled])').waitFor();
+  // The composer's add button is there while the crew still works, so wait for the first message's runs to finish.
+  await page.locator('button[aria-label="Thêm nguồn"]:not([disabled])').waitFor();
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const state = await page.evaluate(id => window.orglet.call('task', { id }), id);
+    if (state.task.status === 'waiting_input' && state.artifacts.length === 4) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
   const before = await page.evaluate(id => window.orglet.call('task', { id }), id);
   assert.equal(before.artifacts.length, 4);
   assert.equal(before.runs.filter(run => run.stage === 'plan').length, 1);
@@ -36,15 +41,15 @@ try {
   await page.keyboard.press('Escape');
   assert.equal((await page.evaluate(id => window.orglet.call('task', { id }), id)).task.status, 'waiting_input');
   assert.equal(await page.getByRole('button', { name: 'Thử lại với thiết lập hiện tại', exact: true }).count(), 0);
-  await page.getByRole('button', { name: 'Đính kèm tệp', exact: true }).click();
-  await page.getByRole('textbox', { name: /Tin nhắn/ }).fill('Review supplemented evidence from UI');
-  await page.getByRole('button', { name: 'Bỏ nguồn original.csv', exact: true }).click();
+  // A follow-up adds its file through the composer's + (COD-257): the card sits on the composer strip, and the chat's
+  // earlier file goes with the message without being listed there again.
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, added);
-  await page.getByRole('button', { name: 'Bổ sung tệp', exact: true }).click();
-  await page.getByRole('button', { name: 'Bỏ nguồn supplement.csv', exact: true }).waitFor();
-  await page.getByText('Giới hạn này tính cả các tin nhắn trước.', { exact: false }).waitFor();
-  await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
-  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).click();
+  await page.getByRole('menuitem', { name: /Tệp/ }).first().click();
+  await page.getByRole('button', { name: 'Bỏ supplement.csv', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Bỏ original.csv', exact: true }).count(), 0);
+  await page.getByRole('textbox', { name: /Tin nhắn/ }).fill('Review supplemented evidence from UI');
+  await page.keyboard.press('Enter');
   for (let attempt = 0; attempt < 100; attempt++) {
     const state = await page.evaluate(id => window.orglet.call('task', { id }), id);
     if (state.task.inputRevision === 1 && state.task.status === 'waiting_input') break;
@@ -54,7 +59,8 @@ try {
   assert.equal(after.task.inputRevision, 1); assert.equal(after.task.brief, before.task.brief);
   assert.equal(after.task.status, 'waiting_input');
   assert.equal(after.task.currentInput.brief, 'Review supplemented evidence from UI');
-  assert.equal(after.task.currentInput.sourceIds.length, 1); assert.equal(after.task.sourceIds.length, 2);
+  // The follow-up carries the chat's earlier file plus the one it added.
+  assert.equal(after.task.currentInput.sourceIds.length, 2); assert.equal(after.task.sourceIds.length, 2);
   assert.equal(after.preflights.length, 2);
   for (const artifact of before.artifacts) assert.deepEqual(after.artifacts.find(row => row.id === artifact.id), artifact);
   const revised = after.runs.filter(run => run.snapshot.inputRevision === 1);
@@ -73,10 +79,9 @@ try {
   await page.locator('.report-file').last().click();
   assert.equal(await page.getByRole('button', { name: 'Chấp nhận báo cáo', exact: true }).count(), 1);
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Đính kèm tệp', exact: true }).click();
+  // Sending clears the composer: no text and no file cards left on its strip.
   assert.equal(await page.getByRole('textbox', { name: /Tin nhắn/ }).inputValue(), '');
-  assert.equal(await page.getByRole('button', { name: 'Bỏ nguồn original.csv', exact: true }).count(), 0);
-  await page.getByRole('button', { name: 'Bỏ nguồn supplement.csv', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Bỏ supplement.csv', exact: true }).count(), 0);
   await app.evaluate(({ dialog }) => { dialog.showOpenDialog = globalThis.originalOpen; });
   console.log(JSON.stringify({ directory, taskId: id, revision: 1, artifacts: 8, preflights: 2, result: 'passed' }));
   if (process.argv.includes('--inspect-ui')) await new Promise(resolve => app.once('close', resolve));
