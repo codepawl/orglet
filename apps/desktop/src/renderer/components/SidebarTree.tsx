@@ -169,14 +169,15 @@ export function SideThreadRow({ name, active, status, onOpen, onDwell, onRename,
 /**
  * The newest run of one schedule, listed under the orglet or crew it ran for (COD-258): its status mark, the
  * schedule's name with a small schedule mark after it, and a menu to open the schedule, archive the run or delete
- * it. The row is named after the schedule, so it has no rename. It wears the side thread's row class, so the two
- * kinds of row line up and share the thread lines drawn down from the orglet's face.
+ * it. The row is named after the schedule, so it has no rename; the mark takes some of the name's room, so the
+ * tooltip carries the whole name. It wears the side thread's row class, so the two kinds of row line up and share
+ * the thread lines drawn down from the orglet's face (COD-262).
  */
 export function ScheduleRunRow({ name, active, status, onOpen, onDwell, onOpenSchedule, onArchive, onDelete }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onOpenSchedule: () => void; onArchive: () => void; onDelete: () => void }) {
   const dwell = dwellHandlers(onDwell);
   const label = statusMarkLabel(status);
   return <div className={`task-row side-thread-row schedule-run-row${active ? ' active' : ''}`} {...dwell}>
-    <button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} aria-label={t('Lần chạy của lịch {0}', [name])} title={label} onClick={onOpen}>
+    <button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} aria-label={t('Lần chạy của lịch {0}', [name])} title={`${name}\n${label}`} onClick={onOpen}>
       <StatusMark variant={status.variant} tone={status.tone} label={label} decorative />
       <span className="row-name">{name}</span>
       <CalendarClock size={13} className="schedule-run-mark" aria-hidden="true" />
