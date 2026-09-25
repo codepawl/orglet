@@ -977,12 +977,12 @@ export function App() {
       ? tasksStatusMark([{ status: live.status, seen: taskSeen(live) }])
       : tasksStatusMark(activeTasks.filter(task => taskWorkers(task, workspace).some(item => item.id === id)).map(task => ({ status: task.status, seen: taskSeen(task) })));
   };
+  // A crew row marks the crew's own chat. It used to roll up its members' marks too, from when the row listed its
+  // members; now a member waiting in its own solo chat flagged the whole crew (COD-263). A member's work for the crew
+  // runs inside the crew's chat, so it still shows here.
   const teamStatus = (team: Team): StatusMarkState => {
     const live = liveTeamTask(activeTasks, team.id);
-    return rollupStatusMarks([
-      ...(live ? [tasksStatusMark([{ status: live.status, seen: taskSeen(live) }])] : []),
-      ...teamRoster(team, workspace.workers).map(member => workerStatus(member.id)),
-    ]);
+    return live ? tasksStatusMark([{ status: live.status, seen: taskSeen(live) }]) : rollupStatusMarks([]);
   };
   const openTaskWorkers = detail ? taskWorkers(detail.task, workspace) : [];
   const openTaskPaid = openTaskWorkers.some(item => isPaidApi(item.provider));

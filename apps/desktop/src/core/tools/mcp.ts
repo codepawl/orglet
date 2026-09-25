@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -64,6 +66,29 @@ const READ_BUFFER_BYTES = 4 * 1024 * 1024;
 function reasonOf(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return message.replace(/\s+/g, ' ').trim().slice(0, 300) || 'Lỗi không rõ.';
+}
+
+/**
+ * Whether a stdio server's command can be found, so a wrong path says so instead of the SDK's bare "Connection closed"
+ * (COD-263). A bare name is looked up on PATH with the extensions Windows would try; anything with a folder in it is
+ * checked as given.
+ */
+export function commandExists(command: string, environment: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): boolean {
+  if (isAbsolute(command) || /[\\/]/.test(command)) return existsSync(command);
+  const separator = platform === 'win32' ? ';' : ':';
+  const folders = (environment.PATH ?? environment.Path ?? '').split(separator).filter(Boolean);
+  const extensions = platform === 'win32' ? ['', ...(environment.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : [''];
+  return folders.some(folder => extensions.some(extension => existsSync(join(folder, command + extension))));
+}
+
+/**
+ * The SDK reports a server that exits during the handshake as a closed connection. Its stderr stays out of the
+ * window, so the person gets what that means and where to see the server's own error instead (COD-263).
+ */
+function startFailure(error: unknown): unknown {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/Connection closed/i.test(message)) return new Error('Máy chủ MCP đã thoát trước khi trả lời Orglet. Chạy thử đúng lệnh này trong terminal để xem nó báo lỗi gì.');
+  return error;
 }
 
 /** The first line of a description, for the Settings list. */
@@ -294,6 +319,7 @@ export class McpServers {
         if (!value) throw new Error(`Chưa có giá trị cho biến ${name}. Mở Cài đặt → MCP và nhập lại.`);
         env[name] = value;
       }
+      if (!commandExists(server.transport.command)) throw new Error(`Không tìm thấy lệnh ${server.transport.command}. Kiểm tra lại đường dẫn, hoặc cài chương trình đó rồi thử lại.`);
       // stderr is dropped: nothing a server writes there may reach the window, and an unread pipe would stall it.
       const transport = new StdioClientTransport({ command: server.transport.command, args: server.transport.args, env, stderr: 'ignore', maxBufferSize: READ_BUFFER_BYTES });
       const client = this.newClient();
@@ -301,7 +327,7 @@ export class McpServers {
         await client.connect(transport, options);
       } catch (error) {
         await this.closeTransport(transport, transport.pid ?? undefined);
-        throw error;
+        throw startFailure(error);
       }
       return { client, transport };
     }

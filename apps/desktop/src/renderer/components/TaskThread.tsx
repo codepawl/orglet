@@ -11,6 +11,7 @@ import { providerName } from './workerModel';
 import { Avatar } from './Avatar';
 import { toast } from './toast';
 import { t } from '../i18n';
+import { filesAddedWith } from '../turnFiles';
 import { DocumentCard, DocumentViewer } from './DocumentViewer';
 import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
@@ -322,6 +323,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         // explanation just below, so it is quiet here too.
         const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
         const previousSentAt = turns[index - 1]?.sentAt;
+        const addedFiles = filesAddedWith(turn.sources, turns[index - 1]?.sources);
         // A group-chat reply carries the cards its own run proposed; the rest of the turn's cards sit with the turn.
         const turnProposals = detail.appProposals.filter(proposal => proposal.inputRevision === turn.revision);
         const replyRunIds = new Set(turn.replies.map(reply => reply.run.id));
@@ -331,8 +333,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
           {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
               of the text, rather than stacking one per line inside it (user, 2026-09-21). */}
-          {turn.sources.length > 0 && <ul className="message-files" aria-label={t('Tệp đính kèm')}>
-            {turn.sources.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}
+          {addedFiles.length > 0 && <ul className="message-files" aria-label={t('Tệp đính kèm')}>
+            {addedFiles.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}
           </ul>}
           <div className="user-message" id={`message-${turnMessageId(detail.task.id, turn.revision)}`} tabIndex={-1}>
             {turn.replyTo && <button type="button" className="message-reply-context" onClick={() => openMessage(turn.replyTo!)}>
