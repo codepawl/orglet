@@ -38,7 +38,7 @@ For a reassigned member, Chi tiết names the worker who actually ran the attemp
 2. If there is no live thread yet, you get an empty chat (composer pinned at the bottom). The first send creates the thread.
 3. If a live thread already exists, it opens with the saved messages. Later sends are follow-ups in the same chat.
 
-A **team** row is one row: clicking it opens that team's chat. Its members are listed in the chat **Details** panel, not nested under it in the sidebar. A worker row lists only its open side threads under it; its main chat is the row itself, and it has no other nested task list.
+A **team** row is one row: clicking it opens that team's chat. Its members are listed in the chat **Details** panel, not nested under it in the sidebar. A worker row lists only its open side threads under it; its main chat is the row itself, and it has no other nested task list. A thin line runs down from under the orglet's face and curves into each side thread, the way Discord draws a channel's threads, so they read as that orglet's (COD-262).
 
 Ctrl+N focuses the current worker or team chat (it does not create a new session). Search (Ctrl+K) finds chats by their text, including archived ones.
 

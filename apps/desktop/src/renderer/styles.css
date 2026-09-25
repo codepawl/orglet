@@ -1336,7 +1336,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .row-disclosure:hover { color:var(--text); }
 .worker-row .row-disclosure+.worker { padding-left:6px; }
 /* Children sit a clear step below their parent and a small step apart from each other. */
-.tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 10px 21px; padding-left:8px; }
+.tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 10px 21px; padding-left:25px; }
 .tree-children[hidden] { display:none; }
 .tree-leaf { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; padding:6px 10px; border:0; border-radius:10px; background:transparent; font-size:13px; text-align:left; }
 /* Row icons are muted, but an avatar keeps its own colour. */
@@ -2349,4 +2349,22 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .side-thread-row > .row-menu { position:absolute; top:50%; right:2px; transform:translateY(-50%); }
 .side-thread-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .history-item { padding-right:36px; }
 .tree-children .tree-more { margin-left:0; }
+/* Thread lines (COD-262), after Discord's thread list: a line runs down from under the orglet's face and curves into
+   each row below it, so a side thread reads as that orglet's. The rows sit one step in so the line never crosses
+   their status mark. It is drawn over the row's hover background, never takes room, and ignores the pointer. */
+/* Opaque, so the joins between rows do not darken where two pieces meet. */
+.tree-children { --thread-line:color-mix(in srgb, var(--muted) 45%, var(--bg)); }
+.tree-children > :is(.side-thread-row, .tree-more, .history-item.editing) { position:relative; }
+.tree-children > :is(.side-thread-row, .tree-more, .history-item.editing)::before {
+  content:""; position:absolute; z-index:1; left:-3px; top:0; width:9px; height:50%;
+  border-left:1.5px solid var(--thread-line); border-bottom:1.5px solid var(--thread-line); border-bottom-left-radius:8px;
+  pointer-events:none;
+}
+/* The first row's line starts just under the orglet's face instead of at the gap above it. */
+.tree-children > :is(.side-thread-row, .tree-more, .history-item.editing):first-child::before { top:-12px; height:calc(50% + 12px); }
+/* Every row but the last carries the line straight through, past its curve, on down to the next one. */
+.tree-children > :is(.side-thread-row, .tree-more, .history-item.editing):not(:last-child)::after {
+  content:""; position:absolute; z-index:1; left:-3px; top:0; bottom:-4px; border-left:1.5px solid var(--thread-line);
+  pointer-events:none;
+}
 @media(prefers-reduced-motion:reduce) { .brought-in { animation:none; } }
