@@ -1810,10 +1810,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .chat-reply .message-actions,.report-turn .message-actions { padding-left:2px; }
 /* A sent message's actions sit under its bubble like an answer's, lined up with the bubble's right edge. */
 .user-message + .message-actions { justify-content:flex-end; }
-/* A table header is drawn in --surface, which inside the bubble sits at nearly the same lightness as the wash:
-   the two separate by hue alone, which is not a separation. A step in value instead, which holds whatever accent
-   is picked and in dark mode too. */
-.chat-reply .markdown th { background:color-mix(in srgb, var(--text) 9%, transparent); }
 .chat-reply .prose { line-height:1.65; }
 .chat-limitations { margin-top:16px; overflow-wrap:anywhere; }
 .chat-limitations ul { margin:8px 0 0; padding-left:20px; }
@@ -1873,11 +1869,14 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .markdown blockquote { padding:10px 14px; border-radius:10px; background:var(--surface); color:var(--muted); }
 .markdown-table-wrap { max-width:100%; overflow-x:auto; }
 .markdown table { border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; font-variant-numeric:tabular-nums; }
+/* Tables separate rows by value, never by a rule (house rule): the header and every other row carry a wash of the
+   text colour, which shows on the page, inside either bubble and in dark mode alike (owner, 2026-09-25: a table
+   in a message read as blank). Every cell has the same padding so a column's header and values line up. */
 .markdown th,.markdown td { padding:6px 10px; vertical-align:top; }
-.markdown th { background:var(--surface); font-weight:600; }
-.markdown th:first-child,.markdown td:first-child { padding-left:0; }
-.markdown th:first-child { padding-left:10px; border-radius:7px 0 0 7px; }
-.markdown th:last-child { border-radius:0 7px 7px 0; }
+.markdown th { background:color-mix(in srgb, var(--text) 8%, transparent); font-weight:600; }
+.markdown tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--text) 4%, transparent); }
+.markdown th:first-child,.markdown tbody tr:nth-child(even) td:first-child { border-radius:7px 0 0 7px; }
+.markdown th:last-child,.markdown tbody tr:nth-child(even) td:last-child { border-radius:0 7px 7px 0; }
 .markdown .markdown-break { height:6px; }
 .markdown-link { text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:2px; }
 .markdown-link-address { color:var(--muted); font-size:.9em; }
