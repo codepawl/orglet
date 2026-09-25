@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { Bridge, Reply } from '../shared/contracts';
 import type { RunProgressUpdate } from '../shared/progress';
 import type { UpdateState } from '../shared/updates';
+import type { OpenChatTarget } from '../shared/cli';
 
 async function invoke<T>(channel: string, args?: unknown): Promise<T> {
   const reply: Reply<T> = await ipcRenderer.invoke(channel, args);
@@ -50,6 +51,13 @@ const bridge: Bridge = {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward') => callback(direction);
     ipcRenderer.on('orglet:navigate', listener);
     return () => ipcRenderer.removeListener('orglet:navigate', listener);
+  },
+  cliState: () => invoke('orglet:cli-state'),
+  setCliOnPath: enabled => invoke('orglet:cli-path', enabled),
+  onOpenChat: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, target: OpenChatTarget) => callback(target);
+    ipcRenderer.on('orglet:open-chat', listener);
+    return () => ipcRenderer.removeListener('orglet:open-chat', listener);
   },
 };
 contextBridge.exposeInMainWorld('orglet', bridge);

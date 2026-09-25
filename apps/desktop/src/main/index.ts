@@ -23,6 +23,12 @@ import { Updater } from './updater';
 import { ChangelogFeed } from './changelog';
 import { ABOUT_LINKS, AboutLink, installKind, updateFeedUrl, type AboutInfo, type UpdateEnvironment } from '../shared/updates';
 import type { BackupSummary } from '../core/storage/backup';
+import { translateMessage } from '../shared/i18n';
+import type { CliInstallState, OpenChatTarget } from '../shared/cli';
+import { cliEndpoint, type CliChat } from '../cli/protocol';
+import { CliServer, createCliToken, writeCliToken } from './cli-server';
+import { CliOperations } from './cli-operations';
+import { CliPathInstaller } from './cli-path';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -71,7 +77,51 @@ function request(command: string, args: unknown): Promise<unknown> {
 }
 // Workspace language for native dialogs: read once when the core is ready, then updated whenever settings are saved.
 let language: Language = DEFAULT_LANGUAGE;
-const tr = (key: string, params?: readonly unknown[]) => translate(language === 'en' ? en : language === 'en-GB' ? enGB : null, key, params);
+const activeDictionary = () => language === 'en' ? en : language === 'en-GB' ? enGB : null;
+const tr = (key: string, params?: readonly unknown[]) => translate(activeDictionary(), key, params);
+let cliServer: CliServer | undefined;
+/**
+ * Brings the window forward for `orglet open`, and with a chat asks the renderer to show it. Windows may only flash
+ * the taskbar button instead: it does not let a background process take the foreground.
+ */
+function showWindow(chat?: CliChat) {
+  if (!window || window.isDestroyed()) return;
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.moveTop();
+  window.focus();
+  if (chat) window.webContents.send('orglet:open-chat', { kind: chat.kind, id: chat.id } satisfies OpenChatTarget);
+}
+/** The line protocol the `orglet` command talks to (COD-234), with a new token on every start. */
+async function startCliServer(directory: string) {
+  const token = createCliToken();
+  await writeCliToken(directory, token);
+  const translateForCli = (message: string) => translateMessage(activeDictionary(), message);
+  const operations = new CliOperations({ request, version: () => app.getVersion(), open: showWindow, translate: translateForCli });
+  cliServer = new CliServer({
+    endpoint: cliEndpoint(directory),
+    token,
+    handle: (cliRequest, signal) => operations.run(cliRequest, signal),
+    translate: translateForCli,
+  });
+  await cliServer.start();
+}
+/** Only a packaged Windows build edits PATH; the shim sits in a folder that survives updates. */
+function cliInstaller(): CliPathInstaller | undefined {
+  if (!app.isPackaged || process.platform !== 'win32') return undefined;
+  const localAppData = process.env.LOCALAPPDATA ?? join(app.getPath('home'), 'AppData', 'Local');
+  return new CliPathInstaller(join(localAppData, 'Orglet', 'bin'), {
+    executable: process.execPath,
+    cliScript: join(process.resourcesPath, 'orglet-cli.cjs'),
+    userData: app.getPath('userData'),
+  });
+}
+function cliState(): CliInstallState {
+  if (!app.isPackaged) return { mode: 'dev' };
+  const installer = cliInstaller();
+  if (installer) return { mode: 'windows', installed: installer.isInstalled() };
+  return { mode: 'manual', command: `export PATH="$PATH:${join(process.resourcesPath, 'bin')}"` };
+}
 const spellCheckerDictionaries: Record<Language, string> = { vi: 'vi', en: 'en-US', 'en-GB': 'en-GB' };
 /**
  * Point Chromium's spellchecker at the interface language. It keeps its own list and never reads the document's
@@ -354,6 +404,19 @@ async function start() {
     await writeAtomicText(result.filePath, text); return true;
   });
   handle('orglet:copy', async raw => { clipboard.writeText((await artifactText(raw)).text); });
+  // The renderer says on or off; where the shim goes and what it points at are decided here.
+  handle('orglet:cli-state', async () => cliState());
+  handle('orglet:cli-path', async raw => {
+    const enabled = z.boolean().parse(raw);
+    const installer = cliInstaller();
+    if (!installer) throw new Error('Chỉ bản cài trên Windows tự thêm lệnh orglet vào PATH.');
+    if (enabled) await installer.install();
+    else await installer.remove();
+    return cliState();
+  });
+  // The app works without its command line, so a pipe that cannot open does not stop the start.
+  await startCliServer(directory).catch(error => console.warn('orglet CLI server did not start:', error instanceof Error ? error.message : error));
+  void cliInstaller()?.refresh().catch(() => undefined);
   if (devServer) {
     // Forge can start Electron before Vite finishes the first renderer build, which leaves a blank window.
     for (let attempt = 0; attempt < 60; attempt++) {
@@ -374,5 +437,5 @@ else {
   app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.focus(); } });
   app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
   app.on('window-all-closed', () => app.quit());
-  app.on('before-quit', () => { ready = false; updater?.stop(); stopProfiles(); core?.kill(); });
+  app.on('before-quit', () => { ready = false; void cliServer?.close(); updater?.stop(); stopProfiles(); core?.kill(); });
 }

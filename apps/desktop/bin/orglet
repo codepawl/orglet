@@ -1,0 +1,18 @@
+#!/bin/sh
+# The orglet command (COD-234). Lives in the app's resources/bin; runs the CLI script with Orglet as Node.
+# A symlink to this file (for example in /usr/local/bin) is followed back to the app.
+script="$0"
+while [ -L "$script" ]; do
+  target="$(readlink "$script")"
+  case "$target" in
+    /*) script="$target" ;;
+    *) script="$(dirname "$script")/$target" ;;
+  esac
+done
+resources="$(cd "$(dirname "$script")/.." && pwd)"
+if [ -x "$resources/../MacOS/Orglet" ]; then
+  executable="$resources/../MacOS/Orglet"
+else
+  executable="$resources/../Orglet"
+fi
+ELECTRON_RUN_AS_NODE=1 exec "$executable" "$resources/orglet-cli.cjs" "$@"

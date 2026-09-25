@@ -2024,6 +2024,27 @@ export const en: Dictionary = {
   'Lần chạy không thuộc cuộc trò chuyện này.': 'This run does not belong to this chat.',
   'Lần chạy này không có bản làm việc để so sánh.': 'This run has no working copy to compare.',
   'Bản làm việc này không có bản gốc để so sánh.': 'This working copy has no snapshot to compare with.',
+  // The `orglet` terminal command (COD-234).
+  'Lệnh orglet trong terminal': 'orglet command in the terminal',
+  'Gửi tin cho Tí và đọc câu trả lời từ terminal. Lệnh chỉ nói chuyện với app đang chạy trên máy này.': 'Send messages to orglets and read their answers from a terminal. The command only talks to the app running on this computer.',
+  'Đã có trong PATH. Mở terminal mới rồi thử lệnh dưới đây.': 'It is on your PATH. Open a new terminal and try the command below.',
+  'Thêm thư mục của lệnh vào PATH bằng dòng dưới đây, trong tệp khởi động của shell như ~/.zprofile.': 'Add the command’s folder to your PATH with the line below, in your shell’s startup file such as ~/.zprofile.',
+  'Lệnh orglet chạy từ bản cài. Trong mã nguồn, thử bằng pnpm orglet khi pnpm dev đang chạy.': 'The orglet command works from an installed build. From source, try it with pnpm orglet while pnpm dev is running.',
+  'Thêm vào PATH': 'Add to PATH',
+  'Gỡ khỏi PATH': 'Remove from PATH',
+  'Đã thêm orglet vào PATH. Mở terminal mới để dùng.': 'Added orglet to your PATH. Open a new terminal to use it.',
+  'Đã gỡ orglet khỏi PATH.': 'Removed orglet from your PATH.',
+  'Chào': 'Hello',
+  'Chỉ bản cài trên Windows tự thêm lệnh orglet vào PATH.': 'Only an installed Windows build adds the orglet command to PATH by itself.',
+  'Mã truy cập CLI không khớp. Chạy lại lệnh sau khi Orglet khởi động xong.': 'The CLI access token does not match. Run the command again once Orglet has finished starting.',
+  'Yêu cầu CLI không hợp lệ.': 'The CLI request is not valid.',
+  'Yêu cầu CLI quá lớn.': 'The CLI request is too large.',
+  'Đang có quá nhiều lệnh CLI chạy cùng lúc. Thử lại sau.': 'Too many CLI commands are running at once. Try again later.',
+  'Chưa có Tí hay hội nào.': 'There are no orglets or crews yet.',
+  'Không có Tí hay hội nào tên "{0}". Có: {1}.': 'No orglet or crew is named "{0}". Available: {1}.',
+  '"{0}" khớp với nhiều tên: {1}. Gõ tên đầy đủ hơn.': '"{0}" matches several names: {1}. Type more of the name.',
+  '"{0}" là tên của nhiều Tí hoặc hội. Đổi tên trong app để phân biệt.': 'Several orglets or crews are named "{0}". Rename one in the app to tell them apart.',
+  'Chưa có cuộc trò chuyện với {0}.': 'There is no chat with {0} yet.',
 };
 
 // British English differs from the US text only in these spellings, so it is derived instead of duplicated.
