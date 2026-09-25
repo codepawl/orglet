@@ -4,10 +4,10 @@ import { COMMAND_HELP, MAIN_HELP, parseArguments, UsageError, type ParsedCommand
 import { appChatClient } from './chat-client';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
-import { formatList, formatOpen, formatRead, formatSend, formatStatus } from './output';
+import { formatList, formatOpen, formatRead, formatRun, formatSend, formatStatus } from './output';
 import { entriesFromList, findChat } from './picker';
 import { renderAnswers, styledList, styledStatus, type Layout } from './pretty';
-import { EXIT_CODES, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ListValue, type OpenValue, type ReadValue, type SendValue, type StatusValue } from './protocol';
+import { EXIT_CODES, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ListValue, type OpenValue, type ReadValue, type RunValue, type SendValue, type StatusValue } from './protocol';
 import { NEUTRAL_COLOR, type ColorMode } from './terminal';
 import { NO_WAITING, WaitingFace, type Waiting } from './waiting';
 
@@ -65,6 +65,11 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
       wait: command.wait,
       timeoutSeconds: command.timeoutSeconds,
     };
+    case 'run': return {
+      op: 'run',
+      schedule: command.schedule,
+      files: command.files.map(file => resolve(workingDirectory, file)),
+    };
   }
 }
 
@@ -120,6 +125,9 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
     }
     case 'open':
       if (!command.json) output.stdout(formatOpen(value as OpenValue));
+      return EXIT_CODES.ok;
+    case 'run':
+      if (!command.json) output.stdout(formatRun(value as RunValue));
       return EXIT_CODES.ok;
     case 'read': {
       const readValue = value as ReadValue;

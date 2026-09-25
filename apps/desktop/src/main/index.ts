@@ -306,11 +306,14 @@ async function start() {
     const input = PickWorkspace.parse(raw);
     // A chat row must still be open before the picker shows; a chat with no row yet is checked when the folder is kept.
     if ('taskId' in input) await request('workspaceAccess', { taskId: input.taskId });
-    const title = input.permissions.includes('execute') ? tr('Chọn workspace: đọc, sửa file và chạy lệnh')
+    // A routine's watched folder is read-only and says what it is for (COD-245); the core keeps its path.
+    const watching = 'watch' in input;
+    const title = watching ? tr('Chọn thư mục để lịch theo dõi: chỉ đọc')
+      : input.permissions.includes('execute') ? tr('Chọn workspace: đọc, sửa file và chạy lệnh')
       : input.permissions.includes('write') ? tr('Chọn workspace: đọc và sửa file') : tr('Chọn workspace: chỉ đọc');
     const result = await dialog.showOpenDialog(window, {
       title, properties: ['openDirectory'],
-      buttonLabel: tr('Cấp quyền workspace'),
+      buttonLabel: watching ? tr('Theo dõi thư mục này') : tr('Cấp quyền workspace'),
     });
     return result.canceled ? null : request('grantWorkspace', { ...input, directory: result.filePaths[0] });
   });

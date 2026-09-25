@@ -1,4 +1,4 @@
-import type { CliAnswer, ListValue, OpenValue, ReadValue, SendValue, StatusValue } from './protocol';
+import type { CliAnswer, ListValue, OpenValue, ReadValue, RunValue, SendValue, StatusValue } from './protocol';
 
 /** Plain text for a person at a terminal; `--json` prints the values as they came instead (COD-234). */
 
@@ -45,4 +45,8 @@ export function formatRead(value: ReadValue): string {
 
 export function formatOpen(value: OpenValue): string {
   return value.chat ? `Opened the chat with ${value.chat.name}.` : 'Orglet is in front.';
+}
+
+export function formatRun(value: RunValue): string {
+  return `Started ${value.schedule.name}. Its run is in the app under Schedules.`;
 }

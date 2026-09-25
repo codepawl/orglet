@@ -440,7 +440,8 @@ export class AppProposals {
           const task = { ...current.task, ...(chat ?? {}), ...(payload.fields.brief ? { brief: payload.fields.brief } : {}) };
           if (chat && !chat.teamId) delete (task as { teamId?: string }).teamId;
           // A change to an enabled schedule is saved switched off: enabling it is the user's approval of what will run.
-          const saved = this.applier.saveRoutine(RoutineInput.parse({ id: current.id, name: payload.fields.name ?? current.name, enabled: false, schedule: payload.fields.schedule ?? current.schedule, task }));
+          // The trigger is kept as it is: a proposal cannot pick a folder to watch or change what starts a routine.
+          const saved = this.applier.saveRoutine(RoutineInput.parse({ id: current.id, name: payload.fields.name ?? current.name, enabled: false, schedule: payload.fields.schedule ?? current.schedule, ...(current.trigger ? { trigger: current.trigger } : {}), task }));
           return { target: { kind: 'routine', id: saved.id } };
         }
         const saved = this.applier.saveRoutine(RoutineInput.parse({

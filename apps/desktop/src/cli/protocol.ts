@@ -40,10 +40,13 @@ export function cliEndpoint(userData: string, platform: NodeJS.Platform = proces
 
 export const CliToken = z.string().regex(/^[a-f0-9]{64}$/);
 const ChatName = z.string().trim().min(1).max(80);
+/** A schedule (routine) is named the way the app names it: up to 80 characters. */
+const ScheduleName = z.string().trim().min(1).max(80);
 
 /**
  * Everything the CLI may ask. Anything else, such as granting a folder, touching keys, connections, settings,
- * permissions or backups, or deleting and archiving, has no operation here and is refused.
+ * permissions or backups, or deleting and archiving, has no operation here and is refused. `run` starts a schedule
+ * that already exists, is switched on and was approved as it is; it cannot create or change one (COD-245).
  */
 export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('status'), token: CliToken }).strict(),
@@ -59,6 +62,12 @@ export const CliRequest = z.discriminatedUnion('op', [
   }).strict(),
   z.object({ op: z.literal('read'), token: CliToken, to: ChatName }).strict(),
   z.object({ op: z.literal('open'), token: CliToken, to: ChatName.optional() }).strict(),
+  z.object({
+    op: z.literal('run'),
+    token: CliToken,
+    schedule: ScheduleName,
+    files: z.array(z.string().min(1).max(32768)).max(MAX_FILES),
+  }).strict(),
 ]);
 export type CliRequest = z.infer<typeof CliRequest>;
 export type CliOperation = CliRequest['op'];
@@ -102,3 +111,5 @@ export type SendValue = {
 };
 export type ReadValue = { chat: CliChat; taskId: string; status: string; answers: CliAnswer[] };
 export type OpenValue = { chat?: CliChat };
+/** The schedule `run` started and the chat its run opened. */
+export type RunValue = { schedule: { id: string; name: string }; taskId: string };

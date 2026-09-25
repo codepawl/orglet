@@ -2,20 +2,43 @@ import { useEffect, useRef, useState } from 'react';
 import type { Routine, TaskInput, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
-import { CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, FilePlus, FileText, Globe, MessageSquare, MessageSquareText, Pencil, Repeat, UserRound, Wallet } from 'lucide-react';
+import { CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
 import { TimeZone } from '../../shared/schedule';
 import { Select } from './Select';
 import { t } from '../i18n';
-import { currentLocale, translated, tMessage } from '../i18n';
+import { currentLanguage, currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Switch, SwitchField } from './Switch';
 import { StatusMark } from './StatusMark';
-import { Input, Textarea } from '@codepawl/orglet-ui';
+import { CommandBlock, Input, Textarea } from '@codepawl/orglet-ui';
+import { triggerOf, type RoutineTrigger, type RoutineTriggerKind } from '../../shared/routine-triggers';
+import { toast } from './toast';
 
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
 export const formatRoutineTime = (iso: string, timeZone: string) => new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' });
+/** The command that starts a routine from a terminal (COD-245); the name is quoted so spaces survive the shell. */
+export const runCommandOf = (name: string) => `orglet run "${name.replace(/"/g, '\\"')}"`;
+const TRIGGER_ICONS: Record<RoutineTriggerKind, typeof CalendarClock> = { schedule: CalendarClock, folder: FolderInput, called: SquareTerminal };
+/** The routine's trigger in a few words, for the one line under its name. */
+function triggerSummary(routine: Routine): string {
+  const trigger = triggerOf(routine);
+  if (trigger.kind === 'folder') return t('Khi có tệp mới trong {0}', [trigger.folderName]);
+  if (trigger.kind === 'called') return t('Chỉ khi được gọi');
+  // Vietnamese writes the day in lower case mid-sentence ("Mỗi thứ hai"); English keeps "Every Monday".
+  const day = currentLanguage() === 'vi' ? weekdays[routine.schedule.weekday].toLowerCase() : weekdays[routine.schedule.weekday];
+  const cadence = routine.schedule.frequency === 'daily' ? t('Hằng ngày') : t('Mỗi {0}', [day]);
+  return t('{0} lúc {1}', [cadence, routine.schedule.time]);
+}
+async function copyCommand(command: string) {
+  try {
+    await orglet.copyText(command);
+    toast(t('Đã sao chép lệnh'), 'success', command);
+  } catch {
+    toast(t('Không sao chép được lệnh'), 'error', command);
+  }
+}
 /** Which screen of the Routines dialog is showing; the dialog title renders it as a breadcrumb. */
 export type RoutineView = { editing: false } | { editing: true; routine?: Routine };
 export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack, onDirty }: { workspace: Workspace; draft?: TaskInput; openTask: (id: string) => void; view: RoutineView; onView: (view: RoutineView) => void; onBack: () => void; onDirty: (dirty: boolean) => void }) {
@@ -26,22 +49,28 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
   return <div className="form">
           {!workspace.routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p></div>}
     <div className="routine-list">
-      {workspace.routines.map(item => <section key={item.id} className="routine-card" aria-label={t('Lịch {0}', [item.name])}>
+      {workspace.routines.map(item => {
+        const trigger = triggerOf(item);
+        const TriggerIcon = TRIGGER_ICONS[trigger.kind];
+        const summary = triggerSummary(item);
+        return <section key={item.id} className="routine-card" aria-label={t('Lịch {0}', [item.name])}>
         <div className="routine-head">
-          <span className="routine-icon" aria-hidden="true"><CalendarClock size={18} /></span>
-          <div className="routine-title"><h3>{item.name}</h3><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}><StatusMark variant={item.enabled ? 'filled' : 'empty'} tone={item.enabled ? 'success' : 'muted'} label={item.enabled ? t('Đang bật') : t('Đã tắt')} decorative />{item.enabled ? t('Đang bật') : t('Đã tắt')}</span></div>
+          <span className="routine-icon" aria-hidden="true"><TriggerIcon size={18} /></span>
+          <div className="routine-title"><h3>{item.name}</h3>
+            {/* One line under the name: on or off, then what starts it. It never wraps; a long folder name ends in … */}
+            <p className="routine-subline"><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}><StatusMark variant={item.enabled ? 'filled' : 'empty'} tone={item.enabled ? 'success' : 'muted'} label={item.enabled ? t('Đang bật') : t('Đã tắt')} decorative />{item.enabled ? t('Đang bật') : t('Đã tắt')}</span><span className="routine-trigger" title={summary}>{summary}</span></p>
+          </div>
           <div className="routine-actions">
             <Button size="icon" aria-label={t('Sửa lịch {0}', [item.name])} title={t('Sửa lịch')} disabled={busy} onClick={() => onView({ editing: true, routine: item })}><Pencil size={16} /></Button>
             {/* On or off is two states, so it wears a switch (user, 2026-09-19). Its name stays "Bật lịch"
                 whichever way it is set, because the state is what aria-checked says. */}
             <Switch checked={item.enabled} disabled={busy} label={t('Bật lịch')}
-              onChange={enabled => void action(() => orglet.call('saveRoutine', { id: item.id, name: item.name, enabled, schedule: item.schedule, task: item.task }))} />
+              onChange={enabled => void action(() => orglet.call('saveRoutine', { id: item.id, name: item.name, enabled, schedule: item.schedule, ...(item.trigger ? { trigger: item.trigger } : {}), task: item.task }))} />
           </div>
         </div>
         <ul className="routine-meta">
-          <li><Repeat size={14} aria-hidden="true" />{t('{0} lúc {1}', [item.schedule.frequency === 'daily' ? t('Hằng ngày') : t('Mỗi {0}', [weekdays[item.schedule.weekday].toLowerCase()]), item.schedule.time])}</li>
-          <li><Globe size={14} aria-hidden="true" />{item.schedule.timeZone}</li>
-          {item.enabled && <li><CalendarDays size={14} aria-hidden="true" />{t('Lần tới {0}', [formatRoutineTime(item.nextDueAt, item.schedule.timeZone)])}</li>}
+          {trigger.kind === 'schedule' && <li><Globe size={14} aria-hidden="true" />{item.schedule.timeZone}</li>}
+          {trigger.kind === 'schedule' && item.enabled && <li><CalendarDays size={14} aria-hidden="true" />{t('Lần tới {0}', [formatRoutineTime(item.nextDueAt, item.schedule.timeZone)])}</li>}
           <li><UserRound size={14} aria-hidden="true" />{assignee(item)}</li>
           <li><Wallet size={14} aria-hidden="true" />{t('{0} mỗi lần', [formatMoney(item.task.budgetMicros)])}</li>
           <li><FileText size={14} aria-hidden="true" />{t('{0} nguồn', [item.task.sourceIds.length])}</li>
@@ -55,8 +84,15 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
           <Button disabled={busy || !item.enabled} variant="primary" onClick={() => void action(async () => openTask(await orglet.call('catchUpRoutine', { id: item.id })))}>{t('Chạy bù một lần')}</Button>
           <Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Bỏ qua lần lỡ')}</Button>
         </div></div></div>}
+        {item.notice && <div className="routine-alert" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>
+          <h4>{t('Lịch chưa chạy')}</h4>
+          <p>{tMessage(item.notice.reason)}</p>
+          <p className="muted">{t('Lúc {0}. Tệp đến khi app tắt không được chạy lại.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])}</p>
+          <div className="actions"><Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Ẩn thông báo')}</Button></div>
+        </div></div>}
         {item.lastTaskId && <Button className="routine-last" disabled={busy} onClick={() => openTask(item.lastTaskId!)}><MessageSquare size={15} />{t('Mở lần chạy gần nhất')}</Button>}
-      </section>)}
+      </section>;
+      })}
     </div>
     {error && <p role="alert" className="error">{error}</p>}
   </div>;
@@ -73,6 +109,9 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const [time, setTime] = useState(routine?.schedule.time ?? '09:00');
   const [timeZone, setTimeZone] = useState(routine?.schedule.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [enabled, setEnabled] = useState(routine?.enabled ?? true);
+  const initialTrigger = routine ? triggerOf(routine) : undefined;
+  const [triggerKind, setTriggerKind] = useState<RoutineTriggerKind>(initialTrigger?.kind ?? 'schedule');
+  const [folder, setFolder] = useState<{ folderId: string; name: string } | undefined>(initialTrigger?.kind === 'folder' ? { folderId: initialTrigger.folderId, name: initialTrigger.folderName } : undefined);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const zoneInput = useRef<HTMLInputElement>(null);
   const zoneError = error.startsWith('Timezone');
@@ -87,20 +126,33 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const workers = team ? workspace.workers.filter(worker => [...team.memberIds, team.synthesizerId].includes(worker.id)) : workspace.workers.filter(worker => worker.id === target);
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
   // Leaving asks for confirmation only when something differs from what the editor opened with.
-  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled]);
+  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId]);
+  const trigger: RoutineTrigger | undefined = triggerKind === 'folder'
+    ? folder && { kind: 'folder', folderId: folder.folderId, folderName: folder.name }
+    : { kind: triggerKind };
+  const pickFolder = async () => {
+    setBusy(true); setError('');
+    try {
+      const picked = await orglet.pickWatchFolder();
+      if (picked) setFolder({ folderId: picked.folderId, name: picked.name });
+    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  };
   const initialSnapshot = useRef(snapshot);
   useEffect(() => { onDirty(snapshot !== initialSnapshot.current); }, [snapshot, onDirty]);
   useEffect(() => () => onDirty(false), [onDirty]);
   return <form className="form routine-editor" onSubmit={async event => {
     event.preventDefault(); setError('');
-    if (!TimeZone.safeParse(timeZone).success) { setError(t('Timezone không hợp lệ. Dùng tên như Asia/Ho_Chi_Minh hoặc UTC.')); zoneInput.current?.focus(); return; }
+    if (triggerKind === 'schedule' && !TimeZone.safeParse(timeZone).success) { setError(t('Timezone không hợp lệ. Dùng tên như Asia/Ho_Chi_Minh hoặc UTC.')); zoneInput.current?.focus(); return; }
+    if (!trigger) { setError(t('Chọn thư mục để lịch theo dõi.')); return; }
     setBusy(true);
     try {
       // Saving is the permission (user, 2026-09-19). The tick that used to ask again said nothing the act of
       // writing a brief, picking a worker, setting a limit and turning it on had not already said. What guards an
       // unattended run is still there: the core stores this exact setup as approvedConfig and refuses to run when
       // the worker, skill, team or model has changed since, and a restored backup comes back off and unapproved.
-      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { frequency, weekday, time, timeZone }, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers } });
+      // An event trigger still carries the time fields, valid ones, so switching back to the clock keeps them.
+      const zone = TimeZone.safeParse(timeZone).success ? timeZone : Intl.DateTimeFormat().resolvedOptions().timeZone;
+      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { frequency, weekday, time, timeZone: zone }, trigger, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers } });
       saved();
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }}>
@@ -124,15 +176,33 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
     </section>
 
     <section className="routine-group" aria-labelledby="routine-group-time">
-      <h4 id="routine-group-time">{t('Thời gian')}</h4>
-      <div className="field-grid">
-        <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as typeof frequency); }} options={[{ value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> }, { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> }]} />
-        {frequency === 'weekly' && <Select label={<FieldLabel icon={CalendarDays} required>{t('Ngày trong tuần')}</FieldLabel>} value={String(weekday)} onChange={value => { setWeekday(Number(value)); }} options={weekdays.map((day, index) => ({ value: String(index), label: day }))} />}
-        <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><Input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>
-        <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><Input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError || undefined} aria-describedby={zoneError ? 'routine-zone-error' : undefined} data-flash={zoneError ? 1 : undefined} /></label>
-      </div>
-      {zoneError && <p id="routine-zone-error" role="alert" className="error">{error}</p>}
-      <p className="muted">{t('Chỉ chạy khi Orglet đang mở; các lần lỡ gộp thành một lần chạy bù.')}</p>
+      <h4 id="routine-group-time">{t('Khi nào chạy')}</h4>
+      <Select label={<FieldLabel icon={Zap} required>{t('Bắt đầu')}</FieldLabel>} value={triggerKind} onChange={value => { setTriggerKind(value as RoutineTriggerKind); if (zoneError) setError(''); }} options={[
+        { value: 'schedule', label: t('Theo lịch'), icon: <CalendarClock size={16} /> },
+        { value: 'folder', label: t('Khi có tệp mới'), icon: <FolderInput size={16} /> },
+        { value: 'called', label: t('Chỉ khi được gọi'), icon: <SquareTerminal size={16} /> },
+      ]} />
+      {triggerKind === 'schedule' && <>
+        <div className="field-grid">
+          <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as typeof frequency); }} options={[{ value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> }, { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> }]} />
+          {frequency === 'weekly' && <Select label={<FieldLabel icon={CalendarDays} required>{t('Ngày trong tuần')}</FieldLabel>} value={String(weekday)} onChange={value => { setWeekday(Number(value)); }} options={weekdays.map((day, index) => ({ value: String(index), label: day }))} />}
+          <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><Input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>
+          <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><Input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError || undefined} aria-describedby={zoneError ? 'routine-zone-error' : undefined} data-flash={zoneError ? 1 : undefined} /></label>
+        </div>
+        {zoneError && <p id="routine-zone-error" role="alert" className="error">{error}</p>}
+        <p className="muted">{t('Chỉ chạy khi Orglet đang mở; các lần lỡ gộp thành một lần chạy bù.')}</p>
+      </>}
+      {triggerKind === 'folder' && <div className="routine-folder">
+        <PanelHeading level={3} title={<FieldLabel icon={FolderOpen} required>{t('Thư mục theo dõi')}</FieldLabel>}>
+          <Button type="button" variant="outline" disabled={busy} onClick={() => void pickFolder()}><FolderInput size={15} />{folder ? t('Đổi thư mục') : t('Chọn thư mục')}</Button>
+        </PanelHeading>
+        {folder ? <p className="routine-folder-name"><Folder size={15} aria-hidden="true" /><span title={folder.name}>{folder.name}</span><span className="muted">{t('Chỉ đọc')}</span></p> : <p className="muted">{t('Chưa chọn thư mục.')}</p>}
+        <p className="muted">{t('Mỗi tệp mới trong thư mục này bắt đầu một lần chạy, với tệp đó đính kèm; nhiều tệp đến cùng lúc chạy chung một lần. Chỉ theo dõi khi Orglet đang mở. Tệp có sẵn và tệp đến khi app tắt không được chạy.')}</p>
+      </div>}
+      {triggerKind === 'called' && <div className="routine-called">
+        <CommandBlock command={runCommandOf(name.trim() || t('Tên lịch'))} label={t('Chạy từ terminal')} copyLabel={t('Sao chép lệnh')} copyIcon={<Copy size={14} />} onCopy={next => void copyCommand(next)} />
+        <p className="muted">{t('Lịch chỉ chạy khi lệnh này gọi nó, lúc Orglet đang mở. Thêm --file để đính kèm tệp cho lần đó.')}</p>
+      </div>}
     </section>
 
     <section className="routine-group" aria-labelledby="routine-group-limits">

@@ -5,6 +5,7 @@ import { newChatKey, newChatKeyNames } from '../shared/live-task';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
 import { GrantWorkspace, type NewChatTarget } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
+import { z } from 'zod';
 import { commands, Id, type CredentialProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
 import { BudgetLedger } from './budgets/ledger';
@@ -21,6 +22,9 @@ import { Preflight } from './orchestration/preflight';
 import { PreflightPolicy, type PreflightRecord } from '../shared/preflight';
 import { TeamTemplates } from './storage/templates';
 import { Routines } from './orchestration/routines';
+import { FolderTriggers } from './orchestration/folder-triggers';
+import { RoutineFolders } from './storage/routine-folders';
+import type { WatchFolderView } from '../shared/routine-triggers';
 import { WorkPolicy } from './orchestration/work-policy';
 import { runningView } from './orchestration/running';
 import type { RunningItem } from '../shared/running';
@@ -85,6 +89,10 @@ export class CoreService {
   readonly backups: Backups;
   readonly templates: TeamTemplates;
   readonly routines: Routines;
+  /** Folders routines watch, granted through main's picker (COD-245). */
+  readonly routineFolders: RoutineFolders;
+  /** "When a file arrives" routines; they watch only while the app is open. */
+  readonly folderTriggers: FolderTriggers;
   readonly policy: WorkPolicy;
   readonly knowledge: KnowledgeBase;
   /** App changes workers propose in chats, applied through this service's own commands (COD-199). */
@@ -112,7 +120,9 @@ export class CoreService {
     this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
-    this.routines = new Routines(store, this.sources, this.notify, (input, next) => this.createTask(input, next), clock);
+    this.routineFolders = new RoutineFolders(store);
+    this.routines = new Routines(store, this.sources, this.notify, (input, next) => this.createTask(input, next), clock, this.routineFolders);
+    this.folderTriggers = new FolderTriggers(store, this.routineFolders, this.routines, this.sources, clock);
     this.policy.captureHandoffs();
   }
   /**
@@ -138,8 +148,9 @@ export class CoreService {
    * working keeps the snapshot it froze. Another folder or fewer permissions stops active work, since a worker
    * may be mid-edit in the old copy.
    */
-  async grantWorkspace(raw: unknown) {
+  async grantWorkspace(raw: unknown): Promise<unknown> {
     const input = GrantWorkspace.parse(raw);
+    if ('watch' in input) return this.grantWatchFolder(input.directory);
     if (!('taskId' in input)) {
       const chat = newChatTargetOf(input);
       if ('teamId' in chat) this.assertAssignable('team', chat.teamId);
@@ -156,6 +167,19 @@ export class CoreService {
     }
     this.notify();
     return grant;
+  }
+  /** Keeps a folder main's picker chose for a routine to watch; the renderer gets its id and name, never the path. */
+  private async grantWatchFolder(directory: string): Promise<WatchFolderView> {
+    const resolved = await this.workspaceGrants.resolve(directory);
+    return this.routineFolders.add(resolved);
+  }
+  /**
+   * `orglet run` (COD-245): starts an existing, enabled routine that was approved as it is now, with the files the
+   * command attached. Only main's CLI server calls this; the window has no command for it.
+   */
+  async runRoutine(raw: unknown): Promise<string> {
+    const input = z.object({ id: Id, sourceIds: z.array(Id).max(20) }).strict().parse(raw);
+    return this.routines.runCalled(input.id, input.sourceIds);
   }
   async command(command: Command, raw: unknown): Promise<unknown> {
     if (!Object.hasOwn(commands, command)) throw new Error(`Bản Orglet đang chạy không có lệnh "${command}": giao diện và phần lõi đang khác phiên bản. Tải lại cửa sổ (Ctrl+R) hoặc khởi động lại app.`);
@@ -643,7 +667,10 @@ export class CoreService {
   }
   private saveRoutine(input: Args<'saveRoutine'>): Routine {
     if (input.enabled) this.prepareTask(input.task);
-    return this.routines.save(input);
+    const routine = this.routines.save(input);
+    // A new or changed folder starts watching now, not at the next tick, so files already there stay the baseline.
+    void this.folderTriggers.sync().catch(() => {});
+    return routine;
   }
   /** Writes the settings given; a key left out keeps its value. The settings dialog and an applied proposal share this. */
   private applySettings(input: Partial<Args<'settings'>>) {
@@ -1238,6 +1265,7 @@ export class CoreService {
     // Background refresh retries at most every 10 minutes so an offline machine does not poll every tick.
     if (currency.code !== 'USD' && !this.currencyRefresh && Date.now() - this.currencyAttemptAt > 600_000 && (!currency.updatedAt || this.clock().getTime() - new Date(currency.updatedAt).getTime() > RATE_MAX_AGE_MS)) { this.currencyAttemptAt = Date.now(); void this.updateCurrency(currency.code, false); }
     await this.routines.tick();
+    await this.folderTriggers.poll();
   }
   private start(task: Task, startChecked = false) {
     if (!startChecked) this.policy.assertStart(task.teamId, task.id);

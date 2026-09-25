@@ -34,9 +34,16 @@ export const NewChatTarget = z.union([
 ]);
 export type NewChatTarget = z.infer<typeof NewChatTarget>;
 
-/** What the renderer may ask the native picker for: a folder for a chat row, or for a chat that has no row yet. */
+/** A routine's watched folder is only ever read (COD-245): the level is fixed, not chosen. */
+const ReadOnly = z.tuple([z.literal('read')]);
+
+/**
+ * What the renderer may ask the native picker for: a folder for a chat row, for a chat that has no row yet, or for
+ * a routine to watch.
+ */
 export const PickWorkspace = z.union([
   z.object({ taskId: z.uuid(), permissions: WorkspacePermissions }).strict(),
+  z.object({ watch: z.literal(true), permissions: ReadOnly }).strict(),
   z.object({ workerId: z.uuid(), permissions: WorkspacePermissions }).strict(),
   z.object({ teamId: z.uuid(), permissions: WorkspacePermissions }).strict(),
   z.object({ workerIds: GroupChatWorkerIds, permissions: WorkspacePermissions }).strict(),
@@ -47,6 +54,7 @@ export type PickWorkspace = z.infer<typeof PickWorkspace>;
 const Directory = z.string().min(1).max(32768);
 export const GrantWorkspace = z.union([
   z.object({ taskId: z.uuid(), permissions: WorkspacePermissions, directory: Directory }).strict(),
+  z.object({ watch: z.literal(true), permissions: ReadOnly, directory: Directory }).strict(),
   z.object({ workerId: z.uuid(), permissions: WorkspacePermissions, directory: Directory }).strict(),
   z.object({ teamId: z.uuid(), permissions: WorkspacePermissions, directory: Directory }).strict(),
   z.object({ workerIds: GroupChatWorkerIds, permissions: WorkspacePermissions, directory: Directory }).strict(),

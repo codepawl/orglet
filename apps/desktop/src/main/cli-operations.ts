@@ -1,7 +1,7 @@
-import type { Source, Task, TaskDetail, TaskInput, TaskStatus, Team, Worker, Workspace } from '../shared/contracts';
+import type { Routine, Source, Task, TaskDetail, TaskInput, TaskStatus, Team, Worker, Workspace } from '../shared/contracts';
 import { liveTeamTask, liveWorkerTask } from '../shared/live-task';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
-import type { CliAnswer, CliChat, CliErrorCode, CliRequest, ListValue, OpenValue, ReadValue, SendValue, StatusValue } from '../cli/protocol';
+import type { CliAnswer, CliChat, CliErrorCode, CliRequest, ListValue, OpenValue, ReadValue, RunValue, SendValue, StatusValue } from '../cli/protocol';
 import { findCustomConnection } from '../shared/custom-connections';
 
 /**
@@ -63,6 +63,23 @@ function ambiguous(query: string, candidates: readonly CliChat[]): CliFailure {
 function notFound(query: string, names: string): never {
   if (!names) throw new CliFailure('not_found', 'Chưa có Tí hay hội nào.');
   throw new CliFailure('not_found', `Không có Tí hay hội nào tên "${query}". Có: ${names}.`);
+}
+
+/**
+ * Finds a schedule by name the way `matchChat` finds a chat: a case-insensitive exact name first, then a unique
+ * prefix. Only schedules that exist can match; `run` never makes one.
+ */
+export function matchSchedule(query: string, routines: readonly Pick<Routine, 'id' | 'name'>[]): Pick<Routine, 'id' | 'name'> {
+  const wanted = query.trim().toLocaleLowerCase();
+  const exact = routines.filter(routine => routine.name.toLocaleLowerCase() === wanted);
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) throw new CliFailure('ambiguous', `"${exact[0].name}" là tên của nhiều lịch. Đổi tên trong app để phân biệt.`);
+  const prefixed = routines.filter(routine => routine.name.toLocaleLowerCase().startsWith(wanted));
+  if (prefixed.length === 1) return prefixed[0];
+  const names = (prefixed.length > 1 ? prefixed : routines).map(routine => routine.name).join(', ');
+  if (prefixed.length > 1) throw new CliFailure('ambiguous', `"${query}" khớp với nhiều tên: ${names}. Gõ tên đầy đủ hơn.`);
+  if (!names) throw new CliFailure('not_found', 'Chưa có lịch nào.');
+  throw new CliFailure('not_found', `Không có lịch nào tên "${query}". Các lịch hiện có là ${names}.`);
 }
 
 export function chatsOf(workspace: Pick<Workspace, 'workers' | 'teams'>): CliChat[] {
@@ -138,6 +155,7 @@ export class CliOperations {
       case 'send': return this.send(request, signal);
       case 'read': return this.read(request.to);
       case 'open': return this.open(request.to);
+      case 'run': return this.runSchedule(request);
     }
   }
 
@@ -232,6 +250,20 @@ export class CliOperations {
     const detail = await this.taskDetail(live.id);
     const answers = turnAnswers(detail, latestAnsweredRevision(detail));
     return { chat, taskId: live.id, status: detail.task.status, answers };
+  }
+
+  /**
+   * Starts a schedule now with the files given, through the same guards a scheduled run passes: it must be switched
+   * on, approved as it is, and not still busy with its previous run. The core refuses anything else.
+   */
+  async runSchedule(request: Extract<CliRequest, { op: 'run' }>): Promise<RunValue> {
+    const workspace = await this.workspace();
+    const found = matchSchedule(request.schedule, workspace.routines);
+    const routine = workspace.routines.find(item => item.id === found.id)!;
+    if (!routine.enabled) throw new CliFailure('failed', `"${routine.name}" đang tắt. Bật lịch trong app rồi chạy lại.`);
+    const sources = request.files.length ? await this.dependencies.request('importSources', request.files) as Source[] : [];
+    const taskId = String(await this.dependencies.request('runRoutine', { id: routine.id, sourceIds: sources.map(source => source.id) }));
+    return { schedule: { id: routine.id, name: routine.name }, taskId };
   }
 
   async open(to: string | undefined): Promise<OpenValue> {

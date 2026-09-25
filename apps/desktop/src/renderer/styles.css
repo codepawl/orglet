@@ -1227,6 +1227,12 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-icon { display:grid; place-items:center; width:36px; height:36px; border-radius:10px; background:var(--bg); color:var(--muted); flex-shrink:0; }
 .routine-title { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .routine-title h3 { font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* The line under a routine's name: on or off, then what starts it (COD-245). One line always; the trigger gives way
+   with an ellipsis, never the status. */
+.routine-subline { display:flex; align-items:center; gap:6px; min-width:0; margin:0; font-size:12px; color:var(--muted); white-space:nowrap; }
+.routine-subline .status-pill { flex-shrink:0; }
+.routine-trigger { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.routine-trigger::before { content:'·'; margin-right:6px; }
 /* A 22px switch beside a 36px icon button: without this the flex row stretches them and they sit on different
    centre lines (user, 2026-09-20). */
 .routine-actions { display:flex; align-items:center; gap:6px; }
@@ -1251,8 +1257,15 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .form .routine-group { display:flex; flex-direction:column; gap:16px; padding:16px; border-radius:14px; background:var(--surface); }
 .routine-group h4 { margin:0; font-size:13px; font-weight:600; color:var(--muted); }
 .form .routine-group input:not([type=checkbox]),.form .routine-group select,.form .routine-group textarea,.form .routine-group .money-input { background:var(--bg); }
-.routine-sources { display:flex; flex-direction:column; gap:8px; }
-.routine-sources .panel-heading h3 { font-size:13px; font-weight:500; }
+.routine-sources,.routine-folder,.routine-called { display:flex; flex-direction:column; gap:8px; }
+.routine-sources .panel-heading h3,.routine-folder .panel-heading h3 { font-size:13px; font-weight:500; }
+/* The watched folder: its name and its read-only level, never its path, which stays in the core. */
+.routine-folder-name { display:flex; align-items:center; gap:8px; min-width:0; margin:0; font-size:13px; }
+.routine-folder-name svg { color:var(--muted); flex-shrink:0; }
+.routine-folder-name span:first-of-type { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.routine-folder-name .muted { flex-shrink:0; font-size:12px; }
+/* The command sits on the section's surface, so its card takes the page colour the inputs beside it take. */
+.routine-called .org-command-block-card { background:var(--bg); }
 .attachment-list { display:flex; flex-wrap:wrap; gap:8px; margin:0; padding:0; list-style:none; }
 .routine-group .attachment { background:var(--bg); }
 .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
@@ -1297,7 +1310,9 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
   --org-ease-out:var(--ease-out); --org-ease-spring:var(--ease-spring);
 }
 .field { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
-.field-title { cursor:default; }
+/* Flex, like the <label> around an input: an inline title box adds a line strut, and a Select then sat 3px lower
+   than the input beside it in a two-column grid (COD-245). */
+.field-title { display:flex; cursor:default; }
 /* COD-237: the trigger's line box is a whole, even 20px, so its content box is 20px and the trigger is exactly
    --control-height. With the inherited 1.5 line height it was 21px, which put every 16px icon (and the chevron) at
    y = 9.5: at device scale 1 the icon's strokes smeared over two pixel rows and it sat half a pixel below the
