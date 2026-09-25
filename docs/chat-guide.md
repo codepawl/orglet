@@ -111,7 +111,7 @@ The controls act on the whole turn of that chat. In a crew, stopping one member'
 
 ## Notifications
 
-Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked.
+Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked. A confirmation of something you just did (saved, created, copied, archived) is listed but does not count, since you saw it as it happened. Problems count, and so does news that arrived on its own: an answer in a side thread, a downloaded update, a change an orglet applied by itself.
 
 The list is newest first, grouped by day, with new rows marked. Filter it by **All**, **Problems**, **Done** or **Info**. Each row says what happened and what it was about (the setting, the orglet, the chat, the command); a run of identical notices is one row with a count. Every app change an orglet makes through a proposal is announced here too. **Clear all** empties the list.
 

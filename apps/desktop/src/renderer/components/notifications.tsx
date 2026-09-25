@@ -25,6 +25,11 @@ export type Notice = {
   text: string;
   /** What it was about, when the caller knew. Notices stored before COD-174 have none. */
   about?: string;
+  /**
+   * A confirmation of something the person just did, such as "Đã lưu Tí": kept in the list, but never counted as
+   * unread or marked new, because it was read under the cursor when it appeared (COD-255).
+   */
+  confirmation?: true;
 };
 
 export const noticeKindNames: Record<NoticeKind, string> = translated({ error: 'Lỗi', done: 'Đã xong', info: 'Thông tin' });
@@ -57,9 +62,16 @@ const save = () => {
 };
 
 /** Records one message. Called by `toast`, so nothing has to remember to do both. */
-export function recordNotice(text: string, kind: NoticeKind, about?: string) {
+export function recordNotice(text: string, kind: NoticeKind, about?: string, confirmation = false) {
   const trimmedAbout = about?.trim();
-  const notice: Notice = { id: nextId++, at: new Date().toISOString(), kind, text, ...(trimmedAbout ? { about: trimmedAbout } : {}) };
+  const notice: Notice = {
+    id: nextId++,
+    at: new Date().toISOString(),
+    kind,
+    text,
+    ...(trimmedAbout ? { about: trimmedAbout } : {}),
+    ...(confirmation ? { confirmation: true as const } : {}),
+  };
   notices = [...notices, notice].slice(-LIMIT);
   save();
   emit();
@@ -69,9 +81,14 @@ export function useNotices() {
   return useSyncExternalStore(subscribe, () => notices, () => notices);
 }
 
+/** Whether a notice waits for the person: it arrived after `seenSince` and is not a confirmation of their own action. */
+export function isUnreadNotice(notice: Notice, seenSince: number) {
+  return notice.id > seenSince && !notice.confirmation;
+}
+
 /** How many arrived since the list was last opened, which is what the button shows. */
 export function useUnreadNotices() {
-  return useSyncExternalStore(subscribe, () => notices.filter(notice => notice.id > seenAt).length, () => 0);
+  return useSyncExternalStore(subscribe, () => notices.filter(notice => isUnreadNotice(notice, seenAt)).length, () => 0);
 }
 
 /** The newest notice already seen, read before the centre marks everything seen so it can tell new rows from old. */
@@ -125,5 +142,5 @@ export function collapseNotices(newestFirst: Notice[]): NoticeRow[] {
  * rest, so a new notice never hides among old ones (user, 2026-09-23). Rows are newest first, so new ones lead.
  */
 export function noticeGroupLabels(rows: NoticeRow[], newSince: number | null, newLabel: string, dayOf: (iso: string) => string) {
-  return rows.map(row => newSince !== null && row.notice.id > newSince ? newLabel : dayOf(row.notice.at));
+  return rows.map(row => newSince !== null && isUnreadNotice(row.notice, newSince) ? newLabel : dayOf(row.notice.at));
 }

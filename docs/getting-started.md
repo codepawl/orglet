@@ -59,7 +59,7 @@ The side buttons on a mouse, or Alt+Left and Alt+Right, go back and forward thro
 2. Type a short message in the box at the bottom.
 3. Send it.
 
-You get a labelled sample reply. Demo does not call a model and does not read files. That is enough to see the layout.
+You get a labelled sample reply. Demo does not call a model and does not read files. That is enough to see the layout. The line under the message box says the chat is on Demo; its **Change model** link opens the orglet's settings on the **Model** field.
 
 To start a new conversation later, open **⋯** next to **Details** and choose **Archive**. The next message on that worker starts a fresh chat. Search still finds the old one.
 

@@ -40,7 +40,21 @@ export function hasConnection(connections: Connections, customConnections: reado
   return Object.values(builtIn).some(Boolean) || customConnections.length > 0;
 }
 
-export const setupHint = (provider: ProviderScope, harnesses: HarnessInfo[] = []) => {
+/** A row of the provider menu with whether it can run right now. */
+export type ProviderChoice<Option> = { option: Option; ready: boolean };
+
+/**
+ * Puts what can run right now first (COD-255). Ready rows keep their order and their own group; the rest follow under
+ * one `notReadyGroup`, so a signed-in harness is no longer listed under seven API rows that have no key. Demo is
+ * always ready, so it stays at the top.
+ */
+export function readyFirst<Option extends { group?: string }>(choices: ProviderChoice<Option>[], notReadyGroup: string): Option[] {
+  const ready = choices.filter(choice => choice.ready).map(choice => choice.option);
+  const notReady = choices.filter(choice => !choice.ready).map(choice => ({ ...choice.option, group: notReadyGroup }));
+  return [...ready, ...notReady];
+}
+
+export const setupHint =(provider: ProviderScope, harnesses: HarnessInfo[] = []) => {
   if (!isHarness(provider)) return t('Kết nối {0}', [providerLabel(provider)]);
   const item = harnesses.find(entry => entry.id === provider);
   if (!item || item.status === 'not_installed') return t('Cài và đăng nhập {0}', [providerLabel(provider)]);

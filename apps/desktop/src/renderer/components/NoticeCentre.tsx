@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, CircleAlert, CircleCheck, Info, Trash } from 'lucide-react';
 import { Button, Drawer } from './ui';
-import { clearNotices, collapseNotices, markNoticesSeen, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, useNotices, type NoticeKind, type NoticeRow } from './notifications';
+import { clearNotices, collapseNotices, isUnreadNotice, markNoticesSeen, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, useNotices, type NoticeKind, type NoticeRow } from './notifications';
 import { clockLabel, dayLabel } from './TimeMark';
 import { t, tMessage } from '../i18n';
 
@@ -56,7 +56,7 @@ export function NoticeCentre({ open, onClose }: { open: boolean; onClose: () => 
         {rows.map((row, index) => {
           const label = groupLabels[index];
           const startsGroup = index === 0 || groupLabels[index - 1] !== label;
-          const isNew = newSince !== null && row.notice.id > newSince;
+          const isNew = newSince !== null && isUnreadNotice(row.notice, newSince);
           return <li key={row.notice.id} className={`notice notice-${row.notice.kind}${isNew ? ' is-new' : ''}`}>
             {startsGroup && <p className="notice-day">{label}</p>}
             <NoticeItem row={row} isNew={isNew} />

@@ -21,7 +21,8 @@ export function useAppChangeNotices(changes: AppChangeNotice[] | undefined) {
     }
     const fresh = unannouncedChanges(changes, seen);
     if (!fresh.length) return;
-    for (const change of [...fresh].reverse()) toast(appChangeMessage(change), 'success', change.title);
+    // A change the orglet applied by itself is news; one the person applied with a click was read as it happened (COD-255).
+    for (const change of [...fresh].reverse()) toast(appChangeMessage(change), 'success', change.title, { unread: change.automatic });
     writeSeen([...fresh.map(change => change.id), ...seen]);
   }, [changes]);
 }

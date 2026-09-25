@@ -174,6 +174,10 @@ export function App() {
   
   const [panel, setPanel] = useState<Panel>(null); const [editingWorker, setEditingWorker] = useState<Worker>(); const [workerDialogTab, setWorkerDialogTab] = useState<'memory'>(); const [editingTask, setEditingTask] = useState<string>(); const [editingSkill, setEditingSkill] = useState<Skill>();
   const [editingKnowledge, setEditingKnowledge] = useState<Knowledge>(); const [libraryTab, setLibraryTab] = useState<'skills' | 'knowledge'>('skills');
+  // The empty chat's "Đổi model" opens the worker dialog on its Model field rather than at the top (COD-255).
+  const [workerDialogField, setWorkerDialogField] = useState<'provider'>();
+  // An orglet or crew saved for the first time, waiting for a workspace that lists it so its chat can open (COD-255).
+  const [justCreated, setJustCreated] = useState<{ kind: 'worker' | 'team'; id: string }>();
   // An editor opened from the Library offers the way back to it. One opened from a chat's knowledge proposal does not:
   // "back" would lead somewhere the user never was.
   const [fromLibrary, setFromLibrary] = useState(false);
@@ -330,7 +334,7 @@ export function App() {
       if (state.status !== 'ready') return;
       toast(state.version
         ? t('Orglet {0} đã tải xong. Khởi động lại từ Cài đặt → Giới thiệu.', [state.version])
-        : t('Bản Orglet mới đã tải xong. Khởi động lại từ Cài đặt → Giới thiệu.'), 'success', t('Cập nhật'));
+        : t('Bản Orglet mới đã tải xong. Khởi động lại từ Cài đặt → Giới thiệu.'), 'success', t('Cập nhật'), { unread: true });
     });
   }, []);
   useEffect(() => { if (window.orglet) void refresh(); }, [refresh, selected]);
@@ -439,6 +443,18 @@ export function App() {
     clearSelection();
     openGroupChat(group);
   };
+  // An orglet or crew just created opens its chat (COD-255), once a workspace that lists it has arrived. Selecting it
+  // any earlier would be undone by the check that falls back to the first orglet when the id is not listed yet.
+  useEffect(() => {
+    if (!workspace || !justCreated) return;
+    const listed = justCreated.kind === 'worker'
+      ? workspace.workers.some(item => item.id === justCreated.id)
+      : workspace.teams.some(item => item.id === justCreated.id);
+    if (!listed) return;
+    setJustCreated(undefined);
+    if (justCreated.kind === 'worker') openWorker(justCreated.id);
+    else openTeam(justCreated.id);
+  }, [workspace, justCreated]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.key.toLowerCase() === 'n') {
@@ -640,7 +656,7 @@ export function App() {
       setBrief(''); setSources([]);
     } catch (err) { errorAbout.current = t('Gửi tin cho {0}', [team?.name ?? groupName ?? worker?.name ?? '']); setError((err as Error).message); } finally { setBusy(false); }
   };
-  const close = () => { setPanel(null); setWorkerDialogTab(undefined); void refresh(); };
+  const close = () => { setPanel(null); setWorkerDialogTab(undefined); setWorkerDialogField(undefined); void refresh(); };
   /** The trace above an answer links to the worker's Memory tab (COD-220): the dialog opens on that tab this once. */
   const openWorkerMemories = (workerId: string) => {
     const found = workspace?.workers.find(item => item.id === workerId);
@@ -1087,7 +1103,7 @@ export function App() {
     <RowMenu className="row-action danger" label={t('Xóa')} icon={Trash} asksOnOpen items={[{ label: t('Xóa'), icon: Trash, danger: true, onSelect: () => void applyToSelection('delete'), confirm: { question: deleteSelectionQuestion, label: t('Xóa') } }]} />
     <Button size="icon" className="row-action" aria-label={t('Bỏ chọn')} title={t('Bỏ chọn')} onClick={clearSelection}><SidebarX size={16} /></Button>
   </div>;
-  const composerHint = isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}<button onClick={() => { if (team) { setEditingTeam(team); setPanel('team'); } else { setEditingWorker(groupWorkers[0] ?? worker); setPanel('worker'); } }}>{team ? t('Thiết lập hội') : t('Đổi model')}</button></p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p> : null;
+  const composerHint = isDemo ? <p className="composer-note">{team?.preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.') : t('Đang dùng Demo · không gọi API, không phân tích tệp.')}<button onClick={() => { if (team) { setEditingTeam(team); setPanel('team'); } else { setEditingWorker(groupWorkers[0] ?? worker); setWorkerDialogField('provider'); setPanel('worker'); } }}>{team ? t('Thiết lập hội') : t('Đổi model')}</button></p> : missingConnections.length > 0 ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p> : null;
   return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsPane.width}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
@@ -1223,8 +1239,8 @@ export function App() {
       {panel === 'sources' && detail && <SourcePanel detail={detail} target={sourceTarget} refresh={() => void refresh()} openSource={id => setViewingSource({ id })} />}
     </Drawer>
     {viewingSource && detail && <SourceDialog key={viewingSource.id} detail={detail} sourceId={viewingSource.id} lines={viewingSource.lines} onClose={() => setViewingSource(undefined)} refresh={() => void refresh()} />}
-    <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}`} open={panel === 'worker'} worker={editingWorker} workspace={workspace} connections={connections} harnesses={harnesses ?? []} initialTab={workerDialogTab} onClose={close} onOpenChat={taskId => { close(); openTask(taskId); }} />
-    <TeamDialog key={`team:${panel === 'team'}:${editingTeam?.id ?? 'new'}`} open={panel === 'team'} team={editingTeam} workspace={workspace} onClose={close} />
+    <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}`} open={panel === 'worker'} worker={editingWorker} workspace={workspace} connections={connections} harnesses={harnesses ?? []} initialTab={workerDialogTab} initialField={workerDialogField} onClose={close} onOpenChat={taskId => { close(); openTask(taskId); }} onCreated={id => setJustCreated({ kind: 'worker', id })} />
+    <TeamDialog key={`team:${panel === 'team'}:${editingTeam?.id ?? 'new'}`} open={panel === 'team'} team={editingTeam} workspace={workspace} onClose={close} onCreated={id => setJustCreated({ kind: 'team', id })} />
     <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />
     <NoticeCentre open={noticesOpen} onClose={() => setNoticesOpen(false)} />
     <RunningCentre open={runningOpen} items={workspace.running ?? []} tasks={workspace.tasks} teams={workspace.teams} onClose={() => setRunningOpen(false)} onOpenChat={taskId => { setRunningOpen(false); openTask(taskId); }} />
