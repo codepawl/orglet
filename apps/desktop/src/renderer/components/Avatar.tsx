@@ -74,14 +74,17 @@ export function avatarRenderer(size: AvatarSize): 'solid' | 'glyph' {
 export const solidSizes: Record<AvatarSize, number> = { xxs: 16, xs: 24, sm: 24, md: 30, lg: 40, xl: 64, xxl: 96 };
 // `export` above only so the test can check the mapping; the functions sit after the component that uses them.
 
-/** Overlapping worker faces for a team chat header or empty thread. */
-export function RosterAvatars({ workers, size = 'xs', max = 4, alive }: { workers: readonly Worker[]; size?: 'xs' | 'sm'; max?: number; alive?: boolean }) {
+/**
+ * Overlapping worker faces for a team chat header or empty thread. `countRest` false drops the "+N" after the faces,
+ * for a row whose name needs that width more than a headcount (the sidebar's crew rows, COD-256).
+ */
+export function RosterAvatars({ workers, size = 'xs', max = 4, alive, countRest = true }: { workers: readonly Worker[]; size?: 'xs' | 'sm'; max?: number; alive?: boolean; countRest?: boolean }) {
   if (!workers.length) return null;
   const shown = workers.slice(0, max);
   const rest = workers.length - shown.length;
   return <span className="composer-to-avatars">
     {shown.map(worker => <Avatar key={worker.id} name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} alive={alive} />)}
-    {rest > 0 && <span className="roster-more" aria-hidden="true">+{rest}</span>}
+    {countRest && rest > 0 && <span className="roster-more" aria-hidden="true">+{rest}</span>}
   </span>;
 }
 

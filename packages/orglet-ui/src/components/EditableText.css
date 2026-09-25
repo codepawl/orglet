@@ -4,7 +4,9 @@
 .org-editable-text {
   display: inline-block;
   min-width: 0;
-  max-width: 100%;
+  /* The negative margins give the padding back, so the box may be that much wider than its container. With 100% a
+     name alone in a shrink-to-fit row lost 12px of text to the padding: "Launch crew" read "Launch …" (COD-256). */
+  max-width: calc(100% + 12px);
   margin: 0 -6px;
   padding: 2px 6px;
   border: 0;
