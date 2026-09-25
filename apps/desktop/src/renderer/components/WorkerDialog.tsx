@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AlignLeft, Brain, Smile, Cpu, ScrollText, ShieldCheck, Sparkles, UserRound, Wallet, SlidersHorizontal } from 'lucide-react';
 import { isMemory } from '../../shared/knowledge';
 import { MemoryList } from './Memories';
@@ -142,16 +142,16 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       {skill && <p className="prose muted">{skill.content}</p>}
     </>}
     {tab === 'permissions' && <>
+      {/* Auto-apply is not a chat permission: it belongs to the orglet and is saved with it. It still sits in the
+          same list, under Propose app changes, because that is the switch it extends (owner, 2026-09-25: a separate
+          block left a gap and read as unrelated). What it never covers (a raised limit, a template, a run that read
+          unvetted content) is decided in the core and summed up as "the rest". */}
       <WorkerChatPermissions worker={worker} workspace={workspace} draft={{ id: worker?.id ?? seed, name: name || t('Tí mới'), provider, connected: provider === 'demo' || ready[provider] }}
-        draftCapabilities={draftCapabilities} onDraftCapabilities={setDraftCapabilities} />
-      {/* Not a chat permission: it belongs to the worker and is saved with it. What it never covers is decided in
-          the core (a raised limit, a template, a run that read unvetted content), so the line says so plainly. */}
-      <div className="permissions worker-auto-apply">
-        <SwitchField checked={autoApplyProposals} onChange={setAutoApplyProposals}
-          description={t('Đề xuất an toàn áp dụng ngay, có Hoàn tác. Nâng giới hạn, template và đề xuất từ nội dung bên ngoài vẫn chờ bạn.')}>
+        draftCapabilities={draftCapabilities} onDraftCapabilities={setDraftCapabilities}
+        extra={<SwitchField checked={autoApplyProposals} onChange={setAutoApplyProposals}
+          description={t('Đề xuất an toàn áp dụng ngay, có Hoàn tác; phần còn lại vẫn chờ bạn.')}>
           <Zap size={15} aria-hidden="true" />{t('Áp dụng thay đổi trong app mà không cần hỏi')}
-        </SwitchField>
-      </div>
+        </SwitchField>} />
     </>}
     {tab === 'memory' && <MemoryList memories={memories} workspace={workspace} onOpenChat={onOpenChat} />}
   </TabbedFormDialog>;
@@ -164,9 +164,9 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
  * until the first message turns it into a grant (COD-186). A worker not saved yet has nothing to keep a folder
  * under, so only then does the folder wait.
  */
-function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, onDraftCapabilities }: {
+function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, onDraftCapabilities, extra }: {
   worker?: Worker; workspace: Workspace; draft: { id: string; name: string; provider: Worker['provider']; connected: boolean };
-  draftCapabilities?: ToolCapability[]; onDraftCapabilities: (capabilities: ToolCapability[]) => void;
+  draftCapabilities?: ToolCapability[]; onDraftCapabilities: (capabilities: ToolCapability[]) => void; extra?: ReactNode;
 }) {
   const chat = worker ? liveWorkerTask(workspace.tasks, worker.id) : undefined;
   const pending = worker && !chat ? workspace.newChatCapabilities[newChatKey({ workerId: worker.id })] : undefined;
@@ -209,5 +209,5 @@ function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, on
     if (picked) setPendingFolder(picked);
   });
   return <PermissionControls workers={[draft]} capabilities={capabilities} grant={grant} pending={pendingFolder} taskId={chat?.id} sourceCount={chat?.sourceIds.length ?? 0}
-    busy={busy} folderLocked={chat || worker ? undefined : t('Lưu Tí rồi chọn thư mục.')} onCapability={onCapability} onWorkspace={onWorkspace} />;
+    busy={busy} folderLocked={chat || worker ? undefined : t('Lưu Tí rồi chọn thư mục.')} onCapability={onCapability} onWorkspace={onWorkspace} extra={extra} />;
 }

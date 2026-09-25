@@ -39,7 +39,7 @@ const partlyBlockedNotes: Record<PermissionBlocker, string> = {
  * A blocker (Demo, a model with no connection, a grant still loading) is never a third position on a control:
  * the control is disabled and one short line says why (user, COD-168).
  */
-export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, busy = false, locked, folderLocked, onCapability, onWorkspace, onConfigure }: {
+export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, busy = false, locked, folderLocked, onCapability, onWorkspace, onConfigure, extra }: {
   workers: PermissionWorker[];
   capabilities?: ToolCapability[];
   /** `undefined` while the grant is still being read. */
@@ -56,6 +56,8 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
   onCapability: (capability: ToolCapability, enabled: boolean) => void;
   onWorkspace: (level: WorkspaceLevel) => void;
   onConfigure?: (provider: Exclude<Worker['provider'], 'demo'>) => void;
+  /** A setting that belongs with these switches but is saved elsewhere (the orglet's own auto-apply), listed before the footnote. */
+  extra?: ReactNode;
 }) {
   const state = permissionState({ provider: workers[0]?.provider ?? 'demo', capabilities, grant, pending, taskId });
   const blocked = workers.map(worker => ({ worker, blocker: permissionBlocker(worker.provider, worker.connected) }))
@@ -116,6 +118,7 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
       description={t('Đề xuất Tí, hội, skill và cài đặt mới.')}>
       <Lightbulb size={15} aria-hidden="true" />{t('Đề xuất thay đổi trong app')}
     </SwitchField>
-    <p className="muted permission-footnote">{t('Áp dụng từ lần chạy kế tiếp. Tắt một quyền sẽ dừng việc đang dùng nó.')}</p>
+    {extra}
+    <p className="muted permission-footnote">{t('Áp dụng từ lần chạy kế tiếp; tắt quyền sẽ dừng việc đang dùng nó.')}</p>
   </div>;
 }
