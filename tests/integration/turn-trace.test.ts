@@ -145,6 +145,31 @@ it('reads a saved step from each sentence the core writes, the specific ones bef
   expect(traceSummary(traceOf({ runId, events }))).toBe('Read 1 file · Searched once · Listed files 2 times · Went online once · Checked data once · Edited 1 file · Ran 1 command · Proposed 1 change');
 });
 
+it('reads folders, moves and deletions as their own rows, and a refused one as a step that did not go through (COD-254)', () => {
+  const events = [
+    eventOf(runId, 'Workspace create_folder: receipts'),
+    eventOf(runId, 'Workspace move: receipt 3.pdf → receipts/march.pdf'),
+    eventOf(runId, 'Workspace move: IMG_0412.jpg → images/photo.jpg'),
+    eventOf(runId, 'Workspace delete: contract-old.pdf'),
+    eventOf(runId, 'Không chuyển được: notes.txt → contract-old.pdf'),
+    // The hand-in's own sentences come after the answer and stay in Details.
+    eventOf(runId, 'Đã chuyển tệp: receipt 3.pdf → receipts/march.pdf'),
+    eventOf(runId, 'Đã tạo thư mục: receipts'),
+  ];
+  const entries = traceOf({ runId, events });
+  expect(entries.map(entry => [entry.kind, entry.target ?? entry.note])).toEqual([
+    ['folder', 'receipts'],
+    ['move', 'receipt 3.pdf → receipts/march.pdf'],
+    ['move', 'IMG_0412.jpg → images/photo.jpg'],
+    ['delete', 'contract-old.pdf'],
+    ['failed', 'Không chuyển được: notes.txt → contract-old.pdf'],
+  ]);
+  expect(traceSummary(entries)).toBe('Created 1 folder · Moved 2 items · Deleted 1 item · 1 step did not go through');
+  const html = renderToStaticMarkup(createElement(TurnTrace, { entries }));
+  expect(html).toContain('<span class="trace-verb">Moved</span><span class="trace-target">receipt 3.pdf → receipts/march.pdf</span>');
+  expect(html).toContain('Could not move: notes.txt → contract-old.pdf');
+});
+
 it('gives a crew answer its handoffs before the synthesis steps, one per member, and keeps the members\' own steps out', () => {
   const lead = runOf(planRunId, worker, 'plan');
   const member = runOf(memberRunId, writer, 'member');

@@ -215,7 +215,7 @@ async function copyRunId(id: string) {
   }
 }
 
-export function DetailsPanel({ workspace, team, worker, group, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, readProcessOutput, readPrivateFile }: {
+export function DetailsPanel({ workspace, team, worker, group, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, onRestoreFile, readProcessOutput, readPrivateFile }: {
   workspace: Workspace;
   team?: Team;
   worker?: Worker;
@@ -226,6 +226,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
   /** Set when the chat asked to review an attempt: Details scrolls to that attempt (or to the blocking one). */
   recoveryFocus?: RecoveryFocus;
   onRetireWorkspace?: (runId: string, reviewToken: string) => void;
+  onRestoreFile?: (runId: string, path: string) => void;
   readProcessOutput?: ReadProcessOutput;
   readPrivateFile?: ReadPrivateFile;
   workerStatus: (id: string) => StatusMarkState;
@@ -309,7 +310,8 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
         {detail && <McpChatGrants detail={detail} workers={tools.workers} workspace={workspace} />}
       </section>}
       {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs} focus={recoveryFocus}
-        busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} readOutput={readProcessOutput} readFile={readPrivateFile} />}
+        busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} onRestore={onRestoreFile}
+        readOutput={readProcessOutput} readFile={readPrivateFile} />}
 
       {detail && detail.runs.some(run => run.snapshot.workFrame) && <Section icon={MessageSquare} title={t('Mục tiêu của lượt')}>
         {detail.runs.filter(run => run.snapshot.workFrame).map(run => {

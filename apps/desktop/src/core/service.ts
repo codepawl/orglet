@@ -437,6 +437,12 @@ export class CoreService {
         this.notify();
         return;
       }
+      case 'restoreWorkspaceFile': {
+        if (!this.workspaceRuntime) throw new Error('Workspace runtime chưa được cấu hình.');
+        await this.workspaceRuntime.restore(args, taskId => this.runner.isActive(taskId) || this.teams.isActive(taskId));
+        this.notify();
+        return;
+      }
       case 'workspaceAccess': return this.workspaceGrants.view(commands.workspaceAccess.parse(args).taskId);
       case 'revokeWorkspace': {
         const input = commands.revokeWorkspace.parse(args);

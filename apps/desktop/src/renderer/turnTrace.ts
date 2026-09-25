@@ -11,7 +11,7 @@ import { t } from './i18n';
  */
 export type TraceKind =
   | 'memory' | 'knowledge'
-  | 'read' | 'search' | 'list' | 'skill' | 'web_search' | 'web_read' | 'dataset' | 'edit' | 'command' | 'mcp'
+  | 'read' | 'search' | 'list' | 'skill' | 'web_search' | 'web_read' | 'dataset' | 'edit' | 'folder' | 'move' | 'delete' | 'command' | 'mcp'
   | 'handoff' | 'remembered' | 'proposal' | 'failed' | 'other';
 
 export type TraceEntry = {
@@ -46,9 +46,13 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Workspace (?:read|blob): (.+)$/, kind: 'read' },
   { pattern: /^Workspace search: (.+)$/, kind: 'search' },
   { pattern: /^Workspace write: (.+)$/, kind: 'edit' },
+  { pattern: /^Workspace create_folder: (.+)$/, kind: 'folder' },
+  { pattern: /^Workspace move: (.+)$/, kind: 'move' },
+  { pattern: /^Workspace delete: (.+)$/, kind: 'delete' },
   { pattern: /^Workspace list: (.+)$/, kind: 'list' },
   { pattern: /^Workspace (?:manifest|snapshot): ?$/, kind: 'other' },
   { pattern: /^Không có tệp hoặc thư mục: /, kind: 'failed', note: true },
+  { pattern: /^Không (?:chuyển|xóa|tạo) được/, kind: 'failed', note: true },
   { pattern: /^Tiến trình đã dừng: /, kind: 'command', note: true },
   { pattern: /^(?:Đã ghi nhớ một điều|Đã gộp vào một ghi nhớ|Đã ghi một ghi nhớ)/, kind: 'remembered', note: true },
   { pattern: /^Không ghi nhớ được/, kind: 'failed', note: true },
@@ -140,7 +144,7 @@ export function liveTraceOf(memories: readonly RunMemory[] | undefined, steps: r
 type SummaryKind = Exclude<TraceKind, 'web_search' | 'web_read'> | 'web';
 
 /** The order the counts read in: what was loaded, then a crew's handoffs, then the steps, then what the run left behind. */
-const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web', 'mcp', 'dataset', 'edit', 'command', 'remembered', 'proposal', 'failed', 'other'];
+const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web', 'mcp', 'dataset', 'edit', 'folder', 'move', 'delete', 'command', 'remembered', 'proposal', 'failed', 'other'];
 
 function summaryKindOf(kind: TraceKind): SummaryKind {
   return kind === 'web_search' || kind === 'web_read' ? 'web' : kind;
@@ -159,6 +163,9 @@ function countPhrase(kind: SummaryKind, count: number): string {
     case 'mcp': return count === 1 ? t('Dùng 1 công cụ MCP') : t('Dùng {0} công cụ MCP', [count]);
     case 'dataset': return count === 1 ? t('Kiểm tra dữ liệu 1 lần') : t('Kiểm tra dữ liệu {0} lần', [count]);
     case 'edit': return count === 1 ? t('Sửa 1 tệp') : t('Sửa {0} tệp', [count]);
+    case 'folder': return count === 1 ? t('Tạo 1 thư mục') : t('Tạo {0} thư mục', [count]);
+    case 'move': return count === 1 ? t('Chuyển 1 mục') : t('Chuyển {0} mục', [count]);
+    case 'delete': return count === 1 ? t('Xóa 1 mục') : t('Xóa {0} mục', [count]);
     case 'command': return count === 1 ? t('Chạy 1 lệnh') : t('Chạy {0} lệnh', [count]);
     case 'handoff': return count === 1 ? t('Giao 1 việc') : t('Giao {0} việc', [count]);
     case 'remembered': return count === 1 ? t('Ghi nhớ thêm 1 điều') : t('Ghi nhớ thêm {0} điều', [count]);

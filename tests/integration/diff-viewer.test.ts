@@ -67,3 +67,36 @@ it('shows a line only for runs whose copy changed something', () => {
   expect(changedFilesOf(runs, recovery).map(item => [item.run.snapshot.worker.name, item.summary])).toEqual([['Scout', { files: 2, additions: 5, deletions: 1 }]]);
   expect(changedFilesOf(runs, undefined)).toEqual([]);
 });
+
+it('tells a move from a rename, lists new and removed folders, and shows a plain copy without counts (COD-254)', () => {
+  const plain: WorkspaceDiff = {
+    runId: runIds[0], additions: 0, deletions: 0, truncated: false, lines: false,
+    files: [
+      { path: 'contract-old.pdf', status: 'deleted', binary: false, additions: 0, deletions: 0, truncated: false, hunks: [] },
+      { path: 'receipts/march.pdf', previousPath: 'receipt 3.pdf', status: 'renamed', binary: false, additions: 0, deletions: 0, truncated: false, hunks: [] },
+      { path: 'receipts/april.pdf', previousPath: 'receipts/Scan 12.pdf', status: 'renamed', binary: false, additions: 0, deletions: 0, truncated: false, hunks: [] },
+    ],
+    folders: [{ path: 'receipts', status: 'added' }, { path: 'old', status: 'deleted' }],
+  };
+  const html = renderToStaticMarkup(createElement(DiffBody, { diff: plain }));
+  expect(html).toContain('This folder is not a Git repository, so only the files that changed are listed, not their lines.');
+  expect(html).toContain('receipt 3.pdf → receipts/march.pdf</span><span class="diff-file-status">Moved');
+  expect(html).toContain('receipts/Scan 12.pdf → receipts/april.pdf</span><span class="diff-file-status">Renamed');
+  expect(html).toContain('contract-old.pdf</span><span class="diff-file-status">Deleted');
+  expect(html).toContain('receipts/</span><span class="diff-file-status">New folder');
+  expect(html).toContain('old/</span><span class="diff-file-status">Folder deleted');
+  // Nothing to scroll to and no counts: the rows are plain, and no file section follows the list.
+  expect(html).not.toContain('<button');
+  expect(html).not.toContain('diff-file-counts');
+  expect(html).not.toContain('class="diff-file"');
+});
+
+it('words the turn line with moves, deletions and folders, and drops line counts a plain copy does not have (COD-254)', () => {
+  expect(changedFilesLabel({ files: 6, additions: 0, deletions: 0, moved: 5, removed: 1, folders: 4, lines: false })).toBe('Files changed: 6 · 5 moved or renamed · 1 deleted');
+  expect(changedFilesLabel({ files: 3, additions: 42, deletions: 7, moved: 1 }, 'Scout')).toBe('Scout · files changed: 3 · 1 moved or renamed · +42 −7');
+  expect(changedFilesLabel({ files: 0, additions: 0, deletions: 0, folders: 2, lines: false })).toBe('Folders changed: 2');
+  const runs = [run(runIds[0], 'Scout')];
+  const recovery: WorkspaceRecoveryView = { taskId, attempts: [], processes: [], uncertainCalls: [], truncated: false,
+    copies: [copy(runIds[0], { files: 0, additions: 0, deletions: 0, folders: 1, lines: false })] };
+  expect(changedFilesOf(runs, recovery)).toHaveLength(1);
+});

@@ -1857,6 +1857,12 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .workspace-recovery code { white-space:pre-wrap; overflow-wrap:anywhere; }
 .workspace-recovery ul { padding-left:20px; }
 .workspace-recovery .recovery-attempts,.workspace-recovery .recovery-calls { padding-left:0; }
+/* An attempt's hand-in steps (COD-254): one per row with air between, the path first and what became of it muted. */
+.workspace-recovery ul.recovery-changes { list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:10px; }
+.recovery-change { font-size:12.5px; line-height:1.45; overflow-wrap:anywhere; }
+.recovery-change-state { color:var(--muted); }
+.recovery-change-note { margin:2px 0 0; }
+.recovery-change .workspace-process-output { margin-top:6px; }
 .workspace-recovery-action { display:flex; align-items:center; }
 .workspace-recovery-action .button { white-space:normal; }
 .workspace-process-output { margin-top:12px; display:flex; flex-direction:column; align-items:stretch; gap:8px; }
@@ -2223,6 +2229,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .diff-files { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; }
 .diff-file-row { display:flex; align-items:center; gap:10px; width:100%; min-height:30px; padding:4px 10px; border:0; border-radius:8px; background:none; color:var(--text); font:inherit; text-align:left; cursor:pointer; }
 .diff-file-row:hover { background:var(--row-hover); }
+/* A row with nothing to scroll to: a plain folder copy's file, or a folder (COD-254). */
+.diff-file-row.static { cursor:default; }
+.diff-file-row.static:hover { background:none; }
 .diff-file-path { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono); font-size:12.5px; font-weight:400; }
 .diff-file-status { flex-shrink:0; font-size:12px; font-weight:400; color:var(--muted); }
 .diff-file-counts { flex-shrink:0; margin-left:auto; font-family:var(--font-mono); font-size:12px; font-weight:400; color:var(--muted); font-variant-numeric:tabular-nums; }

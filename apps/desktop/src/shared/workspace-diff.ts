@@ -8,11 +8,22 @@ import { z } from 'zod';
 export const WorkspaceDiffRequest = z.object({ taskId: z.uuid(), runId: z.uuid() }).strict();
 export type WorkspaceDiffRequest = z.infer<typeof WorkspaceDiffRequest>;
 
-/** The counts a turn shows without opening the viewer; saved with the copy when the run finishes. */
+/**
+ * The counts a turn shows without opening the viewer; saved with the copy when the run finishes. The optional counts
+ * (COD-254) are present only when they are not zero, and `lines` only when it is false: a plain folder copy knows
+ * which files moved or were deleted but has no line counts.
+ */
 export const WorkspaceDiffSummary = z.object({
   files: z.number().int().nonnegative(),
   additions: z.number().int().nonnegative(),
   deletions: z.number().int().nonnegative(),
+  /** Files moved to another folder or renamed. */
+  moved: z.number().int().positive().optional(),
+  /** Files deleted. */
+  removed: z.number().int().positive().optional(),
+  /** Folders created or removed. */
+  folders: z.number().int().positive().optional(),
+  lines: z.literal(false).optional(),
 }).strict();
 export type WorkspaceDiffSummary = z.infer<typeof WorkspaceDiffSummary>;
 
@@ -49,6 +60,8 @@ export type DiffFile = {
   truncated: boolean;
   hunks: DiffHunk[];
 };
+/** A folder the copy created or removed (COD-254). Git keeps no folders, so this comes from the two inventories. */
+export type DiffFolder = { path: string; status: 'added' | 'deleted' };
 export type WorkspaceDiff = {
   runId: string;
   files: DiffFile[];
@@ -56,6 +69,13 @@ export type WorkspaceDiff = {
   deletions: number;
   /** Some files have no hunks because the diff passed its total cap. */
   truncated: boolean;
+  /** Folders created or removed; absent when there are none. */
+  folders?: DiffFolder[];
+  /**
+   * False for a plain folder copy: its snapshot kept only hashes, so the files are listed with what happened to them
+   * (added, changed, moved, deleted) and without lines or counts.
+   */
+  lines?: false;
 };
 
 /** Hunk lines kept per file before the rest is dropped. */
@@ -67,6 +87,13 @@ export const DIFF_LINE_CHARACTER_LIMIT = 4000;
 /** Bytes of Git patch output read before the rest is dropped. */
 export const DIFF_OUTPUT_BYTE_LIMIT = 4 * 1024 * 1024;
 
-export function summarize(diff: Pick<WorkspaceDiff, 'files' | 'additions' | 'deletions'>): WorkspaceDiffSummary {
-  return { files: diff.files.length, additions: diff.additions, deletions: diff.deletions };
+export function summarize(diff: Pick<WorkspaceDiff, 'files' | 'additions' | 'deletions' | 'folders' | 'lines'>): WorkspaceDiffSummary {
+  const moved = diff.files.filter(file => file.status === 'renamed').length;
+  const removed = diff.files.filter(file => file.status === 'deleted').length;
+  const folders = diff.folders?.length ?? 0;
+  return {
+    files: diff.files.length, additions: diff.additions, deletions: diff.deletions,
+    ...(moved ? { moved } : {}), ...(removed ? { removed } : {}), ...(folders ? { folders } : {}),
+    ...(diff.lines === false ? { lines: false as const } : {}),
+  };
 }

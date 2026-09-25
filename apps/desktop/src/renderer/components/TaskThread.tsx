@@ -45,12 +45,12 @@ import { turnNotices } from './turnNotices';
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
 type TurnNotices = ReturnType<typeof turnNotices>;
 
-/** The runs of a turn that changed files in their working copy, with the counts the core kept (COD-163). */
+/** The runs of a turn that changed files or folders in their working copy, with the counts the core kept (COD-163). */
 export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecoveryView | undefined): { run: Run; summary: WorkspaceDiffSummary }[] {
   if (!recovery) return [];
   return runs.flatMap(run => {
     const summary = recovery.copies.find(copy => copy.runId === run.id)?.diff;
-    return summary && summary.files > 0 ? [{ run, summary }] : [];
+    return summary && (summary.files > 0 || (summary.folders ?? 0) > 0) ? [{ run, summary }] : [];
   });
 }
 

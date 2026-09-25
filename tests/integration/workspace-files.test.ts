@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { executeWorkspaceOperation } from '../../apps/desktop/src/core/tools/workspace-files';
@@ -90,6 +90,86 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('packaged workspace help
     expect(check.exitCode, check.stderr).toBe(0);
     expect(check.stdout.trim()).toBe('check passed');
     expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('first line\nsecond line');
+  });
+});
+
+describe('folders, moves and deletions in the private copy (COD-254)', () => {
+  const run = (request: Record<string, unknown>) => executeWorkspaceOperation(source, request);
+  const exists = (path: string) => stat(join(source, path)).then(() => true, () => false);
+
+  it('records every folder in the manifest, including empty ones', async () => {
+    await mkdir(join(source, 'a', 'b'), { recursive: true });
+    await mkdir(join(source, 'empty'));
+    const manifest = WorkspaceManifest.parse(await run({ operation: 'manifest' }));
+    expect(manifest.folders).toEqual(['a', 'a/b', 'empty']);
+  });
+
+  it('creates a folder with its parents, leaves an existing one alone and refuses a file in the way', async () => {
+    expect(await run({ operation: 'create_folder', path: 'receipts/2026' })).toEqual({ path: 'receipts/2026', created: true });
+    expect(await run({ operation: 'create_folder', path: 'receipts' })).toEqual({ path: 'receipts', created: false });
+    expect(await run({ operation: 'create_folder', path: 'note.txt' })).toMatchObject({ refused: true, error: expect.stringContaining('note.txt') });
+    expect((await stat(join(source, 'receipts', '2026'))).isDirectory()).toBe(true);
+  });
+
+  it('writes into a folder it just created', async () => {
+    await run({ operation: 'create_folder', path: 'notes' });
+    await run({ operation: 'write', path: 'notes/today.md', content: '# Today', expectedHash: null });
+    expect(await readFile(join(source, 'notes', 'today.md'), 'utf8')).toBe('# Today');
+  });
+
+  it('moves a file into a new folder, renames it, changes only its letter case, and moves a whole folder', async () => {
+    expect(await run({ operation: 'move', from: 'note.txt', to: 'archive/2026/note.txt' })).toEqual({ from: 'note.txt', to: 'archive/2026/note.txt', type: 'file' });
+    await run({ operation: 'move', from: 'archive/2026/note.txt', to: 'archive/2026/meeting.txt' });
+    await run({ operation: 'move', from: 'archive/2026/meeting.txt', to: 'archive/2026/Meeting.txt' });
+    expect(await readdir(join(source, 'archive', '2026'))).toEqual(['Meeting.txt']);
+    expect(await run({ operation: 'move', from: 'archive', to: 'kept/archive' })).toEqual({ from: 'archive', to: 'kept/archive', type: 'folder' });
+    expect(await readFile(join(source, 'kept', 'archive', '2026', 'Meeting.txt'), 'utf8')).toBe('first line\nsecond line');
+    expect(await exists('archive')).toBe(false);
+  });
+
+  it('refuses a move onto something that exists, into itself or onto itself, without changing anything', async () => {
+    await writeFile(join(source, 'other.txt'), 'other');
+    await mkdir(join(source, 'folder'));
+    expect(await run({ operation: 'move', from: 'note.txt', to: 'other.txt' })).toMatchObject({ refused: true });
+    expect(await run({ operation: 'move', from: 'folder', to: 'folder/inside' })).toMatchObject({ refused: true });
+    expect(await run({ operation: 'move', from: 'note.txt', to: 'note.txt' })).toMatchObject({ refused: true });
+    expect(await readFile(join(source, 'other.txt'), 'utf8')).toBe('other');
+    expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('first line\nsecond line');
+    await expect(run({ operation: 'move', from: 'missing.txt', to: 'x.txt' })).rejects.toThrow(/ENOENT/);
+  });
+
+  it('deletes a file and an empty folder, and refuses a folder that still has something in it', async () => {
+    await mkdir(join(source, 'full'));
+    await writeFile(join(source, 'full', 'keep.txt'), 'keep');
+    await mkdir(join(source, 'empty'));
+    expect(await run({ operation: 'delete', path: 'note.txt' })).toEqual({ path: 'note.txt', type: 'file' });
+    expect(await run({ operation: 'delete', path: 'empty' })).toEqual({ path: 'empty', type: 'folder' });
+    expect(await run({ operation: 'delete', path: 'full' })).toMatchObject({ refused: true, error: expect.stringContaining('not empty') });
+    expect(await exists('note.txt')).toBe(false);
+    expect(await exists('empty')).toBe(false);
+    expect(await readFile(join(source, 'full', 'keep.txt'), 'utf8')).toBe('keep');
+    await expect(run({ operation: 'delete', path: 'note.txt' })).rejects.toThrow(/ENOENT/);
+  });
+
+  it('never deletes or moves through a path the model cannot name', async () => {
+    for (const request of [
+      { operation: 'delete', path: '../outside' }, { operation: 'delete', path: '.git' }, { operation: 'delete', path: '' },
+      { operation: 'move', from: 'note.txt', to: '../escape.txt' }, { operation: 'move', from: 'note.txt', to: '.orglet-tmp/x' },
+      { operation: 'create_folder', path: 'a/../b' },
+    ]) await expect(run(request), JSON.stringify(request)).rejects.toThrow();
+  });
+
+  it.runIf(process.platform === 'win32')('refuses to move, delete or create through a junction', async () => {
+    const outside = join(directory, 'outside');
+    await mkdir(outside);
+    await writeFile(join(outside, 'private'), 'canary');
+    await symlink(outside, join(source, 'escape'), 'junction');
+    await expect(run({ operation: 'delete', path: 'escape/private' })).rejects.toThrow('vượt phạm vi');
+    await expect(run({ operation: 'move', from: 'escape/private', to: 'stolen.txt' })).rejects.toThrow('vượt phạm vi');
+    await expect(run({ operation: 'move', from: 'note.txt', to: 'escape/planted.txt' })).rejects.toThrow('vượt phạm vi');
+    await expect(run({ operation: 'create_folder', path: 'escape/new' })).rejects.toThrow('vượt phạm vi');
+    await expect(run({ operation: 'delete', path: 'escape' })).rejects.toThrow('vượt phạm vi');
+    expect(await readdir(outside)).toEqual(['private']);
   });
 });
 

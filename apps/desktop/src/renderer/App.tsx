@@ -1203,6 +1203,7 @@ export function App() {
           confirmLabel: t('Giữ file hiện tại'), cancelLabel: t('Quay lại kiểm tra') });
         if (confirmed) await orglet.call('retireWorkspaceAttempt', { taskId: detail.task.id, runId, reviewToken, keepCurrentFiles: true });
       }) : undefined}
+      onRestoreFile={detail ? (runId, path) => toolAction(() => orglet.call('restoreWorkspaceFile', { taskId: detail.task.id, runId, path })) : undefined}
       tools={detail ? {
         workers: taskWorkers(detail.task, workspace),
         connectedProviders: (Object.keys(ready) as Worker['provider'][]).filter(provider => ready[provider as keyof typeof ready]),

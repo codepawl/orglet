@@ -1,20 +1,43 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import type { Run, Task } from '../../shared/contracts';
 import { WorkspaceGrantSnapshot, type WorkspacePermission } from '../../shared/workspace-access';
-import { WorkspaceBlob, WorkspaceFile, WorkspaceManifest, WorkspaceOperation } from '../../shared/workspace-tools';
+import { WorkspaceBlob, WorkspaceChangeKind, WorkspaceHash, WorkspaceManifest, WorkspaceOperation, WorkspacePath } from '../../shared/workspace-tools';
 import { WorkspaceReadEvidence } from '../../shared/workspace-evidence';
 import { Store } from '../storage/database';
 import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import { WorkspaceGrants } from '../storage/workspace-grants';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
-import { ReadRecoveryFile, RecoveryFile } from '../../shared/workspace-recovery';
+import { ReadRecoveryFile, RecoveryFile, RestoreWorkspaceFile, WorkspaceConflictReason } from '../../shared/workspace-recovery';
 import { WorkspaceDiffRequest, WorkspaceDiffSummary, summarize, type WorkspaceDiff } from '../../shared/workspace-diff';
-import { WORKTREE_POINTER } from './workspace-diff';
+import { planIntegration, plainCopyDiff, type IntegrationStep } from './workspace-plan';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
-import type { WorkspaceIntegration } from './workspace-integration';
+import type { IntegrationStepInput, WorkspaceIntegration } from './workspace-integration';
 import { WorkspaceProcesses } from './workspace-processes';
 import { StartWorkspaceProcess, WorkspaceProcessId, WorkspaceProcessOutput, WorkspaceProcessStatus } from '../../shared/workspace-processes';
+
+/**
+ * One hand-in step and what became of it (COD-254). A change saved before then is a file write: its `hash` and
+ * `bytes` describe the new file, as they always did.
+ */
+const Change = z.object({
+  kind: WorkspaceChangeKind.default('write'),
+  path: WorkspacePath.refine(Boolean),
+  /** Where a moved file was. */
+  from: WorkspacePath.refine(Boolean).optional(),
+  /** The bytes the step leaves at `path`; null for a folder or a deletion. */
+  hash: WorkspaceHash.nullable(),
+  bytes: z.number().int().nonnegative().nullable(),
+  /** What the person's file must still be: the snapshot's hash, or null for a path that must be free. */
+  expectedHash: z.string().nullable(),
+  status: z.enum(['pending', 'applied', 'conflict', 'blocked']),
+  backupPath: z.string().optional(),
+  reason: z.string().optional(),
+  conflict: WorkspaceConflictReason.optional(),
+  restored: z.boolean().optional(),
+}).strict();
+type Change = z.infer<typeof Change>;
 
 const Copy = z.object({
   runId: z.uuid(), grant: WorkspaceGrantSnapshot, directory: z.string().nullable(),
@@ -22,34 +45,86 @@ const Copy = z.object({
   baseline: WorkspaceManifest,
   kind: z.enum(['copy', 'git-worktree']).optional(),
   /**
-   * Counts writes that changed a file's hash. Writes and command starts are both serialized per run, so a command
-   * that recorded this count at start ran either before or after each change with no wall-clock comparison (COD-189).
+   * Counts operations that changed the copy: a write that changed a file's hash, a new folder, a move, a deletion.
+   * Writes and command starts are both serialized per run, so a command that recorded this count at start ran either
+   * before or after each change with no wall-clock comparison (COD-189).
    */
   edits: z.number().int().min(0).default(0),
-  /** What the copy changed since its snapshot, counted when the run finished; only a Git worktree copy has one (COD-163). */
+  /** What the copy changed since its snapshot, counted when the run finished (COD-163, COD-254). */
   diff: WorkspaceDiffSummary.optional(),
-  changes: z.array(WorkspaceFile.extend({
-    expectedHash: z.string().nullable(), status: z.enum(['pending', 'applied', 'conflict', 'blocked']),
-    backupPath: z.string().optional(), reason: z.string().optional(),
-  })),
+  changes: z.array(Change),
 }).strict();
 type Copy = z.infer<typeof Copy>;
 const ReadResult = z.object({ path: z.string(), hash: z.string(), content: z.string() }).passthrough();
 const WriteResult = z.object({ hash: z.string() }).passthrough();
+const FolderResult = z.object({ created: z.boolean() }).passthrough();
+
+/** The operations a model may ask for, and the ones among them that change the private copy. */
+const MODEL_OPERATIONS = ['list', 'read', 'search', 'write', 'create_folder', 'move', 'delete'];
+const CHANGING_OPERATIONS = ['write', 'create_folder', 'move', 'delete'];
 
 /**
  * A path the worker guessed, or a folder it has not created yet, is something it can correct; the answer goes back
  * as the tool's result instead of ending the run, and nothing was changed (COD-190).
  */
-function missingPathResult(request: { operation: string; path?: string }, error: unknown) {
+function missingPathResult(request: WorkspaceOperation, error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   if (!/ENOENT|no such file or directory/i.test(message)) throw error;
-  const path = request.path ?? '';
+  const path = request.operation === 'move' ? request.from : 'path' in request ? request.path : '';
   return { missing: true as const, path, error: `No such file or folder in the working copy: ${path || '.'}`, hint: 'List the parent folder, or write the file to create it.' };
 }
 
 function isMissingPathResult(result: unknown): result is ReturnType<typeof missingPathResult> {
   return typeof result === 'object' && result !== null && (result as { missing?: unknown }).missing === true;
+}
+
+/** A folder, move or delete the helper refused before changing anything; the worker can correct it (COD-254). */
+function isRefusedResult(result: unknown): result is { refused: true; error: string } {
+  return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
+}
+
+/**
+ * Whether an operation changed the copy, for the command rule (COD-189): a write that changed the bytes, a folder that
+ * was not there, any move or deletion. Reads never do.
+ */
+function changedTheCopy(request: WorkspaceOperation, result: unknown): boolean {
+  if (request.operation === 'write') return WriteResult.parse(result).hash !== request.expectedHash;
+  if (request.operation === 'create_folder') return FolderResult.parse(result).created;
+  return request.operation === 'move' || request.operation === 'delete';
+}
+
+/** What a change to the private copy looks like in the run's activity; the trace reads these sentences. */
+function copyEvent(request: WorkspaceOperation): string {
+  if (request.operation === 'move') return `Workspace move: ${request.from} → ${request.to}`;
+  return `Workspace ${request.operation}: ${'path' in request ? request.path : ''}`;
+}
+
+function refusedEvent(request: WorkspaceOperation): string {
+  if (request.operation === 'move') return `Không chuyển được: ${request.from} → ${request.to}`;
+  if (request.operation === 'delete') return `Không xóa được: ${request.path}`;
+  return `Không tạo được thư mục: ${'path' in request ? request.path : ''}`;
+}
+
+/** The sentence a hand-in step leaves in the run's activity once it reached the person's folder. */
+function integratedEvent(step: IntegrationStep): string {
+  if (step.kind === 'folder') return `Đã tạo thư mục: ${step.path}`;
+  if (step.kind === 'move') return `Đã chuyển tệp: ${step.from} → ${step.path}`;
+  if (step.kind === 'delete') return `Đã xóa tệp và giữ bản gốc riêng: ${step.path}`;
+  if (step.kind === 'remove_folder') return `Đã xóa thư mục trống: ${step.path}`;
+  return `Đã tích hợp workspace: ${step.path}`;
+}
+
+/** A write keeps the call id it always had, so a journal from before COD-254 still matches. */
+function integrationCallId(step: IntegrationStep): string {
+  return step.kind === 'write' ? `integrate:${step.path}` : `integrate:${step.kind}:${step.path}`;
+}
+
+function changeOf(step: IntegrationStep): Change {
+  const base = { kind: step.kind, path: step.path, status: 'pending' as const };
+  if (step.kind === 'write') return { ...base, hash: step.hash, bytes: step.bytes, expectedHash: step.expectedHash };
+  if (step.kind === 'move') return { ...base, from: step.from, hash: step.hash, bytes: step.bytes, expectedHash: step.hash };
+  if (step.kind === 'delete') return { ...base, hash: null, bytes: null, expectedHash: step.expectedHash };
+  return { ...base, hash: null, bytes: null, expectedHash: null };
 }
 
 /** Coordinates isolated working copies. It never reads worker-controlled file paths on the host. */
@@ -114,17 +189,23 @@ export class WorkspaceRuntime {
       if (run.taskId !== input.taskId) throw new Error('Lần chạy không thuộc cuộc trò chuyện này.');
       const copy = this.saved(run.id);
       if (!copy?.directory) throw new Error('Lần chạy này không có bản làm việc để so sánh.');
-      if (copy.kind !== 'git-worktree') throw new Error('Bản làm việc này không có bản gốc để so sánh.');
-      if (!this.files.diffCopy) throw new Error('Cần Git cho Windows để đọc thay đổi của bản làm việc này.');
       this.grants.assert(copy.grant, 'read');
+      if (copy.kind !== 'git-worktree') {
+        // A plain folder copy kept only the snapshot's hashes: what happened to each file, without lines (COD-254).
+        const current = WorkspaceManifest.parse(await this.files.execute(copy.directory, { operation: 'manifest' }, signal));
+        return { runId: run.id, ...plainCopyDiff(copy.baseline, current) };
+      }
+      if (!this.files.diffCopy) throw new Error('Cần Git cho Windows để đọc thay đổi của bản làm việc này.');
       const diff = await this.files.diffCopy(copy.directory, copy.baseline, true, signal);
       return { runId: run.id, ...diff };
     });
   }
 
-  /** The counts a finished run keeps beside its copy; absent when the copy is not a Git worktree. */
-  private async summarizeCopy(copy: Copy, signal: AbortSignal): Promise<WorkspaceDiffSummary | undefined> {
-    if (copy.kind !== 'git-worktree' || !copy.directory || !this.files.diffCopy) return undefined;
+  /** The counts a finished run keeps beside its copy; a Git worktree needs Git to count lines. */
+  private async summarizeCopy(copy: Copy, current: WorkspaceManifest, signal: AbortSignal): Promise<WorkspaceDiffSummary | undefined> {
+    if (!copy.directory) return undefined;
+    if (copy.kind !== 'git-worktree') return summarize(plainCopyDiff(copy.baseline, current));
+    if (!this.files.diffCopy) return undefined;
     return summarize(await this.files.diffCopy(copy.directory, copy.baseline, false, signal));
   }
 
@@ -158,13 +239,33 @@ export class WorkspaceRuntime {
     return this.grants.assert(grant, permission);
   }
 
-  private owns(run: Run, path: string) {
+  /**
+   * A crew member changes only its assignment's `writeResources`. A new folder may also be a parent of an owned path,
+   * since writing an owned file creates its parents; removing a folder needs the folder itself to be owned.
+   */
+  private owns(run: Run, path: string, parentFolder = false) {
     if (!run.snapshot.team) return;
     const owned = run.snapshot.assignment?.writeResources ?? [];
     const target = path.toLowerCase();
-    if (!owned.some(resource => target === resource.toLowerCase() || target.startsWith(`${resource.toLowerCase()}/`))) {
+    const inside = (resource: string) => target === resource.toLowerCase() || target.startsWith(`${resource.toLowerCase()}/`);
+    const above = (resource: string) => parentFolder && resource.toLowerCase().startsWith(`${target}/`);
+    if (!owned.some(resource => inside(resource) || above(resource))) {
       throw new Error('Tệp không thuộc phạm vi được giao cho worker này.');
     }
+  }
+
+  private ownsRequest(run: Run, request: WorkspaceOperation) {
+    if (request.operation === 'write' || request.operation === 'delete') this.owns(run, request.path);
+    if (request.operation === 'create_folder') this.owns(run, request.path, true);
+    if (request.operation === 'move') {
+      this.owns(run, request.from);
+      this.owns(run, request.to);
+    }
+  }
+
+  private ownsStep(run: Run, step: IntegrationStep) {
+    if (step.kind === 'move') this.owns(run, step.from);
+    this.owns(run, step.path, step.kind === 'folder');
   }
 
   private async prepare(run: Run, signal: AbortSignal): Promise<Copy> {
@@ -199,13 +300,13 @@ export class WorkspaceRuntime {
 
   async execute(run: Run, callId: string, raw: unknown, signal: AbortSignal): Promise<unknown> {
     const request = WorkspaceOperation.parse(raw);
-    if (!['list', 'read', 'search', 'write'].includes(request.operation)) throw new Error('Tool không được policy cho phép.');
-    const permission = request.operation === 'write' ? 'write' : 'read';
+    if (!MODEL_OPERATIONS.includes(request.operation)) throw new Error('Tool không được policy cho phép.');
+    const permission = CHANGING_OPERATIONS.includes(request.operation) ? 'write' : 'read';
     return this.serial(run.id, async () => {
       this.authorize(run, permission, signal);
       this.processes?.assertIdle(run.id);
       if (permission === 'write') this.assertCopiesResolved(run);
-      if (request.operation === 'write') this.owns(run, request.path);
+      this.ownsRequest(run, request);
       const copy = await this.prepare(run, signal);
       return new ToolCalls(this.store).execute({
         runId: run.id, callId, name: `workspace_${request.operation}`, arguments: request,
@@ -234,11 +335,16 @@ export class WorkspaceRuntime {
             this.notify();
             return { ...read, evidenceId: evidence.id };
           }
-          if (request.operation === 'write' && WriteResult.parse(result).hash !== request.expectedHash) {
+          if (isRefusedResult(result)) {
+            this.store.event(run.id, refusedEvent(request));
+            this.notify();
+            return result;
+          }
+          if (changedTheCopy(request, result)) {
             copy.edits += 1;
             this.save(copy);
           }
-          this.store.event(run.id, `Workspace ${request.operation}: ${'path' in request ? request.path : ''}`);
+          this.store.event(run.id, copyEvent(request));
           this.notify();
           return result;
         },
@@ -314,12 +420,57 @@ export class WorkspaceRuntime {
 
   async stopRun(runId: string) { await this.processes?.stopRun(runId); }
 
+  /**
+   * Puts a file a hand-in deleted back where it was, from the private backup the broker flushed before deleting it
+   * (COD-254). It goes through the same broker as a new file: create-new semantics, so whatever stands at that path now
+   * is never overwritten, and the chat must still hold the same folder with edit access. It is journaled like any
+   * other effect; an interrupted restore is an unknown outcome to review, never retried by itself.
+   */
+  async restore(raw: unknown, isActive: (taskId: string) => boolean): Promise<void> {
+    const input = RestoreWorkspaceFile.parse(raw);
+    const signal = AbortSignal.timeout(60_000);
+    await this.serial(input.runId, async () => {
+      const run = this.store.get<Run>('runs', input.runId);
+      if (run.taskId !== input.taskId) throw new Error('Lần chạy không thuộc cuộc trò chuyện này.');
+      if (isActive(input.taskId)) throw new Error('Dừng công việc trước khi xử lý bản làm việc.');
+      const copy = this.saved(run.id);
+      const change = copy?.changes.find(item => item.kind === 'delete' && item.path === input.path);
+      if (!copy || !change || change.status !== 'applied' || !change.backupPath || !change.expectedHash) {
+        throw new Error('Không có tệp đã xóa để khôi phục ở đường dẫn này.');
+      }
+      if (change.restored) return;
+      const grant = this.grants.snapshot(run.taskId);
+      if (!grant || grant.id !== copy.grant.id || !grant.permissions.includes('write')) {
+        throw new Error('Cần quyền sửa trên đúng thư mục này để khôi phục tệp.');
+      }
+      const bytes = await readFile(change.backupPath);
+      if (createHash('sha256').update(bytes).digest('hex') !== change.expectedHash) {
+        throw new Error('Bản gốc đã lưu không còn khớp; không khôi phục.');
+      }
+      await this.serial('integration', async () => {
+        const root = await this.grants.directory(grant, 'write');
+        const result = await this.integration.apply({ runId: run.id, callId: `restore:${change.path}:${randomUUID()}`,
+          journalName: 'restore_workspace_file', root, signal, operation: 'write', path: change.path, expectedHash: null, bytes,
+          authorize: () => {
+            this.grants.assert(grant, 'write');
+            if (isActive(input.taskId)) throw new Error('Dừng công việc trước khi xử lý bản làm việc.');
+          },
+        });
+        if (result.status === 'conflict') throw new Error('Đã có tệp ở đường dẫn này; không ghi đè. Đổi tên hoặc chuyển tệp đó rồi thử lại.');
+        if (result.status !== 'applied') throw new Error('Không khôi phục được tệp; xem lại trong Chi tiết.');
+        change.restored = true;
+        this.save(copy);
+        this.store.event(run.id, `Đã khôi phục tệp đã xóa: ${change.path}`);
+      });
+    });
+  }
+
   integratedChangeCount(runId: string): number {
     const copy = this.saved(runId);
     return copy?.state === 'integrated' ? copy.changes.filter(change => change.status === 'applied').length : 0;
   }
 
-  private async bytes(directory: string, file: z.infer<typeof WorkspaceFile>, signal: AbortSignal): Promise<Buffer> {
+  private async bytes(directory: string, file: { path: string; hash: string; bytes: number }, signal: AbortSignal): Promise<Buffer> {
     const chunks: Buffer[] = [];
     let offset = 0;
     do {
@@ -340,6 +491,16 @@ export class WorkspaceRuntime {
     return result;
   }
 
+  /** What the broker needs for one step: only a write carries bytes, read through the sandboxed helper. */
+  private async stepInput(directory: string, step: IntegrationStep, signal: AbortSignal): Promise<IntegrationStepInput> {
+    if (step.kind === 'write') {
+      return { operation: 'write', path: step.path, expectedHash: step.expectedHash, bytes: await this.bytes(directory, step, signal) };
+    }
+    if (step.kind === 'move') return { operation: 'move', from: step.from, path: step.path, expectedHash: step.hash };
+    if (step.kind === 'delete') return { operation: 'delete', path: step.path, expectedHash: step.expectedHash };
+    return { operation: step.kind === 'folder' ? 'create_folder' : 'remove_folder', path: step.path };
+  }
+
   /** Integrates the copy and returns the limitations to report: command failures the code has since moved past. */
   async finish(run: Run, signal: AbortSignal): Promise<string[]> {
     signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
@@ -354,37 +515,39 @@ export class WorkspaceRuntime {
       if (copy.state !== 'ready' || !copy.directory) throw new Error('Bản làm việc bị gián đoạn; cần kiểm tra trước khi tiếp tục.');
       const manifest = WorkspaceManifest.parse(await this.files.execute(copy.directory, { operation: 'manifest' }, signal));
       // Counted before integration and kept even when integration is refused, so the chat can still show what changed.
-      copy.diff = await this.summarizeCopy(copy, signal);
-      const baseline = new Map(copy.baseline.files.map(file => [file.path, file]));
-      if (copy.baseline.files.some(file => !manifest.files.some(current => current.path === file.path))) {
+      copy.diff = await this.summarizeCopy(copy, manifest, signal);
+      // A linked worktree carries Git's own `.git` pointer file at its root; the plan never integrates it over the
+      // person's repository. A plan that cannot be ordered safely is refused before anything changes.
+      let steps: IntegrationStep[];
+      try {
+        steps = planIntegration(copy.baseline, manifest);
+        for (const step of steps) this.ownsStep(run, step);
+      } catch (error) {
         this.save(copy);
-        throw new Error('Bản làm việc có tệp bị xóa; chưa tích hợp thay đổi này.');
+        throw error;
       }
-      // A linked worktree carries Git's own `.git` pointer file at its root; it was never in the snapshot and must never
-      // be integrated over the person's repository.
-      copy.changes = manifest.files.filter(file => file.path !== WORKTREE_POINTER && baseline.get(file.path)?.hash !== file.hash)
-        .map(file => ({ ...file, expectedHash: baseline.get(file.path)?.hash ?? null, status: 'pending' }));
-      for (const file of copy.changes) this.owns(run, file.path);
+      copy.changes = steps.map(changeOf);
       if (!copy.changes.length) { this.save({ ...copy, state: 'integrated' }); return limitations; }
       this.authorize(run, 'write', signal);
       // ponytail: one integration queue per core; use per-root queues if more than two concurrent workers are supported.
       await this.serial('integration', async () => {
         this.save({ ...copy, state: 'integrating' });
         try {
-          for (const file of copy.changes) {
+          for (const [index, step] of steps.entries()) {
+            const change = copy.changes[index];
             const root = await this.grants.directory(run.snapshot.workspaceGrant!, 'write');
-            const result = await this.integration.apply({ runId: run.id, callId: `integrate:${file.path}`,
-              root, path: file.path, expectedHash: file.expectedHash,
-              bytes: await this.bytes(copy.directory!, file, signal), signal,
-              authorize: () => { this.authorize(run, 'write', signal); this.owns(run, file.path); },
+            const result = await this.integration.apply({ runId: run.id, callId: integrationCallId(step), root, signal,
+              ...await this.stepInput(copy.directory!, step, signal),
+              authorize: () => { this.authorize(run, 'write', signal); this.ownsStep(run, step); },
             });
             if (result.status === 'uncertain') throw new Error('Tích hợp bị gián đoạn; cần kiểm tra file và bản gốc đã lưu.');
-            file.status = result.status;
-            file.backupPath = result.backupPath;
-            if (result.status === 'blocked') file.reason = result.reason;
+            change.status = result.status;
+            if (result.backupPath) change.backupPath = result.backupPath;
+            if (result.status === 'blocked') change.reason = result.reason;
+            if (result.status === 'conflict') change.conflict = result.reason ?? 'changed';
             this.save({ ...copy, state: result.status === 'applied' ? 'integrating' : 'conflict' });
             if (result.status !== 'applied') throw new Error('Workspace có xung đột; các tệp đã tích hợp được giữ lại.');
-            this.store.event(run.id, `Đã tích hợp workspace: ${file.path}`);
+            this.store.event(run.id, integratedEvent(step));
           }
           this.save({ ...copy, state: 'integrated' });
         } catch (error) {
