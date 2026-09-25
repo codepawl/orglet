@@ -532,6 +532,8 @@ export const en: Dictionary = {
   'Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.': 'Reusable instructions; imported packages need a review first.',
   'Hằng ngày': 'Daily',
   'Hằng tuần': 'Weekly',
+  'Hằng ngày lúc {0} · {1}': 'Daily at {0} · {1}',
+  'Hằng tuần vào {0} lúc {1} · {2}': 'Weekly on {0} at {1} · {2}',
   'Hết ca thì Orglet xong bước đang chạy rồi tạm dừng đến ca sau. Giờ kết thúc sớm hơn giờ bắt đầu nghĩa là ca qua đêm.': 'When the shift ends, Orglet finishes the current step and pauses until the next one. An end time before the start means an overnight shift.',
   'Hết thời gian tải danh sách model. Vẫn có thể gõ ID tùy chỉnh.': 'Timed out while loading the model list. You can still type a custom ID.',
   'Hủy': 'Cancel',

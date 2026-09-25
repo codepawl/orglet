@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import { Mascot, bubbleOutline, eyeColor, mascots, mascotIds, smallGlyphs } from '../../apps/desktop/src/renderer/components/mascots';
 import { mascotGlyph } from '../../apps/desktop/src/renderer/components/Avatar';
-import { autoMascot, mascotCategoryIds, mascotColors, rankMascots, suggestMascots, suggestedColors, suggestedMascots } from '../../apps/desktop/src/renderer/components/mascotSuggest';
+import { autoMascot, distinctMascot, mascotCategoryIds, mascotColors, rankMascots, suggestMascots, suggestedColors, suggestedMascots } from '../../apps/desktop/src/renderer/components/mascotSuggest';
 
 const all = Object.values(mascotCategoryIds).flat();
 const top = (name: string, description?: string) => suggestMascots({ name, description })[0];
@@ -159,4 +159,17 @@ it('draws white eyes on every body and dark ones only on a very light body', () 
   expect(eyeFills.length).toBeGreaterThan(40);
   for (const eye of eyeFills) expect(eye).toContain(`fill="${eyeColor}"`);
   expect(markup).not.toMatch(/<rect [^>]*rx="2\.2"[^>]*fill="var\(--mascot-ink/);
+});
+
+it('gives orglets made together for similar roles different faces and colours (COD-265)', () => {
+  const writerHints = { name: 'Writer', description: 'Drafts weekly X posts about what you shipped.' };
+  const editorHints = { name: 'Editor', description: 'Edits X drafts for accuracy, clarity and a natural voice.' };
+  const writer = distinctMascot(writerHints, 'writer-seed', []);
+  expect(writer).toBe(autoMascot(mascotIds, 'writer-seed', writerHints));
+  const editor = distinctMascot(editorHints, 'editor-seed', [writer]);
+  expect(editor).not.toBe(writer);
+  expect(mascotColors[editor]).not.toBe(mascotColors[writer]);
+  // With every colour already taken it still picks a face nobody shows.
+  const crowd = mascotIds.filter(id => id !== 'notes');
+  expect(distinctMascot(editorHints, 'editor-seed', crowd)).toBe('notes');
 });
