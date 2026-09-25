@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, open, readdir, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, rename, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { WorkspaceOperation, WorkspacePath, type WorkspaceManifest } from '../../shared/workspace-tools';
 
@@ -50,6 +50,7 @@ async function boundedFile(path: string): Promise<Buffer> {
 async function inventory(root: string, destination?: string): Promise<WorkspaceManifest> {
   const files: WorkspaceManifest['files'] = [];
   const omitted: string[] = [];
+  const folders: string[] = [];
   let totalBytes = 0;
   let visited = 0;
   async function visit(folder: string, prefix: string) {
@@ -65,6 +66,7 @@ async function inventory(root: string, destination?: string): Promise<WorkspaceM
       }
       const actual = await within(root, path);
       if (entry.isDirectory()) {
+        folders.push(path);
         if (destination) await mkdir(join(destination, path), { recursive: true });
         await visit(actual, path);
       } else if (entry.isFile()) {
@@ -79,7 +81,58 @@ async function inventory(root: string, destination?: string): Promise<WorkspaceM
     }
   }
   await visit(root, '');
-  return { files, omitted };
+  return { files, omitted, folders };
+}
+
+/**
+ * A request the worker can correct, answered as the tool's result: nothing in the copy changed, so it is not an effect
+ * with an unknown outcome and the run goes on (COD-254, like a missing path in COD-190). Worded for the model.
+ */
+function refused(error: string, hint: string) {
+  return { refused: true as const, error, hint };
+}
+
+/** A folder and any missing parents; one that is already there is left as it is (COD-254). */
+async function createFolder(root: string, path: string) {
+  const target = await within(root, path);
+  const existing = await lstat(target).catch(missingAsUndefined);
+  if (existing?.isDirectory()) return { path, created: false };
+  if (existing) return refused(`A file already has this name: ${path}`, 'Choose another folder name, or move the file first.');
+  await mkdir(target, { recursive: true });
+  return { path, created: true };
+}
+
+/**
+ * Moves or renames a file or a whole folder inside the copy. The new path must be free, except for a change of letter
+ * case only, which Windows treats as the same entry; missing parent folders are created like a new file's (COD-254).
+ */
+async function move(root: string, from: string, to: string) {
+  const source = await within(root, from);
+  const entry = await lstat(source, { bigint: true });
+  if (!entry.isFile() && !entry.isDirectory()) return refused(`Only files and folders can be moved: ${from}`, 'Move a file or a folder.');
+  if (from === to) return refused('The new path is the same as the old one.', 'Give the new path or name.');
+  if (to.toLowerCase().startsWith(`${from.toLowerCase()}/`)) return refused('A folder cannot be moved inside itself.', 'Choose a path outside the folder.');
+  const destination = await within(root, to);
+  const occupied = await lstat(destination, { bigint: true }).catch(missingAsUndefined);
+  const sameEntry = !!occupied && occupied.ino === entry.ino && occupied.dev === entry.dev;
+  if (occupied && !sameEntry) return refused(`Something already exists at ${to}`, 'Choose a free path, or move or delete what is there first.');
+  await mkdir(dirname(destination), { recursive: true });
+  await rename(source, destination);
+  return { from, to, type: entry.isDirectory() ? 'folder' : 'file' };
+}
+
+/** Deletes a file, or a folder that is already empty; a folder with anything in it is refused (COD-254). */
+async function remove(root: string, path: string) {
+  const target = await within(root, path);
+  const entry = await lstat(target);
+  if (entry.isDirectory()) {
+    if ((await readdir(target)).length > 0) return refused(`The folder is not empty: ${path}`, 'Move or delete what is inside first; only an empty folder can be deleted.');
+    await rmdir(target);
+    return { path, type: 'folder' };
+  }
+  if (!entry.isFile()) return refused(`Only files and empty folders can be deleted: ${path}`, 'Delete a file or an empty folder.');
+  await unlink(target);
+  return { path, type: 'file' };
 }
 
 /** Always called inside the OS sandbox in production. Path checks complement that boundary. */
@@ -112,6 +165,9 @@ export async function executeWorkspaceOperation(directory: string, raw: unknown)
     }
     return { path: request.path, hash: digest(bytes), bytes: bytes.length };
   }
+  if (request.operation === 'create_folder') return createFolder(root, request.path);
+  if (request.operation === 'move') return move(root, request.from, request.to);
+  if (request.operation === 'delete') return remove(root, request.path);
   const target = await within(root, request.path);
   if (request.operation === 'blob') {
     const bytes = await boundedFile(target);

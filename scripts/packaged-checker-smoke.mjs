@@ -244,7 +244,7 @@ try {
   const recoveryPanel = page.locator('.workspace-recovery');
   await recoveryPanel.getByRole('heading', { name: 'File và tiến trình', exact: true }).waitFor();
   // The attempt's files fold under their count (COD-191); open the group before reaching the private edit.
-  await recoveryPanel.locator('details.recovery-group > summary').filter({ hasText: /file trong bản làm việc/ }).click();
+  await recoveryPanel.locator('details.recovery-group > summary').filter({ hasText: /thay đổi trong bản làm việc/ }).click();
   await recoveryPanel.getByRole('button', { name: 'Xem bản sửa riêng', exact: true }).click();
   const privateEdit = recoveryPanel.locator('pre').filter({ hasText: 'Private edit for inspection' });
   const privateEditError = recoveryPanel.getByRole('alert');

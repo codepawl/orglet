@@ -1,9 +1,10 @@
-import { FolderOpen, Archive, FileText, ChevronRight, CircleAlert, SquareTerminal, FilePen, FileCheck, Wrench } from 'lucide-react';
+import { FolderOpen, Archive, ArchiveRestore, FileText, ChevronRight, CircleAlert, SquareTerminal, FilePen, FileCheck, FolderInput, FolderPlus, Trash2, Wrench } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { Run } from '../../shared/contracts';
-import type { RecoveryFile, RecoveryOutput, WorkspaceRecoveryView, UncertainCall } from '../../shared/workspace-recovery';
+import type { RecoveryFile, RecoveryOutput, WorkspaceConflictReason, WorkspaceRecoveryView, UncertainCall } from '../../shared/workspace-recovery';
+import type { WorkspaceChangeKind } from '../../shared/workspace-tools';
 import { groupRecoveryAttempts, uncertainCallLabel, type AttemptState, type RecoveryAttempt } from '../../shared/recovery-attempts';
-import { t, tMessage } from '../i18n';
+import { t, tMessage, translated } from '../i18n';
 import { Button } from './ui';
 import { Select } from './Select';
 import { timeMarkLabel } from './TimeMark';
@@ -91,8 +92,12 @@ export function attemptStateLabel(state: AttemptState, pendingChanges: number): 
 export function uncertainCallText(call: Pick<UncertainCall, 'tool' | 'summary'>): string {
   const label = uncertainCallLabel(call);
   if (label.action === 'write' && label.target) return t('Ghi {0}', [label.target]);
+  if (label.action === 'folder' && label.target) return t('Tạo thư mục {0}', [label.target]);
+  if (label.action === 'move' && label.target) return t('Chuyển {0}', [label.target]);
+  if (label.action === 'delete' && label.target) return t('Xóa {0}', [label.target]);
   if (label.action === 'run' && label.target) return t('Chạy {0}', [label.target]);
   if (label.action === 'apply' && label.target) return t('Áp dụng {0}', [label.target]);
+  if (label.action === 'restore' && label.target) return t('Khôi phục {0}', [label.target]);
   if (label.tool && label.target) return `${label.tool} ${label.target}`;
   return label.tool ?? t('Thao tác không rõ tên');
 }
@@ -100,8 +105,12 @@ export function uncertainCallText(call: Pick<UncertainCall, 'tool' | 'summary'>)
 function uncertainCallIcon(call: Pick<UncertainCall, 'tool' | 'summary'>) {
   const action = uncertainCallLabel(call).action;
   if (action === 'write') return FilePen;
+  if (action === 'folder') return FolderPlus;
+  if (action === 'move') return FolderInput;
+  if (action === 'delete') return Trash2;
   if (action === 'run') return SquareTerminal;
   if (action === 'apply') return FileCheck;
+  if (action === 'restore') return ArchiveRestore;
   return Wrench;
 }
 
@@ -119,13 +128,49 @@ function commandsSummary(commands: RecoveryAttempt['commands']): string {
 const changeLabels: Record<string, () => string> = {
   pending: () => t('Chưa áp dụng'), applied: () => t('Đã áp dụng'), conflict: () => t('Xung đột'), blocked: () => t('Bị chặn'),
 };
+/** What a hand-in step does, beside its path (COD-254); a file edit needs no word. */
+const changeKindLabels: Partial<Record<WorkspaceChangeKind, string>> = translated({
+  folder: 'Tạo thư mục', move: 'Chuyển', delete: 'Xóa', remove_folder: 'Xóa thư mục',
+});
+/** Why a step stopped: something the person did in their folder meanwhile, which the hand-in left alone. */
+const conflictLabels: Record<WorkspaceConflictReason, string> = translated({
+  changed: 'Tệp trong thư mục của bạn đã được sửa sau khi Tí bắt đầu; không ghi đè.',
+  missing: 'Tệp hoặc thư mục này không còn trong thư mục của bạn.',
+  exists: 'Đã có tệp hoặc thư mục ở đường dẫn này; không ghi đè.',
+  not_empty: 'Thư mục không trống nên được giữ lại.',
+});
+
+type RecoveryChange = WorkspaceRecoveryView['copies'][number]['changes'][number];
+
+function ChangeRow({ runId, change, busy, readFile, onRestore }: { runId: string; change: RecoveryChange; busy: boolean;
+  readFile: ReadPrivateFile; onRestore?: (runId: string, path: string) => void }) {
+  const kind = change.kind ?? 'write';
+  const isFolder = kind === 'folder' || kind === 'remove_folder';
+  const target = change.from ? `${change.from} → ${change.path}` : isFolder ? `${change.path}/` : change.path;
+  const action = changeKindLabels[kind];
+  const status = change.restored ? t('Đã khôi phục') : changeLabels[change.status]();
+  const restorable = kind === 'delete' && change.status === 'applied' && !change.restored && onRestore;
+  // Only a written file has private bytes worth reading; a move keeps the snapshot's bytes, a folder has none.
+  return <li className="recovery-change">
+    <span><code>{target}</code><span className="recovery-change-state"> · {action ? `${action} · ` : ''}{status}</span></span>
+    {change.conflict && <p className="recovery-change-note">{conflictLabels[change.conflict]}</p>}
+    {change.reason && <p className="recovery-change-note">{tMessage(change.reason)}</p>}
+    {kind === 'write' && <PrivateFile runId={runId} path={change.path} read={readFile} disabled={busy} />}
+    {restorable && <div className="workspace-process-output">
+      <Button disabled={busy} aria-label={t('Khôi phục {0}', [change.path])} onClick={() => onRestore(runId, change.path)}>
+        <ArchiveRestore size={15} />{t('Khôi phục')}
+      </Button>
+    </div>}
+  </li>;
+}
 const processLabels: Record<string, () => string> = {
   running: () => t('Đang chạy'), exited: () => t('Đã dừng'), cancelled: () => t('Đã hủy'), timeout: () => t('Hết thời gian'),
   output_limit: () => t('Vượt giới hạn đầu ra'), uncertain: () => t('Chưa rõ kết quả'),
 };
 
-function AttemptRow({ attempt, busy, onRetire, readOutput, readFile }: { attempt: RecoveryAttempt; busy: boolean;
-  onRetire: (runId: string, reviewToken: string) => void; readOutput: ReadProcessOutput; readFile: ReadPrivateFile }) {
+function AttemptRow({ attempt, busy, onRetire, onRestore, readOutput, readFile }: { attempt: RecoveryAttempt; busy: boolean;
+  onRetire: (runId: string, reviewToken: string) => void; onRestore?: (runId: string, path: string) => void;
+  readOutput: ReadProcessOutput; readFile: ReadPrivateFile }) {
   const copy = attempt.copy;
   const stateClass = attempt.blocking ? 'recovery-attempt-state blocking' : attempt.state === 'integrated' ? 'recovery-attempt-state settled' : 'recovery-attempt-state';
   return <li id={attemptElementId(attempt.runId)} className={attempt.blocking ? 'recovery-attempt blocking' : 'recovery-attempt'} tabIndex={-1}>
@@ -150,12 +195,10 @@ function AttemptRow({ attempt, busy, onRetire, readOutput, readFile }: { attempt
       })}
     </ul>}
     {copy && copy.changes.length > 0 && <details className="recovery-group">
-      <summary>{copy.changeCount === 1 ? t('1 file trong bản làm việc') : t('{0} file trong bản làm việc', [copy.changeCount])}</summary>
-      <ul>{copy.changes.map(change => <li key={change.path}>
-        <code>{change.path}</code> · {changeLabels[change.status]()}
-        {change.reason && <p>{tMessage(change.reason)}</p>}
-        <PrivateFile runId={attempt.runId} path={change.path} read={readFile} disabled={busy} />
-      </li>)}</ul>
+      <summary>{copy.changeCount === 1 ? t('1 thay đổi trong bản làm việc') : t('{0} thay đổi trong bản làm việc', [copy.changeCount])}</summary>
+      {/* A retired attempt takes no new effect, so it offers no restore. */}
+      <ul className="recovery-changes">{copy.changes.map(change => <ChangeRow key={`${change.kind ?? 'write'}:${change.path}`} runId={attempt.runId} change={change}
+        busy={busy} readFile={readFile} onRestore={attempt.retired ? undefined : onRestore} />)}</ul>
       {copy.changeCount > copy.changes.length && <p className="muted">{t('Đang hiển thị {0} trên {1} thay đổi.', [copy.changes.length, copy.changeCount])}</p>}
     </details>}
     {attempt.processes.length > 0 && <details className="recovery-group">
@@ -174,8 +217,10 @@ function AttemptRow({ attempt, busy, onRetire, readOutput, readFile }: { attempt
   </li>;
 }
 
-export function WorkspaceRecovery({ view, runs, busy, focus, onRetire, readOutput, readFile }: { view: WorkspaceRecoveryView; runs: Run[];
-  busy: boolean; focus?: RecoveryFocus; onRetire: (runId: string, reviewToken: string) => void; readOutput: ReadProcessOutput; readFile: ReadPrivateFile }) {
+export function WorkspaceRecovery({ view, runs, busy, focus, onRetire, onRestore, readOutput, readFile }: { view: WorkspaceRecoveryView; runs: Run[];
+  busy: boolean; focus?: RecoveryFocus; onRetire: (runId: string, reviewToken: string) => void;
+  /** Puts a file the hand-in deleted back from its private backup (COD-254). */
+  onRestore?: (runId: string, path: string) => void; readOutput: ReadProcessOutput; readFile: ReadPrivateFile }) {
   const grouped = groupRecoveryAttempts(view, runs);
   const [showEarlier, setShowEarlier] = useState(false);
   const focusRunId = focus?.runId ?? grouped.blocking?.runId;
@@ -193,7 +238,8 @@ export function WorkspaceRecovery({ view, runs, busy, focus, onRetire, readOutpu
     return () => cancelAnimationFrame(frame);
   }, [focus?.at, focusRunId, focusInEarlier]);
   if (!grouped.shown.length) return null;
-  const row = (attempt: RecoveryAttempt) => <AttemptRow key={attempt.runId} attempt={attempt} busy={busy} onRetire={onRetire} readOutput={readOutput} readFile={readFile} />;
+  const row = (attempt: RecoveryAttempt) => <AttemptRow key={attempt.runId} attempt={attempt} busy={busy} onRetire={onRetire} onRestore={onRestore}
+    readOutput={readOutput} readFile={readFile} />;
   return <section className="details-section workspace-recovery" aria-labelledby="workspace-recovery-heading">
     <h3 id="workspace-recovery-heading"><FolderOpen size={15} aria-hidden="true" />{t('File và tiến trình')}</h3>
     <ol className="recovery-attempts">{grouped.shown.map(row)}</ol>

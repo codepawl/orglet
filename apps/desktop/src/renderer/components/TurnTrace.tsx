@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Ban, Blocks, BookOpen, Brain, ChevronRight, FileDiff, FileText, FolderSearch, Globe, Lightbulb, Search, Table2, Terminal, UserRound, Wrench, type LucideIcon } from 'lucide-react';
+import { Ban, Blocks, BookOpen, Brain, ChevronRight, FileDiff, FileText, FolderInput, FolderPlus, FolderSearch, Globe, Lightbulb, Search, Table2, Terminal, Trash2, UserRound, Wrench, type LucideIcon } from 'lucide-react';
 import { t, tMessage } from '../i18n';
 import { traceSummary, type TraceEntry, type TraceKind } from '../turnTrace';
 
@@ -31,7 +31,7 @@ export function TurnTrace({ entries, onOpenMemories, children }: { entries: read
 
 const traceIcons: Record<TraceKind, LucideIcon> = {
   memory: Brain, knowledge: BookOpen, read: FileText, search: Search, list: FolderSearch, skill: BookOpen,
-  web_search: Globe, web_read: Globe, dataset: Table2, edit: FileDiff, command: Terminal, handoff: UserRound,
+  web_search: Globe, web_read: Globe, dataset: Table2, edit: FileDiff, folder: FolderPlus, move: FolderInput, delete: Trash2, command: Terminal, handoff: UserRound,
   remembered: Brain, proposal: Lightbulb, failed: Ban, other: Wrench, mcp: Blocks,
 };
 
@@ -48,6 +48,9 @@ function traceVerb(kind: TraceKind): string {
     case 'web_read': return t('Đọc trang web');
     case 'dataset': return t('Đã kiểm tra dữ liệu');
     case 'edit': return t('Sửa tệp');
+    case 'folder': return t('Đã tạo thư mục');
+    case 'move': return t('Đã chuyển');
+    case 'delete': return t('Đã xóa');
     case 'command': return t('Chạy lệnh');
     case 'mcp': return t('Dùng công cụ MCP');
     case 'handoff': return t('Giao việc cho');

@@ -220,7 +220,11 @@ describe.runIf(existsSync(gitExecutable))('workspace diff through the runtime (C
       },
       execute: async (copy, request, abort) => { abort.throwIfAborted(); return executeWorkspaceOperation(copy, request); },
       diffCopy: async (copy, baseline, includeHunks, abort) => diffWorkspaceCopy({ executable: gitExecutable, worktree: copy, baseline, current: await manifestOf(copy), includeHunks, signal: abort }),
-    }, { apply: async options => { integrated.push(options.path); return { status: 'applied', hash: 'a'.repeat(64), backupPath: join(directory, 'backup'), created: options.expectedHash === null }; } });
+    }, { apply: async options => {
+      integrated.push(options.path);
+      const created = 'expectedHash' in options && options.expectedHash === null;
+      return { status: 'applied', hash: 'a'.repeat(64), backupPath: join(directory, 'backup'), created };
+    } });
   }
 
   async function edit(runtime: WorkspaceRuntime, path: string, content: string) {
@@ -242,7 +246,7 @@ describe.runIf(existsSync(gitExecutable))('workspace diff through the runtime (C
     expect(diff.files[1].hunks[0].lines.map(line => `${line.kind[0]} ${line.text}`)).toEqual(['r original', 'a changed', 'c second', 'a third']);
   });
 
-  it('records no counts while nothing changed, and refuses a run without a copy or a copy without a snapshot', async () => {
+  it('records no counts while nothing changed, refuses a run without a copy, and lists a plain copy without lines', async () => {
     const runtime = fixture();
     await expect(runtime.diff({ taskId: task.id, runId: run.id })).rejects.toThrow('không có bản làm việc để so sánh');
     await runtime.execute(run, id(), { operation: 'read', path: 'note.txt', offset: 0 }, signal());
@@ -257,8 +261,24 @@ describe.runIf(existsSync(gitExecutable))('workspace diff through the runtime (C
     const plainRun = { ...run, id: id() };
     store.put('runs', plainRun, { column: 'task_id', value: task.id });
     await plain.execute(plainRun, id(), { operation: 'read', path: 'note.txt', offset: 0 }, signal());
-    await expect(plain.diff({ taskId: task.id, runId: plainRun.id })).rejects.toThrow('không có bản gốc để so sánh');
+    // A plain folder copy kept only hashes (COD-254): it lists what happened to each file, without lines.
+    expect(await plain.diff({ taskId: task.id, runId: plainRun.id })).toEqual({ runId: plainRun.id, files: [], additions: 0, deletions: 0, truncated: false, lines: false });
     await plain.finish(plainRun, signal());
-    expect(new WorkspaceRecovery(store).view(task.id).copies.find(copy => copy.runId === plainRun.id)!.diff).toBeUndefined();
+    expect(new WorkspaceRecovery(store).view(task.id).copies.find(copy => copy.runId === plainRun.id)!.diff).toEqual({ files: 0, additions: 0, deletions: 0, lines: false });
+  });
+
+  it('lists moves, deletions and new folders of a Git copy, with Git\'s hunks for the edits (COD-254)', async () => {
+    const runtime = fixture();
+    await runtime.execute(run, id(), { operation: 'create_folder', path: 'archive/empty' }, signal());
+    await runtime.execute(run, id(), { operation: 'move', from: 'extra.txt', to: 'archive/extra.txt' }, signal());
+    await runtime.execute(run, id(), { operation: 'delete', path: 'note.txt' }, signal());
+    const diff = await runtime.diff({ taskId: task.id, runId: run.id });
+    expect(diff.files.map(file => [file.path, file.status, file.previousPath ?? null])).toEqual([
+      ['archive/extra.txt', 'renamed', 'extra.txt'], ['note.txt', 'deleted', null],
+    ]);
+    expect(diff.folders).toEqual([{ path: 'archive', status: 'added' }, { path: 'archive/empty', status: 'added' }]);
+    expect(diff.lines).toBeUndefined();
+    await runtime.finish(run, signal());
+    expect(new WorkspaceRecovery(store).view(task.id).copies[0].diff).toEqual({ files: 2, additions: 0, deletions: 2, moved: 1, removed: 1, folders: 2 });
   });
 });

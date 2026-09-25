@@ -64,7 +64,7 @@ Commands the orglet ran are summed under the answer ("Commands: 2 exit 0, 1 fail
 
 ## Diffs
 
-When a run changed files in its working copy, a line under the answer says **Files changed: 3 · +42 −7**. Click it for a read-only diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a crew turn each member has its own line, because each works in its own copy.
+When a run changed files in its working copy, a line under the answer says **Files changed: 3 · +42 −7**; moves and deletions get their own count, as in **Files changed: 6 · 5 moved or renamed · 1 deleted**. Click it for a read-only diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a folder that is not a Git repository the diff lists what happened to each file (new, changed, moved, renamed, deleted) and the folders created or removed, without lines. In a crew turn each member has its own line, because each works in its own copy.
 
 The diff exists only when the working folder is a Git repository, because the comparison is against the snapshot the copy started from; a plain folder says so instead. Applying the changes to your folder, keeping your current files, and file conflicts are handled in **Details → Files and processes**, not in the viewer. Details: [worker-actions.md](worker-actions.md#where-a-diff-lives).
 

@@ -8,6 +8,9 @@ import {
   type DiffFile, type DiffHunk, type DiffLine, type WorkspaceDiff,
 } from '../../shared/workspace-diff';
 import { SNAPSHOT_REF, isolatedGit } from './workspace-git';
+import { WORKTREE_POINTER, folderChanges } from './workspace-plan';
+
+export { WORKTREE_POINTER };
 
 const ObjectId = z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/);
 const FAILURE = 'Không đọc được thay đổi của bản làm việc';
@@ -41,7 +44,10 @@ export async function diffWorkspaceCopy(options: WorkspaceDiffOptions): Promise<
   const repository = join(session, 'repository.git');
   const gitDirectory = await linkedWorktreeDirectory(repository, options.worktree);
   const changed = changedPaths(options.baseline, options.current);
-  if (changed.length === 0) return { files: [], additions: 0, deletions: 0, truncated: false };
+  // Git keeps no folders, so created and removed ones come from the two inventories (COD-254).
+  const folders = folderChanges(options.baseline, options.current);
+  const withFolders = folders.length ? { folders } : {};
+  if (changed.length === 0) return { files: [], additions: 0, deletions: 0, truncated: false, ...withFolders };
   const run = isolatedGit({ executable: options.executable, directory: session, cwd: repository, signal: options.signal, failure: FAILURE });
   const indexFile = join(session, `diff-index-${randomUUID()}`);
   const repositoryArgs = [`--git-dir=${gitDirectory}`, `--work-tree=${options.worktree}`];
@@ -64,6 +70,7 @@ export async function diffWorkspaceCopy(options: WorkspaceDiffOptions): Promise<
       additions: files.reduce((total, file) => total + file.additions, 0),
       deletions: files.reduce((total, file) => total + file.deletions, 0),
       truncated,
+      ...withFolders,
     };
   } finally {
     await rm(indexFile, { force: true });
@@ -99,9 +106,6 @@ export function changedPaths(baseline: WorkspaceManifest, current: WorkspaceMani
   for (const path of before.keys()) if (!after.has(path)) paths.add(path);
   return [...paths].sort();
 }
-
-/** The file Git leaves at the root of a linked worktree; it belongs to the copy, never to the person's folder. */
-export const WORKTREE_POINTER = '.git';
 
 /**
  * `diff-tree --numstat -z`: `added TAB deleted TAB path NUL`, or for a rename `added TAB deleted TAB NUL old NUL new

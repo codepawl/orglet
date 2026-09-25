@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
@@ -58,6 +58,12 @@ function fixture(integrate: WorkspaceIntegration['apply'] = async () => { throw 
     },
     execute: async (copy, request, abort) => { abort.throwIfAborted(); return executeWorkspaceOperation(copy, request); },
   }, { apply: integrate }, undefined, commands);
+}
+
+/** The write fields of a hand-in step; the fixtures that use this only ever integrate file edits. */
+function writeOf(options: Parameters<WorkspaceIntegration['apply']>[0]) {
+  if (options.operation !== undefined && options.operation !== 'write') throw new Error(`Unexpected ${options.operation} step`);
+  return options;
 }
 
 async function edit(runtime: WorkspaceRuntime, path = 'note.txt', content = 'updated') {
@@ -185,11 +191,12 @@ it.each((['claude-code', 'codex', 'cursor'] as const).flatMap(provider =>
       parent.abort(new Error('Parent deadline during integration'));
       options.signal.throwIfAborted();
     }
-    const current = await readFile(join(options.root, options.path));
+    const step = writeOf(options);
+    const current = await readFile(join(step.root, step.path));
     const hash = createHash('sha256').update(current).digest('hex');
-    if (hash !== options.expectedHash) return { status: 'conflict', hash, backupPath: '', created: false };
-    await writeFile(join(options.root, options.path), options.bytes);
-    return { status: 'applied', hash: createHash('sha256').update(options.bytes).digest('hex'), backupPath: '', created: false };
+    if (hash !== step.expectedHash) return { status: 'conflict', hash, backupPath: '', created: false };
+    await writeFile(join(step.root, step.path), step.bytes);
+    return { status: 'applied', hash: createHash('sha256').update(step.bytes).digest('hex'), backupPath: '', created: false };
   }));
   await core.runner.run(task, run, { signal: parent.signal });
   const detail = store.detail(task.id);
@@ -255,11 +262,12 @@ it('lets Codex correct an invalid report without repeating a committed workspace
   let requests = 0;
   const runtime = fixture(async options => {
     options.authorize();
-    const current = await readFile(join(options.root, options.path));
+    const step = writeOf(options);
+    const current = await readFile(join(step.root, step.path));
     const hash = createHash('sha256').update(current).digest('hex');
-    if (hash !== options.expectedHash) return { status: 'conflict', hash, backupPath: '', created: false };
-    await writeFile(join(options.root, options.path), options.bytes);
-    return { status: 'applied', hash: createHash('sha256').update(options.bytes).digest('hex'), backupPath: '', created: false };
+    if (hash !== step.expectedHash) return { status: 'conflict', hash, backupPath: '', created: false };
+    await writeFile(join(step.root, step.path), step.bytes);
+    return { status: 'applied', hash: createHash('sha256').update(step.bytes).digest('hex'), backupPath: '', created: false };
   });
   const core = new CoreService(store, () => {}, async () => { throw new Error('Unexpected API dispatch'); },
     undefined, undefined, {
@@ -576,10 +584,11 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('API fixture using packa
     let reviewerEvidenceId = '';
     const adapter: ModelAdapter = { request: async (messages, tools) => {
       const call = (name: string, argumentsValue: unknown) => ({ calls: [{ id: id(), name, arguments: JSON.stringify(argumentsValue) }], usage: { input: 10, output: 10 } });
-      const report = (summary: string, evidenceId?: string) => call('submit_report', { title: 'Workspace result', summary,
+      // A member's report says whether its assignment is done (COD-125); the synthesis report has no assignment.
+      const report = (summary: string, evidenceId?: string, member = true) => call('submit_report', { title: 'Workspace result', summary,
         findings: evidenceId ? [{ title: 'Integrated file checked', severity: 'info', detail: 'note.txt contains the integrated edit.',
           coverage: 'note.txt', sourceIds: [], workspaceEvidenceIds: [evidenceId], category: 'other', recommendation: null,
-          checkerIds: [], locations: [] }] : [], limitations: [] });
+          checkerIds: [], locations: [] }] : [], limitations: [], ...(member ? { assignmentOutcome: 'completed' } : {}) });
       if (isPlanRequest(tools)) {
         const [writerId, recipient] = memberIdsFromPlanPrompt(messages);
         reviewerId = recipient;
@@ -628,7 +637,7 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('API fixture using packa
       expect(context).toContain('Writer checked note.txt');
       expect(context).toContain('Reviewer confirmed integrated note.txt');
       synthesized = true;
-      return report('Team finished checked note.txt');
+      return report('Team finished checked note.txt', undefined, false);
     } };
     const harness = provider === 'openai' ? undefined : {
       detect: async () => [{ ...missingHarness(provider, 'win32'), executable: 'fixture', auth: 'logged_in' as const,
@@ -662,6 +671,85 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('API fixture using packa
     expect(detail.events.find(event => event.id === handoffId)?.teamMessage?.state).toBe('acknowledged');
     expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('team checked edit');
   });
+  it.each([false, true])('tidies an inbox through Runner, the packaged helper and broker: folders, moves, a deletion and a restore (COD-254, person edits a file meanwhile: %s)', async personEdits => {
+    const photo = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0x10]);
+    await writeFile(join(source, 'IMG_0412.png'), photo);
+    await writeFile(join(source, 'contract-final.pdf'), 'contract v2');
+    await writeFile(join(source, 'contract (1).pdf'), 'contract v1');
+    await writeFile(join(source, 'receipt 3.pdf'), 'receipt march');
+    await mkdir(join(source, 'old scans'));
+    const files = new WorkspaceFilesRuntime({
+      sandbox: new WindowsSandbox(process.env.ORGLET_TEST_SANDBOX_EXECUTABLE!),
+      helperPath: resolve('out/Orglet-win32-x64/resources/workspace-helper.cjs'),
+      stateDirectory: join(directory, 'state'), runtimeExecutable: resolve('out/Orglet-win32-x64/Orglet.exe'),
+    });
+    const runtime = new WorkspaceRuntime(store, files,
+      new WorkspaceIntegration(store, process.env.ORGLET_TEST_INTEGRATION_EXECUTABLE!, join(directory, 'state')), undefined, files);
+    const calls = [
+      { name: 'workspace_list', arguments: { path: '' } },
+      { name: 'workspace_create_folder', arguments: { path: 'receipts' } },
+      { name: 'workspace_create_folder', arguments: { path: 'contracts' } },
+      { name: 'workspace_move', arguments: { from: 'receipt 3.pdf', to: 'receipts/2026-03 receipt.pdf' } },
+      { name: 'workspace_move', arguments: { from: 'contract-final.pdf', to: 'contracts/lease 2026.pdf' } },
+      { name: 'workspace_move', arguments: { from: 'IMG_0412.png', to: 'images/office photo.png' } },
+      { name: 'workspace_move', arguments: { from: 'note.txt', to: 'notes/note.txt' } },
+      { name: 'workspace_delete', arguments: { path: 'contract (1).pdf' } },
+      { name: 'workspace_delete', arguments: { path: 'old scans' } },
+      { name: 'workspace_write', arguments: { path: 'notes/index.md', expectedHash: null, content: '# Inbox\n' } },
+      { name: 'reply', arguments: { message: 'Sorted the inbox.', title: null, knowledgeProposals: [] } },
+    ];
+    let step = 0;
+    const adapter: ModelAdapter = { request: async (_messages, tools) => {
+      const call = calls[step++];
+      expect(tools.some(tool => tool.type === 'function' && tool.function.name === call.name)).toBe(true);
+      if (call.name === 'reply') {
+        // Nothing reached the person's folder before the answer.
+        expect(await readFile(join(source, 'receipt 3.pdf'), 'utf8')).toBe('receipt march');
+        if (personEdits) await writeFile(join(source, 'IMG_0412.png'), 'the person replaced the photo');
+      }
+      return { calls: [{ id: id(), name: call.name, arguments: JSON.stringify(call.arguments) }], usage: { input: 10, output: 10 } };
+    } };
+    const core = new CoreService(store, () => {}, async () => adapter, undefined, undefined, undefined, undefined, undefined, runtime);
+    await core.runner.run(task, run);
+    const detail = store.detail(task.id);
+    const copy = JSON.parse(String(store.db.prepare('SELECT data FROM workspace_copies').get()!.data));
+    const statuses = copy.changes.map((change: { kind: string; path: string; status: string }) => `${change.kind} ${change.path} ${change.status}`);
+    if (personEdits) {
+      expect(detail.task.status).toBe('failed');
+      expect(detail.artifacts).toHaveLength(0);
+      expect(copy.state).toBe('conflict');
+      expect(statuses).toContain('move images/office photo.png conflict');
+      expect(copy.changes.find((change: { kind: string; path: string }) => change.path === 'images/office photo.png').conflict).toBe('changed');
+      expect(await readFile(join(source, 'IMG_0412.png'), 'utf8')).toBe('the person replaced the photo');
+      // Everything the person had is still in the folder: the steps after the conflict never ran.
+      expect(await readFile(join(source, 'contract (1).pdf'), 'utf8')).toBe('contract v1');
+      expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('original');
+      expect(await readdir(join(source, 'old scans'))).toEqual([]);
+      return;
+    }
+    expect(detail.task.status, JSON.stringify(detail.runs.map(item => item.error))).toBe('completed');
+    expect(copy.state).toBe('integrated');
+    expect(statuses).toEqual([
+      'folder contracts applied', 'folder images applied', 'folder notes applied', 'folder receipts applied',
+      'move contracts/lease 2026.pdf applied', 'move images/office photo.png applied', 'move notes/note.txt applied',
+      'move receipts/2026-03 receipt.pdf applied',
+      'write notes/index.md applied', 'delete contract (1).pdf applied', 'remove_folder old scans applied',
+    ]);
+    expect((await readdir(source)).sort()).toEqual(['contracts', 'images', 'notes', 'receipts']);
+    expect(await readFile(join(source, 'images', 'office photo.png'))).toEqual(photo);
+    expect(await readFile(join(source, 'contracts', 'lease 2026.pdf'), 'utf8')).toBe('contract v2');
+    expect(await readFile(join(source, 'notes', 'index.md'), 'utf8')).toBe('# Inbox\n');
+    const deleted = copy.changes.find((change: { kind: string }) => change.kind === 'delete');
+    expect(await readFile(deleted.backupPath, 'utf8')).toBe('contract v1');
+    const diff = await runtime.diff({ taskId: task.id, runId: run.id });
+    expect(diff.lines).toBe(false);
+    expect(diff.files.find(file => file.path === 'images/office photo.png')).toMatchObject({ status: 'renamed', previousPath: 'IMG_0412.png' });
+    expect(diff.folders).toEqual(expect.arrayContaining([{ path: 'old scans', status: 'deleted' }]));
+    await runtime.restore({ taskId: task.id, runId: run.id, path: 'contract (1).pdf' }, () => false);
+    expect(await readFile(join(source, 'contract (1).pdf'), 'utf8')).toBe('contract v1');
+    expect(store.db.prepare("SELECT COUNT(*) AS count FROM tool_calls WHERE state!='completed'").get()!.count).toBe(0);
+  });
+
   it.each([{ conflict: false, checkFails: false }, { conflict: true, checkFails: false }, { conflict: false, checkFails: true }])(
     'edits, runs a check and integrates through Runner: %j', async ({ conflict, checkFails }) => {
     await grants.grant({ taskId: task.id, directory: source, permissions: ['read', 'write', 'execute'] });

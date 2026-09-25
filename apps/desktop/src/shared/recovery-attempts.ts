@@ -39,12 +39,19 @@ export type RecoveryAttempts = {
   blocking: RecoveryAttempt | undefined;
 };
 
-/** What a journaled call with an unknown outcome did, in the terms a person uses: a write, a command, an integration. */
-export type UncertainCallLabel = { action: 'write' | 'run' | 'apply' | 'other'; target: string | null; tool: string | null };
+/**
+ * What a journaled call with an unknown outcome did, in the terms a person uses: a write, a new folder, a move, a
+ * deletion, a command, an integration.
+ */
+export type UncertainCallLabel = { action: 'write' | 'folder' | 'move' | 'delete' | 'run' | 'apply' | 'restore' | 'other'; target: string | null; tool: string | null };
 
 export function uncertainCallLabel(call: Pick<UncertainCall, 'tool' | 'summary'>): UncertainCallLabel {
   const target = call.summary ?? null;
   if (call.tool === 'workspace_write') return { action: 'write', target, tool: call.tool };
+  if (call.tool === 'workspace_create_folder') return { action: 'folder', target, tool: call.tool };
+  if (call.tool === 'workspace_move') return { action: 'move', target, tool: call.tool };
+  if (call.tool === 'workspace_delete') return { action: 'delete', target, tool: call.tool };
+  if (call.tool === 'restore_workspace_file') return { action: 'restore', target, tool: call.tool };
   if (call.tool === 'workspace_start_process') return { action: 'run', target, tool: call.tool };
   if (call.tool === 'integrate_workspace_file') return { action: 'apply', target, tool: call.tool };
   return { action: 'other', target, tool: call.tool ?? null };

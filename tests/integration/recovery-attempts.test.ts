@@ -148,9 +148,47 @@ it('renders one row per attempt with the action only where a decision is needed'
   expect(html).toContain('outcome unknown');
   expect(html).not.toContain('a92f4612');
   expect(html).toContain('3 commands · 1 passed, 2 failed');
-  expect(html).toContain('1 file in the working copy');
+  expect(html).toContain('1 change in the working copy');
   expect(html).toContain('Changes not applied: 3 files');
   expect(html).toContain('Show 2 earlier attempts');
   expect(html).not.toContain('Integrated');
   expect(html.match(/aria-label="Keep current files · Backend Builder"/g)).toHaveLength(2);
+});
+
+it('names folder, move, delete and restore calls by what they did (COD-254)', () => {
+  expect(uncertainCallText({ tool: 'workspace_create_folder', summary: 'receipts' })).toBe('Create folder receipts');
+  expect(uncertainCallText({ tool: 'workspace_move', summary: 'a.pdf → receipts/a.pdf' })).toBe('Move a.pdf → receipts/a.pdf');
+  expect(uncertainCallText({ tool: 'workspace_delete', summary: 'old.pdf' })).toBe('Delete old.pdf');
+  expect(uncertainCallText({ tool: 'restore_workspace_file', summary: 'old.pdf' })).toBe('Restore old.pdf');
+  expect(uncertainCallLabel({ tool: 'workspace_move', summary: null }).action).toBe('move');
+  expect(describeToolCallArguments('workspace_move', { from: 'a.pdf', to: 'receipts/a.pdf' })).toBe('a.pdf → receipts/a.pdf');
+  expect(describeToolCallArguments('integrate_workspace_file', { root: 'C:/private', operation: 'move', from: 'a.pdf', path: 'receipts/a.pdf', expectedHash: 'x' }))
+    .toBe('a.pdf → receipts/a.pdf');
+});
+
+it('shows each hand-in step with its action, why it stopped, and a restore for a deleted file (COD-254)', () => {
+  const noop = () => {};
+  const restored: string[] = [];
+  const copies: WorkspaceRecoveryView['copies'] = [{ runId: integratedRunId, state: 'conflict', kind: 'copy', changeCount: 6, changes: [
+    { kind: 'folder', path: 'receipts', status: 'applied' },
+    { kind: 'write', path: 'receipts/index.md', status: 'applied' },
+    { kind: 'move', from: 'receipt 3.pdf', path: 'receipts/march.pdf', status: 'applied' },
+    { kind: 'delete', path: 'contract-old.pdf', status: 'applied' },
+    { kind: 'delete', path: 'notes-old.txt', status: 'applied', restored: true },
+    { kind: 'move', from: 'IMG_0412.jpg', path: 'images/photo.jpg', status: 'conflict', conflict: 'changed' },
+  ] }];
+  const html = renderToStaticMarkup(createElement(WorkspaceRecovery, { view: { ...view, copies }, runs, busy: false, onRetire: noop,
+    onRestore: (runId: string, path: string) => restored.push(`${runId} ${path}`),
+    readOutput: () => Promise.reject(new Error('unused')), readFile: () => Promise.reject(new Error('unused')) }));
+  const row = (target: string, state: string) => `<code>${target}</code><span class="recovery-change-state"> · ${state}</span>`;
+  expect(html).toContain('6 changes in the working copy');
+  expect(html).toContain(row('receipts/', 'Create folder · Applied'));
+  expect(html).toContain(row('receipts/index.md', 'Applied'));
+  expect(html).toContain(row('receipt 3.pdf → receipts/march.pdf', 'Move · Applied'));
+  expect(html).toContain(row('contract-old.pdf', 'Delete · Applied'));
+  expect(html).toContain(row('notes-old.txt', 'Delete · Restored'));
+  expect(html).toContain('The file in your folder was edited after the worker started; it was not overwritten.');
+  // Only the deleted file not yet restored offers a restore, and only a written file has private bytes to read.
+  expect(html.match(/aria-label="Restore [^"]+"/g)).toEqual(['aria-label="Restore contract-old.pdf"']);
+  expect(html.match(/View private changes/g)).toHaveLength(1);
 });
