@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -23,6 +23,25 @@ export type ShimTarget = {
 };
 
 export const SHIM_NAME = 'orglet.cmd';
+
+/**
+ * Left in the data folder when the person chooses Remove from PATH (COD-235). Setup puts the command on PATH at every
+ * install and update unless this file is there, so the choice holds across updates. Add to PATH deletes it.
+ */
+export const KEPT_OFF_PATH_FILE = 'cli-path-off';
+
+export function isKeptOffPath(userData: string): boolean {
+  return existsSync(join(userData, KEPT_OFF_PATH_FILE));
+}
+
+export async function keepOffPath(userData: string, keep: boolean): Promise<void> {
+  const file = join(userData, KEPT_OFF_PATH_FILE);
+  if (!keep) {
+    await rm(file, { force: true });
+    return;
+  }
+  await writeAtomicText(file, 'Remove from PATH was chosen in Orglet Settings. Delete this file or choose Add to PATH to undo.\n');
+}
 
 /** `%` starts a variable in a batch file, so a literal one in a path is doubled. */
 function batchLiteral(value: string): string {
@@ -94,20 +113,31 @@ async function readUserPath(): Promise<string> {
 }
 
 /**
- * Writes the user Path with the registry type it already had (an expandable string when there was none), then sets
- * and clears a throwaway variable through `[Environment]::SetEnvironmentVariable`, which tells Explorer the
- * environment changed, so a new terminal sees it. Setting Path itself through that call would store it as a plain
- * string and break any `%VAR%` inside an expandable one.
+ * Writes the user Path with the registry type it already had (an expandable string when there was none). Setting
+ * Path through `[Environment]::SetEnvironmentVariable` would store it as a plain string and break any `%VAR%` inside
+ * an expandable one, so the registry is written directly and Explorer is told separately.
  */
 async function writeUserPath(value: string): Promise<void> {
   const script = [
     "$key = Get-Item -LiteralPath 'HKCU:\\Environment'",
     "$kind = if ($key.GetValueNames() -contains 'Path') { $key.GetValueKind('Path') } else { 'ExpandString' }",
     "Set-ItemProperty -LiteralPath 'HKCU:\\Environment' -Name 'Path' -Value $env:ORGLET_USER_PATH -Type $kind",
-    "[Environment]::SetEnvironmentVariable('ORGLET_PATH_CHANGED', '1', 'User')",
-    "[Environment]::SetEnvironmentVariable('ORGLET_PATH_CHANGED', $null, 'User')",
   ].join('; ');
   await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, env: { ...process.env, ORGLET_USER_PATH: value } });
+  announceEnvironmentChange();
+}
+
+/**
+ * Tells Explorer the environment changed, so a terminal opened afterwards sees the new Path. Clearing a variable that
+ * does not exist is enough to send the broadcast. Windows waits on every window that is slow to answer, which took
+ * three to four seconds here (COD-235), so it runs in a process of its own and nobody waits: Setup gives an install
+ * step only about fifteen seconds, and the Settings button should not hang either.
+ */
+function announceEnvironmentChange(): void {
+  const script = "[Environment]::SetEnvironmentVariable('ORGLET_PATH_CHANGED', $null, 'User')";
+  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { detached: true, stdio: 'ignore', windowsHide: true });
+  child.on('error', () => undefined);
+  child.unref();
 }
 
 export class CliPathInstaller {

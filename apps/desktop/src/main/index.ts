@@ -1,5 +1,5 @@
 import { app, autoUpdater, BrowserWindow, clipboard, dialog, ipcMain, session, shell, utilityProcess } from 'electron';
-import { join, relative, isAbsolute, resolve } from 'node:path';
+import { basename, join, relative, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { mkdir, open } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -17,7 +17,6 @@ import { Credentials, OLLAMA_LOCAL_TOKEN } from './credentials';
 import { readBoundedText, writeAtomicText } from './files';
 import { readSkillDirectory, writeSkillDirectory } from './skill-files';
 import { isViteDevRequest, preferLoopbackIpv4 } from './vite-dev-url';
-import squirrelStartup from 'electron-squirrel-startup';
 import { executeProfile, cancelProfile, stopProfiles } from './profiler';
 import { Updater } from './updater';
 import { ChangelogFeed } from './changelog';
@@ -28,7 +27,8 @@ import type { CliInstallState, OpenChatTarget } from '../shared/cli';
 import { cliEndpoint, type CliChat } from '../cli/protocol';
 import { CliServer, createCliToken, writeCliToken } from './cli-server';
 import { CliOperations } from './cli-operations';
-import { CliPathInstaller } from './cli-path';
+import { CliPathInstaller, isKeptOffPath, keepOffPath } from './cli-path';
+import { runSquirrelEvent, runUpdateExecutable, squirrelEventOf, type SquirrelEvent } from './squirrel-events';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -410,6 +410,8 @@ async function start() {
     const enabled = z.boolean().parse(raw);
     const installer = cliInstaller();
     if (!installer) throw new Error('Chỉ bản cài trên Windows tự thêm lệnh orglet vào PATH.');
+    // Recorded first, so an update that lands while this runs already knows the choice.
+    await keepOffPath(app.getPath('userData'), !enabled);
     if (enabled) await installer.install();
     else await installer.remove();
     return cliState();
@@ -432,7 +434,26 @@ async function start() {
   }
   updater.start();
 }
-if (squirrelStartup || !app.requestSingleInstanceLock()) app.quit();
+/**
+ * Setup's install, update and uninstall steps (COD-235): the Start menu shortcuts, as before, and the `orglet`
+ * command on the user PATH, unless the person took it off in Settings. No window opens for these.
+ */
+function handleSquirrelEvent(event: SquirrelEvent) {
+  const shortcutTarget = basename(process.execPath);
+  const installer = cliInstaller();
+  const userData = app.getPath('userData');
+  const work = runSquirrelEvent(event, {
+    createShortcuts: () => runUpdateExecutable(process.execPath, [`--createShortcut=${shortcutTarget}`]),
+    removeShortcuts: () => runUpdateExecutable(process.execPath, [`--removeShortcut=${shortcutTarget}`]),
+    putOnPath: async () => { await installer?.install(); },
+    takeOffPath: async () => { await installer?.remove(); },
+    keptOffPath: () => isKeptOffPath(userData),
+  });
+  void work.finally(() => app.quit());
+}
+const squirrelEvent = squirrelEventOf(process.argv, process.platform);
+if (squirrelEvent) handleSquirrelEvent(squirrelEvent);
+else if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.focus(); } });
   app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
