@@ -21,10 +21,18 @@ const patternCache = new WeakMap<Dictionary, { key: string; pattern: RegExp; tem
 const translateValue = (dictionary: Dictionary, value: string) => dictionary[value] ?? value;
 /**
  * Keys with a value that is itself a finished core message, mapped to that value's placeholder: the error that
- * stopped a crew role (COD-252). That value is translated like a whole message. Other values are names, numbers or
- * model text and only match an exact key, so a sentence that merely starts like a label ("Mở …") stays as written.
+ * stopped a crew role, and the error that refused a memory or an app-change proposal, in the answer's notes and in
+ * the run's trace (COD-252). That value is translated like a whole message. Other values are names, numbers or model
+ * text and only match an exact key, so a sentence that merely starts like a label ("Mở …") stays as written.
  */
-const messageValues = new Map([['Role chưa hoàn tất: {0}: {1}', '1']]);
+const messageValues = new Map([
+  ['Role chưa hoàn tất: {0}: {1}', '1'],
+  ['Ghi nhớ thứ {0} bị từ chối: {1}', '1'],
+  ['Không ghi nhớ được: {0}', '0'],
+  ['Đề xuất thay đổi trong app thứ {0} ({1}) bị từ chối: {2}', '2'],
+  ['Đề xuất thay đổi trong app bị từ chối: {0}', '0'],
+  ['Đề xuất sửa hướng dẫn của Tí bị từ chối: {0}', '0'],
+]);
 
 /** How much fixed text a key has besides its placeholders. */
 const literalLength = (key: string) => key.replace(/\{\d+\}/g, '').length;

@@ -12,6 +12,7 @@ import { nextTeamMessage } from '../../apps/desktop/src/shared/live-task';
 import { translateMessage } from '../../apps/desktop/src/shared/i18n';
 import { en, enGB } from '../../apps/desktop/src/shared/locales/en';
 import { isPlanRequest, memberIdsFromPlanPrompt, planReply } from './team-plan';
+import { hasVietnamese } from './vietnamese';
 
 let directory: string; let store: Store; let core: CoreService;
 let failReviewer: boolean; let blockedFirstMember: boolean; let memberCalls: number;
@@ -20,8 +21,6 @@ let reviewerError: Error;
 let planMode: 'all' | 'first' | 'invalid' | 'fail' | 'dependent' | 'leadCombines' | 'leadOwnJob'; let calls: string[]; let planBodies: string[]; let bodies: string[]; let live: number; let peak: number;
 const COMBINING_BRIEF = 'Combine the others\' results into one short final answer with links';
 const LEAD_OWN_BRIEF = 'Read the attention paper yourself and summarise its method';
-/** Vietnamese letters carry diacritics or are đ; the English text and these fixture names have neither. */
-const hasVietnamese = (text: string) => /[\u0300-\u036f\u0110\u0111]/.test(text.normalize('NFD'));
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orglet-team-')); store = new Store(join(directory, 'state.sqlite'));
   failReviewer = false; blockedFirstMember = false; memberCalls = 0;

@@ -34,6 +34,26 @@ it('translates finished core messages, including ones with values already filled
   expect(translateMessage(en, 'Bước 1: Mở terminal và chạy lệnh cài đặt.')).toBe('Bước 1: Mở terminal và chạy lệnh cài đặt.');
 });
 
+it('translates the core error inside each note that holds one, values and all (COD-252)', () => {
+  // Any core error with a value of its own; the notes below only ever hold core errors.
+  const error = 'Không có đề xuất nào với ref "draft".';
+  expect([
+    `Role chưa hoàn tất: Researcher: ${error}`,
+    `Ghi nhớ thứ 2 bị từ chối: ${error}`,
+    `Không ghi nhớ được: ${error}`,
+    `Đề xuất thay đổi trong app thứ 1 (propose_orglet) bị từ chối: ${error}`,
+    `Đề xuất thay đổi trong app bị từ chối: ${error}`,
+    `Đề xuất sửa hướng dẫn của Tí bị từ chối: ${error}`,
+  ].map(note => translateMessage(en, note))).toEqual([
+    'Unfinished roles: Researcher: No proposal has ref "draft".',
+    'Memory 2 was rejected: No proposal has ref "draft".',
+    'Could not remember that: No proposal has ref "draft".',
+    'App-change proposal 1 (propose_orglet) refused: No proposal has ref "draft".',
+    'App-change proposal refused: No proposal has ref "draft".',
+    'The proposed change to the orglet’s instructions was refused: No proposal has ref "draft".',
+  ]);
+});
+
 it('derives British English spellings from the US text', () => {
   expect(enGB['Tóm tắt tài liệu đã đính kèm']).toBe('Summarise the attached documents');
   expect(en['Tóm tắt tài liệu đã đính kèm']).toBe('Summarize the attached documents');
