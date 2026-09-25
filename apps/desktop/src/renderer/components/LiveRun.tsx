@@ -135,10 +135,25 @@ function stepDoing(step: ActivityStep): Doing {
  * `workers` are the ones whose runs are really running (`workingWorkers`), never the roster.
  */
 function islandFor(doing: Doing, workers: readonly Worker[], receipt?: string): IslandView {
-  const label = doing.state === 'pausing' ? doing.sentence('')
-    : workers.length > 1 ? t('{0} Tí đang làm việc…', [workers.length])
-    : doing.sentence(workers[0]?.name ?? 'Orglet');
-  return { state: doing.state, label, receipt, workers };
+  if (doing.state === 'pausing') return { state: doing.state, label: doing.sentence(''), receipt, workers };
+  if (workers.length > 1) return { state: doing.state, label: t('{0} Tí đang làm việc…', [workers.length]), receipt, workers };
+  const name = workers[0]?.name ?? 'Orglet';
+  return { state: doing.state, label: doing.sentence(name), named: namedSentence(doing, name), receipt, workers };
+}
+
+/** Stands in for the name while the sentence is translated, so the words either side of it can be cut out. */
+const NAME_SLOT = '\u0000';
+
+/**
+ * The sentence in three parts around the worker's name (COD-250), so the island can shorten a long name and keep
+ * the action whole. Found in the translated sentence rather than assumed at its start: "Working with {0}…" puts
+ * the name in the middle.
+ */
+function namedSentence(doing: Doing, name: string): IslandView['named'] {
+  const parts = doing.sentence(NAME_SLOT).split(NAME_SLOT);
+  if (parts.length !== 2) return undefined;
+  const [before, after] = parts;
+  return { before, name, after };
 }
 
 /** The line above the label: the last finished step, or nothing while none has finished. */

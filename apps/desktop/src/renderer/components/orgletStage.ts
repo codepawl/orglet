@@ -133,7 +133,7 @@ function readPalette(canvas: HTMLCanvasElement): Palette {
     alpha: body.alpha,
     ink,
     surface: token('--surface', [246, 246, 246]),
-    accent: token('--accent', [79, 127, 224]),
+    accent: token('--accent', [68, 115, 211]),
     muted: token('--muted', [107, 107, 111]),
   };
 }

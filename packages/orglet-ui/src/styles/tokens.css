@@ -31,7 +31,7 @@
   --org-primary: #171717;
   --org-primary-text: #fff;
   /* The application's colour, for anything it marks as its own. Not used by default. */
-  --org-accent: #4f7fe0;
+  --org-accent: #4473d3;
   --org-accent-ink: #fff;
 
   /* States. These carry meaning, so they stay distinguishable in both themes. */

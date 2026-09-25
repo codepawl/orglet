@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import type { Task, Workspace } from '../../apps/desktop/src/shared/contracts';
-import { DEFAULT_ACCENT_COLOR } from '../../apps/desktop/src/shared/accent';
+import { DEFAULT_ACCENT_COLOR, PREVIOUS_DEFAULT_ACCENT_COLOR } from '../../apps/desktop/src/shared/accent';
 
 let store: Store; let core: CoreService;
 beforeEach(() => { store = new Store(':memory:'); core = new CoreService(store, () => {}, async () => { throw new Error('no model'); }); });
@@ -88,8 +88,15 @@ it('adopts a tag colour chosen before the accent existed, rather than resetting 
   store.setSetting('mentionColor', '#2e7a32');
   expect((await workspace()).accentColor).toBe('#2e7a32');
   // Once an accent is saved it wins; the old key is left alone rather than written back to.
-  await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, accentColor: '#4f7fe0' });
-  expect((await workspace()).accentColor).toBe('#4f7fe0');
+  await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, accentColor: '#a764c9' });
+  expect((await workspace()).accentColor).toBe('#a764c9');
+});
+
+it('reads the accent saved as the old default as the current, darker default (COD-250)', async () => {
+  await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, accentColor: PREVIOUS_DEFAULT_ACCENT_COLOR });
+  expect((await workspace()).accentColor).toBe(DEFAULT_ACCENT_COLOR);
+  store.setSetting('accentColor', '#3f9a68');
+  expect((await workspace()).accentColor).toBe('#3f9a68');
 });
 
 it('keeps the colours made in the avatar picker and rejects anything but lowercase hex', async () => {

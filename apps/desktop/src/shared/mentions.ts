@@ -1,7 +1,9 @@
+import { DEFAULT_ACCENT_COLOR } from './accent';
+
 export const ALL_MENTION = 'all';
 
 /** The colour a mention tag is drawn in when the user has not picked one (user, 2026-09-19: this is theirs to change). */
-export const DEFAULT_MENTION_COLOR = '#4f7fe0';
+export const DEFAULT_MENTION_COLOR = DEFAULT_ACCENT_COLOR;
 
 export type MentionPerson = { id: string; name: string };
 export type MentionKind = 'worker' | 'all';

@@ -84,7 +84,7 @@ export function IslandDock() {
   if (!shown) return null;
   if (shown.kind === 'knowledge') return <KnowledgeIsland count={shown.count} review={shown.review} dismiss={shown.dismiss} leaving={leaving} />;
   if (shown.kind === 'account') return <AccountIsland harnessName={shown.harnessName} target={shown.target} resetsAt={shown.resetsAt} switchAccount={shown.switchAccount} dismiss={shown.dismiss} leaving={leaving} />;
-  return <LiveIsland state={shown.state} label={shown.label} receipt={shown.receipt} workers={shown.workers} leaving={leaving} />;
+  return <LiveIsland state={shown.state} label={shown.label} named={shown.named} receipt={shown.receipt} workers={shown.workers} leaving={leaving} />;
 }
 
 function prefersReducedMotion() {

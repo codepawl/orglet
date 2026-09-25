@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Check, Contrast, Database, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks } from 'lucide-react';
 import { avatarPalette } from './Avatar';
-import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
+import { currentAccentColor, DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, MAX_PROVIDER_CONCURRENCY, QUIET_PARALLEL_LIMIT, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
@@ -36,6 +36,12 @@ import { dwellHandlers } from '../prefetch';
 
 /** 1 to 8 requests in flight per provider (COD-242). */
 const concurrencyChoices = Array.from({ length: MAX_PROVIDER_CONCURRENCY }, (_, index) => index + 1);
+
+/**
+ * The accent's swatches: the orglets' own palette, with its blue swapped for the default accent, which is the same
+ * blue a step darker so white text on it reads (COD-250). The palette itself stays: it is the orglets' identity.
+ */
+const accentSwatches = avatarPalette.map(color => currentAccentColor(color));
 
 /** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
 const SAVED_KEY_MASK = '••••••••••••••••';
@@ -177,6 +183,9 @@ function fontInstalled(family: string): boolean {
   });
 }
 
+/** The font menus' width in px: the widest default row, the code font's with its note in Vietnamese, on one line. */
+const FONT_MENU_WIDTH = 280;
+
 /** Value of the "type your own" option. `FontFamily` refuses underscores, so no real family can collide with it. */
 const CUSTOM_FONT = '__custom__';
 
@@ -219,7 +228,8 @@ function FontSetting({ role, title, description, value, busy, onPick }: {
   };
   return <div ref={row}>
     <Row title={title} description={description}>
-      <Select ariaLabel={title} className="setting-select" menuMinWidth={240} disabled={busy} value={value ?? ''}
+      {/* The menu is where "(default)" shows, so it is wide enough for "JetBrains Mono (mặc định)" on one line. */}
+      <Select ariaLabel={title} className="setting-select" menuMinWidth={FONT_MENU_WIDTH} disabled={busy} value={value ?? ''}
         onChange={next => { if (next === CUSTOM_FONT) setTyping(value ?? ''); else onPick(next || null); }}
         options={[
           { value: '', label: defaultLabel, note: t('mặc định'), labelStyle: { fontFamily: fontStack(role) } },
@@ -408,7 +418,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const customColorButton = useRef<HTMLButtonElement>(null);
   const closeColorPanel = useCallback(() => setColorPanel(false), []);
   const accent = workspace.accentColor ?? DEFAULT_ACCENT_COLOR;
-  const customAccent = !avatarPalette.some(color => color.toLowerCase() === accent.toLowerCase());
+  const customAccent = !accentSwatches.some(color => color.toLowerCase() === accent.toLowerCase());
   const [limit, setLimit] = useState(toAmount(workspace.connectionLimitMicros));
   const [limitError, setLimitError] = useState('');
   const savedLimit = useRef(workspace.connectionLimitMicros);
@@ -484,7 +494,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               </Row>
               <Row title={t('Màu nhấn')} description={t('Thẻ @tên, nút, công tắc.')}>
                 <div className="setting-swatches" role="radiogroup" aria-label={t('Màu nhấn')}>
-                  {avatarPalette.map(color => {
+                  {accentSwatches.map(color => {
                     const checked = accent.toLowerCase() === color.toLowerCase();
                     return <button key={color} type="button" role="radio" aria-checked={checked} tabIndex={checked ? 0 : -1} disabled={busy}
                       className="avatar-swatch" style={{ '--avatar-color': color } as CSSProperties} aria-label={color} title={color}
@@ -500,7 +510,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 </div>
               </Row>
               <AnchoredPopover anchor={customColorButton} open={colorPanel} onClose={closeColorPanel} label={t('Tạo màu')}>
-                <ColorPicker id="accent-colors" value={accent} presets={avatarPalette} saved={workspace.avatarColors ?? []}
+                <ColorPicker id="accent-colors" value={accent} presets={accentSwatches} saved={workspace.avatarColors ?? []}
                   onChange={color => void save({ accentColor: color })}
                   onSave={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: [...new Set([...(workspace.avatarColors ?? []), color])] }); }, t('Màu đã lưu'))}
                   onRemove={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: (workspace.avatarColors ?? []).filter(item => item !== color) }); }, t('Màu đã lưu'))}

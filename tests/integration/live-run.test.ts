@@ -123,11 +123,21 @@ it('says pausing without a name, since it is the task that stops', () => {
 });
 
 it('names what the core itself observed before anything has streamed, with no receipt', () => {
-  expect(islandBeforeStreaming({ workers: [worker], pausing: false })).toEqual({ state: 'thinking', label: 'Minh is thinking…', workers: [worker] });
+  expect(islandBeforeStreaming({ workers: [worker], pausing: false })).toEqual({ state: 'thinking', label: 'Minh is thinking…', named: { before: '', name: 'Minh', after: ' is thinking…' }, workers: [worker] });
   expect(islandBeforeStreaming({ workers: [worker], stage: 'plan', pausing: false }).label).toBe('Minh is assigning work…');
   expect(islandBeforeStreaming({ workers: [worker], stage: 'member', pausing: false }).label).toBe('Working with Minh…');
   expect(islandBeforeStreaming({ workers: [worker], stage: 'synthesis', pausing: false }).label).toBe('Minh is combining…');
-  expect(islandBeforeStreaming({ workers: [worker], message: 'Đã đọc brief.md', pausing: false })).toEqual({ state: 'reading', label: 'Minh is reading brief.md…', workers: [worker] });
-  expect(islandBeforeStreaming({ workers: [worker], message: 'Đang chờ lượt 2', pausing: false })).toEqual({ state: 'waiting', label: 'Minh is waiting for a turn…', workers: [worker] });
+  expect(islandBeforeStreaming({ workers: [worker], message: 'Đã đọc brief.md', pausing: false })).toEqual({ state: 'reading', label: 'Minh is reading brief.md…', named: { before: '', name: 'Minh', after: ' is reading brief.md…' }, workers: [worker] });
+  expect(islandBeforeStreaming({ workers: [worker], message: 'Đang chờ lượt 2', pausing: false })).toEqual({ state: 'waiting', label: 'Minh is waiting for a turn…', named: { before: '', name: 'Minh', after: ' is waiting for a turn…' }, workers: [worker] });
   expect(islandBeforeStreaming({ workers: [worker], message: 'Đã đọc brief.md', pausing: true }).state).toBe('pausing');
+});
+
+it('cuts the sentence around the one name it carries, wherever the translation puts it (COD-250)', () => {
+  const long = { id: 'long', name: 'Quarterly Revenue Operations Coordinator' } as Worker;
+  const reading = islandOf({ ...emptyProgress(), activity: [step('read', 'invoice.xlsx', false)] }, false, [long]);
+  expect(reading.named).toEqual({ before: '', name: 'Quarterly Revenue Operations Coordinator', after: ' is reading invoice.xlsx…' });
+  expect(reading.label).toBe('Quarterly Revenue Operations Coordinator is reading invoice.xlsx…');
+  expect(islandBeforeStreaming({ workers: [worker], stage: 'member', pausing: false }).named).toEqual({ before: 'Working with ', name: 'Minh', after: '…' });
+  expect(islandOf(emptyProgress(), false, [worker, other]).named).toBeUndefined();
+  expect(islandOf(emptyProgress(), true, [worker]).named).toBeUndefined();
 });
