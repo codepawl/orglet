@@ -53,6 +53,18 @@ export function groupChatFromRecipient(recipient: string): PendingGroupChat | un
   return workerIds.length >= 2 ? { workerIds } : undefined;
 }
 
+type GroupChatRow = { id: string; createdAt: string; teamId?: string; assignees?: 'all' | string[]; routineId?: string; sideOf?: unknown; archivedAt?: string; deletedAt?: string };
+
+/**
+ * The group chats the sidebar lists (COD-268): open chats that two or more orglets answer, newest first. Before this
+ * a group chat had no row, so once another chat was opened it could only be found again through search.
+ */
+export function openGroupChats<T extends GroupChatRow>(tasks: readonly T[]): T[] {
+  const groups = tasks.filter(task => !task.teamId && !task.routineId && !task.sideOf && !task.archivedAt && !task.deletedAt
+    && (task.assignees === 'all' || (Array.isArray(task.assignees) && task.assignees.length >= 2)));
+  return [...groups].sort((first, second) => second.createdAt.localeCompare(first.createdAt));
+}
+
 /** The names for a header when there are few enough to read at a glance; undefined means the caller counts them instead. */
 export function groupChatNames(names: readonly string[], most = 3): string | undefined {
   return names.length <= most ? names.join(', ') : undefined;
