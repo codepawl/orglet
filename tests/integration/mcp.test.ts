@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Store, id } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { McpServers } from '../../apps/desktop/src/core/tools/mcp';
+import { commandExists, McpServers } from '../../apps/desktop/src/core/tools/mcp';
 import { assertToolCall, toolsFor } from '../../apps/desktop/src/core/tools/catalog';
 import type { ModelReply } from '../../apps/desktop/src/core/adapters/openai';
 import type { Run, Task, Worker } from '../../apps/desktop/src/shared/contracts';
@@ -176,6 +176,29 @@ it('reports a server that cannot start as a problem of the run, not a crash', as
   expect(offered.tools).toEqual([]);
   expect(offered.problems[0]).toMatch(/Không khởi động được máy chủ MCP Fixture/);
   expect(servers.views()[0].status).toBe('error');
+  // The reason names the command instead of the SDK's bare "Connection closed" (COD-263).
+  expect(servers.views()[0].error).toContain(`Không tìm thấy lệnh ${join(directory, 'missing-server.exe')}.`);
+});
+
+it('says a server quit before answering when it exits during the handshake, and never shows its stderr', async () => {
+  servers = new McpServers(store, () => {}, { readSecrets: secretsFor });
+  const script = join(directory, 'quits-at-once.cjs');
+  await writeFile(script, 'process.stderr.write("secret-looking stderr line"); process.exit(3);');
+  const saved = await servers.save(fixtureConfig({ transport: { kind: 'stdio', command: process.execPath, args: [script], envNames: [] } }));
+  const offered = await servers.toolsForRun([saved.id], new AbortController().signal);
+  expect(offered.tools).toEqual([]);
+  const view = servers.views()[0];
+  expect(view.status).toBe('error');
+  expect(view.error).toBe('Máy chủ MCP đã thoát trước khi trả lời Orglet. Chạy thử đúng lệnh này trong terminal để xem nó báo lỗi gì.');
+  expect(JSON.stringify(servers.views())).not.toContain('secret-looking');
+});
+
+it('finds a bare command on PATH the way Windows would, and checks a path as given', () => {
+  const folder = directory;
+  const environment = { PATH: folder, PATHEXT: '.EXE;.CMD' };
+  expect(commandExists('missing-tool', environment, 'win32')).toBe(false);
+  expect(commandExists(process.execPath, environment, 'win32')).toBe(true);
+  expect(commandExists(join(folder, 'nope', 'server.exe'), environment, 'win32')).toBe(false);
 });
 
 it('hands secret values to the server but never to the window or the database', async () => {

@@ -27,6 +27,8 @@ export const en: Dictionary = {
   'Kiểm tra dữ liệu': 'Check data',
   'Kiểm tra cấu trúc dữ liệu đã đính kèm.': 'Check the structure of attached data.',
   'Mở cài đặt kết nối': 'Open connection settings',
+  'Không tìm thấy lệnh {0}. Kiểm tra lại đường dẫn, hoặc cài chương trình đó rồi thử lại.': 'Could not find the command {0}. Check the path, or install that program and try again.',
+  'Máy chủ MCP đã thoát trước khi trả lời Orglet. Chạy thử đúng lệnh này trong terminal để xem nó báo lỗi gì.': 'The MCP server quit before answering Orglet. Run the same command in a terminal to see its error.',
   'Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.': 'Runs the installed {0} on its own plan, outside the Orglet budget.',
   'Không giới hạn': 'No limit',
   'Claude Code dừng khi ước tính của nó cho một lượt chạm số này. Để trống để chạy theo gói, không giới hạn.': 'Claude Code stops when its own estimate for one turn reaches this amount. Leave it empty to run on your plan with no limit.',

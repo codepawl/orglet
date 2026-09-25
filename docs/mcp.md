@@ -16,7 +16,7 @@ Part of the [user guide](user-guide.md). Tool permissions in general are in [age
 3. Under **How to connect**, pick one:
    - **Run on this computer (stdio)**: the **Command** that starts the server (for example `npx`) and its **Arguments**, one per line (for example `-y` and `@modelcontextprotocol/server-github`). Add the **Environment variables** it needs, such as `GITHUB_TOKEN`.
    - **Remote (HTTP)**: the server's **Address**, and a **Bearer token** or **Headers** if it needs them.
-4. Choose **Save server**. Orglet starts the server once to test it, and the row shows **Connected** with its tools, or **Connection error** with the reason.
+4. Choose **Save server**. Orglet starts the server once to test it, and the row shows **Connected** with its tools, or **Connection error** with the reason: a command it cannot find is named (**Could not find the command …**), and a server that quits during the handshake says so and asks you to run the same command in a terminal to see its error. The server's own error output never reaches the window, since it can print tokens.
 
 Each row has a switch to turn the server off and a menu with **Test connection**, **Edit** and **Remove**. When you edit a server, a saved value shows as dots. Leave it empty to keep it, or type a new one to replace it.
 
