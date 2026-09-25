@@ -144,6 +144,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-runs-on { display:flex; align-items:center; gap:5px; }
 .details-section { display:flex; flex-direction:column; gap:8px; }
 .details-section h3 { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--muted); }
+/* Library section titles lead with a small round mark in the section's colour (owner, 2026-09-25). */
+.library-heading { display:flex; align-items:center; gap:8px; }
+.library-mark { display:grid; place-items:center; flex-shrink:0; width:18px; height:18px; border-radius:50%; }
+.library-mark.pending { color:var(--warning); background:color-mix(in srgb, var(--warning) 16%, transparent); }
+.library-mark.approved { color:var(--success); background:color-mix(in srgb, var(--success) 16%, transparent); }
+.library-mark.memory { color:var(--accent); background:color-mix(in srgb, var(--accent) 16%, transparent); }
 .details-section h3 svg { color:var(--muted); }
 /* Permission controls stay grouped inside chat Details. */
 .task-tools { gap:12px; }
