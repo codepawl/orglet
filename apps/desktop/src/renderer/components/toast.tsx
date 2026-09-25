@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { CircleAlert, CircleCheck } from 'lucide-react';
+import { CircleAlert, CircleCheck, Info } from 'lucide-react';
 // Shown text is re-translated on render, so a toast raised just before a language switch follows the new language.
 import { tMessage } from '../i18n';
 import { recordNotice } from './notifications';
 
-type Toast = { id: number; text: string; tone: 'success' | 'error' };
+/** `info` is a calm note that is neither a success nor a fault, such as a link naming an orglet that is not there. */
+type Toast = { id: number; text: string; tone: 'success' | 'error' | 'info' };
 let toasts: Toast[] = [];
 let nextId = 1;
 const listeners = new Set<() => void>();
@@ -23,7 +24,15 @@ export function toast(text: string, tone: Toast['tone'] = 'success', about?: str
   // A repeated message replaces its older copy; at most three are visible.
   toasts = [...toasts.filter(item => item.text !== text), { id, text, tone }].slice(-3);
   emit();
-  setTimeout(() => { toasts = toasts.filter(item => item.id !== id); emit(); }, tone === 'error' ? 6000 : 3000);
+  // Only a confirmation is short: a fault or a note takes longer to read.
+  const visibleMilliseconds = tone === 'success' ? 3000 : 6000;
+  setTimeout(() => { toasts = toasts.filter(item => item.id !== id); emit(); }, visibleMilliseconds);
+}
+
+function ToneIcon({ tone }: { tone: Toast['tone'] }) {
+  if (tone === 'error') return <CircleAlert size={16} aria-hidden="true" />;
+  if (tone === 'info') return <Info size={16} aria-hidden="true" />;
+  return <CircleCheck size={16} aria-hidden="true" />;
 }
 
 /**
@@ -34,7 +43,7 @@ export function Toaster() {
   const items = useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => toasts);
   return createPortal(<div className="toaster" aria-live="polite">
     {items.map(item => <div key={item.id} className={`toast ${item.tone}`} role={item.tone === 'error' ? 'alert' : 'status'}>
-      {item.tone === 'error' ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}<span>{tMessage(item.text)}</span>
+      <ToneIcon tone={item.tone} /><span>{tMessage(item.text)}</span>
     </div>)}
   </div>, document.body);
 }

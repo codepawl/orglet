@@ -37,14 +37,23 @@ export type SquirrelSteps = {
   takeOffPath: () => Promise<void>;
   /** The person chose Remove from PATH, so an update must not put it back. */
   keptOffPath: () => boolean;
+  /** Puts Orglet in Explorer's Send to menu (COD-246). */
+  addSendTo: () => Promise<void>;
+  removeSendTo: () => Promise<void>;
+  /** The person turned Send to off in Settings, so an update must not put it back. */
+  keptOffSendTo: () => boolean;
+  /** Makes `orglet://` links open Orglet, for this user only. */
+  registerLinks: () => Promise<void>;
+  unregisterLinks: () => Promise<void>;
 };
 
 function stepsFor(event: SquirrelEvent, steps: SquirrelSteps): Promise<void>[] {
   if (event === 'install' || event === 'updated') {
     const onPath = steps.keptOffPath() ? [] : [steps.putOnPath()];
-    return [steps.createShortcuts(), ...onPath];
+    const inSendTo = steps.keptOffSendTo() ? [] : [steps.addSendTo()];
+    return [steps.createShortcuts(), ...onPath, ...inSendTo, steps.registerLinks()];
   }
-  if (event === 'uninstall') return [steps.removeShortcuts(), steps.takeOffPath()];
+  if (event === 'uninstall') return [steps.removeShortcuts(), steps.takeOffPath(), steps.removeSendTo(), steps.unregisterLinks()];
   return [];
 }
 

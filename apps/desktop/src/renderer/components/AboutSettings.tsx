@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Copy, ExternalLink, Globe, Plus, RefreshCw, RotateCw, X } from 'lucide-react';
 import type { Workspace } from '../../shared/contracts';
 import type { CliInstallState } from '../../shared/cli';
+import type { SendToState } from '../../shared/incoming';
 import { aboutDetailsText, osName, type AboutLink, type InstallKind, type Release, type UnsupportedReason, type UpdateState } from '../../shared/updates';
 import { releaseHighlights } from '../../shared/release-notes';
 import { Button } from './ui';
@@ -108,6 +109,28 @@ function CommandLineRow({ workspace, busy, act }: { workspace: Workspace; busy: 
     </Row>
     {state && <CommandBlock command={commandLineExample(state, workspace.workers[0]?.name)} copyLabel={t('Sao chép lệnh')} copyIcon={<Copy size={14} />} onCopy={copy} />}
   </div>;
+}
+
+/**
+ * Orglet in Explorer's Send to menu (COD-246). The switch adds or removes the shortcut in the person's own SendTo
+ * folder, and main keeps the choice so updates respect it. Only a packaged Windows build shows the row.
+ */
+function SendToRow({ busy, act }: { busy: boolean; act: (action: () => Promise<string | void>, about?: string) => Promise<void> }) {
+  const [state, setState] = useState<SendToState>();
+  useEffect(() => {
+    let live = true;
+    orglet.sendToState().then(next => { if (live) setState(next); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  if (state?.mode !== 'windows') return null;
+  const title = t('Gửi tới Orglet trong Explorer');
+  const toggle = (enabled: boolean) => void act(async () => {
+    setState(await orglet.setSendTo(enabled));
+    return enabled ? t('Đã thêm Orglet vào menu Gửi tới.') : t('Đã gỡ Orglet khỏi menu Gửi tới.');
+  }, title);
+  return <Row id="send-to-label" title={title} description={t('Chọn tệp trong File Explorer, bấm chuột phải rồi chọn Gửi tới → Orglet. Trên Windows 11, mục này nằm trong Hiển thị thêm tùy chọn.')}>
+    <Switch checked={state.installed} disabled={busy} labelledBy="send-to-label" onChange={toggle} />
+  </Row>;
 }
 
 function Row({ title, description, children, id }: { title: string; description?: ReactNode; children?: ReactNode; id?: string }) {
@@ -229,6 +252,7 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
       <Button variant="outline" disabled={busy || !about} onClick={copyDetails}><Copy size={14} />{t('Sao chép')}</Button>
     </Row>
     <CommandLineRow workspace={workspace} busy={busy} act={act} />
+    <SendToRow busy={busy} act={act} />
 
     <div className="setting-row about-links-row">
       <div className="setting-text">
