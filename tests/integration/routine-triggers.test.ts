@@ -280,12 +280,16 @@ it('picks a new file up through the real folder watcher', async () => {
   const folder = await grant();
   await core.command('saveRoutine', { name: 'Live inbox', enabled: true, schedule, trigger: { kind: 'folder', folderId: folder.folderId, folderName: folder.name }, task: task() });
   await core.folderTriggers.sync();
+  // macOS starts its FSEvents stream after fs.watch returns, and a file written before the stream is up never
+  // raises an event (the app's own listing tick covers that; this test runs without the tick, to prove the
+  // watcher path). Give the stream a moment to start there, and slow runners time to deliver the event.
+  await new Promise(resolve => setTimeout(resolve, process.platform === 'darwin' ? 1000 : 0));
   await writeFile(join(inbox, 'live.txt'), 'arrived');
-  for (let attempt = 0; attempt < 100 && tasks().length === 0; attempt++) await new Promise(resolve => setTimeout(resolve, 50));
+  for (let attempt = 0; attempt < 300 && tasks().length === 0; attempt++) await new Promise(resolve => setTimeout(resolve, 50));
   await idle();
   expect(tasks()).toHaveLength(1);
   expect(sourceNames(tasks()[0])).toEqual(['live.txt']);
-});
+}, 30_000);
 
 /** Opens the database file again as a new app start would, after the caller changed it with the store closed. */
 function reopen() {
