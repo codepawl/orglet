@@ -43,6 +43,14 @@ describe('orglet arguments', () => {
     expect(parseArguments(['send', '--to', 'Writer', '--', '--not-an-option'])).toMatchObject({ kind: 'send', message: '--not-an-option', wait: true, timeoutSeconds: 600 });
   });
 
+  it('parses run with a schedule name and files', () => {
+    expect(parseArguments(['run', 'Invoice check', '--file', 'a.pdf', '--file=b.txt', '--json'])).toEqual({
+      kind: 'run', schedule: 'Invoice check', files: ['a.pdf', 'b.txt'], json: true,
+    });
+    expect(parseArguments(['run', 'Morning'])).toEqual({ kind: 'run', schedule: 'Morning', files: [], json: false });
+    expect(COMMAND_HELP.run).toContain('cannot create or change one');
+  });
+
   it('reads help and version before anything else', () => {
     expect(parseArguments(['--help'])).toEqual({ kind: 'help' });
     expect(parseArguments(['-v'])).toEqual({ kind: 'version' });
@@ -53,6 +61,7 @@ describe('orglet arguments', () => {
 
   it('refuses mistakes as usage errors', () => {
     const mistakes = [[], ['frobnicate'], ['send', '--to', 'Researcher'], ['send', 'hi'], ['read'], ['status', '--to', 'x'], ['list', '--file', 'a'],
+      ['run'], ['run', 'a', 'b'], ['run', 'a', '--no-wait'], ['run', 'a', '--to', 'x'],
       ['send', 'hi', 'there', '--to', 'x'], ['send', 'hi', '--to', 'x', '--timeout', '0'], ['send', 'hi', '--to'], ['status', '--bogus'], ['send', 'hi', '--to', 'a', '--to', 'b']];
     for (const mistake of mistakes) expect(() => parseArguments(mistake), mistake.join(' ')).toThrow(UsageError);
     expect(() => parseArguments(['send', 'hi', '--to', 'x', ...Array.from({ length: 21 }, (_, index) => `--file=${index}`)])).toThrow(UsageError);
@@ -132,8 +141,13 @@ describe('orglet request checks', () => {
     expect(tokensMatch(token, 42)).toBe(false);
   });
 
-  it('allows only status, list, send, read and open', () => {
+  it('allows only status, list, send, read, open and run', () => {
     expect(CliRequest.safeParse({ op: 'status', token }).success).toBe(true);
+    expect(CliRequest.safeParse({ op: 'run', token, schedule: 'Morning', files: [] }).success).toBe(true);
+    // run starts a schedule that exists; it cannot carry a new setup or a trigger.
+    expect(CliRequest.safeParse({ op: 'run', token, schedule: 'Morning', files: [], enabled: true }).success).toBe(false);
+    expect(CliRequest.safeParse({ op: 'run', token, schedule: 'Morning', files: [], trigger: { kind: 'called' } }).success).toBe(false);
+    for (const op of ['saveRoutine', 'runRoutine', 'catchUpRoutine']) expect(CliRequest.safeParse({ op, token }).success, op).toBe(false);
     for (const op of ['grantWorkspace', 'connect', 'settings', 'deleteTask', 'archiveTask', 'backupExport', 'eraseData']) {
       expect(CliRequest.safeParse({ op, token }).success, op).toBe(false);
     }

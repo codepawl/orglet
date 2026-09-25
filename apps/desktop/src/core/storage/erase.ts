@@ -15,7 +15,7 @@ export const ERASE_TABLES = [
   'tool_calls', 'checkpoints', 'leases', 'events', 'artifacts', 'app_proposals', 'runs',
   'profiles', 'preflights', 'workspace_grants', 'task_search', 'tasks',
   'knowledge_search', 'knowledge_revisions', 'knowledge', 'revisions',
-  'routines', 'workers', 'teams', 'skills', 'sources', 'settings', 'mcp_servers',
+  'routine_arrivals', 'routine_folders', 'routines', 'workers', 'teams', 'skills', 'sources', 'settings', 'mcp_servers',
 ] as const;
 
 const count = (store: Store, table: string) => Number(store.db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()!.count);

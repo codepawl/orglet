@@ -9,6 +9,7 @@ import { WorkspaceDiffRequest, type WorkspaceDiff } from './workspace-diff';
 import { ExactMatchRequest, ProfileArgs, type DataFormat, type DatasetProfile, type ProfileRecord } from './profiles';
 import { PreflightPolicy, type PreflightRecord } from './preflight';
 import { Schedule, WorkHours } from './schedule';
+import { RoutineTrigger, type WatchFolderView } from './routine-triggers';
 import { SkillPackage, type PackageReview } from './skill-package';
 import { RunAuditArgs } from './run-audit';
 import type { MediaKind } from './source-kinds';
@@ -158,8 +159,13 @@ export type TeamPlan = z.infer<typeof TeamPlan>;
 export const UNASSIGNED_PLAN_ERROR = 'Không được phân việc cho lượt này.';
 export const MISSING_PLAN_ERROR = 'Phân việc không có kết quả. Không chạy thành viên và không bịa báo cáo.';
 export const INVALID_PLAN_ERROR = 'Phân việc không hợp lệ: Tí không thuộc hội.';
-export const RoutineInput = z.object({ id: Id.optional(), name: z.string().trim().min(1).max(80), enabled: z.boolean(), schedule: Schedule, task: TaskInput }).strict();
-export const Routine = RoutineInput.extend({ id: Id, revision: z.number().int().positive(), approvedConfig: z.string(), nextDueAt: z.iso.datetime(), pending: z.object({ dueAt: z.iso.datetime(), reason: z.string() }).strict().nullable(), lastTaskId: Id.optional() }).strict();
+/** `schedule` stays on every routine, so switching the trigger back to the clock keeps the time the person set. */
+export const RoutineInput = z.object({ id: Id.optional(), name: z.string().trim().min(1).max(80), enabled: z.boolean(), schedule: Schedule, trigger: RoutineTrigger.optional(), task: TaskInput }).strict();
+/**
+ * `pending` is a clock routine's one missed run. `notice` is why an event trigger's files did not start a run, or
+ * are waiting for the previous run to end; the person dismisses it like a miss, and there is nothing to catch up.
+ */
+export const Routine = RoutineInput.extend({ id: Id, revision: z.number().int().positive(), approvedConfig: z.string(), nextDueAt: z.iso.datetime(), pending: z.object({ dueAt: z.iso.datetime(), reason: z.string() }).strict().nullable(), notice: z.object({ at: z.iso.datetime(), reason: z.string() }).strict().optional(), lastTaskId: Id.optional() }).strict();
 export type Routine = z.infer<typeof Routine>;
 export const Handoff = z.object({ createdAt: z.iso.datetime(), artifactIds: z.array(Id), blockers: z.array(z.string()), nextSteps: z.array(z.string()), chargedMicros: z.number().int().nonnegative(), reservedMicros: z.number().int().nonnegative(), uncertainCount: z.number().int().nonnegative() }).strict();
 export type Handoff = z.infer<typeof Handoff>;
@@ -345,6 +351,8 @@ export interface Bridge {
   pickWorkspace(taskId: string, permissions: WorkspacePermission[]): Promise<WorkspaceGrantView | null>;
   /** The same native picker for a chat with no row yet; the core keeps the folder until the first message (COD-186). */
   pickNewChatWorkspace(chat: NewChatTarget, permissions: WorkspacePermission[]): Promise<NewChatWorkspaceView | null>;
+  /** The same native picker, read-only, for the folder a routine watches (COD-245); the path stays in the core. */
+  pickWatchFolder(): Promise<WatchFolderView | null>;
   /** Save an API key from typed input, or omit `key` to pick a .txt file. The key never comes back to the renderer. */
   connect(provider: CredentialProvider, key?: string): Promise<Connections>;
   disconnect(provider: CredentialProvider): Promise<Connections>;

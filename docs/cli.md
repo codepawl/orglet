@@ -18,8 +18,9 @@
 | `orglet send "message" --to <name>` | Sends a message into that chat and prints the answer |
 | `orglet read --to <name>` | Prints the latest answer in that chat |
 | `orglet open [--to <name>]` | Brings the Orglet window forward, and with `--to` opens that chat |
+| `orglet run "<schedule>" [--file <path>]` | Starts a schedule now, with the files you attach. See [run](#run). |
 
-It cannot grant a folder, touch API keys or connections, change settings or permissions, back up, archive or delete anything. Those stay in the window, where you can see what you are agreeing to. The app refuses any other request, even one that carries the right token.
+It cannot grant a folder, touch API keys or connections, change settings or permissions, create or edit a schedule, back up, archive or delete anything. Those stay in the window, where you can see what you are agreeing to. The app refuses any other request, even one that carries the right token.
 
 ## Install
 
@@ -146,6 +147,28 @@ orglet open --to "Review crew"
 
 Brings the window forward and opens that chat. On Windows the taskbar button may flash instead, because Windows does not always let another program take the front.
 
+### run
+
+```sh
+orglet run "Invoice check" --file invoice.pdf
+```
+
+Starts one of the app's schedules now: its brief goes to its orglet or crew, within its cost limit, with the files you attach added to the schedule's own sources. The command returns once the run has started, and the run appears in the app under **Schedules → Open latest run**. It does not wait for the answer.
+
+Any schedule can be started this way. A schedule set to **Only when called** runs in no other way. The schedule must:
+
+- exist. `run` cannot create one, and names match the way chat names do.
+- be switched on. A schedule that is off is refused with a message saying so.
+- be approved as it is now. If its orglet, crew, skill, model or trigger changed since it was saved, the app refuses and asks you to save it again, the same as for a scheduled run.
+- have finished its previous run. A run still going or waiting for you is refused.
+
+| Option | Meaning |
+|---|---|
+| `--file <path>` | Attach a file to this run. Repeat it for more; the schedule's own sources and these together stay within 20. The same size and type limits as the file picker apply. |
+| `--json` | Print the schedule and the new chat's id as JSON |
+
+Like every command, `run` works only while the app is open; it starts the app first when it is not. Nothing is queued while the app is closed, and nothing is replayed later.
+
 ### Names
 
 Names match without regard to case. A unique start of a name is enough: `--to res` finds Researcher. If the start fits several names, or nothing fits, the command lists the names you can use. If an orglet and a crew share a name, rename one in the app.
@@ -167,8 +190,9 @@ Messages that come from the app are in the app's language.
 
 - While Orglet runs, it listens on a named pipe on Windows (`\\.\pipe\orglet-cli-` plus a hash of the data folder) or a socket file `cli.sock` in the data folder on macOS and Linux. Nothing listens on the network.
 - Each start writes a new random token to `cli-token` in the data folder, readable only by you where the system supports it. Every request must carry it; the app compares it in constant time. Anyone who cannot read your data folder cannot use the pipe.
-- A request is one line of JSON and the answer is one line back. The app checks each request against a fixed list of five operations and refuses everything else, lines over 1 MB, and more than eight commands at once.
+- A request is one line of JSON and the answer is one line back. The app checks each request against a fixed list of six operations and refuses everything else, lines over 1 MB, and more than eight commands at once.
 - `send` goes through the same steps as the message box: attached files are imported by the app, then the chat's live conversation takes the message or a new one starts. The app then checks the chat until the turn stops.
+- `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window has no command that does this, so a page cannot start a schedule unasked.
 - Chat in the terminal makes only the requests `list`, `send`, `read` and `open` make; the pipe has no operation of its own for it. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
 - The answers to `list`, `status`, `send` and `read` carry each orglet's colour as `#rrggbb`: the one picked in the app, or the colour of the face the app chose for it by name. The command draws the faces from these fields and falls back to grey when they are missing.
 - If nothing answers, the command starts Orglet on the same data folder and tries again for up to 30 seconds.

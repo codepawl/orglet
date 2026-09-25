@@ -2,7 +2,7 @@ import { DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_WAIT_SECONDS } from './protocol';
 
 /** Turning `orglet …` arguments into one command, and the help text for each (COD-234). */
 
-export type CommandName = 'chat' | 'status' | 'list' | 'send' | 'read' | 'open';
+export type CommandName = 'chat' | 'status' | 'list' | 'send' | 'read' | 'open' | 'run';
 
 export type ParsedCommand =
   | { kind: 'help'; topic?: CommandName }
@@ -12,12 +12,13 @@ export type ParsedCommand =
   | { kind: 'list'; json: boolean }
   | { kind: 'send'; message: string; to: string; files: string[]; wait: boolean; timeoutSeconds: number; json: boolean }
   | { kind: 'read'; to: string; json: boolean }
-  | { kind: 'open'; to?: string; json: boolean };
+  | { kind: 'open'; to?: string; json: boolean }
+  | { kind: 'run'; schedule: string; files: string[]; json: boolean };
 
 /** A mistake in how the command was typed; exits with code 2. */
 export class UsageError extends Error {}
 
-const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 'send', 'read', 'open'];
+const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 'send', 'read', 'open', 'run'];
 
 export const MAIN_HELP = `orglet: talk to the Orglet app from a terminal.
 
@@ -35,6 +36,7 @@ Commands:
   send      Send a message to an orglet or crew and print the answer
   read      Print the latest answer in a chat
   open      Bring the Orglet window forward, optionally on one chat
+  run       Start a schedule now, optionally with files
 
 Options:
   -h, --help       Show help. "orglet <command> --help" shows a command's options.
@@ -100,6 +102,24 @@ Brings the Orglet window forward. With --to, opens that chat.
 Options:
   --to <name>    The orglet or crew to open
   --json         Print machine-readable JSON`,
+  run: `Usage: orglet run "<schedule>" [--file <path>] [--json]
+
+Starts a schedule from the app's Schedules now, with its brief, its orglet or
+crew and its limit, and returns once the run has started. The name matches
+case-insensitively; a unique start of a name is enough. Files given with
+--file are attached to this run, next to the schedule's own sources.
+
+The schedule must exist, be switched on and be saved as it is now. This
+command cannot create or change one. Any schedule can be started this way,
+and one set to "Only when called" runs only like this. Nothing runs while
+the app is closed; the command starts the app first.
+
+Options:
+  --file <path>  Attach a file to this run; repeat for more (up to ${MAX_FILES})
+  --json         Print machine-readable JSON
+
+Example:
+  orglet run "Invoice check" --file invoice.pdf`,
 };
 
 type Options = {
@@ -182,12 +202,14 @@ function parseTimeout(value: string | undefined): number {
 
 /** Options that only one command understands, so `orglet list --file x` is a mistake rather than ignored. */
 function rejectForeignOptions(command: CommandName, options: Options): void {
-  const sendOnly = options.files.length > 0 || !options.wait || options.timeout !== undefined;
-  if (command !== 'send' && sendOnly) throw new UsageError('--file, --no-wait and --timeout belong to "orglet send".');
+  const sendOnly = !options.wait || options.timeout !== undefined;
+  if (command !== 'send' && sendOnly) throw new UsageError('--no-wait and --timeout belong to "orglet send".');
+  const takesFiles = command === 'send' || command === 'run';
+  if (!takesFiles && options.files.length > 0) throw new UsageError('--file belongs to "orglet send" and "orglet run".');
   const takesName = command === 'chat' || command === 'send' || command === 'read' || command === 'open';
   if (!takesName && options.to !== undefined) throw new UsageError(`"orglet ${command}" does not take --to.`);
   if (command === 'chat' && options.json) throw new UsageError('"orglet chat" does not take --json. Use "orglet send --json" in scripts.');
-  const takesMessage = command === 'send';
+  const takesMessage = command === 'send' || command === 'run';
   const extra = takesMessage ? options.positionals.slice(2) : options.positionals.slice(1);
   if (extra.length > 0) throw new UsageError(`Unexpected argument "${extra[0]}". Put a message with spaces in quotes.`);
 }
@@ -222,7 +244,15 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
     case 'read': return { kind: 'read', to: requireName(command, options.to), json };
     case 'open': return { kind: 'open', ...(options.to?.trim() ? { to: options.to.trim() } : {}), json };
     case 'send': return parseSend(options);
+    case 'run': return parseRun(options);
   }
+}
+
+function parseRun(options: Options): ParsedCommand {
+  const schedule = options.positionals[1]?.trim();
+  if (!schedule) throw new UsageError('"orglet run" needs a schedule name, for example: orglet run "Invoice check"');
+  if (options.files.length > MAX_FILES) throw new UsageError(`Attach at most ${MAX_FILES} files.`);
+  return { kind: 'run', schedule, files: options.files, json: options.json };
 }
 
 function parseSend(options: Options): ParsedCommand {

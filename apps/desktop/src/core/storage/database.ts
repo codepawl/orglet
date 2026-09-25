@@ -13,7 +13,7 @@ import type { WorkspacePermission } from '../../shared/workspace-access';
 import { readCustomConnections } from './custom-connections';
 import { McpServer, type McpServerView } from '../../shared/mcp';
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export class Store {
@@ -139,6 +139,13 @@ export class Store {
       this.db.exec(`CREATE TABLE IF NOT EXISTS mcp_servers (
         id TEXT PRIMARY KEY, data TEXT NOT NULL
       ); INSERT OR IGNORE INTO migrations VALUES (16);`);
+      // Folders a routine watches and the new files it already handled there (COD-245). Local only, like
+      // workspace grants: a backup carries neither, so a restored folder routine asks for its folder again.
+      this.db.exec(`CREATE TABLE IF NOT EXISTS routine_folders (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS routine_arrivals (
+          routine_id TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, modified_ms INTEGER NOT NULL, handled_at TEXT NOT NULL,
+          PRIMARY KEY(routine_id,name,size,modified_ms)
+        ); INSERT OR IGNORE INTO migrations VALUES (17);`);
       this.db.prepare(`INSERT OR IGNORE INTO reservation_reviews (reservation_id,reason,noted_at)
         SELECT id,'legacy',? FROM reservations WHERE state='unknown'`).run(now());
     });
