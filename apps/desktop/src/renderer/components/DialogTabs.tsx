@@ -23,12 +23,24 @@ export function DialogTabs<T extends string>({ label, tabs, value, onChange, pan
  * Centred editor with the Settings layout: tabs on the left, the current section on the right and Save/Cancel pinned
  * at the bottom so they stay reachable whichever section is open.
  */
-export function TabbedFormDialog<T extends string>({ open, onClose, title, tabs, tab, onTab, panelId, onSubmit, submitLabel, busy, actions, description, error, children }: { open: boolean; onClose: () => void; title: string; tabs: DialogTab<T>[]; tab: T; onTab: (tab: T) => void; panelId: string; onSubmit: () => void; submitLabel: string; busy: boolean; actions?: ReactNode; description?: ReactNode; error?: string; children: ReactNode }) {
+export function TabbedFormDialog<T extends string>({ open, onClose, title, tabs, tab, onTab, panelId, onSubmit, submitLabel, busy, actions, description, error, focusField, children }: { open: boolean; onClose: () => void; title: string; tabs: DialogTab<T>[]; tab: T; onTab: (tab: T) => void; panelId: string; onSubmit: () => void; submitLabel: string; busy: boolean; actions?: ReactNode; description?: ReactNode; error?: string;
+  /**
+   * The `data-field` to focus when the dialog opens, scrolled into view, instead of the first control. A link that
+   * names one field (the empty chat's "Đổi model") lands on it rather than at the top of the tab (COD-255).
+   */
+  focusField?: string; children: ReactNode }) {
   const current = tabs.find(item => item.id === tab);
+  const focusNamedField = (event: Event) => {
+    const field = focusField ? document.querySelector<HTMLElement>(`#${panelId} [data-field="${focusField}"]`) : null;
+    if (!field) return;
+    event.preventDefault();
+    field.scrollIntoView({ block: 'center' });
+    field.focus({ preventScroll: true });
+  };
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
       <Dialog.Overlay className="modal-overlay" />
-      <Dialog.Content className="settings-dialog" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup}>
+      <Dialog.Content className="settings-dialog" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup} onOpenAutoFocus={focusNamedField}>
         <div className="settings-header"><Dialog.Title>{title}</Dialog.Title><Dialog.Close asChild><Button size="icon" aria-label={t('Đóng {0}', [title.toLowerCase()])}><X size={18} /></Button></Dialog.Close></div>
         {/* noValidate: fields on hidden tabs are unmounted, so validation happens in onSubmit and switches to the tab at fault. */}
         <form className="dialog-form" noValidate onSubmit={event => { event.preventDefault(); onSubmit(); }}>

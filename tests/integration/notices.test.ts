@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { collapseNotices, noticeGroupLabels, type Notice } from '../../apps/desktop/src/renderer/components/notifications';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { collapseNotices, isUnreadNotice, noticeGroupLabels, useNotices, type Notice } from '../../apps/desktop/src/renderer/components/notifications';
+import { toast } from '../../apps/desktop/src/renderer/components/toast';
 import { calendarDaysAgo, clockLabel, dayLabel } from '../../apps/desktop/src/renderer/components/TimeMark';
 
 let nextId = 1;
@@ -91,5 +94,49 @@ describe('new notices in the centre', () => {
     expect(noticeGroupLabels(rows, older.id, 'New', () => 'Today')).toEqual(['New', 'New', 'Today']);
     expect(noticeGroupLabels(rows, newest.id, 'New', () => 'Today')).toEqual(['Today', 'Today', 'Today']);
     expect(noticeGroupLabels(rows, null, 'New', () => 'Today')).toEqual(['Today', 'Today', 'Today']);
+  });
+});
+
+/** The notices recorded so far, read through the same hook the centre uses. */
+function recordedNotices(): Notice[] {
+  let recorded: Notice[] = [];
+  const Probe = () => {
+    recorded = useNotices();
+    return null;
+  };
+  renderToStaticMarkup(createElement(Probe));
+  return recorded;
+}
+
+/**
+ * COD-255: saving an orglet left an unread "Orglet saved" and a badge on Notifications. A confirmation of what the
+ * person just did is kept but already read; a problem and news that arrived on its own still wait for them.
+ */
+describe('what counts as unread', () => {
+  it('keeps a plain confirmation in the list without counting it, and counts problems, notes and news', () => {
+    const before = recordedNotices().at(-1)?.id ?? 0;
+    toast('Đã lưu Tí', 'success', 'Researcher');
+    toast('Đã tạo hội', 'success', 'Review crew', { action: { label: 'Mở', onSelect: () => undefined } });
+    toast('Không lưu được Tí', 'error', 'Researcher');
+    toast('Liên kết trỏ tới Tí không còn', 'info');
+    toast('Researcher đã trả lời trong chat phụ', 'success', 'Side thread', { unread: true });
+    const added = recordedNotices().filter(notice => notice.id > before);
+    expect(added.map(notice => [notice.text, isUnreadNotice(notice, before)])).toEqual([
+      ['Đã lưu Tí', false],
+      ['Đã tạo hội', false],
+      ['Không lưu được Tí', true],
+      ['Liên kết trỏ tới Tí không còn', true],
+      ['Researcher đã trả lời trong chat phụ', true],
+    ]);
+  });
+
+  it('never files a confirmation under "new", even when it arrived after the centre was last opened', () => {
+    const seen = notice('Đã sao chép', '2026-09-23T09:00:00.000Z');
+    const confirmation = notice('Đã lưu Tí', '2026-09-23T10:00:00.000Z', { confirmation: true });
+    const problem = notice('Không lưu được Tí', '2026-09-23T11:00:00.000Z', { kind: 'error' });
+    const rows = collapseNotices([problem, confirmation, seen]);
+    expect(noticeGroupLabels(rows, seen.id, 'New', () => 'Today')).toEqual(['New', 'Today', 'Today']);
+    expect(isUnreadNotice(confirmation, seen.id)).toBe(false);
+    expect(isUnreadNotice(problem, seen.id)).toBe(true);
   });
 });

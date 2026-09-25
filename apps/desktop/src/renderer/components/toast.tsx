@@ -7,6 +7,15 @@ import { recordNotice } from './notifications';
 
 /** A toast can offer one thing to do about it, such as opening the chat it announces. */
 export type ToastAction = { label: string; onSelect: () => void };
+export type ToastOptions = {
+  action?: ToastAction;
+  /**
+   * Counts in Notifications until the centre is opened. A problem or a note always does. A success does only when it
+   * is news that arrived on its own (a side thread answering, an update, a change an orglet applied by itself): a
+   * confirmation of what the person just did, such as "Đã lưu Tí", was read under the cursor (COD-255).
+   */
+  unread?: boolean;
+};
 /** `info` is a calm note that is neither a success nor a fault, such as a link naming an orglet that is not there. */
 type Toast = { id: number; text: string; tone: 'success' | 'error' | 'info'; action?: ToastAction };
 let toasts: Toast[] = [];
@@ -19,10 +28,12 @@ const emit = () => { for (const listener of listeners) listener(); };
  * `about` is what the message concerns (the setting, the worker, the chat): the toast itself stays short, because
  * the control it answers is under the cursor, and the notice centre shows it later, when that context is gone.
  */
-export function toast(text: string, tone: Toast['tone'] = 'success', about?: string, action?: ToastAction) {
+export function toast(text: string, tone: Toast['tone'] = 'success', about?: string, options: ToastOptions = {}) {
   const id = nextId++;
+  const { action } = options;
+  const confirmation = tone === 'success' && !options.unread;
   // Every toast is also kept, so a message missed while looking elsewhere can still be found (user, 2026-09-20).
-  recordNotice(text, tone === 'error' ? 'error' : 'done', about);
+  recordNotice(text, tone === 'error' ? 'error' : 'done', about, confirmation);
   // A repeated message replaces its older copy; at most three are visible.
   toasts = [...toasts.filter(item => item.text !== text), { id, text, tone, ...(action ? { action } : {}) }].slice(-3);
   emit();

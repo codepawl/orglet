@@ -9,8 +9,8 @@ Part of the [user guide](user-guide.md). How a crew turn runs under the hood: [t
 ### Create one
 
 1. Click **+** next to **Orglets** in the sidebar.
-2. On **General**, give it a name and a short description, write its instructions, and pick its **Model**: a connection (Demo, a local harness, or an API provider) and, for everything but Demo, a model ID from that provider's list or one you type. Set its **Limit per task** if you want a cap on what one chat may spend through an API connection.
-3. Choose **Save orglet**. Orglet picks a face and a colour for it from its name and description; the colour can be changed in the same dialog.
+2. On **General**, give it a name and a short description, write its instructions, and pick its **Model**: a connection (Demo, a local harness, or an API provider) and, for everything but Demo, a model ID from that provider's list or one you type. The **Model** menu lists Demo first, then every connection that can run now (a signed-in harness, an API with a saved key, a custom connection), then the rest greyed under **Unavailable**. Set its **Limit per task** if you want a cap on what one chat may spend through an API connection.
+3. Choose **Save orglet**. Orglet picks a face and a colour for it from its name and description; the colour can be changed in the same dialog. The new orglet's chat opens, ready for a first message.
 
 The dialog has four tabs:
 
@@ -41,7 +41,7 @@ Open the row's menu (right-click, or the **⋯** on the row) to edit, archive or
 2. Name the crew, write its instructions, and pick **1 to 4 members**. One of them is the **lead** (the dialog calls it the **Orgletrator**): it plans the turn and writes the final answer.
 3. Choose the **Workflow**: **In parallel, then combine** (members work at the same time, two at once) or **In sequence, then combine** (each member gets the previous one's result).
 4. Under **Limits & shifts**, set **Crew limit / month** and **Limit per task**, **Concurrent tasks** (1–8; above 4 a short note says more at once means more spend at once), and, if you want, **Limit working hours** with a time zone. Outside work hours nothing new starts; a running step finishes and the crew leaves an end-of-shift handoff.
-5. Choose **Save crew**.
+5. Choose **Save crew**. The new crew's chat opens.
 
 **Import template** creates a crew from a template file, with a separate copy of its orglets and shared skills. A saved crew's settings offer **Export saved template**. Templates carry configuration, not keys, sources or chat history. The Research Review and Eris Review templates start on Demo and can bring a required checklist and a dataset check with them; a crew that has one says so under General and can drop it there.
 

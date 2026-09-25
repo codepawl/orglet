@@ -308,7 +308,7 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
       try {
         const sideTaskId = await orglet.call('startSideThread', { taskId: detail.task.id, brief, sourceIds: carriedSources(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
         setText(current => current === text ? '' : current);
-        toast(t('Đã mở chat phụ'), 'success', orgletName, { label: t('Mở'), onSelect: () => openChat(sideTaskId) });
+        toast(t('Đã mở chat phụ'), 'success', orgletName, { action: { label: t('Mở'), onSelect: () => openChat(sideTaskId) } });
       } finally { setSubmitting(false); }
     });
   };

@@ -24,7 +24,7 @@ const tabs = [
 ];
 
 /** Team create/edit. Remount (via key) to reset the draft. */
-export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; team?: Team; workspace: Workspace; onClose: () => void }) {
+export function TeamDialog({ open, team, workspace, onClose, onCreated }: { open: boolean; team?: Team; workspace: Workspace; onClose: () => void; /** A new crew was saved; the app opens its chat (COD-255). Not called when an existing one is saved. */ onCreated?: (teamId: string) => void }) {
   const [tab, setTab] = useState<Tab>('general');
   const [name, setName] = useState(team?.name ?? '');
   const [instructions, setInstructions] = useState(team?.instructions ?? 'Combine evidence from each role into one review. Preserve disagreements and explicitly identify missing evidence.');
@@ -68,8 +68,10 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
     if (shift && !TimeZone.safeParse(shiftZone).success) return fail('limits', t('Timezone của ca không hợp lệ. Dùng tên như Asia/Ho_Chi_Minh hoặc UTC.'), 'shiftZone');
     if (shift && (!shiftDays.length || shiftStart === shiftEnd)) return fail('limits', t('Chọn ít nhất một ngày làm việc và giờ bắt đầu khác giờ kết thúc.'), 'shift');
     void run(async () => {
-      await orglet.call('saveTeam', { ...(team ? { id: team.id } : {}), name, instructions, ...(reviewPolicy ? { reviewPolicy } : {}), memberIds: members, synthesizerId: synthesizer, workflow, monthlyBudgetMicros, taskBudgetMicros, maxConcurrentTasks: concurrency, ...(shift ? { workHours: { timeZone: shiftZone, start: shiftStart, end: shiftEnd, days: shiftDays } } : {}), ...(preflight ? { preflight } : {}) });
-      toast(team ? t('Đã lưu hội') : t('Đã tạo hội'), 'success', name); onClose();
+      const saved = await orglet.call('saveTeam', { ...(team ? { id: team.id } : {}), name, instructions, ...(reviewPolicy ? { reviewPolicy } : {}), memberIds: members, synthesizerId: synthesizer, workflow, monthlyBudgetMicros, taskBudgetMicros, maxConcurrentTasks: concurrency, ...(shift ? { workHours: { timeZone: shiftZone, start: shiftStart, end: shiftEnd, days: shiftDays } } : {}), ...(preflight ? { preflight } : {}) });
+      toast(team ? t('Đã lưu hội') : t('Đã tạo hội'), 'success', name);
+      if (!team) onCreated?.(saved.id);
+      onClose();
     });
   };
 

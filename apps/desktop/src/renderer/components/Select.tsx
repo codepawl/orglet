@@ -20,7 +20,7 @@ const GAP = 6, EDGE = 10, MAX_HEIGHT = 360, MIN_HEIGHT = 140;
  * there is more room above, fits its height to the space left in the window, and follows the trigger on resize/scroll.
  * Keyboard: arrows, Home/End, typing to jump, Enter/Space to choose, Escape to close.
  */
-export function Select({ value, options, onChange, label, ariaLabel, disabled, size = 'md', className = '', menuMinWidth = 0, showDetail = true, showIcon = true, inlineDetail = false, describedBy, invalid, flash }: {
+export function Select({ value, options, onChange, label, ariaLabel, disabled, size = 'md', className = '', menuMinWidth = 0, showDetail = true, showIcon = true, inlineDetail = false, describedBy, invalid, flash, field }: {
   value: string; options: SelectOption[]; onChange: (value: string) => void;
   /** Visible label above the trigger; otherwise pass ariaLabel. */
   label?: ReactNode; ariaLabel?: string; disabled?: boolean; size?: 'md' | 'sm'; className?: string; menuMinWidth?: number;
@@ -32,6 +32,8 @@ export function Select({ value, options, onChange, label, ariaLabel, disabled, s
   inlineDetail?: boolean;
   /** Validation: red border + brief flash when `flash` changes. */
   invalid?: boolean; flash?: number;
+  /** Set as the trigger's `data-field`, the name a form uses to find and focus a field, like its inputs'. */
+  field?: string;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -112,7 +114,7 @@ export function Select({ value, options, onChange, label, ariaLabel, disabled, s
   };
 
   const labelId = `${id}-label`;
-  const button = <button ref={trigger} type="button" role="combobox" className={`select-trigger ${size} ${className}`} disabled={disabled} data-value={value}
+  const button = <button ref={trigger} type="button" role="combobox" className={`select-trigger ${size} ${className}`} disabled={disabled} data-value={value} data-field={field}
     aria-label={label ? undefined : ariaLabel} aria-labelledby={label ? labelId : undefined} aria-describedby={describedBy}
     aria-invalid={invalid || undefined} data-flash={invalid ? flash : undefined}
     aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined} aria-activedescendant={open ? `${id}-option-${active}` : undefined}

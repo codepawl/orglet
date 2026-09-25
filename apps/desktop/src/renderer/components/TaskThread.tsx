@@ -457,7 +457,7 @@ function BringIntoMainChat({ artifactId, brought, about, action, openChat }: { a
   const label = brought ? t('Đã đưa vào chat chính') : t('Đưa vào chat chính');
   const bring = () => action(async () => {
     const mainTaskId = await orglet.call('bringIntoMainChat', { artifactId });
-    toast(t('Đã đưa vào chat chính'), 'success', about, openChat ? { label: t('Mở'), onSelect: () => openChat(mainTaskId) } : undefined);
+    toast(t('Đã đưa vào chat chính'), 'success', about, openChat ? { action: { label: t('Mở'), onSelect: () => openChat(mainTaskId) } } : {});
   });
   return <Button size="icon" aria-label={label} title={label} disabled={brought} onClick={bring}>{brought ? <Check size={15} /> : <MessageSquareQuote size={15} />}</Button>;
 }

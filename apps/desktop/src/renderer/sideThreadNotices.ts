@@ -46,7 +46,8 @@ export function useSideThreadNotices(tasks: readonly Task[] | undefined, openCha
       if (thread.id === openChat) continue;
       const author = workerName(thread.workerId) ?? 'Orglet';
       const text = thread.failed ? t('Chat phụ của {0} cần xem lại', [author]) : t('{0} đã trả lời trong chat phụ', [author]);
-      toast(text, thread.failed ? 'error' : 'success', thread.name, { label: t('Mở'), onSelect: () => openRef.current(thread.id) });
+      // An answer that landed while the person was elsewhere is news, so it waits in Notifications (COD-255).
+      toast(text, thread.failed ? 'error' : 'success', thread.name, { action: { label: t('Mở'), onSelect: () => openRef.current(thread.id) }, unread: true });
     }
   }, [tasks]);
 }

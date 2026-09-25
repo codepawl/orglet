@@ -12,7 +12,7 @@ import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-pol
 import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/workspace-access';
 import { harnessCatalog, harnessNames, isHarness, type HarnessInfo } from '../../shared/harness';
 import { FieldLabel, MoneyInput } from './ui';
-import { Select } from './Select';
+import { Select, type SelectOption } from './Select';
 import { ModelPicker } from './ModelPicker';
 import { ProviderMark } from './ProviderMark';
 import { StatusMark } from './StatusMark';
@@ -20,7 +20,7 @@ import { AvatarPicker } from './Avatar';
 import { isMascot, mascotIds } from './mascots';
 import { autoMascot } from './mascotSuggest';
 import { TabbedFormDialog } from './DialogTabs';
-import { readiness } from './providers';
+import { readiness, readyFirst, type ProviderChoice, type Readiness } from './providers';
 import { openCodeModelIssue } from './openCodeModel';
 import { PermissionControls } from './PermissionControls';
 import { toAmount, toMicros } from './money';
@@ -50,8 +50,47 @@ function customConnectionCostNote(connection: CustomConnection): string {
   return t('Orglet không biết giá của kết nối này: mỗi request giữ chỗ phần còn lại của giới hạn mỗi task cho tới khi bạn nhập chi phí thật trong Cài đặt → Chi phí & giới hạn.');
 }
 
+/**
+ * The Model menu: every provider a worker can use, with what can run right now first (COD-255). Ready connections
+ * keep their group; the rest sit under one "Chưa sẵn sàng" group, which says for all of them what a badge on each
+ * row used to. A harness keeps its state circle either way, since it tells missing from signed out from broken.
+ */
+export function workerProviderOptions(ready: Readiness, harnesses: HarnessInfo[], customConnections: readonly CustomConnection[]): SelectOption[] {
+  const choice = (value: Worker['provider'], label: string, detail: string, group: string, available: boolean): ProviderChoice<SelectOption> => ({
+    option: { value, label, detail, group, icon: <ProviderMark provider={value} size="small" decorative />, ...(available ? {} : { dimmed: true }) },
+    ready: available,
+  });
+  const choices = [
+    choice('demo', 'Demo', t('không gọi API'), t('Thử nghiệm'), true),
+    choice('openai', 'OpenAI', t('gợi ý {0}', [CATALOG_HINT_IDS.openai]), t('API trả phí'), ready.openai),
+    choice('anthropic', 'Anthropic', t('gợi ý {0}', [CATALOG_HINT_IDS.anthropic]), t('API trả phí'), ready.anthropic),
+    choice('xai', 'Grok', t('gợi ý {0}', [CATALOG_HINT_IDS.xai]), t('API trả phí'), ready.xai),
+    choice('openrouter', 'OpenRouter', t('gợi ý {0}', [CATALOG_HINT_IDS.openrouter]), t('API trả phí'), ready.openrouter),
+    choice('opencode-zen', 'OpenCode Zen', t('trả theo mức dùng'), t('API trả phí'), ready['opencode-zen']),
+    choice('opencode-go', 'OpenCode Go', t('gói đăng ký có hạn mức'), t('API theo gói'), ready['opencode-go']),
+    choice('ollama', 'Ollama', t('gợi ý {0}', [CATALOG_HINT_IDS.ollama]), t('Local trên máy này'), ready.ollama),
+    // Connections the person added in Settings (COD-242), under the name they gave each one.
+    ...customConnections.map(connection => choice(customProviderId(connection.id), connection.name, `${baseUrlHost(connection.baseUrl)} · ${pricingLabel(connection)}`, t('Kết nối tùy chỉnh'), true)),
+    // A harness carries its state as the circle the rest of the app uses for one, so the line underneath is the
+    // version and one phrase rather than three things strung together on dots (user, 2026-09-22). The circle is
+    // more exact than the generic "not ready" group it sits in: it tells missing from signed out from broken.
+    ...harnessCatalog.map(id => {
+      const found = harnesses.find(item => item.id === id);
+      const state = !found || found.status === 'not_installed' ? { word: t('chưa cài'), mark: { variant: 'empty', tone: 'muted' } as const }
+        : found.status === 'detected' ? { word: t('chưa đăng nhập'), mark: { variant: 'dashed', tone: 'muted' } as const }
+        : found.status === 'auth_error' ? { word: t('lỗi đăng nhập'), mark: { variant: 'dashed', tone: 'error' } as const }
+        : found.runnable ? { word: t('sẵn sàng'), mark: { variant: 'filled', tone: 'success' } as const }
+        : { word: t('đã đăng nhập'), mark: { variant: 'empty', tone: 'success' } as const };
+      const detail = [found?.version, state.word].filter(Boolean).join(' · ');
+      const harnessChoice = choice(id, harnessNames[id], detail, t('Harness trên máy'), ready[id]);
+      return { ...harnessChoice, option: { ...harnessChoice.option, badge: <StatusMark variant={state.mark.variant} tone={state.mark.tone} label={state.word} decorative /> } };
+    }),
+  ];
+  return readyFirst(choices, t('Chưa sẵn sàng'));
+}
+
 /** Worker create/edit. Remount (via key) to reset the draft. */
-export function WorkerDialog({ open, worker, workspace, connections, harnesses, initialTab, onClose, onOpenChat }: { open: boolean; worker?: Worker; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; /** The tab to open on; the trace above an answer opens straight onto Memory (COD-220). */ initialTab?: Tab; onClose: () => void; /** Opens the chat a memory came from; the dialog closes first. */ onOpenChat: (taskId: string) => void }) {
+export function WorkerDialog({ open, worker, workspace, connections, harnesses, initialTab, initialField, onClose, onOpenChat, onCreated }: { open: boolean; worker?: Worker; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; /** The tab to open on; the trace above an answer opens straight onto Memory (COD-220). */ initialTab?: Tab; /** The field to land on; the empty chat's "Đổi model" opens on the Model menu (COD-255). */ initialField?: 'provider'; onClose: () => void; /** Opens the chat a memory came from; the dialog closes first. */ onOpenChat: (taskId: string) => void; /** A new worker was saved; the app opens its chat (COD-255). Not called when an existing one is saved. */ onCreated?: (workerId: string) => void }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'general');
   // Faces other workers already show, so suggestions lean towards a different one.
   const takenMascots = workspace.workers.filter(item => item.id !== worker?.id).map(item => isMascot(item.avatar?.mascot) ? item.avatar.mascot : autoMascot(mascotIds, item.id, { name: item.name, description: item.description }));
@@ -85,11 +124,6 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     setTab(at); setError(message); setInvalid(field); setFlash(n => n + 1);
     if (field) setTimeout(() => (document.querySelector(`#worker-panel [data-field="${field}"]`) as HTMLElement | null)?.focus(), 0);
   };
-  const unavailable = t('Chưa sẵn sàng');
-  const modelOption = (value: Worker['provider'], label: string, detail: string, group: string, available: boolean) => ({
-    value, label, detail, group, icon: <ProviderMark provider={value} size="small" decorative />,
-    ...(available ? {} : { dimmed: true, badge: unavailable }),
-  });
 
   const submit = async () => {
     if (!name.trim()) return fail('general', t('Nhập tên Tí.'), 'name');
@@ -108,48 +142,24 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     try {
       const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
       if (!worker && draftCapabilities) await orglet.call('setToolCapabilities', { workerId: saved.id, capabilities: draftCapabilities });
-      toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name); onClose();
+      toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name);
+      if (!worker) onCreated?.(saved.id);
+      onClose();
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
 
   // What this worker remembered for itself, newest first; team and workspace memories live in Thư viện → Knowledge.
   const memories = worker ? workspace.knowledge.filter(item => isMemory(item) && item.status !== 'archived' && item.scope.type === 'worker' && item.scope.id === worker.id).sort((first, second) => second.createdAt.localeCompare(first.createdAt)) : [];
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói nhập từ thư mục cần review trong Thư viện trước.') : tab === 'permissions' ? t('Cho chat riêng của Tí; chat hội có quyền riêng.') : tab === 'memory' ? t('Điều Tí mang theo giữa các cuộc trò chuyện.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error}>
+  return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói nhập từ thư mục cần review trong Thư viện trước.') : tab === 'permissions' ? t('Cho chat riêng của Tí; chat hội có quyền riêng.') : tab === 'memory' ? t('Điều Tí mang theo giữa các cuộc trò chuyện.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error} focusField={initialField}>
     {tab === 'general' && <>
       <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} /></label>
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><Input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
       <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>
       {worker && <p className="muted">{t('Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.')}</p>}
-      <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} value={provider} onChange={value => { const next = value as Worker['provider']; setProvider(next); if (next !== provider) setModelId(''); }} options={[
-        modelOption('demo', 'Demo', t('không gọi API'), t('Thử nghiệm'), true),
-        modelOption('openai', 'OpenAI', t('gợi ý {0}', [CATALOG_HINT_IDS.openai]), t('API trả phí'), ready.openai),
-        modelOption('anthropic', 'Anthropic', t('gợi ý {0}', [CATALOG_HINT_IDS.anthropic]), t('API trả phí'), ready.anthropic),
-        modelOption('xai', 'Grok', t('gợi ý {0}', [CATALOG_HINT_IDS.xai]), t('API trả phí'), ready.xai),
-        modelOption('openrouter', 'OpenRouter', t('gợi ý {0}', [CATALOG_HINT_IDS.openrouter]), t('API trả phí'), ready.openrouter),
-        modelOption('opencode-zen', 'OpenCode Zen', t('trả theo mức dùng'), t('API trả phí'), ready['opencode-zen']),
-        modelOption('opencode-go', 'OpenCode Go', t('gói đăng ký có hạn mức'), t('API theo gói'), ready['opencode-go']),
-        modelOption('ollama', 'Ollama', t('gợi ý {0}', [CATALOG_HINT_IDS.ollama]), t('Local trên máy này'), ready.ollama),
-        // Connections the person added in Settings (COD-242), under the name they gave each one.
-        ...workspace.customConnections.map(connection => modelOption(customProviderId(connection.id), connection.name, `${baseUrlHost(connection.baseUrl)} · ${pricingLabel(connection)}`, t('Kết nối tùy chỉnh'), true)),
-        // A harness carries its state as the circle the rest of the app uses for one, so the line underneath is the
-        // version and one phrase rather than three things strung together on dots (user, 2026-09-22). The circle is
-        // more exact than the generic "not ready" badge it stands in for: it tells missing from signed out from broken.
-        ...harnessCatalog.map(id => {
-          const found = harnesses.find(item => item.id === id);
-          const state = !found || found.status === 'not_installed' ? { word: t('chưa cài'), mark: { variant: 'empty', tone: 'muted' } as const }
-            : found.status === 'detected' ? { word: t('chưa đăng nhập'), mark: { variant: 'dashed', tone: 'muted' } as const }
-            : found.status === 'auth_error' ? { word: t('lỗi đăng nhập'), mark: { variant: 'dashed', tone: 'error' } as const }
-            : found.runnable ? { word: t('sẵn sàng'), mark: { variant: 'filled', tone: 'success' } as const }
-            : { word: t('đã đăng nhập'), mark: { variant: 'empty', tone: 'success' } as const };
-          const detail = [found?.version, state.word].filter(Boolean).join(' · ');
-          return {
-            ...modelOption(id, harnessNames[id], detail, t('Harness trên máy'), ready[id]),
-            badge: <StatusMark variant={state.mark.variant} tone={state.mark.tone} label={state.word} decorative />,
-          };
-        }),
-      ]} />
+      <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProvider(next); if (next !== provider) setModelId(''); }}
+        options={workerProviderOptions(ready, harnesses, workspace.customConnections)} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} />}
       {isHarness(provider) && <p className="muted">{t('Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
       {provider === 'ollama' && <p className="muted">{t('Chạy Ollama tại 127.0.0.1:11434; không tính vào ngân sách Orglet.')}</p>}
