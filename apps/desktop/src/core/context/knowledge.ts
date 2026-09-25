@@ -29,7 +29,8 @@ export function similarMemoryText(first: string, second: string) {
 /** The title the Library shows for a memory: its own first line, cut at the title limit. */
 const memoryTitle = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 200);
 
-export type RememberOutcome = { memoryId: string; status: 'approved' | 'proposed'; merged: boolean };
+/** `scope` says who will use the line, so the chat can tell the person where it was kept (COD-259). */
+export type RememberOutcome = { memoryId: string; status: 'approved' | 'proposed'; merged: boolean; scope: KnowledgeScope['type'] };
 
 export class KnowledgeBase {
   constructor(private store: Store) {}
@@ -98,12 +99,12 @@ export class KnowledgeBase {
       // An approved memory restated by a tainted run stays approved: its text does not change.
       const mergedStatus = duplicate.status === 'approved' ? 'approved' : status;
       this.write({ ...duplicate, revision: duplicate.revision + 1, status: mergedStatus, provenance, createdAt: now() });
-      return { memoryId: duplicate.id, status: mergedStatus, merged: true };
+      return { memoryId: duplicate.id, status: mergedStatus, merged: true, scope: scope.type };
     }
     const item: Knowledge = { kind: 'memory', id: id(), revision: 1, title: memoryTitle(input.text), content: input.text, tags: [], pinned: false, scope, status, hash: contentHash({ title: memoryTitle(input.text), content: input.text, tags: [] }), provenance, createdAt: now() };
     this.write(item);
     if (status === 'approved') this.evictMemories(scope);
-    return { memoryId: item.id, status, merged: false };
+    return { memoryId: item.id, status, merged: false, scope: scope.type };
   }
   /** The person's correction of a memory: new text or a pin, saved as a new approved revision. */
   updateMemory(memoryId: string, patch: { text?: string; pinned?: boolean }): Knowledge {

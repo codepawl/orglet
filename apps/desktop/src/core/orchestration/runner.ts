@@ -161,13 +161,21 @@ function webFailureEvent(toolName: string, reason: string) {
   return toolName === 'web_search' ? `Tìm kiếm web không thành công: ${reason}` : `Không đọc được trang web: ${reason}`;
 }
 
-type RememberResult = { memoryId: string; status: 'approved' | 'proposed'; merged: boolean } | { error: string };
+type RememberResult = { memoryId: string; status: 'approved' | 'proposed'; merged: boolean; scope?: 'worker' | 'team' | 'workspace' } | { error: string };
 
-/** The activity line for one remembered line: active now, merged into one the worker already had, or waiting for review. */
-function memoryEventLine(result: RememberResult) {
+/**
+ * The activity line for one remembered line: active now, merged into one the worker already had, or waiting for
+ * review. A new line says who will use it, so the person can tell whether every orglet or only this one will
+ * (COD-259). A result journaled before the scope was recorded keeps the older wording.
+ */
+function memoryEventLine(result: RememberResult, workerName: string) {
   if ('error' in result) return `Không ghi nhớ được: ${result.error}`;
   if (result.status === 'proposed') return 'Đã ghi một ghi nhớ từ nội dung chưa được kiểm chứng; chờ bạn duyệt trong Thư viện.';
-  return result.merged ? 'Đã gộp vào một ghi nhớ đã có.' : 'Đã ghi nhớ một điều cho các cuộc trò chuyện sau.';
+  if (result.merged) return 'Đã gộp vào một ghi nhớ đã có.';
+  if (result.scope === 'workspace') return 'Đã ghi nhớ một điều cho mọi Tí.';
+  if (result.scope === 'team') return 'Đã ghi nhớ một điều cho cả hội.';
+  if (result.scope === 'worker') return `Đã ghi nhớ một điều cho riêng ${workerName}.`;
+  return 'Đã ghi nhớ một điều cho các cuộc trò chuyện sau.';
 }
 
 /** Search, read a few pages and write the report does not fit in the six steps a sources-only run gets. */
@@ -1059,7 +1067,7 @@ export class Runner {
             // A run that has already read unvetted content only gets a proposal, which waits for review (COD-161).
             perform: () => this.store.transaction(() => this.rememberForRun(run, argumentsValue, untrustedInputs.size > 0)),
           });
-          this.event(run.id, memoryEventLine(result));
+          this.event(run.id, memoryEventLine(result, run.snapshot.worker.name));
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
           checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
           this.checkpoints.committed(checkpoint);
@@ -1503,7 +1511,7 @@ export class Runner {
       const shape = RememberModelArgs.safeParse(item);
       const result = shape.success ? this.store.transaction(() => this.rememberForRun(run, shape.data, untrusted)) : { error: 'Mỗi ghi nhớ cần text và scope.' };
       if ('error' in result) limitations.push(`Ghi nhớ thứ ${index + 1} bị từ chối: ${result.error}`);
-      this.event(run.id, memoryEventLine(result));
+      this.event(run.id, memoryEventLine(result, run.snapshot.worker.name));
     });
     return limitations;
   }
