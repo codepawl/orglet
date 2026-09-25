@@ -24,12 +24,11 @@ export class HandInBlockedError extends Error {
     super(HAND_IN_BLOCKED_MESSAGE);
   }
 
+  /** What the failed run keeps. It is written from the runner's failure path, so an answer it cannot hold is dropped, never thrown. */
   record(): BlockedHandIn {
-    return BlockedHandIn.parse({
-      commands: this.commands,
-      ...(this.copyFingerprint ? { copyFingerprint: this.copyFingerprint } : {}),
-      ...(this.answer ? { answer: this.answer } : {}),
-    });
+    const reason = { commands: this.commands, ...(this.copyFingerprint ? { copyFingerprint: this.copyFingerprint } : {}) };
+    const withAnswer = BlockedHandIn.safeParse({ ...reason, ...(this.answer ? { answer: this.answer } : {}) });
+    return withAnswer.success ? withAnswer.data : BlockedHandIn.parse(reason);
   }
 }
 
