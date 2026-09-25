@@ -27,6 +27,11 @@ it('translates finished core messages, including ones with values already filled
   expect(translateMessage(en, 'Something the core never says.')).toBe('Something the core never says.');
   // A message with its own key is not answered by the general "{0}: {1}" one (COD-246).
   expect(translateMessage(en, 'Không có Tí hay hội nào tên "Nobody". Có: Researcher.')).toBe('No orglet or crew is named "Nobody". Available: Researcher.');
+  // The error that stopped a crew role is a message of its own inside the limitation, translated like one (COD-252).
+  expect(translateMessage(en, 'Role chưa hoàn tất: Researcher: Chưa thể khuyến nghị sẵn sàng khi còn check thiếu/lỗi, bất đồng hoặc finding nghiêm trọng.'))
+    .toBe('Unfinished roles: Researcher: Cannot recommend ready while checks are missing or failed, disagreements remain, or critical findings exist.');
+  // Other values are not: a model's Vietnamese answer that merely has a label after a colon stays as written.
+  expect(translateMessage(en, 'Bước 1: Mở terminal và chạy lệnh cài đặt.')).toBe('Bước 1: Mở terminal và chạy lệnh cài đặt.');
 });
 
 it('derives British English spellings from the US text', () => {

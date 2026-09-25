@@ -1074,7 +1074,7 @@ export const en: Dictionary = {
   'Revision knowledge không hợp lệ.': 'Invalid knowledge revision.',
   'Revision knowledge xung đột.': 'Knowledge revision conflict.',
   'Revision xung đột.': 'Revision conflict.',
-  'Role chưa hoàn tất: {0}': 'Unfinished roles: {0}',
+  'Role chưa hoàn tất: {0}: {1}': 'Unfinished roles: {0}: {1}',
   'Run audit dùng score do tệp log khai báo, không tính lại metric từ predictions/answers.': 'The run audit uses scores declared in the log file and does not recompute the metric from predictions/answers.',
   'Run audit phải khớp dataset và số dòng đã kiểm tra.': 'The run audit must match the checked dataset and row count.',
   'Run thiếu preflight.': 'The run is missing a preflight.',
