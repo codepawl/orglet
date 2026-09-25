@@ -43,6 +43,28 @@ const tabs = [
 ];
 
 /** How this connection's requests are charged, beside its model picker. */
+const DEFAULT_TASK_BUDGET = toAmount(500_000);
+
+/**
+ * The limit field's starting text. Claude Code runs on the person's plan, so an orglet on it starts with no limit
+ * (an empty field); a paid API needs one, so it starts at the default (COD-253).
+ */
+function initialBudget(worker?: Worker): string {
+  if (worker?.taskBudgetMicros !== undefined) return toAmount(worker.taskBudgetMicros);
+  if (worker?.provider === 'claude-code') return '';
+  return DEFAULT_TASK_BUDGET;
+}
+
+/**
+ * Keeps a limit the person typed and swaps only the untouched default: moving to Claude Code clears it, since that
+ * runs on the person's plan, and moving to a paid API puts the default back into an empty field.
+ */
+function budgetForProvider(current: string, provider: Worker['provider']): string {
+  if (provider === 'claude-code' && current === DEFAULT_TASK_BUDGET) return '';
+  if (provider !== 'claude-code' && current.trim() === '') return DEFAULT_TASK_BUDGET;
+  return current;
+}
+
 function customConnectionCostNote(connection: CustomConnection): string {
   const pricing = connectionPricing(connection);
   if (pricing.kind === 'local') return t('Máy chủ trên máy này hoặc mạng nội bộ: tính miễn phí. Nhập giá trong Cài đặt nếu bạn muốn tính khác.');
@@ -99,7 +121,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [provider, setProvider] = useState<Worker['provider']>(worker?.provider ?? 'demo');
   const [modelId, setModelId] = useState(worker?.modelId ?? '');
   const [skillId, setSkill] = useState(worker?.skillId ?? workspace.skills[0].id);
-  const [budget, setBudget] = useState(toAmount(worker?.taskBudgetMicros ?? 500_000));
+  const [budget, setBudget] = useState(() => initialBudget(worker));
   const [avatar, setAvatar] = useState(worker?.avatar ?? {});
   const [description, setDescription] = useState(worker?.description ?? '');
   // Saved with the worker, like its other fields; off for every worker until the person turns it on (COD-199).
@@ -128,8 +150,10 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const submit = async () => {
     if (!name.trim()) return fail('general', t('Nhập tên Tí.'), 'name');
     if (!instructions.trim()) return fail('general', t('Hướng dẫn không được để trống.'), 'instructions');
-    const taskBudgetMicros = toMicros(budget);
-    if (!Number.isFinite(taskBudgetMicros) || taskBudgetMicros < 0) return fail('general', t('Giới hạn mỗi task phải là số không âm.'), 'budget');
+    // An empty limit on Claude Code means none: it runs on the person's plan (COD-253).
+    const uncapped = provider === 'claude-code' && budget.trim() === '';
+    const taskBudgetMicros = uncapped ? undefined : toMicros(budget);
+    if (taskBudgetMicros !== undefined && (!Number.isFinite(taskBudgetMicros) || taskBudgetMicros < 0)) return fail('general', t('Giới hạn mỗi task phải là số không âm.'), 'budget');
     const trimmedModel = modelId.trim();
     if (trimmedModel.length > 200) return fail('general', t('ID model tối đa 200 ký tự.'), 'modelId');
     const modelIssue = openCodeModelIssue(provider, trimmedModel);
@@ -158,7 +182,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><Input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
       <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>
       {worker && <p className="muted">{t('Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.')}</p>}
-      <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProvider(next); if (next !== provider) setModelId(''); }}
+      <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProvider(next); if (next !== provider) { setModelId(''); setBudget(current => budgetForProvider(current, next)); } }}
         options={workerProviderOptions(ready, harnesses, workspace.customConnections)} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} />}
       {isHarness(provider) && <p className="muted">{t('Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
@@ -166,7 +190,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       {provider === 'opencode-zen' && <p className="muted">{t('Zen trừ số dư theo từng request; Orglet không theo dõi hay giới hạn khoản này.')}</p>}
       {customConnection && <p className="muted">{customConnectionCostNote(customConnection)}</p>}
       {provider === 'opencode-go' && <p className="muted">{t('Tính vào hạn mức gói Go, không qua ngân sách Orglet. Bật Use balance thì phần vượt trừ vào số dư Zen.')}</p>}
-      {capped && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
+      {capped && <label><FieldLabel icon={Wallet} required={paid}>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} placeholder={paid ? undefined : t('Không giới hạn')} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
+      {provider === 'claude-code' && <p className="muted">{t('Claude Code dừng khi ước tính của nó cho một lượt chạm số này. Để trống để chạy theo gói, không giới hạn.')}</p>}
     </>}
     {tab === 'skill' && <>
       <Select ariaLabel={t('Kỹ năng')} value={skillId} onChange={setSkill} options={workspace.skills.map(item => { const pending = !!item.package && item.package.reviewedHash !== item.package.hash; return { value: item.id, label: item.name, detail: pending ? t('v{0} · Cần review trong Thư viện', [item.revision]) : `v${item.revision}`, icon: <Sparkles size={16} />, disabled: pending }; })} />

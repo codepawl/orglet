@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { Checkpoints } from '../../apps/desktop/src/core/storage/checkpoints';
 import { CoreService } from '../../apps/desktop/src/core/service';
@@ -58,15 +62,27 @@ describe('orglet chat on Claude Code', () => {
       detect: async () => [{ ...missingHarness('claude-code', 'win32'), executable: 'claude.exe', version: '2.1.270', auth: 'logged_in', status: 'signed_in', authDetail: 'Đăng nhập qua claude.ai' }],
       execute: async request => {
         requests.push(request);
-        if (stopOnBudget) throw new HarnessBudgetError(request.maxBudgetUsd, 0.5);
+        if (stopOnBudget) throw new HarnessBudgetError(request.maxBudgetUsd ?? 0, 0.5);
         return { output: { message: 'Done within the limit.', report: null }, costUsd: 0.01 };
       },
     });
   });
   afterEach(() => store.close());
 
+  it('runs an orglet that has no limit of its own without a cap, on the person\'s plan', async () => {
+    stopOnBudget = false;
+    const { taskBudgetMicros: _unset, ...seeded } = store.all<Worker>('workers')[0];
+    const worker = await core.command('saveWorker', { ...seeded, provider: 'claude-code' }) as Worker;
+    expect(worker.taskBudgetMicros).toBeUndefined();
+    const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Fix the failing test', sourceIds: [], consent: true, providerScopes: ['claude-code'], budgetMicros: 500_000 }) as string;
+    await idle(store, core);
+
+    expect(requests[0].maxBudgetUsd).toBeUndefined();
+    expect(store.get<Task>('tasks', taskId).status).toBe('completed');
+  });
+
   it('waits for budget with the orglet wording, then retry and a follow-up take the orglet\'s raised limit', async () => {
-    const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'claude-code' }) as Worker;
+    const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'claude-code', taskBudgetMicros: 500_000 }) as Worker;
     const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Research this', sourceIds: [], consent: true, providerScopes: ['claude-code'], budgetMicros: 500_000 }) as string;
     await idle(store, core);
 
@@ -126,7 +142,7 @@ describe('crew on Claude Code', () => {
         const text = context.messages.map(message => typeof message.content === 'string' ? message.content : '').join('\n');
         if (text.includes('"assignment":"Do your assigned role')) {
           memberRequests.push(request);
-          if (memberStops > 0) { memberStops--; throw new HarnessBudgetError(request.maxBudgetUsd, 0.5); }
+          if (memberStops > 0) { memberStops--; throw new HarnessBudgetError(request.maxBudgetUsd ?? 0, 0.5); }
           return respond('submit_report', { title: 'Member report', summary: 'Finished within the limit.', findings: [], limitations: [] });
         }
         return respond('submit_report', { title: 'Crew report', summary: 'Joined the member result.', findings: [], limitations: [] });
@@ -195,5 +211,37 @@ describe('crew on Claude Code', () => {
     // The same member run continued; the other member run is the one the plan left unassigned.
     expect(detail.runs.filter(run => run.stage === 'member' && run.status !== 'cancelled')).toHaveLength(1);
     expect(detail.task.status).toBe('completed');
+  });
+});
+
+describe('Claude Code orglets saved with the old forced limit', () => {
+  it('lose the $0.50 default once when the workspace opens, and keep a limit someone picked', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orglet-limit-'));
+    const path = join(directory, 'orglet.sqlite');
+    try {
+      let store = new Store(path);
+      const [seeded] = store.all<Worker>('workers');
+      store.update('workers', { ...seeded, provider: 'claude-code', taskBudgetMicros: 500_000 });
+      store.put('workers', { ...seeded, id: randomUUID(), name: 'Picked', provider: 'claude-code', taskBudgetMicros: 2_000_000 });
+      store.put('workers', { ...seeded, id: randomUUID(), name: 'On an API', provider: 'openai', taskBudgetMicros: 500_000 });
+      // A workspace from before the fix has no marker yet.
+      store.clearSetting('claudeCodeDefaultLimitDropped');
+      store.close();
+
+      store = new Store(path);
+      const limits = Object.fromEntries(store.all<Worker>('workers').map(worker => [worker.name, worker.taskBudgetMicros]));
+      expect(limits[seeded.name]).toBeUndefined();
+      expect(limits.Picked).toBe(2_000_000);
+      expect(limits['On an API']).toBe(500_000);
+
+      // Once done, a $0.50 limit set afterwards on purpose is left alone.
+      store.update('workers', { ...store.get<Worker>('workers', seeded.id), taskBudgetMicros: 500_000 });
+      store.close();
+      store = new Store(path);
+      expect(store.get<Worker>('workers', seeded.id).taskBudgetMicros).toBe(500_000);
+      store.close();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

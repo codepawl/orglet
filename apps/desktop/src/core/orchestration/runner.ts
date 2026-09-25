@@ -405,6 +405,18 @@ export class Runner {
   }
   /** Runs waiting for a provider slot, in the order they will be served (COD-244). */
   slotWaits(): SlotWait[] { return this.slots.waiting(); }
+  /**
+   * The cap a harness call in this chat runs under, or undefined for none. A crew, a group chat and a scheduled run
+   * keep the limit saved for them. An orglet's own chat is capped only when that orglet has a limit of its own: a
+   * subscription harness otherwise runs on the person's plan, and the old forced $0.50 stopped real work after a few
+   * calls (COD-253).
+   */
+  private harnessLimitMicros(run: Run, task: Task): number | undefined {
+    if (run.snapshot.team || task.teamId || task.assignees || task.routineId) return task.budgetMicros;
+    const worker = this.store.all<Worker>('workers').find(candidate => candidate.id === task.workerId);
+    if (worker?.taskBudgetMicros === undefined) return undefined;
+    return task.budgetMicros;
+  }
   cancel(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.controller.abort(); }
   pause(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.paused = true; }
   assertResumable(run: Run) {
@@ -753,7 +765,7 @@ export class Runner {
         return;
       }
       let checkpoint: Checkpoint = this.checkpoints.get(run.id) ?? { id: run.id, step: 0, phase: 'ready', messages, readIds: [...new Set(checkedProfiles.flatMap(profile => Object.keys(profile.sourceHashes)))] };
-      let harnessRemainingUsd = 0;
+      let harnessRemainingUsd: number | undefined = 0;
       let model: ModelAdapter;
       if (isHarness(run.snapshot.worker.provider)) {
         const provider = run.snapshot.worker.provider;
@@ -854,11 +866,15 @@ export class Runner {
           try {
             if (control.paused || !this.canDispatch(task)) throw new Paused();
             if (isHarness(provider)) {
-              const usage = this.store.usage(task.id);
-              const limit = this.store.get<Task>('tasks', task.id).budgetMicros;
-              const remainingMicros = Math.max(0, limit - usage.chargedMicros - usage.reservedMicros - (checkpoint.harnessCostMicros ?? 0));
-              harnessRemainingUsd = Math.floor(remainingMicros / 100) / 10_000;
-              if (harnessRemainingUsd < 0.0001) throw new BudgetError('Ngân sách còn lại không đủ cho request kế tiếp.');
+              const limit = this.harnessLimitMicros(run, this.store.get<Task>('tasks', task.id));
+              if (limit === undefined) {
+                harnessRemainingUsd = undefined;
+              } else {
+                const usage = this.store.usage(task.id);
+                const remainingMicros = Math.max(0, limit - usage.chargedMicros - usage.reservedMicros - (checkpoint.harnessCostMicros ?? 0));
+                harnessRemainingUsd = Math.floor(remainingMicros / 100) / 10_000;
+                if (harnessRemainingUsd < 0.0001) throw new BudgetError('Ngân sách còn lại không đủ cho request kế tiếp.');
+              }
               this.checkpoints.save({ ...checkpoint, phase: 'requesting' });
               try {
                 reply = await model.request(messages, requestTools, AbortSignal.any([signal, AbortSignal.timeout(900000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
@@ -1367,7 +1383,8 @@ export class Runner {
         await writeFile(join(directory, 'skill', resource.path), Buffer.from(resource.base64, 'base64'), { flag: 'wx' });
       }
       const usage = this.store.usage(task.id);
-      const remainingUsd = Math.max(0, task.budgetMicros - usage.chargedMicros - usage.reservedMicros) / 1_000_000;
+      const limit = this.harnessLimitMicros(run, task);
+      const remainingUsd = limit === undefined ? undefined : Math.max(0, limit - usage.chargedMicros - usage.reservedMicros) / 1_000_000;
       // The propose_* tools live in the tool loop only, so a one-shot answer carries them as an appProposals array
       // under the same rules the loop applies (capability, never a plan or scheduled run) (COD-206).
       const withProposals = !!this.appProposals && proposalsAllowed(run, this.store.get<Task>('tasks', task.id));

@@ -146,6 +146,15 @@ export class Store {
           routine_id TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL, modified_ms INTEGER NOT NULL, handled_at TEXT NOT NULL,
           PRIMARY KEY(routine_id,name,size,modified_ms)
         ); INSERT OR IGNORE INTO migrations VALUES (17);`);
+      // The orglet form used to force the $0.50 default limit on Claude Code orglets, which stopped real work after a
+      // few calls. An orglet on Claude Code now runs on the person's plan unless it has a limit of its own (COD-253),
+      // so that forced default is dropped once; any other limit someone picked is kept. A settings row, not a schema
+      // version, so an older build can still open the workspace.
+      if (!this.db.prepare("SELECT id FROM settings WHERE id='claudeCodeDefaultLimitDropped'").get()) {
+        this.db.exec(`UPDATE workers SET data=json_remove(data,'$.taskBudgetMicros')
+          WHERE json_extract(data,'$.provider')='claude-code' AND json_extract(data,'$.taskBudgetMicros')=500000;
+          INSERT INTO settings (id,data) VALUES ('claudeCodeDefaultLimitDropped','true');`);
+      }
       this.db.prepare(`INSERT OR IGNORE INTO reservation_reviews (reservation_id,reason,noted_at)
         SELECT id,'legacy',? FROM reservations WHERE state='unknown'`).run(now());
     });
