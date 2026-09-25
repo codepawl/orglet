@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupChatFromRecipient, groupChatFromSelection, groupChatKey, groupChatNames, groupChatRecipient, groupChatTaskInput, isGroupChatTask, pruneGroupChat } from '../../apps/desktop/src/renderer/groupChat';
+import { groupChatFromRecipient, groupChatFromSelection, groupChatKey, groupChatNames, groupChatRecipient, groupChatTaskInput, isGroupChatTask, openGroupChats, pruneGroupChat } from '../../apps/desktop/src/renderer/groupChat';
 import { newChatKey, newChatKeyNames } from '../../apps/desktop/src/shared/live-task';
 import { noSelection } from '../../apps/desktop/src/renderer/sidebarSelection';
 
@@ -88,5 +88,32 @@ describe('groupChatNames', () => {
     expect(groupChatNames(['Researcher', 'Writer'])).toBe('Researcher, Writer');
     expect(groupChatNames(['A', 'B', 'C'])).toBe('A, B, C');
     expect(groupChatNames(['A', 'B', 'C', 'D'])).toBeUndefined();
+  });
+});
+
+describe('the sidebar list of group chats (COD-268)', () => {
+  const chat = (id: string, createdAt: string, extra: Record<string, unknown> = {}) => ({ id, createdAt, workerId: 'writer', assignees: ['writer', 'editor'], ...extra });
+
+  it('lists open chats two or more orglets answer, newest first', () => {
+    const tasks = [
+      chat('older', '2026-09-24T10:00:00.000Z'),
+      chat('newer', '2026-09-25T10:00:00.000Z'),
+      chat('everyone', '2026-09-23T10:00:00.000Z', { assignees: 'all' }),
+    ];
+    expect(openGroupChats(tasks).map(task => task.id)).toEqual(['newer', 'older', 'everyone']);
+  });
+
+  it('leaves out solo chats, crews, side threads, schedule runs, archived and deleted chats', () => {
+    const tasks = [
+      { id: 'solo', createdAt: '2026-09-25T10:00:00.000Z', workerId: 'writer' },
+      chat('one-orglet', '2026-09-25T10:00:00.000Z', { assignees: ['writer'] }),
+      chat('crew', '2026-09-25T10:00:00.000Z', { teamId: 'crew' }),
+      chat('side', '2026-09-25T10:00:00.000Z', { sideOf: { taskId: 'x', throughRevision: 0 } }),
+      chat('scheduled', '2026-09-25T10:00:00.000Z', { routineId: 'routine' }),
+      chat('archived', '2026-09-25T10:00:00.000Z', { archivedAt: '2026-09-25T11:00:00.000Z' }),
+      chat('deleted', '2026-09-25T10:00:00.000Z', { deletedAt: '2026-09-25T11:00:00.000Z' }),
+      chat('kept', '2026-09-25T10:00:00.000Z'),
+    ];
+    expect(openGroupChats(tasks).map(task => task.id)).toEqual(['kept']);
   });
 });

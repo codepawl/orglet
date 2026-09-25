@@ -41,7 +41,7 @@ What a side thread knows and can do:
 
 To use an answer in the main chat, click **Bring into main chat** (the return arrow under the answer). The answer appears in the main chat as a quote, marked with the side thread it came from. Nothing runs when you do this; the orglet reads the quote with the next message you send in the main chat.
 
-Side threads are for single orglets. A crew chat and a group chat do not have them yet.
+Side threads are for single orglets. A crew chat and a group chat do not have them yet. Group chats you started by picking several orglets are listed in the sidebar under **Group chats**, newest first, so you can get back to one after opening another chat.
 
 ## Reports as documents
 

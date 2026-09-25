@@ -144,6 +144,31 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
 }
 
 /**
+ * One group chat in the sidebar's Group chats section (COD-268): its status mark, the faces of the orglets in it, its
+ * name, and a menu to rename, archive or delete it. It looks like an orglet's row but has no reorder: the list is
+ * newest first. Renaming happens in place.
+ */
+export function GroupChatRow({ name, faces, active, status, onOpen, onDwell, onRename, onArchive, onDelete }: { name: string; faces: ReactNode; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onRename: (title: string) => void; onArchive: () => void; onDelete: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const dwell = dwellHandlers(onDwell);
+  if (editing) return <div className="tree-item group-chat-row"><div className="worker-row editing"><RenameField name={name} label={t('Tên mới cho nhóm chat {0}', [name])} onSave={onRename} onDone={() => setEditing(false)} /></div></div>;
+  return <div className="tree-item group-chat-row" {...dwell}>
+    <div className="worker-row">
+      <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />
+      <span className="row-disclosure" aria-hidden="true">{faces}</span>
+      <button type="button" className={active ? 'worker active' : 'worker'} aria-current={active || undefined} title={name} onClick={onOpen}>
+        <span>{name}</span>
+      </button>
+      <RowMenu label={t('Tùy chọn nhóm chat {0}', [name])} icon={EllipsisVertical} contextMenuOf=".group-chat-row" items={[
+        { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing(true) },
+        { label: t('Lưu trữ'), icon: Archive, onSelect: onArchive },
+        { label: t('Xóa'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: t('Xóa nhóm chat này? Không thể hoàn tác.'), label: t('Xóa') } },
+      ]} />
+    </div>
+  </div>;
+}
+
+/**
  * One side thread of an orglet, listed under the orglet's row (COD-247): its status mark, its name (the auto title or
  * its first message), and a menu to rename, archive or delete it. Clicking it opens that thread. Renaming happens in
  * place, the way a chat is renamed from its row menu.
