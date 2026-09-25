@@ -7,9 +7,15 @@ import { t } from '../i18n';
  * shows here the moment it is saved. Neither knows the workspace: they are samples, not settings.
  */
 
-/** One sentence in the interface font, in the text colour: a sample, not a caption. */
+/**
+ * One sentence in the interface font, in the text colour, under a small "Preview" word so nobody takes the sentence
+ * for a setting or a hint (owner, 2026-09-25).
+ */
 export function InterfaceFontSample() {
-  return <p className="font-sample">{t('Tí đọc nguồn rồi trả lời bằng tiếng Việt có dấu đầy đủ.')}</p>;
+  return <div className="font-sample" role="group" aria-label={t('Xem trước phông chữ')}>
+    <span className="font-sample-label">{t('Xem trước')}</span>
+    <p>{t('Tí đọc nguồn rồi trả lời bằng tiếng Việt có dấu đầy đủ.')}</p>
+  </div>;
 }
 
 /** Line five went and line six came, so the diff colours show beside the token colours. */

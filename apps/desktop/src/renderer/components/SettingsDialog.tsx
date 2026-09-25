@@ -8,7 +8,7 @@ import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
 import { harnessCatalog, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
 import { PlanUsage } from './PlanUsage';
-import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, type FontRole } from '../../shared/fonts';
+import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, INTERFACE_PREFERRED_FONTS, type FontRole } from '../../shared/fonts';
 import { Button, PanelHeading, keepOpenForPopup } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
@@ -171,16 +171,25 @@ function FontSetting({ role, title, description, value, busy, onPick }: {
   const [typing, setTyping] = useState<string>();
   const suggestions = role === 'interface' ? INTERFACE_FONT_SUGGESTIONS : CODE_FONT_SUGGESTIONS;
   const [installed, setInstalled] = useState<string[]>([]);
+  const [hasSfPro, setHasSfPro] = useState(false);
   useEffect(() => {
     let live = true;
-    void document.fonts.ready.then(() => { if (live) setInstalled(suggestions.filter(fontInstalled)); });
+    void document.fonts.ready.then(() => {
+      if (!live) return;
+      setInstalled(suggestions.filter(fontInstalled));
+      setHasSfPro(role === 'interface' && INTERFACE_PREFERRED_FONTS.some(fontInstalled));
+    });
     return () => { live = false; };
-  }, [suggestions]);
+  }, [suggestions, role]);
   const bundled = bundledFont(role);
-  // The interface default is SF Pro with Inter behind it, so Inter is a choice of its own and gets its row; the
-  // code default is the bundled face itself, so a second row would only repeat it.
-  const bundledRow = role === 'interface' ? [bundled] : [];
-  const families = [...new Set([...bundledRow, ...installed, ...(value && value !== bundled ? [value] : [])])];
+  // The default row names what this machine actually draws (owner, 2026-09-25): SF Pro where it is installed,
+  // otherwise the bundled face. SF Pro is never offered on a machine without it, and Inter gets a row of its own
+  // only when SF Pro is the default.
+  const defaultLabel = hasSfPro ? 'SF Pro' : bundled;
+  const bundledChoice = hasSfPro ? [bundled] : [];
+  const otherInstalled = installed.filter(family => !INTERFACE_PREFERRED_FONTS.includes(family) && family !== bundled);
+  const keptPick = value && value !== bundled ? [value] : [];
+  const families = [...new Set([...bundledChoice, ...otherInstalled, ...keptPick])];
   const submit = () => {
     const family = FontFamily.safeParse(typing);
     if (!family.success) return;
@@ -192,8 +201,8 @@ function FontSetting({ role, title, description, value, busy, onPick }: {
       <Select ariaLabel={title} className="setting-select" menuMinWidth={240} disabled={busy} value={value ?? ''}
         onChange={next => { if (next === CUSTOM_FONT) setTyping(value ?? ''); else onPick(next || null); }}
         options={[
-          { value: '', label: role === 'interface' ? t('SF Pro hoặc {0}', [bundled]) : bundled, note: t('mặc định'), detail: role === 'interface' ? t('SF Pro nếu máy có, không thì {0}', [bundled]) : undefined, labelStyle: { fontFamily: fontStack(role) } },
-          ...families.map(family => ({ value: family, label: family, detail: family === bundled ? t('đi kèm Orglet') : undefined, labelStyle: { fontFamily: `"${family}"` } })),
+          { value: '', label: defaultLabel, note: t('mặc định'), labelStyle: { fontFamily: fontStack(role) } },
+          ...families.map(family => ({ value: family, label: family, labelStyle: { fontFamily: `"${family}"` } })),
           { value: CUSTOM_FONT, label: t('Phông khác…'), icon: <Pencil size={15} /> },
         ]} />
     </Row>
