@@ -158,7 +158,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
  * dialog's Quyền tab. The folder row mirrors a switch row (text left, control right, centred on the text) with the
  * granted folder named under the dropdown; where the column is narrow the control drops under the text instead.
  */
-.permissions { display:flex; flex-direction:column; gap:14px; min-width:0; container-type:inline-size; }
+/* Each permission is a title over a one-line description; 18px between them keeps one row from reading as the next
+   row's caption (owner, 2026-09-25: "dính chùm"). */
+.permissions { display:flex; flex-direction:column; gap:18px; min-width:0; container-type:inline-size; }
 .permissions .org-switch-field-title,.permission-folder-title { display:flex; align-items:center; gap:7px; overflow-wrap:anywhere; }
 .permissions .org-switch-field-title svg,.permission-folder-title svg,.permission-folder-name svg { flex-shrink:0; color:var(--muted); }
 .permissions .org-switch-field-description,.permission-folder-description { display:flex; flex-direction:column; gap:2px; line-height:1.45; }
@@ -1626,6 +1628,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .avatar.md .mascot { width:30px; height:30px; }
 .avatar.lg .mascot { --mascot-lift:-1px; width:40px; height:40px; }
 .avatar.xl .mascot { --mascot-lift:-2px; width:64px; height:64px; }
+/* The small glyph keeps a row free above the body for a hat, so the bubble sits a pixel under the box's centre and
+   read low beside a name (owner, 2026-09-25: measured 1-2px under the caps in the sidebar). */
+.avatar.xs .mascot,.avatar.sm .mascot { --mascot-lift:-1px; }
 /* Mascots sit centred on the text line: no clipping of the enlarged art (user feedback 2026-09-17). */
 .avatar.has-mascot .avatar-face { overflow:visible; }
 /* Sidebar hierarchy: section headings sit furthest left, their rows one step in, and nested rows further in (user feedback 2026-09-17). */
@@ -1833,7 +1838,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .proposal-crew-chips:empty { display:none; }
 @media(max-width:1000px) { .chat-reply,.report-turn,.assistant-message > .turn-after { padding-left:0; } .thread-usage { margin-left:0; } }
 /* The auto-apply switch sits under the chat permissions in the worker dialog, spaced as a second group. */
-.worker-auto-apply { margin-top:22px; }
 
 /* Task rows carry their own menu (rename lives there, not on double-click). */
 .task-row { display:flex; align-items:center; gap:1px; border-radius:10px; }
