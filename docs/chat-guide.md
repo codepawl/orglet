@@ -12,9 +12,15 @@ An orglet reads only what you attach to **that** chat, or what is inside the wor
 2. Pick **Files**, or **Folder** for up to 20 supported files from one folder (hidden and generated files are skipped, and the chat lists what was left out).
 3. Write what you want done, then send.
 
-Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed under **Details → Sources**. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. Images, video, audio and PDF are preview-only for now: the orglet is told they exist but cannot read them.
+Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed under **Details → Sources**. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages.
 
-Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. CSV, JSONL and Parquet files can also be checked locally under **Details → Sources**: schema, row counts, duplicate and missing IDs, and, for two files, an exact-match accuracy. Demo cannot analyze files; switch **Model** off Demo first.
+What the orglet gets from each kind:
+
+- **PDF:** the text of each page, pulled out on your computer. The PDF itself is not sent. A scanned PDF has no text to pull out, so the orglet says it cannot read it. So does a PDF with a password. Pictures and layout in a PDF are not included.
+- **Images (PNG, JPEG, GIF, WebP, up to 5 MB):** shown to the orglet when its connection can see images. Claude, most OpenAI models, Claude Code and Codex can. When the connection cannot, the orglet tells you instead of guessing. SVG and BMP are never shown. [Which connections see images](capabilities.md#pdfs-and-images).
+- **Video and audio:** preview only. The orglet is told they are there but cannot read them.
+
+Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. A PDF's text is held to the same 256 KB per file: a longer PDF is cut after the last page that fits, and the orglet is told where it stops. CSV, JSONL and Parquet files can also be checked locally under **Details → Sources**: schema, row counts, duplicate and missing IDs, and, for two files, an exact-match accuracy. Demo cannot analyze files; switch **Model** off Demo first.
 
 ## Emoji
 

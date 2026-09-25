@@ -3,8 +3,11 @@ import { basename, dirname, resolve, extname, join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Store, id, now } from '../storage/database';
 import type { Source, FolderIntake, SourceBytes, SourceOrigin } from '../../shared/contracts';
-import { DATASET_SOURCE_LIMIT, INLINE_PREVIEW_LIMIT, MEDIA_SOURCE_EXTENSIONS, MEDIA_SOURCE_LIMITS, TEXT_SOURCE_EXTENSIONS, TEXT_SOURCE_LIMIT, mediaKindOf, mediaMimeType, type MediaKind } from '../../shared/source-kinds';
+import { DATASET_SOURCE_LIMIT, INLINE_PREVIEW_LIMIT, MEDIA_SOURCE_EXTENSIONS, MEDIA_SOURCE_LIMITS, TEXT_SOURCE_EXTENSIONS, TEXT_SOURCE_LIMIT, imageSendable, mediaKindOf, mediaMimeType, type ImageWithheld, type MediaKind } from '../../shared/source-kinds';
 import { DataFormat, type ExactMatchRequest, type ProfileExecutor, type DatasetProfile, type ProfileInput } from '../../shared/profiles';
+import { ViewableImageMime, type ImageRef } from '../../shared/images';
+import { pdfTextForWorker, type PdfPages, type PdfText, type PdfTextExtractor } from './pdf-text';
+import { extractPdfPagesHere } from './pdf-extract';
 
 export const fingerprint = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
 
@@ -48,17 +51,29 @@ export function limitFor(name: string): SourceLimit {
   return { kind: 'text', limit: TEXT_SOURCE_LIMIT, overLimit: 'Chỉ đọc tệp văn bản tối đa 256 KB.' };
 }
 
-/** What a worker is told when it asks for a media source: the file exists, and this kind cannot be read. */
+/** What a worker is told when it asks for a media source as text: the file exists, and it has no text to give. */
 export function unreadableSourceMessage(source: Source): string {
+  if (source.media === 'image') return `Nguồn ${source.name} là ảnh nên không có văn bản để đọc.`;
   return `Nguồn ${source.name} là ${MEDIA_LABEL[source.media ?? 'image']}. Tí chưa đọc được loại tệp này; chỉ xem được trong Nguồn của cuộc trò chuyện.`;
+}
+
+/** The activity line when an image is not shown to the worker, and why. */
+export function imageWithheldMessage(name: string, reason: ImageWithheld): string {
+  if (reason === 'connection') return `Tí không xem được ảnh ${name}: kết nối này không nhận ảnh.`;
+  if (reason === 'format') return `Tí không xem được ảnh ${name}: model không nhận loại ảnh này (SVG, BMP).`;
+  return `Tí không xem được ảnh ${name}: ảnh vượt 5 MB, mức lớn nhất gửi cho model.`;
 }
 
 type ReadMode = 'buffer' | 'hash';
 type FileRead = { bytes?: Buffer; hash: string; size: number };
 
+/** Parsed PDFs kept by hash, so a second read of the same file skips pdf.js; the file is still read and checked each time. */
+const PDF_PAGES_KEPT = 16;
+
 export class Sources {
   private checks = new Map<string, Set<AbortController>>();
-  constructor(private store: Store, private executor?: ProfileExecutor) {}
+  private pdfPages = new Map<string, PdfPages>();
+  constructor(private store: Store, private executor?: ProfileExecutor, private pdfText: PdfTextExtractor = extractPdfPagesHere) {}
   /**
    * Reads a file within `rule.limit` while making sure it is a plain file that nobody swaps under us. `hash` mode
    * streams the digest without keeping the bytes, so a 200 MB video is fingerprinted without 200 MB of memory.
@@ -150,14 +165,66 @@ export class Sources {
     };
     await scan(root, 0); return result;
   }
-  /** Text of a source for a worker or a preview. Media sources are refused by name, never read. */
+  /**
+   * Text of a source for a worker or a preview. A PDF gives its text layer with page markers (COD-260); images, video
+   * and audio are refused by name, never read as text.
+   */
   async read(sourceId: string, allowedIds: string[]): Promise<string> {
     if (!allowedIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
     const source = this.store.get<Source>('sources', sourceId);
     if (source.format === 'parquet') throw new Error('Dùng profile_dataset để đọc Parquet.');
+    if (source.media === 'pdf') return (await this.readPdf(sourceId, allowedIds)).text;
     if (source.media) throw new Error(unreadableSourceMessage(source));
     const read = await this.readChecked(sourceId, allowedIds, 'buffer');
     return read.bytes!.toString('utf8');
+  }
+  /**
+   * A PDF's text layer, read locally with pdf.js from bytes that passed the permission, revoke and hash checks, and cut
+   * to the text source limit. A PDF read before is not parsed again, but its file is still read and checked.
+   */
+  async readPdf(sourceId: string, allowedIds: string[], signal?: AbortSignal): Promise<PdfText> {
+    const source = this.store.get<Source>('sources', sourceId);
+    if (source.media !== 'pdf') throw new Error(`Nguồn ${source.name} không phải PDF.`);
+    const read = await this.readChecked(sourceId, allowedIds, 'buffer');
+    let pages = this.pdfPages.get(read.hash);
+    if (!pages) {
+      pages = await this.pdfText(new Uint8Array(read.bytes!.buffer, read.bytes!.byteOffset, read.bytes!.length), signal);
+      this.keepPdfPages(read.hash, pages);
+    }
+    // Revocation can arrive while the text is being read.
+    if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
+    return pdfTextForWorker(pages);
+  }
+  private keepPdfPages(hash: string, pages: PdfPages) {
+    this.pdfPages.set(hash, pages);
+    if (this.pdfPages.size <= PDF_PAGES_KEPT) return;
+    const oldest = this.pdfPages.keys().next().value;
+    if (oldest !== undefined) this.pdfPages.delete(oldest);
+  }
+  /**
+   * A permitted image that may go to a model, with its bytes checked against the attached hash: a type models take and
+   * no larger than the send limit. The caller decides whether the connection can see images at all.
+   */
+  async readImage(sourceId: string, allowedIds: string[]): Promise<{ bytes: Buffer; image: ImageRef }> {
+    if (!allowedIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
+    const source = this.store.get<Source>('sources', sourceId);
+    if (source.media !== 'image') throw new Error(`Nguồn ${source.name} không phải ảnh.`);
+    const withheld = imageSendable(source);
+    if (withheld) throw new Error(imageWithheldMessage(source.name, withheld));
+    const read = await this.readChecked(sourceId, allowedIds, 'buffer');
+    return { bytes: read.bytes!, image: { hash: read.hash, mime: ViewableImageMime.parse(mediaMimeType(source.name)) } };
+  }
+  /**
+   * The base64 bytes of an image a message refers to by hash, for the request about to be sent. Only an unrevoked image
+   * attached to this chat can answer, and its file is read and checked again every time.
+   */
+  async imageData(reference: ImageRef, allowedIds: string[]): Promise<string> {
+    const source = allowedIds
+      .map(sourceId => this.store.get<Source>('sources', sourceId))
+      .find(candidate => candidate.media === 'image' && candidate.hash === reference.hash && !candidate.revoked);
+    if (!source) throw new Error('Ảnh đã gửi cho Tí không còn trong nguồn được phép của chat này.');
+    const { bytes } = await this.readImage(source.id, allowedIds);
+    return bytes.toString('base64');
   }
   /** Confirms the file is still there, unchanged and permitted, without keeping its bytes. */
   async verify(sourceId: string, allowedIds: string[]) { await this.readChecked(sourceId, allowedIds, 'hash'); }

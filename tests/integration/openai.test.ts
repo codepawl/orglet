@@ -28,6 +28,45 @@ it('uses the official SDK to assemble streamed tool arguments and usage over HTT
   } finally { server.closeAllConnections(); server.close(); }
 });
 
+it('sends an image a tool returned as an image part in the next user message, never the image slot itself (COD-260)', async () => {
+  let received: { messages: Record<string, unknown>[] } = { messages: [] };
+  const server = createServer(async (request, response) => {
+    const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(chunk);
+    received = JSON.parse(Buffer.concat(chunks).toString());
+    response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    const send = (data: unknown) => response.write(`data: ${JSON.stringify(data)}\n\n`);
+    const base = { id: 'fixture', object: 'chat.completion.chunk', created: 1, model: 'gpt-4.1-mini-2025-04-14' };
+    send({ ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'call_2', type: 'function', function: { name: 'reply', arguments: '{}' } }] }, finish_reason: 'tool_calls' }] });
+    response.end('data: [DONE]\n\n');
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  try {
+    const address = server.address() as { port: number };
+    const model = new OpenAIAdapter('fixture-not-a-real-key', { baseURL: `http://127.0.0.1:${address.port}/v1` });
+    const image = { hash: 'a'.repeat(64), mime: 'image/png' as const, data: 'iVBORw0KGgo=' };
+    await model.request([
+      { role: 'user', content: 'What is in the screenshot?' },
+      { role: 'assistant', tool_calls: [{ type: 'function', id: 'call_1', function: { name: 'read_source', arguments: '{"sourceId":"shot"}' } }] },
+      { role: 'tool', tool_call_id: 'call_1', content: '{"sourceId":"shot"}', images: [image] },
+    ], [], new AbortController().signal, () => {});
+    expect(received.messages).toEqual([
+      { role: 'user', content: 'What is in the screenshot?' },
+      { role: 'assistant', tool_calls: [{ type: 'function', id: 'call_1', function: { name: 'read_source', arguments: '{"sourceId":"shot"}' } }] },
+      { role: 'tool', tool_call_id: 'call_1', content: '{"sourceId":"shot"}' },
+      { role: 'user', content: [
+        { type: 'text', text: 'The image returned by the tool call above:' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+      ] },
+    ]);
+  } finally { server.closeAllConnections(); server.close(); }
+});
+
+it('refuses to send an image whose bytes were not attached', async () => {
+  const model = new OpenAIAdapter('fixture-not-a-real-key', { baseURL: 'http://127.0.0.1:9/v1' });
+  await expect(model.request([{ role: 'user', content: 'Look', images: [{ hash: 'a'.repeat(64), mime: 'image/png' }] }], [], new AbortController().signal, () => {}))
+    .rejects.toThrow('Image bytes were not attached');
+});
+
 it('points the same adapter at xAI with the Grok catalog model', async () => {
   let received: Record<string, unknown> = {};
   const server = createServer(async (request, response) => {

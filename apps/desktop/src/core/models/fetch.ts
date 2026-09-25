@@ -109,6 +109,24 @@ function xaiTenths(cents: unknown): number | undefined {
   return tenths <= 1_000_000 ? tenths : undefined;
 }
 
+/** An input-types field says images: a list with "image" in it, or OpenRouter's "text+image->text" before the arrow. */
+function namesImage(modalities: unknown): boolean {
+  if (Array.isArray(modalities)) return modalities.includes('image');
+  if (typeof modalities === 'string') return modalities.split('->')[0].split('+').includes('image');
+  return false;
+}
+
+/**
+ * Whether a list row says the model takes images: xAI puts `input_modalities` on the row, OpenRouter puts it (or the
+ * older `modality` string) under `architecture`. OpenAI's own list has neither, so its rows never carry the mark.
+ */
+function listsImageInput(row: { input_modalities?: unknown; architecture?: unknown }): boolean {
+  if (namesImage(row.input_modalities)) return true;
+  if (!row.architecture || typeof row.architecture !== 'object') return false;
+  const architecture = row.architecture as { input_modalities?: unknown; modality?: unknown };
+  return namesImage(architecture.input_modalities) || namesImage(architecture.modality);
+}
+
 /** OpenAI's `/v1/models` shape, which every OpenAI-compatible server copies; `provider` labels the rows. */
 export function parseOpenAIModels(payload: unknown, provider: ModelListProvider = 'openai'): ModelEntry[] {
   const data = payload && typeof payload === 'object' ? (payload as { data?: unknown }).data : undefined;
@@ -117,7 +135,7 @@ export function parseOpenAIModels(payload: unknown, provider: ModelListProvider 
   const seen = new Set<string>();
   for (const row of data) {
     if (!row || typeof row !== 'object') continue;
-    const rec = row as { id?: unknown; shutdown_date?: unknown };
+    const rec = row as { id?: unknown; shutdown_date?: unknown; input_modalities?: unknown; architecture?: unknown };
     const id = pickId(rec.id);
     if (!id || seen.has(id) || hiddenOpenAIModel(id)) continue;
     seen.add(id);
@@ -127,6 +145,7 @@ export function parseOpenAIModels(payload: unknown, provider: ModelListProvider 
       id,
       source: 'native',
       ...(sunsetAt ? { deprecated: true as const, sunsetAt } : {}),
+      ...(listsImageInput(rec) ? { imageInput: true as const } : {}),
     });
     if (models.length >= MODEL_LIST_MAX) break;
   }
@@ -157,7 +176,7 @@ export function parseXaiLanguageModels(payload: unknown): ModelEntry[] {
   const seen = new Set<string>();
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
-    const rec = row as { id?: unknown; aliases?: unknown; output_modalities?: unknown; prompt_text_token_price?: unknown; completion_text_token_price?: unknown };
+    const rec = row as { id?: unknown; aliases?: unknown; input_modalities?: unknown; output_modalities?: unknown; prompt_text_token_price?: unknown; completion_text_token_price?: unknown };
     const modalities = rec.output_modalities;
     if (!Array.isArray(modalities) || !modalities.includes('text')) continue;
     const id = pickId(rec.id);
@@ -178,6 +197,7 @@ export function parseXaiLanguageModels(payload: unknown): ModelEntry[] {
       ...(aliases.length ? { aliases } : {}),
       ...(inputTenths !== undefined ? { inputTenths } : {}),
       ...(outputTenths !== undefined ? { outputTenths } : {}),
+      ...(listsImageInput(rec) ? { imageInput: true as const } : {}),
     });
     if (models.length >= MODEL_LIST_MAX) break;
   }
@@ -221,6 +241,7 @@ export function parseOpenRouterModels(payload: unknown): ModelEntry[] {
       ...(displayName && displayName !== id ? { displayName } : {}),
       ...(inputTenths !== undefined ? { inputTenths } : {}),
       ...(outputTenths !== undefined ? { outputTenths } : {}),
+      ...(listsImageInput(rec) ? { imageInput: true as const } : {}),
     });
     if (models.length >= MODEL_LIST_MAX) break;
   }

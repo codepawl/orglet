@@ -186,7 +186,7 @@ For a changed or moved file, **View private changes** reads the retained working
 
 The packaged smoke checks output paging after restart, cancelling and confirming retirement, and preservation of the failed run and uncertain effects.
 
-Codex launches explicitly disable native web search and local image attachment, and set the project-instruction byte limit to zero. Web and file access use the core permission checks; the argument contract is covered by fixtures. These settings follow the [Codex configuration reference](https://developers.openai.com/codex/config-reference/), but are not a claim of live harness verification.
+Codex launches explicitly disable native web search and local image attachment (`view_image`), and set the project-instruction byte limit to zero. A source-only answer can still see the chat's own images: Orglet attaches its hash-checked copies with `--image` ([PDFs and images](capabilities.md#pdfs-and-images)). Web and file access use the core permission checks; the argument contract is covered by fixtures. These settings follow the [Codex configuration reference](https://developers.openai.com/codex/config-reference/), but are not a claim of live harness verification.
 
 The CLI tool loop retains reported cost estimates in its checkpoint and subtracts them from the next call's allowance. Exhaustion pauses before dispatch, and resuming the same run keeps those estimates. They remain separate from API ledger charges. This is not a team-wide billing guarantee: native CLI budget enforcement varies, and a CLI that omits cost information remains explicitly unknown.
 

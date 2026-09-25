@@ -42,3 +42,37 @@ it('translates tool history and assembles Anthropic streamed tools and usage', a
     expect(cost(100, 20, 'openai')).toBe(72);
   } finally { server.closeAllConnections(); server.close(); }
 });
+
+it('puts an image a tool returned inside its tool_result as a base64 image block (COD-260)', async () => {
+  let received: { messages: unknown[] } = { messages: [] };
+  const server = createServer(async (request, response) => {
+    const chunks: Buffer[] = []; for await (const chunk of request) chunks.push(chunk);
+    received = JSON.parse(Buffer.concat(chunks).toString());
+    response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    const send = (data: { type: string; [key: string]: unknown }) => response.write(`event: ${data.type}\ndata: ${JSON.stringify(data)}\n\n`);
+    send({ type: 'message_start', message: { id: 'msg_fixture', type: 'message', role: 'assistant', model: 'claude-haiku-4-5-20251001', content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 1500, output_tokens: 1 } } });
+    send({ type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'call_2', name: 'reply', input: {} } });
+    send({ type: 'content_block_stop', index: 0 });
+    send({ type: 'message_delta', delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 5 } });
+    send({ type: 'message_stop' }); response.end();
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  try {
+    const address = server.address() as { port: number };
+    const adapter = new AnthropicAdapter('fixture-not-real', `http://127.0.0.1:${address.port}`);
+    const image = { hash: 'b'.repeat(64), mime: 'image/jpeg' as const, data: '/9j/4AAQ' };
+    await adapter.request([
+      { role: 'user', content: 'What is in the photo?' },
+      { role: 'assistant', tool_calls: [{ type: 'function', id: 'call_1', function: { name: 'read_source', arguments: '{"sourceId":"photo"}' } }] },
+      { role: 'tool', tool_call_id: 'call_1', content: '{"sourceId":"photo"}', images: [image] },
+    ], [{ type: 'function', function: { name: 'reply', parameters: { type: 'object', properties: {} } } }], new AbortController().signal, () => {});
+    expect(received.messages).toEqual([
+      { role: 'user', content: 'What is in the photo?' },
+      { role: 'assistant', content: [{ type: 'tool_use', id: 'call_1', name: 'read_source', input: { sourceId: 'photo' } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call_1', content: [
+        { type: 'text', text: '{"sourceId":"photo"}' },
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/4AAQ' } },
+      ] }] },
+    ]);
+  } finally { server.closeAllConnections(); server.close(); }
+});
