@@ -15,6 +15,8 @@ export type ToastOptions = {
    * confirmation of what the person just did, such as "Đã lưu Tí", was read under the cursor (COD-255).
    */
   unread?: boolean;
+  /** The chat the toast is about: its notice in Notifications opens that chat when clicked (COD-258). */
+  chat?: string;
 };
 /** `info` is a calm note that is neither a success nor a fault, such as a link naming an orglet that is not there. */
 type Toast = { id: number; text: string; tone: 'success' | 'error' | 'info'; action?: ToastAction };
@@ -33,7 +35,7 @@ export function toast(text: string, tone: Toast['tone'] = 'success', about?: str
   const { action } = options;
   const confirmation = tone === 'success' && !options.unread;
   // Every toast is also kept, so a message missed while looking elsewhere can still be found (user, 2026-09-20).
-  recordNotice(text, tone === 'error' ? 'error' : 'done', about, confirmation);
+  recordNotice(text, tone === 'error' ? 'error' : 'done', about, { confirmation, taskId: options.chat });
   // A repeated message replaces its older copy; at most three are visible.
   toasts = [...toasts.filter(item => item.text !== text), { id, text, tone, ...(action ? { action } : {}) }].slice(-3);
   emit();

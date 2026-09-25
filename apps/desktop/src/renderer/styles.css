@@ -1303,7 +1303,9 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-actions .button:hover:not(:disabled) { background:var(--bg); }
 .routine-meta { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:6px 16px; font-size:13px; }
 .routine-meta li { display:flex; align-items:center; gap:8px; min-width:0; overflow-wrap:anywhere; }
-.routine-meta svg,.routine-brief svg { color:var(--muted); flex-shrink:0; }
+.routine-meta li > svg,.routine-brief svg { color:var(--muted); flex-shrink:0; }
+/* The orglet's own face in its own colour, where the other lines have an icon (COD-258). */
+.routine-meta li > :is(.avatar, .composer-to-avatars) { flex-shrink:0; }
 .routine-brief { display:flex; gap:8px; font-size:13px; color:var(--muted); }
 .routine-brief svg { margin-top:3px; }
 .routine-brief span { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
@@ -2378,4 +2380,10 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
   content:""; position:absolute; z-index:1; left:-3px; top:0; bottom:-4px; border-left:1.5px solid var(--thread-line);
   pointer-events:none;
 }
+/* A schedule's newest run under its orglet or crew (COD-258): the side thread's row, with a small schedule mark at
+   the end of the name so the two kinds of row tell apart at a glance. */
+.schedule-run-row .schedule-run-mark { flex-shrink:0; }
+/* The same mark before a schedule run's name in the top bar. The name and the model sit on one baseline; the mark
+   is centred on the line instead, and a step closer to the name than the model is. */
+.topbar-schedule-mark { display:inline-flex; align-self:center; margin-right:-4px; color:var(--muted); flex-shrink:0; }
 @media(prefers-reduced-motion:reduce) { .brought-in { animation:none; } }

@@ -15,7 +15,9 @@ const kindIcons: Record<NoticeKind, typeof Info> = { error: CircleAlert, done: C
  * Each row says what happened and what it was about, and a run of identical notices is one row with a count
  * (COD-174): the owner opened this to twelve rows reading "Saved" and "Command not allowed." and nothing else.
  */
-export function NoticeCentre({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function NoticeCentre({ open, onClose, onOpenChat, chatExists }: { open: boolean; onClose: () => void;
+  /** Opens the chat a notice points at, such as a schedule's run (COD-258). */ onOpenChat: (taskId: string) => void;
+  /** A chat deleted since leaves its notice as plain text. */ chatExists: (taskId: string) => boolean }) {
   const notices = useNotices();
   const [kind, setKind] = useState<NoticeKind | 'all'>('all');
   // What was unread when the centre opened stays marked as new until it closes, even though opening marks it seen.
@@ -59,7 +61,7 @@ export function NoticeCentre({ open, onClose }: { open: boolean; onClose: () => 
           const isNew = newSince !== null && isUnreadNotice(row.notice, newSince);
           return <li key={row.notice.id} className={`notice notice-${row.notice.kind}${isNew ? ' is-new' : ''}`}>
             {startsGroup && <p className="notice-day">{label}</p>}
-            <NoticeItem row={row} isNew={isNew} />
+            <NoticeItem row={row} isNew={isNew} onOpenChat={row.notice.taskId && chatExists(row.notice.taskId) ? onOpenChat : undefined} />
           </li>;
         })}
       </ol>}
@@ -69,23 +71,28 @@ export function NoticeCentre({ open, onClose }: { open: boolean; onClose: () => 
 /**
  * One row: the icon carries the kind's colour, the message reads in full, the line under it says what it was
  * about, and the time on the right is the latest. A repeated notice says how many times and opens to the times.
+ * A notice about a chat that still exists opens that chat instead (COD-258): that is what the person came for, and
+ * its repeats are the same chat, so the count still reads without the list of times.
  */
-function NoticeItem({ row, isNew }: { row: NoticeRow; isNew: boolean }) {
+function NoticeItem({ row, isNew, onOpenChat }: { row: NoticeRow; isNew: boolean; onOpenChat?: (taskId: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = kindIcons[row.notice.kind];
   const repeated = row.count > 1;
+  const taskId = row.notice.taskId;
+  const opensChat = Boolean(onOpenChat && taskId);
   const content = <>
     <Icon size={15} aria-hidden="true" />
     <span className="notice-text">
       <span className="notice-line">
         <span className="notice-message">{tMessage(row.notice.text)}</span>
-        {repeated && <span className="notice-count">{t('{0} lần', [row.count])}<ChevronDown size={13} aria-hidden="true" /></span>}
+        {repeated && <span className="notice-count">{t('{0} lần', [row.count])}{!opensChat && <ChevronDown size={13} aria-hidden="true" />}</span>}
       </span>
       {row.notice.about && <span className="notice-about">{tMessage(row.notice.about)}</span>}
     </span>
     {isNew && <span className="notice-new-dot" aria-hidden="true" />}
     <time dateTime={row.notice.at}>{clockLabel(row.notice.at)}</time>
   </>;
+  if (onOpenChat && taskId) return <button type="button" className="notice-body" title={t('Mở chat')} onClick={() => onOpenChat(taskId)}>{content}</button>;
   if (!repeated) return <div className="notice-body">{content}</div>;
   return <>
     <button type="button" className="notice-body" aria-expanded={expanded} onClick={() => setExpanded(current => !current)}>{content}</button>

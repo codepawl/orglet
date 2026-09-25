@@ -48,6 +48,17 @@ Every run a routine starts, on the clock, on a new file or from `orglet run`, is
 
 The routine runs only when `orglet run` names it, while the app is open. The editor shows the command to copy. `run` can start a routine but never create or change one, and it passes the same checks as a scheduled run: switched on, approved as it is now, previous run finished.
 
+## Where a run shows up
+
+Every run is its own chat row with `routineId`, apart from the orglet's or crew's main chat, and the routine keeps the newest one as `lastTaskId`. Before COD-258 that chat could only be reached through **Schedules → Open latest run**, so a daily run's answer went unread unless someone went looking. Now a run is found where the person looks and says when it lands, whatever started it:
+
+- **Sidebar.** Each routine has one row under the orglet or crew its newest run was for, next to the orglet's side threads, newest first and three at a time with **Show more** (`chatsUnder` and `scheduleRunsOf` in `apps/desktop/src/shared/schedule-runs.ts`). The row is named after the routine, carries a small schedule mark and the newest run's status mark, and its menu opens the routine, archives the run or deletes it. The row belongs to the run, not to the routine's current setting: a crew run sits under the crew, and a routine moved to another orglet moves when its next run starts. An archived newest run hides the row until the next run, rather than bringing an older run back; deleting it clears `lastTaskId`, which does the same.
+- **The chat.** The header shows the routine's name with the schedule mark instead of the orglet's, so it does not read as the main chat, and the top of the thread says "A run of the schedule *name*, by *orglet*" with **Open schedule**. The header cannot rename it: the name changes in the routine's editor, where saving is also the approval to run.
+- **Notices.** When a run finishes, stops with a problem (failed, partial, interrupted) or waits for the person (an answer or budget), the window shows a toast naming the routine, such as "Daily standup note is ready" or "Daily standup note needs you", with the orglet or crew as what it was about and **Open**. It is kept unread in **Notifications**, and its row there opens the run (`chatNotices.ts`). A run that started and finished between two workspace reads still counts, since nobody watched it start. Nothing is shown for the run already open.
+- **In the background.** With Orglet not focused, the same moment also raises a system notification titled with the routine's name, unless **Settings → Chat** turned it off ([chat guide](chat-guide.md#while-orglet-is-in-the-background)).
+
+The **Open latest run** button on the routine's card in **Schedules** stays.
+
 ## What runs, and when
 
 The rest of this page is the clock trigger. Orglet checks schedules only while the app is open. The core process polls every five seconds (`apps/desktop/src/core/entry.ts`). Closing the app, sleeping, or shutting the machine down creates no tasks.

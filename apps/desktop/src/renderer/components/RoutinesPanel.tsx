@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Routine, TaskInput, Workspace } from '../../shared/contracts';
+import type { Routine, TaskInput, Worker, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
 import { CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
@@ -15,6 +15,8 @@ import { StatusMark } from './StatusMark';
 import { CommandBlock, Input, Textarea } from '@codepawl/orglet-ui';
 import { triggerOf, type RoutineTrigger, type RoutineTriggerKind } from '../../shared/routine-triggers';
 import { toast } from './toast';
+import { Avatar, RosterAvatars } from './Avatar';
+import { teamRoster } from '../assignees';
 
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
 export const formatRoutineTime = (iso: string, timeZone: string) => new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' });
@@ -39,6 +41,10 @@ async function copyCommand(command: string) {
     toast(t('Không sao chép được lệnh'), 'error', command);
   }
 }
+/** An orglet's face at list size, the way the chat's recipient list shows it, instead of a generic person icon. */
+function WorkerFace({ worker, size }: { worker: Worker; size: 'xxs' | 'xs' }) {
+  return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />;
+}
 /** Which screen of the Routines dialog is showing; the dialog title renders it as a breadcrumb. */
 export type RoutineView = { editing: false } | { editing: true; routine?: Routine };
 export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack, onDirty }: { workspace: Workspace; draft?: TaskInput; openTask: (id: string) => void; view: RoutineView; onView: (view: RoutineView) => void; onBack: () => void; onDirty: (dirty: boolean) => void }) {
@@ -46,6 +52,15 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
   const action = async (fn: () => Promise<unknown>) => { setBusy(true); setError(''); try { await fn(); } catch (err) { setError((err as Error).message); } finally { setBusy(false); } };
   if (view.editing) return <RoutineEditor key={view.routine?.id ?? 'new'} routine={view.routine} draft={view.routine ? undefined : draft} workspace={workspace} saved={() => { onDirty(false); onView({ editing: false }); }} back={onBack} onDirty={onDirty} />;
   const assignee = (item: Routine) => item.task.teamId ? workspace.teams.find(team => team.id === item.task.teamId)?.name ?? t('Hội đã xóa') : workspace.workers.find(worker => worker.id === item.task.workerId)?.name ?? t('Tí đã xóa');
+  /** The face of whoever runs the schedule: the orglet's own, a crew's first members, or the plain icon once it is gone. */
+  const assigneeFace = (item: Routine) => {
+    if (item.task.teamId) {
+      const team = workspace.teams.find(entry => entry.id === item.task.teamId);
+      return team ? <RosterAvatars workers={teamRoster(team, workspace.workers)} max={2} /> : <Users size={14} aria-hidden="true" />;
+    }
+    const worker = workspace.workers.find(entry => entry.id === item.task.workerId);
+    return worker ? <WorkerFace worker={worker} size="xxs" /> : <UserRound size={14} aria-hidden="true" />;
+  };
   return <div className="form">
           {!workspace.routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p></div>}
     <div className="routine-list">
@@ -71,9 +86,10 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
         <ul className="routine-meta">
           {trigger.kind === 'schedule' && <li><Globe size={14} aria-hidden="true" />{item.schedule.timeZone}</li>}
           {trigger.kind === 'schedule' && item.enabled && <li><CalendarDays size={14} aria-hidden="true" />{t('Lần tới {0}', [formatRoutineTime(item.nextDueAt, item.schedule.timeZone)])}</li>}
-          <li><UserRound size={14} aria-hidden="true" />{assignee(item)}</li>
+          <li>{assigneeFace(item)}{assignee(item)}</li>
           <li><Wallet size={14} aria-hidden="true" />{t('{0} mỗi lần', [formatMoney(item.task.budgetMicros)])}</li>
-          <li><FileText size={14} aria-hidden="true" />{t('{0} nguồn', [item.task.sourceIds.length])}</li>
+          {/* A schedule with no sources says nothing about them, rather than "0 sources" (COD-258). */}
+          {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{t('{0} nguồn', [item.task.sourceIds.length])}</li>}
         </ul>
         <p className="routine-brief"><MessageSquareText size={14} aria-hidden="true" /><span>{item.task.brief}</span></p>
         {item.pending && <div className="routine-alert" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>
@@ -125,6 +141,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   }, [initial]);
   const workers = team ? workspace.workers.filter(worker => [...team.memberIds, team.synthesizerId].includes(worker.id)) : workspace.workers.filter(worker => worker.id === target);
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
+  const destination = providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo');
   // Leaving asks for confirmation only when something differs from what the editor opened with.
   const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId]);
   const trigger: RoutineTrigger | undefined = triggerKind === 'folder'
@@ -161,7 +178,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       <h4 id="routine-group-job">{t('Công việc')}</h4>
       <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><Input value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
       <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><Textarea rows={4} value={brief} onChange={event => setBrief(event.target.value)} required maxLength={16000} /></label>
-      <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> }))]} />
+      <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Tí'), icon: <WorkerFace worker={worker} size="xs" /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <RosterAvatars workers={teamRoster(team, workspace.workers)} max={2} /> }))]} />
       <div className="routine-sources">
         <PanelHeading level={3} title={<FieldLabel icon={FileText}>{t('Nguồn ({0}/20)', [sources.length])}</FieldLabel>}>
           <Button type="button" variant="outline" disabled={busy} onClick={async () => {
@@ -211,7 +228,9 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       <SwitchField checked={enabled} onChange={setEnabled}>{t('Bật lịch')}</SwitchField>
       {/* Where the data goes is worth saying; it just is not worth asking about twice, since saving is the
           permission (user, 2026-09-19). It stays as a plain line rather than a tick. */}
-      {enabled && <p className="muted">{t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo')])}</p>}
+      {enabled && <p className="muted">{sources.length > 0
+        ? t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, destination])
+        : t('Mỗi lần chạy gửi brief này {0}, trong giới hạn trên.', [destination])}</p>}
       <p className="muted">{t('Đổi Tí, skill, hội hay model thì cần lưu lịch lại.')}</p>
     </section>
     <div className="sticky-actions">{error && !zoneError ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>

@@ -30,6 +30,8 @@ export type Notice = {
    * unread or marked new, because it was read under the cursor when it appeared (COD-255).
    */
   confirmation?: true;
+  /** The chat this notice is about, such as a schedule's run that finished (COD-258): its row opens that chat. */
+  taskId?: string;
 };
 
 export const noticeKindNames: Record<NoticeKind, string> = translated({ error: 'Lỗi', done: 'Đã xong', info: 'Thông tin' });
@@ -62,7 +64,7 @@ const save = () => {
 };
 
 /** Records one message. Called by `toast`, so nothing has to remember to do both. */
-export function recordNotice(text: string, kind: NoticeKind, about?: string, confirmation = false) {
+export function recordNotice(text: string, kind: NoticeKind, about?: string, details: { confirmation?: boolean; taskId?: string } = {}) {
   const trimmedAbout = about?.trim();
   const notice: Notice = {
     id: nextId++,
@@ -70,7 +72,8 @@ export function recordNotice(text: string, kind: NoticeKind, about?: string, con
     kind,
     text,
     ...(trimmedAbout ? { about: trimmedAbout } : {}),
-    ...(confirmation ? { confirmation: true as const } : {}),
+    ...(details.confirmation ? { confirmation: true as const } : {}),
+    ...(details.taskId ? { taskId: details.taskId } : {}),
   };
   notices = [...notices, notice].slice(-LIMIT);
   save();
@@ -116,7 +119,8 @@ export function clearNotices() {
 /** One row of the centre: the latest of a run of identical notices, with how many there were and when each came. */
 export type NoticeRow = { notice: Notice; count: number; times: string[] };
 
-const sameNotice = (one: Notice, two: Notice) => one.kind === two.kind && one.text === two.text && (one.about ?? '') === (two.about ?? '');
+/** Two notices are one thing that happened twice only when they also point at the same chat, if any. */
+const sameNotice = (one: Notice, two: Notice) => one.kind === two.kind && one.text === two.text && (one.about ?? '') === (two.about ?? '') && (one.taskId ?? '') === (two.taskId ?? '');
 
 /**
  * Folds consecutive identical notices into one row. Six "Đã lưu · Ngôn ngữ" in a row are one thing that happened

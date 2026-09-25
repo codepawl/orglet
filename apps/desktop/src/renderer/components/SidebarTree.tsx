@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
-import { GripVertical, Archive, ArchiveRestore, EllipsisVertical, Pencil, Trash } from './icons';
+import { GripVertical, Archive, ArchiveRestore, CalendarClock, EllipsisVertical, Pencil, Trash } from './icons';
 import { t } from '../i18n';
 import { RowMenu } from './RowMenu';
 import { Checkbox } from './Checkbox';
@@ -113,8 +113,9 @@ export type RowSelection = { picking: boolean; selected: boolean; onPick: (mode:
  * (user, 2026-09-19), so no row expands here.
  * Optional `status` is the rolled-up mark from its subset (live thread for a worker, workers for a team).
  */
-export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, onDwell, menu, reorder, arriving, selection, children }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; /** The pointer came to rest on the row, or left it: what the click will open is fetched ahead of it (COD-218). */ onDwell?: (resting: boolean) => void; menu?: ReactNode; reorder: RowBindings; arriving?: boolean; selection?: RowSelection;
-  /** Rows listed under this one, such as an orglet's side threads (COD-247). */ children?: ReactNode }) {
+export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, onDwell, menu, reorder, arriving, selection, children, childrenLabel }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; /** The pointer came to rest on the row, or left it: what the click will open is fetched ahead of it (COD-218). */ onDwell?: (resting: boolean) => void; menu?: ReactNode; reorder: RowBindings; arriving?: boolean; selection?: RowSelection;
+  /** Rows listed under this one: an orglet's side threads (COD-247) and its schedules' runs (COD-258). */ children?: ReactNode;
+  /** What the rows under this one are, for assistive technology. */ childrenLabel?: string }) {
   const { ref, style, dragging, onMoveKey, ...pointer } = reorder;
   const dwell = dwellHandlers(onDwell);
   const mark = dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : null;
@@ -138,7 +139,7 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
       </button>
       <span data-no-drag>{menu}</span>
     </div>
-    {children && <div className="tree-children" role="group" aria-label={t('Chat phụ của {0}', [name])} data-no-drag>{children}</div>}
+    {children && <div className="tree-children" role="group" aria-label={childrenLabel ?? t('Chat phụ của {0}', [name])} data-no-drag>{children}</div>}
   </div>;
 }
 
@@ -161,6 +162,29 @@ export function SideThreadRow({ name, active, status, onOpen, onDwell, onRename,
       { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing(true) },
       { label: t('Lưu trữ'), icon: Archive, onSelect: onArchive },
       { label: t('Xóa'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: t('Xóa chat phụ này? Không thể hoàn tác.'), label: t('Xóa') } },
+    ]} />
+  </div>;
+}
+
+/**
+ * The newest run of one schedule, listed under the orglet or crew it ran for (COD-258): its status mark, the
+ * schedule's name with a small schedule mark after it, and a menu to open the schedule, archive the run or delete
+ * it. The row is named after the schedule, so it has no rename. It wears the side thread's row class, so the two
+ * kinds of row line up and share the thread lines drawn down from the orglet's face.
+ */
+export function ScheduleRunRow({ name, active, status, onOpen, onDwell, onOpenSchedule, onArchive, onDelete }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onOpenSchedule: () => void; onArchive: () => void; onDelete: () => void }) {
+  const dwell = dwellHandlers(onDwell);
+  const label = statusMarkLabel(status);
+  return <div className={`task-row side-thread-row schedule-run-row${active ? ' active' : ''}`} {...dwell}>
+    <button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} aria-label={t('Lần chạy của lịch {0}', [name])} title={label} onClick={onOpen}>
+      <StatusMark variant={status.variant} tone={status.tone} label={label} decorative />
+      <span className="row-name">{name}</span>
+      <CalendarClock size={13} className="schedule-run-mark" aria-hidden="true" />
+    </button>
+    <RowMenu label={t('Tùy chọn lịch {0}', [name])} contextMenuOf=".schedule-run-row" items={[
+      { label: t('Mở lịch'), icon: CalendarClock, onSelect: onOpenSchedule },
+      { label: t('Lưu trữ'), icon: Archive, onSelect: onArchive },
+      { label: t('Xóa'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: t('Xóa lần chạy này? Không thể hoàn tác.'), label: t('Xóa') } },
     ]} />
   </div>;
 }

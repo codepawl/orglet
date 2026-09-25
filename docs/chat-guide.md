@@ -89,6 +89,14 @@ A schedule sends the same request to an orglet or crew daily or weekly, while Or
 
 Orglet checks schedules only while it is open. If the computer was off or asleep at the time, the missed run becomes one **Run once to catch up** choice, or **Skip missed run**; missed days are never queued up, and the next time stays on the calendar. Scheduled runs cannot write memory, react, or propose app changes, since nobody is watching. There are at most 100 schedules. Policy detail: [routines.md](routines.md).
 
+Each run is its own chat, apart from the orglet's main chat. You find it three ways:
+
+- **In the sidebar**, under the orglet or crew it ran for, next to the side threads: one row per schedule, named after it with a small calendar mark, showing its newest run and that run's status mark. The row's menu opens the schedule, archives the run or deletes it.
+- **In Notifications.** When a run finishes, stops with a problem or waits for you, a message names the schedule ("Daily standup note is ready", "Daily standup note needs you") with **Open**, and stays unread in Notifications until you look.
+- **In Schedules**, where each card has **Open latest run**.
+
+The run's header shows the schedule's name with the same calendar mark, and the top of the chat says which schedule it is and who ran it, with **Open schedule**.
+
 You can also ask an orglet, in its chat, to schedule something ("run this every Monday at 9"); it answers with a proposal card, and the schedule it creates is saved switched off until you enable it ([App-change proposals](permissions-and-learning.md#app-change-proposals)).
 
 ## What is running
@@ -111,8 +119,14 @@ The controls act on the whole turn of that chat. In a crew, stopping one member'
 
 ## Notifications
 
-Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked. A confirmation of something you just did (saved, created, copied, archived) is listed but does not count, since you saw it as it happened. Problems count, and so does news that arrived on its own: an answer in a side thread, a downloaded update, a change an orglet applied by itself.
+Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked. A confirmation of something you just did (saved, created, copied, archived) is listed but does not count, since you saw it as it happened. Problems count, and so does news that arrived on its own: an answer in a side thread, a schedule's run that finished or needs you, a downloaded update, a change an orglet applied by itself.
 
-The list is newest first, grouped by day, with new rows marked. Filter it by **All**, **Problems**, **Done** or **Info**. Each row says what happened and what it was about (the setting, the orglet, the chat, the command); a run of identical notices is one row with a count. Every app change an orglet makes through a proposal is announced here too. **Clear all** empties the list.
+The list is newest first, grouped by day, with new rows marked. Filter it by **All**, **Problems**, **Done** or **Info**. Each row says what happened and what it was about (the setting, the orglet, the chat, the command); a run of identical notices is one row with a count. A row about a chat, such as a side thread's answer or a schedule's run, opens that chat when you click it, as long as the chat still exists. Every app change an orglet makes through a proposal is announced here too. **Clear all** empties the list.
+
+### While Orglet is in the background
+
+When you are in another app and a chat finishes, stops with a problem or waits for you, Orglet also shows a notification from the system: the orglet's, crew's or schedule's name and a word or two ("Done", "Needs you", "Needs attention"). It never shows the answer, your message or a file name, since it appears on your desktop. Clicking it brings Orglet forward on that chat. It covers every chat: main chats, side threads, crews, group chats and schedule runs. With Orglet in front, the sidebar marks and the messages above already tell you, so nothing is shown.
+
+Turn it off in **Settings → Chat → Notify me when a chat finishes**. It is on by default. Windows shows these notifications for the installed app; how they look, and whether they make a sound, follow the system's own notification settings.
 
 Notifications are notes about this machine's session, stored in the window, not in the workspace: they are not in a backup and do not follow you to another computer. The **Schedules** and **Library** buttons in the footer show the same dot when something there waits for you: a missed run, or knowledge to review.
