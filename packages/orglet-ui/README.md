@@ -1,11 +1,103 @@
 # @codepawl/orglet-ui
 
-The interface Orglet is built from: a small set of components and the tokens they read.
+The interface Orglet is built from: a small set of React components and the tokens they read.
 
 It is not published yet. This package exists so components can be moved out of the app one at a time, under a
 contract, instead of being untangled in one go on the day someone wants to use them. The app still imports its own
 `apps/desktop/src/renderer/components`; a component moves here only when it meets the rules below, and the app then
 imports it from here.
+
+## Install
+
+Once it is published:
+
+```sh
+pnpm add @codepawl/orglet-ui
+```
+
+It needs React 19 (`react` and `react-dom` are peer dependencies). It ships as ES modules with type declarations,
+and each component imports its own stylesheet, so it expects a bundler that handles CSS imports, as Vite does out of
+the box.
+
+Inside this repository the app depends on it as `workspace:*` and reads its source directly, through an alias in
+`vite.renderer.config.ts` and `vitest.config.ts` and a path in `tsconfig.json`. Neither `pnpm dev` nor the packaged
+app needs a build of the kit first.
+
+## Use
+
+Import the tokens once, in the application's entry file, then use the components:
+
+```tsx
+import '@codepawl/orglet-ui/tokens.css';
+import { useState } from 'react';
+import { SwitchField } from '@codepawl/orglet-ui';
+
+export function ReportSetting() {
+  const [weekly, setWeekly] = useState(true);
+  return <SwitchField checked={weekly} onChange={setWeekly} description="Every Monday morning">Weekly report</SwitchField>;
+}
+```
+
+A component's styles come with it: `Switch` imports `Switch.css`, so an application that only uses the switch only
+loads the switch's styles.
+
+## Components
+
+- `Input` and `Textarea`: a text field. Name it with a `<label>` around it or `aria-label`. `invalid` marks it as
+  failing validation, and `flash` replays the shake: pass a counter the form increments on every failed submit.
+- `Switch` and `SwitchField`: an on/off setting. `Switch` is the bare control, named by `label` or `labelledBy`;
+  `SwitchField` is the whole row, its title on the left and the switch on the right, with `description` under the
+  title.
+- `Skeleton`, `SkeletonText` and `SkeletonGroup`: the only shape a wait may take. A bar where text will be, a block
+  where a picture will be, a circle where a face will be, sweeping under a second per pass and still under reduced
+  motion. The group is the one status region, and its `label` is what a screen reader hears. The kit has no spinner
+  and will not grow one.
+- `CommandBlock`: a command for someone to paste into a terminal. A label, the command on a quiet card that breaks
+  only after a path separator or a space, and a copy button. A small control that changes the command, such as a
+  terminal picker, goes in its `toolbar`, on the card's top bar. The application does the copying in `onCopy`.
+- `EditableText`: a name renamed where it is shown. A click, Enter or F2 turns it into a field; Enter or leaving the
+  field keeps the change, Escape puts the old value back. `onCommit` does the saving and may be async.
+- `cn`: joins class names and lets the caller's win.
+
+## Theming
+
+`tokens.css` defines every value a component reads as an `--org-` custom property on `:root`. Light is the default.
+`data-theme` on the root element picks another:
+
+- `data-theme="dark"` uses the dark palette.
+- `data-theme="system"` follows the operating system through `prefers-color-scheme`.
+- No attribute, or `data-theme="light"`, stays light.
+
+To make the kit look like the application around it, set the tokens after importing `tokens.css`:
+
+```css
+:root { --org-accent: #0a7d5a; --org-radius: 6px; }
+:root[data-theme=dark] { --org-accent: #4fd1a5; }
+```
+
+Orglet does exactly this: it keeps its own tokens and hands them over once in `styles.css` (`--org-bg: var(--bg)`,
+and so on). A subtree can carry another palette by setting the tokens on its own root element.
+
+Under `prefers-reduced-motion: reduce` the tokens set every `--org-motion-` duration to zero, so a component that
+animates through them stops without any code of its own.
+
+## Develop
+
+```sh
+pnpm --filter @codepawl/orglet-ui build           # dist/: one module per component, its stylesheet beside it, types
+pnpm --filter @codepawl/orglet-ui test            # Vitest in jsdom, Testing Library, axe
+pnpm --filter @codepawl/orglet-ui check:package   # publint and Are the Types Wrong, on the built package
+```
+
+The build is tsdown. It keeps each component in its own file and copies its stylesheet next to it unchanged, so the
+`import './Switch.css'` in `Switch.js` still finds it. `dist` is not committed.
+
+The root `pnpm test` runs these tests too, as the `orglet-ui` Vitest project. CI builds the kit and runs
+`check:package` on every pull request.
+
+A new component comes with a test in `test/`: it renders with its required text, works from the keyboard, applies
+`className` last, and passes an axe check. `test/styles.test.ts` checks every stylesheet for the `org-` prefix and for
+reduced motion.
 
 ## What belongs here
 
@@ -36,16 +128,8 @@ token like `--sidebar`, it is not general yet, and forcing it here only moves th
 ## What is still missing
 
 The kit is deliberately thin today. Before it can be published it needs at least the controls an application cannot
-do without: `Input`, `Textarea`, `Label`, `Card`, `Badge`, `Dialog`, and a real `Tooltip`. After those: `Tabs`
-outside a dialog, `RadioGroup`, `Progress`, `Table`.
-
-`Skeleton` is here already, and it is the only shape a wait may take: a bar where text will be, a block where a
-picture will be, a circle where a face will be, sweeping under a second per pass and still under reduced motion.
-The kit has no spinner and will not grow one.
-
-`CommandBlock` is a command for someone to paste into a terminal: a label, the command on a quiet card that breaks
-only after a path separator or a space, and a copy button. A small control that changes the command, such as a
-terminal picker, goes in its `toolbar`, on the card's top bar. The application does the copying in `onCopy`.
+do without: `Label`, `Card`, `Badge`, `Dialog`, and a real `Tooltip`. After those: `Tabs` outside a dialog,
+`RadioGroup`, `Progress`, `Table`.
 
 Two things it will not grow: a `Separator` and the alert with a coloured left border. Orglet separates with spacing,
 grouping and a quiet background instead, and that rule travels with the kit.

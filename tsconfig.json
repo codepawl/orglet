@@ -14,5 +14,6 @@
     "types": ["node", "vite/client"],
     "paths": { "@codepawl/orglet-ui": ["./packages/orglet-ui/src/index.ts"] }
   },
-  "include": ["apps", "packages", "tests", "*.ts"]
+  "include": ["apps", "packages", "tests", "*.ts"],
+  "exclude": ["node_modules", "packages/*/dist"]
 }

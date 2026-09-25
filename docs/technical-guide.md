@@ -314,6 +314,8 @@ Export creates a new named directory and refuses to overwrite an existing one. I
 ```powershell
 pnpm typecheck
 pnpm test
+pnpm --filter @codepawl/orglet-ui build
+pnpm --filter @codepawl/orglet-ui check:package
 pnpm build
 pnpm test:desktop
 pnpm make
@@ -327,6 +329,8 @@ pnpm test:knowledge
 pnpm test:harness
 pnpm test:cli
 ```
+
+`pnpm test` also runs the UI kit's tests (`packages/orglet-ui/test`, in jsdom with Testing Library and axe). The kit's build is tsdown: one ES module per component with its stylesheet copied beside it, type declarations and `tokens.css` in `packages/orglet-ui/dist`, which publint and Are the Types Wrong then check. The app never reads that build; it compiles the kit's source through an alias.
 
 The CLI smoke launches the packaged app on a temporary data folder and runs the shipped `orglet` launcher (`orglet.cmd` through `cmd.exe` on Windows): help and version, `status`, `list`, `send` to the Demo Researcher and `read` of the same answer, a second turn in the same chat with `--json`, `open`, an unknown name and a usage error. It sends a wrong token and an operation outside the allowlist straight to the pipe and expects both refused, then closes the app and checks that `orglet status` starts it again. It never touches the user's PATH.
 
