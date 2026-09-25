@@ -22,6 +22,7 @@ import { ImprovementSignals } from '../../shared/self-improvement';
 import { CustomConnection, CustomProviderId, MAX_CUSTOM_CONNECTIONS } from '../../shared/custom-connections';
 import { readCustomConnections, writeCustomConnections } from './custom-connections';
 import { McpGrant, McpRunTool } from '../../shared/mcp';
+import { ChatQuote, MAX_CHAT_QUOTES, SideOf } from '../../shared/side-threads';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -30,7 +31,7 @@ const Worker = WorkerInput.extend({ id: Id, revision: Revision }).strict();
 const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPackage.optional() }).strict();
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
-const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), messageReactions: z.array(MessageReaction).max(1000).optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), pendingStart: z.boolean().optional(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(400).optional(), mcpGrants: z.array(McpGrant).max(200).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
+const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), messageReactions: z.array(MessageReaction).max(1000).optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), pendingStart: z.boolean().optional(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(400).optional(), mcpGrants: z.array(McpGrant).max(200).optional(), sideOf: SideOf.optional(), quotes: z.array(ChatQuote).max(MAX_CHAT_QUOTES).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
 const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), workFrame: WorkFrame.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), scoreProfileIds: z.array(Id).max(20).optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional(), improvement: ImprovementSignals.optional(), mcpTools: z.array(McpRunTool).max(20 * 64).optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable(), errorCode: z.enum(['unresolved_attempt', 'report_rejected', 'plan_limit']).optional() }).strict();
 const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime(), teamMessage: TeamMessage.optional() }).strict();
 const UsedMemory = z.object({ id: Id, revision: z.number().int().positive(), text: z.string().min(1).max(500) }).strict();
@@ -90,6 +91,11 @@ function validateRelations(data: Payload) {
       if (JSON.stringify(missing) !== JSON.stringify(request.checks)) fail('Yêu cầu bằng chứng không khớp mục chưa đánh giá.');
     }
     if (task.routineId && !routines.has(task.routineId)) fail('Task thiếu lịch.');
+    // A side thread belongs to one orglet's main chat (COD-247). That chat may have been deleted since, and then it
+    // is not in the backup; when it is, it has to be a main chat of the same orglet.
+    const parent = task.sideOf ? tasks.get(task.sideOf.taskId) : undefined;
+    if (task.sideOf && (task.teamId || task.assignees || task.routineId)) fail('Chat phụ chỉ thuộc về một Tí.');
+    if (parent && (parent.workerId !== task.workerId || parent.teamId || parent.assignees || parent.sideOf)) fail('Chat phụ không khớp chat chính.');
     if (task.handoff?.artifactIds.some(id => runs.get(artifacts.get(id)?.runId ?? '')?.taskId !== task.id)) fail('Handoff tham chiếu báo cáo ngoài task.');
   }
   map(data.events); map(data.profiles); const processEvidence = map(data.processEvidence ?? []); const workspaceEvidence = map(data.workspaceEvidence ?? []); const reservations = map(data.reservations); map(data.ledger);

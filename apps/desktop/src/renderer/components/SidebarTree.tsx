@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
-import { GripVertical, Archive, ArchiveRestore, EllipsisVertical, Trash } from './icons';
+import { GripVertical, Archive, ArchiveRestore, EllipsisVertical, Pencil, Trash } from './icons';
 import { t } from '../i18n';
 import { RowMenu } from './RowMenu';
 import { Checkbox } from './Checkbox';
@@ -113,7 +113,8 @@ export type RowSelection = { picking: boolean; selected: boolean; onPick: (mode:
  * (user, 2026-09-19), so no row expands here.
  * Optional `status` is the rolled-up mark from its subset (live thread for a worker, workers for a team).
  */
-export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, onDwell, menu, reorder, arriving, selection }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; /** The pointer came to rest on the row, or left it: what the click will open is fetched ahead of it (COD-218). */ onDwell?: (resting: boolean) => void; menu?: ReactNode; reorder: RowBindings; arriving?: boolean; selection?: RowSelection }) {
+export function SidebarTreeRow({ id, name, avatar, description, active, status, onSelect, onDwell, menu, reorder, arriving, selection, children }: { id: string; name: string; avatar: ReactNode; description?: string; active: boolean; status?: StatusMarkState; onSelect: () => void; /** The pointer came to rest on the row, or left it: what the click will open is fetched ahead of it (COD-218). */ onDwell?: (resting: boolean) => void; menu?: ReactNode; reorder: RowBindings; arriving?: boolean; selection?: RowSelection;
+  /** Rows listed under this one, such as an orglet's side threads (COD-247). */ children?: ReactNode }) {
   const { ref, style, dragging, onMoveKey, ...pointer } = reorder;
   const dwell = dwellHandlers(onDwell);
   const mark = dragging ? <GripVertical size={14} className="disclosure-chevron" aria-hidden="true" /> : null;
@@ -137,7 +138,50 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
       </button>
       <span data-no-drag>{menu}</span>
     </div>
+    {children && <div className="tree-children" role="group" aria-label={t('Chat phụ của {0}', [name])} data-no-drag>{children}</div>}
   </div>;
+}
+
+/**
+ * One side thread of an orglet, listed under the orglet's row (COD-247): its status mark, its name (the auto title or
+ * its first message), and a menu to rename, archive or delete it. Clicking it opens that thread. Renaming happens in
+ * place, the way a chat is renamed from its row menu.
+ */
+export function SideThreadRow({ name, active, status, onOpen, onDwell, onRename, onArchive, onDelete }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onRename: (title: string) => void; onArchive: () => void; onDelete: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const dwell = dwellHandlers(onDwell);
+  if (editing) return <div className="history-item nested editing"><RenameField name={name} label={t('Tên mới cho chat phụ {0}', [name])} onSave={onRename} onDone={() => setEditing(false)} /></div>;
+  const label = statusMarkLabel(status);
+  return <div className={`task-row side-thread-row${active ? ' active' : ''}`} {...dwell}>
+    <button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} title={label} onClick={onOpen}>
+      <StatusMark variant={status.variant} tone={status.tone} label={label} decorative />
+      <span className="row-name">{name}</span>
+    </button>
+    <RowMenu label={t('Tùy chọn chat phụ {0}', [name])} contextMenuOf=".side-thread-row" items={[
+      { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing(true) },
+      { label: t('Lưu trữ'), icon: Archive, onSelect: onArchive },
+      { label: t('Xóa'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: t('Xóa chat phụ này? Không thể hoàn tác.'), label: t('Xóa') } },
+    ]} />
+  </div>;
+}
+
+/** A name edited in place: Enter or leaving the field saves, Escape keeps the old name. */
+function RenameField({ name, label, onSave, onDone }: { name: string; label: string; onSave: (title: string) => void; onDone: () => void }) {
+  const [value, setValue] = useState(name);
+  const finished = useRef(false);
+  const finish = (save: boolean) => {
+    if (finished.current) return;
+    finished.current = true;
+    const title = value.trim();
+    if (save && title && title !== name) onSave(title);
+    onDone();
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(false); }
+  };
+  return <input className="row-rename" aria-label={label} value={value} maxLength={120} autoFocus
+    onChange={event => setValue(event.target.value)} onKeyDown={onKeyDown} onBlur={() => finish(true)} onFocus={event => event.currentTarget.select()} />;
 }
 
 export type ArchiveState = { daysLeft: number | null; tone: 'fresh' | 'aging' | 'expiring' };

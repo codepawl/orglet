@@ -8,6 +8,9 @@ import { crewWaits } from '../../apps/desktop/src/core/orchestration/crew-waits'
 import { taskStatusMark } from '../../apps/desktop/src/renderer/components/StatusMark';
 import { isPlanRequest, planReply } from './team-plan';
 import type { CustomConnection } from '../../apps/desktop/src/shared/custom-connections';
+import { runningChatName } from '../../apps/desktop/src/renderer/runningList';
+import { liveWorkerTask } from '../../apps/desktop/src/shared/live-task';
+import { sideThreadsOf } from '../../apps/desktop/src/shared/side-threads';
 
 /* COD-244: one place that lists every run across chats, with the queue the core really keeps. */
 
@@ -324,5 +327,49 @@ describe('custom connections', () => {
     openNextGate();
     await until(() => [localFirst, localSecond, hostedFirst].every(taskId => statusOf(taskId) === 'completed'));
     expect(core.running()).toEqual([]);
+  });
+});
+
+describe('side threads (COD-247)', () => {
+  it('lists each running or queued side thread as its own row, named like its sidebar row, and opening it opens the side thread', async () => {
+    const workerId = await useOpenAi(1);
+    const main = await startChat(workerId, 'Main question');
+    await until(() => gates.length === 1 && itemsOf(main)[0]?.state === 'running');
+    const scope = { sourceIds: [], consent: true, providerScopes: ['openai'], budgetMicros: 1_000_000 };
+    // Started while the main chat is still working: they share the orglet's provider slot and wait behind it.
+    const pricing = await core.command('startSideThread', { taskId: main, brief: 'Compare two pricing options', ...scope }) as string;
+    const naming = await core.command('startSideThread', { taskId: main, brief: 'Suggest a name\nwith detail', ...scope }) as string;
+    await core.command('renameTask', { id: pricing, title: 'Pricing ideas' });
+    await until(() => core.running().filter(item => item.state === 'queued').length === 2);
+
+    expect(summary(core.running())).toEqual([
+      { task: main, state: 'running', wait: undefined },
+      { task: pricing, state: 'queued', wait: { kind: 'provider', provider: 'openai', ahead: 0 } },
+      { task: naming, state: 'queued', wait: { kind: 'provider', provider: 'openai', ahead: 1 } },
+    ]);
+    const workspace = await core.command('workspace', {}) as Workspace;
+    const names = Object.fromEntries(workspace.running!.map(item => [item.taskId, runningChatName(item, workspace.tasks, workspace.teams)]));
+    expect(names).toEqual({ [main]: 'Main question', [pricing]: 'Pricing ideas', [naming]: 'Suggest a name' });
+    // Every listed side thread has its own row under the orglet, and the orglet's own row is still the main chat.
+    const nested = sideThreadsOf(workspace.tasks, workerId).map(task => task.id);
+    expect(nested.sort()).toEqual([pricing, naming].sort());
+    expect(liveWorkerTask(workspace.tasks, workerId)?.id).toBe(main);
+    // "Open chat" opens the row's task, which is the side thread itself.
+    expect(itemsOf(pricing).map(item => item.taskId)).toEqual([pricing]);
+    expectSidebarAgrees();
+
+    openNextGate();
+    await until(() => statusOf(main) === 'completed' && itemsOf(pricing)[0]?.state === 'running');
+    expect(summary(core.running())).toEqual([
+      { task: pricing, state: 'running', wait: undefined },
+      { task: naming, state: 'queued', wait: { kind: 'provider', provider: 'openai', ahead: 0 } },
+    ]);
+    expectSidebarAgrees();
+    openNextGate();
+    await until(() => itemsOf(naming)[0]?.state === 'running');
+    openNextGate();
+    await until(() => [main, pricing, naming].every(taskId => statusOf(taskId) === 'completed'));
+    expect(core.running()).toEqual([]);
+    expectSidebarAgrees();
   });
 });

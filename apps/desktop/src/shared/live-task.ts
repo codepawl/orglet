@@ -1,13 +1,17 @@
 import type { Task } from './contracts';
 
 /** Fields that identify one live worker or team chat (`docs/team-chat-context.md`). */
-export type LiveThreadTask = Pick<Task, 'id' | 'createdAt' | 'workerId' | 'teamId' | 'assignees' | 'archivedAt' | 'deletedAt' | 'routineId'>;
+export type LiveThreadTask = Pick<Task, 'id' | 'createdAt' | 'workerId' | 'teamId' | 'assignees' | 'archivedAt' | 'deletedAt' | 'routineId' | 'sideOf'>;
 
 /** @deprecated Use `LiveThreadTask`. Kept so existing imports keep compiling. */
 export type TeamThreadTask = LiveThreadTask;
 
-function isOpenEnvelope(task: Pick<LiveThreadTask, 'archivedAt' | 'deletedAt' | 'routineId' | 'assignees'>): boolean {
-  return !task.archivedAt && !task.deletedAt && !task.routineId && !task.assignees;
+/**
+ * A row that can be the one live chat of an orglet or crew. A side thread (COD-247) never is: it is a second row of
+ * the same orglet, and the main chat keeps meaning the row this finds.
+ */
+function isOpenEnvelope(task: Pick<LiveThreadTask, 'archivedAt' | 'deletedAt' | 'routineId' | 'assignees' | 'sideOf'>): boolean {
+  return !task.archivedAt && !task.deletedAt && !task.routineId && !task.assignees && !task.sideOf;
 }
 
 /** True when this row is the open conversation for `teamId`, not a routine or archived pile item. */
@@ -36,6 +40,23 @@ export function liveTeamTask<T extends LiveThreadTask>(tasks: readonly T[], team
 /** Newest non-archived 1:1 chat for this worker. Undefined until the first user message creates the row. */
 export function liveWorkerTask<T extends LiveThreadTask>(tasks: readonly T[], workerId: string): T | undefined {
   return newestLive(tasks, task => isLiveWorkerThread(task, workerId));
+}
+
+/** The live chat of an orglet or a crew: its main chat, never a side thread (COD-247). */
+export function liveChatOf<T extends LiveThreadTask>(tasks: readonly T[], chat: { teamId: string } | { workerId: string }): T | undefined {
+  if ('teamId' in chat) return liveTeamTask(tasks, chat.teamId);
+  return liveWorkerTask(tasks, chat.workerId);
+}
+
+/**
+ * The chat an empty chat on screen switches to (COD-241): the orglet's or crew's live chat when it appeared after
+ * the view was entered (`baselineLiveId` is what was live then). Anything a draft carries follows this choice, so a
+ * side thread starting (COD-247) is never adopted: it is not the live chat, and the empty chat stays the main one.
+ */
+export function liveChatToAdopt(tasks: readonly LiveThreadTask[], chat: { teamId: string } | { workerId: string }, baselineLiveId: string | undefined): string | undefined {
+  const live = liveChatOf(tasks, chat);
+  if (!live || live.id === baselineLiveId) return undefined;
+  return live.id;
 }
 
 /** How the team chat composer should persist the next user message: one live `tasks` row, not a row per send. */

@@ -297,6 +297,8 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
         <PermissionControls workers={tools.workers.map(person => ({ id: person.id, name: person.name, provider: person.provider, connected: tools.connectedProviders.includes(person.provider) }))}
           capabilities={detail ? detail.task.toolCapabilities : tools.capabilities} grant={tools.grant} taskId={detail?.task.id} sourceCount={detail?.sources.length ?? 0}
           busy={tools.busy} pending={tools.pending}
+          // A side thread takes its permissions from its main chat and can never be wider (COD-247).
+          locked={detail?.task.sideOf ? t('Chat phụ dùng quyền của chat chính. Đổi quyền ở chat chính.') : undefined}
           onCapability={tools.onCapability} onWorkspace={tools.onWorkspace} onConfigure={tools.onConfigure} />
         {detail && <McpChatGrants detail={detail} workers={tools.workers} workspace={workspace} />}
       </section>}

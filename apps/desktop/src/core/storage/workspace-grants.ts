@@ -115,6 +115,41 @@ export class WorkspaceGrants {
   }
 
   /** The folder waiting for this chat's first message, if one was chosen. */
+  /**
+   * Gives a new side thread the folder its main chat has, at the same level (COD-247). It is the side thread's own
+   * grant, so its runs are checked against it, but it is never wider than the main chat's: `narrowTo` keeps it so.
+   * For a caller that already holds the store transaction, the one creating the side thread's row.
+   */
+  copyInsideTransaction(fromTaskId: string, toTaskId: string) {
+    const source = this.current(fromTaskId);
+    if (!source || source.revoked) return;
+    const grant = StoredGrant.parse({ ...source, id: id(), taskId: toTaskId, revision: 1, permissions: [...source.permissions] });
+    this.store.db.prepare('INSERT INTO workspace_grants(task_id,data) VALUES(?,?)').run(toTaskId, JSON.stringify(grant));
+  }
+
+  /**
+   * Keeps a side thread's folder inside its main chat's (COD-247). Another folder or none on the main chat revokes
+   * the side thread's; fewer permissions on the same folder narrow it to the ones both have. Either is a new revision,
+   * so every run that froze the old grant is refused its next file operation. Widening the main chat changes nothing
+   * here. Archived side threads are narrowed too, so restoring one never brings back more than the main chat has.
+   * Returns true when the side thread's grant changed.
+   */
+  narrowTo(sideTaskId: string, mainTaskId: string): boolean {
+    return this.store.transaction(() => {
+      const side = this.current(sideTaskId);
+      if (!side || side.revoked) return false;
+      const main = this.current(mainTaskId);
+      const sameFolder = !!main && !main.revoked && main.directory === side.directory && main.device === side.device && main.inode === side.inode;
+      const kept = sameFolder ? side.permissions.filter(permission => main.permissions.includes(permission)) : [];
+      if (kept.length === side.permissions.length) return false;
+      const next = kept.length
+        ? StoredGrant.parse({ ...side, id: id(), revision: side.revision + 1, permissions: kept })
+        : { ...side, revoked: true, revision: side.revision + 1 };
+      this.store.db.prepare('UPDATE workspace_grants SET data=? WHERE task_id=?').run(JSON.stringify(next), sideTaskId);
+      return true;
+    });
+  }
+
   pending(chat: NewChatTarget): PendingWorkspace | undefined {
     const entry = this.pendingAll()[newChatKey(chat)];
     return entry ? PendingWorkspace.parse(entry) : undefined;

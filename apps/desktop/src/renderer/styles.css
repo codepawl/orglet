@@ -790,6 +790,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .send-to-option-name { flex:0 1 auto; min-width:0; font-size:15px; line-height:20px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .send-to-option-detail { flex:1 1 0; min-width:0; font-size:13px; line-height:20px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .send-to-option-time { flex:0 0 auto; font-size:13px; color:var(--muted); white-space:nowrap; }
+/* A side thread in Recent (COD-247) always shows that it is one: its label keeps its width and the name gives way. */
+.send-to-option.side-thread .send-to-option-detail { flex:0 0 auto; }
 .send-to-option-enter { flex:0 0 auto; color:var(--muted); }
 .send-to-empty { margin:0; padding:14px 24px 10px; color:var(--muted); font-size:14px; text-align:center; }
 /* Files a picker, a folder or Send to left out, with the reason: quiet text, the list indented under its summary. */
@@ -2270,3 +2272,35 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .form fieldset.mcp-picker legend { padding:0; margin-bottom:6px; font-size:14px; font-weight:400; }
 .mcp-picker .checkbox { margin:0; }
 .mcp-grants>.permission-folder-title { margin:0; font-size:14px; }
+
+/* Side threads (COD-247). The send options sit left of send: shorter than it, like the composer's other secondary
+   control, so they keep clear of the pill's curve, and they answer hover with colour only. */
+.composer .composer-send-options { width:28px; height:28px; min-height:28px; padding:0; border-radius:50%; color:var(--muted); background:transparent; }
+.composer .composer-send-options:hover:not(:disabled),.composer .composer-send-options[aria-expanded=true] { background:transparent; color:var(--text); }
+.composer .composer-send-options:disabled { opacity:.35; }
+/* A menu item's shortcut rides at its end, quieter than its label. */
+.row-menu-shortcut { margin-left:auto; padding-left:16px; font:inherit; font-size:12px; color:var(--muted); white-space:nowrap; }
+/* An item with a shortcut keeps its label on one line; the menu grows to fit both instead. */
+.row-menu-popover:has(.row-menu-shortcut) { max-width:min(380px, calc(100vw - 32px)); }
+.row-menu-popover button:has(.row-menu-shortcut) > span { white-space:nowrap; }
+/* A toast that offers something to do takes the pointer; the rest of the stack still lets clicks through. */
+.toast.has-action { pointer-events:auto; }
+.toast-action { margin-left:6px; padding:2px 4px; border:0; border-radius:6px; background:transparent; color:inherit; font:inherit; font-weight:600; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.toast-action:hover { text-decoration-thickness:2px; }
+/* An answer brought in from a side thread: on the person's side like their own messages, on the quiet surface so it
+   is not mistaken for something they typed, with where it came from on top. */
+.brought-in { display:flex; flex-direction:column; gap:6px; width:fit-content; max-width:var(--bubble-max); margin:16px 0 0 auto; padding:10px 16px 12px; border-radius:18px; background:var(--surface); animation:turn-in var(--motion-base) var(--ease-out); }
+@media(max-width:460px) { .brought-in { max-width:100%; } }
+/* The line at the top of a side thread saying what it is, with the way back to the main chat. */
+.side-thread-origin { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:4px 10px; margin:0 0 18px; color:var(--muted); font-size:12px; text-align:center; }
+.side-thread-origin button { padding:0; border:0; background:none; color:var(--text); font:inherit; font-weight:500; cursor:pointer; }
+.side-thread-origin button:hover { text-decoration:underline; text-underline-offset:3px; }
+/* Side threads under their orglet: a clear step below the orglet's row, a small step apart from each other. */
+.tree-children .side-thread-row .history-item { gap:8px; }
+/* The menu floats over the row's end and only takes room while it shows, so a quiet row gives its name the full
+   width instead of truncating it next to an invisible button. */
+.side-thread-row { position:relative; }
+.side-thread-row > .row-menu { position:absolute; top:50%; right:2px; transform:translateY(-50%); }
+.side-thread-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .history-item { padding-right:36px; }
+.tree-children .tree-more { margin-left:0; }
+@media(prefers-reduced-motion:reduce) { .brought-in { animation:none; } }

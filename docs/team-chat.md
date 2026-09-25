@@ -19,7 +19,8 @@ Work is a **chat**, not a pile of tasks or sessions.
 
 - Click a **worker** → that worker's conversation.
 - Click a **team** → that team's conversation (roster under the row and in the header).
-- One live thread per worker and per team. A new message is a turn in that chat, not a new row in the sidebar.
+- One live thread per worker and per team: its **main chat**. A new message is a turn in that chat, not a new row in the sidebar.
+- A worker's main chat can send a message into a **side thread** ([COD-247](https://linear.app/codepawl/issue/COD-247)): a second chat with the same worker, listed under it in the sidebar, that never replaces the main chat. See [Side threads](#side-threads).
 - Archive the thread (⋯ next to **Chi tiết** / Chat details) to start over. Search still finds older or archived chats.
 - **Lịch chạy** stays a list of discrete scheduled jobs. Those rows are not merged into the infinite chat.
 
@@ -37,7 +38,7 @@ For a reassigned member, Chi tiết names the worker who actually ran the attemp
 2. If there is no live thread yet, you get an empty chat (composer pinned at the bottom). The first send creates the thread.
 3. If a live thread already exists, it opens with the saved messages. Later sends are follow-ups in the same chat.
 
-A **team** row is one row: clicking it opens that team's chat. Its members are listed in the chat **Details** panel, not nested under it in the sidebar. **Workers have no nested task list.**
+A **team** row is one row: clicking it opens that team's chat. Its members are listed in the chat **Details** panel, not nested under it in the sidebar. A worker row lists only its open side threads under it; its main chat is the row itself, and it has no other nested task list.
 
 Ctrl+N focuses the current worker or team chat (it does not create a new session). Search (Ctrl+K) finds chats by their text, including archived ones.
 
@@ -63,8 +64,9 @@ There is no separate `threads` table.
 
 | Thread | Identity |
 |---|---|
-| Worker chat | Newest non-archived, non-deleted `tasks` row with that `workerId`, no `teamId`, no `assignees`, no `routineId` |
-| Team chat | Newest non-archived, non-deleted `tasks` row with that `teamId`, no `assignees`, no `routineId` |
+| Worker chat | Newest non-archived, non-deleted `tasks` row with that `workerId`, no `teamId`, no `assignees`, no `routineId`, no `sideOf` |
+| Team chat | Newest non-archived, non-deleted `tasks` row with that `teamId`, no `assignees`, no `routineId`, no `sideOf` |
+| Side thread | A `tasks` row with `sideOf` set; never returned by the two lookups above |
 
 | User does | Core |
 |---|---|
@@ -72,7 +74,29 @@ There is no separate `threads` table.
 | Later message in the same chat | `reviseTask` on that row (`inputRevision` + 1) |
 | Archive the thread | Next click is an empty chat; the next send creates a new live row |
 
-Find-or-create lives in `apps/desktop/src/shared/live-task.ts` (`liveWorkerTask`, `liveTeamTask`, `nextWorkerMessage`, `nextTeamMessage`). The renderer uses it when you click a worker or team and when you send from the empty composer. `createTask` itself is unchanged, so routines and explicit extra rows can still insert their own records. Group chats (`assignees`) stay reachable from search; they are not the primary sidebar, and are started from a selection as described above.
+Find-or-create lives in `apps/desktop/src/shared/live-task.ts` (`liveWorkerTask`, `liveTeamTask`, `nextWorkerMessage`, `nextTeamMessage`). Every one of them skips a row with `sideOf`, so everything built on them (the worker row, the empty-chat composer, the worker dialog's Permissions tab, the `orglet` terminal command) keeps meaning the main chat. The renderer uses it when you click a worker or team and when you send from the empty composer. `createTask` itself is unchanged, so routines and explicit extra rows can still insert their own records. Group chats (`assignees`) stay reachable from search; they are not the primary sidebar, and are started from a selection as described above.
+
+## Side threads
+
+A message sent with **Send in a new thread** (the menu beside Send, or Ctrl+Shift+Enter) from a worker's main chat becomes a side thread ([COD-247](https://linear.app/codepawl/issue/COD-247)). Only a worker's own open main chat can start one: `startSideThread` refuses a crew chat, a group chat, a scheduled run's row, an archived chat and a side thread. The option is not shown in those chats.
+
+**Data.** A side thread is its own `tasks` row of the same `workerId`, with `sideOf: { taskId, throughRevision }`: the main chat it came from and that chat's `inputRevision` at that moment. It is an optional JSON field on the row, so no table changes and the schema version stays the same. `isOpenEnvelope` in `live-task.ts` excludes it from the live lookups. The sidebar lists a worker's open side threads under its row, newest first (`sideThreadsOf` in `apps/desktop/src/shared/side-threads.ts`), each with its own `StatusMark`; rename, archive and delete are the ordinary `renameTask`, `archiveTask` and `deleteTask`. The Send to picker (COD-246) keeps side threads in its recent chats, labelled `side thread · <orglet>` in a muted detail that never gives way to the name (`sideThread` on `SendToOption` in `renderer/sendTo.ts`); its orglet rows resolve through `liveWorkerTask`, so they always mean the main chat. Archiving or deleting the main chat leaves its side threads as they are. Backups carry `sideOf` and the main chat's `quotes`, and refuse a side thread whose main chat is in the backup but belongs to another worker, a crew or a group.
+
+**Starting.** The main chat is not touched: no revision, no run, and a run already working there keeps going. The side thread's message may only carry sources already in the main chat's `sourceIds`. Its limit is the worker's current **Limit per task**, applied to the side thread as its own chat; it runs through the same runner, provider slots and budget reservations as any chat, and moves through the same statuses. The Running view (COD-244) lists each running or waiting side thread as its own row, named like its row in the sidebar, and its Open chat opens the side thread; a side thread started while the main chat works waits behind it for the provider's slot like any other chat.
+
+**Context.** The side thread's first turn (`inputRevision` 0, no stage) reads the main chat's turns up to `throughRevision` as a read-only `mainChat` layer (`mainChatTurns` in `core/context/thread.ts`): the last `MAIN_CHAT_TURNS` (6) turns, dropping the oldest while they are over `MAIN_CHAT_CHARS` (12 000 characters). It uses the same turn collection as the chat's own history, so the worker's own answers there read as `you`. The run's manifest records it as a `main_chat` entry with `mainChatTurns`, shown in **Details → Loaded context**. Later turns in the side thread read only that thread's history. A main chat deleted before the first turn runs leaves the layer out.
+
+**Permissions.** `startSideThread` copies, in the transaction that creates the row, the main chat's `toolCapabilities`, `mcpGrants` and working-folder grant (`WorkspaceGrants.copyInsideTransaction`: same folder and level, the side thread's own grant id). Nothing on a side thread can be wider than its main chat:
+
+- `setToolCapabilities` on a side thread refuses a capability the main chat does not have; `grantWorkspace` on a side thread is refused; `setMcpGrant` on a side thread refuses a grant the main chat does not give; an MCP approval card in a side thread offers only **Allow once** and **Refuse**, and core refuses the two "always" answers there. Details shows the side thread's permission controls locked with that reason.
+- When the main chat loses something, its side threads lose it in the same command (`SideThreads` in `core/orchestration/side-threads.ts`), archived ones included: `setToolCapabilities` keeps each side thread's set inside the main chat's and cancels a side thread's running work when it lost one; `grantWorkspace` and `revokeWorkspace` narrow each side thread's grant (`WorkspaceGrants.narrowTo`: another folder or none revokes it, fewer permissions on the same folder keeps only the shared ones) as a new revision, so a running side run is refused its next file operation, and its work is cancelled; `setMcpGrant` with `allowed: false` drops every side-thread grant the main chat no longer gives.
+- Widening the main chat later does not reach side threads that already started.
+
+**Bringing an answer back.** `bringIntoMainChat` copies a side thread's answer into its main chat as a `ChatQuote` (`quotes` on the main chat's row: the text, who wrote it, the side thread and answer ids, and `afterRevision`, the main chat's latest turn). If that main chat is archived or deleted, it goes to the worker's current main chat; with none, it is refused. It never starts a run and never changes the main chat's revision or status; bringing the same answer twice adds nothing. The thread shows it after that turn as a quote on the person's side, with the side thread's name opening it. The main chat's next turn reads it as part of the history, from the user, naming who wrote it. Deleting the side thread leaves the quote.
+
+**The empty chat.** When an orglet's empty chat is on screen, the view switches to a chat only when a new main chat appears (`liveChatToAdopt` in `live-task.ts`, the MCP "adopt a live chat" rule); a side-thread row never qualifies, so nothing typed or sent there follows it into a side thread.
+
+**Finishing.** When a side thread stops working while another chat is on screen, the renderer shows a toast with **Open** (`sideThreadNotices.ts`), which the notice centre keeps. The answer stays in the side thread.
 
 ## Orchestrator: one message → workers → one report
 
@@ -127,14 +151,14 @@ Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết
 
 ## Code
 
-- Click / send: `apps/desktop/src/renderer/App.tsx` (`openWorker`, `openTeam`, `send`)
-- Identity: `apps/desktop/src/shared/live-task.ts`
+- Click / send: `apps/desktop/src/renderer/App.tsx` (`openWorker`, `openTeam`, `send`); send in a new thread: `FollowUpComposer` in `apps/desktop/src/renderer/components/Composer.tsx`
+- Identity: `apps/desktop/src/shared/live-task.ts`; side threads: `apps/desktop/src/shared/side-threads.ts`, `apps/desktop/src/core/orchestration/side-threads.ts`
 - Mentions: `apps/desktop/src/shared/mentions.ts`
 - Persist a turn: `createTask` / `reviseTask` in `apps/desktop/src/core/service.ts`
 - Orchestrator: `apps/desktop/src/core/orchestration/team.ts` (`run`) and `plan.ts`
 - Transcript layers: `apps/desktop/src/core/context/thread.ts`
 - Plan tool / Demo routing: `apps/desktop/src/core/orchestration/runner.ts` (`submit_plan`, `completePlan`)
-- Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`, `tests/integration/thread-context.test.ts`, `tests/integration/mentions.test.ts`
+- Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`, `tests/integration/thread-context.test.ts`, `tests/integration/mentions.test.ts`, `tests/integration/side-threads.test.ts`
 ## Worker messages
 
 Every saved user turn, completed answer and team message has a stable ID. Reply chooses one of those messages in the current chat; core resolves the ID when the next turn starts and supplies a short, attributed excerpt to the worker. A reply never broadens the worker's sources, workspace access or team assignment. The user can react to any saved message without starting a run. Each person, the user or a worker, has at most one reaction per message: repeating the same request is harmless, adding a different emoji replaces the earlier one, and adding the current one again with `active: false` takes it off (COD-219). The user's reaction on the latest answer is also explained in the next brief. A worker may use `react_to_message` only during its assigned run and only for a committed message it can see; this tool does not send a team message or start another worker. Team message bodies and interactions appear in Details.

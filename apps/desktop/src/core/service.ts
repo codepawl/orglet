@@ -48,6 +48,7 @@ import { mentionedPeople } from '../shared/mentions';
 import { assertOpenCodeModel, isOpenCodePlan } from '../shared/opencode';
 import { MessageInteractions } from './orchestration/message-interactions';
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
+import { SideThreads } from './orchestration/side-threads';
 import type { Args } from '../shared/contracts';
 import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
 import { deleteCustomConnection, readCustomConnections, requireCustomConnection, saveCustomConnection } from './storage/custom-connections';
@@ -99,6 +100,8 @@ export class CoreService {
   readonly appProposals: AppProposals;
   /** MCP servers the person added and the connections to them (COD-241). */
   readonly mcp: McpServers;
+  /** Side threads of orglets' main chats and how their permissions follow the main chat (COD-247). */
+  readonly sideThreads: SideThreads;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
   readonly harnessAccounts: HarnessAccounts;
@@ -114,6 +117,7 @@ export class CoreService {
     this.notify = () => { if (!this.store.db.isOpen) return; this.policy.captureHandoffs(); notify(); };
     this.sources = new Sources(store, profiler);
     this.workspaceGrants = new WorkspaceGrants(store);
+    this.sideThreads = new SideThreads(store, this.workspaceGrants);
     this.templates = new TeamTemplates(store, this.notify);
     this.appProposals = new AppProposals(store, this.proposalApplier());
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
@@ -159,12 +163,14 @@ export class CoreService {
       this.notify();
       return view;
     }
+    if (this.store.get<Task>('tasks', input.taskId).sideOf) throw new Error('Chat phụ dùng thư mục của chat chính. Đổi thư mục ở chat chính.');
     const previous = this.workspaceGrants.view(input.taskId);
     const grant = await this.workspaceGrants.grant(input);
     if (replacesGrant(previous, grant)) {
       this.teams.cancel(grant.taskId);
       this.runner.cancel(grant.taskId);
     }
+    this.narrowSideThreadFolders(grant.taskId);
     this.notify();
     return grant;
   }
@@ -265,6 +271,12 @@ export class CoreService {
         const input = commands.createTask.parse(args);
         return this.createTask(input, undefined, await this.resolveNewChatWorkspace(input));
       }
+      case 'startSideThread': return this.startSideThread(commands.startSideThread.parse(args));
+      case 'bringIntoMainChat': {
+        const mainTaskId = this.sideThreads.bringIn(commands.bringIntoMainChat.parse(args).artifactId);
+        this.notify();
+        return mainTaskId;
+      }
       case 'setMessageReaction': {
         new MessageInteractions(this.store).userReaction(commands.setMessageReaction.parse(args));
         this.notify(); return;
@@ -301,11 +313,15 @@ export class CoreService {
       case 'setMcpGrant': {
         const input = commands.setMcpGrant.parse(args);
         const task = this.liveTask(input.taskId);
-        const others = (task.mcpGrants ?? []).filter(grant => !(grant.serverId === input.serverId && grant.tool === input.tool));
-        const grants = input.allowed ? [...others, McpGrant.parse({ serverId: input.serverId, tool: input.tool })] : others;
+        const grant = McpGrant.parse({ serverId: input.serverId, tool: input.tool });
+        if (input.allowed && task.sideOf) this.sideThreads.assertMcpGrantWithin(task, grant);
+        const others = (task.mcpGrants ?? []).filter(item => !(item.serverId === input.serverId && item.tool === input.tool));
+        const grants = input.allowed ? [...others, grant] : others;
         if (grants.length > 200) throw new Error('Chat đã có quá nhiều quyền MCP.');
-        // Taking a grant away stops nothing: the next call of that tool asks again (COD-241).
-        this.store.update('tasks', { ...task, mcpGrants: grants });
+        // Taking a grant away stops nothing: the next call of that tool asks again (COD-241). The main chat's side
+        // threads lose it too (COD-247).
+        const updated = this.store.patchTask(task.id, { mcpGrants: grants });
+        if (!input.allowed) this.sideThreads.narrowMcpGrants(updated);
         this.notify();
         return;
       }
@@ -329,6 +345,8 @@ export class CoreService {
           // runs. The runner reads the answer from the chat, so the checkpoint keeps the call as it was (COD-241).
           const choice = McpApprovalChoice.parse(input.answer);
           if (!checkpoint.pendingApproval || checkpoint.pendingApproval.requestId !== request.id) throw new Error('Lần chạy không còn chờ quyết định.');
+          // A standing grant on a side thread would be wider than its main chat's, which did not give it (COD-247).
+          if (task.sideOf && (choice === 'tool' || choice === 'server')) throw new Error('Chat phụ chỉ cho phép một lần. Cho phép luôn ở chat chính.');
           this.store.transaction(() => {
             this.store.update('tasks', { ...task, status: 'paused', mcpGrants: grantsAfterApproval(task.mcpGrants, request.approval!, choice),
               decisionRequests: task.decisionRequests!.map(item => item.id === request.id ? { ...item, answer: choice, answeredAt } : item) });
@@ -430,6 +448,7 @@ export class CoreService {
         this.workspaceGrants.revoke(input.taskId);
         this.teams.cancel(input.taskId);
         this.runner.cancel(input.taskId);
+        this.narrowSideThreadFolders(input.taskId);
         this.notify();
         return;
       }
@@ -442,13 +461,16 @@ export class CoreService {
           : task.assignees === 'all' ? this.store.all<Worker>('workers').map(worker => worker.id)
           : task.assignees ?? [task.workerId];
         for (const workerId of workers) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, input.capabilities);
+        if (task.sideOf) this.sideThreads.assertCapabilitiesWithin(task, input.capabilities);
         const reduced = this.store.detail(task.id).runs.some(run =>
           (run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider)).some(capability => !input.capabilities.includes(capability)));
-        this.store.update('tasks', { ...task, toolCapabilities: input.capabilities });
+        const updated = this.store.patchTask(task.id, { toolCapabilities: input.capabilities });
         if (reduced) {
           this.teams.cancel(task.id);
           this.runner.cancel(task.id);
         }
+        // What the main chat no longer has, its side threads lose at once, and their running work stops (COD-247).
+        for (const sideTaskId of this.sideThreads.narrowCapabilities(updated)) this.stopRuns(sideTaskId);
         this.notify();
         return;
       }
@@ -599,6 +621,7 @@ export class CoreService {
       case 'updateTask': {
         const input = commands.updateTask.parse(args);
         const task = this.store.get<Task>('tasks', input.id);
+        if (task.sideOf) throw new Error('Chat phụ luôn thuộc Tí của chat chính. Đổi tên chat phụ trong menu của nó.');
         if (this.runner.isActive(task.id) || this.teams.isActive(task.id) || ['queued', 'running', 'pausing'].includes(task.status)) throw new Error('Công việc đang chạy. Đợi xong rồi hãy đổi thiết lập.');
         const { assignee } = input;
         const team = assignee.kind === 'team' ? this.store.get<Team>('teams', assignee.teamId) : undefined;
@@ -1048,6 +1071,43 @@ export class CoreService {
     const kept = Object.fromEntries(Object.entries(pending).filter(([key]) => !newChatKeyNames(key, workerId)));
     if (Object.keys(kept).length === Object.keys(pending).length) return;
     this.store.setSetting('newChatCapabilities', kept);
+  }
+  /** Stops whatever is running in a chat; used when its permissions were taken away underneath it. */
+  private stopRuns(taskId: string) {
+    this.teams.cancel(taskId);
+    this.runner.cancel(taskId);
+  }
+  /** After a main chat's folder changed or was revoked, its side threads' folders follow, stopping their runs (COD-247). */
+  private narrowSideThreadFolders(mainTaskId: string) {
+    const main = this.store.get<Task>('tasks', mainTaskId);
+    for (const sideTaskId of this.sideThreads.narrowWorkspace(main)) this.stopRuns(sideTaskId);
+  }
+  /**
+   * A message sent "in a new thread" from an orglet's main chat (COD-247). It becomes a side thread: its own row of
+   * the same orglet, marked with the main chat and how far that chat had got, so its first turn reads those turns.
+   * It starts with a copy of the main chat's tool permissions, folder grant and MCP grants and nothing more; the
+   * files it carries must already belong to the main chat. The main chat is left as it is, running or not.
+   */
+  private startSideThread(input: Args<'startSideThread'>): string {
+    const main = this.liveTask(input.taskId);
+    this.sideThreads.assertCanStart(main);
+    const sourceIds = [...new Set(input.sourceIds)];
+    if (sourceIds.some(sourceId => !main.sourceIds.includes(sourceId))) throw new Error('Chat phụ chỉ mang theo tệp đã có trong chat chính.');
+    const task = this.prepareTask({
+      workerId: main.workerId, brief: input.brief, sourceIds, excludedSources: input.excludedSources,
+      consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(main) ?? input.budgetMicros,
+      ...(main.toolCapabilities ? { toolCapabilities: [...main.toolCapabilities] } : {}),
+    });
+    task.sideOf = { taskId: main.id, throughRevision: main.inputRevision ?? 0 };
+    if (main.mcpGrants?.length) task.mcpGrants = main.mcpGrants.map(grant => ({ ...grant }));
+    snapshotCapabilities(this.store.get<Worker>('workers', task.workerId).provider, task.toolCapabilities);
+    this.store.transaction(() => {
+      this.store.put('tasks', task);
+      this.store.db.prepare('INSERT INTO task_search VALUES(?,?)').run(task.id, task.brief);
+      this.workspaceGrants.copyInsideTransaction(main.id, task.id);
+    });
+    this.start(task, true);
+    return task.id;
   }
   /** Workers and teams chosen for new work must be active. */
   private assertAssignable(kind: 'worker' | 'team', entityId: string) {

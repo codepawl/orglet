@@ -1,5 +1,6 @@
 import type { Task, Worker, Workspace } from '../shared/contracts';
 import { taskWorkers, teamRoster } from './assignees';
+import { t } from './i18n';
 
 /**
  * The places files sent from Explorer can go (COD-246): the most recent chats first, then every orglet and every
@@ -19,6 +20,11 @@ export type SendToOption = {
   detail?: string;
   /** When a recent chat was last opened or started, for its relative day. */
   when?: string;
+  /**
+   * A recent chat that is a side thread (COD-247). Its detail says so and whose it is, and never gives way to a long
+   * name, so choosing it is deliberate: files sent there go to the side thread, not to the orglet's main chat.
+   */
+  sideThread?: true;
 };
 
 export const RECENT_CHAT_COUNT = 3;
@@ -39,15 +45,24 @@ export function recentChats(workspace: Pick<Workspace, 'tasks'>, count = RECENT_
   return newestFirst.slice(0, count);
 }
 
+/** "side thread · Researcher": what a side thread's row says beside its name. */
+function sideThreadLabel(orgletName: string | undefined): string {
+  return orgletName ? t('chat phụ · {0}', [orgletName]) : t('chat phụ');
+}
+
 export function sendToOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | 'teams'>): SendToOption[] {
-  const recent = recentChats(workspace).map((task): SendToOption => ({
-    key: `task:${task.id}`,
-    group: 'recent',
-    target: { kind: 'task', id: task.id },
-    name: task.title?.trim() || task.brief,
-    faces: taskWorkers(task, workspace),
-    when: lastTouched(task),
-  }));
+  const recent = recentChats(workspace).map((task): SendToOption => {
+    const faces = taskWorkers(task, workspace);
+    return {
+      key: `task:${task.id}`,
+      group: 'recent',
+      target: { kind: 'task', id: task.id },
+      name: task.title?.trim() || task.brief,
+      faces,
+      when: lastTouched(task),
+      ...(task.sideOf ? { sideThread: true as const, detail: sideThreadLabel(faces[0]?.name) } : {}),
+    };
+  });
   const orglets = workspace.workers.map((worker): SendToOption => ({
     key: `worker:${worker.id}`,
     group: 'orglets',
