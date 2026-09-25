@@ -116,7 +116,7 @@ Windows Terminal, PowerShell and cmd on Windows 10 and later show the faces in f
 orglet send "Summarise these notes" --to Researcher --file notes.txt
 ```
 
-The message goes into the orglet's or crew's chat exactly as if you had typed it in the message box. If the chat already has a conversation, the message is the next turn in it; if not, it starts one. A crew's chat is led by its lead, as in the app.
+The message goes into the orglet's or crew's chat exactly as if you had typed it in the message box. If the chat already has a conversation, the message is the next turn in it; if not, it starts one. A crew's chat is led by its lead, as in the app. If the app window is showing that orglet's or crew's empty chat when the command starts one, the window switches to the new chat, so a question the chat asks, such as approving an MCP tool, is in view.
 
 By default the command waits for the turn to finish and prints the answer. A crew prints each member's reply and then the lead's, each under its name. In a terminal, the orglet's face waits beside you on standard error while it works. Ctrl+C stops waiting; the turn keeps running in the app, and `orglet read` shows the answer later.
 

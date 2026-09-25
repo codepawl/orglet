@@ -52,6 +52,9 @@ const bridge: Bridge = {
     ipcRenderer.on('orglet:navigate', listener);
     return () => ipcRenderer.removeListener('orglet:navigate', listener);
   },
+  saveMcpServer: draft => invoke('orglet:mcp-save', draft),
+  removeMcpServer: id => invoke('orglet:mcp-remove', id),
+  importMcpServers: () => invoke('orglet:mcp-import'),
   cliState: () => invoke('orglet:cli-state'),
   setCliOnPath: enabled => invoke('orglet:cli-path', enabled),
   onOpenChat: callback => {

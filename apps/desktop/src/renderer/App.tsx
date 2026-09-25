@@ -514,6 +514,27 @@ export function App() {
   const groupWorkers = groupChat ? groupChat.workerIds.map(id => workspace?.workers.find(item => item.id === id)).filter((item): item is Worker => Boolean(item)) : [];
   const group = groupChat && groupWorkers.length === groupChat.workerIds.length ? groupChat : undefined;
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : group ? groupWorkers : worker ? [worker] : [];
+  /**
+   * An orglet's or crew's chat is its one live row. When that row starts somewhere other than this composer (the
+   * `orglet` terminal command) while the empty chat is on screen, the view switches to it, so a question it asks,
+   * such as an MCP approval (COD-241), is not left behind the empty screen. Only a row that appears while the empty
+   * chat is shown is adopted; a chat that already existed when the view was entered, as at startup, is left alone.
+   */
+  const emptyChatBaseline = useRef<{ key: string; liveId?: string }>(undefined);
+  useEffect(() => {
+    const key = team ? `team:${team.id}` : worker ? `worker:${worker.id}` : '';
+    if (selected || !workspace || group || !key) {
+      emptyChatBaseline.current = undefined;
+      return;
+    }
+    const live = team ? liveTeamTask(workspace.tasks, team.id) : liveWorkerTask(workspace.tasks, worker!.id);
+    const baseline = emptyChatBaseline.current;
+    if (!baseline || baseline.key !== key) {
+      emptyChatBaseline.current = { key, liveId: live?.id };
+      return;
+    }
+    if (live && live.id !== baseline.liveId) openTask(live.id);
+  }, [workspace, selected, team?.id, worker?.id, group]);
   // An empty chat has no row yet, so its permissions wait under the worker, team or group until the first message
   // (COD-178, COD-215), and so does its working folder (COD-186).
   const newChatTarget: NewChatTarget | undefined = team ? { teamId: team.id } : group ? { workerIds: group.workerIds } : worker ? { workerId: worker.id } : undefined;

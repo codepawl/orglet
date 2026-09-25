@@ -38,6 +38,7 @@ import { AppProposalCards, type ProposalActions } from './AppProposals';
 import { ChangedFilesLine, DiffDialog } from './DiffViewer';
 import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import type { AppProposal } from '../../shared/app-proposals';
+import { McpApprovalCard } from './McpApproval';
 import { turnNotices } from './turnNotices';
 
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
@@ -335,7 +336,17 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
           {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
             {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
-            {latest && detail.task.status === 'waiting_input' && pendingDecision && <div role="group" aria-label={t('Quyết định đang chờ')}>
+            {latest && detail.task.status === 'waiting_input' && pendingDecision?.approval && <McpApprovalCard approval={pendingDecision.approval} busy={answeringDecision}
+              workerName={detail.runs.find(run => run.id === pendingDecision.runId)?.snapshot.worker.name ?? 'Orglet'}
+              onAnswer={choice => {
+                if (answeringDecision) return;
+                setAnsweringDecision(true);
+                action(async () => {
+                  try { await orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: choice }); }
+                  finally { setAnsweringDecision(false); }
+                });
+              }} />}
+            {latest && detail.task.status === 'waiting_input' && pendingDecision && !pendingDecision.approval && <div role="group" aria-label={t('Quyết định đang chờ')}>
               <p role="status">{pendingDecision.question}</p>
               <div className="actions">{pendingDecision.options.map(option => <Button key={option} variant="outline" disabled={answeringDecision} onClick={() => {
                 if (answeringDecision) return;

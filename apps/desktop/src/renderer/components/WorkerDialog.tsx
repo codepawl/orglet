@@ -29,7 +29,8 @@ import { t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Input, SwitchField, Textarea } from '@codepawl/orglet-ui';
 import { taskGrants } from '../caches';
-import { Zap } from 'lucide-react';
+import { Blocks, Zap } from 'lucide-react';
+import { Checkbox } from './Checkbox';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
 type Tab = 'general' | 'skill' | 'permissions' | 'memory';
@@ -64,6 +65,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [description, setDescription] = useState(worker?.description ?? '');
   // Saved with the worker, like its other fields; off for every worker until the person turns it on (COD-199).
   const [autoApplyProposals, setAutoApplyProposals] = useState(worker?.autoApplyProposals ?? false);
+  // The MCP servers this worker may use, saved with it; none until the person picks some (COD-241).
+  const [mcpServerIds, setMcpServerIds] = useState<string[]>(worker?.mcpServerIds ?? []);
   // New workers get a stable colour seed before they have an id.
   const [seed] = useState(() => worker?.id ?? crypto.randomUUID());
   // Permissions chosen for a worker that is not saved yet; they reach the core once the worker has an id.
@@ -99,9 +102,11 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     if (modelIssue) return fail('general', modelIssue, 'modelId');
     // A custom connection has no default model to fall back on.
     if (customConnection && !trimmedModel) return fail('general', t('Chọn hoặc gõ ID model cho {0}.', [customConnection.name]), 'modelId');
+    // A server removed while the dialog was open is left out rather than saved.
+    const pickedServers = mcpServerIds.filter(serverId => (workspace.mcpServers ?? []).some(server => server.id === serverId));
     setBusy(true); clearError();
     try {
-      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}) });
+      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
       if (!worker && draftCapabilities) await orglet.call('setToolCapabilities', { workerId: saved.id, capabilities: draftCapabilities });
       toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name); onClose();
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
@@ -168,9 +173,29 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
           description={t('Đề xuất an toàn áp dụng ngay, có Hoàn tác; phần còn lại vẫn chờ bạn.')}>
           <Zap size={15} aria-hidden="true" />{t('Áp dụng thay đổi trong app mà không cần hỏi')}
         </SwitchField>} />
+      <McpServerPicker servers={workspace.mcpServers ?? []} picked={mcpServerIds} onChange={setMcpServerIds} />
     </>}
     {tab === 'memory' && <MemoryList memories={memories} workspace={workspace} onOpenChat={onOpenChat} />}
   </TabbedFormDialog>;
+}
+
+/**
+ * Which MCP servers this worker may use (COD-241): picking from a list, so a checkbox each. Saved with the worker
+ * like its other fields; each call still asks in the chat until the person allows it there.
+ */
+function McpServerPicker({ servers, picked, onChange }: { servers: Workspace['mcpServers']; picked: string[]; onChange: (next: string[]) => void }) {
+  const toggle = (serverId: string, checked: boolean) => onChange(checked ? [...picked, serverId] : picked.filter(item => item !== serverId));
+  return <fieldset className="permissions mcp-picker" aria-describedby="mcp-picker-note">
+    <legend className="permission-folder-title"><Blocks size={15} aria-hidden="true" />{t('Máy chủ MCP')}</legend>
+    <p id="mcp-picker-note" className="muted permission-footnote">{servers.length
+      ? t('Tí gọi được công cụ của máy chủ được chọn, và hỏi bạn trước mỗi lần trong chat.')
+      : t('Chưa có máy chủ MCP. Thêm trong Cài đặt → MCP.')}</p>
+    {servers.map(server => {
+      const toolCount = server.tools?.length ?? 0;
+      const detail = [server.enabled ? undefined : t('đang tắt'), toolCount === 1 ? t('1 công cụ') : toolCount ? t('{0} công cụ', [toolCount]) : undefined].filter(Boolean).join(' · ');
+      return <Checkbox key={server.id} checked={picked.includes(server.id)} onChange={event => toggle(server.id, event.target.checked)} description={detail || undefined}>{server.name}</Checkbox>;
+    })}
+  </fieldset>;
 }
 
 /**

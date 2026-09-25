@@ -17,6 +17,11 @@ export type Checkpoint = {
    * knows; an app change proposed by such a run is never applied without a click (COD-199).
    */
   untrustedInputs?: string[];
+  /**
+   * An MCP call waiting for the person's answer on the chat (COD-241). The messages end with the model's call and no
+   * result; on resume the runner reads the answer, then runs the call or hands back the refusal.
+   */
+  pendingApproval?: { requestId: string; callId: string; name: string; arguments: string };
 };
 // Context may contain selected source text. It stays in core storage, outside renderer IPC and backups.
 export class Checkpoints {

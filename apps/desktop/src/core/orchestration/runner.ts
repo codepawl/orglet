@@ -2,7 +2,7 @@ import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { WebTools } from '../tools/web-tools';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
-import { assertToolCall, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, reactionsAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, REACTION_NUDGE, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
+import { assertToolCall, mcpToolOf, mcpToolsOffered, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, reactionsAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, REACTION_NUDGE, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
 import { z } from 'zod';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
@@ -57,6 +57,9 @@ import { ProposeSelfImprovement } from '../../shared/self-improvement';
 import type { AppProposals } from './app-proposals';
 import { findCustomConnection, type CustomConnection } from '../../shared/custom-connections';
 import { readCustomConnections } from '../storage/custom-connections';
+import type { McpCallResult, McpServers } from '../tools/mcp';
+import { approvalArguments, mcpCallGranted, McpApprovalChoice, MCP_CALL_TIMEOUT_MS, type McpRunTool } from '../../shared/mcp';
+import type { DecisionRequest } from '../../shared/work-decisions';
 
 /**
  * A report the citation, checker, line-range or process gates refused (COD-162). The run fails as before; the code
@@ -172,7 +175,40 @@ function stepLimit(run: Run) {
   // Coding is many small tool calls: every file read, write and command is a step (COD-187).
   if (run.snapshot.workspaceGrant) return 40;
   if (run.snapshot.toolCapabilities?.includes('network.web')) return 16;
+  // An MCP server is another service to look things up in, so it gets the same room as the web (COD-241).
+  if (run.snapshot.mcpTools?.length) return 16;
   return 6;
+}
+
+const NOT_APPROVED_IN_CREW = "Not approved in this chat. The person can allow this server in the chat's Details under Tool permissions. Continue without it.";
+
+/** Answered approval cards a chat keeps; the oldest go first, questions the worker asked are always kept. */
+const KEPT_APPROVALS = 200;
+
+/** A chat's decision list with one more request, trimming the oldest answered approvals so the list stays bounded. */
+function withDecision(requests: readonly DecisionRequest[] | undefined, request: DecisionRequest): DecisionRequest[] {
+  const next = [...(requests ?? []), request];
+  const approvals = next.filter(item => item.approval && item.answer);
+  const dropped = new Set(approvals.slice(0, Math.max(0, approvals.length - KEPT_APPROVALS)).map(item => item.id));
+  return next.filter(item => !dropped.has(item.id));
+}
+
+/** What a worker receives when a call could not finish: the reason, and a warning that it may have done something. */
+function mcpFailure(tool: McpRunTool, error: unknown) {
+  const reason = error instanceof Error ? error.message.slice(0, 300) : 'Công cụ MCP gặp lỗi.';
+  return { server: tool.serverName, tool: tool.tool, error: reason, hint: 'The call did not complete. If it could have changed something, check before trying again.' };
+}
+
+type McpRefusal = { server: string; tool: string; refused: true; error: string };
+type McpStepResult = McpCallResult | ReturnType<typeof mcpFailure> | McpRefusal;
+
+/** The activity line for one MCP step; `traceOf` in the renderer reads these sentences as trace rows. */
+function mcpEventLine(tool: McpRunTool, result: McpStepResult) {
+  const target = `${tool.tool} · ${tool.serverName}`;
+  if ('refused' in result) return `Bạn đã từ chối công cụ MCP: ${target}`;
+  if ('error' in result) return `Công cụ MCP không thành công: ${target}: ${result.error}`;
+  if (result.isError) return `Công cụ MCP không thành công: ${target}: máy chủ báo lỗi`;
+  return `Đã dùng công cụ MCP: ${target}`;
 }
 
 /** Steps left when the worker is told to stop using tools and hand in what it has (COD-187). */
@@ -338,7 +374,7 @@ export class Runner {
   private slots = new ProviderSlots(() => this.store.setting('providerConcurrency', DEFAULT_PROVIDER_CONCURRENCY));
   /** Receives live progress from streaming harnesses; the core process forwards it to the window. */
   onProgress: (update: RunProgressUpdate) => void = () => {};
-  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals) {}
+  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers) {}
   isActive(taskId: string) { return [...this.active.values()].some(item => item.taskId === taskId); }
   cancel(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.controller.abort(); }
   pause(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.paused = true; }
@@ -354,6 +390,75 @@ export class Runner {
     if (checkpoint.phase === 'requesting') throw new Error('Request bị gián đoạn chưa rõ kết quả. Không gửi lại tự động; kiểm tra chi phí rồi chọn thử lại nếu cần.');
   }
   async shutdown() { for (const item of this.active.values()) item.controller.abort(); }
+  /** MCP tools reach a run whose orglet may use a server, outside planning, schedules and Demo (COD-241). */
+  private mayUseMcp(task: Task, run: Run) {
+    return run.snapshot.worker.provider !== 'demo' && run.stage !== 'plan' && !task.routineId && (run.snapshot.worker.mcpServerIds?.length ?? 0) > 0;
+  }
+  /**
+   * Stops the run to ask the person about one MCP call, the way request_user_decision stops it for a question: the
+   * card waits on the chat, the checkpoint keeps the call, and the answer resumes this same run (COD-241).
+   */
+  private askMcpApproval(task: Task, run: Run, tool: McpRunTool, call: { id: string; name: string; arguments: string }, checkpoint: Checkpoint) {
+    const request: DecisionRequest = {
+      id: id(), runId: run.id, inputRevision: run.snapshot.inputRevision ?? 0, requestedAt: now(),
+      question: `Cho phép dùng công cụ ${tool.tool} của máy chủ MCP ${tool.serverName}?`.slice(0, 1000),
+      options: [...McpApprovalChoice.options],
+      approval: { serverId: tool.serverId, serverName: tool.serverName, tool: tool.tool, arguments: approvalArguments(call.arguments) },
+    };
+    const paused: Checkpoint = { ...checkpoint, pendingApproval: { requestId: request.id, callId: call.id, name: call.name, arguments: call.arguments } };
+    this.checkpoints.committed(paused, false, () => {
+      const latest = this.store.get<Task>('tasks', task.id);
+      this.store.update('tasks', { ...latest, decisionRequests: withDecision(latest.decisionRequests, request), status: 'waiting_input' });
+      this.store.update('runs', { ...run, status: 'waiting_input' });
+    });
+    this.event(run.id, `Chờ bạn cho phép công cụ MCP: ${tool.tool} · ${tool.serverName}`);
+    this.notify();
+  }
+  /**
+   * Runs one allowed MCP call through the tool journal. A tool the server marks read-only may run again after a
+   * crash; any other call left unfinished by a crash becomes an unknown outcome to review, like a workspace write.
+   */
+  private async executeMcp(task: Task, run: Run, tool: McpRunTool, call: { id: string; name: string; arguments: string }, signal: AbortSignal): Promise<McpStepResult> {
+    if (!this.mcp) throw new Error('MCP chưa được cấu hình.');
+    const mcp = this.mcp;
+    const argumentsValue = JSON.parse(call.arguments) as Record<string, unknown>;
+    const toolSignal = AbortSignal.any([signal, AbortSignal.timeout(MCP_CALL_TIMEOUT_MS + 5_000)]);
+    const result: McpStepResult = await new ToolCalls(this.store).execute({
+      runId: run.id, callId: call.id, name: call.name, arguments: argumentsValue,
+      replay: tool.readOnly ? 'read' : 'never',
+      authorize: () => {
+        toolSignal.throwIfAborted();
+        assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
+      },
+      perform: async (): Promise<McpStepResult> => {
+        try {
+          return await mcp.call(tool.serverId, tool.tool, argumentsValue, toolSignal);
+        } catch (error) {
+          // A server that refused, crashed or timed out is something the worker can work around, so it is the
+          // tool's answer. Cancelling the run still stops the run.
+          if (signal.aborted) throw error;
+          return mcpFailure(tool, error);
+        }
+      },
+    });
+    this.event(run.id, mcpEventLine(tool, result));
+    return result;
+  }
+  /** The answer to an approval card: run the call once it is allowed, or hand the refusal to the worker. */
+  private async settleMcpApproval(task: Task, run: Run, pending: NonNullable<Checkpoint['pendingApproval']>, signal: AbortSignal): Promise<McpStepResult> {
+    const current = this.store.get<Task>('tasks', task.id);
+    const request = current.decisionRequests?.find(item => item.id === pending.requestId);
+    const choice = McpApprovalChoice.safeParse(request?.answer);
+    if (!request?.approval || !choice.success) throw new Error('Yêu cầu dùng công cụ MCP chưa được trả lời.');
+    const tool = mcpToolOf(run, current, pending.name);
+    if (!tool) throw new Error('Tool không được policy cho phép.');
+    if (choice.data === 'refuse') {
+      const refused: McpRefusal = { server: tool.serverName, tool: tool.tool, refused: true, error: 'The person refused this call. Do not call it again in this turn; continue without it or say what you would need.' };
+      this.event(run.id, mcpEventLine(tool, refused));
+      return refused;
+    }
+    return this.executeMcp(task, run, tool, { id: pending.callId, name: pending.name, arguments: pending.arguments }, signal);
+  }
   /** Workers answering alongside this run: the team roster, or the other workers of a group chat. */
   private colleaguesOf(task: Task, run: Run): Colleague[] {
     const team = run.snapshot.team;
@@ -451,6 +556,13 @@ export class Runner {
       this.store.update('runs', run);
       if (!options.keepTaskOpen) this.store.status(task.id, run.id, 'running');
       this.notify();
+      // The MCP tools this run may call, frozen once like its permissions; a resume offers the same list (COD-241).
+      if (this.mcp && run.snapshot.mcpTools === undefined && this.mayUseMcp(task, run)) {
+        const offered = await this.mcp.toolsForRun(run.snapshot.worker.mcpServerIds ?? [], signal);
+        for (const problem of offered.problems) this.event(run.id, problem);
+        run = { ...run, snapshot: { ...run.snapshot, mcpTools: offered.tools } };
+        this.store.update('runs', run);
+      }
       const manifest = task.sourceIds.map(sourceId => this.store.get<Source>('sources', sourceId));
       const preflight = run.snapshot.preflightId ? this.store.get<PreflightRecord>('preflights', run.snapshot.preflightId) : undefined;
       if (preflight && preflight.taskId !== task.id) throw new Error('Preflight không thuộc task này.');
@@ -584,7 +696,8 @@ export class Runner {
         messages = resume.messages;
       }
       if (isHarness(run.snapshot.worker.provider) && !run.snapshot.workspaceGrant && !run.snapshot.team
-        && !run.snapshot.toolCapabilities?.some(capability => ['network.web', 'dataset.check'].includes(capability))) {
+        && !run.snapshot.toolCapabilities?.some(capability => ['network.web', 'dataset.check'].includes(capability))
+        && !mcpToolsOffered(run, task)) {
         await this.runHarness(run.snapshot.worker.provider, task, run, messages, { manifest, preflight, preflightLimits, checkedSourceIds: checkedProfiles.flatMap(profile => Object.keys(profile.sourceHashes)) }, options, control, signal);
         return;
       }
@@ -641,6 +754,14 @@ export class Runner {
         checkpoint = { ...checkpoint, untrustedInputs: [...untrustedInputs] };
       };
       if (untrustedInputs.size) checkpoint = { ...checkpoint, untrustedInputs: [...untrustedInputs] };
+      // The run stopped to ask whether an MCP call may run; the answer is on the chat now, so the call runs or is refused.
+      const pendingApproval = checkpoint.pendingApproval;
+      if (pendingApproval) {
+        const settled = await this.settleMcpApproval(task, run, pendingApproval, signal);
+        if (!('error' in settled)) noteUntrusted('MCP tool results');
+        messages.push({ role: 'tool', tool_call_id: pendingApproval.callId, content: JSON.stringify(settled) });
+        checkpoint = { ...checkpoint, messages, pendingApproval: undefined };
+      }
       this.checkpoints.save(checkpoint);
       const maxSteps = stepLimit(run);
       for (let step = checkpoint.step; step < maxSteps; step++) {
@@ -937,6 +1058,28 @@ export class Runner {
           });
           this.event(run.id, 'error' in result ? `Đề xuất thay đổi trong app bị từ chối: ${result.error}` : 'Đã ghi một đề xuất thay đổi trong app; chờ bạn áp dụng.');
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
+          this.checkpoints.committed(checkpoint);
+          this.notify();
+          continue;
+        }
+        const mcpTool = mcpToolOf(run, this.store.get<Task>('tasks', task.id), call.name);
+        if (mcpTool) {
+          const current = this.store.get<Task>('tasks', task.id);
+          if (!mcpCallGranted(current.mcpGrants, mcpTool.serverId, mcpTool.tool)) {
+            // A solo chat can stop and ask, the way request_user_decision does. A crew or group member cannot hold
+            // the turn, so its call comes back refused and the person allows the server in Details instead.
+            if (run.stage === undefined && !options.keepTaskOpen) {
+              this.askMcpApproval(task, run, mcpTool, call, { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] });
+              return;
+            }
+            this.event(run.id, `Công cụ MCP chưa được phép trong chat này: ${mcpTool.tool} · ${mcpTool.serverName}`);
+            messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ server: mcpTool.serverName, tool: mcpTool.tool, refused: true, error: NOT_APPROVED_IN_CREW }) });
+          } else {
+            const result = await this.executeMcp(task, run, mcpTool, call, signal);
+            if (!('error' in result)) noteUntrusted('MCP tool results');
+            messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+          }
           checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
           this.checkpoints.committed(checkpoint);
           this.notify();

@@ -15,7 +15,7 @@ export const ERASE_TABLES = [
   'tool_calls', 'checkpoints', 'leases', 'events', 'artifacts', 'app_proposals', 'runs',
   'profiles', 'preflights', 'workspace_grants', 'task_search', 'tasks',
   'knowledge_search', 'knowledge_revisions', 'knowledge', 'revisions',
-  'routines', 'workers', 'teams', 'skills', 'sources', 'settings',
+  'routines', 'workers', 'teams', 'skills', 'sources', 'settings', 'mcp_servers',
 ] as const;
 
 const count = (store: Store, table: string) => Number(store.db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()!.count);
@@ -63,15 +63,17 @@ export function eraseSources(store: Store): { sources: number; sourcesForgotten:
 
 /**
  * Back to a fresh install: every row in every table, then the worker and skill a new workspace starts with. Custom
- * connections stay, like the API keys beside them in the credential store: a connection is set up once per machine,
- * and dropping its name and address while its key stays would leave a secret nothing points at.
+ * connections and MCP servers stay, like the API keys beside them in the credential store: each is set up once per
+ * machine, and dropping its name and address while its secret stays would leave a secret nothing points at (COD-241).
  */
 export function eraseEverything(store: Store): { entities: number } {
   const entities = count(store, 'workers') + count(store, 'teams') + count(store, 'skills') + count(store, 'routines');
   const connections = readCustomConnections(store);
+  const mcpServers = store.db.prepare('SELECT id,data FROM mcp_servers ORDER BY rowid').all();
   store.transaction(() => {
     for (const table of ERASE_TABLES) store.db.prepare(`DELETE FROM ${table}`).run();
     if (connections.length) writeCustomConnections(store, connections);
+    for (const server of mcpServers) store.db.prepare('INSERT INTO mcp_servers(id,data) VALUES(?,?)').run(server.id, server.data);
   });
   // Seeding writes a revision of its own, in its own transaction, so it waits until the tables are empty.
   store.seedDefaults();

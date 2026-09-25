@@ -1,6 +1,6 @@
 # Settings
 
-**Settings** is the last button in the sidebar footer. Seven tabs, each a few rows.
+**Settings** is the last button in the sidebar footer. Eight tabs, each a few rows.
 
 Part of the [user guide](user-guide.md).
 
@@ -22,6 +22,10 @@ Turn a provider on, paste its key or pick a `.txt` file, save. Ollama is a switc
 ## Local harnesses
 
 Claude Code, Codex, Cursor Agent and Gemini CLI: whether each is installed and signed in, its login command, its accounts with how much of each plan is used, and **Rescan**. See [Connections → Local harnesses](connections.md#local-harnesses-claude-code-codex-cursor-agent-gemini-cli).
+
+## MCP
+
+MCP servers you add by hand, run on this computer or remote: each row shows whether it is connected, its tools, a switch to turn it off, and **Test connection**, **Edit** and **Remove**. **Import from a file** reads a JSON file you pick; Orglet never reads another app's MCP settings on its own. Secret values are encrypted on this computer and never shown again. See [MCP servers](mcp.md).
 
 ## Costs & limits
 
