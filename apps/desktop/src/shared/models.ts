@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Connections that can produce a native or alias model list. Demo never fetches. */
-export const ModelListProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor']);
+export const ModelListProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor', 'gemini']);
 export type ModelListProvider = z.infer<typeof ModelListProvider>;
 export const ModelSource = z.enum(['native', 'alias', 'catalog-hint']);
 export type ModelSource = z.infer<typeof ModelSource>;
@@ -44,6 +44,7 @@ export const ModelListCache = z.object({
     'claude-code': ModelListRow.optional(),
     codex: ModelListRow.optional(),
     cursor: ModelListRow.optional(),
+    gemini: ModelListRow.optional(),
   }).strict(),
 }).strict();
 export type ModelListCache = z.infer<typeof ModelListCache>;

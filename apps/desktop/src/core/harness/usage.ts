@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { HarnessAccountUsage, HarnessCatalogId, HarnessUsageGap, HarnessUsageWindow } from '../../shared/harness';
 import { cleanEnv, commandLine, harnessAccountEnv, probe, type Probe } from './detect';
+import { geminiHome, readGeminiSignIn } from './gemini';
 
 /** What one account's read found, before the service stamps it with the account and the time. */
 export type AccountUsageRead = Omit<HarnessAccountUsage, 'accountId' | 'checkedAt'>;
@@ -18,6 +19,8 @@ export type UsageRuntime = {
   readText: (path: string) => Promise<string>;
   home: string;
   now: () => Date;
+  /** Variables a CLI reads its sign-in from (Gemini CLI's GEMINI_CLI_HOME and API key); none when left out. */
+  env?: NodeJS.ProcessEnv;
 };
 
 const SESSION_MINUTES = 5 * 60;
@@ -208,11 +211,21 @@ async function readCursor(executable: string, configDir: string | undefined, run
   return cursorAbout(result.stdout);
 }
 
+/** Gemini CLI names the signed-in Google account in its own folder, but reports no plan allowance outside its window. */
+async function readGemini(configDir: string | undefined, runtime: UsageRuntime): Promise<AccountUsageRead> {
+  const environment = runtime.env ?? {};
+  const signIn = await readGeminiSignIn(geminiHome(configDir, environment, runtime.home), environment, runtime.readText);
+  if (signIn.state === 'unreadable') return gap('failed');
+  if (signIn.state === 'signed_out') return gap('signed_out');
+  return gap('unsupported', signIn.email ? { email: signIn.email } : {});
+}
+
 /** Who is signed in to one account folder of one harness, on which plan, and how much of that plan is used. */
 export async function readHarnessUsage(harness: HarnessCatalogId, executable: string, configDir: string | undefined, runtime: UsageRuntime = localUsageRuntime()): Promise<AccountUsageRead> {
   try {
     if (harness === 'claude-code') return await readClaude(executable, configDir, runtime);
     if (harness === 'codex') return await readCodex(executable, configDir, runtime);
+    if (harness === 'gemini') return await readGemini(configDir, runtime);
     return await readCursor(executable, configDir, runtime);
   } catch {
     return gap('failed');
@@ -280,4 +293,5 @@ export const localUsageRuntime = (): UsageRuntime => ({
   readText: path => readFile(path, 'utf8'),
   home: homedir(),
   now: () => new Date(),
+  env: process.env,
 });

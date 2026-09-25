@@ -8,7 +8,7 @@ import { liveWorkerTask, newChatKey } from '../../shared/live-task';
 import { permissionsForLevel, type WorkspaceLevel } from '../../shared/capability-status';
 import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
 import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/workspace-access';
-import { harnessNames, isHarness, type HarnessInfo } from '../../shared/harness';
+import { harnessCatalog, harnessNames, isHarness, type HarnessInfo } from '../../shared/harness';
 import { FieldLabel, MoneyInput } from './ui';
 import { Select } from './Select';
 import { ModelPicker } from './ModelPicker';
@@ -116,7 +116,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         // A harness carries its state as the circle the rest of the app uses for one, so the line underneath is the
         // version and one phrase rather than three things strung together on dots (user, 2026-09-22). The circle is
         // more exact than the generic "not ready" badge it stands in for: it tells missing from signed out from broken.
-        ...(['claude-code', 'codex', 'cursor'] as const).map(id => {
+        ...harnessCatalog.map(id => {
           const found = harnesses.find(item => item.id === id);
           const state = !found || found.status === 'not_installed' ? { word: t('chưa cài'), mark: { variant: 'empty', tone: 'muted' } as const }
             : found.status === 'detected' ? { word: t('chưa đăng nhập'), mark: { variant: 'dashed', tone: 'muted' } as const }

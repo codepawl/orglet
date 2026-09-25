@@ -77,10 +77,23 @@ function accountSummary(usage: HarnessAccountUsage | undefined): string | undefi
 
 /** Why a signed-in account shows no allowance. Signed out says nothing here: the login command below already does. */
 function usageGapText(item: HarnessInfo, usage: HarnessAccountUsage): string | undefined {
-  if (usage.unavailable === 'unsupported') return item.id === 'cursor' ? t('Cursor Agent không cho biết gói đã dùng bao nhiêu.') : t('Kiểu đăng nhập này không có hạn mức gói.');
+  if (usage.unavailable === 'unsupported') return unreportedUsageText(item);
   if (usage.unavailable === 'expired') return t('Phiên đăng nhập đã hết hạn. Mở {0} một lần rồi bấm Dò lại.', [item.name]);
   if (usage.unavailable === 'failed') return t('Chưa đọc được hạn mức lúc này.');
   return undefined;
+}
+
+/** Cursor Agent and Gemini CLI never report a plan allowance; for the others it depends on how they signed in. */
+function unreportedUsageText(item: HarnessInfo): string {
+  if (item.id === 'cursor') return t('Cursor Agent không cho biết gói đã dùng bao nhiêu.');
+  if (item.id === 'gemini') return t('Gemini CLI không cho biết gói đã dùng bao nhiêu.');
+  return t('Kiểu đăng nhập này không có hạn mức gói.');
+}
+
+/** What to do in the terminal once the login command runs. Gemini CLI has no login command, so it names the menu choice. */
+function signInStep(item: HarnessInfo): string {
+  if (item.id === 'gemini') return t('Chạy lệnh bên dưới, chọn Sign in with Google, đăng nhập xong gõ /quit rồi bấm Dò lại.');
+  return t('Chạy lệnh bên dưới trong terminal rồi bấm Dò lại.');
 }
 
 /**
@@ -613,7 +626,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       </span>
                       {/* Signed in, the account itself says more than "signed in through claude.ai". */}
                       {/* Found but signed out, the state says so and the command follows: one short line points at it. */}
-                      <span className="setting-description">{signedInAs ?? (item.status === 'detected' ? t('Chạy lệnh bên dưới trong terminal rồi bấm Dò lại.') : tMessage(item.authDetail))}</span>
+                      <span className="setting-description">{signedInAs ?? (item.status === 'detected' ? signInStep(item) : tMessage(item.authDetail))}</span>
                       {!showLogin && usage === undefined && <SkeletonGroup label={t('Đang đọc hạn mức gói…')}>
                         <div className="plan-usage"><Skeleton width="70%" /></div>
                       </SkeletonGroup>}
@@ -641,7 +654,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                     </div>
                   </div>;
                 })}
-                {harnesses !== undefined && !harnesses.length && <Row title={t('Chưa tìm thấy Claude Code, Codex hoặc Cursor Agent trên máy này.')} description={t('Cài một harness rồi bấm Dò lại.')} />}
+                {harnesses !== undefined && !harnesses.length && <Row title={t('Chưa tìm thấy Claude Code, Codex, Cursor Agent hoặc Gemini CLI trên máy này.')} description={t('Cài một harness rồi bấm Dò lại.')} />}
               </div>
             </>}
 

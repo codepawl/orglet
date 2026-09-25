@@ -240,6 +240,10 @@ Workers store optional `modelId`. The worker dialog lists the cached models for 
 
 The model picker chips a selected or suggested ID when the cached list has `deprecated: true`. A sunset day is shown only from native `sunsetAt` (OpenAI `shutdown_date`). Anthropic, xAI and harness lists omit dates; Orglet does not scrape HTML or guess them. Codex `replacementId` is a quiet “prefer” line, not an automatic switch. Opening the dialog does not toast. Tests: `tests/integration/model-deprecation.test.ts`.
 
+## Gemini CLI harness (COD-243)
+
+Gemini CLI (`@google/gemini-cli`, read against 0.61.0) is a fourth local harness: detection on `PATH`, the npm global folder and Homebrew's folders, sign-in read from its own `.gemini` folder (it has no status command), accounts through `GEMINI_CLI_HOME`, the CLI's model aliases, and runs with none of its own tools through a workspace settings file in the private folder plus flags and variables ([technical guide → Gemini CLI lockdown](technical-guide.md#gemini-cli-lockdown)). Sources are inlined as for Codex; a `tool_use` event stops the run. Tests: `tests/integration/gemini-harness.test.ts` with a fake `gemini`, plus the shared harness, login-line and tool-adapter suites; the packaged harness smoke lists Gemini CLI as found and signed out. Not verified: a signed-in run against the real CLI.
+
 ## COD-98 tools and team coordination: implementation under verification
 
 The worktree now contains a shared tool catalog and permission checks, workspace grants, isolated Windows execution, private copies and Git worktrees, guarded file integration, durable tool/process journals, assignment ownership and dependencies, a bounded mailbox, and lead-controlled reassignment. These extend the existing orchestrator and checkpoints.

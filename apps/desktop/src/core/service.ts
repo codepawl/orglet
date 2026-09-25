@@ -24,7 +24,7 @@ import { Routines } from './orchestration/routines';
 import { WorkPolicy } from './orchestration/work-policy';
 import { KnowledgeBase } from './context/knowledge';
 import type { HarnessRuntime } from './orchestration/runner';
-import { SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessUsage } from '../shared/harness';
+import { harnessCatalog, SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessUsage } from '../shared/harness';
 import { detectHarnesses, probe } from './harness/detect';
 import { readHarnessUsage } from './harness/usage';
 import { HarnessAccounts } from './harness/accounts';
@@ -694,7 +694,7 @@ export class CoreService {
 
   /** Probing spawns each CLI, so results are reused for a minute unless the user asks to detect again. */
   harnesses(refresh: boolean): Promise<HarnessInfo[]> {
-    if (refresh) for (const id of ['claude-code', 'codex', 'cursor'] as const) this.invalidateModelList(id);
+    if (refresh) for (const id of harnessCatalog) this.invalidateModelList(id);
     if (refresh || !this.harnessCache || Date.now() - this.harnessCache.at > 60_000) {
       const value = this.harness.detect(this.harnessAccounts.map()).catch(() => [] as HarnessInfo[]);
       this.harnessCache = { at: Date.now(), value };

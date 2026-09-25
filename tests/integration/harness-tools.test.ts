@@ -21,7 +21,7 @@ it('writes Cursor native-tool denials in the private call directory and refuses 
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-it.each(['claude-code', 'codex', 'cursor'] as const)('translates a %s structured request without executing its requested operation', async harness => {
+it.each(['claude-code', 'codex', 'cursor', 'gemini'] as const)('translates a %s structured request without executing its requested operation', async harness => {
   const tools = [toolDefinitions.workspace_read.model];
   let notices = 0;
   const adapter = harnessToolAdapter({ request: { harness, executable: 'fixture', cwd: 'fixture', maxBudgetUsd: 1 },
@@ -38,7 +38,7 @@ it.each(['claude-code', 'codex', 'cursor'] as const)('translates a %s structured
   expect(notices).toBe(1);
 });
 
-it.each(['claude-code', 'codex', 'cursor'] as const)('validates a %s reaction request through the shared tool schema', async harness => {
+it.each(['claude-code', 'codex', 'cursor', 'gemini'] as const)('validates a %s reaction request through the shared tool schema', async harness => {
   const messageId = '00000000-0000-4000-8000-000000000001';
   const tools = [toolDefinitions.react_to_message.model];
   const adapter = harnessToolAdapter({ request: { harness, executable: 'fixture', cwd: 'fixture', maxBudgetUsd: 1 },

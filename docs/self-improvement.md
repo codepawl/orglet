@@ -55,7 +55,7 @@ The run's brief message carries `selfImprovement`: each signal with its kind, co
 
 The schema is strict, so a `targetId`, a `name`, a `provider`, a `modelId`, a `skillId` or a budget is an unknown field and the call is refused before anything is stored. The sentence to replace has to occur exactly once; a wrong quote or an unknown signal goes back to the worker as the tool's answer and the run goes on.
 
-**Claude Code, Codex and Cursor Agent** chats with no working folder, web or data checks make one CLI call with no tool loop. There the same call travels as an optional `selfImprovement` object in the JSON answer, next to `appProposals` and `memories`, and the prompt explains the field. A malformed item becomes a limitation of the answer; the rest of the answer is saved.
+**Claude Code, Codex, Cursor Agent and Gemini CLI** chats with no working folder, web or data checks make one CLI call with no tool loop. There the same call travels as an optional `selfImprovement` object in the JSON answer, next to `appProposals` and `memories`, and the prompt explains the field. A malformed item becomes a limitation of the answer; the rest of the answer is saved.
 
 ## The card
 

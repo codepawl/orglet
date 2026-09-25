@@ -33,6 +33,18 @@ export const CLAUDE_CODE_ALIASES: ReadonlyArray<{ id: string; displayName: strin
   { id: 'fable', displayName: 'Fable' },
 ];
 
+/**
+ * The model aliases Gemini CLI documents for `-m` (docs/cli/cli-reference.md, "Model aliases", checked against 0.61.0).
+ * The CLI has no command that prints its model list, so these stand in for one the way Claude Code's aliases do; a
+ * full model name such as gemini-2.5-pro still goes in the custom ID field.
+ */
+export const GEMINI_CLI_ALIASES: ReadonlyArray<{ id: string; displayName: string }> = [
+  { id: 'auto', displayName: 'Auto' },
+  { id: 'pro', displayName: 'Pro' },
+  { id: 'flash', displayName: 'Flash' },
+  { id: 'flash-lite', displayName: 'Flash-Lite' },
+];
+
 export type ModelListFetchOptions = {
   readKey: (provider: ApiProvider) => Promise<string | null>;
   fetch?: typeof fetch;
@@ -332,6 +344,16 @@ export function claudeCodeModels(): ModelEntry[] {
   }));
 }
 
+export function geminiCliModels(): ModelEntry[] {
+  return GEMINI_CLI_ALIASES.map(item => ({
+    provider: 'gemini' as const,
+    id: item.id,
+    displayName: item.displayName,
+    aliases: [item.id],
+    source: 'alias' as const,
+  }));
+}
+
 export function probeWithTimeout(timeoutMs: number): Probe {
   return (executable, args) => new Promise(resolve => {
     const command = commandLine(executable, args);
@@ -469,6 +491,7 @@ export async function fetchProviderList(provider: ModelListProvider, options: Mo
   if (provider === 'opencode-zen' || provider === 'opencode-go') return { fetchedAt, ...await fetchOpenCode(provider, options) };
   if (provider === 'ollama') return { fetchedAt, ...await fetchOllama(options) };
   if (provider === 'claude-code') return { fetchedAt, ...withCatalogHint('claude-code', claudeCodeModels(), 'alias') };
+  if (provider === 'gemini') return { fetchedAt, ...withCatalogHint('gemini', geminiCliModels(), 'alias') };
   if (provider === 'codex') return { fetchedAt, ...await fetchCodex(options) };
   return { fetchedAt, ...await fetchCursor(options) };
 }

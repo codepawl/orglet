@@ -8,7 +8,7 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../../apps/desktop/src/core/harness/detect';
 import { HarnessAccounts } from '../../apps/desktop/src/core/harness/accounts';
 import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
-import { harnessReady, harnessStatus, loginCommand, loginCommands, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
+import { harnessNames, harnessReady, harnessStatus, loginCommand, loginCommands, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
 let directory: string;
@@ -48,7 +48,7 @@ describe('detection', () => {
       return { code: 0, stdout: 'Logged in using ChatGPT\n', stderr: '' };
     };
     const found = await detectHarnesses(env, 'win32', probe);
-    expect(found.map(item => item.id)).toEqual(['claude-code', 'codex', 'cursor']);
+    expect(found.map(item => item.id)).toEqual(['claude-code', 'codex', 'cursor', 'gemini']);
     expect(found[0]).toEqual(expect.objectContaining({
       id: 'claude-code', version: '2.1.10', auth: 'logged_out', status: 'detected',
       executable: expect.stringContaining('2.1.10'), runnable: true,
@@ -134,6 +134,7 @@ describe('detection', () => {
         id: 'cursor', auth: 'unknown', status: 'auth_error', runnable: true,
         executable: agent, loginCommand: `& "${agent}" login`,
       }),
+      expect.objectContaining({ id: 'gemini', status: 'not_installed', auth: 'missing' }),
     ]);
     expect(found[2].authDetail).toContain('không đọc được trạng thái đăng nhập');
     expect(found[2].authDetail).toContain('không chuyển sang Demo');
@@ -301,7 +302,7 @@ it.runIf(process.platform === 'win32')('bounds stderr output and waits for the o
 });
 
 const fixture = (item: Pick<HarnessInfo, 'id' | 'executable' | 'version' | 'auth' | 'authDetail'>): HarnessInfo => ({
-  name: item.id === 'claude-code' ? 'Claude Code' : item.id === 'codex' ? 'Codex' : 'Cursor Agent',
+  name: harnessNames[item.id],
   status: harnessStatus(item.auth),
   accountId: SYSTEM_ACCOUNT_ID,
   accounts: [],
@@ -366,6 +367,7 @@ describe('accounts', () => {
       'claude-code': { accountId: 'work', accounts: [{ id: 'work', label: 'Công ty' }], configDir: folder },
       codex: { accountId: SYSTEM_ACCOUNT_ID, accounts: [] },
       cursor: { accountId: SYSTEM_ACCOUNT_ID, accounts: [] },
+      gemini: { accountId: SYSTEM_ACCOUNT_ID, accounts: [] },
     });
     expect(probed.every(overrides => overrides.CLAUDE_CONFIG_DIR === folder)).toBe(true);
     expect(claude).toEqual(expect.objectContaining({ accountId: 'work', configDir: folder, auth: 'logged_in' }));
@@ -378,6 +380,7 @@ describe('accounts', () => {
     expect(harnessAccountEnv('claude-code', '/a')).toEqual({ CLAUDE_CONFIG_DIR: '/a' });
     expect(harnessAccountEnv('codex', '/b')).toEqual({ CODEX_HOME: '/b' });
     expect(harnessAccountEnv('cursor', '/c')).toEqual({ CURSOR_CONFIG_DIR: '/c' });
+    expect(harnessAccountEnv('gemini', '/d')).toEqual({ GEMINI_CLI_HOME: '/d' });
     // The system account runs the CLI exactly as installed.
     expect(harnessAccountEnv('claude-code', undefined)).toEqual({});
   });
@@ -409,6 +412,7 @@ describe('runner integration', () => {
       fixture({ id: 'claude-code', executable: 'claude.exe', version: '2.1.270 (Claude Code)', auth: 'logged_in', authDetail: 'Đăng nhập qua claude.ai' }),
       fixture({ id: 'codex', executable: 'codex.exe', version: 'codex-cli 0.154.0', auth: 'logged_in', authDetail: 'Logged in using ChatGPT' }),
       fixture({ id: 'cursor', executable: '', version: '', auth: 'missing', authDetail: 'Chưa cài Cursor trên máy này. Cài xong bấm Dò lại.' }),
+      fixture({ id: 'gemini', executable: 'gemini.cmd', version: '0.61.0', auth: 'logged_in', authDetail: 'Đăng nhập Google · an@example.com' }),
     ];
     reply = async request => ({ title: 'Harness review', summary: 'Checked the note.', findings: [{ title: 'Answer located', severity: 'info', detail: 'Line two states the answer.', sourceIds: [sources[0].id], coverage: 'Full note', category: 'other', recommendation: null, checkerIds: [], locations: [{ sourceId: sources[0].id, startLine: 2, endLine: 2 }] }], limitations: [], review: { checks: [], recommendation: 'insufficient_evidence', draftFeedback: 'None.', upstreamFindingIds: [], conflicts: [] }, knowledgeProposals: [], cwd: request.cwd });
     core = new CoreService(store, () => {}, async () => { throw new Error('Native adapter must not be used'); }, undefined, undefined, {
@@ -426,7 +430,7 @@ describe('runner integration', () => {
   });
   afterEach(() => store.close());
   const idle = async () => { for (let i = 0; i < 300 && store.all<Task>('tasks').some(task => core.runner.isActive(task.id)); i++) await new Promise(resolve => setTimeout(resolve, 10)); };
-  async function run(provider: 'claude-code' | 'codex', scopes: string[] = [provider]) {
+  async function run(provider: 'claude-code' | 'codex' | 'gemini', scopes: string[] = [provider]) {
     const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider }) as Worker;
     const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Find the answer in the note', sourceIds: sources.map(source => source.id), consent: true, providerScopes: scopes, budgetMicros: 500_000 }) as string;
     await idle(); return store.detail(taskId);
@@ -485,6 +489,18 @@ describe('runner integration', () => {
     reply = async () => ({ title: 'Bad', summary: 'x', findings: [{ title: 'x', severity: 'info', detail: 'x', sourceIds: [sources[0].id], coverage: 'x', category: 'other', recommendation: null, checkerIds: [], locations: [{ sourceId: sources[0].id, startLine: 9, endLine: 9 }] }], limitations: [], review: null, knowledgeProposals: [] });
     const failed = await run('codex');
     expect(failed.task.status).toBe('failed'); expect(failed.artifacts).toEqual([]);
+  });
+
+  it('inlines source text for Gemini CLI, which runs with no tools of its own', async () => {
+    const gemini = await run('gemini');
+    expect(gemini.task.status).toBe('completed');
+    const [request] = requests;
+    expect(request.harness).toBe('gemini');
+    expect(request.prompt).toContain('line two: the answer is 42');
+    expect(request.prompt).toContain('You have no file or command tools.');
+    // Gemini has no strict-schema envelope: the prompt asks for the answer object itself.
+    expect(request.prompt).not.toContain('one payload string');
+    expect(gemini.artifacts[0].report.limitations.join(' ')).toContain('Gemini CLI không có tool đọc tệp');
   });
 
   it('requires consent for the harness and stops before copying sources when it is missing or logged out', async () => {

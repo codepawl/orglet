@@ -40,7 +40,7 @@ import { dirname, join } from 'node:path';
 import { harnessNames, isHarness, type HarnessCatalogId, type HarnessId, type HarnessInfo } from '../../shared/harness';
 import type { HarnessAccountMap } from '../harness/accounts';
 import type { AccountUsageRead } from '../harness/usage';
-import { HarnessBudgetError, HarnessLimitError, HarnessTerminationError, type HarnessExecutor } from '../harness/exec';
+import { HarnessBudgetError, HarnessLimitError, HarnessTerminationError, type HarnessExecutor, type HarnessResult } from '../harness/exec';
 import { ProgressSender } from './progress';
 import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 import { detectUsageLimit, usageLimitMessage } from '../usageLimits';
@@ -130,6 +130,19 @@ function harnessCostLine(name: string, costUsd: number | null, stopped = false, 
   if (costUsd === null) return `${name} đã trả lời; không báo chi phí.`;
   if (total) return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} cho bước này, ${harnessRunTotalPhrase(total)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
   return `${name} đã trả lời; harness ước tính $${costUsd.toFixed(4)} theo gói hoặc tài khoản của nó. Khoản này tính vào giới hạn mỗi task của chat này, không trừ vào ngân sách tháng.`;
+}
+
+/** The line after a harness answered: its price when it named one, else the tokens it counted, else neither. */
+function harnessReplyLine(name: string, result: HarnessResult, total?: HarnessRunTotal) {
+  if (result.costUsd !== null || !result.tokens) return harnessCostLine(name, result.costUsd, false, total);
+  return `${name} đã trả lời; không báo chi phí, dùng ${result.tokens.input} token vào và ${result.tokens.output} token ra.`;
+}
+
+/** What a run with no file tools of its own says about how it read the sources; the others read their own copies. */
+function harnessReadLimitation(provider: HarnessId, name: string, version: string) {
+  if (provider === 'codex') return `Chạy bằng ${name} ${version} trên máy này. Nội dung nguồn văn bản được gửi trực tiếp trong prompt; Codex không có tool đọc tệp hay chạy lệnh.`;
+  if (provider === 'gemini') return `Chạy bằng ${name} ${version} trên máy này. Nội dung nguồn văn bản được gửi trực tiếp trong prompt; Gemini CLI không có tool đọc tệp hay chạy lệnh.`;
+  return `Chạy bằng ${name} ${version} trên máy này. Harness tự đọc bản sao nguồn; Orglet kiểm tra nguồn trích dẫn, checker và vị trí dòng nhưng không xác minh tệp nào đã thực sự được mở.`;
 }
 
 /** What a web tool hands back to the worker when the search or the page could not be read. */
@@ -605,7 +618,7 @@ export class Runner {
               : { ...checkpoint, harnessCostMicros: addHarnessCost(checkpoint.harnessCostMicros, result.costUsd) };
             this.checkpoints.save({ ...checkpoint, phase: 'requesting' });
             if (result.notice) this.event(run.id, result.notice);
-            this.event(run.id, harnessCostLine(harness.name, result.costUsd, false, checkpoint));
+            this.event(run.id, harnessReplyLine(harness.name, result, checkpoint));
           },
         });
       } else model = await this.adapter(run.snapshot.worker.provider, run.snapshot.model);
@@ -1104,6 +1117,9 @@ export class Runner {
       const inline: { sourceId: string; name: string; content: string }[] = [];
       const unreadable: UnreadableSource[] = [];
       let inlineBytes = 0;
+      // Gemini CLI runs with none of its own tools (its read tools would follow the person's include folders), so it
+      // reads sources the way Codex does: as text in the prompt.
+      const inlinesSources = provider === 'codex' || provider === 'gemini';
       for (const [index, source] of scope.manifest.entries()) {
         if (!hasCapability(run, this.store.get<Task>('tasks', task.id), 'source.read')) continue;
         // Media stays on the person's screen: no copy for the harness, and the prompt says why it is missing.
@@ -1114,8 +1130,8 @@ export class Runner {
           execute: () => this.sources.readVerified(source.id, task.sourceIds) });
         await writeFile(join(directory, file), bytes, { flag: 'wx' });
         files.push({ sourceId: source.id, name: source.name, file, format: source.format ?? 'text' });
-        // Codex has no usable file tool here, so it gets the same text a native read_source call would return.
-        if (provider === 'codex' && source.format !== 'parquet' && bytes.length <= 262_144 && inlineBytes + bytes.length <= 1_048_576) {
+        // Codex and Gemini CLI have no usable file tool here, so they get the same text a native read_source call would return.
+        if (inlinesSources && source.format !== 'parquet' && bytes.length <= 262_144 && inlineBytes + bytes.length <= 1_048_576) {
           inline.push({ sourceId: source.id, name: source.name, content: bytes.toString('utf8') }); inlineBytes += bytes.length;
         }
       }
@@ -1147,7 +1163,7 @@ export class Runner {
           executable: tool.executable,
           ...(tool.configDir ? { configDir: tool.configDir } : {}),
           cwd: directory,
-          prompt: harnessPrompt(messages, files, provider === 'codex' ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable, withProposals, withMemories, withSelfImprovement, withReactions),
+          prompt: harnessPrompt(messages, files, inlinesSources ? inline : undefined, run.stage === 'plan', provider === 'codex', unreadable, withProposals, withMemories, withSelfImprovement, withReactions),
           schema: provider === 'codex' ? codexOutputSchema : z.toJSONSchema(run.stage === 'plan' ? TeamPlan : needsReport(run) ? ModelReportSchema
             : harnessAnswerSchema(run, withProposals, withMemories, withSelfImprovement, withReactions), { target: 'draft-7' }),
           signal,
@@ -1162,11 +1178,9 @@ export class Runner {
       for (const capability of run.snapshot.toolCapabilities ?? []) assertCapability(run, this.store.get<Task>('tasks', task.id), capability);
       if (result.notice) this.event(run.id, result.notice);
       signal.throwIfAborted();
-      this.event(run.id, harnessCostLine(tool.name, result.costUsd));
-      const readIds = new Set([...(provider === 'codex' ? inline : files).map(item => item.sourceId), ...scope.checkedSourceIds]);
-      const limitations = [provider === 'codex'
-        ? `Chạy bằng ${tool.name} ${tool.version} trên máy này. Nội dung nguồn văn bản được gửi trực tiếp trong prompt; Codex không có tool đọc tệp hay chạy lệnh.`
-        : `Chạy bằng ${tool.name} ${tool.version} trên máy này. Harness tự đọc bản sao nguồn; Orglet kiểm tra nguồn trích dẫn, checker và vị trí dòng nhưng không xác minh tệp nào đã thực sự được mở.`];
+      this.event(run.id, harnessReplyLine(tool.name, result));
+      const readIds = new Set([...(inlinesSources ? inline : files).map(item => item.sourceId), ...scope.checkedSourceIds]);
+      const limitations = [harnessReadLimitation(provider, tool.name, tool.version)];
       const output = provider === 'codex' ? decodeCodexOutput(result.output) : result.output;
       if (run.stage === 'plan') {
         this.completePlan(run, output);
@@ -1176,7 +1190,7 @@ export class Runner {
       const answer = needsReport(run) ? undefined : HarnessAnswer.safeParse(output);
       // Every source the harness could read is content nobody vetted: with any attached, the run's proposals wait
       // for a click, the same hold the tool loop puts on a run that called read_source (COD-206).
-      const untrustedInputs = (provider === 'codex' ? inline : files).length ? ['attached sources'] : [];
+      const untrustedInputs = (inlinesSources ? inline : files).length ? ['attached sources'] : [];
       const proposalLimitations = answer?.success ? this.recordAnswerProposals(run, task, answer.data.appProposals ?? [], withProposals) : [];
       const memoryLimitations = answer?.success ? this.recordAnswerMemories(run, answer.data.memories ?? [], withMemories, untrustedInputs.length > 0) : [];
       const improvementLimitations = answer?.success ? this.recordAnswerSelfImprovement(run, task, answer.data.selfImprovement, withSelfImprovement) : [];

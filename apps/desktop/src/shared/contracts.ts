@@ -25,7 +25,7 @@ import type { AboutInfo, AboutLink, Changelog, UpdateState } from './updates';
 import type { AppProposal } from './app-proposals';
 
 export const Id = z.string().uuid();
-export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor']);
+export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor', 'gemini']);
 export type ProviderId = z.infer<typeof ProviderId>;
 /** Providers that receive task content and therefore need per-task consent. */
 export const ProviderScope = ProviderId.exclude(['demo']);
@@ -60,7 +60,7 @@ export const WorkerInput = z.object({
   // Selected or typed model slug. Absence means the catalog suggestion for this provider (or the CLI default for a harness).
   modelId: CustomModelId.optional(),
   // Limit per task for this worker's chat: reserved against for a paid API, passed to Claude Code as its spending cap;
-  // Codex, Cursor Agent and Demo have no cap to give it to.
+  // Codex, Cursor Agent, Gemini CLI and Demo have no cap to give it to.
   taskBudgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
   // Presentation only: shown in the app and carried by templates, never sent to a model.
   avatar: WorkerAvatar.optional(),

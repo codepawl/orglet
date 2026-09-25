@@ -26,7 +26,7 @@
 
 Orglet is a desktop app where you keep a few AI workers, each with a name, a role and their own instructions, and give them work in a normal chat.
 
-- **Use the AI plan you already pay for.** Workers can run on the Claude Code or Codex account you are signed in to, so there is no extra API bill.
+- **Use the AI plan you already pay for.** Workers can run on the Claude Code, Codex, Cursor Agent or Gemini CLI account you are signed in to, so there is no extra API bill.
 - **Keep your data on your computer.** No Orglet account, no Orglet server. Chats, workers and files live in a local database.
 - **Made for one person.** Freelancers, solo founders and anyone who uses ChatGPT or Claude every day and wants a bit more structure.
 
@@ -58,6 +58,7 @@ Workers can run through a local CLI, an API key, or Demo:
 | Claude Code on this computer | Claude Code installed **and signed in** | Your Claude plan |
 | Codex on this computer | Codex installed **and signed in** | Your ChatGPT plan |
 | Cursor Agent on this computer | Cursor Agent CLI installed **and signed in** | Your Cursor plan |
+| Gemini CLI on this computer | Gemini CLI installed **and signed in** (Sign in with Google, or its own API key) | Your Google account's Gemini allowance |
 | OpenAI, Anthropic, Grok (xAI) or OpenRouter API | An API key saved in Settings | Pay per use, with limits you set |
 | OpenCode Zen API | A Zen API key saved in Settings | Pay per use from your Zen balance. Orglet does not track Zen spending or apply its task budget; set a spending limit in the OpenCode Zen console |
 | OpenCode Go API | A Go API key saved in Settings (a separate connection from Zen) | Your Go subscription and its 5-hour, weekly and monthly limits, not Orglet budgets |
@@ -75,7 +76,7 @@ The `orglet` command talks to the running app from a terminal, like VS Code's `c
 
 **Settings → Data** backs the workspace up, restores it, and deletes what you no longer want kept: the chat history, the knowledge your workers built up, what they remembered, the sources you imported, or everything at once. Nothing there touches your API keys or your own files. Details: [technical guide](docs/technical-guide.md#deleting-data).
 
-**Settings → Local harnesses** always shows Claude Code, Codex and Cursor Agent as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. If sign-in fails, the screen gives the CLI login command to copy; Orglet does not switch to Demo.
+**Settings → Local harnesses** always shows Claude Code, Codex, Cursor Agent and Gemini CLI as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. If sign-in fails, the screen gives the CLI login command to copy; Orglet does not switch to Demo.
 
 API keys are encrypted with your system's secure storage and never reach the app's interface.
 

@@ -2,10 +2,12 @@ import { spawn, execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { HarnessId } from '../../shared/harness';
+import { harnessNames, type HarnessId } from '../../shared/harness';
 import { cleanEnv, commandLine, harnessAccountEnv } from './detect';
 import { ClaudeStreamParser } from './claudeStream';
 import { CodexStreamParser } from './codexStream';
+import { geminiArgs, geminiPrompt, geminiRunEnvironment, unescapeAtSigns, writeGeminiLockdown } from './gemini';
+import { GeminiStreamParser, geminiTokens, type GeminiStreamOutcome } from './geminiStream';
 import { claudeLimitWarning, claudeRejection, detectUsageLimit, usageLimitMessage, type ClaudeRateLimitInfo, type UsageLimit } from '../usageLimits';
 import type { HarnessProgress } from '../../shared/progress';
 
@@ -29,6 +31,8 @@ export type HarnessRequest = {
 export type HarnessResult = {
   output: unknown;
   costUsd: number | null;
+  /** Tokens the CLI reported for the call, when it reports them without a price (Gemini CLI). */
+  tokens?: { input: number; output: number };
   /** Something the user should know even though the run worked, such as a plan close to its limit. */
   notice?: string;
 };
@@ -74,6 +78,8 @@ const LAST_MESSAGE_FILE = 'orglet-last-message.json';
  * finished answer. Asking for detailed summaries puts that thinking back (checked against codex-cli 0.155.0:
  * unset and "auto" both produce none, "detailed" produces them).
  * Cursor Agent: ask mode + sandbox, never --force/--yolo; report schema is embedded in the prompt.
+ * Gemini CLI: none of its own tools, extensions, MCP servers, skills, hooks or context files, set by a settings file in
+ * the private working folder (see gemini.ts); never --yolo; report schema is embedded in the prompt.
  */
 function modelFlag(harness: HarnessId, model?: string) {
   if (!model) return [];
@@ -81,6 +87,7 @@ function modelFlag(harness: HarnessId, model?: string) {
 }
 
 export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly'>): string[] {
+  if (request.harness === 'gemini') return geminiArgs(request.model);
   const model = modelFlag(request.harness, request.model);
   if (request.harness === 'claude-code') {
     return ['-p', ...model, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', request.coreToolsOnly ? '' : 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', '--max-budget-usd', request.maxBudgetUsd.toFixed(4)];
@@ -92,7 +99,7 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
 }
 
 const authHint = (harness: HarnessId) => {
-  const name = harness === 'claude-code' ? 'Claude Code' : harness === 'codex' ? 'Codex' : 'Cursor Agent';
+  const name = harnessNames[harness];
   return `${name} chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy, sao chép lệnh đăng nhập, rồi thử lại. Orglet không chuyển sang Demo.`;
 };
 const looksLikeAuth = (text: string) => /not logged in|not authenticated|please run \/login|please run.*login|token_expired|401 unauthorized|invalid api key|authentication|unauthenticated/i.test(text);
@@ -187,6 +194,48 @@ export function parseCodexOutput(jsonl: string, lastMessage: string | null): Har
   }
 }
 
+/** Gemini CLI's error types for a used-up plan and for a short rate limit (utils/googleQuotaErrors in its core). */
+const GEMINI_QUOTA_ERROR = 'TerminalQuotaError';
+const GEMINI_RATE_ERROR = 'RetryableQuotaError';
+
+/** The answer of a Gemini CLI run. It has no schema flag, so the JSON comes back as text, sometimes in a fence. */
+export function parseGeminiOutput(outcome: GeminiStreamOutcome): HarnessResult {
+  const tokens = geminiTokens(outcome.result);
+  if (outcome.result?.status === 'error') throw geminiRunError(outcome.result.error ?? {});
+  try {
+    return { output: JSON.parse(geminiAnswerJson(outcome.text)), costUsd: null, ...(tokens ? { tokens } : {}) };
+  } catch {
+    if (looksLikeAuth(outcome.errors.join('\n'))) throw new HarnessError(authHint('gemini'));
+    throw new HarnessError('Gemini CLI không trả về báo cáo đúng schema.');
+  }
+}
+
+function geminiRunError(error: { type?: string; message?: string }) {
+  const message = error.message ?? '';
+  if (error.type === 'FatalAuthenticationError' || looksLikeAuth(message)) return new HarnessError(authHint('gemini'));
+  if (error.type === GEMINI_QUOTA_ERROR) return new HarnessLimitError(harnessNames.gemini, { kind: 'quota', resetsAt: null });
+  if (error.type === GEMINI_RATE_ERROR) return new HarnessLimitError(harnessNames.gemini, { kind: 'rate', resetsAt: null });
+  const limit = detectUsageLimit(message);
+  if (limit) return new HarnessLimitError(harnessNames.gemini, limit);
+  return new HarnessError(`Gemini CLI báo lỗi: ${(message || 'không rõ').slice(0, 500)}`);
+}
+
+/** The answer's JSON text without a Markdown fence around it, with at signs the model copied from the prompt restored. */
+function geminiAnswerJson(text: string): string {
+  const trimmed = text.trim();
+  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n?```$/i.exec(trimmed);
+  return unescapeAtSigns(fenced ? fenced[1] : trimmed);
+}
+
+/** Gemini CLI's exit code for a missing or refused sign-in (FatalAuthenticationError). */
+const GEMINI_AUTH_EXIT_CODE = 41;
+
+/** Why Gemini CLI stopped without a closing result: signed out, or an unknown failure with its own words kept. */
+function geminiExitError(code: number | null, errorOutput: string) {
+  if (code === GEMINI_AUTH_EXIT_CODE || looksLikeAuth(errorOutput)) return new HarnessError(authHint('gemini'));
+  return exitError(harnessNames.gemini, code, errorOutput);
+}
+
 /** taskkill's exit code when the process it was given is not running. */
 const TASKKILL_NOT_FOUND = 128;
 
@@ -229,6 +278,11 @@ export async function killTree(pid: number | undefined): Promise<void> {
 }
 
 export async function prepareHarnessToolPolicy(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'coreToolsOnly'>) {
+  // Gemini CLI gets no tools of its own on any run, so its lockdown is written for one-shot answers too.
+  if (request.harness === 'gemini') {
+    await writeGeminiLockdown(request.cwd);
+    return;
+  }
   if (request.harness !== 'cursor' || !request.coreToolsOnly) return;
   // This directory is a fresh core-owned call directory, never the user's workspace.
   const configurationDirectory = join(request.cwd, '.cursor');
@@ -261,15 +315,16 @@ export const executeHarness: HarnessExecutor = async request => {
   // Both harnesses print events as they work; each parser turns them into live progress for the window.
   const claudeStream = request.harness === 'claude-code' ? new ClaudeStreamParser(request.onProgress) : null;
   const codexStream = request.harness === 'codex' ? new CodexStreamParser(request.onProgress) : null;
-  const prompt = request.harness === 'cursor'
-    ? `${request.prompt}\n\nReturn only one JSON object that matches this schema (no markdown fences):\n${JSON.stringify(request.schema)}`
-    : request.prompt;
+  // Set once the process is running: a tool request from Gemini CLI stops it before the CLI can act on it.
+  let stopForNativeTool: (toolName: string) => void = () => {};
+  const geminiStream = request.harness === 'gemini' ? new GeminiStreamParser(request.onProgress, toolName => stopForNativeTool(toolName)) : null;
+  const prompt = harnessPromptText(request);
 
   const stdout = await new Promise<string>((resolve, reject) => {
     request.signal.throwIfAborted();
     if (!existsSync(request.executable)) throw missingExecutableError(request.harness, request.executable);
     const command = commandLine(request.executable, harnessArgs(request));
-    const child = spawn(command.file, command.args, { cwd: request.cwd, env: { ...cleanEnv(process.env), ...harnessAccountEnv(request.harness, request.configDir) }, windowsHide: true, windowsVerbatimArguments: command.verbatim, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(command.file, command.args, { cwd: request.cwd, env: harnessEnvironment(request), windowsHide: true, windowsVerbatimArguments: command.verbatim, stdio: ['pipe', 'pipe', 'pipe'] });
     let outputBytes = 0;
     let collected = '';
     let errorOutput = '';
@@ -299,6 +354,7 @@ export const executeHarness: HarnessExecutor = async request => {
       void stop(new HarnessError('Harness chạy quá 15 phút và đã bị dừng.'));
     }, HARNESS_TIMEOUT_MS);
     request.signal.addEventListener('abort', abort, { once: true });
+    stopForNativeTool = toolName => { void stop(nativeToolError(toolName)); };
 
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
@@ -310,6 +366,7 @@ export const executeHarness: HarnessExecutor = async request => {
       }
       if (claudeStream) claudeStream.push(chunk);
       else if (codexStream) codexStream.push(chunk);
+      else if (geminiStream) geminiStream.push(chunk);
       else collected += chunk;
     });
     child.stderr.on('data', chunk => {
@@ -338,6 +395,15 @@ export const executeHarness: HarnessExecutor = async request => {
         resolve(codexStream.finish());
         return;
       }
+      if (geminiStream) {
+        const outcome = geminiStream.finish();
+        if (code !== 0 && !outcome.result && !outcome.text.trim()) {
+          reject(geminiExitError(code, errorOutput));
+          return;
+        }
+        resolve('');
+        return;
+      }
       if (code !== 0 && !collected.trim()) {
         if (looksLikeAuth(errorOutput)) reject(new HarnessError(authHint('cursor')));
         else reject(exitError('Cursor Agent', code, errorOutput));
@@ -350,10 +416,30 @@ export const executeHarness: HarnessExecutor = async request => {
   });
 
   if (claudeStream) return parseClaudeOutput(stdout, claudeStream.rateLimit, request.maxBudgetUsd);
+  // The stream was read to its end when the process closed; finishing again returns the same outcome.
+  if (geminiStream) return parseGeminiOutput(geminiStream.finish());
   if (request.harness === 'cursor') return parseCursorOutput(stdout);
   const lastMessage = await readFile(join(request.cwd, LAST_MESSAGE_FILE), 'utf8').catch(() => null);
   return parseCodexOutput(stdout, lastMessage);
 };
+
+/** The prompt as each CLI takes it: the ones without a schema flag get the schema in the text. */
+function harnessPromptText(request: Pick<HarnessRequest, 'harness' | 'prompt' | 'schema'>): string {
+  if (request.harness === 'cursor') return `${request.prompt}\n\nReturn only one JSON object that matches this schema (no markdown fences):\n${JSON.stringify(request.schema)}`;
+  if (request.harness === 'gemini') return geminiPrompt(request.prompt, request.schema);
+  return request.prompt;
+}
+
+/** The CLI's environment: this machine's, minus Electron's own variables, pointed at the chosen account. */
+function harnessEnvironment(request: Pick<HarnessRequest, 'harness' | 'configDir'>): NodeJS.ProcessEnv {
+  const environment = { ...cleanEnv(process.env), ...harnessAccountEnv(request.harness, request.configDir) };
+  if (request.harness === 'gemini') return geminiRunEnvironment(environment);
+  return environment;
+}
+
+function nativeToolError(toolName: string) {
+  return new HarnessError(`Gemini CLI đòi dùng tool riêng của nó (${toolName.slice(0, 100)}) dù Orglet đã tắt; lượt chạy đã dừng để không thao tác nào chạy ngoài quyền của Orglet.`);
+}
 
 /** Why Claude Code stopped without printing a result: signed out, out of plan usage, or an unknown failure. */
 function claudeExitError(code: number | null, errorOutput: string, rateLimit: ClaudeRateLimitInfo | null) {
@@ -387,7 +473,5 @@ export function stderrTail(errorOutput: string) {
  * minute ago can be gone by the time a run starts. Naming that beats a bare exit code (COD-165).
  */
 export function missingExecutableError(harness: HarnessId, executable: string) {
-  return new HarnessError(`Không còn thấy ${harnessDisplayNames[harness]} ở ${executable}; bản cài có thể vừa được thay. Bấm Dò lại trong Cài đặt → Harness trên máy rồi thử lại.`);
+  return new HarnessError(`Không còn thấy ${harnessNames[harness]} ở ${executable}; bản cài có thể vừa được thay. Bấm Dò lại trong Cài đặt → Harness trên máy rồi thử lại.`);
 }
-
-const harnessDisplayNames: Record<HarnessId, string> = { 'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor Agent' };

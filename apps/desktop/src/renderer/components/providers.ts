@@ -1,5 +1,5 @@
 import { API_PROVIDER_NAMES, type Connections, type ProviderScope } from '../../shared/contracts';
-import { harnessReady, isHarness, type HarnessInfo } from '../../shared/harness';
+import { harnessReady, isHarness, type HarnessId, type HarnessInfo } from '../../shared/harness';
 import { t } from '../i18n';
 
 export type Readiness = Record<ProviderScope, boolean>;
@@ -8,19 +8,21 @@ const labels: Record<ProviderScope, string> = {
   'claude-code': 'Claude Code trên máy này',
   codex: 'Codex trên máy này',
   cursor: 'Cursor Agent trên máy này',
+  gemini: 'Gemini CLI trên máy này',
 };
 export const providerLabel = (provider: ProviderScope) => t(labels[provider]);
 
 /** API providers need a stored key; local harnesses need a signed-in, runnable install — detected-on-disk is not enough. */
 /** `harnesses` is undefined while detection is still running; a harness then counts as ready rather than flashing "not ready". */
 export function readiness(connections: Connections, harnesses: HarnessInfo[] | undefined): Readiness {
-  const item = (id: 'claude-code' | 'codex' | 'cursor') => harnesses?.find(entry => entry.id === id);
-  const ready = (id: 'claude-code' | 'codex' | 'cursor') => harnesses === undefined || harnessReady(item(id) ?? { auth: 'missing', runnable: true });
+  const item = (id: HarnessId) => harnesses?.find(entry => entry.id === id);
+  const ready = (id: HarnessId) => harnesses === undefined || harnessReady(item(id) ?? { auth: 'missing', runnable: true });
   return {
     ...connections,
     'claude-code': ready('claude-code'),
     codex: ready('codex'),
     cursor: ready('cursor'),
+    gemini: ready('gemini'),
   };
 }
 
