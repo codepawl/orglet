@@ -1,23 +1,27 @@
 import { z } from 'zod';
 
 /** Agent CLIs installed on the user's machine that Orglet can drive as a read-only review worker. */
-export const HarnessId = z.enum(['claude-code', 'codex', 'cursor']);
+export const HarnessId = z.enum(['claude-code', 'codex', 'cursor', 'gemini']);
 export type HarnessId = z.infer<typeof HarnessId>;
-/** Harnesses listed in Settings (same set as runnable ids while Cursor Agent is supported). */
-export const HarnessCatalogId = z.enum(['claude-code', 'codex', 'cursor']);
+/** Harnesses listed in Settings (the same set as the runnable ids). */
+export const HarnessCatalogId = z.enum(['claude-code', 'codex', 'cursor', 'gemini']);
 export type HarnessCatalogId = z.infer<typeof HarnessCatalogId>;
 export const harnessCatalog = HarnessCatalogId.options;
-export const harnessNames: Record<HarnessCatalogId, string> = { 'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor Agent' };
+export const harnessNames: Record<HarnessCatalogId, string> = { 'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor Agent', gemini: 'Gemini CLI' };
 export const isHarness = (provider: string): provider is HarnessId => HarnessId.safeParse(provider).success;
 export const harnessRunnable = (id: HarnessCatalogId): id is HarnessId => HarnessId.safeParse(id).success;
 
 /** PATH / default binary names used in copy-paste commands when no install was found. */
-export const harnessBinaries: Record<HarnessCatalogId, string> = { 'claude-code': 'claude', codex: 'codex', cursor: 'agent' };
-/** Login subcommands from each CLI's own help / docs. Not deep links — those CLIs open a browser themselves. */
+export const harnessBinaries: Record<HarnessCatalogId, string> = { 'claude-code': 'claude', codex: 'codex', cursor: 'agent', gemini: 'gemini' };
+/**
+ * Login subcommands from each CLI's own help / docs. Not deep links — those CLIs open a browser themselves. Gemini CLI
+ * has no login subcommand: started bare it asks how to sign in, and "Sign in with Google" opens the browser.
+ */
 export const harnessLoginArgs: Record<HarnessCatalogId, readonly string[]> = {
   'claude-code': ['auth', 'login'],
   codex: ['login'],
   cursor: ['login'],
+  gemini: [],
 };
 
 /**
@@ -28,6 +32,8 @@ export const harnessConfigDirVariable: Record<HarnessCatalogId, string> = {
   'claude-code': 'CLAUDE_CONFIG_DIR',
   codex: 'CODEX_HOME',
   cursor: 'CURSOR_CONFIG_DIR',
+  // Gemini CLI keeps its `.gemini` folder inside this one, so an account folder holds `<folder>/.gemini`.
+  gemini: 'GEMINI_CLI_HOME',
 };
 
 /** The account that is the CLI's own home folder: what every install starts with, and what Orglet used before accounts existed. */
@@ -91,7 +97,7 @@ export type HarnessUsageWindow = {
 };
 
 /**
- * Why an account shows no allowance: the CLI reports none (Cursor Agent, an API-key sign-in), the account is
+ * Why an account shows no allowance: the CLI reports none (Cursor Agent, Gemini CLI, an API-key sign-in), the account is
  * signed out, its saved sign-in has expired until the CLI runs again, or the read failed this time.
  */
 export type HarnessUsageGap = 'unsupported' | 'signed_out' | 'expired' | 'failed';
@@ -139,13 +145,18 @@ const gitBashPath = (path: string) => path.replace(/^([A-Za-z]):[\\/]/, (_match,
 
 /** The program and its login arguments as one shell would write them, or the bare command name when nothing is installed. */
 function loginProgram(shell: LoginShell, id: HarnessCatalogId, executable: string | undefined): string {
-  const args = harnessLoginArgs[id].join(' ');
-  if (!executable) return `${harnessBinaries[id]} ${args}`;
-  if (shell === 'powershell') return `& "${executable}" ${args}`;
-  if (shell === 'cmd') return `"${executable}" ${args}`;
-  if (shell === 'bash') return `${posixQuote(gitBashPath(executable))} ${args}`;
+  const args = harnessLoginArgs[id];
+  if (!executable) return withArguments(harnessBinaries[id], args);
+  if (shell === 'powershell') return withArguments(`& "${executable}"`, args);
+  if (shell === 'cmd') return withArguments(`"${executable}"`, args);
+  if (shell === 'bash') return withArguments(posixQuote(gitBashPath(executable)), args);
   const quote = (value: string) => /[\s"$\\]/.test(value) ? `"${value.replace(/(["\\$])/g, '\\$1')}"` : value;
-  return [executable, ...harnessLoginArgs[id]].map(quote).join(' ');
+  return [executable, ...args].map(quote).join(' ');
+}
+
+/** A program and its arguments; a CLI that signs in when started bare gets no trailing space. */
+function withArguments(program: string, args: readonly string[]): string {
+  return [program, ...args].join(' ');
 }
 
 /**
@@ -176,13 +187,14 @@ export function loginCommand(id: HarnessCatalogId, executable: string | undefine
 }
 
 /**
- * The install line each vendor documents. Claude Code and Codex publish first-party npm packages whose binaries
- * are the very names `candidates()` looks for, and a global npm install lands in %APPDATA%\npm, one of the
+ * The install line each vendor documents. Claude Code, Codex and Gemini CLI publish first-party npm packages whose
+ * binaries are the very names `candidates()` looks for, and a global npm install lands in %APPDATA%\npm, one of the
  * folders it already searches — so the command shown here is one the detector will find afterwards.
  */
 export function installCommand(id: HarnessCatalogId, platform: NodeJS.Platform): string | undefined {
   if (id === 'claude-code') return 'npm install -g @anthropic-ai/claude-code';
   if (id === 'codex') return 'npm install -g @openai/codex';
+  if (id === 'gemini') return 'npm install -g @google/gemini-cli';
   return platform === 'win32' ? "irm 'https://cursor.com/install?win32=true' | iex" : 'curl https://cursor.com/install -fsS | bash';
 }
 

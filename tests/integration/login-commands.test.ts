@@ -35,6 +35,17 @@ describe('login lines as text', () => {
     ]);
   });
 
+  it('starts Gemini CLI bare, since it signs in from its own menu, with no trailing space', () => {
+    const gemini = 'C:\\Users\\An Nguyen\\AppData\\Roaming\\npm\\gemini.cmd';
+    const account = 'C:\\Users\\An Nguyen\\AppData\\Roaming\\Orglet\\harness-accounts\\gemini\\work';
+    expect(loginCommands('gemini', gemini, 'win32', account)).toEqual([
+      { shell: 'powershell', command: `$env:GEMINI_CLI_HOME = "${account}"; & "${gemini}"` },
+      { shell: 'cmd', command: `set "GEMINI_CLI_HOME=${account}" && "${gemini}"` },
+      { shell: 'bash', command: `GEMINI_CLI_HOME='${account}' '/c/Users/An Nguyen/AppData/Roaming/npm/gemini.cmd'` },
+    ]);
+    expect(loginCommands('gemini', undefined, 'darwin')).toEqual([{ shell: 'sh', command: 'gemini' }]);
+  });
+
   it('quotes a single quote inside a Git Bash path', () => {
     expect(loginCommandFor('bash', 'claude-code', "C:\\Users\\O'Brien\\claude.exe")).toBe(`'/c/Users/O'\\''Brien/claude.exe' auth login`);
   });

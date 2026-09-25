@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isHarness } from './harness';
 
 /** Only shipped capabilities can be granted. Adding a tool never grants it to old tasks. */
 export const ToolCapability = z.enum(['source.read', 'dataset.check', 'skill.read', 'network.web', 'app.propose']);
@@ -17,7 +18,7 @@ export function snapshotCapabilities(provider: string, requested?: ToolCapabilit
   // A new capability must never become an implicit grant on old tasks or checkpoints. `app.propose` is the one
   // exception (COD-199): it lets a worker store a change for the user to apply, never make one, so a chat has it
   // unless the user turned it off.
-  const defaults: ToolCapability[] = ['claude-code', 'codex', 'cursor'].includes(provider)
+  const defaults: ToolCapability[] = isHarness(provider)
     ? ['source.read', 'skill.read', 'app.propose'] : ['source.read', 'dataset.check', 'skill.read', 'app.propose'];
   const capabilities = ToolCapabilities.parse(requested ?? defaults);
   if (capabilities.some(capability => !supported.includes(capability))) {

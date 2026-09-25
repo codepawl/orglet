@@ -29,7 +29,7 @@ A worker stores `provider` and optional `modelId` (`apps/desktop/src/shared/cont
 | Anthropic | `claude-haiku-4-5-20251001` | $1.00 / $5.00 per MTok |
 | xAI | `grok-3-mini` | $0.30 / $0.50 per MTok |
 | OpenRouter | `openai/gpt-4.1-mini` | $0.40 / $1.60 per MTok (catalog hint; native list tenths when cached) |
-| Demo / Claude Code / Codex / Cursor / Ollama / OpenCode Zen / OpenCode Go | (none) | No Orglet reservation (OpenCode Zen is billed to the Zen balance, OpenCode Go by the Go plan; neither has a default model) |
+| Demo / Claude Code / Codex / Cursor / Gemini CLI / Ollama / OpenCode Zen / OpenCode Go | (none) | No Orglet reservation (OpenCode Zen is billed to the Zen balance, OpenCode Go by the Go plan; neither has a default model) |
 
 The worker dialog labels those three IDs as suggestions in the picker (`WorkerDialog.tsx`, `workerModel.ts`). A saved `modelId` is frozen onto `run.snapshot.model`. Custom OpenAI/Anthropic IDs are not billed at mini/Haiku rates (unknown reservation until a later COD stores a verified price). xAI and OpenRouter native tenths from the cached list are used when present. Harness runs pass `--model` / `-m` when `modelId` is set. Ollama runs make no Orglet reservation.
 
@@ -49,6 +49,7 @@ Checked against official docs on 2026-09-18. Revalidate URLs before COD-31 lands
 | **Claude Code** | No list command. Ship the documented `--model` **aliases** (`sonnet`, `opus`, `haiku`, `fable`) plus custom ID. | Official CLI has `--model` but no `claude model list` ([feature request](https://github.com/anthropics/claude-code/issues/12612)). `/model` is interactive. Anthropic Models API **rejects** Claude Code OAuth. | **None.** Aliases are not versions and have no sunset. |
 | **Codex** | Native `codex debug models` JSON on the detected executable (logged-in). Fall back to `codex debug models --bundled` if the remote catalog refresh fails. | Official CLI JSON. Do **not** start Codex app-server (`model/list`) — [capabilities.md](capabilities.md) already keeps app-server off. | No sunset date. Optional **`upgrade`** (replacement slug) and `visibility` if present. Map `upgrade` as `replacementId` for COD-30 copy, not as a date. |
 | **Cursor Agent** | Native `agent --list-models` (same as `agent models`) on the detected executable. Prefer the flag so older builds do not treat `models` as a prompt. | Official CLI. Account-specific. | **None.** Text rows `id - display name` only. |
+| **Gemini CLI** | No list command (checked against 0.61.0: `--help` has none, `/model` is interactive). Ship the `-m` **aliases** its CLI reference documents (`auto`, `pro`, `flash`, `flash-lite`) plus custom ID for a full model name such as `gemini-2.5-pro`. Nothing is probed. | Same shape as Claude Code. The Gemini API's own model list needs an API key, and most people sign the CLI in with Google instead. | **None.** Aliases are not versions and have no sunset. |
 | **Demo** | No fetch. | Demo calls no API. | n/a |
 
 ### Display filter (OpenAI only)
@@ -87,10 +88,10 @@ A later COD may add an optional community overlay **only** if a native list is s
 Normalize every source into one object. Unknown fields stay omitted, never invented.
 
 ```
-provider        openai | anthropic | xai | openrouter | opencode-zen | opencode-go | ollama | claude-code | codex | cursor
+provider        openai | anthropic | xai | openrouter | opencode-zen | opencode-go | ollama | claude-code | codex | cursor | gemini
 id              exact slug sent to the API or `--model`
-displayName     optional (Anthropic, Codex, Cursor, OpenRouter, Ollama)
-aliases         optional (xAI, Claude Code)
+displayName     optional (Anthropic, Codex, Cursor, OpenRouter, Ollama, Claude Code and Gemini CLI aliases)
+aliases         optional (xAI, Claude Code, Gemini CLI)
 deprecated      true only when the native payload says so
 sunsetAt        ISO date only when native (`shutdown_date`)
 replacementId   optional (Codex `upgrade`)
@@ -147,6 +148,7 @@ COD-31 stores whatever the native source actually has. COD-30 renders a chip onl
 | Anthropic | omit | omit | Dates exist only on [model deprecations](https://platform.claude.com/docs/en/about-claude/model-deprecations). Chip cannot show a sunset until Anthropic puts it on `GET /v1/models`. |
 | xAI | omit | omit | Retirement redirects (e.g. grok-3 → grok-4.3) are HTML. A still-listed slug may already be a redirect; we will not infer that. |
 | Claude Code | omit | omit | Aliases have no version lifecycle. |
+| Gemini CLI | omit | omit | Same: aliases only. |
 | Codex | omit (unless JSON later adds it) | omit | `upgrade` → `replacementId` only. `visibility` is picker hygiene, not deprecation. |
 | Cursor | omit | omit | List text has no dates. |
 
@@ -190,7 +192,7 @@ Shipped. Picker and deprecated chip are COD-28 / COD-30.
 1. Typed `ModelEntry` / `ModelListCache` in `shared/models.ts` (zod). Settings key `modelLists`, versioned, excluded from backup.
 2. Core command `modelList({ provider, refresh?: boolean })`. Return `{ models, fetchedAt, stale, error?, customIdOk }`. Renderer-only; no keys.
 3. OpenAI / Anthropic / xAI: `GET` with the saved key; 8s timeout; pagination for Anthropic; xAI `language-models`; OpenAI display filter above.
-4. Codex: `codex debug models` JSON → `id`/`displayName`/`replacementId`. Cursor: `agent --list-models`, parse `id - name` lines; if the shape is wrong, fail-open. Claude Code: static aliases, no network. Demo: empty.
+4. Codex: `codex debug models` JSON → `id`/`displayName`/`replacementId`. Cursor: `agent --list-models`, parse `id - name` lines; if the shape is wrong, fail-open. Claude Code and Gemini CLI: static aliases, no network. Demo: empty.
 5. Persist; TTL 24h; invalidate on key change and harness **Dò lại**; stale-while-revalidate.
 6. Map OpenAI `shutdown_date` into `deprecated` + `sunsetAt`. Leave other providers' deprecation fields omitted.
 7. Tests with HTTP/CLI fixtures in `tests/integration/model-list.test.ts`.

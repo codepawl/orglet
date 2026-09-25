@@ -11,7 +11,7 @@ Orglet is early. Expect rough edges, and check answers against your own sources 
 | Page | What it covers |
 |---|---|
 | [Orglets and crews](orglets-and-crews.md) | Creating an orglet, crews and how a crew turn runs, group chats, `@` tags, replies, reactions |
-| [Connections](connections.md) | Claude Code, Codex and Cursor Agent on this computer; API keys; Ollama; Demo; model IDs; cost limits |
+| [Connections](connections.md) | Claude Code, Codex, Cursor Agent and Gemini CLI on this computer; API keys; Ollama; Demo; model IDs; cost limits |
 | [In a chat](chat-guide.md) | Attaching files, reports as documents, the trace of what an orglet did, diffs, Details, schedules, notifications |
 | [Permissions and learning](permissions-and-learning.md) | The permission switches and the working folder, memory, knowledge and the Library, self-improvement, app-change proposals |
 | [Settings](settings.md) | Every settings tab, including backup, erasing data, and updates |
@@ -22,7 +22,7 @@ The step-by-step first walk-through with screenshots is [Getting started](gettin
 ## What Orglet is
 
 - **A team with roles.** Each orglet has a name, a face, instructions and a skill. You talk to one orglet, a few of them, or a crew.
-- **Your existing AI plan.** An orglet can run through Claude Code, Codex or Cursor Agent using the account you are already logged in to. An API key is optional.
+- **Your existing AI plan.** An orglet can run through Claude Code, Codex, Cursor Agent or Gemini CLI using the account you are already logged in to. An API key is optional.
 - **Private by default.** No account, no server. An orglet reads only the files you attach to that chat or the folder you grant it.
 - **Repeat work runs itself.** Schedules send the same request daily or weekly while the app is open.
 

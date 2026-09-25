@@ -9,9 +9,9 @@ import { packagedExecutable } from './packaged-executable.mjs';
 const pills = { not_installed: 'Chưa cài', detected: 'Chưa đăng nhập', signed_in_ready: 'Sẵn sàng', signed_in: 'Đã đăng nhập', auth_error: 'Lỗi đăng nhập' };
 const hint = { not_installed: name => `Cài và đăng nhập ${name} trên máy này`, detected: name => `Đăng nhập ${name} trên máy này`, auth_error: name => `Sửa đăng nhập ${name} trên máy này` };
 
-// Puts two fake CLIs first on PATH so CI always has a logged-out Claude Code and an
-// unreadable Codex login probe. Cursor stays whatever the machine has (usually not installed).
-// The smoke never starts a harness run and never calls a provider.
+// Puts three fake CLIs first on PATH so CI always has a logged-out Claude Code, an unreadable Codex login probe and
+// a Gemini CLI whose empty config folder (GEMINI_CLI_HOME below) holds no sign-in. Cursor stays whatever the machine
+// has (usually not installed). The smoke never starts a harness run and never calls a provider.
 async function fakeHarnessPath(directory) {
   const bin = join(directory, 'bin');
   await mkdir(bin, { recursive: true });
@@ -40,14 +40,24 @@ async function fakeHarnessPath(directory) {
     }
     process.exit(1);
   `);
+  // Gemini CLI has no status command; Orglet reads its sign-in from GEMINI_CLI_HOME, which the smoke leaves empty.
+  await shim('gemini', `
+    const args = process.argv.slice(2);
+    if (args[0] === '--version') { process.stdout.write('0.61.0\\n'); process.exit(0); }
+    process.exit(1);
+  `);
   return bin;
 }
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-harness-ui-'));
 await mkdir('test-results', { recursive: true });
 const bin = await fakeHarnessPath(directory);
+const geminiHome = join(directory, 'gemini-home');
+await mkdir(geminiHome, { recursive: true });
 const pathValue = `${bin}${delimiter}${process.env.PATH ?? process.env.Path ?? ''}`;
-const env = { ...process.env, PATH: pathValue, Path: pathValue }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, PATH: pathValue, Path: pathValue, GEMINI_CLI_HOME: geminiHome }; delete env.ELECTRON_RUN_AS_NODE;
+// Variables Gemini CLI would treat as a sign-in on their own; without them the empty folder reads as signed out.
+for (const name of ['GEMINI_API_KEY', 'GOOGLE_GENAI_USE_GCA', 'GOOGLE_GENAI_USE_VERTEXAI', 'GOOGLE_GEMINI_BASE_URL', 'GEMINI_CLI_USE_COMPUTE_ADC', 'CLOUD_SHELL']) delete env[name];
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
 let closed = false; app.once('close', () => { closed = true; });
 const noDemo = async page => {
@@ -58,9 +68,14 @@ try {
   const page = await app.firstWindow(); const errors = []; page.on('pageerror', error => errors.push(error.message));
   await useVietnamese(page);
   const detected = await page.evaluate(() => window.orglet.call('harnesses', { refresh: true }));
-  assert.deepEqual(detected.map(item => item.id), ['claude-code', 'codex', 'cursor']);
+  assert.deepEqual(detected.map(item => item.id), ['claude-code', 'codex', 'cursor', 'gemini']);
   const claude = detected.find(item => item.id === 'claude-code');
   const codex = detected.find(item => item.id === 'codex');
+  const gemini = detected.find(item => item.id === 'gemini');
+  // Found on PATH with no sign-in in its folder: detected, never ready.
+  assert.equal(gemini.auth, 'logged_out');
+  assert.equal(gemini.status, 'detected');
+  assert.equal(gemini.version, '0.61.0');
   // detect ≠ signed-in: fixture Claude Code is found on disk, not logged_in.
   assert.equal(claude.auth, 'logged_out');
   assert.equal(claude.status, 'detected');
@@ -103,6 +118,12 @@ try {
   await codexRow.getByText('Lỗi đăng nhập', { exact: true }).waitFor();
   await codexRow.getByText('không chuyển sang Demo', { exact: false }).waitFor();
   assert.equal(await codexRow.getByText(/^Đã đăng nhập/, { exact: false }).count(), 0);
+  const geminiRow = section.locator('.harness-row', { hasText: 'Gemini CLI' });
+  await geminiRow.getByText('Chưa đăng nhập', { exact: true }).waitFor();
+  // Gemini CLI signs in from its own menu, so the row names the choice to make there.
+  await geminiRow.getByText('Sign in with Google', { exact: false }).waitFor();
+  await geminiRow.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/settings-harness-gemini.png' });
   await page.getByRole('button', { name: 'Dò lại', exact: true }).click();
   await page.getByText('Đã dò lại harness', { exact: true }).waitFor();
   await page.screenshot({ path: 'test-results/settings-connections.png' });
@@ -125,7 +146,7 @@ try {
   const model = await editResearcher();
   await model.click();
   // Accessible names ignore decorative ProviderMark glyphs; allTextContents would see Cursor's "C" monogram.
-  for (const name of ['Claude Code', 'Codex', 'Cursor Agent']) {
+  for (const name of ['Claude Code', 'Codex', 'Cursor Agent', 'Gemini CLI']) {
     await page.getByRole('option', { name: new RegExp(`^${name}`) }).waitFor();
   }
   await page.screenshot({ path: 'test-results/model-select.png' });

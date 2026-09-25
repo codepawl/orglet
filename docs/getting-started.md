@@ -67,9 +67,9 @@ To start a new conversation later, open **⋯** next to **Details** and choose *
 
 When you want real answers, pick one path. Do not paste keys into chat.
 
-### A. A plan you already pay for (Claude Code, Codex, or Cursor Agent)
+### A. A plan you already pay for (Claude Code, Codex, Cursor Agent or Gemini CLI)
 
-1. Install that tool on this computer and sign in to it.
+1. Install that tool on this computer and sign in to it. Gemini CLI signs in when you run `gemini` and choose **Sign in with Google**.
 2. Open **Settings** → **Local harnesses**.
 3. Check the row: **not installed**, **found on disk**, **signed in (ready)**, or **sign-in error**. **Found on disk is not ready.**
 4. If it is not signed in, copy the login command from that row and run it, then choose **Rescan**. Orglet does not switch to Demo when sign-in fails.

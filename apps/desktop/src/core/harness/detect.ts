@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { readdir, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import {
   harnessBinaries,
@@ -18,6 +19,7 @@ import {
   type HarnessInfo,
 } from '../../shared/harness';
 import type { HarnessAccountMap } from './accounts';
+import { geminiHome, readGeminiSignIn, type GeminiSignIn } from './gemini';
 
 export type Probe = (executable: string, args: string[], overrides?: NodeJS.ProcessEnv) => Promise<{ code: number; stdout: string; stderr: string }>;
 
@@ -68,11 +70,15 @@ export async function candidates(id: HarnessCatalogId, env: NodeJS.ProcessEnv = 
     const bin = join(local, 'OpenAI', 'Codex', 'bin');
     for (const entry of await children(bin)) paths.push(join(bin, entry, 'codex.exe'));
     if (platform === 'darwin') paths.push('/Applications/Codex.app/Contents/Resources/codex');
-  } else {
+  } else if (id === 'cursor') {
     // Cursor Agent CLI: install script under ~/.cursor/bin, native Windows installer under %LOCALAPPDATA%\cursor-agent.
     paths.push(join(home, '.cursor', 'bin', windows ? 'agent.exe' : 'agent'));
     pushNames(join(local, 'cursor-agent'), ['agent', 'cursor-agent']);
     if (platform === 'darwin') paths.push('/usr/local/bin/agent', join(home, '.local', 'bin', 'agent'));
+  } else if (platform === 'darwin') {
+    // Gemini CLI is an npm package (the npm folders above cover it); Homebrew links it here, and an app opened from
+    // the Finder does not get the shell's PATH.
+    paths.push('/opt/homebrew/bin/gemini', '/usr/local/bin/gemini');
   }
   const found: string[] = [];
   for (const path of [...new Set(paths)]) if (await isFile(path)) found.push(path);
@@ -132,7 +138,7 @@ function describeAuth(id: HarnessCatalogId, executable: string, platform: NodeJS
   };
 }
 
-async function inspect(id: HarnessCatalogId, executable: string, run: Probe, platform: NodeJS.Platform, selection: HarnessAccountSelection): Promise<HarnessInfo | null> {
+async function inspect(id: HarnessCatalogId, executable: string, run: Probe, platform: NodeJS.Platform, selection: HarnessAccountSelection, env: NodeJS.ProcessEnv): Promise<HarnessInfo | null> {
   // Every probe reads the selected account's folder, so the version, the sign-in and the login command all describe it.
   const accountEnv = harnessAccountEnv(id, selection.configDir);
   const describe = (auth: HarnessInfo['auth'], detail: string) => describeAuth(id, executable, platform, auth, detail, selection);
@@ -168,6 +174,8 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
     } else {
       info = describe('unknown', unread);
     }
+  } else if (id === 'gemini') {
+    info = describeGeminiSignIn(await readGeminiSignIn(geminiHome(selection.configDir, env, homeFolder(env)), env, path => readFile(path, 'utf8')), describe, signedOut, unread);
   } else {
     const status = await run(executable, ['status', '--format', 'json'], accountEnv);
     const text = output(status).trim();
@@ -194,6 +202,20 @@ async function inspect(id: HarnessCatalogId, executable: string, run: Probe, pla
     }
   }
   return { ...info, version };
+}
+
+/** The home folder as this environment names it; a CLI's own home folder when the environment names none. */
+const homeFolder = (env: NodeJS.ProcessEnv) => env.USERPROFILE ?? env.HOME ?? homedir();
+
+type Describe = (auth: HarnessInfo['auth'], detail: string) => Omit<HarnessInfo, 'version'>;
+
+/** Gemini CLI has no status command, so its state comes from its own files (see readGeminiSignIn). */
+function describeGeminiSignIn(signIn: GeminiSignIn, describe: Describe, signedOut: string, unread: string) {
+  if (signIn.state === 'unreadable') return describe('unknown', unread);
+  if (signIn.state === 'signed_out') return describe('logged_out', signedOut);
+  if (signIn.method !== 'oauth-personal') return describe('logged_in', `Đăng nhập qua ${signIn.method ?? 'Gemini CLI'}`);
+  if (signIn.email) return describe('logged_in', `Đăng nhập Google · ${signIn.email}`);
+  return describe('logged_in', 'Đăng nhập Google');
 }
 
 /**
@@ -229,7 +251,7 @@ export async function detectHarnesses(env: NodeJS.ProcessEnv = process.env, plat
     const installs = await candidates(id, env, platform);
     let found: HarnessInfo | null = null;
     for (const executable of installs) {
-      found = await inspect(id, executable, run, platform, selection);
+      found = await inspect(id, executable, run, platform, selection, env);
       if (found) break;
     }
     if (found) {

@@ -9,7 +9,7 @@
 
 ## Why mobile is not a port
 
-A worker runs through a local CLI harness — Claude Code, Codex, Cursor Agent — or through an API key held in the desktop machine's secure storage. A phone runs none of that. It cannot host a worker, and Orglet has no server to host one for it ([capabilities.md](capabilities.md)).
+A worker runs through a local CLI harness — Claude Code, Codex, Cursor Agent, Gemini CLI — or through an API key held in the desktop machine's secure storage. A phone runs none of that. It cannot host a worker, and Orglet has no server to host one for it ([capabilities.md](capabilities.md)).
 
 So mobile is a **companion to a desktop workspace**, not a second copy of the app. Every question below follows from that.
 
