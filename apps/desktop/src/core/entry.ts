@@ -15,6 +15,7 @@ import { WindowsSandbox } from './tools/sandbox';
 import { WorkspaceFilesRuntime } from './tools/workspace-files-runtime';
 import { WorkspaceIntegration } from './tools/workspace-integration';
 import { WorkspaceRuntime } from './tools/workspace-runtime';
+import { emptyMcpSecrets, McpSecrets } from '../shared/mcp';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
@@ -23,6 +24,17 @@ const requestKey = (provider: string) => new Promise<string | null>(resolve => {
   const requestId = crypto.randomUUID(); pendingKeys.set(requestId, resolve);
   port.postMessage({ type: 'key', id: requestId, provider });
   setTimeout(() => { if (pendingKeys.delete(requestId)) resolve(null); }, 5000).unref();
+});
+/**
+ * An MCP server's secret values, asked of main when the server starts (COD-241). Main decrypts them with safeStorage;
+ * a missing or unreadable answer is an empty set, and the server then says which value it lacks.
+ */
+const pendingMcpSecrets = new Map<string, (secrets: McpSecrets) => void>();
+const requestMcpSecrets = (serverId: string) => new Promise<McpSecrets>(resolve => {
+  const requestId = crypto.randomUUID();
+  pendingMcpSecrets.set(requestId, resolve);
+  port.postMessage({ type: 'mcpSecrets', id: requestId, serverId });
+  setTimeout(() => { if (pendingMcpSecrets.delete(requestId)) resolve(emptyMcpSecrets()); }, 5000).unref();
 });
 const pendingProfiles = new Map<string, (reply: unknown) => void>();
 const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject) => {
@@ -70,7 +82,12 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   return new OpenAIAdapter(key, { model });
 }, profile, undefined, localHarnessRuntime(join(process.argv[2], 'harness-accounts')), undefined, {
   readKey: provider => requestKey(provider),
-}, workspaceRuntime);
+}, workspaceRuntime, {
+  readSecrets: requestMcpSecrets,
+  // Main keeps each running server's process id and creation time, so quitting or a crash of this process still
+  // stops them, and a reused id is never taken for one of them.
+  onProcesses: processes => port.postMessage({ type: 'mcpProcesses', processes }),
+});
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
 port.on('message', async ({ data }) => {
   const envelope = z.object({ id: z.string(), command: z.string(), args: z.unknown() }).safeParse(data);
@@ -79,6 +96,12 @@ port.on('message', async ({ data }) => {
   if (command === 'profileReply') { pendingProfiles.get(id)?.(args); return; }
   if (command === 'keyReply') {
     pendingKeys.get(id)?.(typeof args === 'string' ? args : null); pendingKeys.delete(id); return;
+  }
+  if (command === 'mcpSecretsReply') {
+    const secrets = McpSecrets.safeParse(args);
+    pendingMcpSecrets.get(id)?.(secrets.success ? secrets.data : emptyMcpSecrets());
+    pendingMcpSecrets.delete(id);
+    return;
   }
   try {
     const value = command === 'importSources'
@@ -97,6 +120,10 @@ port.on('message', async ({ data }) => {
       : command === 'skillImport' ? core.importSkill(args)
       : command === 'skillExport' ? core.exportSkill(Id.parse(args))
       : command === 'invalidateModelList' ? core.invalidateModelList(CredentialProvider.parse(args))
+      // Only main sends these three: it has split the secret values off a server before saving it (COD-241).
+      : command === 'saveMcpServer' ? await core.saveMcpServer(args)
+      : command === 'removeMcpServer' ? await core.removeMcpServer(args)
+      : command === 'shutdown' ? await core.mcp.shutdown()
       : await core.command(command as Command, args);
     port.postMessage({ id, ok: true, value });
   } catch (error) {

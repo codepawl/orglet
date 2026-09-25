@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Check, Contrast, Database, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop } from 'lucide-react';
+import { Check, Contrast, Database, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
@@ -26,6 +26,7 @@ import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../../sh
 import { Switch } from './Switch';
 import { CodeFontPreview, InterfaceFontSample } from './FontPreview';
 import { AboutSettings } from './AboutSettings';
+import { McpHeadingActions, McpSettings, type McpEditing } from './McpSettings';
 import { t, tMessage, translated } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
@@ -39,13 +40,15 @@ const concurrencyChoices = Array.from({ length: MAX_PROVIDER_CONCURRENCY }, (_, 
 /** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
 const SAVED_KEY_MASK = '••••••••••••••••';
 
-export type SettingsTab = 'general' | 'chat' | 'connections' | 'harness' | 'usage' | 'data' | 'about';
+export type SettingsTab = 'general' | 'chat' | 'connections' | 'harness' | 'mcp' | 'usage' | 'data' | 'about';
 // Short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming). About sits last (COD-176).
 const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'general', label: 'Chung', icon: <SlidersHorizontal size={16} /> },
   { id: 'chat', label: 'Cuộc trò chuyện', icon: <MessageSquare size={16} /> },
   { id: 'connections', label: 'Kết nối API', icon: <Plug size={16} /> },
   { id: 'harness', label: 'Harness trên máy', icon: <SquareTerminal size={16} /> },
+  // MCP servers the person added by hand (COD-241).
+  { id: 'mcp', label: 'MCP', icon: <Blocks size={16} /> },
   { id: 'usage', label: 'Chi phí & giới hạn', icon: <Wallet size={16} /> },
   { id: 'data', label: 'Dữ liệu', icon: <Database size={16} /> },
   { id: 'about', label: 'Giới thiệu', icon: <Info size={16} /> },
@@ -63,6 +66,7 @@ const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch 
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
   connections: 'Key được mã hóa trên máy này và không vào bản sao lưu.',
   harness: 'Đăng nhập lỗi thì Orglet dừng lại, không chuyển sang Demo.',
+  mcp: 'Tí hỏi bạn trước mỗi lần gọi công cụ.',
   usage: 'Chỉ tính request qua Orglet; harness trên máy dùng gói riêng.',
 };
 
@@ -446,6 +450,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     if (micros !== savedLimit.current) { savedLimit.current = micros; void save({ connectionLimitMicros: micros }); }
   };
   const current = tabs.find(item => item.id === tab)!;
+  /** The MCP server open in its editor, or a new one; the heading's Add opens it (COD-241). */
+  const [mcpEditing, setMcpEditing] = useState<McpEditing>();
 
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
@@ -467,7 +473,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             <PanelHeading title={t(current.label)} description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}>{tab === 'harness' && <>
               {/* The button says it is checking instead of a line beside it, so the heading never reflows while it runs. */}
               <Button disabled={busy || harnesses === undefined} onClick={detectAgain} aria-live="polite" data-checking={detecting || undefined}><RefreshCw size={13} /><span className="steady-label"><span aria-hidden={detecting}>{t('Dò lại')}</span><span aria-hidden={!detecting}>{t('Đang dò lại…')}</span></span></Button>
-            </>}</PanelHeading>
+            </>}{tab === 'mcp' && <McpHeadingActions busy={busy} act={act} onAdd={() => setMcpEditing('new')} />}</PanelHeading>
 
             {tab === 'general' && <>
               <Row title={t('Ngôn ngữ')} description={t('Áp dụng cho toàn bộ giao diện và thông báo.')}>
@@ -665,6 +671,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               </div>
             </>}
 
+            {tab === 'mcp' && <McpSettings workspace={workspace} busy={busy} act={act} editing={mcpEditing} onEdit={setMcpEditing} />}
+
             {tab === 'usage' && <>
               <Row title={t('Đã đối soát')} description={t('Phần provider đã chốt số và tính tiền.')}><span className="setting-value">{formatMoney(workspace.usage.chargedMicros)}</span></Row>
               <Row title={t('Đang giữ chỗ')} description={workspace.usage.uncertainCount > 0 ? <span className="error">{t('{0} request chưa rõ chi phí, vẫn được tính vào giới hạn.', [workspace.usage.uncertainCount])}</span> : t('Request đang chạy hoặc chưa rõ chi phí.')}><span className="setting-value">{formatMoney(workspace.usage.reservedMicros)}</span></Row>
@@ -721,7 +729,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <EraseRow busy={busy} scope="everything" onErase={erase}
                 title={t('Xóa toàn bộ dữ liệu')}
                 description={t('Đưa Orglet về như mới cài.')}
-                caveat={t('Mọi trò chuyện, Tí, hội, skill, lịch, nguồn, kiến thức, ghi nhớ và cài đặt. API key và kết nối tùy chỉnh được giữ lại.')}
+                caveat={t('Mọi trò chuyện, Tí, hội, skill, lịch, nguồn, kiến thức, ghi nhớ và cài đặt. API key, kết nối tùy chỉnh và máy chủ MCP được giữ lại.')}
                 question={t('Xóa sạch mọi thứ trong Orglet?')} />
               <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi thứ nằm trên máy này. Không có tài khoản Orglet.')} />
             </>}

@@ -4,6 +4,7 @@ import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import type { ModelAdapter } from '../adapters/openai';
 import { toolDefinitions } from '../tools/catalog';
 import type { HarnessExecutor, HarnessRequest, HarnessResult } from './exec';
+import { isMcpToolName } from '../../shared/mcp';
 
 const ToolResponse = z.object({ call: z.object({ name: z.string().min(1).max(100), arguments: z.union([z.record(z.string(), z.unknown()), z.string()]) }).strict() }).strict();
 
@@ -49,14 +50,16 @@ export function harnessToolAdapter(options: {
     options.onResult(result);
     signal.throwIfAborted();
     const { call } = ToolResponse.parse(result.output);
-    if (!tools.some(tool => tool.type === 'function' && tool.function.name === call.name)
-      || !Object.hasOwn(toolDefinitions, call.name)) throw new Error('Tool không được policy cho phép.');
+    const offered = tools.some(tool => tool.type === 'function' && tool.function.name === call.name);
+    // An MCP tool is not in the static catalog: the runner checks it against the run's frozen list (COD-241).
+    const known = Object.hasOwn(toolDefinitions, call.name) || isMcpToolName(call.name);
+    if (!offered || !known) throw new Error('Tool không được policy cho phép.');
     // The runner validates submit_report and can request one correction without
     // persisting the invalid report body or replaying completed workspace tools.
     if (call.name === 'submit_report') return { calls: [{ id: randomUUID(), name: call.name,
       arguments: typeof call.arguments === 'string' ? call.arguments : JSON.stringify(call.arguments) }] };
     const argumentsValue = typeof call.arguments === 'string' ? JSON.parse(call.arguments) as unknown : call.arguments;
-    toolDefinitions[call.name].schema.parse(argumentsValue);
+    if (!isMcpToolName(call.name)) toolDefinitions[call.name].schema.parse(argumentsValue);
     return { calls: [{ id: randomUUID(), name: call.name, arguments: JSON.stringify(argumentsValue) }] };
   } };
 }

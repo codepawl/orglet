@@ -253,7 +253,8 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   const reaction = detail.task.messageReactions?.findLast(item => item.messageId === latestAnswer && item.actor === 'user')?.emoji;
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0;
-  const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt);
+  // An MCP approval card is answered with its buttons; typing sends a new message instead (COD-241).
+  const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt && !request.approval);
   const send = () => {
     const extra = text.trim(); if (!extra || blocked || detail.task.pendingStart || submitting) return;
     setSubmitting(true);

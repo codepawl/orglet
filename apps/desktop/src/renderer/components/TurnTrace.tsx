@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Ban, BookOpen, Brain, ChevronRight, FileDiff, FileText, FolderSearch, Globe, Lightbulb, Search, Table2, Terminal, UserRound, Wrench, type LucideIcon } from 'lucide-react';
+import { Ban, Blocks, BookOpen, Brain, ChevronRight, FileDiff, FileText, FolderSearch, Globe, Lightbulb, Search, Table2, Terminal, UserRound, Wrench, type LucideIcon } from 'lucide-react';
 import { t, tMessage } from '../i18n';
 import { traceSummary, type TraceEntry, type TraceKind } from '../turnTrace';
 
@@ -32,7 +32,7 @@ export function TurnTrace({ entries, onOpenMemories, children }: { entries: read
 const traceIcons: Record<TraceKind, LucideIcon> = {
   memory: Brain, knowledge: BookOpen, read: FileText, search: Search, list: FolderSearch, skill: BookOpen,
   web_search: Globe, web_read: Globe, dataset: Table2, edit: FileDiff, command: Terminal, handoff: UserRound,
-  remembered: Brain, proposal: Lightbulb, failed: Ban, other: Wrench,
+  remembered: Brain, proposal: Lightbulb, failed: Ban, other: Wrench, mcp: Blocks,
 };
 
 /** The row's verb, worded as what the worker did, never which tool it called (docs/worker-actions.md). */
@@ -49,6 +49,7 @@ function traceVerb(kind: TraceKind): string {
     case 'dataset': return t('Đã kiểm tra dữ liệu');
     case 'edit': return t('Sửa tệp');
     case 'command': return t('Chạy lệnh');
+    case 'mcp': return t('Dùng công cụ MCP');
     case 'handoff': return t('Giao việc cho');
     case 'remembered': return t('Ghi nhớ thêm');
     case 'proposal': return t('Đề xuất');

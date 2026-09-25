@@ -11,7 +11,7 @@ import { t } from './i18n';
  */
 export type TraceKind =
   | 'memory' | 'knowledge'
-  | 'read' | 'search' | 'list' | 'skill' | 'web_search' | 'web_read' | 'dataset' | 'edit' | 'command'
+  | 'read' | 'search' | 'list' | 'skill' | 'web_search' | 'web_read' | 'dataset' | 'edit' | 'command' | 'mcp'
   | 'handoff' | 'remembered' | 'proposal' | 'failed' | 'other';
 
 export type TraceEntry = {
@@ -32,6 +32,10 @@ export type TraceEntry = {
  */
 const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Đã đọc tài nguyên skill: (.+)$/, kind: 'skill' },
+  // An MCP call names the tool and its server, "search_issues · GitHub" (COD-241).
+  { pattern: /^Đã dùng công cụ MCP: (.+)$/, kind: 'mcp' },
+  { pattern: /^(?:Công cụ MCP không thành công|Bạn đã từ chối công cụ MCP|Công cụ MCP chưa được phép trong chat này): /, kind: 'failed', note: true },
+  { pattern: /^Không khởi động được máy chủ MCP /, kind: 'failed', note: true },
   { pattern: /^Đã đọc trang web dưới dạng dữ liệu không đáng tin\.$/, kind: 'web_read' },
   { pattern: /^Đã tìm kiếm web; kết quả chưa được xác minh\.$/, kind: 'web_search' },
   { pattern: /^(?:Không đọc được trang web|Tìm kiếm web không thành công): /, kind: 'failed', note: true },
@@ -136,7 +140,7 @@ export function liveTraceOf(memories: readonly RunMemory[] | undefined, steps: r
 type SummaryKind = Exclude<TraceKind, 'web_search' | 'web_read'> | 'web';
 
 /** The order the counts read in: what was loaded, then a crew's handoffs, then the steps, then what the run left behind. */
-const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web', 'dataset', 'edit', 'command', 'remembered', 'proposal', 'failed', 'other'];
+const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web', 'mcp', 'dataset', 'edit', 'command', 'remembered', 'proposal', 'failed', 'other'];
 
 function summaryKindOf(kind: TraceKind): SummaryKind {
   return kind === 'web_search' || kind === 'web_read' ? 'web' : kind;
@@ -152,6 +156,7 @@ function countPhrase(kind: SummaryKind, count: number): string {
     case 'list': return count === 1 ? t('Liệt kê tệp 1 lần') : t('Liệt kê tệp {0} lần', [count]);
     case 'skill': return count === 1 ? t('Đọc 1 tài nguyên skill') : t('Đọc {0} tài nguyên skill', [count]);
     case 'web': return count === 1 ? t('Lên web 1 lần') : t('Lên web {0} lần', [count]);
+    case 'mcp': return count === 1 ? t('Dùng 1 công cụ MCP') : t('Dùng {0} công cụ MCP', [count]);
     case 'dataset': return count === 1 ? t('Kiểm tra dữ liệu 1 lần') : t('Kiểm tra dữ liệu {0} lần', [count]);
     case 'edit': return count === 1 ? t('Sửa 1 tệp') : t('Sửa {0} tệp', [count]);
     case 'command': return count === 1 ? t('Chạy 1 lệnh') : t('Chạy {0} lệnh', [count]);

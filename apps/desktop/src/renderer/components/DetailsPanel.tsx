@@ -24,6 +24,8 @@ import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { MessageActions, MessageBadges } from './MessageActions';
 import { focusMessage, reactionGroups } from './messageMarks';
 import { turnMessageId } from '../../shared/message-interactions';
+import { approvalAnswerLabels, McpChatGrants } from './McpApproval';
+import { McpApprovalChoice } from '../../shared/mcp';
 
 /*
  * The panel beside a chat: who you are talking to, what this conversation has cost, and what happened in it.
@@ -33,6 +35,12 @@ import { turnMessageId } from '../../shared/message-interactions';
  * Plain words on the surface, machine detail underneath: run ids, revisions, model slugs, the context manifest
  * and token counts live in one collapsed block, so the panel reads like a person wrote it.
  */
+
+/** An answer as saved: the person's own words, or for an MCP approval card the choice it stands for (COD-241). */
+function decisionAnswer(answer: string, approval: boolean) {
+  const choice = McpApprovalChoice.safeParse(answer);
+  return approval && choice.success ? approvalAnswerLabels[choice.data] : answer;
+}
 
 // Not the bare 'tí trưởng', which the dictionary already uses for the synthesizer role rather than this stage.
 const stageNames: Record<string, string> = { plan: 'phân việc', synthesis: 'gộp kết quả', member: 'phần việc', group: 'trả lời' };
@@ -290,6 +298,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           capabilities={detail ? detail.task.toolCapabilities : tools.capabilities} grant={tools.grant} taskId={detail?.task.id} sourceCount={detail?.sources.length ?? 0}
           busy={tools.busy} pending={tools.pending}
           onCapability={tools.onCapability} onWorkspace={tools.onWorkspace} onConfigure={tools.onConfigure} />
+        {detail && <McpChatGrants detail={detail} workers={tools.workers} workspace={workspace} />}
       </section>}
       {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs} focus={recoveryFocus}
         busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} readOutput={readProcessOutput} readFile={readPrivateFile} />}
@@ -311,8 +320,9 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
       {detail && Boolean(detail.task.decisionRequests?.length) && <Section icon={MessageSquare} title={t('Quyết định trong chat')}>
         {detail.task.decisionRequests!.map(request => <div key={request.id} className="details-run">
           <div>
-            <p><strong>{request.question}</strong></p>
-            <p className="muted">{request.answer ?? (request.interruptedAt ? t('Không thể tiếp tục từ bản sao lưu') : t('Đang chờ trả lời'))}</p>
+            {/* An approval card's question is the core's own sentence, so it is translated; a worker's question is shown as asked. */}
+            <p><strong>{request.approval ? tMessage(request.question) : request.question}</strong></p>
+            <p className="muted">{request.answer ? decisionAnswer(request.answer, Boolean(request.approval)) : request.interruptedAt ? t('Không thể tiếp tục từ bản sao lưu') : t('Đang chờ trả lời')}</p>
           </div>
         </div>)}
       </Section>}

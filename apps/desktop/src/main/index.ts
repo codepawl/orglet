@@ -1,4 +1,4 @@
-import { app, autoUpdater, BrowserWindow, clipboard, dialog, ipcMain, session, shell, utilityProcess } from 'electron';
+import { app, autoUpdater, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, session, shell, utilityProcess } from 'electron';
 import { basename, join, relative, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { mkdir, open } from 'node:fs/promises';
@@ -30,6 +30,9 @@ import { CliServer, createCliToken, writeCliToken } from './cli-server';
 import { CliOperations } from './cli-operations';
 import { CliPathInstaller, isKeptOffPath, keepOffPath } from './cli-path';
 import { runSquirrelEvent, runUpdateExecutable, squirrelEventOf, type SquirrelEvent } from './squirrel-events';
+import { McpSecretStore, stopProcessTrees } from './mcp-secrets';
+import type { ProcessIdentity } from '../core/tools/process-identity';
+import { McpServerDraft, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -42,6 +45,9 @@ const pending = new Map<string, { resolve: (value: unknown) => void; reject: (er
 let window: BrowserWindow;
 let core: Electron.UtilityProcess;
 let credentials: Credentials;
+let mcpSecrets: McpSecretStore;
+/** The MCP server processes the core reports running, so they stop even when the core cannot stop them (COD-241). */
+let mcpProcesses: ProcessIdentity[] = [];
 let ready = false;
 let updater: Updater;
 let changelog: ChangelogFeed;
@@ -139,6 +145,7 @@ function useSpellCheckerLanguage(next: Language) {
 async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
   credentials = new Credentials(directory);
+  mcpSecrets = new McpSecretStore(directory, safeStorage);
   const workspaceRuntimePaths = app.isPackaged ? {
     sandboxExecutable: join(process.resourcesPath, 'wxc-exec.exe'),
     helperPath: join(process.resourcesPath, 'workspace-helper.cjs'),
@@ -165,6 +172,16 @@ async function start() {
         const provider = CredentialProvider.safeParse(message.provider);
         core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await credentials.read(provider.data) : null }); return;
       }
+      if (message.type === 'mcpSecrets') {
+        const serverId = Id.safeParse(message.serverId);
+        core.postMessage({ id: message.id, command: 'mcpSecretsReply', args: serverId.success ? await mcpSecrets.read(serverId.data) : null });
+        return;
+      }
+      if (message.type === 'mcpProcesses') {
+        const ProcessEntry = z.object({ pid: z.number().int().positive(), startedAt: z.string().min(1).max(64) }).strict();
+        mcpProcesses = z.array(ProcessEntry).max(64).catch([]).parse(message.processes);
+        return;
+      }
       if (message.type === 'profileCancel') { cancelProfile(message.id); return; }
       if (message.type === 'profile') {
         try { core.postMessage({ id: message.id, command: 'profileReply', args: { ok: true, value: await executeProfile(message.id, message.input) } }); }
@@ -175,6 +192,9 @@ async function start() {
       if (response) { clearTimeout(response.timer); pending.delete(message.id); if (message.ok) response.resolve(message.value); else response.reject(new Error(message.error)); }
     });
     core.on('exit', () => {
+      // A core that died leaves its MCP servers orphaned; they are stopped here instead.
+      stopProcessTrees(mcpProcesses);
+      mcpProcesses = [];
       ready = false; clearTimeout(timer); reject(new Error('Core exited before startup.'));
       for (const response of pending.values()) { clearTimeout(response.timer); response.reject(new Error('Core đã dừng. Lịch sử được giữ lại; khởi động lại app để phục hồi.')); }
       pending.clear(); if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
@@ -343,6 +363,44 @@ async function start() {
     await request('invalidateModelList', provider).catch(() => {});
     return announceConnections();
   });
+  /**
+   * MCP servers (COD-241). The form's secret values stop here: they are encrypted into main's store and the core
+   * receives the server's shape with names only. A new server's values are dropped again if the core refuses it.
+   */
+  const saveMcpDraft = async (draft: McpServerDraft): Promise<McpServerView> => {
+    const serverId = draft.id ?? randomUUID();
+    const saved = draft.id ? await mcpSecrets.read(serverId) : { env: {}, headers: {} };
+    const { config, secrets } = splitMcpDraft(draft, serverId, saved);
+    await mcpSecrets.save(serverId, secrets);
+    try {
+      return await request('saveMcpServer', config) as McpServerView;
+    } catch (error) {
+      if (!draft.id) await mcpSecrets.remove(serverId);
+      throw error;
+    }
+  };
+  handle('orglet:mcp-save', async raw => saveMcpDraft(McpServerDraft.parse(raw)));
+  handle('orglet:mcp-remove', async raw => {
+    const serverId = Id.parse(raw);
+    await request('removeMcpServer', serverId);
+    await mcpSecrets.remove(serverId);
+  });
+  // Only a file the person picks here is read; Orglet never looks for another app's MCP settings on its own.
+  handle('orglet:mcp-import', async () => {
+    const result = await dialog.showOpenDialog(window, { title: tr('Nhập máy chủ MCP từ tệp JSON'), properties: ['openFile'], filters: [{ name: 'JSON', extensions: ['json'] }] });
+    if (result.canceled) return null;
+    const { drafts, skipped } = parseMcpImport(await readBoundedText(result.filePaths[0], 1024 * 1024));
+    const imported: string[] = [];
+    for (const draft of drafts) {
+      try {
+        await saveMcpDraft(draft);
+        imported.push(draft.name);
+      } catch (error) {
+        skipped.push({ name: draft.name, reason: error instanceof z.ZodError ? 'Dữ liệu không hợp lệ.' : error instanceof Error ? error.message : 'Không lưu được.' });
+      }
+    }
+    return { imported, skipped };
+  });
   handle('orglet:backup', async () => {
     const result = await dialog.showSaveDialog(window, { title: tr('Lưu bản sao lưu'), defaultPath: 'orglet-backup.json', filters: [{ name: 'Orglet backup', extensions: ['json'] }] });
     if (result.canceled || !result.filePath) return false;
@@ -471,5 +529,13 @@ else {
   app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.focus(); } });
   app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
   app.on('window-all-closed', () => app.quit());
-  app.on('before-quit', () => { ready = false; void cliServer?.close(); updater?.stop(); stopProfiles(); core?.kill(); });
+  app.on('before-quit', () => {
+    // MCP servers run under the core (COD-241). The core is told first, so it closes the servers it holds while main
+    // checks and stops the ones it reported; only a process still the one Orglet started is stopped here.
+    if (ready) core?.postMessage({ id: randomUUID(), command: 'shutdown', args: undefined });
+    ready = false; void cliServer?.close(); updater?.stop(); stopProfiles();
+    stopProcessTrees(mcpProcesses);
+    mcpProcesses = [];
+    core?.kill();
+  });
 }

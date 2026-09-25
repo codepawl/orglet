@@ -5,7 +5,7 @@ import { newChatKey, newChatKeyNames } from '../shared/live-task';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
 import { GrantWorkspace, type NewChatTarget } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
-import { commands, type CredentialProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
+import { commands, Id, type CredentialProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
 import { BudgetLedger } from './budgets/ledger';
 import { Checkpoints } from './storage/checkpoints';
@@ -45,6 +45,8 @@ import { AppProposals, type CurrentSettings, type ProposalApplier } from './orch
 import type { Args } from '../shared/contracts';
 import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
 import { deleteCustomConnection, readCustomConnections, requireCustomConnection, saveCustomConnection } from './storage/custom-connections';
+import { McpServers, type McpRuntime } from './tools/mcp';
+import { grantsAfterApproval, McpApprovalChoice, McpGrant } from '../shared/mcp';
 
 /**
  * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
@@ -85,6 +87,8 @@ export class CoreService {
   readonly knowledge: KnowledgeBase;
   /** App changes workers propose in chats, applied through this service's own commands (COD-199). */
   readonly appProposals: AppProposals;
+  /** MCP servers the person added and the connections to them (COD-241). */
+  readonly mcp: McpServers;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
   readonly harnessAccounts: HarnessAccounts;
@@ -93,7 +97,7 @@ export class CoreService {
   private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
   private modelListEpoch = new Map<ModelListProviderId, number>();
   private modelListFailed = new Set<ModelListProviderId>();
-  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime) {
+  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
     this.harnessAccounts = new HarnessAccounts(store, harness.accountRoot);
@@ -102,11 +106,22 @@ export class CoreService {
     this.workspaceGrants = new WorkspaceGrants(store);
     this.templates = new TeamTemplates(store, this.notify);
     this.appProposals = new AppProposals(store, this.proposalApplier());
-    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals);
+    this.mcp = new McpServers(store, this.notify, mcpRuntime);
+    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
     this.routines = new Routines(store, this.sources, this.notify, (input, next) => this.createTask(input, next), clock);
     this.policy.captureHandoffs();
+  }
+  /**
+   * Saves a server main has already split: the shape arrives here, the secret values stay in main (COD-241). Only
+   * main calls this; the window's command list has no way to reach it.
+   */
+  saveMcpServer(raw: unknown) {
+    return this.mcp.save(raw);
+  }
+  removeMcpServer(raw: unknown) {
+    return this.mcp.remove(Id.parse(raw));
   }
   /** Path of a task's source for the main process to open in the default app; the renderer only ever sends ids. */
   sourcePath(raw: unknown): string {
@@ -148,6 +163,8 @@ export class CoreService {
         const workspace = this.store.workspace();
         const reviewed = this.store.setting<string[]>('reviewedSkills', []);
         workspace.skills = workspace.skills.map(skill => skill.package ? { ...skill, package: { ...skill.package, reviewedHash: reviewed.includes(`${skill.id}:${skill.package.hash}`) ? skill.package.hash : undefined } } : skill);
+        // The stored servers with whether each one is running right now; never a secret value (COD-241).
+        workspace.mcpServers = this.mcp.views();
         return workspace;
       }
       case 'task': {
@@ -248,6 +265,23 @@ export class CoreService {
         if (active) { this.teams.cancel(task.id); this.runner.cancel(task.id); this.notify(); return; }
         this.start(revised, true); return;
       }
+      case 'testMcpServer': return this.mcp.test(commands.testMcpServer.parse(args).id);
+      case 'setMcpServerEnabled': {
+        const input = commands.setMcpServerEnabled.parse(args);
+        await this.mcp.setEnabled(input.id, input.enabled);
+        return;
+      }
+      case 'setMcpGrant': {
+        const input = commands.setMcpGrant.parse(args);
+        const task = this.liveTask(input.taskId);
+        const others = (task.mcpGrants ?? []).filter(grant => !(grant.serverId === input.serverId && grant.tool === input.tool));
+        const grants = input.allowed ? [...others, McpGrant.parse({ serverId: input.serverId, tool: input.tool })] : others;
+        if (grants.length > 200) throw new Error('Chat đã có quá nhiều quyền MCP.');
+        // Taking a grant away stops nothing: the next call of that tool asks again (COD-241).
+        this.store.update('tasks', { ...task, mcpGrants: grants });
+        this.notify();
+        return;
+      }
       case 'answerDecision': {
         const input = commands.answerDecision.parse(args);
         const task = this.store.get<Task>('tasks', input.taskId);
@@ -263,6 +297,19 @@ export class CoreService {
         this.policy.assertStart(task.teamId, task.id);
         this.runner.assertResumable(run);
         const answeredAt = now();
+        if (request.approval) {
+          // An approval card: the answer is one of four choices, and "always" is saved on the chat before the call
+          // runs. The runner reads the answer from the chat, so the checkpoint keeps the call as it was (COD-241).
+          const choice = McpApprovalChoice.parse(input.answer);
+          if (!checkpoint.pendingApproval || checkpoint.pendingApproval.requestId !== request.id) throw new Error('Lần chạy không còn chờ quyết định.');
+          this.store.transaction(() => {
+            this.store.update('tasks', { ...task, status: 'paused', mcpGrants: grantsAfterApproval(task.mcpGrants, request.approval!, choice),
+              decisionRequests: task.decisionRequests!.map(item => item.id === request.id ? { ...item, answer: choice, answeredAt } : item) });
+            this.store.update('runs', { ...run, status: 'paused' });
+          });
+          this.notify();
+          return this.command('resume', { id: task.id });
+        }
         this.store.transaction(() => {
           checkpoints.save({ ...checkpoint, messages: [...checkpoint.messages, { role: 'user', content: JSON.stringify({ decisionRequestId: request.id, answer: input.answer, instruction: 'This is the user\'s decision for the pending question in this turn. It does not grant new workspace or network permissions. Continue only within the tools and grants actually available.' }) }] });
           this.store.update('tasks', { ...task, status: 'paused', decisionRequests: task.decisionRequests!.map(item => item.id === request.id ? { ...item, answer: input.answer, answeredAt } : item) });
@@ -559,14 +606,18 @@ export class CoreService {
   private saveWorker(input: Args<'saveWorker'>): Worker {
     assertSkillReady(this.store.get<Skill>('skills', input.skillId), this.store);
     if (input.id) this.store.get<Worker>('workers', input.id);
-    const { modelId, ...fields } = input;
+    const { modelId, mcpServerIds, ...fields } = input;
     if (isOpenCodePlan(fields.provider)) assertOpenCodeModel(fields.provider, modelId);
     if (isCustomProvider(fields.provider)) {
       const connection = requireCustomConnection(this.store, fields.provider);
       if (!modelId?.trim()) throw new Error(`Chọn hoặc gõ ID model cho ${connection.name}.`);
     }
+    // A server removed since the dialog opened is dropped rather than refused, so an edit never fails on it.
+    const servers = new Set(this.mcp.list().map(server => server.id));
+    const allowedServers = (mcpServerIds ?? []).filter(serverId => servers.has(serverId));
     const worker: Worker = {
       ...fields,
+      ...(allowedServers.length ? { mcpServerIds: allowedServers } : {}),
       id: input.id ?? id(),
       revision: input.id ? this.store.nextRevision(input.id) : 1,
       ...(fields.provider !== 'demo' && modelId ? { modelId } : {}),

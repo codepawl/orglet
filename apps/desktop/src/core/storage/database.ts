@@ -11,8 +11,9 @@ import { usdCurrency } from '../../shared/currency';
 import type { ToolCapability } from '../../shared/tool-policy';
 import type { WorkspacePermission } from '../../shared/workspace-access';
 import { readCustomConnections } from './custom-connections';
+import { McpServer, type McpServerView } from '../../shared/mcp';
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export class Store {
@@ -133,6 +134,11 @@ export class Store {
       this.db.exec(`CREATE TABLE IF NOT EXISTS app_proposals (
         id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id), run_id TEXT NOT NULL REFERENCES runs(id), data TEXT NOT NULL
       ); INSERT OR IGNORE INTO migrations VALUES (15);`);
+      // MCP servers the person added (COD-241): the command or address and the names of their secrets, never the
+      // values, which main keeps encrypted. Local only, like connections: a backup carries none of it.
+      this.db.exec(`CREATE TABLE IF NOT EXISTS mcp_servers (
+        id TEXT PRIMARY KEY, data TEXT NOT NULL
+      ); INSERT OR IGNORE INTO migrations VALUES (16);`);
       this.db.prepare(`INSERT OR IGNORE INTO reservation_reviews (reservation_id,reason,noted_at)
         SELECT id,'legacy',? FROM reservations WHERE state='unknown'`).run(now());
     });
@@ -245,7 +251,14 @@ export class Store {
     const archived = <T extends { id: string }>(kind: 'workers' | 'teams', items: T[]) => items.flatMap(item => state[kind][item.id]?.archivedAt && !state[kind][item.id]?.deletedAt ? [{ ...item, archivedAt: state[kind][item.id].archivedAt! }] : []);
     // Items the user never placed keep their creation order after the placed ones.
     const ordered = <T extends { id: string }>(items: T[], ids: string[] = []) => items.map((item, index) => ({ item, rank: ids.includes(item.id) ? ids.indexOf(item.id) : ids.length + index })).sort((a, b) => a.rank - b.rank).map(entry => entry.item);
-    return { knowledge: this.all('knowledge'), workers: live('workers', ordered(this.all<Worker>('workers'), order.workers)), teams: live('teams', ordered(this.all<Team>('teams'), order.teams)), archivedWorkers: archived('workers', this.all<Worker>('workers')), archivedTeams: archived('teams', this.all<Team>('teams')), skills: this.all('skills'), tasks: this.all<Task>('tasks').reverse().filter(task => !task.deletedAt).map(task => titles[task.id] ? { ...task, title: titles[task.id] } : task), routines: this.all('routines'), usage: this.usage(), budgetReservations: this.budgetReservations(), language: this.setting('language', DEFAULT_LANGUAGE), autoTitles: this.setting('autoTitles', true), copyFormat: this.setting('copyFormat', 'ask'), downloadFormat: this.setting('downloadFormat', 'ask'), confirmOpenTask: this.setting('confirmOpenTask', true), archiveRetentionDays: this.setting('archiveRetentionDays', 30), avatarColors: this.setting<string[]>('avatarColors', []), accentColor: this.setting('accentColor', this.setting('mentionColor', DEFAULT_ACCENT_COLOR)), logoColor: this.setting('logoColor', 'mono'), interfaceFont: this.setting<string | undefined>('interfaceFont', undefined), codeFont: this.setting<string | undefined>('codeFont', undefined), autoUpdate: this.setting('autoUpdate', true), theme: this.setting('theme', 'system'), connectionLimitMicros: this.setting('connectionLimitMicros', 5_000_000), providerConcurrency: this.setting('providerConcurrency', 2), providerConsent: this.setting('providerConsent', []), customConnections: readCustomConnections(this), currency: this.setting('currency', usdCurrency), sqliteVersion: this.sqliteVersion, newChatCapabilities: this.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}), newChatWorkspace: this.newChatWorkspace(), recentAppChanges: this.recentAppChanges() };
+    return { knowledge: this.all('knowledge'), workers: live('workers', ordered(this.all<Worker>('workers'), order.workers)), teams: live('teams', ordered(this.all<Team>('teams'), order.teams)), archivedWorkers: archived('workers', this.all<Worker>('workers')), archivedTeams: archived('teams', this.all<Team>('teams')), skills: this.all('skills'), tasks: this.all<Task>('tasks').reverse().filter(task => !task.deletedAt).map(task => titles[task.id] ? { ...task, title: titles[task.id] } : task), routines: this.all('routines'), usage: this.usage(), budgetReservations: this.budgetReservations(), language: this.setting('language', DEFAULT_LANGUAGE), autoTitles: this.setting('autoTitles', true), copyFormat: this.setting('copyFormat', 'ask'), downloadFormat: this.setting('downloadFormat', 'ask'), confirmOpenTask: this.setting('confirmOpenTask', true), archiveRetentionDays: this.setting('archiveRetentionDays', 30), avatarColors: this.setting<string[]>('avatarColors', []), accentColor: this.setting('accentColor', this.setting('mentionColor', DEFAULT_ACCENT_COLOR)), logoColor: this.setting('logoColor', 'mono'), interfaceFont: this.setting<string | undefined>('interfaceFont', undefined), codeFont: this.setting<string | undefined>('codeFont', undefined), autoUpdate: this.setting('autoUpdate', true), theme: this.setting('theme', 'system'), connectionLimitMicros: this.setting('connectionLimitMicros', 5_000_000), providerConcurrency: this.setting('providerConcurrency', 2), providerConsent: this.setting('providerConsent', []), customConnections: readCustomConnections(this), currency: this.setting('currency', usdCurrency), sqliteVersion: this.sqliteVersion, newChatCapabilities: this.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}), newChatWorkspace: this.newChatWorkspace(), recentAppChanges: this.recentAppChanges(), mcpServers: this.mcpServerViews() };
+  }
+  /** MCP servers as saved, before the core overlays whether each one is running; see `McpServers.views`. */
+  private mcpServerViews(): McpServerView[] {
+    return this.all<unknown>('mcp_servers').map(row => {
+      const { revision: _revision, ...server } = McpServer.parse(row);
+      return { ...server, status: server.enabled ? 'idle' as const : 'disabled' as const };
+    });
   }
   /** The latest applied app changes from workers' proposals, newest first, with the name of the worker that proposed each. */
   private recentAppChanges(): Workspace['recentAppChanges'] {
