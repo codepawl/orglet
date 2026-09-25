@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -43,6 +43,8 @@ import type { ChatQuote } from '../../shared/side-threads';
 import { McpApprovalCard } from './McpApproval';
 import { turnNotices } from './turnNotices';
 import { withoutSourceIds } from '../../shared/source-mentions';
+import { BlockedCommandLine, CommandOutputDialog, askToFixText } from './BlockedHandIn';
+import type { BlockingCommand } from '../../shared/blocked-hand-in';
 
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
 type TurnNotices = ReturnType<typeof turnNotices>;
@@ -114,14 +116,18 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
+export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
   /** Opens another chat: the side thread a quote came from, or the main chat an answer was brought into (COD-247). */ openChat?: (taskId: string) => void;
   /** Opens an orglet's main chat from one of its side threads. */ openMainChat?: (workerId: string) => void;
-  /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule: () => void } }) {
+  /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule: () => void };
+  /** Puts a reply in this chat's composer without sending it: "Nhờ sửa" on a blocked hand-in (COD-270). */ askToFix?: (text: string) => void }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   // The run whose working-copy changes are open in the diff viewer (COD-163).
   const [diffRun, setDiffRun] = useState<Run>();
+  // A command that blocked a hand-in, its output open in the viewer, and whether "Vẫn áp dụng" is on its way (COD-270).
+  const [outputCommand, setOutputCommand] = useState<BlockingCommand>();
+  const [applyingHandIn, setApplyingHandIn] = useState(false);
   // A member's saved report open in the document viewer from the card that says to see it (COD-256).
   const [savedReportId, setSavedReportId] = useState<string>();
   const savedReport = savedReportId ? detail.artifacts.find(artifact => artifact.id === savedReportId) : undefined;
@@ -262,6 +268,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   // the worker's name. Each opens the diff viewer.
   const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary }) =>
     <ChangedFilesLine key={run.id} summary={summary} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => setDiffRun(run)} />);
+  // One line per command that kept a failed run's changes out of the folder (COD-270); a crew member's line is named.
+  const blockedLinesOf = (runs: readonly Run[]) => runs.flatMap(run => run.status === 'failed' && run.errorCode === 'hand_in_blocked'
+    ? (run.blockedHandIn?.commands ?? []).map(command => <BlockedCommandLine key={command.processId} command={command}
+      workerName={run.stage ? run.snapshot.worker.name : undefined} onOpen={() => setOutputCommand(command)} />)
+    : []);
   // The cards for app changes the workers proposed, each with what became of it; historical turns keep theirs.
   const proposalCards = (proposals: AppProposal[]) => proposals.length > 0
     ? <AppProposalCards key="proposals" proposals={proposals} workers={workspace.workers} skills={workspace.skills} tasks={workspace.tasks} actions={proposalActions} />
@@ -281,6 +292,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     const workerId = author?.snapshot.worker.id;
     const notices = turnNotices({
       trace: trace.length > 0 ? <TurnTrace key="trace" entries={trace} onOpenMemories={openMemories && workerId ? () => openMemories(workerId) : undefined} /> : undefined,
+      // A crew's answer names each member whose changes a failed command kept out of the folder (COD-270).
+      handIn: author?.stage === 'synthesis' ? blockedLinesOf(runs) : undefined,
       changes: changedFilesLines(runs, run => run.id !== artifact.runId),
       proposals: proposalCards(proposals),
       // A chat answer copies and downloads from its row; a report keeps those in its viewer's toolbar.
@@ -296,6 +309,34 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     return chat
       ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} />
       : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} badges={badges} />;
+  };
+  /**
+   * The answer a blocked hand-in kept (COD-270): the orglet's words as it wrote them, then why its changes did not
+   * reach the folder, the files it changed and its proposals. It is not a saved answer yet, so it has no copy,
+   * reply or reaction row; applying it anyway saves it and it then reads like any other answer.
+   */
+  const heldAnswer = (run: Run, proposals: AppProposal[]) => {
+    const blocked = run.blockedHandIn!;
+    const held = blocked.answer!;
+    const text = withoutSourceIds(tMessage(held.report.summary), detail.sources);
+    const memories = run.snapshot.context?.memories?.map(memory => ({ id: memory.id, revision: memory.revision, text: memory.text }));
+    const trace = traceOf({ memories, context: run.snapshot.context, runId: run.id, events: detail.events });
+    const workerId = run.snapshot.worker.id;
+    const notices = turnNotices({
+      trace: trace.length > 0 ? <TurnTrace key="trace" entries={trace} onOpenMemories={openMemories ? () => openMemories(workerId) : undefined} /> : undefined,
+      handIn: blocked.commands.map(command => <BlockedCommandLine key={command.processId} command={command} onOpen={() => setOutputCommand(command)} />),
+      changes: changedFilesLines([run], () => false),
+      proposals: proposalCards(proposals),
+    });
+    return <HeldReply runId={run.id} title={held.report.format === 'report' ? tMessage(held.report.title) : undefined} text={text} limitations={held.report.limitations} notices={notices} />;
+  };
+  const applyHandIn = (run: Run) => {
+    if (applyingHandIn) return;
+    setApplyingHandIn(true);
+    action(async () => {
+      try { await orglet.call('applyBlockedHandIn', { taskId: detail.task.id, runId: run.id }); }
+      finally { setApplyingHandIn(false); }
+    });
   };
 
   return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
@@ -342,6 +383,14 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         const replyRunIds = new Set(turn.replies.map(reply => reply.run.id));
         const remainingProposals = turnProposals.filter(proposal => !replyRunIds.has(proposal.runId));
         const answered = !!turn.artifact && !turn.replies.length;
+        // A hand-in a failed command refused (COD-270): the turn's last run, when it kept the orglet's answer to decide on.
+        const lastRun = turn.runs.at(-1);
+        const heldRun = !answered && !turn.replies.length && lastRun?.status === 'failed' && lastRun.errorCode === 'hand_in_blocked'
+          && lastRun.blockedHandIn?.answer ? lastRun : undefined;
+        // A crew member's or group reply's refused hand-in keeps only the reason, which its error card names.
+        const blockedCommands = !heldRun && unresolvedError?.errorCode === 'hand_in_blocked' ? unresolvedError.blockedHandIn?.commands : undefined;
+        // Without that card (an earlier turn), the reason still sits under the turn.
+        const blockedLines = heldRun || unresolvedError ? [] : blockedLinesOf(turn.runs);
         return <div className="chat-turn" key={turn.revision}>
           {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
@@ -408,19 +457,27 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
-            {!turn.artifact && !turn.replies.length && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
+            {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
             {answered
               ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest)
-              /* No answer of its own to hang them on (still running, failed, or a group turn whose replies carry
-                 theirs), so what the turn's runs produced still reads in the same order under the turn. */
-              : turnNotices({ changes: turn.replies.length ? undefined : changedFilesLines(turn.runs, () => true), proposals: proposalCards(remainingProposals) }).after}
-            {unresolvedError?.error && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
+              : heldRun
+                ? heldAnswer(heldRun, remainingProposals)
+                /* No answer of its own to hang them on (still running, failed, or a group turn whose replies carry
+                   theirs), so what the turn's runs produced still reads in the same order under the turn. */
+                : turnNotices({ handIn: blockedLines, changes: turn.replies.length ? undefined : changedFilesLines(turn.runs, () => true), proposals: proposalCards(remainingProposals) }).after}
+            {/* A held answer says itself why nothing was applied, under the answer; it needs no error card. */}
+            {unresolvedError?.error && !heldRun && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
               {/* A run refused by the unknown-outcome guard (COD-191) says what to do, not which guard fired: the
                   attempt to review sits in Details, and the button below opens it there. */}
-              <p>{unresolvedError.errorCode === 'unresolved_attempt' ? t('Một thay đổi file trước đó chưa rõ kết quả. Kiểm tra trong Chi tiết rồi giữ file hiện tại, sau đó Tí mới ghi tiếp được.')
-                : unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p>
+              {blockedCommands
+                ? <div className="run-error-commands">{blockedCommands.map(command => <BlockedCommandLine key={command.processId} command={command}
+                  workerName={unresolvedError.stage ? unresolvedError.snapshot.worker.name : undefined} onOpen={() => setOutputCommand(command)} />)}</div>
+                : <p>{unresolvedError.errorCode === 'unresolved_attempt' ? t('Một thay đổi file trước đó chưa rõ kết quả. Kiểm tra trong Chi tiết rồi giữ file hiện tại, sau đó Tí mới ghi tiếp được.')
+                  : unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p>}
             </div>}
             {latest && <div className="actions">
+              {!busy && heldRun && <Button variant="primary" disabled={applyingHandIn} onClick={() => applyHandIn(heldRun)}><Check size={16} />{t('Vẫn áp dụng')}</Button>}
+              {!busy && heldRun && askToFix && <Button variant="outline" onClick={() => askToFix(askToFixText(heldRun.blockedHandIn!.commands))}><Wrench size={16} />{t('Nhờ sửa')}</Button>}
               {!busy && unresolvedError?.errorCode === 'unresolved_attempt' && reviewRecovery && <Button variant="primary" onClick={() => reviewRecovery(groupRecoveryAttempts(recovery, detail.runs).blocking?.runId)}><FolderOpen size={16} />{t('Xem trong Chi tiết')}</Button>}
               {blockerReport && unresolvedError && <Button variant="primary" onClick={() => setSavedReportId(blockerReport.id)}><FileText size={16} />{t('Mở báo cáo của {0}', [unresolvedError.snapshot.worker.name])}</Button>}
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
@@ -434,6 +491,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       })}
     </div>
     {diffRun && <DiffDialog taskId={detail.task.id} run={diffRun} onClose={() => setDiffRun(undefined)} />}
+    {outputCommand && <CommandOutputDialog taskId={detail.task.id} command={outputCommand} onClose={() => setOutputCommand(undefined)} />}
     {savedReport && <ReportDocument artifact={savedReport} author={detail.runs.find(run => run.id === savedReport.runId)} detail={detail} open onClose={() => setSavedReportId(undefined)} busy={busy} action={action} showSources={showSources}
       actions={<ArtifactActions artifactId={savedReport.id} about={tMessage(savedReport.report.title)} action={action} />} />}
   </div>;
@@ -450,6 +508,24 @@ function ChatReply({ artifact, text, notices, badges }: { artifact: Artifact; /*
     {artifact.report.limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
+    </div>}
+    {notices.after}
+  </div>;
+}
+
+/**
+ * An answer a failed command kept out of the folder (COD-270): the same bubble as a chat answer, a report's title
+ * above its summary, and the notices around it. Nothing here is saved yet, so it carries no reactions.
+ */
+function HeldReply({ runId, title, text, limitations, notices }: { runId: string; title?: string; text: string; limitations: readonly string[]; notices: TurnNotices }) {
+  return <div className="chat-reply held-reply">
+    {notices.before}
+    <div className="chat-bubble" id={`held-${runId}`} tabIndex={-1}>
+      <Markdown className="prose" text={title ? `**${title}**\n\n${text}` : text} />
+    </div>
+    {limitations.length > 0 && <div className="chat-limitations">
+      <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
+      <ul>{limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
     </div>}
     {notices.after}
   </div>;

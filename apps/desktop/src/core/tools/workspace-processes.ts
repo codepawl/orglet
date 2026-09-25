@@ -1,11 +1,44 @@
 import { createHash } from 'node:crypto';
 import { StartWorkspaceProcess, WorkspaceProcess, describeCommand, loopbackBlockedHint } from '../../shared/workspace-processes';
+import { BlockedHandIn, commandLine, type BlockingCommand, type HeldAnswer } from '../../shared/blocked-hand-in';
+import type { RunErrorCode } from '../../shared/contracts';
 import { Store, id } from '../storage/database';
 import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
 import type { DependencyLink } from './workspace-dependencies';
 
 type ActiveProcess = { runId: string; controller: AbortController; done: Promise<void> };
+
+export const HAND_IN_BLOCKED_MESSAGE = 'Có lệnh chưa hoàn tất thành công. Xem đầu ra và kiểm tra lại trước khi tích hợp.';
+
+/**
+ * The failed-command rule refused a hand-in (COD-189). It carries the commands that blocked it and, once the runtime
+ * and runner have them, the copy's fingerprint and the answer the orglet handed in, so the failed run keeps all three
+ * (COD-270). The message is the one the rule always had.
+ */
+export class HandInBlockedError extends Error {
+  readonly code: RunErrorCode = 'hand_in_blocked';
+  copyFingerprint?: string;
+  answer?: HeldAnswer;
+  constructor(readonly commands: BlockingCommand[]) {
+    super(HAND_IN_BLOCKED_MESSAGE);
+  }
+
+  record(): BlockedHandIn {
+    return BlockedHandIn.parse({
+      commands: this.commands,
+      ...(this.copyFingerprint ? { copyFingerprint: this.copyFingerprint } : {}),
+      ...(this.answer ? { answer: this.answer } : {}),
+    });
+  }
+}
+
+/** The limitation an answer carries when the person applied its changes past a failed command (COD-270). */
+export function acceptedFailureLine(process: Pick<WorkspaceProcess, 'command' | 'state' | 'exitCode'>): string {
+  const command = commandLine(process.command);
+  if (process.state === 'exited') return `Người dùng đã áp dụng thay đổi dù lệnh ${command} thất bại (mã thoát ${process.exitCode}).`;
+  return `Người dùng đã áp dụng thay đổi dù lệnh ${command} không hoàn tất (${process.state}).`;
+}
 
 /** A saved start result is a process handle, not proof that the command finished. */
 export class WorkspaceProcesses {
@@ -47,8 +80,11 @@ export class WorkspaceProcesses {
    * copy's last file change must have exited 0, or hand-in is blocked. A failure the copy has since moved past
    * does not block; it comes back as a report limitation so nothing is hidden. With no file change at all, or on
    * a record from before this rule, every command counts.
+   *
+   * `accepted` holds the processes the person chose to apply past (COD-270): each becomes a limitation line instead of
+   * a block. Only those exact process records are let through; any other failure still blocks.
    */
-  assertSuccessful(runId: string, copyEdits: number): string[] {
+  assertSuccessful(runId: string, copyEdits: number, accepted: ReadonlySet<string> = new Set()): string[] {
     this.assertIdle(runId);
     // Rows are inserted once at start and updated in place, so rowid is start order.
     const records = this.store.db.prepare('SELECT data FROM workspace_processes WHERE run_id=? ORDER BY rowid').all(runId);
@@ -59,16 +95,27 @@ export class WorkspaceProcesses {
       latest.set(key, process);
     }
     const superseded: string[] = [];
+    const acceptedLines: string[] = [];
+    const blocking: BlockingCommand[] = [];
     for (const process of latest.values()) {
       if (process.state === 'exited' && process.exitCode === 0) continue;
       const startedAfterLastEdit = copyEdits === 0 || process.copyEditsAtStart === undefined || process.copyEditsAtStart >= copyEdits;
-      if (startedAfterLastEdit) throw new Error('Có lệnh chưa hoàn tất thành công. Xem đầu ra và kiểm tra lại trước khi tích hợp.');
+      if (startedAfterLastEdit && accepted.has(process.id)) {
+        acceptedLines.push(acceptedFailureLine(process));
+        continue;
+      }
+      if (startedAfterLastEdit) {
+        blocking.push({ processId: process.id, program: process.command.program, arguments: process.command.arguments,
+          state: process.state, exitCode: process.exitCode });
+        continue;
+      }
       const command = describeCommand(process.command, 300);
       superseded.push(process.state === 'exited'
         ? `Lệnh chạy trước lần sửa tệp cuối đã thất bại và chưa được chạy lại: ${command} (mã thoát ${process.exitCode}).`
         : `Lệnh chạy trước lần sửa tệp cuối không hoàn tất và chưa được chạy lại: ${command} (${process.state}).`);
     }
-    return superseded;
+    if (blocking.length) throw new HandInBlockedError(blocking);
+    return [...superseded, ...acceptedLines];
   }
 
   async start(options: { runId: string; callId: string; directory: string; command: unknown; copyEdits: number;

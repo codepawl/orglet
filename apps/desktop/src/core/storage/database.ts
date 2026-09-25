@@ -246,10 +246,11 @@ export class Store {
     this.update('tasks', { ...task, ...patch });
     return this.get<Task>('tasks', taskId);
   }
-  status(taskId: string, runId: string, status: TaskStatus, error: string | null = null, errorCode?: RunErrorCode) {
+  /** `details` adds what the failure kept on the run, such as a refused hand-in (COD-270). */
+  status(taskId: string, runId: string, status: TaskStatus, error: string | null = null, errorCode?: RunErrorCode, details: Pick<Run, 'blockedHandIn'> = {}) {
     this.transaction(() => {
       this.put('tasks', { ...this.get<Task>('tasks', taskId), status });
-      this.put('runs', { ...this.get<Run>('runs', runId), status, error, errorCode }, { column: 'task_id', value: taskId });
+      this.put('runs', { ...this.get<Run>('runs', runId), status, error, errorCode, ...details }, { column: 'task_id', value: taskId });
     });
   }
   usage(taskId?: string): Usage {

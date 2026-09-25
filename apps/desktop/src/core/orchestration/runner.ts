@@ -52,6 +52,8 @@ import { mentionedPeople } from '../../shared/mentions';
 import { reportValidationMessage, sanitizeReportReply } from '../tools/report-validation';
 import { savedArtifactContext, savedAssignmentAttempts } from './artifact-provenance';
 import { WorkspaceProcess } from '../../shared/workspace-processes';
+import { HandInBlockedError } from '../tools/workspace-processes';
+import { BlockedHandIn, commandLine, type HeldAnswer } from '../../shared/blocked-hand-in';
 import { codexOutputSchema, decodeCodexOutput } from '../harness/codex-output';
 import { MessageInteractions } from './message-interactions';
 import { AnswerReaction, AnswerReactions, MAX_ANSWER_REACTIONS, turnMessageId } from '../../shared/message-interactions';
@@ -1241,8 +1243,10 @@ export class Runner {
           if (needsReport(run)) throw new Error('Hội có checklist bắt buộc cần báo cáo đầy đủ, không phải tin nhắn.');
           const { message, title, knowledgeProposals } = ChatReply.parse(JSON.parse(call.arguments));
           for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu câu trả lời.');
-          const workspaceLimitations = await this.finishWorkspace(run);
-          this.commit(task, run, { ...chatReport(message), limitations: [...this.crewLimitations(run, options), ...workspaceLimitations] }, options.keepTaskOpen, knowledgeProposals, title, false, [...untrustedInputs]); return;
+          const answer: HeldAnswer = { report: { ...chatReport(message), limitations: this.crewLimitations(run, options) },
+            knowledgeProposals, title, untrustedInputs: [...untrustedInputs] };
+          const workspaceLimitations = await this.finishWorkspace(run, answer);
+          this.commit(task, run, { ...answer.report, limitations: [...answer.report.limitations, ...workspaceLimitations] }, options.keepTaskOpen, knowledgeProposals, title, false, answer.untrustedInputs); return;
         }
         if (call.name === 'submit_plan') {
           if (run.stage !== 'plan') throw new Error('Tool không được policy cho phép.');
@@ -1328,9 +1332,12 @@ export class Runner {
       const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error, readCustomConnections(this.store)) : 'Lần chạy gặp lỗi.';
       const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
       // A harness account out of plan usage is marked, so the chat can offer an account that still has room (COD-225).
-      const errorCode = error instanceof UnresolvedAttemptError || error instanceof ReportRejectedError ? error.code : error instanceof HarnessLimitError && error.limit.kind === 'quota' ? 'plan_limit' : undefined;
-      if (options.keepTaskOpen) this.store.update('runs', { ...run, status, error: message, errorCode });
-      else this.store.status(task.id, run.id, status, message, errorCode);
+      const handInBlocked = error instanceof HandInBlockedError && !signal.aborted ? error : undefined;
+      const errorCode = error instanceof UnresolvedAttemptError || error instanceof ReportRejectedError ? error.code : handInBlocked ? handInBlocked.code : error instanceof HarnessLimitError && error.limit.kind === 'quota' ? 'plan_limit' : undefined;
+      // What refused the hand-in and, in a solo chat, the answer waiting on the person (COD-270).
+      const blockedHandIn = handInBlocked ? { blockedHandIn: handInBlocked.record() } : {};
+      if (options.keepTaskOpen) this.store.update('runs', { ...run, status, error: message, errorCode, ...blockedHandIn });
+      else this.store.status(task.id, run.id, status, message, errorCode, blockedHandIn);
       this.event(run.id, message);
     } finally {
       try {
@@ -1363,16 +1370,73 @@ export class Runner {
     });
     return [...given, ...cutShort];
   }
-  /** Shared report gate for native tool calls and local harness output: schema, checklist, citations, then commit. */
-  private async finishWorkspace(run: Run): Promise<string[]> {
+  /**
+   * Hands in the run's working copy before its answer is saved. When a failed command refuses the hand-in, a solo
+   * chat's run keeps `answer` with the failure, so the person can still read it and apply the copy anyway (COD-270).
+   */
+  private async finishWorkspace(run: Run, answer: HeldAnswer): Promise<string[]> {
     if (!run.snapshot.workspaceGrant) return [];
     if (!this.workspace) throw new Error('Workspace runtime chưa được cấu hình.');
     const control = this.active.get(run.id);
     if (!control) throw new Error('Lần chạy không còn hoạt động.');
     this.workspace.authorize(run, 'read', control.signal);
-    const limitations = await this.workspace.finish(run, control.signal);
+    let limitations: string[];
+    try {
+      limitations = await this.workspace.finish(run, control.signal);
+    } catch (error) {
+      // A crew member's or a group reply's answer belongs to a turn it cannot finish alone, so only the reason is kept.
+      if (error instanceof HandInBlockedError && run.stage === undefined) error.answer = answer;
+      throw error;
+    }
     control.signal.throwIfAborted();
     return limitations;
+  }
+
+  /**
+   * The person applies a blocked hand-in anyway (COD-270): the copy is integrated through the same hash-checked broker,
+   * skipping only the failed-command rule and only for the commands that blocked this run, then the answer the orglet
+   * handed in is saved with a line saying what was accepted. It is reached from the `applyBlockedHandIn` command alone;
+   * no tool offers it to a model. It refuses a run that is not the chat's latest, a folder grant that no longer allows
+   * editing or changed since the run, and a copy that is no longer `ready` or no longer what the person was shown.
+   */
+  async applyBlockedHandIn(taskId: string, runId: string): Promise<void> {
+    if (!this.workspace) throw new Error('Workspace runtime chưa được cấu hình.');
+    const task = this.store.get<Task>('tasks', taskId);
+    const run = this.store.get<Run>('runs', runId);
+    if (run.taskId !== task.id) throw new Error('Lần chạy không thuộc cuộc trò chuyện này.');
+    if (this.isActive(task.id)) throw new Error('Dừng công việc trước khi xử lý bản làm việc.');
+    const blocked = run.blockedHandIn ? BlockedHandIn.parse(run.blockedHandIn) : undefined;
+    const answer = blocked?.answer;
+    if (run.errorCode !== 'hand_in_blocked' || run.status !== 'failed' || run.stage !== undefined || !blocked?.copyFingerprint || !answer || blocked.acceptedAt) {
+      throw new Error('Lần chạy này không có thay đổi đang chờ áp dụng.');
+    }
+    const latestRun = this.store.db.prepare('SELECT id FROM runs WHERE task_id=? ORDER BY rowid DESC LIMIT 1').get(task.id);
+    if (task.status !== 'failed' || String(latestRun?.id) !== run.id) throw new Error('Chỉ áp dụng được lượt mới nhất của cuộc trò chuyện.');
+    const frozen = run.snapshot.workspaceGrant;
+    const current = new WorkspaceGrants(this.store).snapshot(task.id);
+    if (!frozen || !current || current.id !== frozen.id || current.revision !== frozen.revision || !current.permissions.includes('write')) {
+      throw new Error('Quyền sửa thư mục đã bị thu hồi hoặc thay đổi; không áp dụng. Bấm Thử lại để chạy lại với quyền hiện tại.');
+    }
+    // Held like a run so a retry, a new message or another click waits, and cancelling or revoking the folder stops it.
+    const controller = new AbortController();
+    this.active.set(run.id, { taskId: task.id, controller, signal: controller.signal, paused: false, since: Date.now() });
+    this.notify();
+    try {
+      const limitations = await this.workspace.finish(run, controller.signal,
+        { processIds: blocked.commands.map(command => command.processId), copyFingerprint: blocked.copyFingerprint });
+      controller.signal.throwIfAborted();
+      for (const command of blocked.commands) {
+        this.event(run.id, command.state === 'exited'
+          ? `Người dùng chấp nhận lệnh thất bại và áp dụng thay đổi: ${commandLine(command)} (mã thoát ${command.exitCode})`
+          : `Người dùng chấp nhận lệnh không hoàn tất và áp dụng thay đổi: ${commandLine(command)} (${command.state})`);
+      }
+      const settled: Run = { ...run, errorCode: undefined, blockedHandIn: { ...blocked, answer: undefined, acceptedAt: now() } };
+      const report = { ...answer.report, limitations: [...answer.report.limitations, ...limitations] };
+      this.commit(task, settled, report, false, answer.knowledgeProposals, answer.title, false, answer.untrustedInputs);
+    } finally {
+      this.active.delete(run.id);
+      this.notify();
+    }
   }
   private async finalize(task: Task, run: Run, raw: unknown, readIds: ReadonlySet<string>, scope: { manifest: Source[]; preflight?: PreflightRecord; preflightLimits: string[] }, options: { keepTaskOpen?: boolean; upstream?: Artifact[]; limitations?: string[]; untrustedInputs?: string[]; ranOutOfSteps?: boolean }, runnerLimitations: string[] = []) {
     const { knowledgeProposals, assignmentOutcome, ...submitted } = ModelReport.parse(raw);
@@ -1435,7 +1499,8 @@ export class Runner {
     for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Nguồn đã bị thu hồi trước khi lưu báo cáo.');
     for (const source of scope.manifest.filter(source => !readIds.has(source.id))) report.limitations.push(`Nguồn chưa được đọc: ${source.name.slice(0, 300)} (${source.id}). Không xem đây là đánh giá đầy đủ tệp này.`);
     report.limitations.push(...runnerLimitations, ...scope.preflightLimits, ...this.crewLimitations(run, options));
-    report.limitations.push(...await this.finishWorkspace(run));
+    const answer: HeldAnswer = { report: structuredClone(report), knowledgeProposals, title: null, untrustedInputs: options.untrustedInputs ?? [] };
+    report.limitations.push(...await this.finishWorkspace(run, answer));
     const expectedFileChanges = run.stage === 'member' && !!run.snapshot.assignment?.writeResources?.length;
     const missingFileChanges = expectedFileChanges && !this.workspace?.integratedChangeCount(run.id);
     if (missingFileChanges) report.limitations.push('Phần việc được giao sửa tệp nhưng không tạo hoặc thay đổi tệp nào.');

@@ -14,9 +14,23 @@ import { WorkspaceDiffRequest, WorkspaceDiffSummary, summarize, type WorkspaceDi
 import { planIntegration, plainCopyDiff, type IntegrationStep } from './workspace-plan';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
 import type { IntegrationStepInput, WorkspaceIntegration } from './workspace-integration';
-import { WorkspaceProcesses } from './workspace-processes';
+import { HandInBlockedError, WorkspaceProcesses } from './workspace-processes';
 import { dependencyFolders } from './workspace-dependencies';
 import { StartWorkspaceProcess, WorkspaceProcessId, WorkspaceProcessOutput, WorkspaceProcessStatus } from '../../shared/workspace-processes';
+
+/** What the person accepted when applying a blocked hand-in (COD-270); see `WorkspaceRuntime.finish`. */
+export type AcceptedFailures = { processIds: readonly string[]; copyFingerprint: string };
+
+/**
+ * One hash for the files a copy holds, whatever order the walk listed them in: paths with their hashes, and folders.
+ * Two copies with the same fingerprint hand in the same steps.
+ */
+export function manifestFingerprint(manifest: WorkspaceManifest): string {
+  const files = manifest.files.map(file => `${file.path}\u0000${file.hash}`).sort();
+  const folders = [...(manifest.folders ?? [])].sort();
+  const omitted = [...manifest.omitted].sort();
+  return createHash('sha256').update(JSON.stringify({ files, folders, omitted })).digest('hex');
+}
 
 /**
  * One hand-in step and what became of it (COD-254). A change saved before then is a file write: its `hash` and
@@ -503,8 +517,12 @@ export class WorkspaceRuntime {
     return { operation: step.kind === 'folder' ? 'create_folder' : 'remove_folder', path: step.path };
   }
 
-  /** Integrates the copy and returns the limitations to report: command failures the code has since moved past. */
-  async finish(run: Run, signal: AbortSignal): Promise<string[]> {
+  /**
+   * Integrates the copy and returns the limitations to report: command failures the code has since moved past, and
+   * those the person accepted. `accepted` comes only from the person's own apply-anyway (COD-270): the commands that
+   * blocked this run, and the copy as it was when they were shown it.
+   */
+  async finish(run: Run, signal: AbortSignal, accepted?: AcceptedFailures): Promise<string[]> {
     signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
     new ToolCalls(this.store).assertEffectsResolved(run.id);
     this.assertCopiesResolved(run);
@@ -512,12 +530,29 @@ export class WorkspaceRuntime {
     return this.serial(run.id, async () => {
       this.authorize(run, 'read', signal);
       const copy = this.saved(run.id)!;
-      const limitations = this.processes?.assertSuccessful(run.id, copy.edits) ?? [];
+      let limitations: string[] = [];
+      let blocked: HandInBlockedError | undefined;
+      try {
+        limitations = this.processes?.assertSuccessful(run.id, copy.edits, new Set(accepted?.processIds ?? [])) ?? [];
+      } catch (error) {
+        if (!(error instanceof HandInBlockedError) || copy.state !== 'ready' || !copy.directory) throw error;
+        blocked = error;
+      }
       if (copy.state === 'integrated') return limitations;
       if (copy.state !== 'ready' || !copy.directory) throw new Error('Bản làm việc bị gián đoạn; cần kiểm tra trước khi tiếp tục.');
       const manifest = WorkspaceManifest.parse(await this.files.execute(copy.directory, { operation: 'manifest' }, signal));
       // Counted before integration and kept even when integration is refused, so the chat can still show what changed.
       copy.diff = await this.summarizeCopy(copy, manifest, signal);
+      if (blocked) {
+        // The copy stays `ready`: nothing reached the folder, and the person may still apply it as it is now.
+        this.save(copy);
+        blocked.copyFingerprint = manifestFingerprint(manifest);
+        throw blocked;
+      }
+      if (accepted && manifestFingerprint(manifest) !== accepted.copyFingerprint) {
+        this.save(copy);
+        throw new Error('Bản làm việc đã thay đổi so với lúc bị chặn; không áp dụng. Bấm Thử lại để chạy lại.');
+      }
       // A linked worktree carries Git's own `.git` pointer file at its root; the plan never integrates it over the
       // person's repository. A plan that cannot be ordered safely is refused before anything changes.
       let steps: IntegrationStep[];
