@@ -3,10 +3,12 @@ import { Copy, ExternalLink, Globe, Plus, RefreshCw, RotateCw, X } from 'lucide-
 import type { Workspace } from '../../shared/contracts';
 import type { CliInstallState } from '../../shared/cli';
 import { aboutDetailsText, osName, type AboutLink, type InstallKind, type Release, type UnsupportedReason, type UpdateState } from '../../shared/updates';
+import { releaseHighlights } from '../../shared/release-notes';
 import { Button } from './ui';
 import { Switch } from './Switch';
 import { Markdown } from './Markdown';
 import { BrandMark, type BrandName } from './brandMarks';
+import { Orglet3D } from './Orglet3D';
 import { clockLabel } from './TimeMark';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
@@ -29,6 +31,24 @@ function unsupportedReason(reason: UnsupportedReason): string {
   if (reason === 'portable') return t('Bản ZIP không tự cập nhật.');
   if (reason === 'linux') return t('Chưa có tự cập nhật trên Linux.');
   return t('Bản macOS này chưa được ký nên không tự cập nhật.');
+}
+
+// The About face is the app's own orglet: the startup screen's seed, so it is the same character. At this size of
+// the 64-unit drawing its body is about the 42px the flat brand mark used to be.
+const ABOUT_FACE_SEED = 29;
+const ABOUT_FACE_SIZE = 60;
+
+/**
+ * The brand mark in the About header, alive (COD-237): the 3D orglet in the logo's colours, drawn by the same stage
+ * as every other face. It hops in when the tab opens, turns after the pointer, and a click, Enter or Space makes
+ * it smile with a hop. Under reduced motion the stage keeps it still.
+ */
+function AboutFace() {
+  const [cheer, setCheer] = useState(0);
+  const smile = () => setCheer(count => count + 1);
+  return <button type="button" className="about-face" aria-label={t('Chào Orglet')} title={t('Chào Orglet')} onClick={smile}>
+    <Orglet3D id="classic" seed={ABOUT_FACE_SEED} size={ABOUT_FACE_SIZE} color="brand" motion={{ lead: true, greet: true, cheer }} />
+  </button>;
 }
 
 /** The places the About tab links to, each with its own mark. `releases` is not here: it belongs to the update row. */
@@ -113,9 +133,23 @@ function updateDescription(state: UpdateState | undefined): ReactNode {
   return <span className="error">{t('Không kiểm tra được: {0}', [tMessage(state.message)])}</span>;
 }
 
-function releaseDate(release: Release): string | undefined {
-  if (!release.publishedAt) return undefined;
-  return new Date(release.publishedAt).toLocaleDateString(currentLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
+function releaseDate(publishedAt: string): string {
+  return new Date(publishedAt).toLocaleDateString(currentLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** One release in What is new: the version and its date, then only the part of its notes that says what changed. */
+function ReleaseEntry({ release, current }: { release: Release; current: boolean }) {
+  const highlights = releaseHighlights(release.notes);
+  const hasNotes = release.notes.trim() !== '';
+  return <article className="release">
+    <div className="release-head">
+      <span className="release-name">{release.version}</span>
+      {current && <span className="badge">{t('Đang dùng')}</span>}
+      {release.publishedAt && <time className="release-date" dateTime={release.publishedAt}>{releaseDate(release.publishedAt)}</time>}
+    </div>
+    {highlights && <Markdown text={highlights} className="release-notes" />}
+    {!hasNotes && <span className="setting-description">{t('Bản này không có ghi chú.')}</span>}
+  </article>;
 }
 
 /**
@@ -174,7 +208,7 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
 
   return <>
     <div className="about-head">
-      <span className="orglet-mark large" aria-hidden="true">o</span>
+      <AboutFace />
       <div className="about-name">
         <span className="about-title">Orglet</span>
         <span className="setting-description">{about ? t('Phiên bản {0}', [about.version]) : <Skeleton width="9ch" />}</span>
@@ -214,14 +248,7 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
           ? t('Không tải được bản mới nhất; đang hiện danh sách lấy lúc {0}.', [fetchedAt])
           : t('Không tải được danh sách phát hành. Kiểm tra kết nối mạng rồi thử lại.')}</span>}
         {!changelog && <SkeletonText lines={3} className="release-shape" />}
-        {shown.map(release => <article key={release.version} className="release">
-          <div className="release-head">
-            <span className="release-name">{release.name}</span>
-            {about && release.version === about.version && <span className="badge">{t('Đang dùng')}</span>}
-            {releaseDate(release) && <span className="setting-description">{releaseDate(release)}</span>}
-          </div>
-          {release.notes.trim() ? <Markdown text={release.notes} className="release-notes" /> : <span className="setting-description">{t('Bản này không có ghi chú.')}</span>}
-        </article>)}
+        {shown.map(release => <ReleaseEntry key={release.version} release={release} current={about?.version === release.version} />)}
         {older.length > 0 && <Button className="about-older" disabled={changelogBusy} onClick={() => setShowOlder(value => !value)}>
           {showOlder ? t('Ẩn bản cũ hơn') : t('Hiện {0} bản cũ hơn', [older.length])}
         </Button>}
