@@ -267,7 +267,9 @@ describe('orglet round trip through the real server', () => {
     folder = mkdtempSync(join(tmpdir(), 'orglet-cli-'));
     const token = createCliToken();
     const handle = () => new Promise(() => undefined);
-    server = new CliServer({ endpoint: cliEndpoint(folder), token, handle, translate: message => message, maxConnections: 1, maxLineBytes: 64 });
+    // The default line limit here: a status request with its 64-character token is longer than 64 bytes, so a small
+    // limit would refuse the hanging request as too large and close it before the second one arrives.
+    server = new CliServer({ endpoint: cliEndpoint(folder), token, handle, translate: message => message, maxConnections: 1 });
     await server.start();
     const hanging = exchange(cliEndpoint(folder), { op: 'status', token });
     hanging.catch(() => undefined);
