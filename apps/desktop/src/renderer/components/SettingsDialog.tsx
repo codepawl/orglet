@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Check, Contrast, Database, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks } from 'lucide-react';
+import { Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { currentAccentColor, DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
@@ -27,6 +27,8 @@ import { Switch } from './Switch';
 import { CodeFontPreview, InterfaceFontSample } from './FontPreview';
 import { AboutSettings } from './AboutSettings';
 import { McpHeadingActions, McpSettings, type McpEditing } from './McpSettings';
+import { WebSearchSettings } from './WebSearchSettings';
+import type { WebSearchProvider } from '../../shared/web-tools';
 import { t, tMessage, translated } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
@@ -46,12 +48,14 @@ const accentSwatches = avatarPalette.map(color => currentAccentColor(color));
 /** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
 const SAVED_KEY_MASK = '••••••••••••••••';
 
-export type SettingsTab = 'general' | 'chat' | 'connections' | 'harness' | 'mcp' | 'usage' | 'data' | 'about';
+export type SettingsTab = 'general' | 'chat' | 'connections' | 'search' | 'harness' | 'mcp' | 'usage' | 'data' | 'about';
 // Short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming). About sits last (COD-176).
 const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'general', label: 'Chung', icon: <SlidersHorizontal size={16} /> },
   { id: 'chat', label: 'Cuộc trò chuyện', icon: <MessageSquare size={16} /> },
   { id: 'connections', label: 'Kết nối API', icon: <Plug size={16} /> },
+  // Where web_search sends a query, and Exa's optional key (COD-266).
+  { id: 'search', label: 'Tìm kiếm web', icon: <Globe size={16} /> },
   { id: 'harness', label: 'Harness trên máy', icon: <SquareTerminal size={16} /> },
   // MCP servers the person added by hand (COD-241).
   { id: 'mcp', label: 'MCP', icon: <Blocks size={16} /> },
@@ -65,12 +69,13 @@ const settingNames = translated({
   language: 'Ngôn ngữ', theme: 'Giao diện', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Phông chữ', codeFont: 'Phông chữ code',
   autoTitles: 'Tự đặt tên cuộc trò chuyện', copyFormat: 'Định dạng khi sao chép', downloadFormat: 'Định dạng khi tải xuống', confirmOpenTask: 'Hỏi trước khi mở công việc',
   archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi connection / tháng', providerConcurrency: 'Request đồng thời mỗi provider', providerConsent: 'Provider được phép',
-  autoUpdate: 'Tự động cập nhật', backgroundNotifications: 'Báo khi cuộc trò chuyện xong',
+  autoUpdate: 'Tự động cập nhật', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', webSearchProvider: 'Nhà cung cấp tìm kiếm web',
 });
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
 
 const sectionLabels: Partial<Record<SettingsTab, string>> = {
   connections: 'Key được mã hóa trên máy này và không vào bản sao lưu.',
+  search: 'Tí chỉ gửi câu tìm kiếm đi, không gửi nội dung chat hay tệp.',
   harness: 'Đăng nhập lỗi thì Orglet dừng lại, không chuyển sang Demo.',
   mcp: 'Tí hỏi bạn trước mỗi lần gọi công cụ.',
   usage: 'Chỉ tính request qua Orglet; harness trên máy dùng gói riêng.',
@@ -438,7 +443,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     finally { setBusy(false); }
   };
   // Settings apply as soon as they change; the command always carries the full current set.
-  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; backgroundNotifications: boolean }>) => act(async () => {
+  const save = (patch: Partial<{ language: Workspace['language']; theme: Workspace['theme']; autoTitles: boolean; copyFormat: Workspace['copyFormat']; downloadFormat: Workspace['downloadFormat']; confirmOpenTask: boolean; archiveRetentionDays: Workspace['archiveRetentionDays']; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; accentColor: string; logoColor: LogoColor; interfaceFont: string | null; codeFont: string | null; autoUpdate: boolean; backgroundNotifications: boolean; webSearchProvider: WebSearchProvider }>) => act(async () => {
     await orglet.call('settings', { language: workspace.language ?? DEFAULT_LANGUAGE, theme: workspace.theme, autoTitles: workspace.autoTitles, copyFormat: workspace.copyFormat, downloadFormat: workspace.downloadFormat, confirmOpenTask: workspace.confirmOpenTask, archiveRetentionDays: workspace.archiveRetentionDays, connectionLimitMicros: workspace.connectionLimitMicros, providerConcurrency: workspace.providerConcurrency, providerConsent: workspace.providerConsent ?? [], accentColor: workspace.accentColor, logoColor: workspace.logoColor, autoUpdate: workspace.autoUpdate, backgroundNotifications: workspace.backgroundNotifications, ...patch });
     return t('Đã lưu');
   }, Object.keys(patch).map(key => settingNames[key as keyof typeof settingNames]).filter(Boolean).join(', '));
@@ -625,6 +630,9 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               })}
               <CustomConnectionsSection connections={workspace.customConnections ?? []} keys={connections.custom ?? {}} busy={busy} act={act} onConnections={changeConnections} />
             </>}
+
+            {tab === 'search' && <WebSearchSettings provider={workspace.webSearchProvider} hasKey={connections.search?.exa ?? false} busy={busy} act={act}
+              onProvider={value => void save({ webSearchProvider: value })} onConnections={onConnections} />}
 
             {tab === 'harness' && <>
               <div role="region" aria-label={t('Harness trên máy')}>

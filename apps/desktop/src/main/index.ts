@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
 import { en, enGB } from '../shared/locales/en';
-import { commands, Id, ApiProvider, CredentialProvider, type Reply, type Command, type Workspace, TextFormat, type Source } from '../shared/contracts';
+import { commands, Id, ApiProvider, CredentialProvider, type Connections, type Reply, type Command, type Workspace, TextFormat, type Source } from '../shared/contracts';
 import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
 import { PickWorkspace } from '../shared/workspace-access';
 import { OPENCODE_DOCS_URLS } from '../shared/opencode';
@@ -31,6 +31,8 @@ import { chatsOf, CliOperations } from './cli-operations';
 import { CliPathInstaller, isKeptOffPath, keepOffPath } from './cli-path';
 import { runSquirrelEvent, runUpdateExecutable, squirrelEventOf, type SquirrelEvent } from './squirrel-events';
 import { McpSecretStore, stopProcessTrees } from './mcp-secrets';
+import { WebSearchKeys } from './web-search-keys';
+import { WebSearchKeyProvider } from '../shared/web-tools';
 import type { ProcessIdentity } from '../core/tools/process-identity';
 import { McpServerDraft, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
 import type { Incoming, SendToState } from '../shared/incoming';
@@ -50,6 +52,7 @@ let window: BrowserWindow;
 let core: Electron.UtilityProcess;
 let credentials: Credentials;
 let mcpSecrets: McpSecretStore;
+let webSearchKeys: WebSearchKeys;
 /** The MCP server processes the core reports running, so they stop even when the core cannot stop them (COD-241). */
 let mcpProcesses: ProcessIdentity[] = [];
 let ready = false;
@@ -282,6 +285,7 @@ async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
   credentials = new Credentials(directory);
   mcpSecrets = new McpSecretStore(directory, safeStorage);
+  webSearchKeys = new WebSearchKeys(directory, safeStorage);
   const workspaceRuntimePaths = app.isPackaged ? {
     sandboxExecutable: join(process.resourcesPath, 'wxc-exec.exe'),
     helperPath: join(process.resourcesPath, 'workspace-helper.cjs'),
@@ -307,6 +311,12 @@ async function start() {
       if (message.type === 'key') {
         const provider = CredentialProvider.safeParse(message.provider);
         core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await credentials.read(provider.data) : null }); return;
+      }
+      // The web search key for a search the core is about to send (COD-266); the answer rides the same reply as an API key.
+      if (message.type === 'searchKey') {
+        const provider = WebSearchKeyProvider.safeParse(message.provider);
+        core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await webSearchKeys.read(provider.data) : null });
+        return;
       }
       if (message.type === 'mcpSecrets') {
         const serverId = Id.safeParse(message.serverId);
@@ -437,7 +447,9 @@ async function start() {
     const failure = await shell.openPath(path);
     if (failure) throw new Error('Không mở được tệp bằng ứng dụng mặc định.');
   });
-  handle('orglet:connections', async () => credentials.status());
+  /** Which API and web search keys are saved, never the keys. */
+  const connectionStatus = async (): Promise<Connections> => ({ ...await credentials.status(), search: await webSearchKeys.status() });
+  handle('orglet:connections', async () => connectionStatus());
   handle('orglet:pick-workspace', async raw => {
     const input = PickWorkspace.parse(raw);
     // A chat row must still be open before the picker shows; a chat with no row yet is checked when the folder is kept.
@@ -461,7 +473,7 @@ async function start() {
   // orglet:changed, and without this one a Details panel opened before the connect kept its old state (COD-177).
   const announceConnections = () => {
     if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
-    return credentials.status();
+    return connectionStatus();
   };
   /** A key is only kept for a custom connection the core still has, so a stale window cannot plant an orphan secret. */
   const assertCustomConnection = async (provider: CredentialProvider) => {
@@ -500,6 +512,16 @@ async function start() {
     const provider = CredentialProvider.parse(raw);
     await credentials.remove(provider);
     await request('invalidateModelList', provider).catch(() => {});
+    return announceConnections();
+  });
+  /** Web search keys (COD-266) stop here like the API keys; the window gets back only whether one is saved. */
+  handle('orglet:web-search-key', async raw => {
+    const body = z.object({ provider: WebSearchKeyProvider, key: z.string().min(1).max(500) }).strict().parse(raw);
+    await webSearchKeys.save(body.provider, body.key.trim());
+    return announceConnections();
+  });
+  handle('orglet:web-search-key-remove', async raw => {
+    await webSearchKeys.remove(WebSearchKeyProvider.parse(raw));
     return announceConnections();
   });
   /**

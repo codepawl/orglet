@@ -13,7 +13,7 @@ Worker setup previews actions in plain language. Chat Details shows each worker'
 |---|---|---|---|
 | Read attached source; inspect selected data | Core tool, subject to task capability and attachment; dataset checks are separate. PDFs as page-marked text; images per model ([PDFs and images](#pdfs-and-images)) | Core tool loop supports both when enabled; source-only review uses a restricted copy/prompt; CLI fixtures cover the bridge. PDFs as text on every CLI; images to Claude Code and Codex in source-only answers | Not integrated; no support claim |
 | Read, edit, run checks in a folder | Task folder grant with read/write/execute modes; isolated copy and core integration | Same core tools and grant; CLI native controls differ, so fixture parity is not proof of every installed version | Not integrated |
-| Read/search public web | Separate task capability; bounded, untrusted results | Same core web tool in structured loop, never a native browser permission | Not integrated |
+| Read/search public web | Separate task capability; bounded, untrusted results; search goes to the provider in Settings → Web search (Exa by default, or DuckDuckGo) with only the query | Same core web tool in structured loop, never a native browser permission | Not integrated |
 | Skill resource / knowledge | Reviewed text; no permission or script execution | Same rule | Not integrated |
 
 Connection readiness comes from stored API/Ollama settings or a detected signed-in CLI. The view says Demo is unavailable for these actions. A missing source or grant is reported as setup needed, not as a model limitation. For teams the view does not merge unlike members into a misleading single “ready” badge. Live CLI evidence and unverified native controls remain identified below.
@@ -45,7 +45,7 @@ Connection readiness comes from stored API/Ollama settings or a detected signed-
 | Deprecated model chip | Yes ([COD-30](https://linear.app/codepawl/issue/COD-30)) | Quiet chip on selected/suggested ID when cached `deprecated` is true; sunset day only from native `sunsetAt` (OpenAI `shutdown_date`); no HTML scrape or invented dates |
 | Subscription quota display / internal allocation | No | Neither CLI exposes quota windows in headless mode; no screen is shown |
 | Workspace files and commands | Explicit grant, Windows x64 isolation backend | Private copies or Git worktrees; hash-checked integration; Node/cmd commands without network; recovery in Details. See [agent tools](agent-tools.md) |
-| Public web reads and search | Explicit task capability | Public-address validation, bounded text and provenance; provider challenges fail visibly |
+| Public web reads and search | Explicit task capability | Public-address validation, bounded text and provenance. Search goes to Exa's hosted MCP server by default (free and rate-limited without a key, or with an Exa key saved in Settings → Web search) or to DuckDuckGo; only the query is sent. Rate limits, rejected keys and challenges fail visibly, with no fallback to another engine ([agent tools → Web search](agent-tools.md#web-search)) |
 | Imported skill scripts and external writes | No | No automatic skill-script execution or tool for changing another service |
 
 ## Local harness capability matrix

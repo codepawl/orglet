@@ -4,6 +4,7 @@ import { permissionBlocker, permissionState, workspaceLevels, type PermissionBlo
 import type { ToolCapability } from '../../shared/tool-policy';
 import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/workspace-access';
 import type { Worker } from '../../shared/contracts';
+import { WEB_SEARCH_PROVIDER_NAMES, type WebSearchProvider } from '../../shared/web-tools';
 import { Button } from './ui';
 import { Select } from './Select';
 import { SwitchField } from './Switch';
@@ -39,7 +40,7 @@ const partlyBlockedNotes: Record<PermissionBlocker, string> = {
  * A blocker (Demo, a model with no connection, a grant still loading) is never a third position on a control:
  * the control is disabled and one short line says why (user, COD-168).
  */
-export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, busy = false, locked, folderLocked, onCapability, onWorkspace, onConfigure, extra }: {
+export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, searchProvider, busy = false, locked, folderLocked, onCapability, onWorkspace, onConfigure, extra }: {
   workers: PermissionWorker[];
   capabilities?: ToolCapability[];
   /** `undefined` while the grant is still being read. */
@@ -48,6 +49,8 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
   pending?: NewChatWorkspaceView;
   taskId?: string;
   sourceCount: number;
+  /** Where a search goes (Settings → Web search), named under the web switch so the person knows who sees the query (COD-266). */
+  searchProvider: WebSearchProvider;
   busy?: boolean;
   /** Why nothing here can be changed yet; every control renders disabled with this one line above them. */
   locked?: string;
@@ -110,7 +113,7 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
       </span>
     </div>
     <SwitchField checked={state.web} disabled={disabled} onChange={enabled => onCapability('network.web', enabled)}
-      description={t('Tìm và đọc trang web công khai.')}>
+      description={t('Tìm qua {0}, đọc trang web công khai.', [WEB_SEARCH_PROVIDER_NAMES[searchProvider]])}>
       <Globe size={15} aria-hidden="true" />{t('Đọc và tìm kiếm web')}
     </SwitchField>
     {/* Proposing is not doing: the switch lets the worker store a card, and the card still waits for Apply (COD-199). */}

@@ -15,7 +15,7 @@ Permissions belong to a **chat**. You find the same controls in two places:
 |---|---|
 | **Read attached sources** | Reading the files attached to this chat |
 | **Check data** | Running the local checks on attached CSV, JSONL and Parquet files |
-| **Read and search the web** | Reading public web pages and searching. Pages come back as text; nothing runs, and the content is treated as untrusted. |
+| **Read and search the web** | Reading public web pages and searching. Pages come back as text; nothing runs, and the content is treated as untrusted. Searches go to the provider in **Settings → Web search** (Exa unless you pick DuckDuckGo), which the switch names; only the query is sent. |
 | **Propose app changes** | Suggesting a new orglet, crew, skill, schedule or setting as a card you apply ([below](#app-change-proposals)). On by default. |
 | **Working folder** | **No folder**, **Read files only**, **Read and edit files**, or **Read, edit files and run commands**. Choosing a level opens the folder picker, which states the access asked for. |
 

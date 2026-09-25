@@ -1,5 +1,7 @@
 import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { WebTools } from '../tools/web-tools';
+import { webNetwork } from '../tools/web-network';
+import type { WebSearchSettings } from '../tools/web-search';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
 import { assertToolCall, mcpToolOf, mcpToolsOffered, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, reactionsAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, REACTION_NUDGE, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
@@ -444,7 +446,7 @@ export class Runner {
   private slots = new ProviderSlots(() => this.store.setting('providerConcurrency', DEFAULT_PROVIDER_CONCURRENCY));
   /** Receives live progress from streaming harnesses; the core process forwards it to the window. */
   onProgress: (update: RunProgressUpdate) => void = () => {};
-  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers) {
+  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers, private webSearch: () => WebSearchSettings = () => ({ provider: store.webSearchProvider() })) {
     this.slots.onChange = () => this.notify();
   }
   isActive(taskId: string) { return [...this.active.values()].some(item => item.taskId === taskId); }
@@ -1149,7 +1151,8 @@ export class Runner {
           continue;
         }
         if (call.name === 'web_read_url' || call.name === 'web_search') {
-          const web = new WebTools();
+          // The provider is read at each search, so a change in Settings → Web search applies to the next one.
+          const web = new WebTools(webNetwork, this.webSearch());
           const input = JSON.parse(call.arguments);
           const result = await executeReadTool({ signal, timeoutMs: toolDefinitions[call.name].timeoutMs,
             authorize: () => assertCapability(run, this.store.get<Task>('tasks', task.id), 'network.web'),

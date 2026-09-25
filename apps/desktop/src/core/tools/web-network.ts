@@ -39,7 +39,9 @@ export function publicWebUrl(raw: string): URL {
   return url;
 }
 
-export type WebConnection = { url: URL; address: LookupAddress; signal: AbortSignal };
+/** A request other than a page read: the web search provider's MCP client posts JSON-RPC (COD-266). */
+export type WebRequest = { method: 'POST' | 'DELETE'; headers: Record<string, string>; body?: Buffer };
+export type WebConnection = { url: URL; address: LookupAddress; signal: AbortSignal; request?: WebRequest };
 /** `cut` marks a body that stopped at the byte limit: the page was longer and only its start was read (COD-266). */
 export type WebResponse = { status: number; headers: IncomingHttpHeaders; body: Buffer; cut?: boolean };
 export type WebNetwork = {
@@ -49,12 +51,19 @@ export type WebNetwork = {
 
 export function webRequestOptions(connection: WebConnection): RequestOptions & { autoSelectFamily: boolean } {
   return {
-    method: 'GET', agent: false, signal: connection.signal, maxHeaderSize: 16 * 1024, rejectUnauthorized: true,
+    method: connection.request?.method ?? 'GET', agent: false, signal: connection.signal, maxHeaderSize: 16 * 1024, rejectUnauthorized: true,
     family: connection.address.family, autoSelectFamily: false,
     // Resolve once and pin the connection. TLS still verifies the original URL hostname.
     lookup: (_hostname, _options, callback) => callback(null, connection.address.address, connection.address.family),
-    headers: { Accept: 'text/html,text/plain,application/json;q=0.8', 'Accept-Encoding': 'identity', 'User-Agent': 'Orglet/0.2 WebTools' },
+    headers: connection.request ? requestHeaders(connection.request) : { Accept: 'text/html,text/plain,application/json;q=0.8', 'Accept-Encoding': 'identity', 'User-Agent': 'Orglet/0.2 WebTools' },
   };
+}
+
+/** The caller's headers, with the same uncompressed encoding and user agent a page read sends. */
+function requestHeaders(request: WebRequest): Record<string, string> {
+  const headers: Record<string, string> = { ...request.headers, 'Accept-Encoding': 'identity', 'User-Agent': 'Orglet/0.2 WebTools' };
+  if (request.body) headers['Content-Length'] = String(request.body.length);
+  return headers;
 }
 
 export const webNetwork: WebNetwork = {
@@ -93,11 +102,11 @@ export const webNetwork: WebNetwork = {
         response.on('aborted', () => { if (!cut) reject(new Error('Kết nối web bị gián đoạn.')); });
       });
     request.on('error', reject);
-    request.end();
+    request.end(connection.request?.body);
   }),
 };
 
-async function resolveAddress(url: URL, signal: AbortSignal, network: WebNetwork): Promise<LookupAddress> {
+export async function resolveAddress(url: URL, signal: AbortSignal, network: WebNetwork): Promise<LookupAddress> {
   const hostname = url.hostname.replace(/^\[|\]$/g, '');
   const family = isIP(hostname);
   const addresses = family ? [{ address: hostname, family }] : await network.resolve(hostname);

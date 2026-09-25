@@ -17,6 +17,7 @@ import { WorkspaceIntegration } from './tools/workspace-integration';
 import { WorkspaceRuntime } from './tools/workspace-runtime';
 import { emptyMcpSecrets, McpSecrets } from '../shared/mcp';
 import { pdfTextInWorker } from './tools/pdf-text';
+import type { WebSearchKeyProvider } from '../shared/web-tools';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
@@ -24,6 +25,13 @@ const pendingKeys = new Map<string, (key: string | null) => void>();
 const requestKey = (provider: string) => new Promise<string | null>(resolve => {
   const requestId = crypto.randomUUID(); pendingKeys.set(requestId, resolve);
   port.postMessage({ type: 'key', id: requestId, provider });
+  setTimeout(() => { if (pendingKeys.delete(requestId)) resolve(null); }, 5000).unref();
+});
+/** The saved web search key, asked of main right before a search goes out (COD-266); no answer means no key. */
+const requestSearchKey = (provider: WebSearchKeyProvider) => new Promise<string | null>(resolve => {
+  const requestId = crypto.randomUUID();
+  pendingKeys.set(requestId, resolve);
+  port.postMessage({ type: 'searchKey', id: requestId, provider });
   setTimeout(() => { if (pendingKeys.delete(requestId)) resolve(null); }, 5000).unref();
 });
 /**
@@ -89,7 +97,7 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   // stops them, and a reused id is never taken for one of them.
   onProcesses: processes => port.postMessage({ type: 'mcpProcesses', processes }),
   // Each PDF is read in a worker thread built next to this file, so one slow or hostile file cannot stall the core.
-}, pdfTextInWorker(join(__dirname, 'pdf-text.js')));
+}, pdfTextInWorker(join(__dirname, 'pdf-text.js')), { readKey: requestSearchKey });
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
 port.on('message', async ({ data }) => {
   const envelope = z.object({ id: z.string(), command: z.string(), args: z.unknown() }).safeParse(data);

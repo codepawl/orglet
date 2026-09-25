@@ -17,9 +17,14 @@ const demo = { id: 'w2', name: 'Lan', provider: 'demo' as const, connected: true
 const noop = () => {};
 
 const render = (props: Partial<Parameters<typeof PermissionControls>[0]>) => renderToStaticMarkup(createElement(PermissionControls, {
-  workers: [codex], capabilities: ['source.read', 'skill.read'] as ToolCapability[], grant, taskId, sourceCount: 1,
+  workers: [codex], capabilities: ['source.read', 'skill.read'] as ToolCapability[], grant, taskId, sourceCount: 1, searchProvider: 'exa',
   onCapability: noop, onWorkspace: noop, ...props,
 }));
+
+it('names the web search provider under the web switch, so the person knows who sees a query (COD-266)', () => {
+  expect(render({})).toContain('Search with Exa, read public pages.');
+  expect(render({ searchProvider: 'duckduckgo' })).toContain('Search with DuckDuckGo, read public pages.');
+});
 
 it('maps every grant the schema allows onto one folder level and back', () => {
   for (const level of workspaceLevels) {

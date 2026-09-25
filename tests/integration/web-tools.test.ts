@@ -12,6 +12,8 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import type { Run, Skill, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
 const signal = () => new AbortController().signal;
+/** DuckDuckGo is an option since COD-266; Exa is the default and has its own tests in web-search.test.ts. */
+const duckDuckGo = { provider: 'duckduckgo' as const };
 const response = (body = '<title>Source</title><p>Evidence</p>', status = 200, headers: WebResponse['headers'] = {}): WebResponse => ({
   status, headers: { 'content-type': 'text/html; charset=utf-8', ...headers }, body: Buffer.from(body),
 });
@@ -156,19 +158,19 @@ describe('web evidence', () => {
     expect(result.content).not.toContain('�');
   });
 
-  it('extracts search targets without fetching them or treating a challenge as zero results', async () => {
+  it('extracts DuckDuckGo search targets without fetching them or treating a challenge as zero results', async () => {
     const fixture = network([response(`<a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fevidence&amp;rut=ignored">Source &amp; title</a>
       <a class="result__a" href="http://127.0.0.1/">Private</a><a class="result__a" href="javascript:alert(1)">Script</a>`)]);
-    const result = await new WebTools(fixture).search({ query: 'public reference' }, signal());
+    const result = await new WebTools(fixture, duckDuckGo).search({ query: 'public reference' }, signal());
     expect(result.results).toEqual([{ title: 'Source & title', url: 'https://example.com/evidence' }]);
     expect(fixture.connect).toHaveBeenCalledTimes(1);
     expect(fixture.connect.mock.calls[0][0].url.searchParams.get('q')).toBe('public reference');
     expect(result.coverage).toContain('have not been read');
-    await expect(new WebTools(network([response('<form>Complete the challenge</form>')])).search({ query: 'query' }, signal()))
+    await expect(new WebTools(network([response('<form>Complete the challenge</form>')]), duckDuckGo).search({ query: 'query' }, signal()))
       .rejects.toThrow('không trả danh sách');
-    await expect(new WebTools(network([response('<form id="challenge-form">Human verification</form>')])).search({ query: 'query' }, signal()))
+    await expect(new WebTools(network([response('<form id="challenge-form">Human verification</form>')]), duckDuckGo).search({ query: 'query' }, signal()))
       .rejects.toThrow('xác minh người dùng');
-    expect((await new WebTools(network([response('<div class="result--no-result">No results found</div>')])).search({ query: 'query' }, signal())).results).toEqual([]);
+    expect((await new WebTools(network([response('<div class="result--no-result">No results found</div>')]), duckDuckGo).search({ query: 'query' }, signal())).results).toEqual([]);
   });
 
   it('handles malformed HTML and decodes numeric entities without evaluating markup', () => {

@@ -50,9 +50,16 @@ The orglet is told this when it happens, with the way around it: test in-process
 
 Workspace commands do not inherit your `PATH` or shell profile. They run with the bundled Node runtime or Windows `cmd`, inside the working copy. `npm test`, `npm run <name>` and the pnpm and yarn forms run the project's `package.json` scripts with that Node, using the packages already installed in the folder's `node_modules` (read-only), but nothing can be installed. If a script needs a package that is missing, install it in your folder first. Tell the orglet what is available, or run that step yourself.
 
-## Web search fails with a verification challenge
+## Web search fails
 
-Search reads DuckDuckGo's plain results page, which sometimes answers with a human-verification page. The orglet gets that as an error and can read a URL you give it instead. Reading a page needs a public `http` or `https` address; private addresses and pages that need a login are refused.
+The orglet gets the reason as an error and can read a URL you give it instead; the chat shows the same reason. What it says, by provider (**Settings → Web search**):
+
+- **Exa's free search is rate-limited**: Exa without a key allows a limited number of searches from your network and then refuses until its limit resets, which can be hours (the message says about how long when Exa does). Add an Exa key in **Settings → Web search**, or wait.
+- **Exa rejected the saved API key**: the key was mistyped, revoked or has no credit. Save a new one, or remove it to go back to the free searches.
+- **Could not reach Exa**: the network is down, or something on it blocks `mcp.exa.ai`.
+- **The search service requires human verification**: DuckDuckGo answered with a challenge page instead of results. Switch the provider to Exa.
+
+Orglet never switches to the other provider on its own. **Test** in **Settings → Web search** runs one search and shows what happens. Reading a page needs a public `http` or `https` address; private addresses and pages that need a login are refused.
 
 ## The ZIP build does not update
 
