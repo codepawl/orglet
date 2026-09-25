@@ -8,6 +8,8 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import { commands, type Run, type Skill, type Task, type Worker } from '../../apps/desktop/src/shared/contracts';
 import { PickWorkspace } from '../../apps/desktop/src/shared/workspace-access';
+import { translateMessage } from '../../apps/desktop/src/shared/i18n';
+import { en } from '../../apps/desktop/src/shared/locales/en';
 
 let directory: string;
 let workspace: string;
@@ -77,6 +79,17 @@ it('rejects a directory replaced at the same pathname', async () => {
   await rename(workspace, join(directory, 'original'));
   await mkdir(workspace);
   await expect(grants.directory(snapshot, 'read')).rejects.toThrow('bị thay thế');
+});
+
+it('says the working folder is gone, by its name and without its path, when it was deleted', async () => {
+  // COD-257: the chat banner showed "ENOENT: no such file or directory, realpath '<full path>'".
+  await grants.grant({ taskId: task.id, directory: workspace, permissions: ['read'] });
+  const snapshot = grants.snapshot(task.id)!;
+  await rm(workspace, { recursive: true });
+  const failure = await grants.directory(snapshot, 'read').then(() => undefined, (error: Error) => error.message);
+  expect(failure).toBe('Thư mục làm việc workspace không còn trên máy. Chọn lại thư mục trong Chi tiết.');
+  expect(failure).not.toContain(directory);
+  expect(translateMessage(en, failure!)).toBe('The working folder workspace is no longer on this computer. Choose the folder again in Details.');
 });
 
 it('persists grants locally but never restores them from a backup', async () => {

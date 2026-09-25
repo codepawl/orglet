@@ -165,6 +165,8 @@ function useMeasuredWidth(target: RefObject<HTMLElement | null>) {
 /**
  * The width the element's text needs in whole pixels, even while it is cut short. Measured again when `text`
  * changes; the fonts are loaded before any run starts, so the text is the only thing that moves it.
+ * The text itself is measured, not the element: the element starts at the name's floor (6em), and its scrollWidth
+ * then reported that floor for a short name, so "Dev" kept 6em with a gap before the action (COD-257).
  */
 function useNaturalWidth(target: RefObject<HTMLElement | null>, text: string | undefined) {
   const [width, setWidth] = useState<number>();
@@ -174,7 +176,9 @@ function useNaturalWidth(target: RefObject<HTMLElement | null>, text: string | u
       setWidth(undefined);
       return;
     }
-    setWidth(Math.ceil(element.scrollWidth));
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    setWidth(Math.ceil(range.getBoundingClientRect().width));
   }, [target, text]);
   return width;
 }

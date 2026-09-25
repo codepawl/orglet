@@ -8,11 +8,11 @@ Part of the [user guide](user-guide.md). How the words in the chat are chosen an
 
 An orglet reads only what you attach to **that** chat, or what is inside the working folder you granted it ([Permissions](permissions-and-learning.md#permissions)).
 
-1. Click **+** next to the message box and choose **Attach files**.
+1. Click **+** next to the message box.
 2. Pick **Files**, or **Folder** for up to 20 supported files from one folder (hidden and generated files are skipped, and the chat lists what was left out).
 3. Write what you want done, then send.
 
-Attached files sit as cards above your message; hover a card to remove it. Files stay with the chat for the messages that follow, but each message shows only the files sent with it; all of them are listed under **Details → Sources**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. Images, video, audio and PDF are preview-only for now: the orglet is told they exist but cannot read them.
+Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed under **Details → Sources**. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. Images, video, audio and PDF are preview-only for now: the orglet is told they exist but cannot read them.
 
 Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. CSV, JSONL and Parquet files can also be checked locally under **Details → Sources**: schema, row counts, duplicate and missing IDs, and, for two files, an exact-match accuracy. Demo cannot analyze files; switch **Model** off Demo first.
 

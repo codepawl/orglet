@@ -34,6 +34,16 @@ async function prepareCopy(session: string, seedFiles: Record<string, string | B
   return { worktree: join(session, 'worktree'), repository: join(session, 'repository.git'), baseline };
 }
 
+/** A folder path under `parent` exactly `length` characters long, made of folders of at most 49 characters. */
+function folderOfLength(parent: string, length: number) {
+  let path = parent;
+  while (path.length < length) {
+    const room = length - path.length - 1;
+    path = room > 0 ? join(path, 'x'.repeat(Math.min(49, room))) : `${path}x`;
+  }
+  return path;
+}
+
 async function diffOf(worktree: string, baseline: WorkspaceManifest, options: { includeHunks?: boolean; outputByteLimit?: number } = {}) {
   return diffWorkspaceCopy({
     executable: gitExecutable, worktree, baseline, current: await manifestOf(worktree),
@@ -159,6 +169,19 @@ describe.runIf(existsSync(gitExecutable))('workspace diff against the snapshot (
       { kind: 'added', text: 'second\r', oldLine: null, newLine: 2 },
     ]);
     expect(diff.files.map(file => file.path)).toEqual(['.gitattributes', 'note.txt']);
+  });
+
+  it('diffs a copy whose session folder sits under a long user-data path', async () => {
+    // COD-257: Git for Windows refuses a $GIT_DIR longer than MAX_PATH - 40 ("'$GIT_DIR' too big"), and the copy's
+    // linked worktree directory was passed absolute. Pad the session so that directory is 240 characters long.
+    const linkedDirectoryTail = join('repository.git', 'worktrees', 'worktree').length + 1;
+    const session = folderOfLength(directory, 240 - linkedDirectoryTail);
+    await mkdir(session, { recursive: true });
+    expect(join(session, 'repository.git', 'worktrees', 'worktree').length).toBe(240);
+    const { worktree, baseline } = await prepareCopy(session, { 'src/app.ts': 'one\ntwo\n' });
+    await writeFile(join(worktree, 'src', 'app.ts'), 'one\nthree\n');
+    const diff = await diffOf(worktree, baseline);
+    expect(diff.files.map(file => [file.path, file.additions, file.deletions])).toEqual([['src/app.ts', 1, 1]]);
   });
 
   it('refuses a copy whose .git file points elsewhere', async () => {

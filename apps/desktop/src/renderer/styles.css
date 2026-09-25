@@ -588,7 +588,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .tree-leaf.roster { cursor:default; }
 .tree-leaf.roster:hover { background:transparent; }
 .source-picker { position:relative; }
-.source-menu { position:absolute; left:0; bottom:calc(100% + 6px); z-index:4; min-width:230px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001a; display:flex; flex-direction:column; gap:2px; }
+/* Sized to its longest line: inside the 36px + button the shrink-to-fit width was the min-width, which wrapped
+   "Takes up to 20 supported files" onto two lines. */
+.source-menu { position:absolute; left:0; bottom:calc(100% + 6px); z-index:4; width:max-content; min-width:230px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001a; display:flex; flex-direction:column; gap:2px; }
 .source-menu.below { top:calc(100% + 6px); bottom:auto; }
 .source-menu button { display:flex; align-items:flex-start; gap:10px; width:100%; padding:9px 10px; border:0; border-radius:8px; background:transparent; text-align:left; }
 .source-menu button:hover,.source-menu button:focus-visible { background:var(--surface); }

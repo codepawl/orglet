@@ -42,6 +42,7 @@ import type { AppProposal } from '../../shared/app-proposals';
 import type { ChatQuote } from '../../shared/side-threads';
 import { McpApprovalCard } from './McpApproval';
 import { turnNotices } from './turnNotices';
+import { withoutSourceIds } from '../../shared/source-mentions';
 
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
 type TurnNotices = ReturnType<typeof turnNotices>;
@@ -273,6 +274,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   const answer = (artifact: Artifact, author: Run | undefined, runs: readonly Run[], proposals: AppProposal[], latest: boolean) => {
     const authorName = author?.snapshot.worker.name ?? 'Orglet';
     const chat = artifact.report.format === 'chat';
+    // A source id the model copied into its message reads as the file's name, here and in what is copied (COD-257).
+    const replyText = withoutSourceIds(tMessage(artifact.report.summary), detail.sources);
     const trace = traceOf({ memories: artifact.usedMemories, context: author?.snapshot.context, runId: artifact.runId, events: detail.events, crew: author?.stage === 'synthesis' ? runs : [] });
     const workerId = author?.snapshot.worker.id;
     const notices = turnNotices({
@@ -281,7 +284,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       proposals: proposalCards(proposals),
       // A chat answer copies and downloads from its row; a report keeps those in its viewer's toolbar.
       actions: <MessageActions key="actions" taskId={detail.task.id} messageId={artifact.id} author={authorName} reactions={detail.task.messageReactions ?? []} action={action}
-        text={chat ? tMessage(artifact.report.summary) : tMessage(artifact.report.title)}
+        text={chat ? replyText : tMessage(artifact.report.title)}
         leading={<>
           {chat && <ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [authorName])} action={action} />}
           {detail.task.sideOf && <BringIntoMainChat artifactId={artifact.id} brought={broughtIn.has(artifact.id)} about={t('Câu trả lời của {0}', [authorName])} action={action} openChat={openChat} />}
@@ -290,7 +293,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     // The reactions ride on the answer's own corner, whichever shape it takes (COD-219).
     const badges = <MessageBadges taskId={detail.task.id} messageId={artifact.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="end" />;
     return chat
-      ? <ChatReply artifact={artifact} notices={notices} badges={badges} />
+      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} />
       : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} badges={badges} />;
   };
 
@@ -435,10 +438,10 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
  * A normal chat answer: the message as a bubble, its limitations, and the turn's notices around it in their order
  * (COD-217): what was loaded before writing above, what came out of it and the action row below.
  */
-function ChatReply({ artifact, notices, badges }: { artifact: Artifact; notices: TurnNotices; badges: ReactNode }) {
+function ChatReply({ artifact, text, notices, badges }: { artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges: ReactNode }) {
   return <div className="chat-reply">
     {notices.before}
-    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={tMessage(artifact.report.summary)} />{badges}</div>
+    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={text} />{badges}</div>
     {artifact.report.limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       <ul>{artifact.report.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>

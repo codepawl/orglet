@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFile, realpath, rm } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { z } from 'zod';
 import type { WorkspaceManifest } from '../../shared/workspace-tools';
 import {
@@ -44,7 +44,9 @@ export async function diffWorkspaceCopy(options: WorkspaceDiffOptions): Promise<
   if (changed.length === 0) return { files: [], additions: 0, deletions: 0, truncated: false };
   const run = isolatedGit({ executable: options.executable, directory: session, cwd: repository, signal: options.signal, failure: FAILURE });
   const indexFile = join(session, `diff-index-${randomUUID()}`);
-  const repositoryArgs = [`--git-dir=${gitDirectory}`, `--work-tree=${options.worktree}`];
+  // Named relative to the repository Git runs in: an absolute $GIT_DIR under a long user-data folder passes the
+  // MAX_PATH - 40 characters Git for Windows allows it and fails with "'$GIT_DIR' too big" (COD-257).
+  const repositoryArgs = [`--git-dir=${relative(repository, gitDirectory)}`, `--work-tree=${relative(repository, options.worktree)}`];
   const git = async (args: string[], input?: string) => (await run([...repositoryArgs, ...args], { input, environment: { GIT_INDEX_FILE: indexFile } })).output;
   try {
     await git(['read-tree', SNAPSHOT_REF]);
