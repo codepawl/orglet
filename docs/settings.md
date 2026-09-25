@@ -56,11 +56,11 @@ Where the data lives: `%APPDATA%\orglet\orglet.sqlite` on Windows, `~/Library/Ap
 
 ## About
 
-The version you run, and **Build details** (Electron, Chromium, Node and SQLite versions, the OS, and how the build was installed) with a **Copy** button for bug reports. Links to the website, GitHub, Discord, X and Threads.
+The Orglet face and the version you run. The face says hello when the tab opens, looks at your pointer, and hops when you click it or press Enter on it; with reduced motion turned on in Windows it stays still. Then **Build details** (Electron, Chromium, Node and SQLite versions, the OS, and how the build was installed) with a **Copy** button for bug reports. Links to the website, GitHub, Discord, X and Threads.
 
 **orglet command in the terminal** is the `orglet` command for sending messages and reading answers from a terminal. On Windows, Setup already put it on your PATH; **Remove from PATH** takes it off and keeps it off through updates, and **Add to PATH** puts it back. On macOS the row shows the line to add yourself. See [the orglet command](cli.md).
 
-**What is new** lists the last ten releases with their notes, the one you run marked. It is fetched from GitHub once an hour; offline, it shows the last copy and when it was fetched.
+**What is new** lists the last ten releases, the one you run marked. Each shows its version, its date and what changed; the install advice every release page repeats is left out. It is fetched from GitHub once an hour; offline, it shows the last copy and when it was fetched.
 
 **Check for updates** shows one state at a time: not checked yet, checking, up to date with the time, downloading, ready with **Restart now**, or the error. **Automatic updates** (on by default) checks 30 seconds after launch and every four hours, downloads in the background, then asks you to restart; if you do not, the next launch uses the new version. Off, it checks only when you click.
 

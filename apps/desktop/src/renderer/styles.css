@@ -912,11 +912,18 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .plan-usage-value { text-align:right; font-variant-numeric:tabular-nums; color:var(--text); }
 .plan-usage-reset { white-space:nowrap; }
 .plan-usage .org-skeleton { grid-column:1 / -1; }
-/* Settings → Giới thiệu (COD-176): the mark and the name lead, then the same rows as every other section. The links
-   are a wrapping row of outline buttons, each mark left of its name; the changelog is the release name, the date and
-   the notes as rendered Markdown, one release at a time. */
+/* Settings → Giới thiệu (COD-176): the face and the name lead, then the same rows as every other section. The links
+   are one row of compact outline chips, each mark left of its name; the changelog is the version, the date and what
+   changed, one release at a time. */
 .about-head { display:flex; align-items:center; gap:14px; padding:4px 0 14px; }
-.about-head .orglet-mark.large { margin-bottom:0; }
+/* The brand mark, alive (COD-237): the 3D orglet (`Orglet3D`, out of layout) in the logo's colours: the text colour
+   with page-coloured rims, or the accent when Màu logo says so. Its body is about the 42px the flat mark was; the
+   button is 52px so a face turned toward the pointer, extruded side and all, stays inside it and inside its focus
+   ring, and the negative margin gives the row the 44px it had. It is a button, so the keyboard reaches it; the ring
+   takes the bubble's own corners. No background on hover: the face answering the pointer is the hover. */
+.about-face { position:relative; flex-shrink:0; width:52px; height:52px; margin:-4px; padding:0; border:0; border-radius:31% 31% 31% 15%; background:transparent; color:var(--text); --mascot-ink:var(--bg); --mascot-lift:-1px; cursor:pointer; }
+.about-face:focus-visible { outline-offset:3px; }
+:root[data-logo-color=accent] .about-face { color:var(--accent); --mascot-ink:var(--accent-ink); }
 .about-name { display:flex; flex-direction:column; gap:2px; min-width:0; }
 .about-title { font-size:17px; font-weight:600; line-height:1.2; }
 .about-details { font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
@@ -925,16 +932,38 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    command sits under it, as close to the description as a card inside the row would be. */
 .about-command-line { padding-bottom:13px; }
 .about-command-line > .setting-row { padding-bottom:10px; }
-.about-links { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
-.about-links .button { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; }
+/* COD-237: five chips on one row in the 720px Settings dialog (460px of text column). Compact rather than the
+   settings buttons' 34px, so the row stays one line down to about a 750px window; narrower than that the row
+   becomes three columns, three chips over two, instead of one chip left alone on a second line. */
+.about-links-row .setting-text { container-type:inline-size; }
+.about-links { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.about-links .button { min-height:30px; gap:6px; padding:4px 10px; font-size:13px; border-radius:16px; }
+@container (width < 448px) {
+  .about-links { display:grid; grid-template-columns:repeat(3, max-content); }
+}
 .about-links .button svg { color:var(--muted); }
 .about-links .button:hover:not(:disabled) svg { color:var(--text); }
-.release { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
-.release+.release { margin-top:18px; }
-.release-head { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
-.release-name { font-size:14px; font-weight:500; }
-.release-notes { font-size:13px; line-height:1.5; }
-.release-notes h1,.release-notes h2 { margin-top:12px; font-size:14px; font-weight:600; }
+/* What is new (COD-237): each release reads as one quiet entry. The head is the version in medium weight with the
+   date small and muted beside it; the notes are only what changed (`releaseHighlights`), at the Settings body size,
+   with section headings a step up in weight rather than in size, and releases kept apart by space alone. Links
+   show their text only: the app does not open them, so the address in brackets was noise. */
+.release { display:flex; flex-direction:column; gap:4px; margin-top:8px; }
+.release+.release { margin-top:24px; }
+.release-head { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px; }
+.release-name { font-size:14px; font-weight:500; font-variant-numeric:tabular-nums; }
+.release-date { font-size:12px; color:var(--muted); }
+.release-head .badge { align-self:center; }
+.markdown.release-notes { font-size:13px; line-height:1.55; }
+.markdown.release-notes>*+* { margin-top:6px; }
+.markdown.release-notes :is(h3,h4) { margin-top:14px; font-size:13px; font-weight:600; line-height:1.4; }
+.markdown.release-notes>:first-child { margin-top:0; }
+.markdown.release-notes :is(h3,h4)+* { margin-top:3px; }
+.markdown.release-notes :is(h3,h4) code { font-size:.9em; font-weight:500; }
+.markdown.release-notes :is(ul,ol) { padding-left:1.3em; }
+.markdown.release-notes li+li { margin-top:3px; }
+.markdown.release-notes pre { padding:8px 12px; font-size:12px; }
+.markdown.release-notes .markdown-link { text-decoration:none; }
+.markdown.release-notes .markdown-link-address { display:none; }
 /* Pulled left by its own padding so the label lines up with the notes above it. */
 .about-older { align-self:flex-start; margin:10px 0 0 -8px; min-height:28px; padding:3px 8px; font-size:12px; color:var(--muted); }
 .about-older:hover:not(:disabled) { color:var(--text); }
@@ -1216,11 +1245,17 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 }
 .field { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
 .field-title { cursor:default; }
-.select-trigger { display:flex; align-items:center; gap:10px; width:100%; min-width:0; min-height:var(--select-height); padding:6px 12px; border:1px solid var(--border); border-radius:var(--select-radius); background:var(--bg); color:var(--text); font-size:14px; font-weight:400; text-align:left; }
+/* COD-237: the trigger's line box is a whole, even 20px, so its content box is 20px and the trigger is exactly
+   --control-height. With the inherited 1.5 line height it was 21px, which put every 16px icon (and the chevron) at
+   y = 9.5: at device scale 1 the icon's strokes smeared over two pixel rows and it sat half a pixel below the
+   caps. The icon slot is as wide as a flag (20px), so a 16px icon is inset from the left edge as far as the chevron
+   is from the right, and the text of every select in a settings column starts at the same x. */
+.select-trigger { --select-icon-slot:20px; display:flex; align-items:center; gap:8px; width:100%; min-width:0; min-height:var(--select-height); padding:6px 12px; border:1px solid var(--border); border-radius:var(--select-radius); background:var(--bg); color:var(--text); font-size:14px; font-weight:400; line-height:20px; text-align:left; }
+.select-trigger>.select-icon { min-width:var(--select-icon-slot); }
 .select-trigger:hover:not(:disabled) { border-color:var(--muted); }
 .select-trigger[aria-expanded=true] { border-color:var(--muted); }
 .select-trigger:disabled { opacity:.55; }
-.select-trigger.sm { --select-height:32px; gap:8px; padding:3px 8px 3px 10px; font-size:13px; border-radius:8px; }
+.select-trigger.sm { --select-height:32px; --select-icon-slot:0px; gap:8px; padding:3px 8px 3px 10px; font-size:13px; border-radius:8px; }
 .select-value { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .select-placeholder,.select-detail { color:var(--muted); }
 .select-chevron { flex-shrink:0; color:var(--muted); transition:transform .15s; }

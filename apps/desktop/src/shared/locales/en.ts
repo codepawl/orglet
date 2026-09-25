@@ -1802,6 +1802,7 @@ export const en: Dictionary = {
   'Bản ZIP': 'ZIP build',
   'Ứng dụng macOS': 'macOS app',
   'Bản ZIP Linux': 'Linux ZIP build',
+  'Chào Orglet': 'Say hi to Orglet',
   'Cộng đồng và mã nguồn': 'Community and source',
   'Có gì mới': 'What is new',
   'Tải lại danh sách phát hành': 'Reload the release list',
