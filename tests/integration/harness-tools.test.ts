@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { harnessToolAdapter, harnessToolSchema } from '../../apps/desktop/src/core/harness/tool-adapter';
+import { harnessToolAdapter, harnessToolSchema, STEP_NOTES_CHARACTERS } from '../../apps/desktop/src/core/harness/tool-adapter';
 import { toolDefinitions } from '../../apps/desktop/src/core/tools/catalog';
 import { prepareHarnessToolPolicy } from '../../apps/desktop/src/core/harness/exec';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -72,4 +72,29 @@ it.each([
     execute: async () => ({ output: { call }, costUsd: null }), onResult: () => {},
   });
   await expect(adapter.request([], [toolDefinitions.workspace_read.model], new AbortController().signal, () => {})).rejects.toThrow();
+});
+
+it.each(['claude-code', 'codex', 'cursor', 'gemini'] as const)('lets %s keep notes beside its call, cut to a bounded length (COD-264)', async harness => {
+  const tools = [toolDefinitions.web_read_url.model];
+  const schema = harnessToolSchema(tools, harness) as { required: string[]; properties: { notes: { type: string } } };
+  expect(schema.properties.notes).toEqual({ type: 'string' });
+  // Codex's strict schema needs every property listed; the others leave notes optional.
+  expect(schema.required).toEqual(harness === 'codex' ? ['call', 'notes'] : ['call']);
+  const longNotes = `Zoho Invoice: free, 500 invoices a year. ${'x'.repeat(STEP_NOTES_CHARACTERS)}`;
+  const adapter = harnessToolAdapter({ request: { harness, executable: 'fixture', cwd: 'fixture', maxBudgetUsd: 1 },
+    execute: async request => {
+      expect(request.prompt).toContain('Use notes to keep');
+      const call = { name: 'web_read_url', arguments: harness === 'codex' ? JSON.stringify({ url: 'https://example.com/pricing' }) : { url: 'https://example.com/pricing' } };
+      return { output: { call, notes: `  ${longNotes}  ` }, costUsd: null };
+    }, onResult: () => {},
+  });
+  const reply = await adapter.request([], tools, new AbortController().signal, () => {});
+  expect(reply.notes?.startsWith('Zoho Invoice: free, 500 invoices a year.')).toBe(true);
+  expect(reply.notes).toHaveLength(STEP_NOTES_CHARACTERS);
+
+  const quiet = harnessToolAdapter({ request: { harness, executable: 'fixture', cwd: 'fixture', maxBudgetUsd: 1 },
+    execute: async () => ({ output: { call: { name: 'web_read_url', arguments: harness === 'codex' ? JSON.stringify({ url: 'https://example.com' }) : { url: 'https://example.com' } }, notes: '   ' }, costUsd: null }),
+    onResult: () => {},
+  });
+  expect((await quiet.request([], tools, new AbortController().signal, () => {})).notes).toBeUndefined();
 });

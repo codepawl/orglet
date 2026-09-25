@@ -3,6 +3,8 @@ import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/reso
 import { modelCatalog, type CatalogProvider } from './catalog';
 
 export type ModelReply = { calls: { id: string; name: string; arguments: string }[]; usage?: { input: number; output: number };
+  /** Text the model wrote beside its call, kept for later steps (COD-264). */
+  notes?: string;
   validationFailure?: { toolName: 'submit_report'; issues: { path: string; code: string; expected?: string }[] } };
 export interface ModelAdapter {
   request(messages: ChatCompletionMessageParam[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply>;
@@ -32,9 +34,12 @@ export class OpenAIAdapter implements ModelAdapter {
     const calls = new Map<number, { id: string; name: string; arguments: string }>();
     let usage: ModelReply['usage'];
     let received = false;
+    let text = '';
     for await (const chunk of stream) {
       if (!received) { progress(); received = true; }
       if (chunk.usage) usage = { input: chunk.usage.prompt_tokens, output: chunk.usage.completion_tokens };
+      const written = chunk.choices[0]?.delta.content;
+      if (written && text.length < 2000) text += written;
       for (const part of chunk.choices[0]?.delta.tool_calls ?? []) {
         const call = calls.get(part.index) ?? { id: '', name: '', arguments: '' };
         if (part.id) call.id = part.id;
@@ -44,6 +49,7 @@ export class OpenAIAdapter implements ModelAdapter {
         calls.set(part.index, call);
       }
     }
-    return { calls: [...calls.values()], usage };
+    const notes = text.trim().slice(0, 2000);
+    return { calls: [...calls.values()], usage, ...(notes ? { notes } : {}) };
   }
 }

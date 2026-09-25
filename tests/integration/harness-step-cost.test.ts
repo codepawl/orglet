@@ -187,4 +187,23 @@ describe('web research on the Claude Code tool bridge', () => {
     expect(checkpointBeforeLastStep?.harnessCostMicros).toBe(200_000);
     expect(checkpointBeforeLastStep?.harnessCallsWithoutCost).toBe(1);
   });
+
+  it('keeps the notes a step wrote after the page they came from is cut, and says to use them (COD-264)', async () => {
+    const lastContext: { messages: ChatCompletionMessageParam[] }[] = [];
+    respond = (request, step) => {
+      lastContext.push(contextOf(request).context);
+      if (step <= 4) return { output: { call: { name: 'web_read_url', arguments: { url: `https://example.com/${step}` } }, notes: step === 2 ? 'Page 1: Pro plan costs $14 a month; free plan allows five clients.' : '' }, costUsd: 0.01 };
+      return { output: { call: { name: 'reply', arguments: { message: 'Compared.' } } }, costUsd: 0.01 };
+    };
+    const taskId = await research();
+    expect(store.detail(taskId).task.status).toBe('completed');
+    const final = lastContext.at(-1)!.messages;
+    // The note stays with the call it was written beside, as the assistant's own words.
+    expect(final.some(message => message.role === 'assistant' && message.content === 'Page 1: Pro plan costs $14 a month; free plan allows five clients.')).toBe(true);
+    // Empty notes add nothing.
+    expect(final.filter(message => message.role === 'assistant' && message.content !== undefined)).toHaveLength(1);
+    // The first page has been cut by now, and its note points at the notes instead of reading it again.
+    const firstPage = final.find(message => message.role === 'tool' && String(message.content).includes('https://example.com/1'));
+    expect(JSON.parse(String(firstPage!.content)).trimmedForContext).toContain('Use what your notes kept from it');
+  });
 });
