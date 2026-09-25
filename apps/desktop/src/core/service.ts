@@ -721,6 +721,7 @@ export class CoreService {
     saveFont('interfaceFont', input.interfaceFont);
     saveFont('codeFont', input.codeFont);
     if (input.autoUpdate !== undefined) this.store.setSetting('autoUpdate', input.autoUpdate);
+    if (input.backgroundNotifications !== undefined) this.store.setSetting('backgroundNotifications', input.backgroundNotifications);
     if (input.connectionLimitMicros !== undefined) this.store.setSetting('connectionLimitMicros', input.connectionLimitMicros);
     if (input.providerConcurrency) this.store.setSetting('providerConcurrency', input.providerConcurrency);
     // Standing per-provider permission (plan §12: consent scoped by connection); backups never restore it.

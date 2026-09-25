@@ -2410,6 +2410,21 @@ export const en: Dictionary = {
   'Đã đưa vào chat chính': 'Brought into main chat',
   'Đưa vào chat chính': 'Bring into main chat',
   'Đọc {0} tin gần nhất của chat chính': 'Read the main chat’s last {0} messages',
+  // COD-258: schedule runs in the sidebar, their notices, and system notifications while Orglet is in the background.
+  '{0} đã xong': '{0} is ready',
+  '{0} đang chờ bạn': '{0} needs you',
+  '{0} cần xem lại': '{0} needs a look',
+  '{0} · chat phụ': '{0} · side thread',
+  'Đang chờ bạn': 'Needs you',
+  'Báo khi cuộc trò chuyện xong': 'Notify me when a chat finishes',
+  'Chỉ khi Orglet chạy nền; không kèm câu trả lời.': 'Only while Orglet is in the background; never the answer.',
+  'Chat phụ và lịch chạy của {0}': 'Side threads and schedules of {0}',
+  'Lịch chạy của {0}': 'Schedules of {0}',
+  'Lần chạy của lịch {0}': 'Run of the schedule {0}',
+  'Tùy chọn lịch {0}': 'Schedule {0} options',
+  'Xóa lần chạy này? Không thể hoàn tác.': 'Delete this run? This cannot be undone.',
+  'Lần chạy của lịch {0}, do {1} làm.': 'A run of the schedule {0}, by {1}.',
+  'Mỗi lần chạy gửi brief này {0}, trong giới hạn trên.': 'Each run sends this brief {0}, within the limit above.',
 };
 
 // British English differs from the US text only in these spellings, so it is derived instead of duplicated.

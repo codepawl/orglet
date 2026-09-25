@@ -63,6 +63,12 @@ const bridge: Bridge = {
     ipcRenderer.on('orglet:open-chat', listener);
     return () => ipcRenderer.removeListener('orglet:open-chat', listener);
   },
+  notifyInBackground: notice => invoke('orglet:notify', notice),
+  onOpenTask: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, taskId: string) => callback(taskId);
+    ipcRenderer.on('orglet:open-task', listener);
+    return () => ipcRenderer.removeListener('orglet:open-task', listener);
+  },
   takeIncoming: () => invoke('orglet:incoming'),
   onIncoming: callback => {
     const listener = () => callback();

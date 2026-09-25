@@ -38,7 +38,7 @@ For a reassigned member, Chi tiết names the worker who actually ran the attemp
 2. If there is no live thread yet, you get an empty chat (composer pinned at the bottom). The first send creates the thread.
 3. If a live thread already exists, it opens with the saved messages. Later sends are follow-ups in the same chat.
 
-A **team** row is one row: clicking it opens that team's chat. Its members are listed in the chat **Details** panel, not nested under it in the sidebar. A worker row lists only its open side threads under it; its main chat is the row itself, and it has no other nested task list. A thin line runs down from under the orglet's face and curves into each side thread, the way Discord draws a channel's threads, so they read as that orglet's (COD-262).
+A **team** row is one row: clicking it opens that team's chat. Its members are listed in the chat **Details** panel, not nested under it in the sidebar; the only rows under a team are its schedules' runs. A worker row lists its open side threads and its schedules' runs under it, newest first (`chatsUnder` in `apps/desktop/src/shared/schedule-runs.ts`, COD-258); its main chat is the row itself, and it has no other nested task list. A schedule's row is the schedule's newest run (`lastTaskId`), named after the schedule; see [routines.md](routines.md#where-a-run-shows-up). A thin line runs down from under the orglet's or crew's face and curves into each row under it, the way Discord draws a channel's threads, so they read as that row's (COD-262).
 
 Ctrl+N focuses the current worker or team chat (it does not create a new session). Search (Ctrl+K) finds chats by their text, including archived ones.
 
@@ -67,6 +67,7 @@ There is no separate `threads` table.
 | Worker chat | Newest non-archived, non-deleted `tasks` row with that `workerId`, no `teamId`, no `assignees`, no `routineId`, no `sideOf` |
 | Team chat | Newest non-archived, non-deleted `tasks` row with that `teamId`, no `assignees`, no `routineId`, no `sideOf` |
 | Side thread | A `tasks` row with `sideOf` set; never returned by the two lookups above |
+| Schedule run | A `tasks` row with `routineId` set; never returned by the two lookups above. The sidebar lists the schedule's newest one under its worker or team |
 
 | User does | Core |
 |---|---|
@@ -96,7 +97,7 @@ A message sent with **Send in a new thread** (the menu beside Send, or Ctrl+Shif
 
 **The empty chat.** When an orglet's empty chat is on screen, the view switches to a chat only when a new main chat appears (`liveChatToAdopt` in `live-task.ts`, the MCP "adopt a live chat" rule); a side-thread row never qualifies, so nothing typed or sent there follows it into a side thread.
 
-**Finishing.** When a side thread stops working while another chat is on screen, the renderer shows a toast with **Open** (`sideThreadNotices.ts`), which the notice centre keeps. The answer stays in the side thread.
+**Finishing.** When a side thread stops working while another chat is on screen, the renderer shows a toast with **Open** (`chatNotices.ts`), which the notice centre keeps and opens the thread from. The answer stays in the side thread.
 
 ## Orchestrator: one message → workers → one report
 

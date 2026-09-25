@@ -1,4 +1,4 @@
-import { app, autoUpdater, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, session, shell, utilityProcess } from 'electron';
+import { app, autoUpdater, BrowserWindow, clipboard, dialog, ipcMain, Notification, safeStorage, session, shell, utilityProcess } from 'electron';
 import { basename, dirname, join, relative, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { mkdir, open, rm, stat } from 'node:fs/promises';
@@ -36,6 +36,7 @@ import { McpServerDraft, parseMcpImport, splitMcpDraft, type McpServerView } fro
 import type { Incoming, SendToState } from '../shared/incoming';
 import { LINK_SCHEME, parseLaunchArguments, resolveLinkChat, type LaunchRequest } from './launch-requests';
 import { importSentFiles, isKeptOffSendTo, keepOffSendTo, SendToInstaller, SentFilesHandOff, type PathKind, type ShortcutFiles } from './send-to';
+import { BackgroundNotice } from '../shared/background-notice';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -101,6 +102,32 @@ function showWindow(chat?: CliChat) {
   window.moveTop();
   window.focus();
   if (chat) window.webContents.send('orglet:open-chat', { kind: chat.kind, id: chat.id } satisfies OpenChatTarget);
+}
+/**
+ * System notifications still on screen or in the notification centre. Electron drops the click handler of one
+ * that is garbage collected, so each is held until it is clicked; only the newest few are kept.
+ */
+let shownNotifications: Notification[] = [];
+const KEPT_NOTIFICATIONS = 20;
+/**
+ * A chat finished, failed or needs the person while they are in another app (COD-258). The window decides which
+ * chats; this checks again that the window really is in the background, and a click brings it forward on that chat.
+ * A Setup install gets its taskbar identity from Squirrel's shortcut, which Electron picks up by itself.
+ */
+function notifyInBackground(notice: BackgroundNotice): boolean {
+  if (!window || window.isDestroyed() || window.isFocused()) return false;
+  if (!Notification.isSupported()) return false;
+  const notification = new Notification({ title: notice.title, body: notice.body });
+  const forget = () => { shownNotifications = shownNotifications.filter(item => item !== notification); };
+  notification.on('click', () => {
+    forget();
+    showWindow();
+    if (window && !window.isDestroyed()) window.webContents.send('orglet:open-task', notice.taskId);
+  });
+  notification.on('failed', forget);
+  shownNotifications = [...shownNotifications, notification].slice(-KEPT_NOTIFICATIONS);
+  notification.show();
+  return true;
 }
 /** The line protocol the `orglet` command talks to (COD-234), with a new token on every start. */
 async function startCliServer(directory: string) {
@@ -605,6 +632,7 @@ async function start() {
     incomingQueue = [];
     return taken;
   });
+  handle('orglet:notify', async raw => notifyInBackground(BackgroundNotice.parse(raw)));
   handle('orglet:sent-files', async raw => {
     const id = z.string().uuid().parse(raw);
     const paths = sentFiles.take(id);

@@ -155,7 +155,7 @@ Brings the window forward and opens that chat. On Windows the taskbar button may
 orglet run "Invoice check" --file invoice.pdf
 ```
 
-Starts one of the app's schedules now: its brief goes to its orglet or crew, within its cost limit, with the files you attach added to the schedule's own sources. The command returns once the run has started, and the run appears in the app under **Schedules → Open latest run**. It does not wait for the answer.
+Starts one of the app's schedules now: its brief goes to its orglet or crew, within its cost limit, with the files you attach added to the schedule's own sources. The command returns once the run has started, and the run appears in the app's sidebar under the orglet or crew it runs for, named after the schedule. It does not wait for the answer; the app says when the run is done, with a system notification if Orglet is in the background ([chat guide](chat-guide.md#while-orglet-is-in-the-background)).
 
 Any schedule can be started this way. A schedule set to **Only when called** runs in no other way. The schedule must:
 

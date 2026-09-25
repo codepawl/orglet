@@ -48,5 +48,5 @@ export function formatOpen(value: OpenValue): string {
 }
 
 export function formatRun(value: RunValue): string {
-  return `Started ${value.schedule.name}. Its run is in the app under Schedules.`;
+  return `Started ${value.schedule.name}. Its run is in the app's sidebar, under the orglet or crew it runs for.`;
 }
