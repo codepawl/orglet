@@ -43,7 +43,7 @@ The first time an orglet calls a tool in a chat, the chat stops and shows who wa
 - **Always allow** *server*: every tool of this server runs without asking in this chat.
 - **Refuse**: the call does not run. The orglet is told you refused and carries on without it.
 
-"Always" lasts for this chat only. To take it back, open the chat's **Details → Tool permissions**, where each server the chat's orglets may use has a switch, and each tool you allowed on its own has one too. Turning one off stops nothing already running; the next call asks again.
+In a side thread the card offers only **Allow once** and **Refuse**: a side thread never allows more than its main chat, and taking a grant away in the main chat takes it from its side threads too ([team-chat.md](team-chat.md#side-threads)). "Always" lasts for this chat only. To take it back, open the chat's **Details → Tool permissions**, where each server the chat's orglets may use has a switch, and each tool you allowed on its own has one too. Turning one off stops nothing already running; the next call asks again.
 
 A crew or group chat cannot stop mid-turn to ask. There, a tool you have not allowed comes back to the orglet as refused and the trace says so. Allow the server in **Details → Tool permissions** first, then send the message again.
 

@@ -32,7 +32,7 @@ import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWe
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, memoryCandidate, type Colleague } from '../context/compiler';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
-import { applyThreadManifest, compactThread, fitThread, threadMessages } from '../context/thread';
+import { applyThreadManifest, compactThread, fitThread, mainChatTurns, threadMessages, type ThreadExtras } from '../context/thread';
 import { ProviderSlots, type SlotWait } from './slots';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -500,6 +500,18 @@ export class Runner {
    * started (a resume keeps the snapshot it ran with), and a reassignment attempt keeps the intersection of both
    * workers that recovery gave it.
    */
+  /**
+   * A side thread's first turn also reads its main chat's latest turns, read-only (COD-247): up to the turn the main
+   * chat had reached when the thread started. Later turns in the side thread are that thread's own history, and a
+   * main chat deleted since leaves the first turn without it.
+   */
+  private threadExtras(task: Task, run: Run): ThreadExtras {
+    if (!task.sideOf || run.stage || (run.snapshot.inputRevision ?? 0) > 0) return {};
+    const row = this.store.db.prepare('SELECT data FROM tasks WHERE id=?').get(task.sideOf.taskId);
+    if (!row || (JSON.parse(String(row.data)) as Task).deletedAt) return {};
+    const main = this.store.detail(task.sideOf.taskId);
+    return { mainChat: mainChatTurns(main, task.sideOf.throughRevision, run.snapshot.worker.id) };
+  }
   private startPermissions(task: Task, run: Run): Pick<Run['snapshot'], 'toolCapabilities' | 'workspaceGrant'> {
     const fresh = !run.snapshot.context && !run.snapshot.reassignment;
     if (!fresh) {
@@ -594,8 +606,9 @@ export class Runner {
       if (!preflight && task.excludedSources?.length) preflightLimits.push(`${task.excludedSources.length} mục đã bị loại khi nhập nguồn. Không xem đây là review toàn bộ thư mục; xem danh sách loại trừ trên máy.`);
       if (manifest.some(source => source.revoked)) throw new Error('Một nguồn đã bị thu hồi quyền đọc.');
       if (manifest.filter(source => !source.format && !source.media).reduce((sum, source) => sum + source.bytes, 0) > 1_048_576) throw new Error('Tổng nguồn văn bản vượt 1 MB. Tách thành các task nhỏ hơn.');
+      const extras = this.threadExtras(task, run);
       const freezeTranscript = (fold = 0) => {
-        const compacted = compactThread(this.store.detail(task.id), run, input.brief, fold);
+        const compacted = compactThread(this.store.detail(task.id), run, input.brief, fold, extras);
         run = { ...run, snapshot: { ...run.snapshot, context: applyThreadManifest(compiled.context, compacted) } };
         this.store.update('runs', run);
         return compacted;
@@ -698,7 +711,7 @@ export class Runner {
       };
       let messages: ChatCompletionMessageParam[];
       if (!resume?.messages.length) {
-        const compacted = fitThread(this.store.detail(task.id), run, input.brief, assemble, tools);
+        const compacted = fitThread(this.store.detail(task.id), run, input.brief, assemble, tools, undefined, extras);
         messages = assemble(compacted);
         run = { ...run, snapshot: { ...run.snapshot, context: applyThreadManifest(compiled.context, compacted) } };
         this.store.update('runs', run);

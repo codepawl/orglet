@@ -19,6 +19,7 @@ import {
   type ShortcutSpec,
 } from '../../apps/desktop/src/main/send-to';
 import { filterOptions, recentChats, sendToOptions } from '../../apps/desktop/src/renderer/sendTo';
+import { t } from '../../apps/desktop/src/renderer/i18n';
 
 // COD-246: files sent from Explorer are imported like picked files, with the same limits, and the Send to shortcut is
 // added, pointed at the stable launcher and removed through fakes of the file system.
@@ -206,6 +207,19 @@ describe('the picker list', () => {
     ]);
     expect(options.find(option => option.group === 'crews')?.faces.map(worker => worker.id)).toEqual(['w1', 'w2']);
     expect(options.find(option => option.name === 'brief crew')?.target).toEqual({ kind: 'task', id: 'crew' });
+  });
+
+  it('labels a side thread in Recent as one, with its orglet, and finds it by that label (COD-247)', () => {
+    const withSide = { ...workspace, tasks: [...workspace.tasks, task('side', '2026-09-25T02:00:00Z', { title: 'Pricing ideas', sideOf: { taskId: 'new', throughRevision: 0 } })] };
+    const options = sendToOptions(withSide);
+    const side = options.find(option => option.target.id === 'side')!;
+    expect(side).toMatchObject({ group: 'recent', name: 'Pricing ideas', sideThread: true, detail: t('chat phụ · {0}', ['Researcher']) });
+    // The main chat of the same orglet is an ordinary row, and the orglet itself still goes to its main chat.
+    const main = options.find(option => option.target.id === 'new')!;
+    expect(main.sideThread).toBeUndefined();
+    expect(main.detail).toBeUndefined();
+    expect(options.find(option => option.group === 'orglets' && option.name === 'Researcher')?.target).toEqual({ kind: 'worker', id: 'w1' });
+    expect(filterOptions(options, t('chat phụ')).map(option => option.target.id)).toEqual(['side']);
   });
 
   it('narrows by name without regard to case or accents', () => {

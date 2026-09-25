@@ -21,18 +21,19 @@ export const approvalAnswerLabels: Record<McpApprovalChoice, string> = translate
  * wants to call which tool of which server, the arguments it chose, and four answers. "Always" lasts for this chat
  * only and can be taken back in Details.
  */
-export function McpApprovalCard({ approval, workerName, busy, onAnswer }: { approval: McpApproval; workerName: string; busy: boolean; onAnswer: (choice: McpApprovalChoice) => void }) {
+export function McpApprovalCard({ approval, workerName, busy, onAnswer, sideThread = false }: { approval: McpApproval; workerName: string; busy: boolean; onAnswer: (choice: McpApprovalChoice) => void;
+  /** A side thread can never allow more than its main chat (COD-247), so it offers only once and refuse. */ sideThread?: boolean }) {
   return <div className="mcp-approval" role="group" aria-label={t('Cho phép công cụ MCP')}>
     <p role="status" className="mcp-approval-question"><Blocks size={16} aria-hidden="true" />
       <span>{t('{0} muốn dùng {1} của {2}.', [workerName, approval.tool, approval.serverName])}</span></p>
     {approval.arguments && approval.arguments !== '{}' && <pre className="mcp-arguments" aria-label={t('Tham số')}>{approval.arguments}</pre>}
     <div className="actions">
       <Button variant="primary" disabled={busy} onClick={() => onAnswer('once')}><Check size={16} />{t('Cho phép một lần')}</Button>
-      <Button variant="outline" disabled={busy} onClick={() => onAnswer('tool')}><CheckCheck size={16} />{t('Luôn cho phép công cụ này')}</Button>
-      <Button variant="outline" disabled={busy} onClick={() => onAnswer('server')}><ShieldCheck size={16} />{t('Luôn cho phép {0}', [approval.serverName])}</Button>
+      {!sideThread && <Button variant="outline" disabled={busy} onClick={() => onAnswer('tool')}><CheckCheck size={16} />{t('Luôn cho phép công cụ này')}</Button>}
+      {!sideThread && <Button variant="outline" disabled={busy} onClick={() => onAnswer('server')}><ShieldCheck size={16} />{t('Luôn cho phép {0}', [approval.serverName])}</Button>}
       <Button variant="ghost" disabled={busy} onClick={() => onAnswer('refuse')}><X size={16} />{t('Từ chối')}</Button>
     </div>
-    <p className="muted">{t('“Luôn cho phép” chỉ áp dụng cho chat này; tắt lại trong Chi tiết → Quyền công cụ.')}</p>
+    <p className="muted">{sideThread ? t('Chat phụ chỉ cho phép từng lần. Muốn luôn cho phép, bật ở chat chính.') : t('“Luôn cho phép” chỉ áp dụng cho chat này; tắt lại trong Chi tiết → Quyền công cụ.')}</p>
   </div>;
 }
 

@@ -1,6 +1,6 @@
 # In a chat
 
-What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, and find what the app told you.
+What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, ask something on the side, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, and find what the app told you.
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
@@ -21,6 +21,27 @@ Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. CSV, JSONL an
 Type a colon and at least two letters of an emoji's name, such as `:sk`, and a small menu lists the emoji that fit. Arrow keys move through it, Enter or Tab inserts the one highlighted, Escape closes it. A full name such as `:skull:` becomes 💀 as soon as you type the closing colon.
 
 The names are GitHub's, which Slack and Discord mostly share. The menu only opens at the start of the message or after a space or bracket, and only when an emoji matches, so times like `10:30` and links stay as you typed them.
+
+## Side threads
+
+Each orglet has one main chat. Clicking the orglet always opens it. When you want to ask something on the side without mixing it into the main chat, or while the orglet is still busy there, send it in a side thread.
+
+1. Type the message in the orglet's main chat.
+2. Press **Ctrl+Shift+Enter** (Cmd+Shift+Enter on macOS), or click the small arrow next to Send and choose **Send in a new thread**.
+3. You stay in the main chat. A short message says the side thread started; click **Open** to go there, or open it later.
+
+Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. When a side thread answers while you are somewhere else, a message says so with **Open**, and it is also kept in Notifications.
+
+What a side thread knows and can do:
+
+- Its first answer reads the last few turns of the main chat (up to six), so you do not have to repeat the context. After that, it only reads its own messages.
+- It carries the files of the message you sent it with.
+- It has the main chat's permissions: the same switches, the same working folder at the same level, and the same MCP tools allowed. It never gets more. If you turn something off in the main chat, its side threads lose it at once. A side thread that was working with a switch or the folder you turned off stops; an MCP tool you took back asks again the next time it is used. To change permissions, change them in the main chat. An MCP tool that asks in a side thread can only be allowed once there.
+- It counts as its own chat for the **Limit per task**, and it shares the orglet's connection and slots with the main chat.
+
+To use an answer in the main chat, click **Bring into main chat** (the return arrow under the answer). The answer appears in the main chat as a quote, marked with the side thread it came from. Nothing runs when you do this; the orglet reads the quote with the next message you send in the main chat.
+
+Side threads are for single orglets. A crew chat and a group chat do not have them yet.
 
 ## Reports as documents
 

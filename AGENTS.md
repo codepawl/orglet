@@ -46,7 +46,7 @@ Renderer talks to core through `preload` → typed `Bridge` / `commands` in `app
 
 | Feature | Page | Code entry |
 |---|---|---|
-| Orglet and crew chat, group chats, `@` tags, replies, reactions | [docs/team-chat.md](docs/team-chat.md) | `core/orchestration/team.ts`, `shared/live-task.ts`, `shared/message-interactions.ts` |
+| Orglet and crew chat, side threads, group chats, `@` tags, replies, reactions | [docs/team-chat.md](docs/team-chat.md) | `core/orchestration/team.ts`, `shared/live-task.ts`, `shared/message-interactions.ts` |
 | Permissions, working folder, commands, web tools, app-change proposals | [docs/agent-tools.md](docs/agent-tools.md) | `core/tools/catalog.ts`, `core/orchestration/app-proposals.ts` |
 | MCP servers, per-orglet choice, approving calls, secrets in main | [docs/mcp.md](docs/mcp.md) | `core/tools/mcp.ts`, `shared/mcp.ts`, `main/mcp-secrets.ts` |
 | Memory | [docs/memory.md](docs/memory.md) | `core/context/knowledge.ts` |
@@ -110,7 +110,7 @@ Process detail is [CONTRIBUTING.md](CONTRIBUTING.md). Fill [.github/pull_request
 
 **Proposals, not actions.** An orglet asked to set the app up proposes a card the person applies; it never creates, deletes or grants anything itself, and keys, connections, permissions, folders, backups and deletions cannot be proposed at all. Self-improvement changes one sentence of the orglet's own instructions and always waits for a click.
 
-**Chats.** Clicking an orglet or a crew opens **that chat** (one live `tasks` row keyed by `workerId` or `teamId`). A user message is a turn, not a new task row. See [docs/team-chat.md](docs/team-chat.md).
+**Chats.** Clicking an orglet or a crew opens **its main chat** (one live `tasks` row keyed by `workerId` or `teamId`, found by `liveWorkerTask` / `liveTeamTask`). A user message is a turn, not a new task row. An orglet's main chat can also start **side threads** (COD-247): separate rows marked `sideOf`, listed under the orglet, which the live lookups never return. A side thread starts with a copy of the main chat's permissions, folder grant and MCP grants, is never wider, and loses at once whatever the main chat loses; bringing its answer into the main chat adds a quote and never starts a run. Crews and group chats have no side threads. See [docs/team-chat.md](docs/team-chat.md#side-threads).
 
 ## Do not
 

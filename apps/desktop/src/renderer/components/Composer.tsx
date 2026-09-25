@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { ArrowUp, Plus, Reply, Square, X } from 'lucide-react';
+import { ArrowUp, ChevronUp, MessageSquarePlus, Plus, Reply, Square, X } from 'lucide-react';
 import type { TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
 import { completeShortcodeAt, emojiChoices, insertEmoji, shortcodeQueryAt } from '../../shared/emoji-shortcodes';
@@ -12,6 +12,9 @@ import { t } from '../i18n';import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
 import { briefWithReaction, clearReplyTarget, useReplyTarget } from './messageMarks';
 import { IslandDock } from './islandDock';
+import { RowMenu } from './RowMenu';
+import { toast } from './toast';
+import { canStartSideThread } from '../../shared/side-threads';
 
 const SINGLE_LINE = 40;
 
@@ -43,7 +46,9 @@ function restingScrollLeft(strip: HTMLUListElement) {
  * Team and group chats can pass `mentions` so `@` opens a worker picker. In every chat `:sk` offers matching emoji
  * and a finished `:skull:` turns into its emoji (COD-233).
  */
-export function Composer({ value, onChange, onSubmit, label, placeholder, sendLabel, leading, trailing, attachments, onRemoveAttachment, context, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: readonly ComposerAttachment[]; onRemoveAttachment?: (id: string) => void;
+export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, placeholder, sendLabel, leading, trailing, attachments, onRemoveAttachment, context, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void;
+  /** Ctrl+Shift+Enter (Cmd on macOS): the other way to send, where the bar has one ("in a new thread", COD-247). */
+  onAlternateSubmit?: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: readonly ComposerAttachment[]; onRemoveAttachment?: (id: string) => void;
   /** The top zone of the grown bar, above the files: what this message answers, for example. */
   context?: ReactNode; disabled?: boolean; sendDisabled?: boolean; textareaRef?: RefObject<HTMLTextAreaElement | null>; mentions?: MentionRoster;
   /**
@@ -165,6 +170,12 @@ export function Composer({ value, onChange, onSubmit, label, placeholder, sendLa
     setDismissed(undefined);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const alternate = event.key === 'Enter' && event.shiftKey && (event.ctrlKey || event.metaKey);
+    if (alternate && onAlternateSubmit && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      if (canSend) onAlternateSubmit();
+      return;
+    }
     if (menuOpen) {
       if (event.key === 'ArrowDown') { event.preventDefault(); setActive(index => (index + 1) % optionCount); return; }
       if (event.key === 'ArrowUp') { event.preventDefault(); setActive(index => (index - 1 + optionCount) % optionCount); return; }
@@ -248,7 +259,7 @@ export function withPrefill(current: string, prefill: string): string {
  * run is on, the island saying what the worker is doing sits on the bar's top edge (COD-167, `IslandDock`).
  * `prefill` fills it without sending; `onPrefilled` lets the caller forget it once it is in.
  */
-export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, action, prefill, onPrefilled }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: (tab?: 'connections' | 'harness') => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void }) {
+export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, openChat, action, prefill, onPrefilled }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void }) {
   const [text, setText] = useState('');
   const textarea = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -280,11 +291,32 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
       return;
     }
     const brief = briefWithReaction(extra, reaction);
-    action(async () => { try { await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
+    action(async () => { try { await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: carriedSources(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
   };
+  /** The files the next message carries: the latest turn's, minus any whose access was taken back. */
+  function carriedSources() {
+    return input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked);
+  }
+  // An orglet's own main chat can send a message into a new side thread instead (COD-247); crews and group chats cannot.
+  const sideThreads = canStartSideThread(detail.task);
+  const sendInNewThread = () => {
+    const brief = text.trim();
+    if (!brief || blocked || submitting) return;
+    setSubmitting(true);
+    const orgletName = workers[0]?.name ?? 'Orglet';
+    action(async () => {
+      try {
+        const sideTaskId = await orglet.call('startSideThread', { taskId: detail.task.id, brief, sourceIds: carriedSources(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
+        setText(current => current === text ? '' : current);
+        toast(t('Đã mở chat phụ'), 'success', orgletName, { label: t('Mở'), onSelect: () => openChat(sideTaskId) });
+      } finally { setSubmitting(false); }
+    });
+  };
+  const sendOptions = sideThreads ? <RowMenu className="composer-send-options" label={t('Tùy chọn gửi')} icon={ChevronUp} disabled={!text.trim() || blocked || submitting}
+    items={[{ label: t('Gửi trong chat phụ mới'), icon: MessageSquarePlus, shortcut: 'Ctrl+Shift+Enter', onSelect: sendInNewThread }]} /> : undefined;
   return <div className="thread-composer">
     <IslandDock />
-    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} label={t('Tin nhắn')} placeholder={detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(detail.task.pendingStart) || submitting} sendDisabled={blocked}
+    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} label={t('Tin nhắn')} placeholder={detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(detail.task.pendingStart) || submitting} sendDisabled={blocked}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
       context={reply && !pendingDecision ? <div className="composer-reply">

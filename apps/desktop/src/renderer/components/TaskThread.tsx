@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -38,6 +38,7 @@ import { AppProposalCards, type ProposalActions } from './AppProposals';
 import { ChangedFilesLine, DiffDialog } from './DiffViewer';
 import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import type { AppProposal } from '../../shared/app-proposals';
+import type { ChatQuote } from '../../shared/side-threads';
 import { McpApprovalCard } from './McpApproval';
 import { turnNotices } from './turnNotices';
 
@@ -111,7 +112,9 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void }) {
+export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
+  /** Opens another chat: the side thread a quote came from, or the main chat an answer was brought into (COD-247). */ openChat?: (taskId: string) => void;
+  /** Opens an orglet's main chat from one of its side threads. */ openMainChat?: (workerId: string) => void }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   // The run whose working-copy changes are open in the diff viewer (COD-163).
@@ -152,6 +155,13 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     readersByRevision.set(revision, [...(readersByRevision.get(revision) ?? []), run]);
   }
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
+  // Side threads (COD-247): which answers were already brought into a main chat, and what the threads are called.
+  const broughtIn = new Set(workspace.tasks.flatMap(task => (task.quotes ?? []).map(quote => quote.artifactId)));
+  const threadName = (taskId: string) => {
+    const thread = workspace.tasks.find(task => task.id === taskId && !task.deletedAt);
+    return thread ? thread.title || thread.brief.split('\n')[0].trim() : undefined;
+  };
+  const sideThreadOrglet = detail.runs[0]?.snapshot.worker.name ?? workspace.workers.find(worker => worker.id === detail.task.workerId)?.name ?? 'Orglet';
   const liveRuns = useRunProgress(detail.task.id);
   // Changes whenever streamed text or steps grow, so the view keeps following the newest output.
   const liveLength = Object.values(liveRuns).reduce((total, update) => total + (update.progress ? update.progress.preamble.length + update.progress.answer.length + update.progress.activity.length : 0), 0);
@@ -268,7 +278,10 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       // A chat answer copies and downloads from its row; a report keeps those in its viewer's toolbar.
       actions: <MessageActions key="actions" taskId={detail.task.id} messageId={artifact.id} author={authorName} reactions={detail.task.messageReactions ?? []} action={action}
         text={chat ? tMessage(artifact.report.summary) : tMessage(artifact.report.title)}
-        leading={chat ? <ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [authorName])} action={action} /> : undefined} />,
+        leading={<>
+          {chat && <ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [authorName])} action={action} />}
+          {detail.task.sideOf && <BringIntoMainChat artifactId={artifact.id} brought={broughtIn.has(artifact.id)} about={t('Câu trả lời của {0}', [authorName])} action={action} openChat={openChat} />}
+        </>} />,
     });
     // The reactions ride on the answer's own corner, whichever shape it takes (COD-219).
     const badges = <MessageBadges taskId={detail.task.id} messageId={artifact.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="end" />;
@@ -279,6 +292,10 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
 
   return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
     <div className="thread-content">
+      {detail.task.sideOf && <p className="side-thread-origin">
+        <span>{t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
+        {openMainChat && <button type="button" onClick={() => openMainChat(detail.task.workerId)}>{t('Mở chat chính')}</button>}
+      </p>}
       {turns.map((turn, index) => {
         const latest = turn.revision === current;
         const workFrame = turn.runs.find(run => run.stage === 'plan' && run.snapshot.workFrame)?.snapshot.workFrame
@@ -336,7 +353,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
           {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
             {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
-            {latest && detail.task.status === 'waiting_input' && pendingDecision?.approval && <McpApprovalCard approval={pendingDecision.approval} busy={answeringDecision}
+            {latest && detail.task.status === 'waiting_input' && pendingDecision?.approval && <McpApprovalCard approval={pendingDecision.approval} busy={answeringDecision} sideThread={Boolean(detail.task.sideOf)}
               workerName={detail.runs.find(run => run.id === pendingDecision.runId)?.snapshot.worker.name ?? 'Orglet'}
               onAnswer={choice => {
                 if (answeringDecision) return;
@@ -395,6 +412,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             </div>}
           </section>}
           <ReadReceipts readers={readersByRevision.get(turn.revision) ?? []} />
+          {(detail.task.quotes ?? []).filter(quote => quote.afterRevision === turn.revision).map(quote =>
+            <BroughtInQuote key={quote.id} quote={quote} threadName={threadName(quote.fromTaskId)} onOpen={openChat && threadName(quote.fromTaskId) ? () => openChat(quote.fromTaskId) : undefined} />)}
         </div>;
       })}
     </div>
@@ -416,6 +435,31 @@ function ChatReply({ artifact, notices, badges }: { artifact: Artifact; notices:
     </div>}
     {notices.after}
   </div>;
+}
+
+/**
+ * An answer from a side thread that the person brought into this main chat (COD-247). It sits on the person's side,
+ * like their own messages, because they put it here; the line above it says where it came from and opens that thread.
+ * It is a quote, not a message sent: nothing ran when it arrived.
+ */
+function BroughtInQuote({ quote, threadName, onOpen }: { quote: ChatQuote; threadName?: string; onOpen?: () => void }) {
+  const origin = threadName ? t('{0} trong chat phụ “{1}”', [quote.author, threadName]) : t('{0} trong một chat phụ đã xóa', [quote.author]);
+  return <div className="brought-in" id={`message-${quote.id}`} tabIndex={-1}>
+    {onOpen
+      ? <button type="button" className="message-reply-context" onClick={onOpen}><MessageSquareQuote size={13} aria-hidden="true" />{origin}</button>
+      : <p className="message-reply-context"><MessageSquareQuote size={13} aria-hidden="true" />{origin}</p>}
+    <Markdown className="prose" text={tMessage(quote.text)} />
+  </div>;
+}
+
+/** "Bring into main chat" on a side thread's answer: copies it there as a quote and starts nothing (COD-247). */
+function BringIntoMainChat({ artifactId, brought, about, action, openChat }: { artifactId: string; brought: boolean; about: string; action: (fn: () => Promise<unknown>) => void; openChat?: (taskId: string) => void }) {
+  const label = brought ? t('Đã đưa vào chat chính') : t('Đưa vào chat chính');
+  const bring = () => action(async () => {
+    const mainTaskId = await orglet.call('bringIntoMainChat', { artifactId });
+    toast(t('Đã đưa vào chat chính'), 'success', about, openChat ? { label: t('Mở'), onSelect: () => openChat(mainTaskId) } : undefined);
+  });
+  return <Button size="icon" aria-label={label} title={label} disabled={brought} onClick={bring}>{brought ? <Check size={15} /> : <MessageSquareQuote size={15} />}</Button>;
 }
 
 /**

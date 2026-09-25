@@ -85,7 +85,7 @@ export function SendToPicker({ open, count, names, options, onChoose, onClose }:
             const selected = index === active;
             return <li key={option.key} role="presentation" className={startsGroup ? 'send-to-group-start' : undefined}>
               {startsGroup && <span className="send-to-group" aria-hidden="true">{GROUP_TITLES[option.group]()}</span>}
-              <div id={`send-to-${option.key}`} data-index={index} role="option" aria-selected={selected} className="send-to-option" onMouseMove={() => setActive(index)} onClick={() => choose(index)}>
+              <div id={`send-to-${option.key}`} data-index={index} role="option" aria-selected={selected} className={option.sideThread ? 'send-to-option side-thread' : 'send-to-option'} onMouseMove={() => setActive(index)} onClick={() => choose(index)}>
                 <OptionFaces option={option} />
                 <span className="send-to-option-text">
                   <span className="send-to-option-name">{option.name}</span>
