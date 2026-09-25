@@ -475,7 +475,8 @@ it('blocks file access while a command owns the copy and waits for its cancellat
     await expect(runtime.finish(run, signal())).rejects.toThrow('còn chạy');
     expect(await runtime.processTool(run, id(), 'workspace_cancel_process', { processId: started.processId }, signal(), signal())).toMatchObject({ state: 'cancelled' });
     expect(stopped).toBe(true);
-    await expect(runtime.finish(run, signal())).rejects.toThrow('chưa hoàn tất thành công');
+    // Nothing changed in the copy, so the cancelled check does not block (COD-270), but it is never reported as passing.
+    expect(await runtime.finish(run, signal())).toEqual(['Lệnh không hoàn tất và không có thay đổi tệp nào để áp dụng: node check.cjs (cancelled).']);
   } finally { await runtime.stopRun(run.id); }
 });
 
@@ -533,11 +534,26 @@ describe('judges the code the run hands in, not every command it ever ran (COD-1
     expect(applied).toEqual([]);
   });
 
-  it('still blocks a failed command when no file changed', async () => {
+  it('reports a failed command instead of blocking when the copy has nothing to hand in (COD-270)', async () => {
     const runtime = judged();
     await command(runtime, ['test'], 1);
     await command(runtime, ['--version'], 0);
+    expect(await runtime.finish(run, signal())).toEqual(['Lệnh đã thất bại và không có thay đổi tệp nào để áp dụng: node test (mã thoát 1).']);
+    expect(copyState()).toBe('integrated');
+    expect(applied).toEqual([]);
+  });
+
+  it('still blocks a failed command that changed the copy itself, with no file tool used', async () => {
+    const runtime = fixture(async request => {
+      applied.push(request.path);
+      return { status: 'applied', hash: 'b'.repeat(64), backupPath: 'retained-original', created: false };
+    }, { runCommand: async directory => {
+      await writeFile(join(directory, 'generated.txt'), 'written by the command');
+      return { termination: 'exited', exitCode: 1, stdout: '', stderr: '' };
+    } });
+    await command(runtime, ['build'], 1);
     await expect(runtime.finish(run, signal())).rejects.toThrow('chưa hoàn tất thành công');
+    expect(copyState()).toBe('ready');
     expect(applied).toEqual([]);
   });
 

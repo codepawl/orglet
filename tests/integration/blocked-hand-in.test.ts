@@ -130,6 +130,38 @@ it('keeps the answer, the blocking command and a ready copy when a failed comman
   expect(output).toMatchObject({ content: expect.stringContaining("'npm' is not recognized"), nextOffset: null });
 });
 
+it('publishes the answer with a limitation when a failed command left nothing to hand in', async () => {
+  // A read-only question: "run npm test and tell me if everything passes; do not change any files".
+  exitCode = 2;
+  const reply = 'npm test fails: eslint could not load a module, so the lint step exits with 2 before the tests run.';
+  const calls = [
+    { name: 'workspace_start_process', arguments: { program: 'shell', arguments: ['npm test'], timeoutMs: 10000 } },
+    { name: 'reply', arguments: { message: reply, title: null, knowledgeProposals: [] } },
+  ];
+  let step = 0;
+  const adapter: ModelAdapter = { request: async () => {
+    const call = calls[step++];
+    return { calls: [{ id: id(), name: call.name, arguments: JSON.stringify(call.arguments) }], usage: { input: 10, output: 10 } };
+  } };
+  await blockedRun(adapter);
+  const detail = store.detail(task.id);
+  expect(detail.task.status).toBe('completed');
+  expect(detail.artifacts).toHaveLength(1);
+  expect(detail.artifacts[0].report.summary).toBe(reply);
+  expect(detail.artifacts[0].report.limitations).toEqual(['Lệnh đã thất bại và không có thay đổi tệp nào để áp dụng: npm test (mã thoát 2).']);
+  const finished = savedRun();
+  expect(finished.status).toBe('completed');
+  expect(finished.errorCode).toBeUndefined();
+  expect(finished.blockedHandIn).toBeUndefined();
+  expect(copyRecord().state).toBe('integrated');
+  expect(integrated).toEqual([]);
+  // The turn reads as an ordinary answer: no held reply, no Apply anyway.
+  const html = renderThread();
+  expect(html).toContain('A command failed and there were no file changes to apply: npm test (exit code 2).');
+  expect(html).not.toContain('held-reply');
+  expect(html).not.toContain('Apply anyway');
+});
+
 it('applies the copy anyway through the broker, records the event and adds the limitation', async () => {
   const core = await blockedRun();
   await core.command('applyBlockedHandIn', { taskId: task.id, runId: run.id });

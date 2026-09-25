@@ -78,6 +78,8 @@ export const en: Dictionary = {
   // COD-270: a hand-in a failed command refused, and the person applying it anyway.
   'Người dùng đã áp dụng thay đổi dù lệnh {0} thất bại (mã thoát {1}).': 'The user applied the changes even though {0} failed (exit code {1}).',
   'Người dùng đã áp dụng thay đổi dù lệnh {0} không hoàn tất ({1}).': 'The user applied the changes even though {0} did not finish ({1}).',
+  'Lệnh đã thất bại và không có thay đổi tệp nào để áp dụng: {0} (mã thoát {1}).': 'A command failed and there were no file changes to apply: {0} (exit code {1}).',
+  'Lệnh không hoàn tất và không có thay đổi tệp nào để áp dụng: {0} ({1}).': 'A command did not finish and there were no file changes to apply: {0} ({1}).',
   'Người dùng chấp nhận lệnh thất bại và áp dụng thay đổi: {0} (mã thoát {1})': 'The user accepted a failed command and applied the changes: {0} (exit code {1})',
   'Người dùng chấp nhận lệnh không hoàn tất và áp dụng thay đổi: {0} ({1})': 'The user accepted an unfinished command and applied the changes: {0} ({1})',
   'Lần chạy này không có thay đổi đang chờ áp dụng.': 'This run has no changes waiting to be applied.',

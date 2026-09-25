@@ -14,7 +14,7 @@ import { WorkspaceDiffRequest, WorkspaceDiffSummary, summarize, type WorkspaceDi
 import { planIntegration, plainCopyDiff, type IntegrationStep } from './workspace-plan';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
 import type { IntegrationStepInput, WorkspaceIntegration } from './workspace-integration';
-import { HandInBlockedError, WorkspaceProcesses } from './workspace-processes';
+import { HandInBlockedError, WorkspaceProcesses, unappliedFailureLine } from './workspace-processes';
 import { dependencyFolders } from './workspace-dependencies';
 import { StartWorkspaceProcess, WorkspaceProcessId, WorkspaceProcessOutput, WorkspaceProcessStatus } from '../../shared/workspace-processes';
 
@@ -518,9 +518,9 @@ export class WorkspaceRuntime {
   }
 
   /**
-   * Integrates the copy and returns the limitations to report: command failures the code has since moved past, and
-   * those the person accepted. `accepted` comes only from the person's own apply-anyway (COD-270): the commands that
-   * blocked this run, and the copy as it was when they were shown it.
+   * Integrates the copy and returns the limitations to report: command failures the code has since moved past, those
+   * the person accepted, and failures in a copy with nothing to hand in, which never block (COD-270). `accepted` comes
+   * only from the person's own apply-anyway: the commands that blocked this run, and the copy as they were shown it.
    */
   async finish(run: Run, signal: AbortSignal, accepted?: AcceptedFailures): Promise<string[]> {
     signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
@@ -543,6 +543,22 @@ export class WorkspaceRuntime {
       const manifest = WorkspaceManifest.parse(await this.files.execute(copy.directory, { operation: 'manifest' }, signal));
       // Counted before integration and kept even when integration is refused, so the chat can still show what changed.
       copy.diff = await this.summarizeCopy(copy, manifest, signal);
+      // A linked worktree carries Git's own `.git` pointer file at its root; the plan never integrates it over the
+      // person's repository. A plan that cannot be ordered safely is refused before anything changes.
+      let steps: IntegrationStep[] | undefined;
+      let planError: unknown;
+      try {
+        steps = planIntegration(copy.baseline, manifest);
+        for (const step of steps) this.ownsStep(run, step);
+      } catch (error) {
+        planError = error;
+      }
+      if (blocked && steps?.length === 0) {
+        // Nothing to hand in, so nothing to hold back: for a question such as "do the tests pass?" the failed command
+        // is the answer. It is published with a line naming each failure (COD-270).
+        this.save({ ...copy, changes: [], state: 'integrated' });
+        return [...blocked.limitations, ...blocked.commands.map(unappliedFailureLine)];
+      }
       if (blocked) {
         // The copy stays `ready`: nothing reached the folder, and the person may still apply it as it is now.
         this.save(copy);
@@ -553,15 +569,9 @@ export class WorkspaceRuntime {
         this.save(copy);
         throw new Error('Bản làm việc đã thay đổi so với lúc bị chặn; không áp dụng. Bấm Thử lại để chạy lại.');
       }
-      // A linked worktree carries Git's own `.git` pointer file at its root; the plan never integrates it over the
-      // person's repository. A plan that cannot be ordered safely is refused before anything changes.
-      let steps: IntegrationStep[];
-      try {
-        steps = planIntegration(copy.baseline, manifest);
-        for (const step of steps) this.ownsStep(run, step);
-      } catch (error) {
+      if (!steps) {
         this.save(copy);
-        throw error;
+        throw planError;
       }
       copy.changes = steps.map(changeOf);
       if (!copy.changes.length) { this.save({ ...copy, state: 'integrated' }); return limitations; }

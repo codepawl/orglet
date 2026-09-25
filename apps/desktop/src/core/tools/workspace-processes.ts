@@ -20,7 +20,8 @@ export class HandInBlockedError extends Error {
   readonly code: RunErrorCode = 'hand_in_blocked';
   copyFingerprint?: string;
   answer?: HeldAnswer;
-  constructor(readonly commands: BlockingCommand[]) {
+  /** `limitations`: the lines the rule had for the other commands, kept for when there is nothing to hold back. */
+  constructor(readonly commands: BlockingCommand[], readonly limitations: string[] = []) {
     super(HAND_IN_BLOCKED_MESSAGE);
   }
 
@@ -37,6 +38,17 @@ export function acceptedFailureLine(process: Pick<WorkspaceProcess, 'command' | 
   const command = commandLine(process.command);
   if (process.state === 'exited') return `Người dùng đã áp dụng thay đổi dù lệnh ${command} thất bại (mã thoát ${process.exitCode}).`;
   return `Người dùng đã áp dụng thay đổi dù lệnh ${command} không hoàn tất (${process.state}).`;
+}
+
+/**
+ * The limitation an answer carries for a command that failed in a run with nothing to hand in (COD-270): the copy
+ * changed nothing, so there is nothing to hold back, and for a question such as "do the tests pass?" the failure is the
+ * answer. It reads like the lines for a failure the code has since moved past.
+ */
+export function unappliedFailureLine(command: BlockingCommand): string {
+  const line = commandLine(command);
+  if (command.state === 'exited') return `Lệnh đã thất bại và không có thay đổi tệp nào để áp dụng: ${line} (mã thoát ${command.exitCode}).`;
+  return `Lệnh không hoàn tất và không có thay đổi tệp nào để áp dụng: ${line} (${command.state}).`;
 }
 
 /** A saved start result is a process handle, not proof that the command finished. */
@@ -81,7 +93,8 @@ export class WorkspaceProcesses {
    * a record from before this rule, every command counts.
    *
    * `accepted` holds the processes the person chose to apply past (COD-270): each becomes a limitation line instead of
-   * a block. Only those exact process records are let through; any other failure still blocks.
+   * a block. Only those exact process records are let through; any other failure still blocks. Whether a block holds
+   * anything back is the runtime's call: a copy with nothing to hand in publishes the answer instead (COD-270).
    */
   assertSuccessful(runId: string, copyEdits: number, accepted: ReadonlySet<string> = new Set()): string[] {
     this.assertIdle(runId);
@@ -113,7 +126,7 @@ export class WorkspaceProcesses {
         ? `Lệnh chạy trước lần sửa tệp cuối đã thất bại và chưa được chạy lại: ${command} (mã thoát ${process.exitCode}).`
         : `Lệnh chạy trước lần sửa tệp cuối không hoàn tất và chưa được chạy lại: ${command} (${process.state}).`);
     }
-    if (blocking.length) throw new HandInBlockedError(blocking);
+    if (blocking.length) throw new HandInBlockedError(blocking, [...superseded, ...acceptedLines]);
     return [...superseded, ...acceptedLines];
   }
 
