@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -204,7 +204,8 @@ describe('lockdown', () => {
     const result = await executeHarness(call);
 
     const seen = await recorded();
-    expect(seen.cwd.toLowerCase()).toBe(call.cwd.toLowerCase());
+    // macOS reports the temp folder through its /private/var target; compare the folders, not the spellings.
+    expect(realpathSync(seen.cwd).toLowerCase()).toBe(realpathSync(call.cwd).toLowerCase());
     expect(seen.args).toEqual(harnessArgs(call));
     expect(seen.settings).toEqual(geminiLockdownSettings);
     expect(seen.settings).toEqual(expect.objectContaining({ tools: expect.objectContaining({ core: [] }), skills: { enabled: false }, hooksConfig: { enabled: false } }));
