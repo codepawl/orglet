@@ -262,7 +262,7 @@ export function trimOlderWebPages(messages: { role: string; content?: unknown }[
     if (characters.length <= TRIMMED_PAGE_CHARACTERS) continue;
     page.content = characters.slice(0, TRIMMED_PAGE_CHARACTERS).join('');
     page.truncated = true;
-    page.trimmedForContext = 'Only the start of this page is kept: every step resends the whole conversation, so pages you have moved on from are shortened. Call web_read_url again for the full text.';
+    page.trimmedForContext = 'Only the start of this page is kept: every step resends the whole conversation, so pages you have moved on from are shortened. Use what your notes kept from it; call web_read_url again only for a part you did not note.';
     messages[index] = { ...messages[index], content: JSON.stringify(page) };
     trimmed = true;
   }
@@ -961,7 +961,8 @@ export class Runner {
         const call = reply.calls[0];
         if (checkpoint.reportCorrections && call.name !== 'submit_report') throw new Error('Lần sửa báo cáo chỉ được nộp submit_report.');
         assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
-        messages.push({ role: 'assistant', tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
+        // Notes the model kept beside the call travel with it, so what it read survives when older pages are cut (COD-264).
+        messages.push({ role: 'assistant', ...(reply.notes ? { content: reply.notes } : {}), tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
         if (call.name === 'record_work_frame') {
           const frame = WorkFrame.parse(JSON.parse(call.arguments));
           const recorded = Boolean(run.snapshot.workFrame);
