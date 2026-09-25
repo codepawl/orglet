@@ -913,6 +913,22 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .harness-account-form input { min-width:220px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
 .harness-commands { display:flex; flex-direction:column; gap:12px; margin-top:10px; }
 
+/* Custom OpenAI-compatible connections (COD-242): a titled group under the built-in APIs, each row's menu shown on
+   hover or a visible focus like other rows, and the add/edit form floating beside its trigger. */
+.custom-connections { margin-top:22px; }
+.custom-connection-meta { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.custom-connection-row .row-action { opacity:0; color:var(--muted); margin-right:0; }
+.custom-connection-row:hover .row-action,.custom-connection-row:has(:focus-visible) .row-action,.custom-connection-row .row-action[aria-expanded=true] { opacity:1; }
+@media (hover:none) { .custom-connection-row .row-action { opacity:1; } }
+.custom-connection-form { width:340px; max-width:calc(100vw - 48px); gap:14px; padding:14px; }
+.custom-connection-form .error { font-weight:400; line-height:1.35; }
+.custom-connection-prices { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:8px 10px; }
+.custom-connection-prices .money-input { min-width:0; }
+.custom-connection-prices .money-input input { flex:1; width:auto; min-width:0; }
+.custom-connection-prices > span { grid-column:1 / -1; font-size:12.5px; font-weight:400; line-height:1.4; }
+.custom-connection-actions { display:flex; align-items:center; gap:8px; }
+.custom-connection-actions .dialog-footer-spacer { flex:1; }
+
 /* How much of each plan allowance the account has used (COD-223): the allowance, a slim bar, the percentage and
    when it resets, in four columns so every bar starts and ends at the same place, across harnesses too. The bar is the
    accent until the allowance nears its end, then the warning and the error colour. */

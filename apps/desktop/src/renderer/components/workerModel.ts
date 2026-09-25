@@ -1,6 +1,7 @@
 import { harnessNames, isHarness } from '../../shared/harness';
 import type { Worker } from '../../shared/contracts';
 import { t } from '../i18n';
+import { customConnectionName } from '../customConnections';
 
 const suggestions: Partial<Record<Worker['provider'], string>> = {
   openai: 'GPT-4.1 mini',
@@ -20,7 +21,7 @@ export function providerName(provider: Worker['provider']) {
   if (provider === 'opencode-go') return 'OpenCode Go';
   if (provider === 'ollama') return 'Ollama';
   if (isHarness(provider)) return harnessNames[provider];
-  return provider;
+  return customConnectionName(provider) ?? provider;
 }
 
 /** Short model line for the new-task recipient strip and composer notes. */

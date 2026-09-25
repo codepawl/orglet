@@ -55,6 +55,8 @@ import { AnswerReaction, AnswerReactions, MAX_ANSWER_REACTIONS, turnMessageId } 
 import { AnswerAppChange, isProposalTool, MAX_ANSWER_PROPOSALS, ProposedAppChanges, proposalToolNames } from '../../shared/app-proposals';
 import { ProposeSelfImprovement } from '../../shared/self-improvement';
 import type { AppProposals } from './app-proposals';
+import { findCustomConnection, type CustomConnection } from '../../shared/custom-connections';
+import { readCustomConnections } from '../storage/custom-connections';
 
 /**
  * A report the citation, checker, line-range or process gates refused (COD-162). The run fails as before; the code
@@ -78,9 +80,10 @@ export type HarnessRuntime = {
 const providerNames: Record<string, string> = { ...API_PROVIDER_NAMES, ...harnessNames };
 
 /** The error shown for a failed run; provider refusals over plan, credit or rate limits say so plainly. */
-function failureMessage(run: Run, error: Error) {
+function failureMessage(run: Run, error: Error, customConnections: readonly CustomConnection[]) {
   const limit = detectUsageLimit(error.message);
-  const providerName = providerNames[run.snapshot.worker.provider];
+  const provider = run.snapshot.worker.provider;
+  const providerName = providerNames[provider] ?? findCustomConnection(customConnections, provider)?.name;
   if (limit && providerName) return usageLimitMessage(providerName, limit);
   return error.message;
 }
@@ -423,7 +426,7 @@ export class Runner {
       run = { ...run, snapshot: { ...run.snapshot, input, ...this.startPermissions(task, run) } };
       task = { ...task, ...input };
       assertSkillReady(run.snapshot.skill, this.store);
-      const resolved = resolveWorkerModel(run.snapshot.worker, readModelListCache(this.store));
+      const resolved = resolveWorkerModel(run.snapshot.worker, readModelListCache(this.store), readCustomConnections(this.store));
       const workerProvider = run.snapshot.worker.provider;
       if (isOpenCodePlan(workerProvider)) assertOpenCodeModel(workerProvider, run.snapshot.model ?? resolved.id);
       if (run.snapshot.worker.provider !== 'demo') {
@@ -729,7 +732,11 @@ export class Runner {
                 ? cost(upperInput, 4096, resolved.rates)
                 : Math.max(1000, task.budgetMicros - usage.chargedMicros - usage.reservedMicros);
               if (!resolved.rates) this.event(run.id, 'Model tùy chỉnh chưa có giá đã xác minh trong Orglet. Chi phí được giữ chỗ chưa rõ.');
-              const reservation = ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, reservationId => this.checkpoints.requested(checkpoint, reservationId));
+              const journal = (reservationId: string) => this.checkpoints.requested(checkpoint, reservationId);
+              // A known price of zero (a free local custom connection) holds nothing, so it never waits for budget.
+              const reservation = resolved.rates && hold === 0
+                ? ledger.reserveAtZeroPrice(run.id, task.id, provider, journal)
+                : ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, journal);
               this.event(run.id, `Đang gọi model · bước ${step + 1}/${maxSteps}`);
               try {
                 reply = await model.request(messages, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation);
@@ -737,8 +744,12 @@ export class Runner {
                 if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
                 else ledger.unknown(reservation, 'missing_usage');
                 this.checkpoints.received(checkpoint, reply);
-              } catch {
+              } catch (error) {
                 ledger.unknown(reservation, 'request_failed');
+                // A custom connection words its own refusal (a wrong key, a stopped local server); keep that and, when
+                // money is held, still say the unknown cost stays held. A free connection holds nothing to say it about.
+                if (error instanceof ProviderRequestError && hold === 0) throw error;
+                if (error instanceof ProviderRequestError) throw new ProviderRequestError(`${error.message} Chi phí chưa rõ vẫn được giữ chỗ cho tới khi bạn đối soát.`);
                 throw new Error('Request model không hoàn tất. Chi phí chưa rõ vẫn được giữ chỗ; kiểm tra kết nối hoặc quota trước khi thử lại.');
               }
             }
@@ -991,7 +1002,7 @@ export class Runner {
       throw new Error(run.snapshot.workspaceGrant ? `Đã chạm giới hạn ${maxSteps} bước mà chưa hoàn tất công việc.` : `Đã chạm giới hạn ${maxSteps} bước mà chưa có báo cáo hợp lệ.`);
     } catch (error) {
       if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true, harnessRunTotal));
-      const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error) : 'Lần chạy gặp lỗi.';
+      const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error, readCustomConnections(this.store)) : 'Lần chạy gặp lỗi.';
       const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
       // A harness account out of plan usage is marked, so the chat can offer an account that still has room (COD-225).
       const errorCode = error instanceof UnresolvedAttemptError || error instanceof ReportRejectedError ? error.code : error instanceof HarnessLimitError && error.limit.kind === 'quota' ? 'plan_limit' : undefined;

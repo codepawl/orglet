@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FormatPreference, Id, LogoColor, ProviderId } from './contracts';
+import { FormatPreference, Id, LogoColor, MAX_CREW_MEMBERS, ProviderId } from './contracts';
 import { CustomModelId } from './models';
 import { FontFamily } from './fonts';
 import { Language } from './i18n';
@@ -41,8 +41,8 @@ export const ProposeCrew = z.object({
   ref: ProposalRef.nullable(),
   name: Text(80).nullable(),
   instructions: Text(16000).nullable(),
-  memberIds: z.array(Id).max(4).nullable(),
-  memberRefs: z.array(ProposalRef).max(4).nullable(),
+  memberIds: z.array(Id).max(MAX_CREW_MEMBERS).nullable(),
+  memberRefs: z.array(ProposalRef).max(MAX_CREW_MEMBERS).nullable(),
   leadId: Id.nullable(),
   leadRef: ProposalRef.nullable(),
   workflow: Workflow.nullable(),

@@ -5,7 +5,7 @@ import { newChatKey, newChatKeyNames } from '../shared/live-task';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
 import { GrantWorkspace, type NewChatTarget } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
-import { commands, type ApiProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
+import { commands, type CredentialProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
 import { Store, id, now } from './storage/database';
 import { BudgetLedger } from './budgets/ledger';
 import { Checkpoints } from './storage/checkpoints';
@@ -43,6 +43,8 @@ import { assertOpenCodeModel, isOpenCodePlan } from '../shared/opencode';
 import { MessageInteractions } from './orchestration/message-interactions';
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import type { Args } from '../shared/contracts';
+import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
+import { deleteCustomConnection, readCustomConnections, requireCustomConnection, saveCustomConnection } from './storage/custom-connections';
 
 /**
  * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
@@ -479,6 +481,20 @@ export class CoreService {
         return this.eraseData(input.scope, input.confirm);
       }
       case 'modelList': return this.modelList(commands.modelList.parse(args));
+      case 'saveCustomConnection': {
+        const connection = saveCustomConnection(this.store, commands.saveCustomConnection.parse(args), id);
+        // A new address lists different models; the old list must not linger under the same connection.
+        this.invalidateModelList(customProviderId(connection.id));
+        this.notify();
+        return connection;
+      }
+      case 'deleteCustomConnection': {
+        const connectionId = commands.deleteCustomConnection.parse(args).id;
+        deleteCustomConnection(this.store, connectionId, this.store.workspace().workers);
+        this.invalidateModelList(customProviderId(connectionId));
+        this.notify();
+        return;
+      }
       case 'renameTask': {
         const input = commands.renameTask.parse(args);
         this.store.get<Task>('tasks', input.id);
@@ -545,6 +561,10 @@ export class CoreService {
     if (input.id) this.store.get<Worker>('workers', input.id);
     const { modelId, ...fields } = input;
     if (isOpenCodePlan(fields.provider)) assertOpenCodeModel(fields.provider, modelId);
+    if (isCustomProvider(fields.provider)) {
+      const connection = requireCustomConnection(this.store, fields.provider);
+      if (!modelId?.trim()) throw new Error(`Chọn hoặc gõ ID model cho ${connection.name}.`);
+    }
     const worker: Worker = {
       ...fields,
       id: input.id ?? id(),
@@ -787,7 +807,7 @@ export class CoreService {
     return this.toModelListResult(await this.refreshModelList(provider), false);
   }
   /** Drop one provider's cached list (API key change, harness Dò lại, or cache-shape bump). */
-  invalidateModelList(provider: ApiProvider | ModelListProviderId) {
+  invalidateModelList(provider: CredentialProvider | ModelListProviderId) {
   const parsed = ModelListProvider.safeParse(provider);
   if (!parsed.success) return;
   const id = parsed.data;
@@ -857,6 +877,7 @@ export class CoreService {
       probe: this.modelListRuntime.probe,
       timeoutMs: this.modelListRuntime.timeoutMs,
       harnesses: () => this.harnesses(false),
+      customConnection: (provider: string) => findCustomConnection(readCustomConnections(this.store), provider),
       now: this.clock,
     };
   }

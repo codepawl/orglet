@@ -19,6 +19,8 @@ import { WorkFrame } from '../../shared/work-frame';
 import { WorkspaceReadEvidence } from '../../shared/workspace-evidence';
 import { MessageReaction, turnMessageId } from '../../shared/message-interactions';
 import { ImprovementSignals } from '../../shared/self-improvement';
+import { CustomConnection, CustomProviderId, MAX_CUSTOM_CONNECTIONS } from '../../shared/custom-connections';
+import { readCustomConnections, writeCustomConnections } from './custom-connections';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -37,7 +39,7 @@ const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: 
 const manualScoreAvailable = (profile: z.infer<typeof Profile>, run: z.infer<typeof Run>) => !profile.runId && !!profile.result.exactMatch && profile.createdAt <= run.startedAt
   && !!run.snapshot.scoreProfileIds?.includes(profile.id) && Object.keys(profile.sourceHashes).every(sourceId => run.snapshot.input?.sourceIds.includes(sourceId));
 const ProcessEvidence = z.object({ id: Id, runId: Id, exitCode: z.number().int() }).strict();
-const Reservation = z.object({ id: Id, run_id: Id, task_id: Id, provider: z.enum(['openai', 'anthropic', 'xai', 'openrouter']), month: z.string().regex(/^\d{4}-\d{2}$/), amount: Integer, state: z.enum(['held', 'unknown', 'settled']) }).strict();
+const Reservation = z.object({ id: Id, run_id: Id, task_id: Id, provider: z.union([z.enum(['openai', 'anthropic', 'xai', 'openrouter']), CustomProviderId]), month: z.string().regex(/^\d{4}-\d{2}$/), amount: Integer, state: z.enum(['held', 'unknown', 'settled']) }).strict();
 const Ledger = z.object({ id: Id, reservation_id: Id, amount: Integer, input_tokens: Integer, output_tokens: Integer, pricing_version: z.string() }).strict();
 const ReservationReview = z.object({ reservation_id: Id, reason: z.enum(['missing_usage', 'request_failed', 'interrupted', 'legacy']), noted_at: z.iso.datetime(), actual_amount: Integer.nullable(), verified_source: z.enum(['provider_dashboard', 'invoice']).nullable(), resolved_at: z.iso.datetime().nullable() }).strict();
 const RevisionRow = z.object({ entity_id: Id, revision: Revision, data: z.union([Worker, Skill, Team]) }).strict();
@@ -45,6 +47,8 @@ const Settings = z.object({ theme: z.enum(['system', 'light', 'dark']), connecti
 const KnowledgeRevision = z.object({ id: Id, revision: Revision, data: Knowledge }).strict();
 const Payload = z.object({
   routines: z.array(Routine).max(100).optional(),
+  // A custom connection's name and address travel with the orglets that use it; its key never does.
+  customConnections: z.array(CustomConnection).max(MAX_CUSTOM_CONNECTIONS).optional(),
   knowledge: z.array(Knowledge).max(10_000).optional(), knowledgeRevisions: z.array(KnowledgeRevision).max(100_000).optional(),
   workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), workspaceEvidence: z.array(WorkspaceReadEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), reservationReviews: z.array(ReservationReview).optional(), settings: Settings,
 }).strict();
@@ -348,6 +352,7 @@ function snapshot(store: Store): Payload {
     .flatMap(finding => finding.workspaceEvidenceIds ?? [])));
   return Payload.parse({
     routines: store.all('routines'),
+    customConnections: readCustomConnections(store),
     knowledge: store.all('knowledge'),
     knowledgeRevisions: store.db.prepare('SELECT * FROM knowledge_revisions ORDER BY rowid').all().map(row => ({ id: row.id, revision: row.revision, data: JSON.parse(String(row.data)) })),
     workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs: store.all('runs'), events: store.all('events'), artifacts, sources: store.all('sources'), profiles: store.all('profiles'),
@@ -362,6 +367,30 @@ function snapshot(store: Store): Payload {
     // Keys, reviewedSkills and modelLists stay on this machine; they are derived from local credentials/CLIs.
     settings: { theme: store.setting('theme', 'system'), connectionLimitMicros: store.setting('connectionLimitMicros', 5_000_000) },
   });
+}
+
+/**
+ * Adds the backup's connections this machine does not have, keeping the ones it does. A restored orglet points at its
+ * connection by id, so the id is kept; a name already taken here gets a number so the pickers can still tell them apart.
+ * Keys are not in a backup: a restored connection that needs one waits for it in Settings.
+ */
+export function mergeCustomConnections(current: CustomConnection[], incoming: CustomConnection[]): CustomConnection[] {
+  const merged = [...current];
+  for (const connection of incoming) {
+    if (merged.some(existing => existing.id === connection.id)) continue;
+    merged.push({ ...connection, name: freeConnectionName(merged, connection.name) });
+  }
+  return merged;
+}
+
+function freeConnectionName(taken: CustomConnection[], name: string): string {
+  const used = new Set(taken.map(connection => connection.name.toLowerCase()));
+  if (!used.has(name.toLowerCase())) return name;
+  for (let number = 2; ; number++) {
+    const suffix = ` (${number})`;
+    const candidate = `${name.slice(0, 60 - suffix.length)}${suffix}`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
 }
 
 export class Backups {
@@ -471,6 +500,9 @@ export class Backups {
       merged.knowledgeRevisions = [...knowledgeRevisions.values()];
       validateRelations(merged);
       if ((merged.routines?.length ?? 0) > 100) fail('Tổng số lịch sau khôi phục vượt 100.');
+      const connections = mergeCustomConnections(readCustomConnections(this.store), incoming.customConnections ?? []);
+      if (connections.length > MAX_CUSTOM_CONNECTIONS) fail(`Tổng số kết nối tùy chỉnh sau khôi phục vượt ${MAX_CUSTOM_CONNECTIONS}.`);
+      writeCustomConnections(this.store, connections);
       for (const routine of merged.routines ?? []) this.store.put('routines', routine);
       for (const table of ['skills', 'workers', 'teams', 'tasks'] as const) for (const row of merged[table]) this.store.put(table, row);
       for (const source of merged.sources) {

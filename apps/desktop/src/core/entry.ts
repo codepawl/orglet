@@ -5,7 +5,9 @@ import { CoreService, localHarnessRuntime } from './service';
 import { OpenAIAdapter } from './adapters/openai';
 import { AnthropicAdapter } from './adapters/anthropic';
 import { OpenCodeAdapter } from './adapters/opencode';
-import { API_PROVIDER_NAMES, ApiProvider, Id, type Command } from '../shared/contracts';
+import { API_PROVIDER_NAMES, ApiProvider, CredentialProvider, Id, type Command } from '../shared/contracts';
+import { isCustomProvider } from '../shared/custom-connections';
+import { customConnectionAdapter } from './adapters/custom';
 import { CATALOG_HINT_IDS } from '../shared/models';
 import { MODEL_LIST_ENDPOINTS } from './models/fetch';
 import { DatasetProfile, type ProfileExecutor } from '../shared/profiles';
@@ -52,6 +54,7 @@ const workspaceRuntime = new WorkspaceRuntime(store, workspaceFiles,
   new WorkspaceIntegration(store, runtimePaths.integrationExecutable, workspaceDirectory),
   () => port.postMessage({ type: 'changed' }), workspaceFiles);
 const core = new CoreService(store, () => port.postMessage({ type: 'changed' }), async (provider, model) => {
+  if (isCustomProvider(provider)) return customConnectionAdapter(store, provider, model, requestKey);
   const apiProvider = ApiProvider.safeParse(provider);
   if (!apiProvider.success) throw new Error('Provider chưa được hỗ trợ.');
   const key = await requestKey(provider);
@@ -93,7 +96,7 @@ port.on('message', async ({ data }) => {
       : command === 'templateImport' ? core.templates.import(z.string().parse(args))
       : command === 'skillImport' ? core.importSkill(args)
       : command === 'skillExport' ? core.exportSkill(Id.parse(args))
-      : command === 'invalidateModelList' ? core.invalidateModelList(ApiProvider.parse(args))
+      : command === 'invalidateModelList' ? core.invalidateModelList(CredentialProvider.parse(args))
       : await core.command(command as Command, args);
     port.postMessage({ id, ok: true, value });
   } catch (error) {

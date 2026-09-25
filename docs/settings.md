@@ -17,7 +17,7 @@ Language (English (US), English (UK), Tiếng Việt), **Appearance** (light or 
 
 ## API connections
 
-Turn a provider on, paste its key or pick a `.txt` file, save. Ollama is a switch with no key. See [Connections → API keys](connections.md#api-keys).
+Turn a provider on, paste its key or pick a `.txt` file, save. Ollama is a switch with no key. **Custom connections** below the list add any OpenAI-compatible server by name, base URL and an optional key. See [Connections → API keys](connections.md#api-keys) and [Connections → Custom connections](connections.md#custom-connections).
 
 ## Local harnesses
 
@@ -26,7 +26,7 @@ Claude Code, Codex, Cursor Agent and Gemini CLI: whether each is installed and s
 ## Costs & limits
 
 - **Limit per connection / month**: a cap on what Orglet may spend through each API key, by UTC month.
-- **Concurrent requests per provider** (1–4): how many model requests may be in flight at once across all chats.
+- **Concurrent requests per provider** (1–8): how many model requests may be in flight at once across all chats. Above 4, a short note says that more at once means more spend at once.
 - **Allowed providers**.
 - **Charges to reconcile**: requests that failed or came back without usage keep their reservation. After checking the provider's usage page, enter the actual amount; enter zero only when the provider shows zero. See [Connections → Cost limits](connections.md#cost-limits).
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Team, Workspace } from '../../shared/contracts';
+import { MAX_CREW_CONCURRENT_TASKS, MAX_CREW_MEMBERS, QUIET_PARALLEL_LIMIT, type Team, type Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput } from './ui';
 import { Columns2, ListOrdered, CalendarDays, Clock, Combine, Download, FileUp, Globe, Layers, ScrollText, SlidersHorizontal, Users, Wallet, Workflow } from 'lucide-react';
 import { ProviderMark } from './ProviderMark';
@@ -59,12 +59,12 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
 
   const submit = () => {
     if (!name.trim()) return fail('general', t('Nhập tên hội.'), 'name');
-    if (!members.length || members.length > 4) return fail('general', t('Chọn từ 1 đến 4 thành viên.'), 'members');
+    if (!members.length || members.length > MAX_CREW_MEMBERS) return fail('general', t('Chọn từ 1 đến {0} thành viên.', [MAX_CREW_MEMBERS]), 'members');
     if (!instructions.trim()) return fail('general', t('Hướng dẫn của hội không được để trống.'), 'instructions');
     const monthlyBudgetMicros = toMicros(limit), taskBudgetMicros = toMicros(taskBudget);
     if (!Number.isFinite(monthlyBudgetMicros) || monthlyBudgetMicros < 0) return fail('limits', t('Giới hạn chi phí phải là số không âm.'), 'limit');
     if (!Number.isFinite(taskBudgetMicros) || taskBudgetMicros < 0) return fail('limits', t('Giới hạn chi phí phải là số không âm.'), 'taskBudget');
-    if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) return fail('limits', t('Số công việc chạy đồng thời từ 1 đến 4.'), 'concurrency');
+    if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > MAX_CREW_CONCURRENT_TASKS) return fail('limits', t('Số công việc chạy đồng thời từ 1 đến {0}.', [MAX_CREW_CONCURRENT_TASKS]), 'concurrency');
     if (shift && !TimeZone.safeParse(shiftZone).success) return fail('limits', t('Timezone của ca không hợp lệ. Dùng tên như Asia/Ho_Chi_Minh hoặc UTC.'), 'shiftZone');
     if (shift && (!shiftDays.length || shiftStart === shiftEnd)) return fail('limits', t('Chọn ít nhất một ngày làm việc và giờ bắt đầu khác giờ kết thúc.'), 'shift');
     void run(async () => {
@@ -82,7 +82,8 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
   return <TabbedFormDialog open={open} onClose={onClose} title={team ? t('Thiết lập hội') : t('Hội mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="team-panel" onSubmit={submit} submitLabel={t('Lưu hội')} busy={busy} actions={actions} error={error}>
     {tab === 'general' && <>
       <label><FieldLabel icon={Users} required>{t('Tên hội')}</FieldLabel><Input data-field="name" value={name} onChange={e => { setName(e.target.value); if (invalid === 'name') clearError(); }} maxLength={80} invalid={invalid === 'name'} flash={flash} /></label>
-      <fieldset><legend><FieldLabel icon={Users} required>{t('Thành viên (1–4)')}</FieldLabel></legend>{workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} data-field={invalid === 'members' ? 'members' : undefined} checked={members.includes(worker.id)} onChange={e => { setMembers(current => e.target.checked ? [...current, worker.id] : current.filter(id => id !== worker.id)); if (invalid === 'members') clearError(); }} {...fieldInvalid(invalid === 'members', flash)}><span className="inline-mark"><Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />{worker.name}</span></Checkbox>)}{!workspace.workers.length && <p className="muted">{t('Chưa có Tí nào. Tạo một Tí trước.')}</p>}</fieldset>
+      <fieldset><legend><FieldLabel icon={Users} required>{t('Thành viên (1–{0})', [MAX_CREW_MEMBERS])}</FieldLabel></legend>{workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} data-field={invalid === 'members' ? 'members' : undefined} checked={members.includes(worker.id)} disabled={!members.includes(worker.id) && members.length >= MAX_CREW_MEMBERS} onChange={e => { setMembers(current => e.target.checked ? [...current, worker.id] : current.filter(id => id !== worker.id)); if (invalid === 'members') clearError(); }} {...fieldInvalid(invalid === 'members', flash)}><span className="inline-mark"><Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />{worker.name}</span></Checkbox>)}{!workspace.workers.length && <p className="muted">{t('Chưa có Tí nào. Tạo một Tí trước.')}</p>}</fieldset>
+      {members.length > QUIET_PARALLEL_LIMIT && <p className="muted">{t('Mỗi thành viên là một lượt gọi model, nên hội đông hơn thì mỗi lượt tốn hơn.')}</p>}
       <Select label={<FieldLabel icon={Combine} required>{t('Tí trưởng')}</FieldLabel>} value={synthesizer} onChange={setSynthesizer} options={workspace.workers.map(worker => ({ value: worker.id, label: worker.name, icon: <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} /> }))} />
       <Select label={<FieldLabel icon={Workflow} required>{t('Quy trình')}</FieldLabel>} value={workflow} onChange={value => setWorkflow(value as typeof workflow)} options={[{ value: 'parallel', label: t('Song song, rồi tổng hợp'), icon: <Columns2 size={16} /> }, { value: 'sequential', label: t('Tuần tự, rồi tổng hợp'), icon: <ListOrdered size={16} /> }]} />
       <p className="muted">{t('Tuần tự theo thứ tự chọn thành viên; song song tối đa hai người cùng lúc.')}</p>
@@ -96,7 +97,8 @@ export function TeamDialog({ open, team, workspace, onClose }: { open: boolean; 
     {tab === 'limits' && <>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn hội / tháng')}</FieldLabel><MoneyInput data-field="limit" type="number" min="0" step="any" value={limit} onChange={value => { setLimit(value); if (invalid === 'limit') clearError(); }} invalid={invalid === 'limit'} flash={flash} /></label>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="taskBudget" type="number" min="0" step="any" value={taskBudget} onChange={value => { setTaskBudget(value); if (invalid === 'taskBudget') clearError(); }} invalid={invalid === 'taskBudget'} flash={flash} /></label>
-      <label><FieldLabel icon={Layers} required>{t('Số công việc chạy đồng thời')}</FieldLabel><Input data-field="concurrency" type="number" min="1" max="4" step="1" value={concurrency} onChange={event => { setConcurrency(Number(event.target.value)); if (invalid === 'concurrency') clearError(); }} invalid={invalid === 'concurrency'} flash={flash} /></label>
+      <label><FieldLabel icon={Layers} required>{t('Số công việc chạy đồng thời')}</FieldLabel><Input data-field="concurrency" type="number" min="1" max={MAX_CREW_CONCURRENT_TASKS} step="1" value={concurrency} onChange={event => { setConcurrency(Number(event.target.value)); if (invalid === 'concurrency') clearError(); }} invalid={invalid === 'concurrency'} flash={flash} /></label>
+      {concurrency > QUIET_PARALLEL_LIMIT && <p className="muted">{t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}</p>}
       <SwitchField checked={shift} onChange={setShift}>{t('Giới hạn khung giờ làm việc')}</SwitchField>
       {shift && <>
         <label><FieldLabel icon={Globe} required>{t('Timezone của ca')}</FieldLabel><Input data-field="shiftZone" value={shiftZone} onChange={event => { setShiftZone(event.target.value); if (invalid === 'shiftZone') clearError(); }} maxLength={100} invalid={invalid === 'shiftZone'} flash={flash} /></label>

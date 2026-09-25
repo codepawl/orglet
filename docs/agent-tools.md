@@ -60,7 +60,7 @@ A worker can be asked, in its own chat, to set the app up: "tạo cho tôi một
 | Tool | Proposes | Arguments (all present, `null` leaves a field alone) |
 |---|---|---|
 | `propose_orglet` | Create an orglet, or edit one (`targetId`) | `ref`, `name`, `description`, `instructions`, `provider`, `modelId`, `skillId` or `skillRef`, `taskBudgetMicros`. Create needs `name` and `instructions`; `provider` null means the proposing worker's provider and model, `skillId` null its skill. |
-| `propose_crew` | Create a crew, or edit one (`targetId`) | `ref`, `name`, `instructions`, `memberIds` and `memberRefs` (up to four together), `leadId` or `leadRef` (default: the first member), `workflow` (default parallel), `monthlyBudgetMicros` (default $5), `taskBudgetMicros`. |
+| `propose_crew` | Create a crew, or edit one (`targetId`) | `ref`, `name`, `instructions`, `memberIds` and `memberRefs` (up to eight together), `leadId` or `leadRef` (default: the first member), `workflow` (default parallel), `monthlyBudgetMicros` (default $5), `taskBudgetMicros`. |
 | `propose_crew_template` | Export a crew as a template file | `teamId`, or `teamRef` of a crew proposed in the same reply. Applying asks where to save the file. |
 | `propose_skill` | A new skill, or a new revision of one (`targetId`) | `ref`, `name`, `content`. An imported skill package cannot be edited this way. |
 | `propose_schedule` | Create a routine, or edit one (`targetId`) | `name`, `brief`, `frequency`, `time`, `weekday` (default Monday), `timeZone` (default this computer's), `workerId`/`workerRef` or `teamId`/`teamRef` (default: this chat's orglet or crew). A routine is saved switched off, whether created or edited; enabling it is the user's approval, as today. |

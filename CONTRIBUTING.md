@@ -43,7 +43,7 @@ The packaged smokes drive a real Electron window and are CI's job after typechec
 | `pnpm test:harness` | Settings → Local harnesses with fixture CLIs; never starts a harness run |
 | `pnpm build` then `pnpm test:cli` | The shipped `orglet` command against the packaged app: send and read with Demo, JSON, a refused token and operation, starting the app; never edits PATH |
 | `pnpm test:isolation` (`--packaged` after `pnpm build`) | The Windows sandbox for workspace files and commands; needs a supported Windows host |
-| `pnpm test:routines`, `pnpm test:skills`, `pnpm test:knowledge`, `pnpm test:run-audit`, `pnpm test:findings`, `pnpm test:revisions`, `pnpm test:sidebar`, `pnpm test:i18n` | One packaged flow each; see the [technical guide](docs/technical-guide.md#checks-and-packaging) |
+| `pnpm test:routines`, `pnpm test:skills`, `pnpm test:knowledge`, `pnpm test:run-audit`, `pnpm test:findings`, `pnpm test:revisions`, `pnpm test:sidebar`, `pnpm test:i18n`, `pnpm test:custom-connections` | One packaged flow each; see the [technical guide](docs/technical-guide.md#checks-and-packaging) |
 
 Do not run `pnpm test:live` unless you have set `ORGLET_LIVE_KEY_FILE` to your own key; it makes one paid request. Never search a machine for keys to make it run.
 

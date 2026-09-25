@@ -1,6 +1,6 @@
 # Orglets and crews
 
-An **orglet** is one AI worker with a name, a face, instructions and a model. A **crew** is up to four orglets who take a message together, with one of them as the lead. Both live in the sidebar, and clicking either opens its chat. Older pages call them workers and teams; it is the same thing.
+An **orglet** is one AI worker with a name, a face, instructions and a model. A **crew** is up to eight orglets who take a message together, with one of them as the lead. Both live in the sidebar, and clicking either opens its chat. Older pages call them workers and teams; it is the same thing.
 
 Part of the [user guide](user-guide.md). How a crew turn runs under the hood: [team-chat.md](team-chat.md).
 
@@ -40,7 +40,7 @@ Open the row's menu (right-click, or the **⋯** on the row) to edit, archive or
 1. Click **+** next to **Crews**.
 2. Name the crew, write its instructions, and pick **1 to 4 members**. One of them is the **lead** (the dialog calls it the **Orgletrator**): it plans the turn and writes the final answer.
 3. Choose the **Workflow**: **In parallel, then combine** (members work at the same time, two at once) or **In sequence, then combine** (each member gets the previous one's result).
-4. Under **Limits & shifts**, set **Crew limit / month** and **Limit per task**, **Concurrent tasks** (1–4), and, if you want, **Limit working hours** with a time zone. Outside work hours nothing new starts; a running step finishes and the crew leaves an end-of-shift handoff.
+4. Under **Limits & shifts**, set **Crew limit / month** and **Limit per task**, **Concurrent tasks** (1–8; above 4 a short note says more at once means more spend at once), and, if you want, **Limit working hours** with a time zone. Outside work hours nothing new starts; a running step finishes and the crew leaves an end-of-shift handoff.
 5. Choose **Save crew**.
 
 **Import template** creates a crew from a template file, with a separate copy of its orglets and shared skills. A saved crew's settings offer **Export saved template**. Templates carry configuration, not keys, sources or chat history. The Research Review and Eris Review templates start on Demo and can bring a required checklist and a dataset check with them; a crew that has one says so under General and can drop it there.

@@ -1,29 +1,43 @@
 import { API_PROVIDER_NAMES, type Connections, type ProviderScope } from '../../shared/contracts';
 import { harnessReady, isHarness, type HarnessId, type HarnessInfo } from '../../shared/harness';
+import { customProviderId, type CustomConnection } from '../../shared/custom-connections';
 import { t } from '../i18n';
+import { customConnectionName } from '../customConnections';
 
 export type Readiness = Record<ProviderScope, boolean>;
-const labels: Record<ProviderScope, string> = {
+const labels: Partial<Record<ProviderScope, string>> = {
   ...API_PROVIDER_NAMES,
   'claude-code': 'Claude Code trên máy này',
   codex: 'Codex trên máy này',
   cursor: 'Cursor Agent trên máy này',
   gemini: 'Gemini CLI trên máy này',
 };
-export const providerLabel = (provider: ProviderScope) => t(labels[provider]);
+export const providerLabel = (provider: ProviderScope) => customConnectionName(provider) ?? t(labels[provider] ?? provider);
 
-/** API providers need a stored key; local harnesses need a signed-in, runnable install — detected-on-disk is not enough. */
-/** `harnesses` is undefined while detection is still running; a harness then counts as ready rather than flashing "not ready". */
-export function readiness(connections: Connections, harnesses: HarnessInfo[] | undefined): Readiness {
+/**
+ * API providers need a stored key; local harnesses need a signed-in, runnable install — detected-on-disk is not enough.
+ * A custom connection is ready once it exists: its key is optional, since a local server usually takes none.
+ * `harnesses` is undefined while detection is still running; a harness then counts as ready rather than flashing "not ready".
+ */
+export function readiness(connections: Connections, harnesses: HarnessInfo[] | undefined, customConnections: readonly CustomConnection[] = []): Readiness {
   const item = (id: HarnessId) => harnesses?.find(entry => entry.id === id);
   const ready = (id: HarnessId) => harnesses === undefined || harnessReady(item(id) ?? { auth: 'missing', runnable: true });
+  const { custom: _customKeys, ...builtIn } = connections;
+  const custom = Object.fromEntries(customConnections.map(connection => [customProviderId(connection.id), true]));
   return {
-    ...connections,
+    ...builtIn,
+    ...custom,
     'claude-code': ready('claude-code'),
     codex: ready('codex'),
     cursor: ready('cursor'),
     gemini: ready('gemini'),
   };
+}
+
+/** Whether anything can run a model yet: a saved key, a local Ollama, or a custom connection (key or not). */
+export function hasConnection(connections: Connections, customConnections: readonly CustomConnection[] = []): boolean {
+  const { custom: _customKeys, ...builtIn } = connections;
+  return Object.values(builtIn).some(Boolean) || customConnections.length > 0;
 }
 
 export const setupHint = (provider: ProviderScope, harnesses: HarnessInfo[] = []) => {

@@ -27,6 +27,7 @@
     "test:sidebar": "node scripts/sidebar-smoke.mjs",
     "test:i18n": "node scripts/i18n-smoke.mjs",
     "test:cli": "node scripts/cli-smoke.mjs",
+    "test:custom-connections": "node scripts/custom-connection-smoke.mjs",
     "orglet": "node .vite/build/orglet-cli.cjs",
     "test:live": "vitest run tests/live/provider-acceptance.test.ts",
     "i18n:keys": "node scripts/i18n-keys.cjs --unused",

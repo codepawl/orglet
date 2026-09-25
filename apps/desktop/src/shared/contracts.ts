@@ -23,16 +23,28 @@ import { CustomModelId, type ModelListResult } from './models';
 import { SetUserReaction, type MessageReaction } from './message-interactions';
 import type { AboutInfo, AboutLink, Changelog, UpdateState } from './updates';
 import type { AppProposal } from './app-proposals';
+import { CustomConnectionInput, CustomProviderId, isCustomProvider, type CustomConnection } from './custom-connections';
 
 export const Id = z.string().uuid();
-export const ProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor', 'gemini']);
+/** The providers Orglet ships with. A custom OpenAI-compatible connection is `custom:<id>` (shared/custom-connections.ts). */
+export const BuiltInProviderId = z.enum(['demo', 'openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor', 'gemini']);
+export type BuiltInProviderId = z.infer<typeof BuiltInProviderId>;
+export const ProviderId = z.union([BuiltInProviderId, CustomProviderId]);
 export type ProviderId = z.infer<typeof ProviderId>;
 /** Providers that receive task content and therefore need per-task consent. */
-export const ProviderScope = ProviderId.exclude(['demo']);
+export const ProviderScope = z.union([BuiltInProviderId.exclude(['demo']), CustomProviderId]);
 export type ProviderScope = z.infer<typeof ProviderScope>;
+/**
+ * Every provider a chat or a setting may list at once: all the built-in ones and every custom connection. A crew of
+ * eight on eight different connections, or a group chat with everyone, must still fit.
+ */
+export const MAX_PROVIDER_SCOPES = 32;
 /** API providers that store an encrypted connection (not local harnesses). Ollama stores a local sentinel, not a billed key. */
 export const ApiProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama']);
 export type ApiProvider = z.infer<typeof ApiProvider>;
+/** What main keeps a key for: a built-in API, or a custom connection under its own id. */
+export const CredentialProvider = z.union([ApiProvider, CustomProviderId]);
+export type CredentialProvider = z.infer<typeof CredentialProvider>;
 export const API_PROVIDER_NAMES: Record<ApiProvider, string> = {
   openai: 'OpenAI', anthropic: 'Anthropic', xai: 'Grok (xAI)', openrouter: 'OpenRouter',
   'opencode-zen': 'OpenCode Zen', 'opencode-go': 'OpenCode Go', ollama: 'Ollama',
@@ -40,8 +52,12 @@ export const API_PROVIDER_NAMES: Record<ApiProvider, string> = {
 export function isLocalApi(provider: string): provider is 'ollama' {
   return provider === 'ollama';
 }
-/** Pay-per-use APIs whose requests Orglet reserves against the task, team and connection budgets. */
+/**
+ * Pay-per-use APIs whose requests Orglet reserves against the task, team and connection budgets. A custom
+ * connection counts: Orglet has no verified price for it, so every request is an unknown charge, never a free one.
+ */
 export function isPaidApi(provider: string): boolean {
+  if (isCustomProvider(provider)) return true;
   return provider === 'openai' || provider === 'anthropic' || provider === 'xai' || provider === 'openrouter';
 }
 /**
@@ -71,16 +87,24 @@ export const WorkerInput = z.object({
 });
 export type WorkerInput = z.infer<typeof WorkerInput>;
 export type WorkerAvatar = z.infer<typeof WorkerAvatar>;
+/** A crew holds up to eight orglets; a lead plans for all of them in one turn. */
+export const MAX_CREW_MEMBERS = 8;
+/** How many chats of one crew may run at once. */
+export const MAX_CREW_CONCURRENT_TASKS = 8;
+/** How many requests may be in flight to one provider at once, across the whole app. */
+export const MAX_PROVIDER_CONCURRENCY = 8;
+/** Above this many at once, the editors say that more at once means more spend at once. */
+export const QUIET_PARALLEL_LIMIT = 4;
 export const TeamInput = z.object({
   id: Id.optional(), name: z.string().trim().min(1).max(80),
   instructions: z.string().trim().min(1).max(16000),
-  memberIds: z.array(Id).min(1).max(4).refine(ids => new Set(ids).size === ids.length, 'Members must be unique'),
+  memberIds: z.array(Id).min(1).max(MAX_CREW_MEMBERS).refine(ids => new Set(ids).size === ids.length, 'Members must be unique'),
   synthesizerId: Id, workflow: z.enum(['sequential', 'parallel']),
   monthlyBudgetMicros: z.number().int().min(1000).max(1_000_000_000),
   preflight: PreflightPolicy.optional(),
   reviewPolicy: ReviewPolicy.optional(),
   workHours: WorkHours.optional(),
-  maxConcurrentTasks: z.number().int().min(1).max(4).optional(),
+  maxConcurrentTasks: z.number().int().min(1).max(MAX_CREW_CONCURRENT_TASKS).optional(),
   taskBudgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
 });
 export type Team = z.infer<typeof TeamInput> & { id: string; revision: number };
@@ -101,7 +125,7 @@ export const TaskInput = z.object({
   sourceIds: z.array(Id).max(20), consent: z.boolean(),
   toolCapabilities: ToolCapabilities.optional(),
   excludedSources: z.array(z.object({ name: z.string().max(4096), reason: z.string().max(2000) }).strict()).max(20020).optional(),
-  providerScopes: z.array(ProviderScope).max(4).optional(),
+  providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES).optional(),
   budgetMicros: z.number().int().min(1000).max(100_000_000),
 });
 export type TaskInput = z.infer<typeof TaskInput>;
@@ -112,7 +136,7 @@ export const PlanAssignment = z.object({
   workerId: Id,
   brief: z.string().trim().min(1).max(16000),
   expectedOutput: z.string().trim().min(1).max(2000).optional(),
-  dependsOn: z.array(Id).max(3).refine(ids => new Set(ids).size === ids.length, 'Phụ thuộc bị trùng.').optional(),
+  dependsOn: z.array(Id).max(MAX_CREW_MEMBERS - 1).refine(ids => new Set(ids).size === ids.length, 'Phụ thuộc bị trùng.').optional(),
   writeResources: z.array(z.string().trim().min(1).max(240).refine(
     resource => !resource.startsWith('/') && !resource.includes('\\') && !resource.includes(':')
       && !/[<>|?*]/.test(resource)
@@ -121,7 +145,7 @@ export const PlanAssignment = z.object({
   )).max(20).optional(),
 }).strict();
 export const TeamPlan = z.object({
-  assignments: z.array(PlanAssignment).min(1).max(4).refine(items => new Set(items.map(item => item.workerId)).size === items.length, 'Members must be unique'),
+  assignments: z.array(PlanAssignment).min(1).max(MAX_CREW_MEMBERS).refine(items => new Set(items.map(item => item.workerId)).size === items.length, 'Members must be unique'),
   note: z.string().trim().max(2000).optional(),
   /** Notes for the lead's own synthesis step, which combines the members' saved results into the final answer. */
   synthesisBrief: z.string().trim().min(1).max(4000).optional(),
@@ -204,15 +228,16 @@ export type TaskDetail = { task: Task; runs: Run[]; events: Activity[]; artifact
 /** How the in-app brand mark is coloured: the text colour, or the user's accent (COD-154). */
 export const LogoColor = z.enum(['mono', 'accent']);
 export type LogoColor = z.infer<typeof LogoColor>;
-export type Workspace = { copyFormat: FormatPreference; downloadFormat: FormatPreference; archivedWorkers: (Worker & { archivedAt: string })[]; archivedTeams: (Team & { archivedAt: string })[]; language: Language; autoTitles: boolean; confirmOpenTask: boolean; archiveRetentionDays: ArchiveRetention; avatarColors: string[]; /** The one colour the user picks for the app; see shared/accent.ts. */ accentColor: string; logoColor: LogoColor; /** Family names the person picked; absent keeps the fonts the app ships with (shared/fonts.ts). */ interfaceFont?: string; codeFont?: string; /** Check for a new build on a schedule and download it in the background (COD-176); off means manual checks only. */ autoUpdate: boolean; knowledge: Knowledge[]; workers: Worker[]; teams: Team[]; skills: Skill[]; tasks: Task[]; routines: Routine[]; usage: Usage; budgetReservations: BudgetReservationView[]; theme: 'system' | 'light' | 'dark'; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; currency: CurrencyState; sqliteVersion: string; /** Permissions chosen for a chat before its first message, keyed by `newChatKey`; `createTask` moves them onto the new row (COD-178). */ newChatCapabilities: Record<string, ToolCapability[]>; /** The working folder chosen for a chat before its first message, keyed the same way; only its name and level reach the renderer (COD-186). */ newChatWorkspace: Record<string, NewChatWorkspaceView>; /** App changes workers' proposals made recently, newest first, so the renderer can announce each one (user, 2026-09-23). */ recentAppChanges: import('./app-proposals').AppChangeNotice[] };
-export type Connections = Record<ApiProvider, boolean>;
-export const emptyConnections = (): Connections => ({ openai: false, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, ollama: false });
+export type Workspace = { copyFormat: FormatPreference; downloadFormat: FormatPreference; archivedWorkers: (Worker & { archivedAt: string })[]; archivedTeams: (Team & { archivedAt: string })[]; language: Language; autoTitles: boolean; confirmOpenTask: boolean; archiveRetentionDays: ArchiveRetention; avatarColors: string[]; /** The one colour the user picks for the app; see shared/accent.ts. */ accentColor: string; logoColor: LogoColor; /** Family names the person picked; absent keeps the fonts the app ships with (shared/fonts.ts). */ interfaceFont?: string; codeFont?: string; /** Check for a new build on a schedule and download it in the background (COD-176); off means manual checks only. */ autoUpdate: boolean; knowledge: Knowledge[]; workers: Worker[]; teams: Team[]; skills: Skill[]; tasks: Task[]; routines: Routine[]; usage: Usage; budgetReservations: BudgetReservationView[]; theme: 'system' | 'light' | 'dark'; connectionLimitMicros: number; providerConcurrency: number; providerConsent: ProviderScope[]; /** OpenAI-compatible connections the person added (COD-242); names and addresses only, never a key. */ customConnections: CustomConnection[]; currency: CurrencyState; sqliteVersion: string; /** Permissions chosen for a chat before its first message, keyed by `newChatKey`; `createTask` moves them onto the new row (COD-178). */ newChatCapabilities: Record<string, ToolCapability[]>; /** The working folder chosen for a chat before its first message, keyed the same way; only its name and level reach the renderer (COD-186). */ newChatWorkspace: Record<string, NewChatWorkspaceView>; /** App changes workers' proposals made recently, newest first, so the renderer can announce each one (user, 2026-09-23). */ recentAppChanges: import('./app-proposals').AppChangeNotice[] };
+/** Which built-in APIs have a saved key, and which custom connections (by connection id) have one. Never the key itself. */
+export type Connections = Record<ApiProvider, boolean> & { custom: Record<string, boolean> };
+export const emptyConnections = (): Connections => ({ openai: false, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, ollama: false, custom: {} });
 
 export const commands = {
   workspace: z.object({}),
   task: z.object({ id: Id }),
   createTask: TaskInput,
-  reviseTask: RunInput.extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(4), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
+  reviseTask: RunInput.extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
   setMessageReaction: SetUserReaction,
   answerDecision: z.object({ taskId: Id, requestId: Id, answer: z.string().trim().min(1).max(2000) }).strict(),
   saveWorker: WorkerInput,
@@ -279,6 +304,10 @@ export const commands = {
   // Deleting what the app has kept. `confirm` is the word the window made the person type for a full erase.
   eraseData: z.object({ scope: EraseScope, confirm: z.string().optional() }).strict(),
   modelList: z.object({ provider: ProviderId, refresh: z.boolean().optional() }).strict(),
+  // A custom OpenAI-compatible connection: its name and base URL. The key goes through `connect`, to main only.
+  saveCustomConnection: CustomConnectionInput,
+  // Refused while a live orglet uses it; main then drops the connection's key from the credential store.
+  deleteCustomConnection: z.object({ id: Id }).strict(),
   setCurrency: z.object({ code: CurrencyCode }).strict(),
   // Display-only names and sidebar order; kept in settings so a running task never overwrites them.
   renameTask: z.object({ id: Id, title: z.string().trim().max(120) }).strict(),
@@ -293,11 +322,11 @@ export const commands = {
   // Colours the user made in the avatar picker, newest first, offered to every worker.
   saveAvatarColors: z.object({ colors: z.array(z.string().regex(/^#[0-9a-f]{6}$/)).max(16).refine(items => new Set(items).size === items.length, 'Duplicate colour') }).strict(),
   refreshCurrency: z.object({}).strict(),
-  settings: z.object({ language: Language.optional(), autoTitles: z.boolean().optional(), confirmOpenTask: z.boolean().optional(), copyFormat: FormatPreference.optional(), downloadFormat: FormatPreference.optional(), archiveRetentionDays: ArchiveRetention.optional(), theme: z.enum(['system', 'light', 'dark']), connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000), providerConcurrency: z.number().int().min(1).max(4).optional(), providerConsent: z.array(ProviderScope).max(4).refine(items => new Set(items).size === items.length, 'Duplicate provider').optional(), accentColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), logoColor: LogoColor.optional(), interfaceFont: FontFamily.nullable().optional(), codeFont: FontFamily.nullable().optional(), autoUpdate: z.boolean().optional() }),
+  settings: z.object({ language: Language.optional(), autoTitles: z.boolean().optional(), confirmOpenTask: z.boolean().optional(), copyFormat: FormatPreference.optional(), downloadFormat: FormatPreference.optional(), archiveRetentionDays: ArchiveRetention.optional(), theme: z.enum(['system', 'light', 'dark']), connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000), providerConcurrency: z.number().int().min(1).max(MAX_PROVIDER_CONCURRENCY).optional(), providerConsent: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES).refine(items => new Set(items).size === items.length, 'Duplicate provider').optional(), accentColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), logoColor: LogoColor.optional(), interfaceFont: FontFamily.nullable().optional(), codeFont: FontFamily.nullable().optional(), autoUpdate: z.boolean().optional() }),
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { applyAppProposal: AppProposal; dismissAppProposal: void; undoAppProposal: AppProposal; reconcileBudget: void; recoveryFile: RecoveryFile; workspaceDiff: WorkspaceDiff; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; harnessUsage: HarnessUsage; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; eraseData: EraseSummary; modelList: ModelListResult; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; updateMemory: Knowledge; deleteMemory: void; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
+export type Results = { applyAppProposal: AppProposal; dismissAppProposal: void; undoAppProposal: AppProposal; reconcileBudget: void; recoveryFile: RecoveryFile; workspaceDiff: WorkspaceDiff; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; harnessUsage: HarnessUsage; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; eraseData: EraseSummary; modelList: ModelListResult; saveCustomConnection: CustomConnection; deleteCustomConnection: void; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; updateMemory: Knowledge; deleteMemory: void; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;
@@ -309,8 +338,8 @@ export interface Bridge {
   /** The same native picker for a chat with no row yet; the core keeps the folder until the first message (COD-186). */
   pickNewChatWorkspace(chat: NewChatTarget, permissions: WorkspacePermission[]): Promise<NewChatWorkspaceView | null>;
   /** Save an API key from typed input, or omit `key` to pick a .txt file. The key never comes back to the renderer. */
-  connect(provider: ApiProvider, key?: string): Promise<Connections>;
-  disconnect(provider: ApiProvider): Promise<Connections>;
+  connect(provider: CredentialProvider, key?: string): Promise<Connections>;
+  disconnect(provider: CredentialProvider): Promise<Connections>;
   connections(): Promise<Connections>;
   exportArtifact(id: string, format?: TextFormat): Promise<boolean>;
   copyArtifact(id: string, format: TextFormat): Promise<void>;
