@@ -1,10 +1,9 @@
-import { RevisionEditor } from './components/RevisionEditor';
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
 import { ArrowLeft, ChevronRight, Pencil as LucidePencil, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, MessagesSquare } from 'lucide-react';
-import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type FolderIntake, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
+import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
 import { WorkerDialog } from './components/WorkerDialog';
@@ -127,7 +126,7 @@ function ThreadSkeleton() {
   </SkeletonGroup>;
 }
 
-type Panel = 'task' | 'revision' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | 'sources' | null;
+type Panel = 'task' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | 'sources' | null;
 export function App() {
   useLanguage();
   const [workspace, setWorkspace] = useState<Workspace>(); const [connections, setConnections] = useState<Connections>(emptyConnections());
@@ -148,7 +147,6 @@ export function App() {
   // What Explorer's Send to menu and orglet:// links sent (COD-246): files waiting for a chat, files headed for the
   // next message of a chat that already has one, and a link's text for such a chat's message bar.
   const [sentFiles, setSentFiles] = useState<IncomingFiles>();
-  const [revisionIntake, setRevisionIntake] = useState<{ taskId: string; intake: FolderIntake; text?: string; at: number }>();
   const [followUpPrefill, setFollowUpPrefill] = useState<ComposerPrefill & { taskId: string }>();
   const pendingIncoming = useRef<Incoming[]>([]);
   const [incomingCount, setIncomingCount] = useState(0);
@@ -568,8 +566,8 @@ export function App() {
   const emptyChatBaseline = useRef<{ key: string; liveId?: string }>(undefined);
   /**
    * Switches to the live chat that appeared. Whatever the empty chat's message box held, typed, linked or sent from
-   * Explorer, moves to that chat's next message instead of being dropped (COD-246): files open the next-message form
-   * with the text, text alone goes into the message bar. A message being sent right now is not a draft.
+   * Explorer, moves to that chat's message bar instead of being dropped (COD-246), text and files alike (COD-257).
+   * A message being sent right now is not a draft.
    */
   const adoptLiveChat = (liveId: string) => {
     const carried = busy ? {} : carriedDraft({ text: brief, sources, skipped: skippedSources });
@@ -578,12 +576,7 @@ export function App() {
     setBrief('');
     setSources([]);
     setSkippedSources([]);
-    if (carried.intake) {
-      setRevisionIntake({ taskId: liveId, intake: carried.intake, text: carried.text, at: Date.now() });
-      setPanel('revision');
-      return;
-    }
-    if (carried.text) setFollowUpPrefill({ taskId: liveId, text: carried.text, at: Date.now() });
+    setFollowUpPrefill({ taskId: liveId, ...carried, at: Date.now() });
   };
   useEffect(() => {
     const key = team ? `team:${team.id}` : worker ? `worker:${worker.id}` : '';
@@ -801,15 +794,13 @@ export function App() {
     if (!workspace || !pendingIncoming.current.length) return;
     for (const item of pendingIncoming.current.splice(0)) handleIncoming.current(item);
   }, [incomingCount, Boolean(workspace)]);
-  // Files for the next message belong to the one form they were opened in; leaving it forgets them.
-  useEffect(() => { if (panel !== 'revision') setRevisionIntake(undefined); }, [panel]);
   const closeSendTo = () => {
     if (sentFiles) void orglet.dropSentFiles(sentFiles.id).catch(() => undefined);
     setSentFiles(undefined);
   };
   /**
-   * The files go where the person picked, the way the file picker's files do: into the message box of an empty chat,
-   * or into the next message of a chat that already has one. Nothing is sent.
+   * The files go where the person picked, the way the file picker's files do: into the message box of that chat,
+   * whether it is empty or already has a conversation (COD-257). Nothing is sent.
    */
   const sendFilesTo = async (option: SendToOption) => {
     if (!sentFiles) return;
@@ -825,8 +816,7 @@ export function App() {
       if (target.kind === 'task') openTask(target.id);
       else openOrgletOrCrew({ kind: target.kind, id: target.id });
       if (thread) {
-        setRevisionIntake({ taskId: thread, intake, at: Date.now() });
-        setPanel('revision');
+        setFollowUpPrefill({ taskId: thread, intake, at: Date.now() });
         return;
       }
       const keepsDraft = target.kind !== 'task' && showsEmptyChat({ kind: target.kind, id: target.id });
@@ -1166,7 +1156,7 @@ export function App() {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
-      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openRevision={() => setPanel('revision')} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} /></> : <ThreadSkeleton />}</> : (team || group || worker) ? <div className="team-chat team-chat-fresh">
+      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} /></> : <ThreadSkeleton />}</> : (team || group || worker) ? <div className="team-chat team-chat-fresh">
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">
@@ -1226,8 +1216,7 @@ export function App() {
         onWorkspace: changeNewChatWorkspace,
       } : undefined}
       workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
-    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'revision' ? t('Đính kèm tệp') : panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
-      {panel === 'revision' && detail && <RevisionEditor key={`${detail.task.id}:${detail.task.inputRevision ?? 0}:${revisionIntake?.at ?? 0}`} detail={detail} workspace={workspace} connections={ready} added={revisionIntake?.taskId === detail.task.id ? revisionIntake.intake : undefined} initialText={revisionIntake?.taskId === detail.task.id ? revisionIntake.text : undefined} done={close} />}
+    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
       {panel === 'skill' && <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />}

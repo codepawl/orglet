@@ -48,6 +48,17 @@ export function carriedDraft(draft: EmptyChatDraft): CarriedDraft {
  * Files arriving from Send to, added to what the message box already holds. A file already there is not added twice,
  * and files past the limit are listed as skipped, the way the folder picker lists them.
  */
+/**
+ * The files added on the bar of a chat that already has a conversation (COD-257), after more arrive. The chat's
+ * `carried` files go with the next message anyway, so they count toward the limit and are never added twice, but
+ * only the added ones are returned: they are the cards on the bar. What did not fit joins the skipped list.
+ */
+export function addToNextMessage(carried: readonly Source[], added: FolderIntake, intake: FolderIntake, limit = ATTACHMENT_LIMIT): FolderIntake {
+  const going = [...carried, ...added.sources];
+  const merged = attachIntake(going, intake, limit);
+  return { sources: merged.sources.slice(carried.length), skipped: [...added.skipped, ...merged.skipped] };
+}
+
 export function attachIntake(current: readonly Source[], intake: FolderIntake, limit = ATTACHMENT_LIMIT): FolderIntake {
   const known = new Set(current.map(source => source.id));
   const fresh = intake.sources.filter(source => !known.has(source.id));

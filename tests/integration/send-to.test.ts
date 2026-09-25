@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Source, Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
-import { attachIntake, carriedDraft, FULL_MESSAGE_REASON } from '../../apps/desktop/src/shared/incoming';
+import { addToNextMessage, attachIntake, carriedDraft, FULL_MESSAGE_REASON } from '../../apps/desktop/src/shared/incoming';
 import {
   importSentFiles,
   isPlainAbsolutePath,
@@ -111,6 +111,17 @@ describe('what the message box ends up holding', () => {
     expect(merged.sources).toHaveLength(20);
     expect(merged.sources.slice(-2).map(item => item.name)).toEqual(['a.txt', 'b.txt']);
     expect(merged.skipped).toEqual([{ name: 'x.exe', reason: SKIP_UNSUPPORTED }, { name: 'c.txt', reason: FULL_MESSAGE_REASON }]);
+  });
+
+  // COD-257: a chat with a conversation takes files on its bar too, next to the files its messages already carry.
+  it('in a chat that has a conversation, counts the carried files but lists only the ones added on the bar', () => {
+    const carried = Array.from({ length: 17 }, (_, index) => source(`kept-${index}.txt`));
+    const onTheBar = { sources: [source('first.txt')], skipped: [{ name: 'x.exe', reason: SKIP_UNSUPPORTED }] };
+    const picked = { sources: [source('kept-3.txt'), source('first.txt'), source('second.txt'), source('third.txt'), source('fourth.txt')], skipped: [] };
+    const next = addToNextMessage(carried, onTheBar, picked);
+    expect(next.sources.map(item => item.name)).toEqual(['first.txt', 'second.txt', 'third.txt']);
+    expect(next.skipped).toEqual([{ name: 'x.exe', reason: SKIP_UNSUPPORTED }, { name: 'fourth.txt', reason: FULL_MESSAGE_REASON }]);
+    expect(addToNextMessage([], { sources: [], skipped: [] }, { sources: [source('a.txt')], skipped: [] }).sources).toEqual([source('a.txt')]);
   });
 });
 

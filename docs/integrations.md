@@ -10,7 +10,7 @@ Two ways into Orglet from outside the app, both on Windows: File Explorer's **Se
 4. Pick one. That chat opens with the files in its message box, as if you had picked them with **+ → Files**.
 5. Write your message and press **Send**.
 
-If the chat already has a conversation, the files go into the form for its next message instead, next to the files it already has. If a conversation starts somewhere else while the files wait in the message box, for example from the `orglet` command, Orglet switches to it and moves the files and any text you wrote into that form. Nothing is dropped and nothing is sent.
+If the chat already has a conversation, the files go into its message box the same way and are sent with the next message, next to the files the chat already has. If a conversation starts somewhere else while the files wait in the message box, for example from the `orglet` command, Orglet switches to it and moves the files and any text you wrote into its message box. Nothing is dropped and nothing is sent.
 
 The usual limits apply: at most 20 files per message, text up to 256 KB, CSV, JSONL and Parquet up to 32 MB, images up to 20 MB, audio up to 50 MB, video and PDF up to 200 MB. Anything that does not fit is listed under the message box with the reason: a folder, a file type Orglet cannot attach, a file over its limit, or the files past the twentieth. To attach a whole folder, use **+ → Folder** in the message box.
 

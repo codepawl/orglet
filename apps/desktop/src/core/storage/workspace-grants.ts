@@ -22,6 +22,12 @@ const PENDING_SETTING = 'newChatWorkspace';
 
 const FOLDER_ERROR = 'Workspace phải là thư mục đã chọn trên máy.';
 
+/** A path that is not there any more: deleted, or one of its parents renamed or replaced by a file. */
+function isMissingPath(error: unknown) {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return code === 'ENOENT' || code === 'ENOTDIR';
+}
+
 /**
  * Whether a new grant replaces what active runs were working on. Widening the level on the same folder keeps the
  * grant's id and revision (see `apply`), so only another folder, a narrower level or a fresh grant after a revoke
@@ -212,7 +218,11 @@ export class WorkspaceGrants {
   async directory(snapshot: WorkspaceGrantSnapshot, permission: WorkspacePermission): Promise<string> {
     const directory = this.assert(snapshot, permission);
     const current = this.current(snapshot.taskId)!;
-    const canonical = await realpath(directory);
+    const canonical = await realpath(directory).catch(error => {
+      // The filesystem's error names the full path in English; the chat says which folder and what to do (COD-257).
+      if (isMissingPath(error)) throw new Error(`Thư mục làm việc ${current.name} không còn trên máy. Chọn lại thư mục trong Chi tiết.`);
+      throw error;
+    });
     const identity = await stat(directory, { bigint: true });
     this.assert(snapshot, permission);
     if (canonical !== directory || !identity.isDirectory() || identity.dev.toString() !== current.device

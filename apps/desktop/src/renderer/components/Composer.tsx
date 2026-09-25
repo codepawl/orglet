@@ -1,6 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { ArrowUp, ChevronUp, MessageSquarePlus, Plus, Reply, Square, X } from 'lucide-react';
-import type { TaskDetail, Worker, Workspace } from '../../shared/contracts';
+import { ArrowUp, ChevronUp, MessageSquarePlus, Reply, Square, X } from 'lucide-react';
+import type { FolderIntake, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
+import { addToNextMessage } from '../../shared/incoming';
+import { SourcePicker } from './SourcePicker';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
 import { completeShortcodeAt, emojiChoices, insertEmoji, shortcodeQueryAt } from '../../shared/emoji-shortcodes';
 import { Button } from './ui';
@@ -8,7 +10,8 @@ import { Avatar } from './Avatar';
 import { Attachment } from './Attachment';
 import { MentionText } from './mentions';
 import { providerLabel, settingsTabFor, type Readiness } from './providers';
-import { t } from '../i18n';import { taskWorkers } from '../assignees';
+import { t, tMessage } from '../i18n';
+import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
 import { briefWithReaction, clearReplyTarget, useReplyTarget } from './messageMarks';
 import { IslandDock } from './islandDock';
@@ -245,8 +248,11 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
   </form>;
 }
 
-/** Text an `orglet://new` link puts in the bar (COD-246). `at` tells two links with the same text apart. */
-export type ComposerPrefill = { text: string; at: number };
+/**
+ * What arrives in the bar from outside it (COD-246): an `orglet://new` link's text, or files sent from Explorer or
+ * carried over from an empty chat. `at` tells two arrivals with the same content apart.
+ */
+export type ComposerPrefill = { text?: string; intake?: FolderIntake; at: number };
 
 /** A link's text goes after a draft already in the bar, never over it. */
 export function withPrefill(current: string, prefill: string): string {
@@ -255,16 +261,24 @@ export function withPrefill(current: string, prefill: string): string {
 }
 
 /**
- * Follow-up bar under a task: the text becomes an extra instruction for a new review of the same sources. While a
- * run is on, the island saying what the worker is doing sits on the bar's top edge (COD-167, `IslandDock`).
- * `prefill` fills it without sending; `onPrefilled` lets the caller forget it once it is in.
+ * Follow-up bar under a task: the next message of a chat that already has one. It carries the files the latest
+ * message had, plus any added here with + (or sent from Explorer), which sit on the bar as cards the way an empty
+ * chat's do (COD-257; an older "Attach files" dialog used to take them). While a run is on, the island saying what the
+ * worker is doing sits on the bar's top edge (COD-167, `IslandDock`). `prefill` fills it without sending;
+ * `onPrefilled` lets the caller forget it once it is in.
  */
-export function FollowUpComposer({ detail, workspace, ready, openRevision, openSettings, openChat, action, prefill, onPrefilled }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openRevision: () => void; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void }) {
+export function FollowUpComposer({ detail, workspace, ready, openSettings, openChat, action, prefill, onPrefilled }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void }) {
   const [text, setText] = useState('');
+  // Files added for the next message, and what could not be added with the reason, as in the empty chat.
+  const [added, setAdded] = useState<FolderIntake>({ sources: [], skipped: [] });
   const textarea = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (!prefill) return;
-    setText(current => withPrefill(current, prefill.text));
+    if (prefill.text) {
+      const prefillText = prefill.text;
+      setText(current => withPrefill(current, prefillText));
+    }
+    if (prefill.intake) addFiles(prefill.intake);
     textarea.current?.focus();
     onPrefilled?.();
   }, [prefill?.at]);
@@ -286,17 +300,44 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
   const send = () => {
     const extra = text.trim(); if (!extra || blocked || detail.task.pendingStart || submitting) return;
     setSubmitting(true);
-    if (detail.task.status === 'waiting_input' && pendingDecision) {
+    // A question is answered in words; a message that brings files is a new message instead.
+    if (detail.task.status === 'waiting_input' && pendingDecision && added.sources.length === 0) {
       action(async () => { try { await orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: extra }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
       return;
     }
     const brief = briefWithReaction(extra, reaction);
-    action(async () => { try { await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: carriedSources(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
+    const sent = added.sources;
+    action(async () => {
+      try {
+        await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
+        setText(current => current === text ? '' : current);
+        clearSentFiles(sent);
+        clearReplyTarget();
+      } finally { setSubmitting(false); }
+    });
   };
   /** The files the next message carries: the latest turn's, minus any whose access was taken back. */
   function carriedSources() {
     return input.sourceIds.filter(id => !detail.sources.find(source => source.id === id)?.revoked);
   }
+  /** What the next message sends: the files it carries, then the ones added on the bar. */
+  function nextSourceIds() {
+    return [...new Set([...carriedSources(), ...added.sources.map(source => source.id)])];
+  }
+  /**
+   * Adds picked or sent files after the ones already going with the next message; past 20 in all, or a file the
+   * picker could not take, is listed under the bar with the reason, as the empty chat lists it.
+   */
+  function addFiles(intake: FolderIntake) {
+    const carried = detail.sources.filter(source => carriedSources().includes(source.id));
+    setAdded(current => addToNextMessage(carried, current, intake));
+  }
+  /** Once a message went, its files are part of the chat; anything added while it was on its way stays. */
+  function clearSentFiles(sent: readonly Source[]) {
+    const sentIds = sent.map(source => source.id);
+    setAdded(current => ({ sources: current.sources.filter(source => !sentIds.includes(source.id)), skipped: [] }));
+  }
+  const removeFile = (sourceId: string) => setAdded(current => ({ ...current, sources: current.sources.filter(source => source.id !== sourceId) }));
   // An orglet's own main chat can send a message into a new side thread instead (COD-247); crews and group chats cannot.
   const sideThreads = canStartSideThread(detail.task);
   const sendInNewThread = () => {
@@ -304,10 +345,12 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
     if (!brief || blocked || submitting) return;
     setSubmitting(true);
     const orgletName = workers[0]?.name ?? 'Orglet';
+    const sent = added.sources;
     action(async () => {
       try {
-        const sideTaskId = await orglet.call('startSideThread', { taskId: detail.task.id, brief, sourceIds: carriedSources(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
+        const sideTaskId = await orglet.call('startSideThread', { taskId: detail.task.id, brief, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
         setText(current => current === text ? '' : current);
+        clearSentFiles(sent);
         toast(t('Đã mở chat phụ'), 'success', orgletName, { action: { label: t('Mở'), onSelect: () => openChat(sideTaskId) } });
       } finally { setSubmitting(false); }
     });
@@ -324,7 +367,9 @@ export function FollowUpComposer({ detail, workspace, ready, openRevision, openS
         <p><strong>{reply.author}</strong><span>{reply.text}</span></p>
         <Button type="button" size="icon" aria-label={t('Bỏ trả lời')} title={t('Bỏ trả lời')} onClick={clearReplyTarget}><X size={14} /></Button>
       </div> : undefined}
-      leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Đính kèm tệp')} title={t('Đính kèm tệp')} disabled={busy} onClick={openRevision}><Plus size={20} /></Button>} />
+      attachments={added.sources} onRemoveAttachment={removeFile}
+      leading={<SourcePicker onFiles={() => action(async () => addFiles({ sources: await orglet.pickSources(), skipped: [] }))} onFolder={() => action(async () => addFiles(await orglet.pickFolder()))} />} />
+    {added.skipped.length > 0 && <details className="intake-skipped"><summary>{t('{0} mục không được thêm vào task', [added.skipped.length])}</summary><ul>{added.skipped.map((item, index) => <li key={index}>{item.name}: {tMessage(item.reason)}</li>)}</ul></details>}
     {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
   </div>;
 }

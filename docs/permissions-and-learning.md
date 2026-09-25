@@ -27,6 +27,8 @@ An orglet never works in your folder directly. Each run gets a private copy (a p
 
 Widening a permission, or raising the folder level on the same folder, applies to every run that has not started yet and stops nothing. Choosing another folder, a lower level or **No folder** stops active work, because an orglet may be mid-edit. A run keeps the permissions it started with; send a new message to give it more. Skills, knowledge, schedules and a restored backup never grant access.
 
+If the folder is deleted, renamed or moved after you picked it, the chat says the working folder is no longer on this computer, by its name. Pick it again under **Details** to go on.
+
 ## Memory
 
 An orglet remembers short facts from its chats ("prefers short answers", "the quarterly file is report-q3.xlsx") and carries them into its next chats. Above an answer, **Memories used: N** opens the lines it was given. The orglet's **Memory** tab lists every memory with the chat it came from; edit, pin or delete any line there, or see every scope under **Library → Knowledge → Memory**.

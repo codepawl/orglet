@@ -2,6 +2,7 @@ import { WorkspaceRecovery } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { newChatKey, newChatKeyNames } from '../shared/live-task';
+import { withoutSourceIds } from '../shared/source-mentions';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
 import { GrantWorkspace, type NewChatTarget } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
@@ -1373,8 +1374,8 @@ export class CoreService {
           : this.store.detail(task.id).runs.find(item => item.snapshot.worker.id === reaction.workerId)?.snapshot.worker.name ?? reaction.workerId;
         return `Reaction: ${reaction.emoji} — ${actor}`;
       })].filter(Boolean) : [];
-    // A chat answer exports as the message itself.
-    if (report.format === 'chat') return [report.summary,
+    // A chat answer exports as the message itself, as the chat shows it: a copied source id reads as the file's name.
+    if (report.format === 'chat') return [withoutSourceIds(report.summary, this.store.detail(task.id).sources),
       ...(report.limitations.length ? ['## Limitations', ...report.limitations.map(limitation => `- ${limitation}`)] : []),
       ...messageLinks].join('\n\n');
     const findings = report.findings.map(finding => [

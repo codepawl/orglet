@@ -38,9 +38,12 @@ export function isolatedGit(options: { executable: string; directory: string; cw
     GIT_AUTHOR_NAME: 'Orglet', GIT_AUTHOR_EMAIL: 'workspace@localhost',
     GIT_COMMITTER_NAME: 'Orglet', GIT_COMMITTER_EMAIL: 'workspace@localhost',
   };
+  // core.longpaths lets Git for Windows reach objects and files past MAX_PATH under a long user-data folder
+  // (COD-257); other Gits ignore it. It does not lift the separate limit on $GIT_DIR, which is why callers name the
+  // Git directory relative to `cwd`.
   const configurationArgs = ['-c', `core.hooksPath=${templates}`, '-c', 'core.fsmonitor=false',
     '-c', 'core.autocrlf=false', '-c', 'core.quotePath=false', '-c', 'gc.auto=0', '-c', 'maintenance.auto=false',
-    '-c', 'protocol.allow=never', '-c', 'commit.gpgsign=false'];
+    '-c', 'protocol.allow=never', '-c', 'commit.gpgsign=false', '-c', 'core.longpaths=true'];
   return (args, runOptions = {}) => new Promise<GitOutput>((resolve, reject) => {
     options.signal.throwIfAborted();
     const outputLimit = runOptions.outputLimit ?? 1024 * 1024;
@@ -102,7 +105,9 @@ export async function prepareGitWorktree(directory: string, raw: unknown, signal
   await git(['init', '--bare', '--quiet', `--template=${templates}`, '.']);
   await mkdir(join(repository, 'info'), { recursive: true });
   await writeFile(join(repository, 'info', 'attributes'), '* -text -filter -working-tree-encoding -ident\n', { flag: 'wx' });
-  const repositoryArgs = [`--git-dir=${repository}`];
+  // Git runs in the repository, so it is named relatively: Git for Windows refuses a $GIT_DIR longer than
+  // MAX_PATH - 40 ("'$GIT_DIR' too big"), which an absolute path under a long user-data folder reaches (COD-257).
+  const repositoryArgs = ['--git-dir=.'];
   const paths = manifest.files.map(file => file.path);
   // Read exact bytes, without .gitattributes conversions, clean filters, hooks or the user's index.
   const hashes = paths.length ? (await git([...repositoryArgs, 'hash-object', '-w', '--no-filters', '--stdin-paths'],
