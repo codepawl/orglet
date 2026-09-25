@@ -1,7 +1,10 @@
+import { IMAGE_SEND_LIMIT, ViewableImageMime } from './images';
+
 /**
- * What kinds of file can be attached to a chat, and how large each may be. Text and datasets are what workers read;
- * media (images, video, audio, PDF) is preview-only for now: the person can look at it in Chat sources, and a
- * worker is told the file exists and that it cannot read that kind.
+ * What kinds of file can be attached to a chat, and how large each may be. Workers read text and datasets, and the text
+ * layer of a PDF. An image is shown to a worker whose connection can see images (COD-260). Video and audio stay
+ * preview-only: the person can look at them in Chat sources, and a worker is told the file exists and that it cannot
+ * read that kind.
  */
 export type MediaKind = 'image' | 'video' | 'audio' | 'pdf';
 
@@ -58,4 +61,31 @@ export function mediaMimeType(name: string): string {
 export function mediaUnreadableNote(kind: MediaKind): string {
   const noun = { image: 'an image', video: 'a video', audio: 'an audio recording', pdf: 'a PDF' }[kind];
   return `This source is ${noun}. Workers cannot read this kind of file yet; the user can view it in Chat sources. Do not guess at its contents.`;
+}
+
+/** Why an attached image is not shown to a model: the connection, the file type, or the file size. */
+export type ImageWithheld = 'connection' | 'format' | 'size';
+
+/** Whether an image source can be sent at all, whatever the connection: a type models take, within the size limit. */
+export function imageSendable(source: { name: string; bytes: number }): Exclude<ImageWithheld, 'connection'> | null {
+  if (!ViewableImageMime.safeParse(mediaMimeType(source.name)).success) return 'format';
+  if (source.bytes > IMAGE_SEND_LIMIT) return 'size';
+  return null;
+}
+
+const IMAGE_WITHHELD_NOTES: Record<ImageWithheld, string> = {
+  connection: 'This source is an image, and the connection you run on cannot see images. Tell the user you cannot see it; they can view it in Chat sources. Do not guess at its contents.',
+  format: 'This source is an image in a type models are not shown (SVG or BMP). Tell the user you cannot see it and that a PNG or JPEG copy would work. Do not guess at its contents.',
+  size: 'This source is an image over 5 MB, which is not sent to models. Tell the user you cannot see it and that a smaller copy would work. Do not guess at its contents.',
+};
+
+/**
+ * The note a worker gets in place of a source it cannot take in, or null when it can: text and PDFs are read as text,
+ * and an image is shown when the connection can see images and the file can be sent. Video and audio never are.
+ */
+export function withheldSourceNote(source: { name: string; bytes: number; media?: MediaKind }, seesImages: boolean): string | null {
+  if (!source.media || source.media === 'pdf') return null;
+  if (source.media !== 'image') return mediaUnreadableNote(source.media);
+  const reason = seesImages ? imageSendable(source) : 'connection';
+  return reason ? IMAGE_WITHHELD_NOTES[reason] : null;
 }

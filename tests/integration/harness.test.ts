@@ -10,6 +10,7 @@ import { HarnessAccounts } from '../../apps/desktop/src/core/harness/accounts';
 import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import { harnessNames, harnessReady, harnessStatus, loginCommand, loginCommands, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
+import { invoicePdf } from './pdf-fixture';
 
 let directory: string;
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-harness-test-')); });
@@ -215,6 +216,15 @@ describe('command contract', () => {
     expect(cursor.join(' ')).not.toMatch(/force|yolo|approve-mcps/);
     expect(harnessArgs({ harness: 'claude-code', cwd: directory, schema: { type: 'object' }, maxBudgetUsd: 0.25, model: 'haiku' })).toEqual(expect.arrayContaining(['--model', 'haiku']));
     expect(harnessArgs({ harness: 'codex', cwd: directory, schema: {}, maxBudgetUsd: 1, model: 'gpt-5' })).toEqual(expect.arrayContaining(['-m', 'gpt-5']));
+  });
+
+  it('attaches a chat\'s images to Codex with --image and keeps view_image off (COD-260)', () => {
+    const codex = harnessArgs({ harness: 'codex', cwd: directory, schema: {}, maxBudgetUsd: 1, images: ['sources/02-shot.png', 'sources/03-scan.jpg'] });
+    expect(codex).toEqual(expect.arrayContaining(['--image=sources/02-shot.png', '--image=sources/03-scan.jpg', 'tools.view_image=false']));
+    // The prompt still comes from stdin, after every image.
+    expect(codex.slice(-2)).toEqual(['--json', '-']);
+    expect(harnessArgs({ harness: 'codex', cwd: directory, schema: {}, maxBudgetUsd: 1 }).join(' ')).not.toContain('--image');
+    expect(harnessArgs({ harness: 'claude-code', cwd: directory, schema: {}, maxBudgetUsd: 1, images: ['sources/02-shot.png'] }).join(' ')).not.toContain('--image');
   });
 
   it('parses real CLI failure shapes into actionable login messages', () => {
@@ -467,15 +477,63 @@ describe('runner integration', () => {
     expect(busy.runs.at(-1)?.errorCode).toBeUndefined();
   });
 
-  it('keeps media on the person\'s screen: no copy for the harness, and the prompt says it is unreadable', async () => {
-    const image = join(directory, 'photo.png'); await writeFile(image, Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]));
-    sources = [...sources, ...(await core.sources.import([image]))];
-    const detail = await run('claude-code');
-    expect(detail.task.status).toBe('completed');
-    const [request] = requests;
-    expect(Object.keys(request.files)).toEqual(['01-note.txt']);
-    expect(request.prompt).toContain('Attached but not readable by you');
-    expect(request.prompt).toContain('photo.png');
+  describe('PDFs and images (COD-260)', () => {
+    const pngBytes = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 3)]);
+    /** Attaches the invoice PDF, a screenshot and a video after the note, and keeps the screenshot's copy as the CLI saw it. */
+    async function attachMedia() {
+      const invoice = join(directory, 'invoice-acme.pdf'); await writeFile(invoice, invoicePdf());
+      const shot = join(directory, 'shot.png'); await writeFile(shot, pngBytes);
+      const clip = join(directory, 'clip.mp4'); await writeFile(clip, Buffer.from([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70]));
+      sources = [...sources, ...(await core.sources.import([invoice, shot, clip]))];
+      const answer = reply;
+      const copies: Record<string, Buffer> = {};
+      reply = async request => {
+        for (const name of await readdir(join(request.cwd, 'sources'))) copies[name] = await readFile(join(request.cwd, 'sources', name));
+        return answer(request);
+      };
+      return copies;
+    }
+
+    it('gives Claude Code the PDF as page-marked text and the image as a file in its copy', async () => {
+      const copies = await attachMedia();
+      const detail = await run('claude-code');
+      expect(detail.task.status).toBe('completed');
+      const [request] = requests;
+      expect(Object.keys(request.files)).toEqual(['01-note.txt', '02-invoice-acme.pdf.txt', '03-shot.png']);
+      expect(request.files['02-invoice-acme.pdf.txt']).toContain('[Page 1 of 1]\nINVOICE #2026-0917');
+      expect(request.files['02-invoice-acme.pdf.txt']).toContain('Total due ............... 1.750.000 VND');
+      expect(copies['03-shot.png'].equals(pngBytes)).toBe(true);
+      expect(request.prompt).toContain('Open each with your Read tool to see it');
+      expect(request.prompt).toContain('"format":"pdf-text"');
+      // Video is still not given to any CLI, and the prompt says so.
+      expect(request.prompt).toContain('Attached but not readable by you');
+      expect(request.prompt).toContain('clip.mp4');
+      expect(request.images).toBeUndefined();
+    });
+
+    it('gives Codex the PDF text in its prompt and the image attached with --image', async () => {
+      await attachMedia();
+      const detail = await run('codex');
+      expect(detail.task.status).toBe('completed');
+      const [request] = requests;
+      expect(request.prompt).toContain('Total due ............... 1.750.000 VND');
+      expect(request.prompt).toContain('Due date: 30 Sep 2026');
+      expect(request.images).toEqual(['sources/03-shot.png']);
+      expect(request.prompt).toContain('attached to this message as images');
+      expect(harnessArgs(request)).toEqual(expect.arrayContaining(['--image=sources/03-shot.png', 'tools.view_image=false']));
+    });
+
+    it('gives Gemini CLI the PDF text and tells it plainly that it cannot see the image', async () => {
+      await attachMedia();
+      const detail = await run('gemini');
+      expect(detail.task.status).toBe('completed');
+      const [request] = requests;
+      expect(request.prompt).toContain('Total due ............... 1.750.000 VND');
+      expect(Object.keys(request.files)).not.toContain('03-shot.png');
+      expect(request.images).toBeUndefined();
+      expect(request.prompt).toContain('shot.png');
+      expect(request.prompt).toContain('cannot see images');
+    });
   });
 
   it('runs the worker through the account folder chosen in Settings', async () => {

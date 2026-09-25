@@ -26,6 +26,11 @@ export type HarnessRequest = {
   coreToolsOnly?: boolean;
   /** Credential folder of the account this run signs in as; absent runs the CLI as installed. */
   configDir?: string;
+  /**
+   * Images to attach to a Codex prompt, as paths inside `cwd`: the hash-checked copies of the chat's own images, never
+   * a path the model chose (COD-260). Other CLIs ignore it.
+   */
+  images?: string[];
   /** Called as a streaming harness thinks, uses tools and writes. Harnesses that do not stream never call it. */
   onProgress?: (progress: HarnessProgress) => void;
 };
@@ -78,6 +83,9 @@ const LAST_MESSAGE_FILE = 'orglet-last-message.json';
  * emits no reasoning items at all, so the window would sit on "thinking" for a whole run and then show the
  * finished answer. Asking for detailed summaries puts that thinking back (checked against codex-cli 0.155.0:
  * unset and "auto" both produce none, "detailed" produces them).
+ * Codex keeps `view_image` off even when it is shown images: that tool opens whatever path the model names, and the
+ * read-only sandbox is about writes, not reads, so nothing confines it to the task folder. A chat's images go in with
+ * `--image` instead: the copies Orglet checked, and nothing else (COD-260).
  * Cursor Agent: ask mode + sandbox, never --force/--yolo; report schema is embedded in the prompt.
  * Gemini CLI: none of its own tools, extensions, MCP servers, skills, hooks or context files, set by a settings file in
  * the private working folder (see gemini.ts); never --yolo; report schema is embedded in the prompt.
@@ -93,7 +101,12 @@ function claudeBudgetArgs(maxBudgetUsd: number | undefined): string[] {
   return ['--max-budget-usd', maxBudgetUsd.toFixed(4)];
 }
 
-export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly'>): string[] {
+/** One `--image=<path>` per image: the joined form keeps a path from reading as the stdin prompt `-` after it. */
+function codexImageFlags(images: string[] | undefined) {
+  return (images ?? []).map(path => `--image=${path}`);
+}
+
+export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly' | 'images'>): string[] {
   if (request.harness === 'gemini') return geminiArgs(request.model);
   const model = modelFlag(request.harness, request.model);
   if (request.harness === 'claude-code') {
@@ -102,7 +115,7 @@ export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 's
   if (request.harness === 'cursor') {
     return ['-p', ...model, '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', request.cwd, '--output-format', 'json'];
   }
-  return ['exec', ...model, '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'tools.view_image=false', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), '--json', '-'];
+  return ['exec', ...model, '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config', '--ignore-rules', '-c', 'model_reasoning_summary=detailed', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'tools.view_image=false', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'shell_tool', '--disable', 'unified_exec', '-C', request.cwd, '--output-schema', join(request.cwd, SCHEMA_FILE), '-o', join(request.cwd, LAST_MESSAGE_FILE), ...codexImageFlags(request.images), '--json', '-'];
 }
 
 const authHint = (harness: HarnessId) => {

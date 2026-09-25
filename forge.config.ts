@@ -79,6 +79,7 @@ const config: ForgeConfig = {
       { entry: 'apps/desktop/src/main/index.ts', config: 'vite.main.config.ts', target: 'main' },
       { entry: 'apps/desktop/src/preload/index.ts', config: 'vite.preload.config.ts', target: 'preload' },
       { entry: 'apps/desktop/src/core/entry.ts', config: 'vite.core.config.ts' },
+      { entry: 'apps/desktop/src/core/tools/pdf-text-worker.ts', config: 'vite.pdf-text.config.ts' },
       { entry: 'apps/desktop/src/profiler/entry.ts', config: 'vite.profiler.config.ts' },
       { entry: 'apps/desktop/src/core/tools/workspace-helper.ts', config: 'vite.workspace.config.ts' },
       { entry: 'apps/desktop/src/cli/main.ts', config: 'vite.cli.config.ts' },

@@ -21,6 +21,8 @@ export const ModelEntry = z.object({
   replacementId: CustomModelId.optional(),
   inputTenths: z.number().int().nonnegative().max(1_000_000).optional(),
   outputTenths: z.number().int().nonnegative().max(1_000_000).optional(),
+  /** The provider's own list says this model takes images (xAI, OpenRouter, and servers that copy their fields; COD-260). */
+  imageInput: z.literal(true).optional(),
   source: ModelSource,
 }).strict();
 export type ModelEntry = z.infer<typeof ModelEntry>;

@@ -1,6 +1,6 @@
 import { APIConnectionError, APIConnectionTimeoutError, APIError, APIUserAbortError } from 'openai';
-import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import { OpenAIAdapter, type ModelAdapter, type ModelReply } from './openai';
+import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import { OpenAIAdapter, type ModelAdapter, type ModelReply, type RunMessage } from './openai';
 import { detectUsageLimit } from '../usageLimits';
 import { assertOpenCodeModel, OPENCODE_BASE_URLS, OPENCODE_PLAN_NAMES, type OpenCodePlan } from '../../shared/opencode';
 
@@ -21,7 +21,7 @@ export class OpenCodeAdapter implements ModelAdapter {
     this.inner = new OpenAIAdapter(key, { baseURL, model });
   }
 
-  async request(messages: ChatCompletionMessageParam[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply> {
+  async request(messages: RunMessage[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply> {
     try {
       return await this.inner.request(messages, tools, signal, progress, correlationId);
     } catch (error) {

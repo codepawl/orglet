@@ -1,8 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { MessageParam, TextBlockParam, Tool, ToolUseBlockParam } from '@anthropic-ai/sdk/resources/messages';
-import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import type { ModelAdapter, ModelReply } from './openai';
+import type { ImageBlockParam, MessageParam, TextBlockParam, Tool, ToolUseBlockParam } from '@anthropic-ai/sdk/resources/messages';
+import type { ChatCompletionTool } from 'openai/resources/chat/completions';
+import type { MessageImage, ModelAdapter, ModelReply, RunMessage } from './openai';
 import { modelCatalog } from './catalog';
+
+function imageBlock(image: MessageImage): ImageBlockParam {
+  if (!image.data) throw new Error('Image bytes were not attached before the request.');
+  return { type: 'image', source: { type: 'base64', media_type: image.mime, data: image.data } };
+}
+
+/** Text followed by the message's images, or the plain text when it carries none. */
+function contentWithImages(text: string, images: MessageImage[] | undefined): string | (TextBlockParam | ImageBlockParam)[] {
+  if (!images?.length) return text;
+  return [{ type: 'text', text }, ...images.map(imageBlock)];
+}
 
 export class AnthropicAdapter implements ModelAdapter {
   private client: Anthropic;
@@ -11,12 +22,13 @@ export class AnthropicAdapter implements ModelAdapter {
     this.model = model || modelCatalog.anthropic.model;
     this.client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: 90_000, ...(baseURL ? { baseURL } : {}) });
   }
-  async request(messages: ChatCompletionMessageParam[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply> {
+  async request(messages: RunMessage[], tools: ChatCompletionTool[], signal: AbortSignal, progress: () => void, correlationId?: string): Promise<ModelReply> {
     const system = messages.filter(message => message.role === 'system').map(message => String(message.content)).join('\n\n');
     const translated: MessageParam[] = [];
     for (const message of messages) {
-      if (message.role === 'user') translated.push({ role: 'user', content: String(message.content) });
-      else if (message.role === 'tool') translated.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: message.tool_call_id, content: String(message.content) }] });
+      // An image a tool returned sits inside its tool_result, which the Messages API allows (COD-260).
+      if (message.role === 'user') translated.push({ role: 'user', content: contentWithImages(String(message.content), message.images) });
+      else if (message.role === 'tool') translated.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: message.tool_call_id, content: contentWithImages(String(message.content), message.images) }] });
       else if (message.role === 'assistant') {
         const content: (TextBlockParam | ToolUseBlockParam)[] = [];
         // Notes written beside a call in an earlier step go back with it (COD-264).

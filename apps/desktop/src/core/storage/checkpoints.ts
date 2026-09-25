@@ -1,10 +1,13 @@
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import type { ModelReply } from '../adapters/openai';
+import type { ModelReply, RunMessage } from '../adapters/openai';
 import { Store, now } from './database';
 
 export type Checkpoint = {
   id: string; step: number; phase: 'ready' | 'requesting' | 'replied' | 'done';
-  messages: ChatCompletionMessageParam[]; readIds: string[]; reply?: ModelReply;
+  /**
+   * The conversation so far. A message's `images` slot holds only `{ hash, mime }` references, never bytes: the runner
+   * reads each image again, through the source checks, right before every request (COD-260).
+   */
+  messages: RunMessage[]; readIds: string[]; reply?: ModelReply;
   reportCorrections?: number;
   /** Set once the run was told it is almost out of steps and must hand in now (COD-187). */
   wrappingUp?: boolean;
