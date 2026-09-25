@@ -177,7 +177,7 @@ export function AvatarPicker({ name, seed, hint, hints, taken, value, onChange, 
             {colors.map((color, index) => colorSwatch(color, index, index === 0 ? t('Màu gợi ý {0} (tự động)', [color]) : t('Màu gợi ý {0}', [color])))}
             {[...own, ...other].map(color => colorSwatch(color, -1, own.includes(color) ? t('Màu của bạn {0}', [color]) : t('Màu {0}', [color])))}
           </div>
-          <button type="button" className="avatar-swatch avatar-swatch-add" aria-label={t('Tạo màu')} title={t('Tạo màu')} aria-expanded={colorPanel} aria-controls={`${ids}-colors`} onClick={() => setColorPanel(!colorPanel)}><Plus size={14} strokeWidth={2.5} aria-hidden="true" /></button>
+          <button type="button" className="avatar-swatch avatar-swatch-add" aria-label={t('Tạo màu')} title={t('Tạo màu')} aria-haspopup="dialog" aria-expanded={colorPanel} aria-controls={`${ids}-colors`} onClick={() => setColorPanel(!colorPanel)}><Plus size={14} strokeWidth={2.5} aria-hidden="true" /></button>
         </div>
         {colorPanel && <ColorPicker id={`${ids}-colors`} value={value.color ?? colors[0]} onChange={color => set({ color })} presets={colorPresets} saved={savedColors} onSave={saveColor}
           onRemove={color => onSavedColorsChange?.(savedColors.filter(item => item !== color))} onClose={() => { setColorPanel(false); document.querySelector<HTMLButtonElement>(`[aria-controls="${ids}-colors"]`)?.focus(); }} />}

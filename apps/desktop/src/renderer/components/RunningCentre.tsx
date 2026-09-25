@@ -88,7 +88,7 @@ function RunningRow({ item, status, now, chatName, onOpenChat }: { item: Running
     <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="sm"
       badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />
     <div className="running-text">
-      <p className="running-title"><span className="running-name">{worker.name}</span>{chatName && <span className="running-chat">{chatName}</span>}</p>
+      <p className="running-title"><span className="running-name" title={worker.name}>{worker.name}</span>{chatName && <span className="running-chat">{chatName}</span>}</p>
       <p className="running-status">{status}</p>
     </div>
     <div className="running-meta">

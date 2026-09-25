@@ -31,9 +31,9 @@ function codeSample(): string {
     `// ${t('Đọc rồi trả lời')}`,
     'const tag = "il1 O0";',
     'function pick(list) {',
-    '  const max = 3;',
+    '  const n = 3;',
     '  return list;',
-    '  return top(list, max);',
+    '  return top(list, n);',
     '}',
   ].join('\n');
 }

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { FileCheck2, Wallet } from 'lucide-react';
-import type { BudgetReservationView, Workspace } from '../../shared/contracts';
+import type { BudgetReservationView, Worker, Workspace } from '../../shared/contracts';
 import { amountToMicros, usdCurrency } from '../../shared/currency';
 import { t } from '../i18n';
 import { Button, FieldLabel, MoneyInput } from './ui';
 import { Checkbox } from './Checkbox';
 import { Select } from './Select';
+import { providerName } from './workerModel';
 
 type Source = 'provider_dashboard' | 'invoice';
 
@@ -14,6 +15,11 @@ function reasonLabel(reason: BudgetReservationView['reason']) {
   if (reason === 'request_failed') return t('Request lỗi hoặc chưa rõ kết quả');
   if (reason === 'interrupted') return t('App đóng khi request đang chạy');
   return t('Lịch sử cũ không ghi lý do');
+}
+
+/** The connection's own name ("OpenAI", a custom connection's name), never its internal id. */
+function connectionLabel(provider: string) {
+  return providerName(provider as Worker['provider']);
 }
 
 function usd(micros: number) {
@@ -64,7 +70,7 @@ export function BudgetReconciliation({ workspace, busy, onReconcile }: {
     <p className="muted">{t('Nhập phí thực tế từ provider; nhập 0 chỉ khi provider xác nhận không tính phí.')}</p>
     {unknown.length === 0 ? <p className="muted">{t('Không có khoản chưa rõ chi phí.')}</p> : <ul className="budget-review-list">{unknown.map(item => <li key={item.id} className="budget-review-item">
       <div className="budget-review-heading">
-        <div><strong>{item.provider} · {taskName(item)}</strong><p className="muted">{reasonLabel(item.reason)} · {item.month} · {t('Giữ chỗ {0}', [usd(item.originalMicros)])} · {t('Lượt {0}', [item.runId.slice(0, 8)])}</p></div>
+        <div><strong>{connectionLabel(item.provider)} · {taskName(item)}</strong><p className="muted">{reasonLabel(item.reason)} · {item.month} · {t('Giữ chỗ {0}', [usd(item.originalMicros)])} · {t('Lượt {0}', [item.runId.slice(0, 8)])}</p></div>
         <Button type="button" variant="outline" disabled={busy} onClick={() => { if (selectedId === item.id) reset(); else { reset(); setSelectedId(item.id); } }}>
           <FileCheck2 size={14} aria-hidden="true" />{t('Đối soát')}
         </Button>
@@ -78,7 +84,7 @@ export function BudgetReconciliation({ workspace, busy, onReconcile }: {
       </form>}
     </li>)}</ul>}
     {resolved.length > 0 && <details className="budget-review-history"><summary>{t('Lịch sử đối soát ({0})', [resolved.length])}</summary><ul>{resolved.map(item => <li key={item.id}>
-      <strong>{item.provider} · {taskName(item)}</strong>
+      <strong>{connectionLabel(item.provider)} · {taskName(item)}</strong>
       <span>{t('Giữ chỗ {0} → phí thực tế {1}', [usd(item.originalMicros), usd(item.actualMicros ?? 0)])} · {item.verifiedSource === 'invoice' ? t('Hóa đơn provider') : t('Trang usage của provider')}</span>
     </li>)}</ul></details>}
   </section>;

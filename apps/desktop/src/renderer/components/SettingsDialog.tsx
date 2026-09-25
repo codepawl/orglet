@@ -476,13 +476,13 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}{tab === 'mcp' && <McpHeadingActions busy={busy} act={act} onAdd={() => setMcpEditing('new')} />}</PanelHeading>
 
             {tab === 'general' && <>
-              <Row title={t('Ngôn ngữ')} description={t('Áp dụng cho toàn bộ giao diện và thông báo.')}>
+              <Row title={t('Ngôn ngữ')} description={t('Cho cả giao diện và thông báo.')}>
                 <Select ariaLabel={t('Ngôn ngữ')} className="setting-select" value={workspace.language ?? DEFAULT_LANGUAGE} disabled={busy} onChange={value => void save({ language: value as Workspace['language'] })} options={[{ value: 'en', label: 'English (US)', icon: <CurrencyFlag code="USD" /> }, { value: 'en-GB', label: 'English (UK)', icon: <CurrencyFlag code="GBP" /> }, { value: 'vi', label: 'Tiếng Việt', icon: <CurrencyFlag code="VND" /> }]} />
               </Row>
               <Row title={t('Giao diện')} description={t('Sáng, tối, hoặc đi theo Windows.')}>
                 <Select ariaLabel={t('Giao diện')} className="setting-select" value={workspace.theme} disabled={busy} onChange={value => void save({ theme: value as Workspace['theme'] })} options={[{ value: 'system', label: t('Theo hệ thống'), icon: <Monitor size={16} /> }, { value: 'light', label: t('Sáng'), icon: <Sun size={16} /> }, { value: 'dark', label: t('Tối'), icon: <Moon size={16} /> }]} />
               </Row>
-              <Row title={t('Màu nhấn')} description={t('Dùng cho thẻ @tên, nút chính và công tắc đang bật.')}>
+              <Row title={t('Màu nhấn')} description={t('Thẻ @tên, nút, công tắc.')}>
                 <div className="setting-swatches" role="radiogroup" aria-label={t('Màu nhấn')}>
                   {avatarPalette.map(color => {
                     const checked = accent.toLowerCase() === color.toLowerCase();
@@ -506,7 +506,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                   onRemove={color => void act(async () => { await orglet.call('saveAvatarColors', { colors: (workspace.avatarColors ?? []).filter(item => item !== color) }); }, t('Màu đã lưu'))}
                   onClose={closeColorPanel} />
               </AnchoredPopover>
-              <Row title={t('Màu logo')} description={t('Logo trong ứng dụng: màu chữ, hoặc màu nhấn bạn chọn.')}>
+              <Row title={t('Màu logo')} description={t('Màu chữ, hoặc màu nhấn bạn chọn.')}>
                 <Select ariaLabel={t('Màu logo')} className="setting-select" value={workspace.logoColor ?? 'mono'} disabled={busy} onChange={value => void save({ logoColor: value as LogoColor })} options={[{ value: 'mono', label: t('Đơn sắc'), icon: <Contrast size={16} /> }, { value: 'accent', label: t('Theo màu nhấn'), icon: <Palette size={16} /> }]} />
               </Row>
               <FontSetting role="interface" busy={busy} value={workspace.interfaceFont}
@@ -514,7 +514,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 onPick={family => void save({ interfaceFont: family })} />
               <InterfaceFontSample />
               <FontSetting role="code" busy={busy} value={workspace.codeFont}
-                title={t('Phông chữ code')} description={t('Dùng cho code, đường dẫn và các giá trị kỹ thuật.')}
+                title={t('Phông chữ code')} description={t('Code, đường dẫn, giá trị kỹ thuật.')}
                 onPick={family => void save({ codeFont: family })} />
               <CodeFontPreview />
             </>}
@@ -523,18 +523,18 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row id="auto-title-label" title={t('Tự đặt tên cuộc trò chuyện')} description={t('Đặt tên sau câu trả lời đầu; tên bạn tự đổi được giữ.')}>
                 <Switch checked={workspace.autoTitles} disabled={busy} labelledBy="auto-title-label" onChange={value => void save({ autoTitles: value })} />
               </Row>
-              <Row title={t('Định dạng khi sao chép')} description={t('Chọn sẵn để bấm một lần là sao chép, không hiện menu.')}>
+              <Row title={t('Định dạng khi sao chép')} description={t('Bấm là sao chép, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi sao chép')} className="setting-select" value={workspace.copyFormat} disabled={busy} onChange={value => void save({ copyFormat: value as Workspace['copyFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản thuần') }, { value: 'markdown', label: 'Markdown' }]} />
               </Row>
-              <Row title={t('Định dạng khi tải xuống')} description={t('Chọn sẵn để bấm một lần là tải, không hiện menu.')}>
+              <Row title={t('Định dạng khi tải xuống')} description={t('Bấm là tải, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi tải xuống')} className="setting-select" value={workspace.downloadFormat} disabled={busy} onChange={value => void save({ downloadFormat: value as Workspace['downloadFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản (.txt)') }, { value: 'markdown', label: 'Markdown (.md)' }]} />
               </Row>
-              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Cuộc trò chuyện, Tí và hội; số liệu chi phí được giữ.')}>
+              <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Chat, Tí, hội; giữ số liệu chi phí.')}>
                 <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
               </Row>
               <Row title={t('Request đồng thời mỗi provider')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
-                ? `${t('Vượt giới hạn thì bước đó xếp hàng chờ, chưa trừ ngân sách.')} ${t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}`
-                : t('Vượt giới hạn thì bước đó xếp hàng chờ, chưa trừ ngân sách.')}>
+                ? `${t('Quá mức thì chờ, chưa trừ ngân sách.')} ${t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}`
+                : t('Quá mức thì chờ, chưa trừ ngân sách.')}>
                 <Select ariaLabel={t('Request đồng thời mỗi provider')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={concurrencyChoices.map(value => ({ value: String(value), label: `${value} request`, detail: value === 1 ? t('tuần tự') : undefined }))} />
               </Row>
             </>}
@@ -679,7 +679,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row id="limit-label" title={t('Giới hạn mỗi connection / tháng')} description={limitError ? <span className="error" id="limit-error">{limitError}</span> : t('Tháng tính theo UTC. Áp dụng riêng cho từng API provider.')}>
                 <span className={`money-input ${limitError ? 'invalid' : ''}`}><span aria-hidden>{moneySymbol()}</span><input aria-labelledby="limit-label" aria-invalid={Boolean(limitError)} aria-describedby={limitError ? 'limit-error' : undefined} inputMode="decimal" value={limit} disabled={busy} onChange={event => setLimit(event.target.value)} onBlur={commitLimit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitLimit(); } }} /></span>
               </Row>
-              <Row title={t('Tiền tệ')} description={currency.code === 'USD' ? t('Chi phí được lưu bằng USD theo giá của provider.') : t('1 USD = {0} {1}{2}. Chi phí vẫn lưu bằng USD, chỉ quy đổi khi hiển thị.', [new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(currency.rate), currency.code, currency.updatedAt ? t(' · cập nhật {0}', [new Date(currency.updatedAt).toLocaleString('vi-VN')]) : ''])}>
+              <Row title={t('Tiền tệ')} description={currency.code === 'USD' ? t('Lưu bằng USD theo giá provider.') : t('1 USD = {0} {1}{2}. Chi phí vẫn lưu bằng USD, chỉ quy đổi khi hiển thị.', [new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(currency.rate), currency.code, currency.updatedAt ? t(' · cập nhật {0}', [new Date(currency.updatedAt).toLocaleString('vi-VN')]) : ''])}>
                 <Select ariaLabel={t('Tiền tệ')} className="setting-select" inlineDetail menuMinWidth={270} value={currency.code} disabled={busy} onChange={value => void act(async () => { await orglet.call('setCurrency', { code: CurrencyCode.parse(value) }); return value === 'USD' ? t('Đã đổi sang USD.') : t('Đã đổi sang {0} theo tỷ giá mới nhất.', [value]); }, t('Tiền tệ'))} options={(Object.keys(currencies) as CurrencyCode[]).map(code => ({ value: code, label: code, detail: t(currencies[code]), icon: <CurrencyFlag code={code} /> }))} />
               </Row>
               {currency.code !== 'USD' && <Row title={t('Tỷ giá')} description={currency.error ? <span className="error">{t('{0} Đang dùng tỷ giá gần nhất.', [currency.error])}</span> : t('Mỗi 12 giờ từ open.er-api.com, không gửi dữ liệu của bạn.')}>

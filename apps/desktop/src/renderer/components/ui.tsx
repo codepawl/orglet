@@ -19,9 +19,14 @@ export function PanelHeading({ title, description, level = 2, children }: { titl
   const Heading = level === 2 ? 'h2' : 'h3';
   return <div className="panel-heading"><div className="heading-text"><Heading>{title}</Heading>{description && <p className="heading-description">{description}</p>}</div>{children && <div className="panel-heading-actions">{children}</div>}</div>;
 }
+/**
+ * What Escape closes before the dialog around it: an open menu, list or picker panel. A disclosure that only shows
+ * more of the form (the avatar's Customize) is not one; counting it left Escape doing nothing at all.
+ */
+export const OPEN_POPUP_SELECTOR = '[aria-haspopup][aria-expanded="true"], [role="combobox"][aria-expanded="true"], [data-popup-open]';
 /** Escape should first close an open dropdown or menu inside a dialog, not the dialog itself. */
 export function keepOpenForPopup(event: KeyboardEvent) {
-  if (document.activeElement?.closest('[aria-expanded="true"], [data-popup-open]')) event.preventDefault();
+  if (document.activeElement?.closest(OPEN_POPUP_SELECTOR)) event.preventDefault();
 }
 /** Money entry in the chosen display currency, or explicit USD for provider bill reconciliation. */
 export function MoneyInput({ value, onChange, invalid, flash, currencyCode, ...props }: Omit<ComponentProps<'input'>, 'value' | 'onChange'> & { value: string; onChange: (value: string) => void; invalid?: boolean; flash?: number; currencyCode?: 'USD' }) {

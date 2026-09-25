@@ -196,8 +196,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The story of the run: who spoke, then what they did, indented under them. */
 .details-runs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:18px; }
 .details-run { display:flex; align-items:flex-start; gap:8px; }
-.details-run > .avatar { margin-top:1px; }
-.details-run-who { display:flex; align-items:center; gap:6px; font-size:13px; }
+/* The face and the name line share one 20px line, so the face sits on the name's centre (it sat 2px low). */
+.details-run > .avatar { margin-top:0; }
+.details-run-who { display:flex; align-items:center; gap:6px; min-height:20px; font-size:13px; }
 .details-run-who small { font-size:11px; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 7px; }
 .details-run-took { margin-left:auto; flex-shrink:0; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .details-run p.muted { font-size:12px; line-height:1.5; display:flex; gap:7px; align-items:baseline; }
@@ -303,6 +304,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
    a background reads as two stacked surfaces, so this one answers with its own detail: the icon darkens. */
 .worker-row .row-action:hover:not(:disabled),.worker-row .row-action:focus-visible,.worker-row .row-action[aria-expanded=true] { background:transparent; border-color:transparent; color:var(--text); }
 @media (hover:none) { .worker-row .row-action { opacity:1; } }
+/* The menu floats over the row's end and only takes room while it shows, as a side thread's does (COD-247): a quiet
+   row gives its name the full width instead of truncating it next to an invisible button. */
+.worker-row { position:relative; }
+.worker-row > [data-no-drag]:has(> .row-menu) { position:absolute; top:50%; right:0; transform:translateY(-50%); }
+.worker-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .worker { padding-right:36px; }
+@media (hover:none) { .worker-row .worker { padding-right:36px; } }
 .row-menu-popover { position:fixed; z-index:30; width:max-content; min-width:200px; max-width:280px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001f; display:flex; flex-direction:column; gap:2px; animation:menu-in var(--motion-quick) var(--ease-out); }
 @keyframes menu-in { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
 .row-menu-popover button { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; padding:6px 10px; border:0; border-radius:8px; background:transparent; font-size:14px; text-align:left; }
@@ -493,7 +500,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Overlapping at their natural size: a scale here put every face between pixels (COD-154). */
 .composer-to-avatars .avatar + .avatar { margin-left:-10px; }
 .composer-to-avatars .avatar.xs + .avatar.xs { margin-left:-8px; }
-.roster-more { margin-left:1px; font-size:11px; font-weight:500; color:var(--muted); }
+/* At 11px on a selected row plain muted fell to 4.1:1; a touch of the text colour keeps it quiet and readable. */
+.roster-more { margin-left:1px; font-size:11px; font-weight:500; color:color-mix(in srgb, var(--muted) 70%, var(--text)); }
 .composer-to-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:500; color:var(--muted); }
 .composer-to:hover .composer-to-name { color:var(--text); }
 .suggestions { list-style:none; margin:22px 0 0; padding:0 8px; display:flex; flex-direction:column; gap:2px; }
@@ -846,9 +854,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .setting-row { display:flex; align-items:center; gap:12px; padding:13px 0; }
 .setting-connection { align-items:center; }
 .setting-connection .setting-text { gap:8px; }
-.setting-connection.inactive .provider-mark,
-.setting-connection.inactive .setting-text { opacity:.5; }
-.setting-connection.inactive .setting-text .text-link { pointer-events:auto; opacity:1; }
+/* A connection that is off reads quieter through its mark and a muted title, never through opacity on the text: its
+   switch and its Pricing link still work, and faded to half they looked disabled and fell under 3:1. */
+.setting-connection.inactive .provider-mark { opacity:.5; }
+.setting-connection.inactive .setting-title { color:var(--muted); }
 /* The key field is a row of its own under the connection, not a strip squeezed into the text column beside the
    switch: a key is long, and in a 460px row it had 254px left after the file and save buttons (user, 2026-09-20). */
 .setting-connection { flex-wrap:wrap; }
@@ -871,7 +880,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .setting-checking { margin-left:8px; font-weight:400; }
 /* Both labels share one grid cell, so a button keeps the width of the longer one and nothing beside it reflows. */
 .steady-label { display:inline-grid; }
-.steady-label > span { grid-area:1 / 1; }
+/* Both labels share one cell so the button keeps its width; the shown one starts beside the icon instead of being
+   centred in the width of the longer one, which opened a gap after the icon. */
+.steady-label > span { grid-area:1 / 1; text-align:start; }
 button:not([data-checking]) .steady-label > span:last-child, button[data-checking] .steady-label > span:first-child { visibility:hidden; }
 .release-shape { margin-top:4px; }
 .skill-review-shape { height:8em; margin-top:10px; }
@@ -906,6 +917,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .budget-review-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .budget-review-heading strong,.budget-review-history strong { font-size:13px; font-weight:600; }
 .budget-review-heading p { margin:4px 0 0; font-size:12px; }
+/* The long charge title takes the room; the Reconcile button keeps its label on one line (it wrapped in Vietnamese). */
+.budget-review-heading > .button { flex-shrink:0; white-space:nowrap; }
 .budget-review-form { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin-top:12px; }
 .budget-review-form label:not(.checkbox) { display:flex; flex-direction:column; gap:5px; }
 .budget-review-form .checkbox { width:100%; }
@@ -1048,7 +1061,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    because there are four and the count on each is half the information. */
 .notice-filters { display:flex; flex-wrap:wrap; gap:6px; }
 .notice-filter { display:flex; align-items:center; gap:6px; padding:5px 11px; border:0; border-radius:999px; background:var(--surface); color:var(--muted); font-size:12.5px; cursor:pointer; }
-.notice-filter span { font-size:11px; font-variant-numeric:tabular-nums; opacity:.75; }
+/* The count is already smaller than its label; fading it as well took it to 3:1 on the chip. */
+.notice-filter span { font-size:11px; font-variant-numeric:tabular-nums; }
 .notice-filter:hover { color:var(--text); }
 .notice-filter.on { background:color-mix(in srgb, var(--accent) 18%, var(--bg)); color:var(--text); }
 .notice-list { list-style:none; margin:14px 0 0; padding:0; display:flex; flex-direction:column; gap:2px; }
@@ -1090,8 +1104,9 @@ button.notice-body { cursor:pointer; }
 .running-row:hover { background:var(--surface); }
 .running-text { min-width:0; display:flex; flex-direction:column; }
 .running-title { margin:0; display:flex; align-items:baseline; gap:8px; min-width:0; font-size:13px; line-height:19px; }
-.running-name { flex-shrink:0; font-weight:500; white-space:nowrap; }
-.running-chat { min-width:0; overflow:hidden; color:var(--muted); text-overflow:ellipsis; white-space:nowrap; }
+/* A long orglet name gives way at 60% so the chat's name always shows; each ends in its own ellipsis. */
+.running-name { flex:0 1 auto; min-width:0; max-width:60%; overflow:hidden; font-weight:500; text-overflow:ellipsis; white-space:nowrap; }
+.running-chat { flex:1 1 0; min-width:0; overflow:hidden; color:var(--muted); text-overflow:ellipsis; white-space:nowrap; }
 .running-status { margin:0; overflow:hidden; color:var(--muted); font-size:12.5px; line-height:19px; text-overflow:ellipsis; white-space:nowrap; }
 .running-meta { display:flex; flex-direction:column; align-items:flex-end; color:var(--muted); font-size:12px; line-height:19px; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .running-elapsed { min-height:19px; }
@@ -1195,8 +1210,9 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .line-number { display:inline-block; width:var(--line-number-width, 4ch); margin-right:12px; text-align:right; text-indent:0; color:var(--muted); user-select:none; font-variant-numeric:tabular-nums; }
 .tok-comment { color:var(--muted); font-style:italic; }
 .tok-string { color:var(--success); }
-.tok-number { color:var(--working); }
-.tok-keyword,.tok-tag { color:color-mix(in srgb, var(--accent) 78%, var(--text)); }
+/* Numbers and keywords carry some of the text colour so they stay past 4.5:1 at 12px, on a diff tint too. */
+.tok-number { color:color-mix(in srgb, var(--working) 78%, var(--text)); }
+.tok-keyword,.tok-tag { color:color-mix(in srgb, var(--accent) 66%, var(--text)); }
 .tok-attribute,.tok-key { font-weight:600; }
 .tok-punctuation { color:var(--muted); }
 /* Markdown rendered as a document, in the interface type rather than monospace. */
@@ -1244,7 +1260,9 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    state adds must not push the shell along: everything is one column here. */
 /* At phone width the sidebar overlays instead of taking a column, so the zero-width column a collapsed sidebar
    adds must not shift the shell along: everything is one column here. */
-@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:0; width:232px; box-shadow:8px 0 30px #0002; } .app,.app.sidebar-hidden,.app.sidebar-hidden.with-details,.app.with-details { grid-template-columns:minmax(0,1fr); } .new-task-content { padding:18px; } }
+/* Under 780px the sidebar floats over the chat, so it needs the window's own colour: docked it is transparent over
+   the window, and floating that way the chat showed through it. */
+@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:0; width:232px; background:var(--window); box-shadow:8px 0 30px #0002; } .app,.app.sidebar-hidden,.app.sidebar-hidden.with-details,.app.with-details { grid-template-columns:minmax(0,1fr); } .new-task-content { padding:18px; } }
 @media(max-width:460px) { .topbar { padding:10px; } .topbar .button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .user-message { max-width:100%; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 0; } .finding-heading { flex-wrap:wrap; } .main-footer { padding:8px 12px; } }
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
@@ -1375,7 +1393,9 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .select-option-text { flex:1; min-width:0; display:flex; flex-direction:column; }
 .select-option-text>span:first-child { overflow-wrap:anywhere; }
 .select-note { color:var(--muted); font-family:var(--font); font-size:.85em; font-weight:400; }
-.select-option .select-detail { font-size:12px; }
+/* A detail is one line of meta (a model, a count, an account): it ends in an ellipsis instead of breaking a model id
+   across lines, and the option's tooltip carries the whole text. */
+.select-option .select-detail { font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .select-option-badge {
   flex-shrink:0; font-size:10px; font-weight:500; line-height:1.2; padding:2px 6px;
   border-radius:999px; background:var(--surface); color:var(--muted); white-space:nowrap;
@@ -1790,10 +1810,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .chat-reply .message-actions,.report-turn .message-actions { padding-left:2px; }
 /* A sent message's actions sit under its bubble like an answer's, lined up with the bubble's right edge. */
 .user-message + .message-actions { justify-content:flex-end; }
-/* A table header is drawn in --surface, which inside the bubble sits at nearly the same lightness as the wash:
-   the two separate by hue alone, which is not a separation. A step in value instead, which holds whatever accent
-   is picked and in dark mode too. */
-.chat-reply .markdown th { background:color-mix(in srgb, var(--text) 9%, transparent); }
 .chat-reply .prose { line-height:1.65; }
 .chat-limitations { margin-top:16px; overflow-wrap:anywhere; }
 .chat-limitations ul { margin:8px 0 0; padding-left:20px; }
@@ -1853,11 +1869,14 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .markdown blockquote { padding:10px 14px; border-radius:10px; background:var(--surface); color:var(--muted); }
 .markdown-table-wrap { max-width:100%; overflow-x:auto; }
 .markdown table { border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; font-variant-numeric:tabular-nums; }
+/* Tables separate rows by value, never by a rule (house rule): the header and every other row carry a wash of the
+   text colour, which shows on the page, inside either bubble and in dark mode alike (owner, 2026-09-25: a table
+   in a message read as blank). Every cell has the same padding so a column's header and values line up. */
 .markdown th,.markdown td { padding:6px 10px; vertical-align:top; }
-.markdown th { background:var(--surface); font-weight:600; }
-.markdown th:first-child,.markdown td:first-child { padding-left:0; }
-.markdown th:first-child { padding-left:10px; border-radius:7px 0 0 7px; }
-.markdown th:last-child { border-radius:0 7px 7px 0; }
+.markdown th { background:color-mix(in srgb, var(--text) 8%, transparent); font-weight:600; }
+.markdown tbody tr:nth-child(even) td { background:color-mix(in srgb, var(--text) 4%, transparent); }
+.markdown th:first-child,.markdown tbody tr:nth-child(even) td:first-child { border-radius:7px 0 0 7px; }
+.markdown th:last-child,.markdown tbody tr:nth-child(even) td:last-child { border-radius:0 7px 7px 0; }
 .markdown .markdown-break { height:6px; }
 .markdown-link { text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:2px; }
 .markdown-link-address { color:var(--muted); font-size:.9em; }
@@ -1874,7 +1893,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .knowledge-author-text strong { font-size:14px; font-weight:500; }
 .knowledge-author-text .muted { font-size:12px; }
 .knowledge-author-mark { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:11px; background:var(--surface); color:var(--muted); }
-.badge.pending { color:var(--working); }
+/* Amber on the badge's tint was 3.5:1 at 11px; mixing in the text colour darkens it in light and lifts it in dark. */
+.badge.pending { color:color-mix(in srgb, var(--working) 72%, var(--text)); }
 /* App-change proposal cards (COD-199): one quiet surface per proposal under the answer, inside the reply's own
    inset (`.turn-after`, COD-217). The diff is a definition list, field on the left, value on the right, an arrow
    between before and after. */
@@ -1951,7 +1971,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 :root, .theme-light { --warning:#9a6700; }
 :root[data-theme=dark], .theme-dark { --warning:#d4a72c; }
 @media (prefers-color-scheme:dark) { :root[data-theme=system] { --warning:#d4a72c; } }
-.archive-age { margin-left:auto; flex-shrink:0; padding:1px 7px; border-radius:999px; font-size:11px; font-weight:500; white-space:nowrap; color:var(--tone); background:color-mix(in srgb, var(--tone) 14%, transparent); }
+/* The tone on its own 14% tint was under 4:1 at 11px; the text colour mixed in brings it past 4.5:1 in both themes. */
+.archive-age { margin-left:auto; flex-shrink:0; padding:1px 7px; border-radius:999px; font-size:11px; font-weight:500; white-space:nowrap; color:color-mix(in srgb, var(--tone) 78%, var(--text)); background:color-mix(in srgb, var(--tone) 14%, transparent); }
 .archive-age.fresh { --tone:var(--success); }
 .archive-age.aging { --tone:var(--warning); }
 .archive-age.expiring { --tone:var(--error); }
@@ -1965,6 +1986,12 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .archived-row .history-item .avatar { margin-right:1px; }
 .archived-row .history-item { cursor:default; }
 .archived-row .row-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* Like the orglet rows: the menu floats over the end and takes room only while it shows, so the name and its
+   days-left pill get the whole row. */
+.archived-row { position:relative; }
+.archived-row > .row-menu { position:absolute; top:50%; right:0; transform:translateY(-50%); }
+.archived-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .history-item { padding-right:36px; }
+@media (hover:none) { .archived-row .history-item { padding-right:36px; } }
 .select-option + .select-group { margin-top:10px; }
 .model-picker { display:flex; align-items:center; gap:8px; }
 .model-picker-field { position:relative; flex:1; min-width:0; }

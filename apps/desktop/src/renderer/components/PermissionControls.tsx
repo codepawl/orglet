@@ -98,7 +98,7 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
     <div className={`permission-folder${folderDisabled ? ' permission-folder-disabled' : ''}`}>
       <span className="permission-folder-text">
         <span className="permission-folder-title"><FolderOpen size={15} aria-hidden="true" />{t('Thư mục làm việc')}</span>
-        <span className="permission-folder-description">{t('Làm trên bản sao riêng của một thư mục.')}</span>
+        <span className="permission-folder-description">{t('Làm trên bản sao riêng của thư mục.')}</span>
       </span>
       <span className="permission-folder-control">
         <Select ariaLabel={t('Thư mục làm việc')} size="sm" value={state.workspace} disabled={folderDisabled}

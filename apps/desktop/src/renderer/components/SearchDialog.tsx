@@ -63,7 +63,7 @@ export function SearchDialog({ open, onClose, tasks, teams, onOpenTask, onDwellT
             const team = task.teamId ? teams.find(item => item.id === task.teamId)?.name ?? task.teamSnapshot?.name : undefined;
             const mark = taskStatusMark(task.status, taskResultSeen(task));
             return <li key={task.id} id={`search-result-${task.id}`} data-index={index} role="option" aria-selected={index === active} className="search-result" onMouseMove={() => setActive(index)} onClick={() => choose(index)}>
-              {team ? <Users size={17} aria-hidden="true" /> : <StatusMark variant={mark.variant} tone={mark.tone} label={statusLabel[task.status]} decorative />}
+              {team ? <Users size={15} aria-hidden="true" /> : <StatusMark variant={mark.variant} tone={mark.tone} label={statusLabel[task.status]} decorative />}
               <span className="search-result-title">{task.brief}{team && <span className="search-result-team"> · {team}</span>}</span>
               {index === active ? <CornerDownLeft size={16} className="search-result-enter" aria-hidden="true" /> : <time className="search-result-time" dateTime={task.createdAt}>{relativeDay(task.createdAt)}</time>}
             </li>;
