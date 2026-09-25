@@ -119,6 +119,9 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   const [answeringDecision, setAnsweringDecision] = useState(false);
   // The run whose working-copy changes are open in the diff viewer (COD-163).
   const [diffRun, setDiffRun] = useState<Run>();
+  // A member's saved report open in the document viewer from the card that says to see it (COD-256).
+  const [savedReportId, setSavedReportId] = useState<string>();
+  const savedReport = savedReportId ? detail.artifacts.find(artifact => artifact.id === savedReportId) : undefined;
   const current = detail.task.inputRevision ?? 0;
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === current && !request.answer && !request.interruptedAt);
   const turns: Turn[] = [...new Set([0, current, ...detail.runs.map(run => run.snapshot.inputRevision ?? 0)])].sort((a, b) => a - b).map(revision => {
@@ -321,6 +324,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         // "Hoàn tất" carrying a line of internal validation text (user, 2026-09-19). A paused task keeps its own
         // explanation just below, so it is quiet here too.
         const unresolvedError = latest && !['completed', 'paused'].includes(detail.task.status) ? headline : undefined;
+        // A member that handed in a blocker still saved its report; the card's message points at it, so it opens from here.
+        const blockerReport = unresolvedError?.stage === 'member' ? detail.artifacts.find(artifact => artifact.runId === unresolvedError.id) : undefined;
         const previousSentAt = turns[index - 1]?.sentAt;
         // A group-chat reply carries the cards its own run proposed; the rest of the turn's cards sit with the turn.
         const turnProposals = detail.appProposals.filter(proposal => proposal.inputRevision === turn.revision);
@@ -407,6 +412,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             </div>}
             {latest && <div className="actions">
               {!busy && unresolvedError?.errorCode === 'unresolved_attempt' && reviewRecovery && <Button variant="primary" onClick={() => reviewRecovery(groupRecoveryAttempts(recovery, detail.runs).blocking?.runId)}><FolderOpen size={16} />{t('Xem trong Chi tiết')}</Button>}
+              {blockerReport && unresolvedError && <Button variant="primary" onClick={() => setSavedReportId(blockerReport.id)}><FileText size={16} />{t('Mở báo cáo của {0}', [unresolvedError.snapshot.worker.name])}</Button>}
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
               {!busy && !['completed', 'waiting_input'].includes(detail.task.status) && <Button variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>}
             </div>}
@@ -418,6 +424,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       })}
     </div>
     {diffRun && <DiffDialog taskId={detail.task.id} run={diffRun} onClose={() => setDiffRun(undefined)} />}
+    {savedReport && <ReportDocument artifact={savedReport} author={detail.runs.find(run => run.id === savedReport.runId)} detail={detail} open onClose={() => setSavedReportId(undefined)} busy={busy} action={action} showSources={showSources}
+      actions={<ArtifactActions artifactId={savedReport.id} about={tMessage(savedReport.report.title)} action={action} />} />}
   </div>;
 }
 
@@ -491,12 +499,9 @@ function ArtifactActions({ artifactId, about, action }: { artifactId: string; ab
 function ReportView({ artifact, author, latest, busy, detail, action, showSources, notices, badges }: { artifact: Artifact; author?: Run; latest: boolean; busy: boolean; detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; notices: TurnNotices; badges: ReactNode }) {
   const [open, setOpen] = useState(false);
   const report = artifact.report;
-  const sample = author?.snapshot.worker.provider === 'demo';
   const name = tMessage(report.title);
   const when = new Date(artifact.createdAt).toLocaleString(currentLocale(), { dateStyle: 'medium', timeStyle: 'short' });
   const meta = [t('Báo cáo'), report.findings.length ? t('{0} phát hiện', [report.findings.length]) : '', latest && detail.task.accepted ? t('Đã chấp nhận') : '', when].filter(Boolean).join(' · ');
-  // Evidence links leave the document for the sources panel.
-  const openSource = (target?: SourceTarget) => { setOpen(false); showSources(target); };
   return <>
     <div className="report-turn" id={`message-${artifact.id}`} tabIndex={-1}>
       {notices.before}
@@ -504,37 +509,52 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
       <div className="report-card"><DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />{badges}</div>
       {notices.after}
     </div>
-    <DocumentViewer open={open} onClose={() => setOpen(false)} name={name} actions={<>
+    <ReportDocument artifact={artifact} author={author} detail={detail} open={open} onClose={() => setOpen(false)} busy={busy} action={action} showSources={showSources} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}
       <ArtifactActions artifactId={artifact.id} about={name} action={action} />
-    </>}>
-      <h1>{name}</h1>
-      <p className="doc-meta">{[author?.snapshot.worker.name, when].filter(Boolean).join(' · ')}</p>
-      {!sample && <p className="prose">{tMessage(report.summary)}</p>}
-      {detail.task.evidenceRequests?.filter(request => request.artifactId === artifact.id).map(request => <section key={request.id}>
-        <h2>{t('Bằng chứng còn thiếu')}</h2><ul>{request.checks.map(item => <li key={item}>{item}</li>)}</ul>
-        <p className="muted">{t('Các phần đã làm được giữ lại. Ghi nhận giới hạn không chuyển các mục này thành đạt.')}</p>
-        {request.state === 'pending' ? <Button variant="outline" disabled={busy} onClick={() => action(() => orglet.call('acknowledgeEvidence', { taskId: detail.task.id, requestId: request.id }))}>{t('Ghi nhận giới hạn')}</Button> : <p role="status">{t('Đã ghi nhận giới hạn bằng chứng.')}</p>}
-      </section>)}
-      <ReviewSummary key={artifact.id} artifactId={artifact.id} report={report} detail={detail} showSources={openSource} />
-      {report.findings.length > 0 && <section><h2>{t('Phát hiện')}</h2>
-        {report.findings.map((finding, index) => <section className="finding" key={finding.provenance?.findingId ?? index}>
-          <h3>{finding.title} <span className="doc-note">· {finding.severity === 'critical' ? t('Nghiêm trọng') : finding.severity === 'warning' ? t('Cần xem lại') : t('Thông tin')}</span></h3>
-          <p className="prose">{finding.detail}</p><p className="muted">{t('Phạm vi: {0}', [finding.coverage])}</p>
-          {finding.category && <p className="muted">{t('Hội: {0}', [({ challenge: 'Challenge', data: t('Dữ liệu'), scoring: 'Scoring', runs: t('Lần chạy'), other: t('Khác') } as const)[finding.category]])}</p>}
-          {finding.recommendation && <p className="prose"><strong>{t('Khuyến nghị:')}</strong> {finding.recommendation}</p>}
-          <div className="source-links">{finding.sourceIds.map(id => <Button key={id} onClick={() => openSource({ type: 'source', id })}><FileText size={14} />{detail.sources.find(source => source.id === id)?.name ?? id}</Button>)}{finding.checkerIds?.map((id, position) => <Button key={id} onClick={() => openSource({ type: 'checker', id })}><FileText size={14} />Xem checker {position + 1}</Button>)}{finding.locations?.map((location, position) => <Button key={`line-${position}`} onClick={() => openSource({ type: 'source', id: location.sourceId, lines: [location.startLine, location.endLine] })}><FileText size={14} />{detail.sources.find(source => source.id === location.sourceId)?.name ?? location.sourceId} · {location.startLine === location.endLine ? t('dòng {0}', [location.startLine]) : t('dòng {0}–{1}', [location.startLine, location.endLine])}</Button>)}</div>
-          {finding.workspaceEvidenceIds?.map(id => {
-            const evidence = detail.workspaceEvidence.find(item => item.id === id);
-            return <p className="muted prose" key={id}>{evidence
-              ? t('Tệp workspace: {0} · SHA-256 {1} · {2}', [evidence.path, evidence.hash, evidence.grantCurrent
-                ? t('Bằng chứng đã lưu; file hiện tại chưa kiểm tra lại') : t('Quyền workspace không còn; không mở được file hiện tại')])
-              : t('Thiếu metadata bằng chứng workspace: {0}', [id])}</p>;
-          })}
-          {finding.provenance && <details><summary>{t('Nguồn gốc finding')}</summary><p>{t('{0} · Tí v{1}', [author?.snapshot.worker.name, author?.snapshot.worker.revision])}</p><code className="hash">Finding: {finding.provenance.findingId}<br />Worker: {finding.provenance.writerId}<br />Run: {finding.provenance.runId}</code></details>}
-        </section>)}
-      </section>}
-      {report.limitations.length > 0 && <section className="limitations"><h2>{t('Giới hạn của báo cáo')}</h2><ul>{report.limitations.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></section>}
-    </DocumentViewer>
+    </>} />
   </>;
+}
+
+/**
+ * A saved report open in the document viewer: its name, who wrote it and when, the summary, the checks, the findings
+ * and its limitations. A crew answer opens here from its card; a member's blocker report opens here from the card
+ * that says to see it (COD-256).
+ */
+function ReportDocument({ artifact, author, detail, open, onClose, busy, action, showSources, actions }: { artifact: Artifact; author?: Run; detail: TaskDetail; open: boolean; onClose: () => void; busy: boolean; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; actions: ReactNode }) {
+  const report = artifact.report;
+  const sample = author?.snapshot.worker.provider === 'demo';
+  const name = tMessage(report.title);
+  const when = new Date(artifact.createdAt).toLocaleString(currentLocale(), { dateStyle: 'medium', timeStyle: 'short' });
+  // Evidence links leave the document for the sources panel.
+  const openSource = (target?: SourceTarget) => { onClose(); showSources(target); };
+  return <DocumentViewer open={open} onClose={onClose} name={name} actions={actions}>
+    <h1>{name}</h1>
+    <p className="doc-meta">{[author?.snapshot.worker.name, when].filter(Boolean).join(' · ')}</p>
+    {!sample && <p className="prose">{tMessage(report.summary)}</p>}
+    {detail.task.evidenceRequests?.filter(request => request.artifactId === artifact.id).map(request => <section key={request.id}>
+      <h2>{t('Bằng chứng còn thiếu')}</h2><ul>{request.checks.map(item => <li key={item}>{item}</li>)}</ul>
+      <p className="muted">{t('Các phần đã làm được giữ lại. Ghi nhận giới hạn không chuyển các mục này thành đạt.')}</p>
+      {request.state === 'pending' ? <Button variant="outline" disabled={busy} onClick={() => action(() => orglet.call('acknowledgeEvidence', { taskId: detail.task.id, requestId: request.id }))}>{t('Ghi nhận giới hạn')}</Button> : <p role="status">{t('Đã ghi nhận giới hạn bằng chứng.')}</p>}
+    </section>)}
+    <ReviewSummary key={artifact.id} artifactId={artifact.id} report={report} detail={detail} showSources={openSource} />
+    {report.findings.length > 0 && <section><h2>{t('Phát hiện')}</h2>
+      {report.findings.map((finding, index) => <section className="finding" key={finding.provenance?.findingId ?? index}>
+        <h3>{finding.title} <span className="doc-note">· {finding.severity === 'critical' ? t('Nghiêm trọng') : finding.severity === 'warning' ? t('Cần xem lại') : t('Thông tin')}</span></h3>
+        <p className="prose">{finding.detail}</p><p className="muted">{t('Phạm vi: {0}', [finding.coverage])}</p>
+        {finding.category && <p className="muted">{t('Hội: {0}', [({ challenge: 'Challenge', data: t('Dữ liệu'), scoring: 'Scoring', runs: t('Lần chạy'), other: t('Khác') } as const)[finding.category]])}</p>}
+        {finding.recommendation && <p className="prose"><strong>{t('Khuyến nghị:')}</strong> {finding.recommendation}</p>}
+        <div className="source-links">{finding.sourceIds.map(id => <Button key={id} onClick={() => openSource({ type: 'source', id })}><FileText size={14} />{detail.sources.find(source => source.id === id)?.name ?? id}</Button>)}{finding.checkerIds?.map((id, position) => <Button key={id} onClick={() => openSource({ type: 'checker', id })}><FileText size={14} />Xem checker {position + 1}</Button>)}{finding.locations?.map((location, position) => <Button key={`line-${position}`} onClick={() => openSource({ type: 'source', id: location.sourceId, lines: [location.startLine, location.endLine] })}><FileText size={14} />{detail.sources.find(source => source.id === location.sourceId)?.name ?? location.sourceId} · {location.startLine === location.endLine ? t('dòng {0}', [location.startLine]) : t('dòng {0}–{1}', [location.startLine, location.endLine])}</Button>)}</div>
+        {finding.workspaceEvidenceIds?.map(id => {
+          const evidence = detail.workspaceEvidence.find(item => item.id === id);
+          return <p className="muted prose" key={id}>{evidence
+            ? t('Tệp workspace: {0} · SHA-256 {1} · {2}', [evidence.path, evidence.hash, evidence.grantCurrent
+              ? t('Bằng chứng đã lưu; file hiện tại chưa kiểm tra lại') : t('Quyền workspace không còn; không mở được file hiện tại')])
+            : t('Thiếu metadata bằng chứng workspace: {0}', [id])}</p>;
+        })}
+        {finding.provenance && <details><summary>{t('Nguồn gốc finding')}</summary><p>{t('{0} · Tí v{1}', [author?.snapshot.worker.name, author?.snapshot.worker.revision])}</p><code className="hash">Finding: {finding.provenance.findingId}<br />Worker: {finding.provenance.writerId}<br />Run: {finding.provenance.runId}</code></details>}
+      </section>)}
+    </section>}
+    {report.limitations.length > 0 && <section className="limitations"><h2>{t('Giới hạn của báo cáo')}</h2><ul>{report.limitations.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></section>}
+  </DocumentViewer>;
 }
