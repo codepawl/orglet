@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent } from 'react';
 import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
-import { Bell, BookOpen, CalendarClock, Plus, Settings } from './icons';
+import { Activity, Bell, BookOpen, CalendarClock, Plus, Settings } from './icons';
 import { t } from '../i18n';
 import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
@@ -66,6 +66,7 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
   const waiting = wait === 'stuck' ? t('Mở lâu hơn bình thường. Nếu vẫn không xong, đóng rồi mở lại Orglet.') : wait === 'slow' ? t('Vẫn đang mở, chờ chút…') : t('Đang mở workspace…');
   const footer = [
     { icon: <Bell size={18} />, label: t('Thông báo') },
+    { icon: <Activity size={18} />, label: t('Đang chạy') },
     { icon: <CalendarClock size={18} />, label: t('Lịch chạy') },
     { icon: <BookOpen size={18} />, label: t('Thư viện') },
     { icon: <Settings size={18} />, label: t('Cài đặt') },

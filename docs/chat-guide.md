@@ -70,6 +70,24 @@ Orglet checks schedules only while it is open. If the computer was off or asleep
 
 You can also ask an orglet, in its chat, to schedule something ("run this every Monday at 9"); it answers with a proposal card, and the schedule it creates is saved switched off until you enable it ([App-change proposals](permissions-and-learning.md#app-change-proposals)).
 
+## What is running
+
+Click **Running** in the footer to see every turn that is working or waiting, across all chats. The button shows a count while anything runs or waits its turn.
+
+The list has up to three parts:
+
+- **Running**: each orglet at work, with its face, its name, the chat or crew it works for, what it is doing now ("Reading invoice.xlsx…"), how long it has run, what it has cost so far, and its provider. A cost Orglet does not know yet says **Cost unknown** (a harness before it reports, or a custom connection with no price), and one with a request of unknown cost says **At least**, rather than showing $0.
+- **Queued**: turns that have not started, with the reason and their place in line: "Waiting for Claude Code · 2 ahead" when the provider already has as many requests as **Settings → requests at once per provider** allows, "Waiting for a crew slot" or "Waiting for results from Lan" inside a crew, "Waiting for its turn to answer" in a group chat, and "Waiting for budget" for a chat that stopped at its **Limit per task**.
+- **Waiting for you**: chats stopped at a checkpoint, including a crew paused at the end of its work hours, and chats waiting for your answer: an MCP tool the orglet wants to use ("Waiting for you to allow the MCP tool: search · Docs") or a question it asked. Answer in the chat and the same run goes on.
+
+Each row has its controls on the right:
+
+1. **Pause** (after the current step) and **Stop** for a running turn. Stopping a queued turn cancels it before it starts; nothing is sent and nothing is charged.
+2. **Resume** for a paused chat, or for one waiting for budget after you raise its limit.
+3. **Open chat** to go to that conversation. A chat waiting for your answer offers only this, because the answer card is in the chat.
+
+The controls act on the whole turn of that chat. In a crew, stopping one member's row stops the crew's turn, the same as **Stop** in the chat. The list follows the sidebar: a chat whose mark shows it working or waiting is always in it. With nothing running, the view says so in one line. How the queue is kept: [technical guide](technical-guide.md#what-is-running-and-the-queue).
+
 ## Notifications
 
 Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked.

@@ -103,12 +103,15 @@ export function islandOf(progress: HarnessProgress, pausing: boolean, workers: r
   return islandFor(doingOf(progress, pausing), workers, receipt);
 }
 
-/** What a run is doing, with the sentence that names the worker doing it. */
-type Doing = { state: IslandState; sentence: (name: string) => string };
+/**
+ * What a run is doing, with the sentence that names the worker doing it, and the same step without the name for a
+ * row that already shows the worker (the Running view, COD-244).
+ */
+type Doing = { state: IslandState; sentence: (name: string) => string; line: () => string };
 
-const pausingDoing: Doing = { state: 'pausing', sentence: () => t('Đang dừng sau bước này…') };
-const thinkingDoing: Doing = { state: 'thinking', sentence: name => t('{0} đang suy nghĩ…', [name]) };
-const writingDoing: Doing = { state: 'writing', sentence: name => t('{0} đang viết câu trả lời…', [name]) };
+const pausingDoing: Doing = { state: 'pausing', sentence: () => t('Đang dừng sau bước này…'), line: () => t('Đang dừng sau bước này…') };
+const thinkingDoing: Doing = { state: 'thinking', sentence: name => t('{0} đang suy nghĩ…', [name]), line: () => t('Đang suy nghĩ…') };
+const writingDoing: Doing = { state: 'writing', sentence: name => t('{0} đang viết câu trả lời…', [name]), line: () => t('Đang viết câu trả lời…') };
 
 function doingOf(progress: HarnessProgress, pausing: boolean): Doing {
   if (pausing) return pausingDoing;
@@ -120,10 +123,10 @@ function doingOf(progress: HarnessProgress, pausing: boolean): Doing {
 
 function stepDoing(step: ActivityStep): Doing {
   const target = step.target;
-  if (step.kind === 'read') return { state: 'reading', sentence: name => target ? t('{0} đang đọc {1}…', [name, target]) : t('{0} đang đọc tệp…', [name]) };
-  if (step.kind === 'search') return { state: 'searching', sentence: name => target ? t('{0} đang tìm {1}…', [name, target]) : t('{0} đang tìm…', [name]) };
-  if (step.kind === 'list') return { state: 'listing', sentence: name => t('{0} đang liệt kê tệp…', [name]) };
-  return { state: 'tool', sentence: name => t('{0} đang chạy một bước…', [name]) };
+  if (step.kind === 'read') return { state: 'reading', sentence: name => target ? t('{0} đang đọc {1}…', [name, target]) : t('{0} đang đọc tệp…', [name]), line: () => target ? t('Đang đọc {0}…', [target]) : t('Đang đọc tệp…') };
+  if (step.kind === 'search') return { state: 'searching', sentence: name => target ? t('{0} đang tìm {1}…', [name, target]) : t('{0} đang tìm…', [name]), line: () => target ? t('Đang tìm {0}…', [target]) : t('Đang tìm…') };
+  if (step.kind === 'list') return { state: 'listing', sentence: name => t('{0} đang liệt kê tệp…', [name]), line: () => t('Đang liệt kê tệp…') };
+  return { state: 'tool', sentence: name => t('{0} đang chạy một bước…', [name]), line: () => t('Đang chạy một bước…') };
 }
 
 /**
@@ -159,13 +162,22 @@ export function islandBeforeStreaming({ workers, stage, message, pausing }: { wo
 function doingBeforeStreaming({ stage, message, pausing }: { stage?: Run['stage']; message?: string; pausing: boolean }): Doing {
   const read = message?.match(/^Đã đọc (.+)$/);
   if (pausing) return pausingDoing;
-  if (stage === 'plan' || message === 'Đang phân việc.') return { state: 'thinking', sentence: name => t('{0} đang phân việc…', [name]) };
-  if (stage === 'member') return { state: 'thinking', sentence: name => t('Đang giao {0}…', [name]) };
-  if (stage === 'synthesis' || message?.startsWith('Đang tổng hợp')) return { state: 'writing', sentence: name => t('{0} đang tổng hợp…', [name]) };
-  if (read) return { state: 'reading', sentence: name => t('{0} đang đọc {1}…', [name, read[1]]) };
-  if (message?.startsWith('Đang chờ lượt')) return { state: 'waiting', sentence: name => t('{0} đang chờ lượt…', [name]) };
+  if (stage === 'plan' || message === 'Đang phân việc.') return { state: 'thinking', sentence: name => t('{0} đang phân việc…', [name]), line: () => t('Đang phân việc…') };
+  if (stage === 'member') return { state: 'thinking', sentence: name => t('Đang giao {0}…', [name]), line: () => t('Đang làm phần việc được giao…') };
+  if (stage === 'synthesis' || message?.startsWith('Đang tổng hợp')) return { state: 'writing', sentence: name => t('{0} đang tổng hợp…', [name]), line: () => t('Đang tổng hợp…') };
+  if (read) return { state: 'reading', sentence: name => t('{0} đang đọc {1}…', [name, read[1]]), line: () => t('Đang đọc {0}…', [read[1]]) };
+  if (message?.startsWith('Đang chờ lượt')) return { state: 'waiting', sentence: name => t('{0} đang chờ lượt…', [name]), line: () => t('Đang chờ lượt…') };
   if (message === 'Model đang trả kết quả…') return writingDoing;
   return thinkingDoing;
+}
+
+/**
+ * What a run is doing now as one line without the worker's name (COD-244): the streamed step when there is live
+ * progress, otherwise what the core's own events say, in the same words the island uses.
+ */
+export function runStepLine({ progress, stage, message, pausing }: { progress?: HarnessProgress | null; stage?: Run['stage']; message?: string; pausing: boolean }): string {
+  if (progress) return doingOf(progress, pausing).line();
+  return doingBeforeStreaming({ stage, message, pausing }).line();
 }
 
 /** The live timer; `plain` is the line standing on its own above the text, in the folded control's place and colour. */

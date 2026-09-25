@@ -25,7 +25,7 @@ One short page per part of the app, in the words on screen.
 |---|---|
 | [orglets-and-crews.md](orglets-and-crews.md) | Create an orglet or a crew, how a crew turn runs, group chats, `@` tags, replies, reactions |
 | [connections.md](connections.md) | Claude Code, Codex, Cursor Agent and Gemini CLI on this computer, API keys, Ollama, Demo, model IDs, cost limits |
-| [chat-guide.md](chat-guide.md) | Attach files, reports as documents, the trace of what an orglet did, diffs, Details, schedules, notifications |
+| [chat-guide.md](chat-guide.md) | Attach files, reports as documents, the trace of what an orglet did, diffs, Details, schedules, what is running and queued, notifications |
 | [permissions-and-learning.md](permissions-and-learning.md) | Permission switches and the working folder, memory, knowledge and the Library, self-improvement, app-change proposals |
 | [settings.md](settings.md) | Every settings tab: appearance, chat, connections, costs, backup and erase, About and updates |
 | [cli.md](cli.md) | The `orglet` terminal command: install, chat in the terminal, send and read from scripts, colours, exit codes, how it talks to the app |

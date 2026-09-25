@@ -8,11 +8,20 @@ import { Store, id, now } from '../storage/database';
 import { Runner } from './runner';
 import { Preflight, PreflightError } from './preflight';
 import { savedArtifactContext } from './artifact-provenance';
+import { crewWaits, groupWaits, planWaits, type TeamWait } from './crew-waits';
 
 export class TeamRunner {
   private active = new Map<string, { cancelled: boolean; paused: boolean; controller: AbortController }>();
+  /** The runs of each active crew or group turn that are held back, and why (COD-244). Observed, never consulted. */
+  private waits = new Map<string, TeamWait[]>();
   constructor(private store: Store, private runner: Runner, private notify: () => void, private preflight: Preflight, private canDispatch: (task: Task) => boolean = () => true) {}
   isActive(taskId: string) { return this.active.has(taskId); }
+  /** What this task's queued runs wait for right now; empty when the task is not running here. */
+  waitsOf(taskId: string): readonly TeamWait[] { return this.waits.get(taskId) ?? []; }
+  private setWaits(taskId: string, waits: TeamWait[]) {
+    this.waits.set(taskId, waits);
+    this.notify();
+  }
   cancel(taskId: string) { const control = this.active.get(taskId); if (control) { control.cancelled = true; control.controller.abort(); } this.runner.cancel(taskId); }
   pause(taskId: string) { const control = this.active.get(taskId); if (control) control.paused = true; this.runner.pause(taskId); }
   assertResumable(taskId: string) {
@@ -27,6 +36,7 @@ export class TeamRunner {
     const control = { cancelled: false, paused: false, controller: new AbortController() }; this.active.set(task.id, control);
     this.store.update('tasks', { ...task, status: 'running', accepted: false }); this.notify();
     task = { ...task, ...(task.currentInput ?? {}) };
+    const queuedSince = Date.now();
     try {
       // Freeze plan, every role and synthesis before the first asynchronous step, including roles not dispatched yet.
       const prior = this.store.detail(task.id);
@@ -40,6 +50,7 @@ export class TeamRunner {
         const synthesis = (resume && prior.runs.findLast(r => r.stage === 'synthesis')) || this.createRun(task, team, team.synthesizerId, 'synthesis', []);
         return { plan, members, synthesis };
       });
+      this.setWaits(task.id, planWaits(planned.members.values(), planned.synthesis, queuedSince));
       let preflightId: string | undefined;
       if (team.preflight) {
         this.store.event(planned.plan.id, 'Đang chạy preflight local trước khi bắt đầu các role.'); this.notify();
@@ -126,12 +137,14 @@ export class TeamRunner {
             break;
           }
           for (const assignment of batch) pending.delete(assignment.workerId);
+          this.setWaits(task.id, crewWaits([...pending.values()], successful, planned.members, planned.synthesis, queuedSince));
           const results = await Promise.allSettled(batch.map(assignment => execute(assignment.workerId, signal)));
           const rejected = results.find(result => result.status === 'rejected');
           if (rejected?.status === 'rejected') throw rejected.reason;
         }
       };
       await drain();
+      this.setWaits(task.id, []);
       if (control.cancelled) { this.finish(task, 'cancelled'); return; }
       if (control.paused) { this.finish(task, waitingBudget ? 'waiting_budget' : 'paused'); return; }
       // Freeze a deterministic join input from committed member artifacts only. Do not invent missing roles.
@@ -174,7 +187,7 @@ export class TeamRunner {
       const last = this.store.detail(task.id).runs.at(-1);
       if (last && last.status !== 'completed') this.store.update('runs', { ...last, error: error instanceof PreflightError ? error.message : 'Hội bị gián đoạn. Kiểm tra nguồn, checkpoint và chi phí trước khi tiếp tục.' });
       this.finish(task, control.cancelled ? 'cancelled' : error instanceof PreflightError ? 'failed' : 'interrupted');
-    } finally { this.notify(); this.active.delete(task.id); }
+    } finally { this.waits.delete(task.id); this.notify(); this.active.delete(task.id); }
   }
   /**
    * Group chat: every assigned worker answers the latest message in order, each seeing the replies before it. Workers
@@ -188,13 +201,15 @@ export class TeamRunner {
     task = { ...task, ...(task.currentInput ?? {}) };
     const revision = task.inputRevision ?? 0;
     let answered = 0, failed = 0, waitingBudget = false;
+    const queuedSince = Date.now();
     try {
-      for (const worker of workers) {
+      for (const [index, worker] of workers.entries()) {
         if (!this.canDispatch(task)) control.paused = true;
         if (control.cancelled || control.paused) break;
         const detail = this.store.detail(task.id);
         const runs = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision && run.stage === 'group' && run.snapshot.worker.id === worker.id);
         if (runs.some(run => run.status === 'completed' && detail.artifacts.some(artifact => artifact.runId === run.id))) { answered++; continue; }
+        this.setWaits(task.id, this.groupTurnWaits(detail, revision, workers.slice(index + 1), queuedSince));
         let run = resume ? runs.findLast(item => ['paused', 'interrupted', 'waiting_budget', 'queued'].includes(item.status)) : undefined;
         if (!run) {
           run = { id: id(), taskId: task.id, stage: 'group', status: 'queued', snapshot: { workspaceGrant: new WorkspaceGrants(this.store).snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill: this.store.get<Skill>('skills', worker.skillId), inputRevision: revision, input: { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, replyTo: task.currentInput?.replyTo } }, startedAt: now(), error: null };
@@ -210,7 +225,17 @@ export class TeamRunner {
       this.finish(task, control.cancelled ? 'cancelled' : control.paused ? (waitingBudget ? 'waiting_budget' : 'paused') : !answered ? 'failed' : failed ? 'partial' : 'completed');
     } catch {
       this.finish(task, control.cancelled ? 'cancelled' : 'interrupted');
-    } finally { this.notify(); this.active.delete(task.id); }
+    } finally { this.waits.delete(task.id); this.notify(); this.active.delete(task.id); }
+  }
+  /** The orglets of a group turn still to answer after the current one, with the run a resume would reuse. */
+  private groupTurnWaits(detail: ReturnType<Store['detail']>, revision: number, later: Worker[], since: number): TeamWait[] {
+    const turnRuns = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision && run.stage === 'group');
+    const answered = (worker: Worker) => turnRuns.some(run => run.snapshot.worker.id === worker.id && run.status === 'completed'
+      && detail.artifacts.some(artifact => artifact.runId === run.id));
+    const waiting = later.filter(worker => !answered(worker));
+    const resumable = (worker: Worker) => turnRuns.findLast(run => run.snapshot.worker.id === worker.id
+      && ['paused', 'interrupted', 'waiting_budget', 'queued'].includes(run.status))?.id;
+    return groupWaits(waiting, resumable, since);
   }
   private createRun(task: Task, team: Team, workerId: string, stage: 'plan' | 'member' | 'synthesis', upstream: Artifact[]) {
     const worker = this.store.get<Worker>('workers', workerId);
