@@ -61,6 +61,12 @@ export function elapsedLabel(fromIso: string, toIso: string) {
   return hours % 24 ? t('{0} ngày {1} giờ', [days, hours % 24]) : t('{0} ngày', [days]);
 }
 
+/** How many answers the chat has, with its own words for one ("1 reply", never "1 replies"). */
+export function replyCountLabel(count: number): string {
+  if (count === 1) return t('1 lượt');
+  return t('{0} lượt', [count]);
+}
+
 /** When a run finished, as far as the panel can tell: the last thing that run reported. */
 const runEndedAt = (runId: string, events: { runId?: string; createdAt: string }[]) =>
   events.filter(event => event.runId === runId).at(-1)?.createdAt;
@@ -284,7 +290,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           {took && <Fact icon={Clock} title={t('Tổng thời gian chạy')}>{took}</Fact>}
           {tokens > 0 && <Fact icon={Cpu} title={t('Token đã dùng')}>{t('{0} token', [tokens.toLocaleString(currentLocale())])}</Fact>}
           {model && <Fact icon={Sparkles} title={t('Model đã trả lời')}>{model}</Fact>}
-          <Fact icon={MessageSquare} title={t('Số lượt trả lời')}>{t('{0} lượt', [detail.artifacts.length])}</Fact>
+          <Fact icon={MessageSquare} title={t('Số lượt trả lời')}>{replyCountLabel(detail.artifacts.length)}</Fact>
         </div>
         {detail.sources.length > 0 && <>
           <ShowMore items={detail.sources} limit={3} empty="" render={source => <p key={source.id} className="details-source"><FileText size={14} aria-hidden="true" />{source.name}</p>} />

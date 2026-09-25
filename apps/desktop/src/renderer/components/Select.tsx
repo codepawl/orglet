@@ -146,7 +146,7 @@ export function Select({ value, options, onChange, label, ariaLabel, disabled, s
         className={`select-option${index === active ? ' active' : ''}${option.dimmed ? ' dimmed' : ''}`}
         onPointerMove={() => { if (!option.disabled && index !== active) setActive(index); }} onPointerDown={event => event.preventDefault()} onClick={() => choose(index)}>
         {option.icon && <span className="select-icon">{option.icon}</span>}
-        <span className="select-option-text"><span><span style={option.labelStyle}>{option.label}</span>{option.note && <span className="select-note"> ({option.note})</span>}</span>{option.detail && <span className="select-detail">{option.detail}</span>}</span>
+        <span className="select-option-text"><span><span style={option.labelStyle}>{option.label}</span>{option.note && <span className="select-note"> ({option.note})</span>}</span>{option.detail && <span className="select-detail" title={option.detail}>{option.detail}</span>}</span>
         {option.badge && <span className="select-option-badge">{option.badge}</span>}
         <Check size={16} className="select-check" aria-hidden="true" />
       </li>];
