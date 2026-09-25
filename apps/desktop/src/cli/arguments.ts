@@ -2,11 +2,12 @@ import { DEFAULT_WAIT_SECONDS, MAX_FILES, MAX_WAIT_SECONDS } from './protocol';
 
 /** Turning `orglet …` arguments into one command, and the help text for each (COD-234). */
 
-export type CommandName = 'status' | 'list' | 'send' | 'read' | 'open';
+export type CommandName = 'chat' | 'status' | 'list' | 'send' | 'read' | 'open';
 
 export type ParsedCommand =
   | { kind: 'help'; topic?: CommandName }
   | { kind: 'version' }
+  | { kind: 'chat'; to?: string }
   | { kind: 'status'; json: boolean }
   | { kind: 'list'; json: boolean }
   | { kind: 'send'; message: string; to: string; files: string[]; wait: boolean; timeoutSeconds: number; json: boolean }
@@ -16,7 +17,7 @@ export type ParsedCommand =
 /** A mistake in how the command was typed; exits with code 2. */
 export class UsageError extends Error {}
 
-const COMMAND_NAMES: readonly CommandName[] = ['status', 'list', 'send', 'read', 'open'];
+const COMMAND_NAMES: readonly CommandName[] = ['chat', 'status', 'list', 'send', 'read', 'open'];
 
 export const MAIN_HELP = `orglet: talk to the Orglet app from a terminal.
 
@@ -24,9 +25,11 @@ The app must be installed; it is started if it is not running. Keys, chats and
 files stay in the app. This command only sends requests to it.
 
 Usage:
+  orglet                     Chat in this terminal: pick an orglet or crew
   orglet <command> [options]
 
 Commands:
+  chat      Talk to an orglet or crew in this terminal
   status    Whether the app is running, its version, how many orglets and crews
   list      Orglets and crews by name, with their provider and model
   send      Send a message to an orglet or crew and print the answer
@@ -40,6 +43,19 @@ Options:
 Exit codes: 0 ok, 1 failure, 2 usage error, 3 app not reachable.`;
 
 export const COMMAND_HELP: Record<CommandName, string> = {
+  chat: `Usage: orglet chat [--to <name>]
+
+Opens a chat in this terminal. Pick an orglet or crew with the arrow keys or by
+typing part of its name, then write messages; each answer prints as it lands.
+Running orglet with no command in a terminal does the same.
+
+In the chat, /to <name> switches chat, /list lists orglets and crews, /read
+shows the latest answer again, /open brings the app to this chat, /clear
+clears the screen, /help lists these and /exit leaves. Ctrl+C stops waiting
+for an answer; the orglet keeps working in the app.
+
+Options:
+  --to <name>    Open this chat straight away`,
   status: `Usage: orglet status [--json]
 
 Shows whether the app is reachable, its version, and how many orglets and crews
@@ -168,8 +184,9 @@ function parseTimeout(value: string | undefined): number {
 function rejectForeignOptions(command: CommandName, options: Options): void {
   const sendOnly = options.files.length > 0 || !options.wait || options.timeout !== undefined;
   if (command !== 'send' && sendOnly) throw new UsageError('--file, --no-wait and --timeout belong to "orglet send".');
-  const takesName = command === 'send' || command === 'read' || command === 'open';
+  const takesName = command === 'chat' || command === 'send' || command === 'read' || command === 'open';
   if (!takesName && options.to !== undefined) throw new UsageError(`"orglet ${command}" does not take --to.`);
+  if (command === 'chat' && options.json) throw new UsageError('"orglet chat" does not take --json. Use "orglet send --json" in scripts.');
   const takesMessage = command === 'send';
   const extra = takesMessage ? options.positionals.slice(2) : options.positionals.slice(1);
   if (extra.length > 0) throw new UsageError(`Unexpected argument "${extra[0]}". Put a message with spaces in quotes.`);
@@ -199,6 +216,7 @@ export function parseArguments(argumentList: readonly string[]): ParsedCommand {
   rejectForeignOptions(command, options);
   const json = options.json;
   switch (command) {
+    case 'chat': return { kind: 'chat', ...(options.to?.trim() ? { to: options.to.trim() } : {}) };
     case 'status': return { kind: 'status', json };
     case 'list': return { kind: 'list', json };
     case 'read': return { kind: 'read', to: requireName(command, options.to), json };

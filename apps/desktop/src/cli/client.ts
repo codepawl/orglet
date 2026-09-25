@@ -10,6 +10,16 @@ import { CLI_TOKEN_FILE, cliEndpoint, MAX_LINE_BYTES, type CliRequestBody, type 
 /** The app is not running for this data folder, or its token file is missing. */
 export class UnreachableError extends Error {}
 
+/**
+ * The person stopped waiting (Ctrl+C). The connection is closed, which ends the app's wait; a turn already sent keeps
+ * running in the app.
+ */
+export class StoppedError extends Error {
+  constructor() {
+    super('Stopped waiting.');
+  }
+}
+
 /** The folder Electron uses as `userData` for a product named "Orglet" on each platform. */
 export function defaultUserData(platform: NodeJS.Platform, environment: NodeJS.ProcessEnv, home: string): string {
   if (platform === 'win32') return join(environment.APPDATA ?? join(home, 'AppData', 'Roaming'), 'Orglet');
@@ -37,12 +47,22 @@ async function readToken(userData: string): Promise<string> {
 
 const UNREACHABLE_CODES = new Set(['ENOENT', 'ECONNREFUSED', 'EPIPE', 'ECONNRESET', 'ENOTSOCK']);
 
-/** Sends one request line and reads one response line. */
-export function exchange(endpoint: string, request: object): Promise<CliResponse> {
+/** Sends one request line and reads one response line. Aborting `signal` closes the connection and rejects. */
+export function exchange(endpoint: string, request: object, signal?: AbortSignal): Promise<CliResponse> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new StoppedError());
+      return;
+    }
     const socket = createConnection(endpoint);
     let received = Buffer.alloc(0);
     let connected = false;
+    const stop = () => {
+      socket.destroy();
+      reject(new StoppedError());
+    };
+    signal?.addEventListener('abort', stop, { once: true });
+    socket.on('close', () => signal?.removeEventListener('abort', stop));
     socket.on('connect', () => {
       connected = true;
       socket.write(`${JSON.stringify(request)}\n`);
@@ -72,9 +92,9 @@ export function exchange(endpoint: string, request: object): Promise<CliResponse
 }
 
 /** One request with this start's token. */
-export async function call(userData: string, request: CliRequestBody): Promise<CliResponse> {
+export async function call(userData: string, request: CliRequestBody, signal?: AbortSignal): Promise<CliResponse> {
   const token = await readToken(userData);
-  return exchange(cliEndpoint(userData), { ...request, token });
+  return exchange(cliEndpoint(userData), { ...request, token }, signal);
 }
 
 /**
@@ -96,8 +116,19 @@ export function launchApp(executable: string, userData: string, environment: Nod
   child.unref();
 }
 
-function delay(milliseconds: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, milliseconds));
+function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, milliseconds);
+    function done() {
+      signal?.removeEventListener('abort', stop);
+      resolve();
+    }
+    function stop() {
+      clearTimeout(timer);
+      reject(new StoppedError());
+    }
+    signal?.addEventListener('abort', stop, { once: true });
+  });
 }
 
 export const START_TIMEOUT_MILLISECONDS = 30_000;
@@ -107,18 +138,18 @@ const RETRY_MILLISECONDS = 500;
  * Tries the request; when the app does not answer, starts it and keeps trying for up to 30 seconds. While it starts,
  * the token on disk may still be the previous run's, so a refused token is retried too.
  */
-export async function callStartingApp(userData: string, request: CliRequestBody, executable: string | undefined): Promise<CliResponse> {
+export async function callStartingApp(userData: string, request: CliRequestBody, executable: string | undefined, signal?: AbortSignal): Promise<CliResponse> {
   try {
-    return await call(userData, request);
+    return await call(userData, request, signal);
   } catch (error) {
     if (!(error instanceof UnreachableError) || !executable) throw error;
   }
   launchApp(executable, userData);
   const deadline = Date.now() + START_TIMEOUT_MILLISECONDS;
   while (Date.now() < deadline) {
-    await delay(RETRY_MILLISECONDS);
+    await delay(RETRY_MILLISECONDS, signal);
     try {
-      const response = await call(userData, request);
+      const response = await call(userData, request, signal);
       const staleToken = !response.ok && response.code === 'unauthorized';
       if (!staleToken) return response;
     } catch (error) {

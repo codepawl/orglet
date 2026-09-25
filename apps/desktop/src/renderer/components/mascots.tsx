@@ -1,4 +1,5 @@
 import { useId, type CSSProperties, type ReactNode } from 'react';
+import type { MascotId as SharedMascotId } from '../../shared/mascot-suggest';
 
 /*
  * Orglet mascots, the Grok reading (owner's reference, 2026-09-21): the Orglet logo bubble, the rounded speech
@@ -98,7 +99,8 @@ export const mascots = {
   coder: define('Mũ len', { wear: <><path d="M22 12a10 9.5 0 0 1 20 0z" {...worn} /><path d="M19.5 12h25v3h-25z" {...worn} /><circle cx="32" cy="2.5" r="2.6" {...worn} /></> }),
   automation: define('Mũ chong chóng', { wear: <><path d="M22.5 13.5a9.5 9 0 0 1 19 0z" {...worn} /><path d="M23 5.5h18" {...worn} strokeWidth={2.2} /><path d="M32 5.5v5" {...worn} strokeWidth={1.8} /></> }),
   care: define('Mũ y tá', { wear: <><path d="M22 13.5v-8h20v8z" {...worn} /><path d="M29.5 9.5h5M32 7v5" {...worn} strokeWidth={2} stroke={ink} /></> }),
-} satisfies Record<string, MascotEntry>;
+  // The same ids as `MASCOT_IDS` in shared/mascot-suggest.ts, which main uses to pick a default colour.
+} satisfies Record<SharedMascotId, MascotEntry>;
 
 export type MascotId = keyof typeof mascots;
 export const mascotIds = Object.keys(mascots) as MascotId[];

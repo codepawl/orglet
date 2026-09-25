@@ -37,8 +37,19 @@ function quote(argument) {
 
 /** Runs the shipped command with `ORGLET_USER_DATA` pointing at the smoke's data folder. */
 function orglet(userData, ...argumentList) {
+  return orgletWith({}, userData, ...argumentList);
+}
+
+/**
+ * The same with extra environment. The runner's own colour settings are dropped first, so output piped here is the
+ * plain text a script gets unless a check asks for colour.
+ */
+function orgletWith(extraEnvironment, userData, ...argumentList) {
   const environment = { ...process.env, ORGLET_USER_DATA: userData };
   delete environment.ELECTRON_RUN_AS_NODE;
+  delete environment.FORCE_COLOR;
+  delete environment.NO_COLOR;
+  Object.assign(environment, extraEnvironment);
   const options = { env: environment, encoding: 'utf8', timeout: 120_000, windowsHide: true };
   const result = process.platform === 'win32'
     // /s keeps cmd from reinterpreting the quotes inside: the whole line runs as typed.
@@ -95,7 +106,16 @@ try {
   assert.match(version, /^orglet \d+\.\d+\.\d+/);
   assert.match(expectOk(orglet(userData, 'send', '--help'), 'orglet send --help'), /--no-wait/);
   assert.match(expectOk(orglet(userData, 'status'), 'orglet status'), /^Orglet \d+\.\d+\.\d+ is running\./);
-  assert.match(expectOk(orglet(userData, 'list'), 'orglet list'), /Researcher\s+demo/);
+  // Piped into this script, list is plain text a script can read (COD-236); FORCE_COLOR brings the faces back.
+  const pipedList = expectOk(orglet(userData, 'list'), 'orglet list');
+  assert.match(pipedList, /^Orglets\n {2}Researcher\s+demo/);
+  assert.doesNotMatch(pipedList, /\x1b\[/, 'orglet list piped must not print escape codes');
+  const coloredList = expectOk(orgletWith({ FORCE_COLOR: '1' }, userData, 'list'), 'orglet list with FORCE_COLOR');
+  assert.match(coloredList, /\x1b\[38;2;\d+;\d+;\d+m▐/, 'orglet list with FORCE_COLOR should draw faces');
+  assert.match(coloredList.replace(/\x1b\[[0-9;]*m/g, ''), /▐••▌ Researcher\s+demo/);
+  assert.doesNotMatch(expectOk(orglet(userData, 'status', '--json'), 'orglet status --json'), /\x1b\[/);
+  const noTerminalChat = orglet(userData, 'chat');
+  assert.equal(noTerminalChat.code, 2, 'orglet chat without a terminal is a usage error');
 
   const answer = expectOk(orglet(userData, 'send', 'hello from the CLI smoke', '--to', 'researcher'), 'orglet send');
   assert.ok(answer.length > 0, 'orglet send printed no answer');
