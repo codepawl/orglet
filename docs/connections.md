@@ -37,7 +37,7 @@ When a reply stops because the account ran out, the bar above the message box of
 
 Gemini CLI writes a transcript of every session under `.gemini/tmp` in its own folder and has no switch to turn that off, so each Orglet run leaves one there too. Claude Code and Codex runs keep no such record.
 
-**Cost.** Harness runs make no Orglet budget reservation. Claude Code reports an estimate per call, which the chat shows and counts toward the chat's **Limit per task**; Orglet also passes what is left of that limit to Claude Code as its own cap, so a run that reaches it stops and the chat says **Waiting for budget** with the setting to raise. Codex, Cursor Agent and Gemini CLI report no cost, so those runs are unknown spend against your plan. Gemini CLI does report its token counts, which the chat shows.
+**Cost.** Harness runs make no Orglet budget reservation. Claude Code reports an estimate per call, which the chat shows. An orglet on Claude Code runs on your plan with no cap unless you give it a **Limit per task**: the field is optional there and empty means no limit. When it has one, or when it works in a crew, a group chat or a schedule (which always carry a limit), Orglet passes what is left of that limit to Claude Code as its own cap, so a run that reaches it stops and the chat says **Waiting for budget** with the setting to raise. Orglets that were saved with the old $0.50 default the form used to force get no cap after updating; a limit you picked yourself is kept. Codex, Cursor Agent and Gemini CLI report no cost, so those runs are unknown spend against your plan. Gemini CLI does report its token counts, which the chat shows.
 
 ## API keys
 

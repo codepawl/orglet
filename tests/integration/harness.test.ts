@@ -199,6 +199,9 @@ describe('command contract', () => {
     expect(claude).toEqual(expect.arrayContaining(['--verbose', '--include-partial-messages']));
     expect(claude[claude.indexOf('--max-budget-usd') + 1]).toBe('0.2500');
     expect(claude).not.toContain('--dangerously-skip-permissions');
+    // A chat without a cap for Claude Code runs on the person's plan, so the flag is left out entirely (COD-253).
+    const uncapped = harnessArgs({ harness: 'claude-code', cwd: directory, schema: { type: 'object' } });
+    expect(uncapped).not.toContain('--max-budget-usd');
     const codex = harnessArgs({ harness: 'codex', cwd: directory, schema: {}, maxBudgetUsd: 1 });
     expect(codex[codex.indexOf('--sandbox') + 1]).toBe('read-only');
     expect(codex).toEqual(expect.arrayContaining(['--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check', 'apps', 'browser_use', 'computer_use', 'shell_tool', 'unified_exec']));
@@ -442,7 +445,8 @@ describe('runner integration', () => {
     const [request] = requests;
     expect(Object.values(request.files)).toEqual(['line one\nline two: the answer is 42']);
     expect(request.prompt).toContain('Find the answer in the note'); expect(request.prompt).toContain(sources[0].id);
-    expect(request.maxBudgetUsd).toBe(0.5);
+    // The seeded orglet has no limit of its own, so Claude Code runs on the person's plan without a cap (COD-253).
+    expect(request.maxBudgetUsd).toBeUndefined();
     expect(existsSync(request.cwd)).toBe(false);
     const report = detail.artifacts[0].report;
     expect(report.findings[0].locations).toEqual([{ sourceId: sources[0].id, startLine: 2, endLine: 2 }]);

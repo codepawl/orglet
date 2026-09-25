@@ -28,6 +28,8 @@ export const en: Dictionary = {
   'Kiểm tra cấu trúc dữ liệu đã đính kèm.': 'Check the structure of attached data.',
   'Mở cài đặt kết nối': 'Open connection settings',
   'Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.': 'Runs the installed {0} on its own plan, outside the Orglet budget.',
+  'Không giới hạn': 'No limit',
+  'Claude Code dừng khi ước tính của nó cho một lượt chạm số này. Để trống để chạy theo gói, không giới hạn.': 'Claude Code stops when its own estimate for one turn reaches this amount. Leave it empty to run on your plan with no limit.',
   'Chỉ đọc file': 'Read files only',
   'Đọc và sửa file': 'Read and edit files',
   'Đọc, sửa file và chạy lệnh': 'Read, edit files and run commands',

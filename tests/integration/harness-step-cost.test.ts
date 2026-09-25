@@ -96,7 +96,8 @@ describe('web research on the Claude Code tool bridge', () => {
   afterEach(() => { vi.restoreAllMocks(); store.close(); });
 
   async function research(provider: 'claude-code' | 'codex' = 'claude-code') {
-    const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider }) as Worker;
+    // A limit of the orglet's own, so Claude Code gets the remaining amount as its cap (COD-253).
+    const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider, taskBudgetMicros: 4_000_000 }) as Worker;
     const taskId = await core.command('createTask', { workerId: worker.id, brief: 'Survey the literature', sourceIds: [], consent: true, providerScopes: [provider], budgetMicros: 4_000_000, toolCapabilities: ['network.web'] }) as string;
     await idle(store, core);
     return taskId;

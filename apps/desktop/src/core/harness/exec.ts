@@ -18,7 +18,8 @@ export type HarnessRequest = {
   prompt: string;
   schema: object;
   signal: AbortSignal;
-  maxBudgetUsd: number;
+  /** Claude Code's `--max-budget-usd`; absent when the chat has no cap for it, so it runs on the person's plan (COD-253). */
+  maxBudgetUsd?: number;
   /** Exact `--model` / `-m` slug. Omitted so the CLI keeps its own default. */
   model?: string;
   /** Tool selection is returned as JSON; native file tools must not bypass core authorization. */
@@ -86,11 +87,17 @@ function modelFlag(harness: HarnessId, model?: string) {
   return harness === 'codex' ? ['-m', model] : ['--model', model];
 }
 
+/** The spending cap flag, or nothing when this call runs uncapped. */
+function claudeBudgetArgs(maxBudgetUsd: number | undefined): string[] {
+  if (maxBudgetUsd === undefined) return [];
+  return ['--max-budget-usd', maxBudgetUsd.toFixed(4)];
+}
+
 export function harnessArgs(request: Pick<HarnessRequest, 'harness' | 'cwd' | 'schema' | 'maxBudgetUsd' | 'model' | 'coreToolsOnly'>): string[] {
   if (request.harness === 'gemini') return geminiArgs(request.model);
   const model = modelFlag(request.harness, request.model);
   if (request.harness === 'claude-code') {
-    return ['-p', ...model, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', request.coreToolsOnly ? '' : 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', '--max-budget-usd', request.maxBudgetUsd.toFixed(4)];
+    return ['-p', ...model, '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--json-schema', JSON.stringify(request.schema), '--restricted', '--safe-mode', '--strict-mcp-config', '--tools', request.coreToolsOnly ? '' : 'Read,Grep,Glob', '--no-session-persistence', '--permission-prompts', 'none', '--disable-slash-commands', ...claudeBudgetArgs(request.maxBudgetUsd)];
   }
   if (request.harness === 'cursor') {
     return ['-p', ...model, '--mode=ask', '--sandbox', 'enabled', '--trust', '--workspace', request.cwd, '--output-format', 'json'];
@@ -415,7 +422,7 @@ export const executeHarness: HarnessExecutor = async request => {
     child.stdin.end(prompt);
   });
 
-  if (claudeStream) return parseClaudeOutput(stdout, claudeStream.rateLimit, request.maxBudgetUsd);
+  if (claudeStream) return parseClaudeOutput(stdout, claudeStream.rateLimit, request.maxBudgetUsd ?? 0);
   // The stream was read to its end when the process closed; finishing again returns the same outcome.
   if (geminiStream) return parseGeminiOutput(geminiStream.finish());
   if (request.harness === 'cursor') return parseCursorOutput(stdout);

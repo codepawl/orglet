@@ -723,7 +723,9 @@ it('keeps reported CLI costs across tool steps and resume without charging the A
   task.providerScopes = ['claude-code'];
   store.update('runs', run);
   store.update('tasks', task);
-  const budgets: number[] = [];
+  // Claude Code is capped only when its orglet has a limit of its own (COD-253); the chat's saved limit is the amount.
+  store.update('workers', { ...store.get<Worker>('workers', task.workerId), taskBudgetMicros: task.budgetMicros });
+  const budgets: (number | undefined)[] = [];
   const core = new CoreService(store, () => {}, async () => { throw new Error('Unexpected API dispatch'); },
     undefined, undefined, {
       detect: async () => [{ ...missingHarness('claude-code', 'win32'), executable: 'fixture', auth: 'logged_in', status: 'signed_in', version: 'fixture' }],
