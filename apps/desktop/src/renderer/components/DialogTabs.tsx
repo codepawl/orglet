@@ -35,7 +35,9 @@ export function TabbedFormDialog<T extends string>({ open, onClose, title, tabs,
     if (!field) return;
     event.preventDefault();
     field.scrollIntoView({ block: 'center' });
-    field.focus({ preventScroll: true });
+    // The link was clicked with the pointer, which would leave the field focused without its ring: the ring is what
+    // shows where the dialog landed.
+    field.focus({ preventScroll: true, focusVisible: true });
   };
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
