@@ -676,13 +676,16 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:16px; }
 .actions .form-error { flex:1 1 100%; margin:0; order:-1; }
 /* A long skill or note never pushes its Save or Approve out of reach: the bar floats in the panel's bottom-right
-   corner, where a dialog's actions sit (user, 2026-09-23). The fields scroll on their own above it and the bar keeps
-   a lane of its own, so no field sits under it when the panel opens or at the end of the form (COD-250: it covered
-   the end of the Scope dropdown on opening, and a padding inside one shared scroll cannot free the first view). */
+   corner, where a dialog's actions sit (user, 2026-09-23), over the fields as frosted glass with no ring (owner,
+   2026-09-25: blur the background, no border). The fields scroll on their own and end with room for the bar, so at
+   the end of the form nothing stays under it; the note's six-row box keeps Scope clear of it when a note opens
+   (COD-250). Inside the bar the secondary action is plain text, so there is no box inside the glass. */
 .drawer-scroll:has(> .floating-form) { display:flex; padding:0; overflow:hidden; }
-.form.floating-form { flex:1; min-width:0; min-height:0; gap:0; }
-.floating-form-fields { flex:1; min-height:0; display:flex; flex-direction:column; gap:22px; padding:18px 24px 16px; overflow:auto; overscroll-behavior:contain; }
-.floating-actions { position:relative; z-index:2; flex-shrink:0; width:fit-content; max-width:calc(100% - 48px); margin:0 24px 12px auto; padding:6px; border-radius:14px; background:color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter:blur(10px) saturate(1.2); box-shadow:0 8px 28px #0000001a, 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent); }
+.form.floating-form { position:relative; flex:1; min-width:0; min-height:0; gap:0; }
+.floating-form-fields { flex:1; min-height:0; display:flex; flex-direction:column; gap:22px; padding:18px 24px 84px; overflow:auto; overscroll-behavior:contain; }
+.floating-actions { position:absolute; right:24px; bottom:14px; z-index:2; width:fit-content; max-width:calc(100% - 48px); margin:0; padding:6px; border-radius:14px; background:color-mix(in srgb, var(--bg) 58%, transparent); backdrop-filter:blur(18px) saturate(1.5); box-shadow:0 12px 32px #0000001f; }
+.floating-actions .button-outline { background:transparent; color:var(--muted); }
+.floating-actions .button-outline:hover:not(:disabled) { background:transparent; color:var(--text); }
 @media (min-width: 420px) {
   .actions .form-error { flex:1 1 auto; order:0; margin-right:auto; }
 }
