@@ -170,6 +170,9 @@ export const BookOpen = defineIcon('book-open', <>
   <path d="M10 6v11.5" />
 </>);
 
+/** A pulse line: work under way, for the Running view (COD-244). Flat ends on the 3..17 box, peaks inside it. */
+export const Activity = defineIcon('activity', <path d="M3 10h3l2.5-5.5 3 11L14 10h3" />);
+
 /** An "i" in a ring: a dot for the tittle and a short stem, so it stays an i at 14px. */
 export const Info = defineIcon('info', <>
   <circle cx="10" cy="10" r="7" />

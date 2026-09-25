@@ -1045,6 +1045,30 @@ button.notice-body { cursor:pointer; }
 .notice.is-new .notice-message { font-weight:500; }
 /* The times of a folded row, indented past the icon so they read as part of the row above. */
 .notice-times { list-style:none; margin:0 0 6px; padding:0 10px 0 34px; display:flex; flex-wrap:wrap; gap:2px 12px; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+
+/* Running view (COD-244): every run across chats, in sections for working, waiting in line and paused. Rows are
+   told apart by spacing and a hover tint, never a line; every text line and the right-hand facts share a 19px
+   line so the two columns sit on the same baselines, and the face and the controls centre on the pair. */
+.running-groups { display:flex; flex-direction:column; gap:18px; }
+.running-group-title { display:flex; align-items:baseline; gap:6px; margin:0 0 4px; padding:0 10px; color:var(--muted); font-size:11.5px; font-weight:600; }
+.running-group-title span { font-weight:500; font-variant-numeric:tabular-nums; }
+.running-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.running-row { display:grid; grid-template-columns:auto minmax(0, 1fr) auto auto; align-items:center; column-gap:12px; padding:8px 6px 8px 10px; border-radius:10px; }
+.running-row:hover { background:var(--surface); }
+.running-text { min-width:0; display:flex; flex-direction:column; }
+.running-title { margin:0; display:flex; align-items:baseline; gap:8px; min-width:0; font-size:13px; line-height:19px; }
+.running-name { flex-shrink:0; font-weight:500; white-space:nowrap; }
+.running-chat { min-width:0; overflow:hidden; color:var(--muted); text-overflow:ellipsis; white-space:nowrap; }
+.running-status { margin:0; overflow:hidden; color:var(--muted); font-size:12.5px; line-height:19px; text-overflow:ellipsis; white-space:nowrap; }
+.running-meta { display:flex; flex-direction:column; align-items:flex-end; color:var(--muted); font-size:12px; line-height:19px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.running-elapsed { min-height:19px; }
+/* Room for all three controls on every row, so the facts column ends at the same x whatever a row offers. */
+.running-actions { display:flex; align-items:center; justify-content:flex-end; gap:2px; width:88px; }
+.button.running-action { width:28px; height:28px; min-height:28px; padding:5px; }
+.running-empty { margin:24px 0 0; padding:0 10px; font-size:13px; }
+.badge.running-count { margin-left:auto; min-width:20px; justify-content:center; font-variant-numeric:tabular-nums; }
+/* A count in a footer button fits the button's 20px line, so a button with a count is as tall as one without. */
+.sidebar-footer .badge { line-height:16px; }
 .toaster { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:60; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; width:max-content; max-width:calc(100vw - 32px); }
 .toast { display:flex; align-items:center; gap:8px; padding:9px 14px; border-radius:12px; background:var(--primary); color:var(--primary-text); font-size:14px; box-shadow:0 8px 24px #00000033; animation:toast-in .18s ease-out; }
 .toast.error svg { color:#ff8a8a; }

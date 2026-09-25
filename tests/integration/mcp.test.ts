@@ -11,6 +11,8 @@ import { assertToolCall, toolsFor } from '../../apps/desktop/src/core/tools/cata
 import type { ModelReply } from '../../apps/desktop/src/core/adapters/openai';
 import type { Run, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 import { McpSecretStore } from '../../apps/desktop/src/main/mcp-secrets';
+import { runningCount } from '../../apps/desktop/src/shared/running';
+import { runningControls, runningStatusLine } from '../../apps/desktop/src/renderer/runningList';
 import {
   emptyMcpSecrets, grantsAfterApproval, mcpToolNames, MCP_RESULT_CHARACTERS, parseMcpImport, splitMcpDraft,
   type McpSecrets, type McpServerConfig,
@@ -363,4 +365,34 @@ it('names tools uniquely within the providers’ limits and folds approval answe
   expect(grantsAfterApproval([], approval, 'refuse')).toEqual([]);
   expect(grantsAfterApproval([], approval, 'tool')).toEqual([{ serverId, tool: 'search' }]);
   expect(grantsAfterApproval([{ serverId, tool: 'search' }], approval, 'server')).toEqual([{ serverId, tool: null }]);
+});
+
+it('lists a run stopped on an MCP approval in the Running view as waiting for the person, until the answer (COD-244)', async () => {
+  let step = 0;
+  core = new CoreService(store, () => {}, async () => ({
+    async request() {
+      step++;
+      if (step === 1) return response('mcp__fixture__echo', { text: 'hi' });
+      return response('reply', { message: 'Xong.', title: null, knowledgeProposals: [] });
+    },
+  }), undefined, undefined, undefined, undefined, undefined, undefined, { readSecrets: secretsFor });
+  const server = await core.saveMcpServer(fixtureConfig());
+  const base = store.all<Worker>('workers')[0];
+  await core.command('saveWorker', { ...base, provider: 'openai', mcpServerIds: [server.id] });
+  const taskId = await core.command('createTask', { workerId: base.id, brief: 'Echo', sourceIds: [], consent: true, providerScopes: ['openai'], budgetMicros: 100_000 }) as string;
+  await until(() => store.detail(taskId).task.status === 'waiting_input' && !core!.runner.isActive(taskId));
+
+  const request = store.detail(taskId).task.decisionRequests![0];
+  const items = core.running();
+  expect(items).toHaveLength(1);
+  expect(items[0]).toMatchObject({ taskId, runId: request.runId, state: 'paused', wait: { kind: 'approval', tool: 'echo', server: 'Fixture' } });
+  expect(items[0].worker.id).toBe(base.id);
+  // It waits for the person, so the footer does not count it and the row only opens the chat, where the card is.
+  expect(runningCount(items)).toBe(0);
+  expect(runningControls(items[0])).toEqual({ pause: false, resume: false, stop: false });
+  expect(runningStatusLine(items[0], undefined)).toBe('Waiting for you to allow the MCP tool: echo · Fixture');
+
+  await core.command('answerDecision', { taskId, requestId: request.id, answer: 'once' });
+  await until(() => store.detail(taskId).task.status === 'completed');
+  expect(core.running()).toEqual([]);
 });

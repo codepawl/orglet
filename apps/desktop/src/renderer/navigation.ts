@@ -21,6 +21,8 @@ export type AppView = {
   /** The routines panel shows its editor. */
   editing?: boolean;
   notices?: boolean;
+  /** The Running view (COD-244). */
+  running?: boolean;
   /** The source viewer dialog. */
   source?: string;
 };
@@ -40,6 +42,7 @@ export type AppViewState = {
   routineEditing: boolean;
   routineId?: string;
   noticesOpen: boolean;
+  runningOpen?: boolean;
   sourceId?: string;
 };
 
@@ -58,13 +61,14 @@ export function appView(state: AppViewState): AppView {
     default: break;
   }
   if (state.noticesOpen) view.notices = true;
+  if (state.runningOpen) view.running = true;
   if (state.sourceId) view.source = state.sourceId;
   return view;
 }
 
 /** Two views with the same key are the same step. Fields are written in a fixed order, so the key is stable. */
 export function viewKey(view: AppView): string {
-  return JSON.stringify([view.chat, view.recipient, view.panel, view.tab ?? null, view.item ?? null, view.fromLibrary ?? false, view.editing ?? false, view.notices ?? false, view.source ?? null]);
+  return JSON.stringify([view.chat, view.recipient, view.panel, view.tab ?? null, view.item ?? null, view.fromLibrary ?? false, view.editing ?? false, view.notices ?? false, view.source ?? null, view.running ?? false]);
 }
 
 export const HISTORY_LIMIT = 50;

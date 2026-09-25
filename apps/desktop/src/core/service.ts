@@ -22,6 +22,8 @@ import { PreflightPolicy, type PreflightRecord } from '../shared/preflight';
 import { TeamTemplates } from './storage/templates';
 import { Routines } from './orchestration/routines';
 import { WorkPolicy } from './orchestration/work-policy';
+import { runningView } from './orchestration/running';
+import type { RunningItem } from '../shared/running';
 import { KnowledgeBase } from './context/knowledge';
 import type { HarnessRuntime } from './orchestration/runner';
 import { harnessCatalog, SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessUsage } from '../shared/harness';
@@ -165,6 +167,7 @@ export class CoreService {
         workspace.skills = workspace.skills.map(skill => skill.package ? { ...skill, package: { ...skill.package, reviewedHash: reviewed.includes(`${skill.id}:${skill.package.hash}`) ? skill.package.hash : undefined } } : skill);
         // The stored servers with whether each one is running right now; never a secret value (COD-241).
         workspace.mcpServers = this.mcp.views();
+        workspace.running = this.running();
         return workspace;
       }
       case 'task': {
@@ -712,6 +715,14 @@ export class CoreService {
       }
     })().finally(() => { this.currencyRefresh = undefined; });
     return this.currencyRefresh;
+  }
+  /** Every run working, waiting or stopped at a checkpoint, for the Running view (COD-244). */
+  running(): RunningItem[] {
+    return runningView(this.store, {
+      activeRun: runId => this.runner.activeRun(runId),
+      slotWaits: () => this.runner.slotWaits(),
+      teamWaits: taskId => this.teams.waitsOf(taskId),
+    });
   }
   /** A task, routine or checker in flight would write rows back while they are being removed. */
   private isBusy() {

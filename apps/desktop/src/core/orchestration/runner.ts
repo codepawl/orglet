@@ -33,7 +33,7 @@ import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, memoryCandidate, type Colleague } from '../context/compiler';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
 import { applyThreadManifest, compactThread, fitThread, threadMessages } from '../context/thread';
-import { ProviderSlots } from './slots';
+import { ProviderSlots, type SlotWait } from './slots';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -369,13 +369,23 @@ export function taskTitle(suggested: string | null, report: Report, brief: strin
   return short && short !== brief.trim() ? short : undefined;
 }
 export class Runner {
-  private active = new Map<string, { taskId: string; controller: AbortController; signal: AbortSignal; paused: boolean }>();
+  private active = new Map<string, { taskId: string; controller: AbortController; signal: AbortSignal; paused: boolean; since: number }>();
   private get checkpoints() { return new Checkpoints(this.store); }
   private slots = new ProviderSlots(() => this.store.setting('providerConcurrency', DEFAULT_PROVIDER_CONCURRENCY));
   /** Receives live progress from streaming harnesses; the core process forwards it to the window. */
   onProgress: (update: RunProgressUpdate) => void = () => {};
-  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers) {}
+  constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers) {
+    this.slots.onChange = () => this.notify();
+  }
   isActive(taskId: string) { return [...this.active.values()].some(item => item.taskId === taskId); }
+  /** A run this runner is working on now: when it started here and whether a pause was asked for (COD-244). */
+  activeRun(runId: string): { since: number; paused: boolean } | undefined {
+    const control = this.active.get(runId);
+    if (!control) return undefined;
+    return { since: control.since, paused: control.paused };
+  }
+  /** Runs waiting for a provider slot, in the order they will be served (COD-244). */
+  slotWaits(): SlotWait[] { return this.slots.waiting(); }
   cancel(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.controller.abort(); }
   pause(taskId: string) { for (const item of this.active.values()) if (item.taskId === taskId) item.paused = true; }
   assertResumable(run: Run) {
@@ -516,7 +526,7 @@ export class Runner {
     if (this.active.has(run.id)) throw new Error('Lần chạy đang hoạt động.');
     const controller = new AbortController();
     const signal = options.signal ? AbortSignal.any([controller.signal, options.signal]) : controller.signal;
-    const control = { taskId: task.id, controller, signal, paused: false }; this.active.set(run.id, control);
+    const control = { taskId: task.id, controller, signal, paused: false, since: Date.now() }; this.active.set(run.id, control);
     this.checkpoints.claim(run.id);
     const heartbeat = setInterval(() => this.checkpoints.claim(run.id), 5000);
     let harnessDirectory: string | undefined;
@@ -798,7 +808,7 @@ export class Runner {
           const provider = run.snapshot.worker.provider;
           if (this.slots.busy(provider)) this.event(run.id, 'Đang chờ lượt gọi provider; chưa giữ ngân sách cho bước này.');
           // Wait before reserving budget so queued work never holds money it has not dispatched.
-          const release = await this.slots.acquire(provider, signal);
+          const release = await this.slots.acquire(provider, signal, { runId: run.id, taskId: task.id });
           try {
             if (control.paused || !this.canDispatch(task)) throw new Paused();
             if (isHarness(provider)) {
@@ -1260,7 +1270,7 @@ export class Runner {
     if (!tool || !tool.executable || tool.status === 'not_installed') throw new Error(`Không tìm thấy ${harnessNames[provider]} trên máy này. Cài đặt rồi dò lại trong Cài đặt → Harness trên máy.`);
     if (tool.auth !== 'logged_in') throw new Error(tool.authDetail);
     if (this.slots.busy(provider)) this.event(run.id, `Đang chờ lượt chạy ${tool.name}.`);
-    const release = await this.slots.acquire(provider, signal);
+    const release = await this.slots.acquire(provider, signal, { runId: run.id, taskId: task.id });
     const directory = await mkdtemp(join(tmpdir(), 'orglet-harness-'));
     let retainDirectory = false;
     try {
