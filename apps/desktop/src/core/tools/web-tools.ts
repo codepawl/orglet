@@ -16,8 +16,10 @@ export class WebTools {
     const characters = Array.from(document.text);
     return {
       source: { requestedUrl: page.requestedUrl, url: page.url, redirects: page.redirects, fetchedAt: now(), title: document.title },
-      trust, content: characters.slice(0, MAX_WEB_CHARACTERS).join(''), truncated: characters.length > MAX_WEB_CHARACTERS,
-      coverage: 'One HTTP response, up to 1 MiB; text only, no JavaScript or linked resources fetched.',
+      trust, content: characters.slice(0, MAX_WEB_CHARACTERS).join(''), truncated: page.cut || characters.length > MAX_WEB_CHARACTERS,
+      coverage: page.cut
+        ? 'The first 1 MiB of one HTTP response (the page is longer); text only, no JavaScript or linked resources fetched.'
+        : 'One HTTP response, up to 1 MiB; text only, no JavaScript or linked resources fetched.',
     };
   }
 

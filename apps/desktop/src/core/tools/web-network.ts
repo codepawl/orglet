@@ -40,7 +40,8 @@ export function publicWebUrl(raw: string): URL {
 }
 
 export type WebConnection = { url: URL; address: LookupAddress; signal: AbortSignal };
-export type WebResponse = { status: number; headers: IncomingHttpHeaders; body: Buffer };
+/** `cut` marks a body that stopped at the byte limit: the page was longer and only its start was read (COD-266). */
+export type WebResponse = { status: number; headers: IncomingHttpHeaders; body: Buffer; cut?: boolean };
 export type WebNetwork = {
   resolve: (hostname: string) => Promise<LookupAddress[]>;
   connect: (connection: WebConnection) => Promise<WebResponse>;
@@ -71,18 +72,25 @@ export const webNetwork: WebNetwork = {
         }
         const chunks: Buffer[] = [];
         let bytes = 0;
+        let cut = false;
+        // A page over the limit keeps its first MAX_WEB_BYTES and stops reading: modern pages often ship more than
+        // 1 MiB of HTML, and refusing them outright lost pages whose text sits near the top (COD-266).
         response.on('data', (chunk: Buffer) => {
-          bytes += chunk.length;
-          if (bytes > MAX_WEB_BYTES) {
-            const error = new Error('Trang web vượt giới hạn 1 MiB.');
-            reject(error);
-            response.destroy(error);
+          if (cut) return;
+          const room = MAX_WEB_BYTES - bytes;
+          if (chunk.length > room) {
+            chunks.push(chunk.subarray(0, room));
+            bytes = MAX_WEB_BYTES;
+            cut = true;
+            resolve({ status, headers: response.headers, body: Buffer.concat(chunks), cut: true });
+            response.destroy();
             return;
           }
+          bytes += chunk.length;
           chunks.push(chunk);
         });
-        response.on('end', () => resolve({ status, headers: response.headers, body: Buffer.concat(chunks) }));
-        response.on('aborted', () => reject(new Error('Kết nối web bị gián đoạn.')));
+        response.on('end', () => { if (!cut) resolve({ status, headers: response.headers, body: Buffer.concat(chunks) }); });
+        response.on('aborted', () => { if (!cut) reject(new Error('Kết nối web bị gián đoạn.')); });
       });
     request.on('error', reject);
     request.end();
@@ -118,7 +126,8 @@ export async function fetchWebText(raw: string, signal: AbortSignal, network: We
       continue;
     }
     if (response.status < 200 || response.status >= 300) throw new Error(`Trang web trả lỗi HTTP ${response.status}.`);
-    if (response.body.length > MAX_WEB_BYTES) throw new Error('Trang web vượt giới hạn 1 MiB.');
+    const cut = Boolean(response.cut) || response.body.length > MAX_WEB_BYTES;
+    const body = response.body.length > MAX_WEB_BYTES ? response.body.subarray(0, MAX_WEB_BYTES) : response.body;
     if (response.headers['content-encoding'] && response.headers['content-encoding'] !== 'identity') {
       throw new Error('Trang web dùng kiểu nén chưa được hỗ trợ.');
     }
@@ -129,9 +138,10 @@ export async function fetchWebText(raw: string, signal: AbortSignal, network: We
     }
     const charset = /charset\s*=\s*["']?([\w-]+)/i.exec(contentType)?.[1] ?? 'utf-8';
     let content: string;
-    try { content = new TextDecoder(charset, { fatal: true }).decode(response.body); }
+    // A body cut at the limit may end inside a character; streaming decode leaves that partial character out.
+    try { content = new TextDecoder(charset, { fatal: true }).decode(body, { stream: cut }); }
     catch { throw new Error('Không giải mã được văn bản của trang web.'); }
-    return { requestedUrl, url: url.href, redirects, mimeType, content };
+    return { requestedUrl, url: url.href, redirects, mimeType, content, cut };
   }
   throw new Error('Trang web chuyển hướng quá nhiều hoặc thiếu đích đến.');
 }
