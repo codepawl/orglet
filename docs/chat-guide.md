@@ -127,6 +127,6 @@ The list is newest first, grouped by day, with new rows marked. Filter it by **A
 
 When you are in another app and a chat finishes, stops with a problem or waits for you, Orglet also shows a notification from the system: the orglet's, crew's or schedule's name and a word or two ("Done", "Needs you", "Needs attention"). It never shows the answer, your message or a file name, since it appears on your desktop. Clicking it brings Orglet forward on that chat. It covers every chat: main chats, side threads, crews, group chats and schedule runs. With Orglet in front, the sidebar marks and the messages above already tell you, so nothing is shown.
 
-Turn it off in **Settings → Chat → Notify me when a chat finishes**. It is on by default. Windows shows these notifications for the installed app; how they look, and whether they make a sound, follow the system's own notification settings.
+Turn it off in **Settings → Chat → Notify me when a chat finishes**. It is on by default. How they look, whether they make a sound, and whether they show at all follow the system's own notification settings for Orglet.
 
 Notifications are notes about this machine's session, stored in the window, not in the workspace: they are not in a backup and do not follow you to another computer. The **Schedules** and **Library** buttons in the footer show the same dot when something there waits for you: a missed run, or knowledge to review.
