@@ -2425,3 +2425,36 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
    is centred on the line instead, and a step closer to the name than the model is. */
 .topbar-schedule-mark { display:inline-flex; align-self:center; margin-right:-4px; color:var(--muted); flex-shrink:0; }
 @media(prefers-reduced-motion:reduce) { .brought-in { animation:none; } }
+
+/* Orglet's browser (COD-261). A chat's profile and site list sit under its MCP permissions in Details; the list is
+   rows told apart by spacing, with the allow or block word quiet beside each site. The steps list reads like the
+   trace, one row per step, and a screenshot opens in a dialog. */
+.browser-chat { margin-top:22px; }
+.browser-chat-sites { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.browser-chat-sites>.permission-folder-title { margin:0; font-size:14px; }
+.browser-chat-sites>.permission-folder-description { margin:0; }
+.browser-sites { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.browser-site-list { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; }
+.browser-site { display:flex; align-items:center; gap:8px; min-width:0; min-height:30px; padding:0 2px 0 8px; border-radius:8px; font-size:13px; }
+.browser-site:hover { background:var(--row-hover); }
+.browser-site>svg { flex-shrink:0; color:var(--muted); }
+.browser-site-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono); font-size:12.5px; }
+.browser-site-decision { flex-shrink:0; font-size:12px; color:var(--muted); }
+.browser-site-decision.blocked { color:var(--error); }
+.browser-site>button { flex-shrink:0; }
+.browser-site-add { display:flex; align-items:center; gap:8px; min-width:0; }
+.browser-site-add>input { flex:1; min-width:0; }
+.browser-site-add .select-trigger { width:auto; min-width:96px; }
+@container (max-width: 400px) {
+  .browser-site-add { flex-wrap:wrap; }
+  .browser-site-add>input { flex-basis:100%; }
+}
+.browser-step-list { display:flex; flex-direction:column; gap:4px; margin:0; padding:0; list-style:none; }
+.browser-step { display:flex; align-items:center; gap:8px; min-width:0; min-height:28px; font-size:12.5px; line-height:1.5; }
+.browser-step>svg { flex-shrink:0; color:var(--muted); }
+.browser-step-muted .browser-step-text { color:var(--muted); }
+.browser-step-text { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.browser-step time { flex-shrink:0; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.browser-steps>.button,.browser-steps>button { align-self:flex-start; }
+.browser-screenshot { display:block; max-width:100%; height:auto; border-radius:10px; background:var(--surface); }
+.routine-browser { display:flex; flex-direction:column; gap:8px; min-width:0; }

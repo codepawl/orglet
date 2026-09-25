@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Ban, Blocks, BookOpen, Brain, ChevronRight, FileDiff, FileText, FolderInput, FolderPlus, FolderSearch, Globe, Lightbulb, Search, Table2, Terminal, Trash2, UserRound, Wrench, type LucideIcon } from 'lucide-react';
+import { AppWindow, Ban, Blocks, BookOpen, Brain, Camera, ChevronRight, FileDiff, FileText, FolderInput, FolderPlus, FolderSearch, Globe, Lightbulb, MoveVertical, ScanSearch, Search, Table2, Terminal, Trash2, UserRound, Wrench, type LucideIcon } from 'lucide-react';
 import { t, tMessage } from '../i18n';
 import { traceSummary, type TraceEntry, type TraceKind } from '../turnTrace';
 
@@ -33,6 +33,7 @@ const traceIcons: Record<TraceKind, LucideIcon> = {
   memory: Brain, knowledge: BookOpen, read: FileText, search: Search, list: FolderSearch, skill: BookOpen,
   web_search: Globe, web_read: Globe, dataset: Table2, edit: FileDiff, folder: FolderPlus, move: FolderInput, delete: Trash2, command: Terminal, handoff: UserRound,
   remembered: Brain, proposal: Lightbulb, failed: Ban, other: Wrench, mcp: Blocks,
+  browser_open: AppWindow, browser_read: AppWindow, browser_find: ScanSearch, browser_screenshot: Camera, browser_scroll: MoveVertical,
 };
 
 /** The row's verb, worded as what the worker did, never which tool it called (docs/worker-actions.md). */
@@ -53,6 +54,11 @@ function traceVerb(kind: TraceKind): string {
     case 'delete': return t('Đã xóa');
     case 'command': return t('Chạy lệnh');
     case 'mcp': return t('Dùng công cụ MCP');
+    case 'browser_open': return t('Mở trang');
+    case 'browser_read': return t('Đọc nội dung trang');
+    case 'browser_find': return t('Tìm trên trang');
+    case 'browser_screenshot': return t('Chụp màn hình');
+    case 'browser_scroll': return t('Cuộn trang');
     case 'handoff': return t('Giao việc cho');
     case 'remembered': return t('Ghi nhớ thêm');
     case 'proposal': return t('Đề xuất');

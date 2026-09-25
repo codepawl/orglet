@@ -2,6 +2,7 @@ import type { ToolCapability } from './tool-policy';
 import type { ProviderId } from './contracts';
 import { snapshotCapabilities } from './tool-policy';
 import type { NewChatWorkspaceView, WorkspaceGrantSnapshot, WorkspaceGrantView, WorkspacePermission } from './workspace-access';
+import { browserLevelOf, type BrowserLevel } from './browser';
 
 /**
  * How much of the working folder a chat may touch. The levels are cumulative because the grant schema
@@ -43,6 +44,8 @@ export type PermissionState = {
   propose: boolean;
   workspace: WorkspaceLevel;
   folder?: string;
+  /** How far the chat's orglets may use Orglet's browser (COD-261); never on unless the person turned it on. */
+  browser: BrowserLevel;
 };
 
 /**
@@ -67,6 +70,7 @@ export function permissionState(input: {
     web: capabilities.includes('network.web'),
     propose: capabilities.includes('app.propose'),
     workspace: folder ? workspaceLevelOf(folder.permissions) : 'none',
+    browser: browserLevelOf(capabilities),
     ...(folder ? { folder: folder.name } : {}),
   };
 }

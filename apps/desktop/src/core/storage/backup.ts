@@ -24,6 +24,7 @@ import { readCustomConnections, writeCustomConnections } from './custom-connecti
 import { ChatSearch } from './chat-search';
 import { McpGrant, McpRunTool } from '../../shared/mcp';
 import { ChatQuote, MAX_CHAT_QUOTES, SideOf } from '../../shared/side-threads';
+import { BrowserProfileId } from '../../shared/browser';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -33,7 +34,7 @@ const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPack
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
 const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), messageReactions: z.array(MessageReaction).max(1000).optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), pendingStart: z.boolean().optional(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(400).optional(), mcpGrants: z.array(McpGrant).max(200).optional(), sideOf: SideOf.optional(), quotes: z.array(ChatQuote).max(MAX_CHAT_QUOTES).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
-const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), workFrame: WorkFrame.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), scoreProfileIds: z.array(Id).max(20).optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional(), improvement: ImprovementSignals.optional(), mcpTools: z.array(McpRunTool).max(20 * 64).optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable(), errorCode: z.enum(['unresolved_attempt', 'report_rejected', 'plan_limit']).optional() }).strict();
+const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), workFrame: WorkFrame.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), scoreProfileIds: z.array(Id).max(20).optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional(), improvement: ImprovementSignals.optional(), mcpTools: z.array(McpRunTool).max(20 * 64).optional(), browser: z.object({ profileId: BrowserProfileId }).strict().optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable(), errorCode: z.enum(['unresolved_attempt', 'report_rejected', 'plan_limit']).optional() }).strict();
 const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime(), teamMessage: TeamMessage.optional() }).strict();
 const UsedMemory = z.object({ id: Id, revision: z.number().int().positive(), text: z.string().min(1).max(500) }).strict();
 const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime(), replyTo: Id.optional(), usedMemories: z.array(UsedMemory).max(60).optional() }).strict();
@@ -401,12 +402,29 @@ function freeConnectionName(taken: CustomConnection[], name: string): string {
   }
 }
 
+/**
+ * A backup carries no browser profile and no site list (COD-261): a profile is a folder of sign-ins on this computer,
+ * and like a chat's other permissions the list is set again after a restore.
+ */
+function withoutBrowser(payload: Payload): Payload {
+  const tasks = payload.tasks.map(({ browser: _browser, ...task }) => task);
+  const routines = payload.routines?.map(routine => {
+    const { browser: _browser, ...task } = routine.task;
+    return { ...routine, task };
+  });
+  const runs = payload.runs.map(run => {
+    const { browser: _browser, ...snapshot } = run.snapshot;
+    return { ...run, snapshot };
+  });
+  return { ...payload, tasks, runs, ...(routines ? { routines } : {}) };
+}
+
 export class Backups {
   private pending?: { token: string; expires: number; payload: Payload };
   constructor(private store: Store, private busy: () => boolean, private notify: () => void) {}
   export(): string {
     return this.store.transaction(() => {
-      const payload = snapshot(this.store); validateRelations(payload);
+      const payload = withoutBrowser(snapshot(this.store)); validateRelations(payload);
       const text = JSON.stringify({ format: 'orglet-backup', version: 1, createdAt: now(), checksum: digest(payload), payload });
       if (Buffer.byteLength(text) > 50 * 1024 * 1024) throw new Error('Bản sao lưu vượt 50 MB.');
       return text;
@@ -433,7 +451,8 @@ export class Backups {
       // Compare that scope with the later backfill, never with the merged task's source history.
       const comparableSnapshot = (run: Payload['runs'][number], payload: Payload) => {
         const task = payload.tasks.find(task => task.id === run.taskId)!;
-        const { input, inputRevision, ...rest } = run.snapshot;
+        // The browser profile a run used never travels in a backup (COD-261), so it is not part of what must match.
+        const { input, inputRevision, browser: _browser, ...rest } = run.snapshot;
         return { ...rest, inputRevision: inputRevision ?? 0, input: RunInput.parse(input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources }) };
       };
       for (const run of incoming.runs) {
@@ -446,7 +465,7 @@ export class Backups {
         return [...rows.values()];
       };
       const restoredSources = incoming.sources.map(source => ({ ...source, revoked: true }));
-      const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, task: { ...routine.task, toolCapabilities: [], consent: false, providerScopes: [] } }));
+      const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, task: { ...routine.task, toolCapabilities: [], browser: undefined, consent: false, providerScopes: [] } }));
       const pendingDecisionRuns = new Set(incoming.tasks.flatMap(task => (task.decisionRequests ?? [])
         .filter(request => !request.answer && !request.interruptedAt).map(request => request.runId)));
       const restoredTasks = incoming.tasks.map(task => {
@@ -454,7 +473,7 @@ export class Backups {
           ? { ...request, interruptedAt: now() } : request);
         const pendingDecision = (task.decisionRequests ?? []).some(request => pendingDecisionRuns.has(request.runId));
         // Like tool permissions, a chat's standing MCP permissions never come back with a backup (COD-241).
-        return { ...task, decisionRequests, toolCapabilities: [], mcpGrants: [], consent: false, providerScopes: [],
+        return { ...task, decisionRequests, toolCapabilities: [], mcpGrants: [], browser: undefined, consent: false, providerScopes: [],
           status: pendingDecision || ['running', 'queued', 'pausing', 'paused'].includes(task.status) ? 'interrupted' as const : task.status };
       });
       const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: comparableSnapshot(run, incoming),

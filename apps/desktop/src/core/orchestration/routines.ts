@@ -6,6 +6,7 @@ import type { RoutineFolders } from '../storage/routine-folders';
 import { Sources, fingerprint } from '../tools/sources';
 import { resolveWorkerModel } from '../models/resolve';
 import { readCustomConnections } from '../storage/custom-connections';
+import { defaultBrowserChoice } from '../../shared/browser';
 
 /** First tick after startup, a gap, or overdue delay above this is a miss — never auto-replayed. See docs/routines.md. */
 export const ROUTINE_MISS_MS = 30_000;
@@ -46,10 +47,14 @@ export class Routines {
       const resolved = resolveWorkerModel(worker, undefined, readCustomConnections(this.store));
       return { provider: worker.provider, modelId: worker.modelId ?? null, model: resolved.id ?? null, pricingVersion: resolved.pricingVersion };
     });
+    // A schedule that reads pages approves its profile and site list too (COD-261); one without the browser keeps the
+    // exact shape it always had, so this change takes no approval away.
+    const browser = routineBrowserApproval(input);
     const approved = triggerOf({ trigger });
-    if (approved.kind === 'schedule') return fingerprint(JSON.stringify({ team, workers, skills, models }));
+    if (approved.kind === 'schedule') return fingerprint(JSON.stringify(browser ? { team, workers, skills, models, browser } : { team, workers, skills, models }));
     const folder = approved.kind === 'folder' ? this.folders.identity(approved.folderId) : null;
-    return fingerprint(JSON.stringify({ team, workers, skills, models, trigger: { kind: approved.kind, folder } }));
+    const triggered = { team, workers, skills, models, trigger: { kind: approved.kind, folder } };
+    return fingerprint(JSON.stringify(browser ? { ...triggered, browser } : triggered));
   }
   /** A folder trigger names a folder the picker granted; its name comes from the grant, not from the renderer. */
   private normalizedTrigger(trigger: RoutineTrigger | undefined): RoutineTrigger | undefined {
@@ -152,6 +157,17 @@ export class Routines {
       return this.dispatch(task, next(current));
     } finally { this.dispatching.delete(routine.id); }
   }
+}
+
+/**
+ * What a scheduled run's browser is approved for: reading only, with one profile and the site list as saved. Undefined
+ * when the routine does not use the browser.
+ */
+export function routineBrowserApproval(input: TaskInput) {
+  if (!input.toolCapabilities?.includes('browser.read')) return undefined;
+  const choice = input.browser ?? defaultBrowserChoice();
+  const sites = choice.sites.map(entry => `${entry.decision}:${entry.site}`).sort();
+  return { level: 'read' as const, profileId: choice.profileId, sites };
 }
 
 /** An event run clears the note left by an earlier event that could not start. */

@@ -26,6 +26,8 @@ import { focusMessage, reactionGroups } from './messageMarks';
 import { turnMessageId } from '../../shared/message-interactions';
 import { approvalAnswerLabels, McpChatGrants } from './McpApproval';
 import { McpApprovalChoice } from '../../shared/mcp';
+import { BrowserChatSettings, BrowserSteps, browserProfileName, useBrowserState } from './BrowserSettings';
+import { defaultBrowserChoice } from '../../shared/browser';
 
 /*
  * The panel beside a chat: who you are talking to, what this conversation has cost, and what happened in it.
@@ -251,6 +253,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
   };
 }) {
   const [technical, setTechnical] = useState(false);
+  const browser = useBrowserState();
   const members = team ? teamRoster(team, workspace.workers) : [...group ?? []];
   const spent = detail ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0;
   const tokens = detail ? detail.usage.inputTokens + detail.usage.outputTokens : 0;
@@ -304,11 +307,14 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
         <PermissionControls workers={tools.workers.map(person => ({ id: person.id, name: person.name, provider: person.provider, connected: tools.connectedProviders.includes(person.provider) }))}
           capabilities={detail ? detail.task.toolCapabilities : tools.capabilities} grant={tools.grant} taskId={detail?.task.id} sourceCount={detail?.sources.length ?? 0}
           searchProvider={workspace.webSearchProvider} busy={tools.busy} pending={tools.pending}
+          browserProfile={detail ? browserProfileName((detail.task.browser ?? defaultBrowserChoice()).profileId, browser.state) : undefined}
           // A side thread takes its permissions from its main chat and can never be wider (COD-247).
           locked={detail?.task.sideOf ? t('Chat phụ dùng quyền của chat chính. Đổi quyền ở chat chính.') : undefined}
           onCapability={tools.onCapability} onWorkspace={tools.onWorkspace} onConfigure={tools.onConfigure} />
         {detail && <McpChatGrants detail={detail} workers={tools.workers} workspace={workspace} />}
+        {detail && <BrowserChatSettings detail={detail} />}
       </section>}
+      {detail && <BrowserSteps detail={detail} />}
       {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs} focus={recoveryFocus}
         busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} onRestore={onRestoreFile}
         readOutput={readProcessOutput} readFile={readPrivateFile} />}

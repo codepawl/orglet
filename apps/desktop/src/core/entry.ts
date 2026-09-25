@@ -18,6 +18,7 @@ import { WorkspaceRuntime } from './tools/workspace-runtime';
 import { emptyMcpSecrets, McpSecrets } from '../shared/mcp';
 import { pdfTextInWorker } from './tools/pdf-text';
 import type { WebSearchKeyProvider } from '../shared/web-tools';
+import type { BrowserHost } from '../shared/browser-host';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
@@ -45,6 +46,31 @@ const requestMcpSecrets = (serverId: string) => new Promise<McpSecrets>(resolve 
   port.postMessage({ type: 'mcpSecrets', id: requestId, serverId });
   setTimeout(() => { if (pendingMcpSecrets.delete(requestId)) resolve(emptyMcpSecrets()); }, 5000).unref();
 });
+/**
+ * The browser host process belongs to main (COD-261); a browser step goes there and back through main. Stopping the
+ * run aborts the signal, which sends the cancel after the request.
+ */
+const pendingBrowser = new Map<string, (reply: unknown) => void>();
+const BrowserReply = z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.string().max(2000).optional() });
+const browserHost: BrowserHost = {
+  request: (request, signal) => new Promise((resolve, reject) => {
+    const requestId = crypto.randomUUID();
+    const abort = () => {
+      if (!pendingBrowser.delete(requestId)) return;
+      port.postMessage({ type: 'browserCancel', id: requestId });
+      reject(signal.reason instanceof Error ? signal.reason : new Error('Đã dừng bước trình duyệt.'));
+    };
+    pendingBrowser.set(requestId, reply => {
+      signal.removeEventListener('abort', abort);
+      const parsed = BrowserReply.safeParse(reply);
+      if (parsed.success && parsed.data.ok) resolve(parsed.data.value);
+      else reject(new Error(parsed.success ? parsed.data.error ?? 'Trình duyệt gặp lỗi.' : 'Trình duyệt trả kết quả không hợp lệ.'));
+    });
+    if (signal.aborted) { abort(); return; }
+    signal.addEventListener('abort', abort, { once: true });
+    port.postMessage({ type: 'browser', id: requestId, request });
+  }),
+};
 const pendingProfiles = new Map<string, (reply: unknown) => void>();
 const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject) => {
   const id = crypto.randomUUID();
@@ -97,13 +123,19 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   // stops them, and a reused id is never taken for one of them.
   onProcesses: processes => port.postMessage({ type: 'mcpProcesses', processes }),
   // Each PDF is read in a worker thread built next to this file, so one slow or hostile file cannot stall the core.
-}, pdfTextInWorker(join(__dirname, 'pdf-text.js')), { readKey: requestSearchKey });
+}, pdfTextInWorker(join(__dirname, 'pdf-text.js')), { readKey: requestSearchKey }, browserHost);
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
 port.on('message', async ({ data }) => {
   const envelope = z.object({ id: z.string(), command: z.string(), args: z.unknown() }).safeParse(data);
   if (!envelope.success) return;
   const { id, command, args } = envelope.data;
   if (command === 'profileReply') { pendingProfiles.get(id)?.(args); return; }
+  if (command === 'browserReply') {
+    const complete = pendingBrowser.get(id);
+    pendingBrowser.delete(id);
+    complete?.(args);
+    return;
+  }
   if (command === 'keyReply') {
     pendingKeys.get(id)?.(typeof args === 'string' ? args : null); pendingKeys.delete(id); return;
   }

@@ -15,7 +15,7 @@ import { McpServer, type McpServerView } from '../../shared/mcp';
 import { CHAT_SEARCH_BACKFILL } from './chat-search';
 import { DEFAULT_WEB_SEARCH_PROVIDER, WebSearchProvider } from '../../shared/web-tools';
 
-export const SCHEMA_VERSION = 18;
+export const SCHEMA_VERSION = 19;
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export class Store {
@@ -176,6 +176,16 @@ export class Store {
           INSERT INTO migrations VALUES (18);
         `);
       }
+      // Every step a run took in Orglet's browser, and the screenshots it kept (COD-261). Local only: a backup carries
+      // neither, and both go with the chat when it is deleted.
+      this.db.exec(`CREATE TABLE IF NOT EXISTS browser_actions (
+          id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), call_id TEXT NOT NULL, tab_id TEXT, kind TEXT NOT NULL,
+          origin TEXT, target TEXT, risk TEXT NOT NULL, outcome TEXT NOT NULL, screenshot_id TEXT, at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS browser_actions_run ON browser_actions(run_id);
+        CREATE TABLE IF NOT EXISTS browser_screenshots (
+          id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), hash TEXT NOT NULL, mime TEXT NOT NULL, bytes BLOB NOT NULL, created_at TEXT NOT NULL
+        ); INSERT OR IGNORE INTO migrations VALUES (19);`);
       // The orglet form used to force the $0.50 default limit on Claude Code orglets, which stopped real work after a
       // few calls. An orglet on Claude Code now runs on the person's plan unless it has a limit of its own (COD-253),
       // so that forced default is dropped once; any other limit someone picked is kept. A settings row, not a schema

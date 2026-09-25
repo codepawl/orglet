@@ -1,4 +1,4 @@
-import { Database, FileText, FolderOpen, Globe, Lightbulb } from 'lucide-react';
+import { AppWindow, Database, FileText, FolderOpen, Globe, Lightbulb } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { permissionBlocker, permissionState, workspaceLevels, type PermissionBlocker, type WorkspaceLevel } from '../../shared/capability-status';
 import type { ToolCapability } from '../../shared/tool-policy';
@@ -10,6 +10,7 @@ import { Select } from './Select';
 import { SwitchField } from './Switch';
 import { Skeleton } from '@codepawl/orglet-ui';
 import { t, translated } from '../i18n';
+import { browserLevels, type BrowserLevel } from '../../shared/browser';
 
 export type PermissionWorker = Pick<Worker, 'id' | 'name' | 'provider'> & { connected: boolean };
 
@@ -18,6 +19,12 @@ const levelNames: Record<WorkspaceLevel, string> = translated({
   read: 'Chỉ đọc file',
   write: 'Đọc và sửa file',
   execute: 'Đọc, sửa file và chạy lệnh',
+});
+
+/** Cumulative like the folder: a later "read and act" level will include reading (COD-261). */
+const browserLevelNames: Record<BrowserLevel, string> = translated({
+  none: 'Không dùng trình duyệt',
+  read: 'Đọc trang',
 });
 
 /** One reason for the whole group when no worker in the chat can use any permission. */
@@ -40,7 +47,7 @@ const partlyBlockedNotes: Record<PermissionBlocker, string> = {
  * A blocker (Demo, a model with no connection, a grant still loading) is never a third position on a control:
  * the control is disabled and one short line says why (user, COD-168).
  */
-export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, searchProvider, busy = false, locked, folderLocked, onCapability, onWorkspace, onConfigure, extra }: {
+export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, searchProvider, busy = false, locked, folderLocked, browserProfile, onCapability, onWorkspace, onConfigure, extra }: {
   workers: PermissionWorker[];
   capabilities?: ToolCapability[];
   /** `undefined` while the grant is still being read. */
@@ -56,6 +63,8 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
   locked?: string;
   /** Why only the folder cannot be kept yet (a worker not saved yet has nothing to keep it under); the switches stay live and the line sits under the dropdown. */
   folderLocked?: string;
+  /** The name of the browser profile the chat reads pages with, shown under the browser level like a folder's name. */
+  browserProfile?: string;
   onCapability: (capability: ToolCapability, enabled: boolean) => void;
   onWorkspace: (level: WorkspaceLevel) => void;
   onConfigure?: (provider: Exclude<Worker['provider'], 'demo'>) => void;
@@ -116,6 +125,19 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
       description={t('Tìm qua {0}, đọc trang web công khai.', [WEB_SEARCH_PROVIDER_NAMES[searchProvider]])}>
       <Globe size={15} aria-hidden="true" />{t('Đọc và tìm kiếm web')}
     </SwitchField>
+    {/* Orglet's own browser (COD-261): a level like the folder's, so reading and a later acting level share one control. */}
+    <div className={`permission-folder${disabled ? ' permission-folder-disabled' : ''}`}>
+      <span className="permission-folder-text">
+        <span className="permission-folder-title"><AppWindow size={15} aria-hidden="true" />{t('Trình duyệt')}</span>
+        <span className="permission-folder-description">{t('Mở và đọc trang trong cửa sổ riêng của Orglet.')}</span>
+      </span>
+      <span className="permission-folder-control">
+        <Select ariaLabel={t('Trình duyệt')} size="sm" value={state.browser} disabled={disabled}
+          onChange={value => onCapability('browser.read', value === 'read')}
+          options={browserLevels.map(level => ({ value: level, label: browserLevelNames[level] }))} />
+        {state.browser === 'read' && browserProfile && <span className="permission-folder-name"><AppWindow size={13} aria-hidden="true" />{t('Hồ sơ {0}', [browserProfile])}</span>}
+      </span>
+    </div>
     {/* Proposing is not doing: the switch lets the worker store a card, and the card still waits for Apply (COD-199). */}
     <SwitchField checked={state.propose} disabled={disabled} onChange={enabled => onCapability('app.propose', enabled)}
       description={t('Đề xuất Tí, hội, skill và cài đặt mới.')}>

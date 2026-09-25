@@ -26,6 +26,8 @@ const included = [
   '/node_modules/@duckdb/node-bindings-linux-arm64',
   '/node_modules/@duckdb/node-bindings-linux-arm64-musl',
   '/node_modules/detect-libc',
+  // The browser host drives Chrome or Edge through it (COD-261). It has no dependencies of its own and no telemetry.
+  '/node_modules/playwright-core',
 ];
 
 const config: ForgeConfig = {
@@ -82,6 +84,7 @@ const config: ForgeConfig = {
       { entry: 'apps/desktop/src/core/entry.ts', config: 'vite.core.config.ts' },
       { entry: 'apps/desktop/src/core/tools/pdf-text-worker.ts', config: 'vite.pdf-text.config.ts' },
       { entry: 'apps/desktop/src/profiler/entry.ts', config: 'vite.profiler.config.ts' },
+      { entry: 'apps/desktop/src/browser/entry.ts', config: 'vite.browser.config.ts' },
       { entry: 'apps/desktop/src/core/tools/workspace-helper.ts', config: 'vite.workspace.config.ts' },
       { entry: 'apps/desktop/src/core/tools/dependency-hooks.ts', config: 'vite.dependency-hooks.config.ts' },
       { entry: 'apps/desktop/src/cli/main.ts', config: 'vite.cli.config.ts' },

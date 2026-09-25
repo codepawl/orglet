@@ -12,6 +12,7 @@ import { t } from './i18n';
 export type TraceKind =
   | 'memory' | 'knowledge'
   | 'read' | 'search' | 'list' | 'skill' | 'web_search' | 'web_read' | 'dataset' | 'edit' | 'folder' | 'move' | 'delete' | 'command' | 'mcp'
+  | 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll'
   | 'handoff' | 'remembered' | 'proposal' | 'failed' | 'other';
 
 export type TraceEntry = {
@@ -39,6 +40,13 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Đã đọc trang web dưới dạng dữ liệu không đáng tin\.$/, kind: 'web_read' },
   { pattern: /^Đã tìm kiếm web; kết quả chưa được xác minh\.$/, kind: 'web_search' },
   { pattern: /^(?:Không đọc được trang web|Tìm kiếm web không thành công): /, kind: 'failed', note: true },
+  // Orglet's browser (COD-261), below the web lines: "Đã đọc trang web …" is the web tool's, not a browser page.
+  { pattern: /^Đã mở trang (.+)$/, kind: 'browser_open' },
+  { pattern: /^Đã đọc trang (.+)$/, kind: 'browser_read' },
+  { pattern: /^Đã tìm trên trang (.+)$/, kind: 'browser_find' },
+  { pattern: /^Đã chụp màn hình (.+)$/, kind: 'browser_screenshot' },
+  { pattern: /^Đã cuộn trang (.+)$/, kind: 'browser_scroll' },
+  { pattern: /^Trình duyệt không (?:mở|làm được)/, kind: 'failed', note: true },
   { pattern: /^Đã kiểm tra (?:dataset|run-log): (.+?) · /, kind: 'dataset' },
   { pattern: /^Đã đọc (.+)$/, kind: 'read' },
   { pattern: /^Đã tìm (.+)$/, kind: 'search' },
@@ -140,14 +148,18 @@ export function liveTraceOf(memories: readonly RunMemory[] | undefined, steps: r
   return [...memoryEntries(memories), ...stepEntries];
 }
 
-/** Which summary count a row adds to; the two web kinds share one. */
-type SummaryKind = Exclude<TraceKind, 'web_search' | 'web_read'> | 'web';
+/** Which summary count a row adds to; the two web kinds share one, and every browser step counts as one kind. */
+type SummaryKind = Exclude<TraceKind, 'web_search' | 'web_read' | BrowserKind> | 'web' | 'browser';
+type BrowserKind = 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll';
+const browserKinds: readonly TraceKind[] = ['browser_open', 'browser_read', 'browser_find', 'browser_screenshot', 'browser_scroll'];
 
 /** The order the counts read in: what was loaded, then a crew's handoffs, then the steps, then what the run left behind. */
-const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web', 'mcp', 'dataset', 'edit', 'folder', 'move', 'delete', 'command', 'remembered', 'proposal', 'failed', 'other'];
+const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web', 'browser', 'mcp', 'dataset', 'edit', 'folder', 'move', 'delete', 'command', 'remembered', 'proposal', 'failed', 'other'];
 
 function summaryKindOf(kind: TraceKind): SummaryKind {
-  return kind === 'web_search' || kind === 'web_read' ? 'web' : kind;
+  if (kind === 'web_search' || kind === 'web_read') return 'web';
+  if (browserKinds.includes(kind)) return 'browser';
+  return kind as SummaryKind;
 }
 
 /** One count phrase per kind, with its own words for one and for several, so no plural is glued on. */
@@ -161,6 +173,7 @@ function countPhrase(kind: SummaryKind, count: number): string {
     case 'skill': return count === 1 ? t('Đọc 1 tài nguyên skill') : t('Đọc {0} tài nguyên skill', [count]);
     case 'web': return count === 1 ? t('Lên web 1 lần') : t('Lên web {0} lần', [count]);
     case 'mcp': return count === 1 ? t('Dùng 1 công cụ MCP') : t('Dùng {0} công cụ MCP', [count]);
+    case 'browser': return count === 1 ? t('1 bước trên trình duyệt') : t('{0} bước trên trình duyệt', [count]);
     case 'dataset': return count === 1 ? t('Kiểm tra dữ liệu 1 lần') : t('Kiểm tra dữ liệu {0} lần', [count]);
     case 'edit': return count === 1 ? t('Sửa 1 tệp') : t('Sửa {0} tệp', [count]);
     case 'folder': return count === 1 ? t('Tạo 1 thư mục') : t('Tạo {0} thư mục', [count]);

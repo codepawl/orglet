@@ -81,5 +81,12 @@ const bridge: Bridge = {
   dropSentFiles: id => invoke('orglet:drop-sent-files', id),
   sendToState: () => invoke('orglet:send-to-state'),
   setSendTo: enabled => invoke('orglet:send-to', enabled),
+  browserState: () => invoke('orglet:browser-state'),
+  createBrowserProfile: name => invoke('orglet:browser-create', name),
+  openBrowserProfile: id => invoke('orglet:browser-open', id),
+  closeBrowserProfile: id => invoke('orglet:browser-close', id),
+  clearBrowserProfile: id => invoke('orglet:browser-clear', id),
+  deleteBrowserProfile: id => invoke('orglet:browser-delete', id),
+  showBrowser: runId => invoke('orglet:browser-show', runId),
 };
 contextBridge.exposeInMainWorld('orglet', bridge);

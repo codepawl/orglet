@@ -37,6 +37,10 @@ Claude Code, Codex, Cursor Agent and Gemini CLI: whether each is installed and s
 
 MCP servers you add by hand, run on this computer or remote: each row shows whether it is connected, its tools, a switch to turn it off, and **Test connection**, **Edit** and **Remove**. **Import from a file** reads a JSON file you pick; Orglet never reads another app's MCP settings on its own. Secret values are encrypted on this computer and never shown again. See [MCP servers](mcp.md).
 
+## Browser
+
+The browser Orglet found (Chrome, or Edge when Chrome is not installed), the **Clean** profile every chat starts with, and the profiles you made. **Add profile** makes one; **Open to sign in** opens it in a normal window so you can sign in to sites yourself; its menu has **Close window**, **Clear data** and **Delete profile**. Profiles stay on this computer and never go into a backup. See [Orglet's browser](browser.md#profiles).
+
 ## Costs & limits
 
 - **Limit per connection / month**: a cap on what Orglet may spend through each API key, by UTC month.
@@ -64,7 +68,7 @@ Each row refuses while a run, schedule or check is in progress, and reports what
 | **Delete knowledge** | Every note, including ones waiting for review. Memory stays. |
 | **Delete memory** | Every memory in every scope, including ones waiting for review. Notes stay. |
 | **Delete imported sources** | Orglet's record of the files you attached. Your files are untouched; a source a chat still refers to is revoked instead so that chat still opens. |
-| **Erase all data** | Everything. Asks you to type `Orglet`. The workspace comes back as a fresh install with the Researcher. |
+| **Erase all data** | Everything. Asks you to type `Orglet`. The workspace comes back as a fresh install with the Researcher. Browser profiles are kept, like API keys; delete them in **Settings → Browser**. |
 
 Where the data lives: `%APPDATA%\orglet\orglet.sqlite` on Windows, `~/Library/Application Support/Orglet/orglet.sqlite` on macOS. Opening the workspace with a newer build first saves a copy of the database; how to roll back is in [recovery.md](recovery.md).
 

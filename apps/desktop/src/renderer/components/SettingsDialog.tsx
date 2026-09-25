@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks } from 'lucide-react';
+import { Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { currentAccentColor, DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
@@ -29,6 +29,7 @@ import { AboutSettings } from './AboutSettings';
 import { McpHeadingActions, McpSettings, type McpEditing } from './McpSettings';
 import { WebSearchSettings } from './WebSearchSettings';
 import type { WebSearchProvider } from '../../shared/web-tools';
+import { BrowserHeadingActions, BrowserProfilesSettings } from './BrowserSettings';
 import { t, tMessage, translated } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
 import { orglet } from '../api';
@@ -48,7 +49,7 @@ const accentSwatches = avatarPalette.map(color => currentAccentColor(color));
 /** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
 const SAVED_KEY_MASK = '••••••••••••••••';
 
-export type SettingsTab = 'general' | 'chat' | 'connections' | 'search' | 'harness' | 'mcp' | 'usage' | 'data' | 'about';
+export type SettingsTab = 'general' | 'chat' | 'connections' | 'search' | 'harness' | 'mcp' | 'browser' | 'usage' | 'data' | 'about';
 // Short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming). About sits last (COD-176).
 const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'general', label: 'Chung', icon: <SlidersHorizontal size={16} /> },
@@ -59,6 +60,8 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'harness', label: 'Harness trên máy', icon: <SquareTerminal size={16} /> },
   // MCP servers the person added by hand (COD-241).
   { id: 'mcp', label: 'MCP', icon: <Blocks size={16} /> },
+  // The browser orglets read pages in, and the profiles the person signs in to themselves (COD-261).
+  { id: 'browser', label: 'Trình duyệt', icon: <AppWindow size={16} /> },
   { id: 'usage', label: 'Chi phí & giới hạn', icon: <Wallet size={16} /> },
   { id: 'data', label: 'Dữ liệu', icon: <Database size={16} /> },
   { id: 'about', label: 'Giới thiệu', icon: <Info size={16} /> },
@@ -78,6 +81,7 @@ const sectionLabels: Partial<Record<SettingsTab, string>> = {
   search: 'Tí chỉ gửi câu tìm kiếm đi, không gửi nội dung chat hay tệp.',
   harness: 'Đăng nhập lỗi thì Orglet dừng lại, không chuyển sang Demo.',
   mcp: 'Tí hỏi bạn trước mỗi lần gọi công cụ.',
+  browser: 'Tí đọc trang trong cửa sổ riêng, không dùng hồ sơ của bạn.',
   usage: 'Chỉ tính request qua Orglet; harness trên máy dùng gói riêng.',
 };
 
@@ -467,6 +471,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const current = tabs.find(item => item.id === tab)!;
   /** The MCP server open in its editor, or a new one; the heading's Add opens it (COD-241). */
   const [mcpEditing, setMcpEditing] = useState<McpEditing>();
+  /** Whether the new browser profile form is open; the heading's Add opens it (COD-261). */
+  const [creatingProfile, setCreatingProfile] = useState(false);
 
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
@@ -488,7 +494,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             <PanelHeading title={t(current.label)} description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}>{tab === 'harness' && <>
               {/* The button says it is checking instead of a line beside it, so the heading never reflows while it runs. */}
               <Button disabled={busy || harnesses === undefined} onClick={detectAgain} aria-live="polite" data-checking={detecting || undefined}><RefreshCw size={13} /><span className="steady-label"><span aria-hidden={detecting}>{t('Dò lại')}</span><span aria-hidden={!detecting}>{t('Đang dò lại…')}</span></span></Button>
-            </>}{tab === 'mcp' && <McpHeadingActions busy={busy} act={act} onAdd={() => setMcpEditing('new')} />}</PanelHeading>
+            </>}{tab === 'mcp' && <McpHeadingActions busy={busy} act={act} onAdd={() => setMcpEditing('new')} />}{tab === 'browser' && <BrowserHeadingActions busy={busy} onCreate={() => setCreatingProfile(true)} />}</PanelHeading>
 
             {tab === 'general' && <>
               <Row title={t('Ngôn ngữ')} description={t('Cho cả giao diện và thông báo.')}>
@@ -693,6 +699,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'mcp' && <McpSettings workspace={workspace} busy={busy} act={act} editing={mcpEditing} onEdit={setMcpEditing} />}
+            {tab === 'browser' && <BrowserProfilesSettings busy={busy} act={act} creating={creatingProfile} onCreating={setCreatingProfile} />}
 
             {tab === 'usage' && <>
               <Row title={t('Đã đối soát')} description={t('Phần provider đã chốt số và tính tiền.')}><span className="setting-value">{formatMoney(workspace.usage.chargedMicros)}</span></Row>

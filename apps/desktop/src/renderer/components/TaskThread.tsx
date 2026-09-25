@@ -23,7 +23,7 @@ import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { LiveRun, islandBeforeStreaming, islandOf, liveRunOf, useRunProgress, workingWorkers } from './LiveRun';
+import { LiveRun, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, useRunProgress, workingWorkers } from './LiveRun';
 import { TurnTrace } from './TurnTrace';
 import { traceOf } from '../turnTrace';
 import { dockIsland } from './islandDock';
@@ -193,7 +193,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   const dockedIsland = dockedRun
     ? latestLive?.update.progress
       ? islandOf(latestLive.update.progress, pausing, islandWorkers)
-      : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
+      : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing,
+        site: browsingSiteOf(detail.events.filter(event => event.runId === dockedRun.id).map(event => event.message)) })
     : undefined;
   const islandWorkerKey = islandWorkers.map(worker => worker.id).join(',');
   // Once no run is on, the island offers this chat's knowledge suggestions instead (COD-208). Dismissing hides the

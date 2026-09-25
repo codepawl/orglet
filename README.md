@@ -81,6 +81,8 @@ On Windows you can also select files in File Explorer and choose **Send to → O
 
 **Settings → MCP** adds MCP servers by hand, run on this computer or remote, so an orglet can use other services such as GitHub or a database. An orglet uses only the servers picked in its settings and asks you in the chat before it calls a tool; secret values are encrypted on this computer. Details: [MCP servers](docs/mcp.md).
 
+**Browser → Read pages** in a chat's permissions lets its orglets open and read web pages in a real Chrome or Edge window that Orglet starts with a profile of its own, never your everyday one. It only reads: no clicks, typing or forms yet. Pages on this computer or your network open only when you allow that exact address, and a profile you signed in to yourself opens only the sites you list. Details: [Orglet's browser](docs/browser.md).
+
 **Settings → Data** backs the workspace up, restores it, and deletes what you no longer want kept: the chat history, the knowledge your workers built up, what they remembered, the sources you imported, or everything at once. Nothing there touches your API keys or your own files. Details: [technical guide](docs/technical-guide.md#deleting-data).
 
 **Settings → Local harnesses** always shows Claude Code, Codex, Cursor Agent and Gemini CLI as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. If sign-in fails, the screen gives the CLI login command to copy; Orglet does not switch to Demo.
