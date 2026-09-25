@@ -524,7 +524,7 @@ export function App() {
   };
   const applyProposal = async (proposal: AppProposal) => {
     const createsOrglet = proposal.kind === 'orglet' && proposal.action === 'create';
-    const avatar = createsOrglet ? { mascot: proposedMascot(proposal) } : undefined;
+    const avatar = createsOrglet ? { mascot: proposedMascot(proposal, { workers: workspace?.workers ?? [], siblings: detail?.appProposals ?? [proposal] }) } : undefined;
     const applied = await orglet.call('applyAppProposal', { id: proposal.id, avatar });
     if (applied.target?.kind === 'template') {
       const saved = await orglet.exportTemplate(applied.target.id);

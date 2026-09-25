@@ -117,6 +117,20 @@ export function autoMascot(ids: readonly MascotId[], seed: string, hints: Mascot
   return best.length ? best[seedHash(seed) % best.length] : ids[seedHash(seed) % ids.length];
 }
 
+/**
+ * A face for a new orglet that another orglet does not already show, in face or colour, when a close match exists
+ * (COD-265). Orglets made together for similar roles (a writer and an editor) otherwise got the same best match and
+ * the same colour. With nothing taken it is the plain automatic face.
+ */
+export function distinctMascot(hints: MascotHints, seed: string, taken: readonly MascotId[]): MascotId {
+  if (!taken.length) return autoMascot(MASCOT_IDS, seed, hints);
+  const takenColors = new Set(taken.map(id => mascotColors[id]));
+  const options = suggestedMascots(hints, { limit: MASCOT_IDS.length, taken });
+  const freshFaceAndColor = options.find(id => !taken.includes(id) && !takenColors.has(mascotColors[id]));
+  const freshFace = options.find(id => !taken.includes(id));
+  return freshFaceAndColor ?? freshFace ?? autoMascot(MASCOT_IDS, seed, hints);
+}
+
 // Soft identity colours; the same seed always picks the same one when nothing better is known.
 export const avatarPalette = ['#d97757', '#4f7fe0', '#3f9a68', '#a764c9', '#c9922e', '#d65c73', '#3597ab', '#7b818c'];
 const [coral, blue, green, purple, amber, rose, teal, slate] = avatarPalette;

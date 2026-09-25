@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { crewMembers, modelLabel, orgletDetailChanges, proposalCards, showChangeValue, type ProposalContext } from '../../apps/desktop/src/renderer/components/proposalValues';
+import { crewMembers, modelLabel, orgletDetailChanges, proposalCards, scheduleInWords, showChangeValue, type ProposalContext } from '../../apps/desktop/src/renderer/components/proposalValues';
 import type { AppProposal } from '../../apps/desktop/src/shared/app-proposals';
 import type { Worker } from '../../apps/desktop/src/shared/contracts';
 
@@ -71,5 +71,14 @@ describe('proposal values', () => {
     const cards = proposalCards([skill, finderPending, checkerPending, crew]);
     expect(cards.map(card => card.kind)).toEqual(['single', 'orglets', 'single']);
     expect(cards[1].kind === 'orglets' && cards[1].proposals.map(item => item.title)).toEqual(['Source Finder', 'Fact Checker']);
+  });
+});
+
+describe('a proposed schedule in words (COD-265)', () => {
+  it('reads a weekly or daily line as a sentence and leaves anything else as written', () => {
+    expect(scheduleInWords('weekly 09:00 · weekday 1 · Asia/Saigon')).toBe('Weekly on Monday at 09:00 · Asia/Saigon');
+    expect(scheduleInWords('daily 07:30 · Europe/London')).toBe('Daily at 07:30 · Europe/London');
+    expect(scheduleInWords('weekly 18:00 · weekday 0 · UTC')).toBe('Weekly on Sunday at 18:00 · UTC');
+    expect(scheduleInWords('every full moon')).toBe('every full moon');
   });
 });

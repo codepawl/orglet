@@ -5,7 +5,7 @@ import type { MascotId } from './mascots';
  * `shared/mascot-suggest.ts`, so main (for the `orglet` command) picks the same default face and colour as the app.
  */
 export {
-  autoMascot, avatarPalette, mascotColors, rankMascots, seedHash, suggestMascots, suggestedColors, suggestedMascots,
+  autoMascot, avatarPalette, distinctMascot, mascotColors, rankMascots, seedHash, suggestMascots, suggestedColors, suggestedMascots,
   type MascotHints, type MascotSuggestion,
 } from '../../shared/mascot-suggest';
 

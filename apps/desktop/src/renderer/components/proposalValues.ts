@@ -90,6 +90,20 @@ export function workflowName(value: string): string {
 }
 
 /** A stored value as the person reads it: money in the display currency, flags as words, ids and refs as names. */
+/**
+ * A schedule line in words (COD-265). The core writes "weekly 09:00 · weekday 1 · Asia/Saigon", which read like a
+ * config file on the card; it becomes "Weekly on Monday at 09:00 · Asia/Saigon". A line in any other shape is shown
+ * as written.
+ */
+export function scheduleInWords(value: string): string {
+  const match = /^(daily|weekly) (\d{2}:\d{2})(?: · weekday ([0-6]))? · (.+)$/.exec(value);
+  if (!match) return value;
+  const [, frequency, time, weekday, timeZone] = match;
+  if (frequency === 'daily') return t('Hằng ngày lúc {0} · {1}', [time, timeZone]);
+  const days = [t('Chủ nhật'), t('Thứ hai'), t('Thứ ba'), t('Thứ tư'), t('Thứ năm'), t('Thứ sáu'), t('Thứ bảy')];
+  return t('Hằng tuần vào {0} lúc {1} · {2}', [days[Number(weekday ?? 1)], time, timeZone]);
+}
+
 export function showChangeValue(field: string, value: string, context: ProposalContext): string {
   if (moneyFields.has(field) && /^\d+$/.test(value)) return formatMoney(Number(value));
   if (value === 'true') return t('Bật');
@@ -97,6 +111,7 @@ export function showChangeValue(field: string, value: string, context: ProposalC
   if (field === 'provider') return modelLabel(value, undefined);
   if (field === 'skillId') return skillName(value, context);
   if (field === 'workflow') return workflowName(value);
+  if (field === 'schedule') return scheduleInWords(value);
   if (memberFields.has(field)) return value.split(', ').map(part => resolveMember(part, context).name).join(', ');
   // A schedule's target or a template's crew may point at an orglet or a crew of this reply.
   if (field === 'target' || field === 'team') return siblingByRef(value, context)?.title ?? value;
