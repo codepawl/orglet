@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Copy, ExternalLink, Globe, RefreshCw, RotateCw } from 'lucide-react';
+import { Copy, ExternalLink, Globe, Plus, RefreshCw, RotateCw, X } from 'lucide-react';
 import type { Workspace } from '../../shared/contracts';
+import type { CliInstallState } from '../../shared/cli';
 import { aboutDetailsText, osName, type AboutLink, type InstallKind, type Release, type UnsupportedReason, type UpdateState } from '../../shared/updates';
 import { Button } from './ui';
 import { Switch } from './Switch';
@@ -9,7 +10,7 @@ import { BrandMark, type BrandName } from './brandMarks';
 import { clockLabel } from './TimeMark';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
-import { Skeleton, SkeletonText } from '@codepawl/orglet-ui';
+import { CommandBlock, Skeleton, SkeletonText } from '@codepawl/orglet-ui';
 import { aboutInfo, APP_KEY, changelogs, updateStates } from '../caches';
 import { useCached } from '../prefetch';
 
@@ -38,6 +39,56 @@ const links: { link: Exclude<AboutLink, 'releases'>; label: string; brand?: Bran
   { link: 'x', label: 'X', brand: 'x' },
   { link: 'threads', label: 'Threads', brand: 'threads' },
 ];
+
+/** A name as a shell argument: quoted when it has a space or a quote in it. */
+function shellWord(name: string): string {
+  return /^[\p{L}\p{N}._-]+$/u.test(name) ? name : `"${name.replaceAll('"', '\\"')}"`;
+}
+
+/** What the command row says under its title, for each way this build can offer the command. */
+function commandLineDescription(state: CliInstallState): string {
+  if (state.mode === 'dev') return t('Lệnh orglet chạy từ bản cài. Trong mã nguồn, thử bằng pnpm orglet khi pnpm dev đang chạy.');
+  if (state.mode === 'manual') return t('Thêm thư mục của lệnh vào PATH bằng dòng dưới đây, trong tệp khởi động của shell như ~/.zprofile.');
+  if (state.installed) return t('Đã có trong PATH. Mở terminal mới rồi thử lệnh dưới đây.');
+  return t('Gửi tin cho Tí và đọc câu trả lời từ terminal. Lệnh chỉ nói chuyện với app đang chạy trên máy này.');
+}
+
+function commandLineExample(state: CliInstallState, firstOrglet: string | undefined): string {
+  if (state.mode === 'dev') return 'pnpm orglet status';
+  if (state.mode === 'manual') return state.command;
+  return `orglet send "${t('Chào')}" --to ${shellWord(firstOrglet ?? 'Researcher')}`;
+}
+
+/**
+ * The `orglet` terminal command (COD-234). On a packaged Windows build the row adds it to the user's PATH and takes
+ * it off again; main decides where the shim goes, so the window only says on or off.
+ */
+function CommandLineRow({ workspace, busy, act }: { workspace: Workspace; busy: boolean; act: (action: () => Promise<string | void>, about?: string) => Promise<void> }) {
+  const [state, setState] = useState<CliInstallState>();
+  const title = t('Lệnh orglet trong terminal');
+  useEffect(() => {
+    let live = true;
+    orglet.cliState().then(next => { if (live) setState(next); }).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
+  const toggle = (enabled: boolean) => void act(async () => {
+    setState(await orglet.setCliOnPath(enabled));
+    return enabled ? t('Đã thêm orglet vào PATH. Mở terminal mới để dùng.') : t('Đã gỡ orglet khỏi PATH.');
+  }, title);
+  const copy = (command: string) => void act(async () => {
+    await orglet.copyText(command);
+    return t('Đã sao chép lệnh');
+  }, title);
+  // The button centres on the title and description; the command card runs under both, in the text column.
+  return <div className="about-command-line">
+    <Row title={title} description={state ? commandLineDescription(state) : <Skeleton width="60%" />}>
+      {state?.mode === 'windows' && (state.installed
+        ? <Button variant="outline" disabled={busy} onClick={() => toggle(false)}><X size={14} />{t('Gỡ khỏi PATH')}</Button>
+        : <Button variant="outline" disabled={busy} onClick={() => toggle(true)}><Plus size={14} />{t('Thêm vào PATH')}</Button>)}
+    </Row>
+    {state && <CommandBlock command={commandLineExample(state, workspace.workers[0]?.name)} copyLabel={t('Sao chép lệnh')} copyIcon={<Copy size={14} />} onCopy={copy} />}
+  </div>;
+}
 
 function Row({ title, description, children, id }: { title: string; description?: ReactNode; children?: ReactNode; id?: string }) {
   return <div className="setting-row">
@@ -143,6 +194,7 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
     <Row title={t('Chi tiết bản cài')} description={<span className="about-details">{detailsLine}</span>}>
       <Button variant="outline" disabled={busy || !about} onClick={copyDetails}><Copy size={14} />{t('Sao chép')}</Button>
     </Row>
+    <CommandLineRow workspace={workspace} busy={busy} act={act} />
 
     <div className="setting-row about-links-row">
       <div className="setting-text">

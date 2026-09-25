@@ -40,12 +40,17 @@ const config: ForgeConfig = {
     },
   },
   packagerConfig: {
-    extraResource: process.platform === 'win32' && process.arch === 'x64' ? [
-      join(__dirname, 'node_modules/@microsoft/mxc-sdk/bin/x64/wxc-exec.exe'),
-      join(__dirname, 'node_modules/@microsoft/mxc-sdk/LICENSE.md'),
-      join(__dirname, '.vite/build/workspace-helper.cjs'),
-      join(__dirname, 'out/native-tools/WorkspaceIntegrate.exe'),
-    ] : [],
+    extraResource: [
+      ...(process.platform === 'win32' && process.arch === 'x64' ? [
+        join(__dirname, 'node_modules/@microsoft/mxc-sdk/bin/x64/wxc-exec.exe'),
+        join(__dirname, 'node_modules/@microsoft/mxc-sdk/LICENSE.md'),
+        join(__dirname, '.vite/build/workspace-helper.cjs'),
+        join(__dirname, 'out/native-tools/WorkspaceIntegrate.exe'),
+      ] : []),
+      // The `orglet` terminal command (COD-234): the script, and resources/bin with its cmd and sh launchers.
+      join(__dirname, '.vite/build/orglet-cli.cjs'),
+      join(__dirname, 'apps/desktop/bin'),
+    ],
     asar: { unpack: '**/*.{node,dll,dylib,so}' },
     executableName: 'Orglet',
     appBundleId: 'com.codepawl.orglet',
@@ -76,6 +81,7 @@ const config: ForgeConfig = {
       { entry: 'apps/desktop/src/core/entry.ts', config: 'vite.core.config.ts' },
       { entry: 'apps/desktop/src/profiler/entry.ts', config: 'vite.profiler.config.ts' },
       { entry: 'apps/desktop/src/core/tools/workspace-helper.ts', config: 'vite.workspace.config.ts' },
+      { entry: 'apps/desktop/src/cli/main.ts', config: 'vite.cli.config.ts' },
     ],
     renderer: [{ name: 'main_window', config: 'vite.renderer.config.ts' }],
   })],

@@ -54,6 +54,7 @@ Renderer talks to core through `preload` → typed `Bridge` / `commands` in `app
 | Schedules | [docs/routines.md](docs/routines.md) | `core/orchestration/routines.ts` |
 | Connections, harnesses, model lists, limits, updater, erase | [docs/technical-guide.md](docs/technical-guide.md), [docs/capabilities.md](docs/capabilities.md), [docs/model-list-fetch.md](docs/model-list-fetch.md) | `core/harness/`, `core/adapters/`, `main/` |
 | Notifications | [docs/chat-guide.md](docs/chat-guide.md#notifications) | `renderer/components/notifications.tsx` |
+| The `orglet` terminal command, its pipe and the PATH shim | [docs/cli.md](docs/cli.md) | `cli/`, `main/cli-server.ts`, `main/cli-operations.ts`, `main/cli-path.ts` |
 | User-facing pages | [docs/user-guide.md](docs/user-guide.md) and its pages | — |
 
 ## Commands

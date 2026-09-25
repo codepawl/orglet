@@ -174,6 +174,8 @@ The row shows one state at a time: not checked yet, checking, up to date with th
 
 Builds 0.2.3 and earlier have no updater and never learn about a newer version; the first release that carries it is installed by hand. For what a release has to include, see [windows-release-gates.md](windows-release-gates.md#updates).
 
+The same tab has the row for the `orglet` terminal command. The main process listens on a named pipe (Windows) or a `cli.sock` socket in the data folder (macOS, Linux), checks a token it writes to `cli-token` on every start, and answers only `status`, `list`, `send`, `read` and `open`; `send` runs the composer's own `createTask` or `reviseTask`. The packaged build ships the script as `resources/orglet-cli.cjs` with `resources/bin/orglet.cmd` and `resources/bin/orglet`, which run it with the app's executable as Node. On a packaged Windows build **Thêm vào PATH** writes `%LOCALAPPDATA%\Orglet\bin\orglet.cmd`, rewritten on every start so it follows updates, and adds that folder to the user Path; macOS shows the `export PATH` line instead. From source, `pnpm orglet` runs the script `pnpm dev` builds. Details: [cli.md](cli.md).
+
 ## Deleting data
 
 **Cài đặt → Dữ liệu** removes what the app has kept. Every deletion refuses while a task, routine or checker is running, runs in one transaction, and reports what it actually removed.
@@ -252,7 +254,10 @@ pnpm test:findings
 pnpm test:revisions
 pnpm test:knowledge
 pnpm test:harness
+pnpm test:cli
 ```
+
+The CLI smoke launches the packaged app on a temporary data folder and runs the shipped `orglet` launcher (`orglet.cmd` through `cmd.exe` on Windows): help and version, `status`, `list`, `send` to the Demo Researcher and `read` of the same answer, a second turn in the same chat with `--json`, `open`, an unknown name and a usage error. It sends a wrong token and an operation outside the allowlist straight to the pipe and expects both refused, then closes the app and checks that `orglet status` starts it again. It never touches the user's PATH.
 
 The harness smoke installs fixture CLIs so **Harness trên máy** always has a logged-out Claude Code and an unreadable Codex login probe, and still lists Cursor (including a not-installed row). It checks status pills and copy-login commands, that detected is not signed-in, that an auth failure does not show Demo, and that the worker model list and send gate match those states. It never starts a harness run. GitHub Actions runs this on Windows after `pnpm make`; see [windows-release-gates.md](windows-release-gates.md). Packaged smoke scripts resolve the Windows `.exe` or the macOS `.app` binary via `scripts/packaged-executable.mjs`.
 

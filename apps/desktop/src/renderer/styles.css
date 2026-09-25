@@ -921,6 +921,10 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .about-title { font-size:17px; font-weight:600; line-height:1.2; }
 .about-details { font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 .about-links-row,.about-changelog { align-items:flex-start; }
+/* The `orglet` terminal command row (COD-234): the row keeps its button centred on the text, and the example
+   command sits under it, as close to the description as a card inside the row would be. */
+.about-command-line { padding-bottom:13px; }
+.about-command-line > .setting-row { padding-bottom:10px; }
 .about-links { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
 .about-links .button { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; }
 .about-links .button svg { color:var(--muted); }

@@ -18,6 +18,7 @@ import { TaskDialog } from './components/TaskDialog';
 import { FormatPreferences } from './components/FormatAction';
 import { assigneeLabel, taskWorkers, teamRoster } from './assignees';
 import { liveTeamTask, liveWorkerTask, newChatKey } from '../shared/live-task';
+import type { OpenChatTarget } from '../shared/cli';
 import { ArchivedList, ArchivedRow, type ArchiveState } from './components/SidebarTree';
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
@@ -643,6 +644,14 @@ export function App() {
     else go();
   };
   useNavigationInput(stepView, window.orglet?.onNavigate);
+  // `orglet open --to <name>` in a terminal (COD-234): main names the chat, the window opens it like a sidebar click.
+  const openChatFromCli = useRef<(target: OpenChatTarget) => void>(() => undefined);
+  openChatFromCli.current = target => {
+    setPanel(null);
+    if (target.kind === 'team') openTeam(target.id);
+    else openWorker(target.id);
+  };
+  useEffect(() => window.orglet?.onOpenChat?.(target => openChatFromCli.current(target)), []);
   const teamOrder = useReorder(workspace?.teams.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'teams', ids })));
   const workerOrder = useReorder(workspace?.workers.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'workers', ids })));
   const sectionOrder = (section: SidebarSelectionSection) => section === 'teams' ? teamOrder.order : workerOrder.order;

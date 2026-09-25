@@ -71,6 +71,8 @@ A worker remembers its chats. It keeps short lines about how you like things don
 
 A worker also learns from the feedback it already gets. When you keep asking it to revise, give its answers a thumbs-down, or its reports keep failing a check, its next chat shows the evidence and it may propose one sentence for its own instructions: a card with the sentence before and after and the chats it came from, which always waits for your click, even with automatic app changes on. Apply is a worker revision with Undo; Dismiss means it will not ask again for that reason. Details: [self-improvement](docs/self-improvement.md).
 
+The `orglet` command talks to the running app from a terminal, like VS Code's `code`: `orglet send "Summarise this" --to Researcher --file notes.txt` sends a message into that chat and prints the answer, and `orglet read`, `list`, `status` and `open` do what they say. Keys, chats and files stay in the app, and the command cannot change settings, permissions or folders. On Windows, **Settings → About → Add to PATH** installs it. Details: [the orglet command](docs/cli.md).
+
 **Settings → Data** backs the workspace up, restores it, and deletes what you no longer want kept: the chat history, the knowledge your workers built up, what they remembered, the sources you imported, or everything at once. Nothing there touches your API keys or your own files. Details: [technical guide](docs/technical-guide.md#deleting-data).
 
 **Settings → Local harnesses** always shows Claude Code, Codex and Cursor Agent as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. If sign-in fails, the screen gives the CLI login command to copy; Orglet does not switch to Demo.

@@ -341,6 +341,12 @@ export interface Bridge {
   onProgress(callback: (update: import('./progress').RunProgressUpdate) => void): () => void;
   /** A back or forward app command the window received: a mouse's side button over the frame, or a driver that sends the command itself (COD-202). */
   onNavigate(callback: (direction: 'back' | 'forward') => void): () => void;
+  /** How the `orglet` terminal command is installed on this build (COD-234). */
+  cliState(): Promise<import('./cli').CliInstallState>;
+  /** Adds the `orglet` command to the user's PATH, or removes it; Windows packaged builds only. */
+  setCliOnPath(enabled: boolean): Promise<import('./cli').CliInstallState>;
+  /** A chat `orglet open --to` asked the window to show. */
+  onOpenChat(callback: (target: import('./cli').OpenChatTarget) => void): () => void;
 }
 declare global { interface Window { orglet: Bridge } }
 

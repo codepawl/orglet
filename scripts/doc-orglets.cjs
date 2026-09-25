@@ -48,6 +48,8 @@ const pageOrglets = [
   { name: 'writing', accessory: 'pencil', colour: '#c9922e', face: 'happy', yaw: 0.34, pitch: 0.06 },
   // Every accessory already has a page, so this one shares the glasses and takes a colour and face of its own.
   { name: 'worker-actions', accessory: 'glasses', colour: '#3f9a68', face: 'curious', yaw: -0.32, pitch: 0.08 },
+  // The terminal command talks to the app over a line, so it wears the antenna in a colour the other one lacks.
+  { name: 'cli', accessory: 'antenna', colour: '#3f9a68', face: 'happy', yaw: 0.3, pitch: 0.08 },
 ];
 
 // The README crew: five orglets side by side, the outer ones turned towards the middle.

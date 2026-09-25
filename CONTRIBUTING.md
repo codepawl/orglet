@@ -41,6 +41,7 @@ The packaged smokes drive a real Electron window and are CI's job after typechec
 | `pnpm build` then `pnpm test:desktop` | A real window, renderer isolation, sources, export, keyboard, history after restart |
 | `pnpm make` then `pnpm test:packaged` | The packaged executable, DuckDB, a crew template with checks, backup and restore |
 | `pnpm test:harness` | Settings → Local harnesses with fixture CLIs; never starts a harness run |
+| `pnpm build` then `pnpm test:cli` | The shipped `orglet` command against the packaged app: send and read with Demo, JSON, a refused token and operation, starting the app; never edits PATH |
 | `pnpm test:isolation` (`--packaged` after `pnpm build`) | The Windows sandbox for workspace files and commands; needs a supported Windows host |
 | `pnpm test:routines`, `pnpm test:skills`, `pnpm test:knowledge`, `pnpm test:run-audit`, `pnpm test:findings`, `pnpm test:revisions`, `pnpm test:sidebar`, `pnpm test:i18n` | One packaged flow each; see the [technical guide](docs/technical-guide.md#checks-and-packaging) |
 

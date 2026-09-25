@@ -26,6 +26,8 @@
     "test:harness": "node scripts/harness-smoke.mjs",
     "test:sidebar": "node scripts/sidebar-smoke.mjs",
     "test:i18n": "node scripts/i18n-smoke.mjs",
+    "test:cli": "node scripts/cli-smoke.mjs",
+    "orglet": "node .vite/build/orglet-cli.cjs",
     "test:live": "vitest run tests/live/provider-acceptance.test.ts",
     "i18n:keys": "node scripts/i18n-keys.cjs --unused",
     "images:readme": "node scripts/readme-screenshots.mjs",
