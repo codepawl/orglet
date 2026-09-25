@@ -41,7 +41,7 @@ The live words come from `ActivityKind` in `shared/progress.ts` and the sentence
 
 ## While work happens
 
-- **The island** on the prompt bar (`LiveIsland`, docked by `TaskThread`) carries the faces of the workers really running, one sentence for what they do now, and above it one grey line for the last step that finished. It says who, and it says the action in the vocabulary above. No dots, colours or marks to learn.
+- **The island** on the prompt bar (`LiveIsland`, docked by `TaskThread`) carries the faces of the workers really running, one sentence for what they do now, and above it one grey line for the last step that finished. It says who, and it says the action in the vocabulary above. No dots, colours or marks to learn. When the sentence does not fit, the name gives way first: it shortens with an ellipsis (the full name is in its tooltip) down to a few letters, and only then is the action cut, so "Quarterly Revenue Op… is reading invoice.xlsx…" still says what is happening (COD-250).
 - **The step list, the timer and the worker's notes** sit behind one folded control above the streaming text: the same trace the finished answer keeps (`TurnTrace`, below), with the memories the run froze as its first rows. The control counts what has happened so far ("Dùng 1 ghi nhớ · Đọc 2 tệp · Tìm 1 lần"), or says *Chi tiết* when only notes are there.
 - **The answer** appears as it is written, as a normal message.
 - **Thinking** shows only inside that folded control, as the worker's notes, and only when the model shares it. It is not on the page by default. It is never saved: `HarnessProgress` lives in memory and is dropped when the run stops.

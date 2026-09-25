@@ -14,15 +14,22 @@ export type IslandState = 'thinking' | 'reading' | 'searching' | 'listing' | 'to
 
 /**
  * What the island shows: the state and label for now, the last finished step where the run reports steps, and the
- * workers whose runs are really running, whose faces the island carries (COD-169).
+ * workers whose runs are really running, whose faces the island carries (COD-169). `named` is the label cut around
+ * the one worker's name, when it names one (COD-250); the label stays the whole sentence.
  */
-export type IslandView = { state: IslandState; label: string; receipt?: string; workers: readonly Worker[] };
+export type IslandView = { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[] };
+
+/** A sentence around a worker's name: "" + "Researcher" + " is reading invoice.xlsx…". */
+export type NamedSentence = { before: string; name: string; after: string };
 
 /** How long the receipt waits after the label has changed, so the new state is read first. */
 const RECEIPT_DELAY_MS = 350;
 
 /** The room between the faces and the label; the receipt line is inset by the faces plus this, to sit over the label. */
 const FACES_GAP_PX = 8;
+
+/** How far a long name shrinks before the action starts to give way: a few letters and the ellipsis. */
+const NAME_FLOOR_EM = 6;
 
 /**
  * A working run as one island (COD-164, from the owner's dynamic-island reference), docked on the prompt bar
@@ -39,7 +46,7 @@ const FACES_GAP_PX = 8;
  * `receipt` is left out where the run reports no steps, and passed as an empty string while the first step is still
  * running; the line takes room only once it has something to say.
  */
-export function LiveIsland({ state, label, receipt, workers, leaving }: { state: IslandState; label: string; receipt?: string; workers: readonly Worker[]; leaving?: boolean }) {
+export function LiveIsland({ state, label, named, receipt, workers, leaving }: { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; leaving?: boolean }) {
   const content = useRef<HTMLSpanElement>(null);
   const faces = useRef<HTMLSpanElement>(null);
   const width = useMeasuredWidth(content);
@@ -56,10 +63,33 @@ export function LiveIsland({ state, label, receipt, workers, leaving }: { state:
         <span className="live-island-faces" ref={faces} title={workers.map(worker => worker.name).join(', ')}>
           <RosterAvatars workers={workers} size="sm" max={workers.length} />
         </span>
-        <span className="live-island-label" key={label}>{label}</span>
+        <IslandSentence key={label} label={label} named={named} />
       </span>
     </div>
   </div>;
+}
+
+/**
+ * The island's sentence. With a name in it, the name and the action are separate pieces (COD-250): the name gives way
+ * first, with an ellipsis and the full name in its tooltip, down to a few letters, and only then does the action
+ * shorten. The floor is the shorter of those few letters and the whole name, so a short name never holds room it
+ * does not use.
+ */
+function IslandSentence({ label, named }: { label: string; named?: NamedSentence }) {
+  const name = useRef<HTMLSpanElement>(null);
+  const nameWidth = useNaturalWidth(name, named?.name);
+  if (!named) {
+    return <span className="live-island-label live-island-sentence">
+      <span className="live-island-action">{label}</span>
+    </span>;
+  }
+  const floor = nameWidth === undefined ? `${NAME_FLOOR_EM}em` : `min(${NAME_FLOOR_EM}em, ${nameWidth}px)`;
+  const style = { '--island-name-floor': floor } as CSSProperties;
+  return <span className="live-island-label live-island-sentence" style={style}>
+    {named.before && <span className="live-island-lead">{named.before}</span>}
+    <span className="live-island-name" ref={name} title={named.name}>{named.name}</span>
+    <span className="live-island-action">{named.after}</span>
+  </span>;
 }
 
 /**
@@ -129,6 +159,23 @@ function useMeasuredWidth(target: RefObject<HTMLElement | null>) {
     observer.observe(element);
     return () => observer.disconnect();
   }, [target]);
+  return width;
+}
+
+/**
+ * The width the element's text needs in whole pixels, even while it is cut short. Measured again when `text`
+ * changes; the fonts are loaded before any run starts, so the text is the only thing that moves it.
+ */
+function useNaturalWidth(target: RefObject<HTMLElement | null>, text: string | undefined) {
+  const [width, setWidth] = useState<number>();
+  useLayoutEffect(() => {
+    const element = target.current;
+    if (!element) {
+      setWidth(undefined);
+      return;
+    }
+    setWidth(Math.ceil(element.scrollWidth));
+  }, [target, text]);
   return width;
 }
 

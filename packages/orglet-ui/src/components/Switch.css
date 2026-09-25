@@ -21,7 +21,7 @@
   box-shadow: 0 1px 2px #0003;
   transition: transform var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
 }
-.org-switch[aria-checked=true] { background: var(--org-accent, #4f7fe0); }
+.org-switch[aria-checked=true] { background: var(--org-accent, #4473d3); }
 .org-switch[aria-checked=true] > span {
   background: var(--org-accent-ink, #fff);
   transform: translateX(16px);

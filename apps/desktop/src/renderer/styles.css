@@ -15,8 +15,9 @@
   --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --font-sans: var(--font); --default-font-family: var(--font);
   font-family: var(--font); font-size: 14px; line-height: 1.5;
-  /* Set from the workspace in App.tsx; these are what the sheet uses until it arrives. */
-  --accent:#4f7fe0; --accent-ink:#ffffff;
+  /* Set from the workspace in App.tsx; these are what the sheet uses until it arrives. `--accent-text-light` and
+     `--accent-text-dark` arrive with them: the accent as text, readable in each theme (shared/accent.ts, COD-250). */
+  --accent:#4473d3; --accent-ink:#ffffff;
   /* One size for every panel and settings-style dialog (user, 2026-09-23). */
   --panel-width: min(720px, calc(100vw - 32px)); --panel-height: min(640px, calc(100dvh - 32px));
   --control-height: 34px; --icon-size: 32px; --radius: 9px; --page-x: 20px; --chrome-y: 12px; --sidebar-width: 228px;
@@ -46,10 +47,11 @@
   /* The prompt bar and the island's shared outline (COD-228): --border read as white on white. */
   --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg));
   --primary:#171717; --primary-text:#fff; --error:#a82626; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
+  --accent-text: var(--accent-text-light, #395a9d);
   --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
 }
-:root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; } }
+:root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); } }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
 button,input,textarea,select { font:inherit; color:inherit; }
@@ -609,7 +611,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .mention-menu .emoji-glyph { display:grid; place-items:center; width:22px; height:22px; flex-shrink:0; font-size:18px; line-height:1; }
 /* A tag is not ordinary text, so it carries its own colour. --mention is set from the workspace, so the user
    can change it in Settings without a rebuild (user, 2026-09-19). */
-.mention { font-weight:600; color:var(--accent); background:color-mix(in srgb, var(--accent) 14%, transparent); border-radius:4px; padding:0 3px; }
+.mention { font-weight:600; color:var(--accent-text); background:color-mix(in srgb, var(--accent) 14%, transparent); border-radius:4px; padding:0 3px; }
 .composer-note { margin:10px 0 0; text-align:center; color:var(--muted); font-size:12px; }
 .composer-note button { border:0; background:transparent; color:var(--text); text-decoration:underline; margin-left:6px; }
 /* Attachment (Attachment.tsx): a card for one attached file — the kind's icon, the name, a line with the kind and
@@ -674,8 +676,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:16px; }
 .actions .form-error { flex:1 1 100%; margin:0; order:-1; }
 /* A long skill or note never pushes its Save or Approve out of reach: the bar floats in the panel's bottom-right
-   corner, where a dialog's actions sit, and the text scrolls under it, blurred (user, 2026-09-23). */
-.floating-actions { position:sticky; bottom:12px; z-index:2; width:fit-content; max-width:100%; margin:20px 0 0 auto; padding:6px; border-radius:14px; background:color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter:blur(10px) saturate(1.2); box-shadow:0 8px 28px #0000001a, 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent); }
+   corner, where a dialog's actions sit (user, 2026-09-23). The fields scroll on their own above it and the bar keeps
+   a lane of its own, so no field sits under it when the panel opens or at the end of the form (COD-250: it covered
+   the end of the Scope dropdown on opening, and a padding inside one shared scroll cannot free the first view). */
+.drawer-scroll:has(> .floating-form) { display:flex; padding:0; overflow:hidden; }
+.form.floating-form { flex:1; min-width:0; min-height:0; gap:0; }
+.floating-form-fields { flex:1; min-height:0; display:flex; flex-direction:column; gap:22px; padding:18px 24px 16px; overflow:auto; overscroll-behavior:contain; }
+.floating-actions { position:relative; z-index:2; flex-shrink:0; width:fit-content; max-width:calc(100% - 48px); margin:0 24px 12px auto; padding:6px; border-radius:14px; background:color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter:blur(10px) saturate(1.2); box-shadow:0 8px 28px #0000001a, 0 0 0 1px color-mix(in srgb, var(--text) 7%, transparent); }
 @media (min-width: 420px) {
   .actions .form-error { flex:1 1 auto; order:0; margin-right:auto; }
 }
@@ -2143,6 +2150,15 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    padding and outline (21px) and the faces with their gap, so the widest label still fits the straight edge. */
 .live-island-label { min-width:0; max-width:min(46ch, calc(100cqw - 101px - var(--island-faces, 24px))); font-size:14px; font-weight:500; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation:island-fade-in 260ms var(--ease-out); }
 @keyframes island-fade-in { from { opacity:0; transform:translateY(2px); } }
+/* A run's sentence is pieces in a row (COD-250): the words before the name, the name, the action. The name shrinks
+   first, down to --island-name-floor (a few letters, or the whole name when that is shorter, set by LiveIsland); the
+   action is capped at what is left after that floor, so it is cut only once the name can give no more. `pre` keeps
+   the spaces at the pieces' edges, which a flex item would otherwise drop. */
+.live-island-sentence { display:flex; align-items:baseline; white-space:pre; }
+.live-island-sentence > span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.live-island-sentence > .live-island-lead { flex:0 0 auto; }
+.live-island-sentence > .live-island-name { flex:0 1 auto; min-width:var(--island-name-floor, 0px); }
+.live-island-sentence > .live-island-action { flex:0 0 auto; max-width:calc(100% - var(--island-name-floor, 0px)); }
 /* The chat's knowledge suggestions on the same tab (COD-208), once no run is on: a lightbulb in the working colour
    where the faces sit, the count in the label's own type, then Review and a dismiss. The controls are the content's
    24px, centred on the label, and answer hover with colour only, since the tab is one surface (Review reads as the

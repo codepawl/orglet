@@ -33,7 +33,7 @@ import { DetailsPanel } from './components/DetailsPanel';
 import type { WorkspaceRecoveryView } from '../shared/workspace-recovery';
 import type { RecoveryFocus } from './components/WorkspaceRecovery';
 import { suggestStarters } from '../shared/starters';
-import { accentInk, DEFAULT_ACCENT_COLOR } from '../shared/accent';
+import { accentInk, accentText, DEFAULT_ACCENT_COLOR } from '../shared/accent';
 import { fontStack } from '../shared/fonts';
 import { ProviderMark } from './components/ProviderMark';
 import { SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
@@ -345,11 +345,15 @@ export function App() {
   useEffect(() => { if (error) recordNotice(error, 'error', errorAbout.current); }, [error]);
   useEffect(() => { document.documentElement.dataset.theme = workspace?.theme ?? 'system'; }, [workspace?.theme]);
   // The accent is the user's to pick, so it rides on the root rather than being baked into the sheet. What sits on
-  // top of it comes with it: a pale accent needs dark ink, or the send arrow disappears into its own button.
+  // top of it comes with it: a pale accent needs dark ink, or the send arrow disappears into its own button. So does
+  // the accent as text, one colour per theme, which the palette blocks in styles.css pick from (COD-250).
   useEffect(() => {
     const accent = workspace?.accentColor ?? DEFAULT_ACCENT_COLOR;
-    document.documentElement.style.setProperty('--accent', accent);
-    document.documentElement.style.setProperty('--accent-ink', accentInk(accent));
+    const root = document.documentElement.style;
+    root.setProperty('--accent', accent);
+    root.setProperty('--accent-ink', accentInk(accent));
+    root.setProperty('--accent-text-light', accentText(accent, 'light'));
+    root.setProperty('--accent-text-dark', accentText(accent, 'dark'));
   }, [workspace?.accentColor]);
   // The brand mark's colour is the user's too (COD-154): the text colour, or the accent. It rides on the root so
   // every mark follows; before the workspace arrives there is nothing to read, so the startup mark stays monochrome.

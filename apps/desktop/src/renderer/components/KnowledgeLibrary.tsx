@@ -88,14 +88,17 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
     const [type, id] = scope.split(':');
     return orglet.call('saveKnowledge', { ...(item ? { id: item.id } : {}), title, content, tags: tags.split(',').map(tag => tag.trim()).filter(Boolean), pinned, scope: type === 'workspace' ? { type: 'workspace' } : { type: type as 'team' | 'worker', id } });
   };
-  return <form className="form" onSubmit={event => { event.preventDefault(); void run(save); }}>
-    {item && <KnowledgeAuthor item={item} workspace={workspace} />}
-    <label><FieldLabel icon={Type} required>{t('Tiêu đề')}</FieldLabel><Input value={title} onChange={event => setTitle(event.target.value)} required maxLength={200} /></label>
-    <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><Textarea rows={8} value={content} onChange={event => setContent(event.target.value)} required maxLength={8000} /></label>
-    <label><FieldLabel icon={Tag}>Tags</FieldLabel><Input value={tags} onChange={event => setTags(event.target.value)} placeholder="scoring, dataset" /></label>
-    <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
-    <p className="muted">{t('Knowledge của hội chỉ nạp khi chạy trong hội đó.')}</p>
-    <SwitchField checked={pinned} onChange={setPinned} description={t('Không ghim thì chỉ nạp khi yêu cầu khớp từ khóa.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
+  return <form className="form floating-form" onSubmit={event => { event.preventDefault(); void run(save); }}>
+    <div className="floating-form-fields">
+      {item && <KnowledgeAuthor item={item} workspace={workspace} />}
+      <label><FieldLabel icon={Type} required>{t('Tiêu đề')}</FieldLabel><Input value={title} onChange={event => setTitle(event.target.value)} required maxLength={200} /></label>
+      {/* Six rows keep a pending note's Scope whole above the action bar when it opens (COD-250); the box still resizes. */}
+      <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><Textarea rows={6} value={content} onChange={event => setContent(event.target.value)} required maxLength={8000} /></label>
+      <label><FieldLabel icon={Tag}>Tags</FieldLabel><Input value={tags} onChange={event => setTags(event.target.value)} placeholder="scoring, dataset" /></label>
+      <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
+      <p className="muted">{t('Knowledge của hội chỉ nạp khi chạy trong hội đó.')}</p>
+      <SwitchField checked={pinned} onChange={setPinned} description={t('Không ghim thì chỉ nạp khi yêu cầu khớp từ khóa.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
+    </div>
     <div className="actions floating-actions">
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       {proposed && !changed && <Button type="button" variant="primary" disabled={busy} onClick={() => void run(() => orglet.call('reviewKnowledge', { id: item.id, revision: item.revision, decision: 'approve' }))}>{t('Duyệt')}</Button>}
