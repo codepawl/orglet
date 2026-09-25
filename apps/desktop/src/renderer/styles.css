@@ -882,7 +882,9 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    own theme (`.theme-light` / `.theme-dark`) so both show whatever the app is set to. The card is the surface,
    so the code sits straight on it with no tint of its own, and a diff line runs the card's full width with its
    sign in the card's inset. The cards stack when the panel is too narrow to hold two readable columns. */
-.font-sample { margin:0 0 6px; padding:12px 14px; border:1px solid var(--border); border-radius:12px; font-size:14px; line-height:1.5; color:var(--text); }
+.font-sample { display:flex; flex-direction:column; gap:4px; margin:0 0 6px; padding:10px 14px 12px; border:1px solid var(--border); border-radius:12px; color:var(--text); }
+.font-sample-label { font-size:12px; color:var(--muted); }
+.font-sample p { margin:0; font-size:14px; line-height:1.5; }
 .font-preview-cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; margin-bottom:6px; }
 .font-preview-card { min-width:0; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--bg); color:var(--text); }
 .font-preview-card pre.source-preview { padding:10px 0; border-radius:0; background:transparent; max-height:none; overflow:hidden; }

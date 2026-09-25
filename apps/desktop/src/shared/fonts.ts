@@ -16,7 +16,7 @@ export const FontFamily = z.string().trim().min(1).max(64).regex(/^[\p{L}\p{N} .
  * Apple platforms, so it cannot be bundled — and the bundled Inter stands right behind it, which is what a
  * machine without SF Pro actually draws.
  */
-const INTERFACE_PREFERRED = ['SF Pro Text', 'SF Pro Display'];
+export const INTERFACE_PREFERRED_FONTS = ['SF Pro Text', 'SF Pro Display'];
 
 /** Kept after the chosen family so text still renders when it is missing, and so emoji keep their own font. */
 const INTERFACE_FALLBACK = 'ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"';
@@ -30,7 +30,7 @@ export function fontStack(role: FontRole, family?: string): string {
   const fallback = role === 'interface' ? INTERFACE_FALLBACK : CODE_FALLBACK;
   const chosen = FontFamily.safeParse(family);
   // Nothing picked means the default stack; a pick replaces the preference, not the bundled face behind it.
-  const preferred = chosen.success ? [] : role === 'interface' ? INTERFACE_PREFERRED : [];
+  const preferred = chosen.success ? [] : role === 'interface' ? INTERFACE_PREFERRED_FONTS : [];
   const picked = chosen.success && chosen.data !== bundledFont(role) ? [chosen.data] : [];
   const names = [...preferred, ...picked, bundledFont(role)];
   return `${names.map(name => `"${name}"`).join(', ')}, ${fallback}`;
