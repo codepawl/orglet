@@ -15,6 +15,7 @@ import { planIntegration, plainCopyDiff, type IntegrationStep } from './workspac
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
 import type { IntegrationStepInput, WorkspaceIntegration } from './workspace-integration';
 import { WorkspaceProcesses } from './workspace-processes';
+import { dependencyFolders } from './workspace-dependencies';
 import { StartWorkspaceProcess, WorkspaceProcessId, WorkspaceProcessOutput, WorkspaceProcessStatus } from '../../shared/workspace-processes';
 
 /**
@@ -395,9 +396,10 @@ export class WorkspaceRuntime {
         this.assertCopiesResolved(run);
         const copy = await this.prepare(run, signal);
         if (copy.state !== 'ready') throw new Error('Bản làm việc đã tích hợp hoặc đang chờ xử lý xung đột.');
-        await this.grants.directory(run.snapshot.workspaceGrant!, 'execute');
+        const source = await this.grants.directory(run.snapshot.workspaceGrant!, 'execute');
+        const dependencies = await dependencyFolders(source, copy.directory!, copy.baseline);
         const started = await processes.start({ runId: run.id, callId, directory: copy.directory!, command, signal: lifetime,
-          copyEdits: copy.edits, authorize: () => { this.authorize(run, 'execute', lifetime); } });
+          copyEdits: copy.edits, dependencies, authorize: () => { this.authorize(run, 'execute', lifetime); } });
         return processes.status(run.id, started.processId, 1000, signal, authorize);
       });
     }

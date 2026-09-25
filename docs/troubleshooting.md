@@ -48,7 +48,7 @@ The orglet is told this when it happens, with the way around it: test in-process
 
 ## A command cannot find Python, Git or pnpm
 
-Workspace commands do not inherit your `PATH` or shell profile. They run with the bundled Node runtime or Windows `cmd`, inside the working copy. `npm test`, `npm run <name>` and the pnpm and yarn forms run the project's `package.json` scripts with that Node, but nothing can be installed. Tell the orglet what is available, or run that step yourself.
+Workspace commands do not inherit your `PATH` or shell profile. They run with the bundled Node runtime or Windows `cmd`, inside the working copy. `npm test`, `npm run <name>` and the pnpm and yarn forms run the project's `package.json` scripts with that Node, using the packages already installed in the folder's `node_modules` (read-only), but nothing can be installed. If a script needs a package that is missing, install it in your folder first. Tell the orglet what is available, or run that step yourself.
 
 ## Web search fails with a verification challenge
 

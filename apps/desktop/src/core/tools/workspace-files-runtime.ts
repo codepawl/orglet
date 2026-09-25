@@ -9,6 +9,7 @@ import { StartWorkspaceProcess } from '../../shared/workspace-processes';
 import { prepareGitWorktree } from './workspace-git';
 import { diffWorkspaceCopy } from './workspace-diff';
 import type { WorkspaceDiff } from '../../shared/workspace-diff';
+import { linkDependencies, unlinkDependencies, type DependencyLink } from './workspace-dependencies';
 
 const HelperReply = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), value: z.unknown() }).strict(),
@@ -74,9 +75,17 @@ export class WorkspaceFilesRuntime {
     return reply.value;
   }
 
-  runCommand(directory: string, raw: unknown, signal: AbortSignal, onOutput?: SandboxRequest['onOutput']): Promise<SandboxResult> {
+  /** Runs one command in the copy. The folder's installed dependencies are linked in, read-only, for its duration (COD-271). */
+  async runCommand(directory: string, raw: unknown, signal: AbortSignal, onOutput?: SandboxRequest['onOutput'],
+    dependencies: readonly DependencyLink[] = []): Promise<SandboxResult> {
     const command = StartWorkspaceProcess.parse(raw);
-    return this.invoke(directory, { operation: 'command', command }, signal, command.timeoutMs, [], onOutput);
+    const linked = await linkDependencies(dependencies);
+    try {
+      const readable = linked.map(dependency => dependency.target);
+      return await this.invoke(directory, { operation: 'command', command }, signal, command.timeoutMs, readable, onOutput);
+    } finally {
+      await unlinkDependencies(linked);
+    }
   }
 
   private async invoke(directory: string, request: unknown, signal: AbortSignal, timeoutMs: number,

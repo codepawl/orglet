@@ -3,6 +3,7 @@ import { StartWorkspaceProcess, WorkspaceProcess, describeCommand, loopbackBlock
 import { Store, id } from '../storage/database';
 import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
+import type { DependencyLink } from './workspace-dependencies';
 
 type ActiveProcess = { runId: string; controller: AbortController; done: Promise<void> };
 
@@ -71,7 +72,7 @@ export class WorkspaceProcesses {
   }
 
   async start(options: { runId: string; callId: string; directory: string; command: unknown; copyEdits: number;
-    signal: AbortSignal; authorize: () => void }): Promise<{ processId: string }> {
+    signal: AbortSignal; authorize: () => void; dependencies?: DependencyLink[] }): Promise<{ processId: string }> {
     const command = StartWorkspaceProcess.parse(options.command);
     return new ToolCalls(this.store).execute({
       runId: options.runId, callId: options.callId, name: 'workspace_start_process', arguments: command, replay: 'never',
@@ -91,7 +92,7 @@ export class WorkspaceProcesses {
           return this.files.runCommand(options.directory, command, lifetime, output => {
             Object.assign(process, output);
             if (Date.now() - lastSaved >= 250) { lastSaved = Date.now(); this.save(process); }
-          });
+          }, options.dependencies);
         }).then(result => {
           this.save({ id: process.id, runId: process.runId, command, state: result.termination,
             exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, copyEditsAtStart: options.copyEdits });
