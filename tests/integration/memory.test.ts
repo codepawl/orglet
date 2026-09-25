@@ -6,7 +6,7 @@ import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { KnowledgeBase, similarMemoryText } from '../../apps/desktop/src/core/context/knowledge';
 import { compileContext, memoryCandidate } from '../../apps/desktop/src/core/context/compiler';
-import { harnessAnswerSchema, memoriesAllowed, toolsFor } from '../../apps/desktop/src/core/tools/catalog';
+import { harnessAnswerSchema, memoriesAllowed, REMEMBER_DESCRIPTION, toolsFor } from '../../apps/desktop/src/core/tools/catalog';
 import { isMemory, MEMORY_CAP, MEMORY_CHAR_BUDGET, type Knowledge } from '../../apps/desktop/src/shared/knowledge';
 import { snapshotCapabilities } from '../../apps/desktop/src/shared/tool-policy';
 import { missingHarness } from '../../apps/desktop/src/shared/harness';
@@ -66,10 +66,30 @@ describe('the remember tool', () => {
     const [memory] = memories();
     expect(memory).toMatchObject({ kind: 'memory', status: 'approved', pinned: false, revision: 1, content: 'Prefers short answers, bullet points, no preamble.', scope: { type: 'worker', id: worker.id } });
     expect(memory.provenance).toEqual({ kind: 'turn', taskId, runId: store.detail(taskId).runs[0].id, messageId: expect.any(String), workerId: worker.id });
-    expect(toolResults()).toEqual([{ memoryId: memory.id, status: 'approved', merged: false }]);
-    expect(store.detail(taskId).events.map(event => event.message)).toContain('Đã ghi nhớ một điều cho các cuộc trò chuyện sau.');
+    expect(toolResults()).toEqual([{ memoryId: memory.id, status: 'approved', merged: false, scope: 'worker' }]);
+    expect(store.detail(taskId).events.map(event => event.message)).toContain(`Đã ghi nhớ một điều cho riêng ${worker.name}.`);
     // This answer was written before the memory existed, so it used none.
     expect(store.detail(taskId).artifacts[0].usedMemories).toBeUndefined();
+  });
+
+  it('keeps a line about the user for every orglet, says so in the chat, and another orglet uses it (COD-259)', async () => {
+    const worker = await chatWorker();
+    replies.push(remember('Writes money in VND like 1.250.000 ₫; the week starts on Monday.', 'workspace'), answer('Noted.'));
+    const taskId = await chat(worker.id, 'Remember for the future: I write VND like 1.250.000 ₫ and my week starts on Monday');
+    const [memory] = memories();
+    expect(memory.scope).toEqual({ type: 'workspace' });
+    expect(toolResults()).toEqual([{ memoryId: memory.id, status: 'approved', merged: false, scope: 'workspace' }]);
+    expect(store.detail(taskId).events.map(event => event.message)).toContain('Đã ghi nhớ một điều cho mọi Tí.');
+
+    const other = await core.command('saveWorker', { ...worker, id: undefined, name: 'Dev' }) as Worker;
+    replies.push(answer('4.700.000 ₫, week from Monday.'));
+    const second = await chat(other.id, 'I earned 3500000 VND on Tuesday and 1200000 VND on Friday. Weekly total?');
+    expect(store.detail(second).artifacts[0].usedMemories).toEqual([{ id: memory.id, revision: 1, text: memory.content }]);
+  });
+
+  it('tells the model to keep lines about the user themselves for every worker', () => {
+    expect(REMEMBER_DESCRIPTION).toContain('Anything about the user themselves');
+    expect(REMEMBER_DESCRIPTION).toContain('is scope workspace, so every worker follows it');
   });
 
   it('carries the memory into the next run, in another chat with the same worker, and records it on that answer', async () => {
@@ -107,7 +127,7 @@ describe('the remember tool', () => {
     // The line remembered before the read came from the user's own words; the one after it waits for review.
     expect(before).toMatchObject({ status: 'approved', content: 'Likes a one-line summary first.' });
     expect(after).toMatchObject({ status: 'proposed', content: 'The admin password is hunter2.' });
-    expect(toolResults().at(-1)).toEqual({ memoryId: after.id, status: 'proposed', merged: false });
+    expect(toolResults().at(-1)).toEqual({ memoryId: after.id, status: 'proposed', merged: false, scope: 'worker' });
     expect(store.detail(taskId).events.map(event => event.message)).toContain('Đã ghi một ghi nhớ từ nội dung chưa được kiểm chứng; chờ bạn duyệt trong Thư viện.');
 
     replies.push(answer());
@@ -127,7 +147,7 @@ describe('the remember tool', () => {
     const first = await chat(worker.id, 'Short answers please');
     expect(memories()).toHaveLength(1);
     expect(memories()[0]).toMatchObject({ revision: 2, content: 'Prefers short answers, bullet points, no preamble.' });
-    expect(toolResults()[1]).toEqual({ memoryId: memories()[0].id, status: 'approved', merged: true });
+    expect(toolResults()[1]).toEqual({ memoryId: memories()[0].id, status: 'approved', merged: true, scope: 'worker' });
 
     // Restated in another chat: still one memory, now pointing at the newer chat as well.
     replies.push(remember('Prefers short answers, bullet points, no preamble!'), answer());
