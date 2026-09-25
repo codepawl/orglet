@@ -97,8 +97,9 @@ describe('orglet answers from a chat', () => {
 
   it('takes every answer of one message, oldest first, with the author', () => {
     expect(turnAnswers(detail({ inputRevision: 1 }, runs, artifacts), 1)).toEqual([
-      { name: 'Researcher', stage: 'member', text: 'Title\n\nMember result', createdAt: '2026-09-25T10:00:03.000Z' },
-      { name: 'Writer', stage: 'synthesis', text: 'Combined answer', createdAt: '2026-09-25T10:00:05.000Z' },
+      // Each answer carries its author's face colour: the mascot its name suggests (search blue, writer purple).
+      { name: 'Researcher', stage: 'member', text: 'Title\n\nMember result', createdAt: '2026-09-25T10:00:03.000Z', color: '#4f7fe0' },
+      { name: 'Writer', stage: 'synthesis', text: 'Combined answer', createdAt: '2026-09-25T10:00:05.000Z', color: '#a764c9' },
     ]);
     expect(turnAnswers(detail({}, runs, artifacts), 0).map(answer => answer.text)).toEqual(['Old answer']);
     expect(turnErrors(detail({}, runs, artifacts), 1)).toEqual(['Hết ngân sách.']);
@@ -248,11 +249,41 @@ describe('orglet round trip through the real server', () => {
     expect(await runCli(['status'], output, environment)).toBe(0);
     expect(printed.pop()).toBe('Orglet 9.9.9 is running.\n1 orglet, 0 crews.');
     expect(await runCli(['open', '--to', 'researcher'], output, environment)).toBe(0);
-    expect(started.opened).toEqual([{ kind: 'worker', id: workerId, name: 'Researcher' }]);
+    expect(started.opened).toEqual([{ kind: 'worker', id: workerId, name: 'Researcher', color: '#4f7fe0' }]);
     expect(await runCli(['read', '--to', 'Nobody', '--json'], output, environment)).toBe(1);
     expect(JSON.parse(printed.pop()!)).toMatchObject({ ok: false, code: 'not_found', error: 'EN:Không có Tí hay hội nào tên "Nobody". Có: Researcher.' });
     const refused = await exchange(cliEndpoint(started.folder), { op: 'status', token: createCliToken() });
     expect(refused).toMatchObject({ ok: false, code: 'unauthorized' });
+  });
+
+  it('shows the waiting face on standard error while send waits, and stops waiting on Ctrl+C', async () => {
+    const started = await startServer();
+    const environment = { ORGLET_USER_DATA: started.folder };
+    const printed: string[] = [];
+    const errors: string[] = [];
+    const drawn: string[] = [];
+    const statusTerminal = { write: (text: string) => drawn.push(text), mode: 'truecolor' as const, columns: () => 80 };
+    const output = { stdout: (text: string) => printed.push(text), stderr: (text: string) => errors.push(text), statusTerminal };
+    expect(await runCli(['send', 'hello', '--to', 'res'], output, environment)).toBe(0);
+    // Standard output stays plain; the face went to standard error, was taken away and gave the cursor back.
+    expect(printed).toEqual(['Hello from Demo']);
+    expect(drawn[0]).toBe('\x1b[?25l');
+    expect(drawn.join('')).toContain('Researcher is working');
+    expect(drawn.join('')).toContain('\x1b[48;2;79;127;224m');
+    expect(drawn[drawn.length - 1]).toBe('\x1b[?25h');
+
+    const controller = new AbortController();
+    let released = false;
+    const catchInterrupt = () => {
+      controller.abort();
+      return () => {
+        released = true;
+      };
+    };
+    const interrupted = { ...output, statusTerminal: { ...statusTerminal, catchInterrupt } };
+    expect(await runCli(['send', 'again', '--to', 'res'], interrupted, environment, undefined, { signal: controller.signal })).toBe(1);
+    expect(errors.pop()).toBe('Stopped waiting. res keeps working in the app. Read the answer later with: orglet read --to "res"');
+    expect(released).toBe(true);
   });
 
   it('exits 3 when nothing listens and there is no app to start', async () => {

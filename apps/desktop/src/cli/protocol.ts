@@ -69,13 +69,25 @@ export type CliErrorCode = 'unauthorized' | 'invalid' | 'too_large' | 'busy' | '
 export type CliResponse<T = unknown> = { ok: true; value: T } | { ok: false; code: CliErrorCode; error: string };
 
 export type ChatKind = 'worker' | 'team';
-export type CliChat = { kind: ChatKind; id: string; name: string };
-export type CliAnswer = { name: string; stage?: string; text: string; createdAt: string };
+/**
+ * The colour fields (COD-236) are `#rrggbb` avatar colours for the terminal faces. They are optional because an app
+ * older than the command does not send them; the command then draws a neutral face.
+ */
+export type CliChat = {
+  kind: ChatKind;
+  id: string;
+  name: string;
+  /** The orglet's colour; for a crew, its lead's. */
+  color?: string;
+  /** A crew's orglets in crew order (members, then the lead), each in its colour. */
+  colors?: string[];
+};
+export type CliAnswer = { name: string; stage?: string; text: string; createdAt: string; color?: string };
 
-export type StatusValue = { version: string; orglets: number; crews: number; running: number };
+export type StatusValue = { version: string; orglets: number; crews: number; running: number; colors?: string[] };
 export type ListValue = {
-  orglets: { name: string; provider: string; model?: string }[];
-  crews: { name: string; lead: string; members: string[] }[];
+  orglets: { name: string; provider: string; model?: string; color?: string }[];
+  crews: { name: string; lead: string; members: string[]; colors?: string[] }[];
 };
 export type SendValue = {
   chat: CliChat;

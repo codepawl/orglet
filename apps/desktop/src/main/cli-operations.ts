@@ -1,5 +1,6 @@
 import type { Source, Task, TaskDetail, TaskInput, TaskStatus, Team, Worker, Workspace } from '../shared/contracts';
 import { liveTeamTask, liveWorkerTask } from '../shared/live-task';
+import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { CliAnswer, CliChat, CliErrorCode, CliRequest, ListValue, OpenValue, ReadValue, SendValue, StatusValue } from '../cli/protocol';
 
 /**
@@ -64,9 +65,19 @@ function notFound(query: string, names: string): never {
 }
 
 export function chatsOf(workspace: Pick<Workspace, 'workers' | 'teams'>): CliChat[] {
-  const orglets = workspace.workers.map(worker => ({ kind: 'worker' as const, id: worker.id, name: worker.name }));
-  const crews = workspace.teams.map(team => ({ kind: 'team' as const, id: team.id, name: team.name }));
+  const orglets = workspace.workers.map(worker => orgletChat(worker));
+  const crews = workspace.teams.map(team => crewChat(team, workspace.workers));
   return [...orglets, ...crews];
+}
+
+function orgletChat(worker: Worker): CliChat {
+  return { kind: 'worker', id: worker.id, name: worker.name, color: defaultAvatarColor(worker) };
+}
+
+function crewChat(team: Team, workers: readonly Worker[]): CliChat {
+  const lead = workers.find(worker => worker.id === team.synthesizerId);
+  const colors = crewRoster(team, workers).map(worker => defaultAvatarColor(worker));
+  return { kind: 'team', id: team.id, name: team.name, ...(lead ? { color: defaultAvatarColor(lead) } : {}), colors };
 }
 
 /** Members then the lead, without repeats, in crew order: the orglets a crew message runs. */
@@ -90,7 +101,8 @@ export function turnAnswers(detail: Pick<TaskDetail, 'runs' | 'artifacts'>, revi
   const answers = detail.artifacts.flatMap(artifact => {
     const run = runs.find(candidate => candidate.id === artifact.runId);
     if (!run) return [];
-    return [{ name: run.snapshot.worker.name, stage: run.stage, text: answerText(artifact.report), createdAt: artifact.createdAt }];
+    const author = run.snapshot.worker;
+    return [{ name: author.name, stage: run.stage, text: answerText(artifact.report), createdAt: artifact.createdAt, color: defaultAvatarColor(author) }];
   });
   return answers.sort((first, second) => first.createdAt.localeCompare(second.createdAt));
 }
@@ -139,14 +151,25 @@ export class CliOperations {
   async status(): Promise<StatusValue> {
     const workspace = await this.workspace();
     const running = workspace.tasks.filter(task => !task.deletedAt && !task.archivedAt && isTurnRunning(task)).length;
-    return { version: this.dependencies.version(), orglets: workspace.workers.length, crews: workspace.teams.length, running };
+    const colors = workspace.workers.map(worker => defaultAvatarColor(worker));
+    return { version: this.dependencies.version(), orglets: workspace.workers.length, crews: workspace.teams.length, running, colors };
   }
 
   async list(): Promise<ListValue> {
     const workspace = await this.workspace();
     const nameOf = (id: string) => workspace.workers.find(worker => worker.id === id)?.name ?? id;
-    const orglets = workspace.workers.map(worker => ({ name: worker.name, provider: worker.provider, ...(worker.modelId ? { model: worker.modelId } : {}) }));
-    const crews = workspace.teams.map(team => ({ name: team.name, lead: nameOf(team.synthesizerId), members: team.memberIds.map(nameOf) }));
+    const orglets = workspace.workers.map(worker => ({
+      name: worker.name,
+      provider: worker.provider,
+      ...(worker.modelId ? { model: worker.modelId } : {}),
+      color: defaultAvatarColor(worker),
+    }));
+    const crews = workspace.teams.map(team => ({
+      name: team.name,
+      lead: nameOf(team.synthesizerId),
+      members: team.memberIds.map(nameOf),
+      colors: crewRoster(team, workspace.workers).map(worker => defaultAvatarColor(worker)),
+    }));
     return { orglets, crews };
   }
 
