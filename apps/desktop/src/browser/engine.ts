@@ -191,7 +191,11 @@ export class BrowserEngine {
       this.cleanBrowser = launching;
       launching.then(browser => browser.on('disconnected', () => {
         if (this.cleanBrowser === launching) this.cleanBrowser = undefined;
-        for (const session of [...this.runs.values()]) if (session.ownsContext) this.runs.delete(session.runId);
+        for (const session of [...this.runs.values()]) {
+          if (!session.ownsContext) continue;
+          session.proxy?.close();
+          this.runs.delete(session.runId);
+        }
       }), () => { if (this.cleanBrowser === launching) this.cleanBrowser = undefined; });
     }
     return this.cleanBrowser;

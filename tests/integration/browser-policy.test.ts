@@ -238,6 +238,7 @@ describe('side threads and schedules', () => {
         if (step === 1) return { calls: [{ id: id(), name: 'browser_open', arguments: JSON.stringify({ url: 'https://example.com/', tabId: null }) }], usage: { input: 10, output: 5 } };
         if (step === 2) return { calls: [{ id: id(), name: 'browser_snapshot', arguments: JSON.stringify({ tabId: 't1', offset: 0 }) }], usage: { input: 10, output: 5 } };
         if (step === 3) return { calls: [{ id: id(), name: 'browser_screenshot', arguments: JSON.stringify({ tabId: 't1' }) }], usage: { input: 10, output: 5 } };
+        if (step === 4) return { calls: [{ id: id(), name: 'propose_settings', arguments: JSON.stringify({ theme: 'dark' }) }], usage: { input: 10, output: 5 } };
         return answer('It says Hello.');
       },
     }), undefined, undefined, undefined, undefined, undefined, undefined, {}, undefined, {}, host);
@@ -257,7 +258,7 @@ describe('side threads and schedules', () => {
 
   const chatInput = (browser: BrowserChoice, brief = 'Hello') => ({
     workerId: store.all<Worker>('workers')[0].id, brief, sourceIds: [], consent: true, providerScopes: ['openai' as const], budgetMicros: 100_000,
-    toolCapabilities: ['source.read' as const, 'skill.read' as const, 'browser.read' as const], browser,
+    toolCapabilities: ['source.read' as const, 'skill.read' as const, 'app.propose' as const, 'browser.read' as const], browser,
   });
 
   it('copies the main chat\'s browser into a side thread, never lets it be wider, and narrows it with the main chat', async () => {
@@ -294,8 +295,9 @@ describe('side threads and schedules', () => {
     expect(actions[2].screenshotId).toBeTruthy();
     // The run's tabs were closed when it ended.
     expect(hostRequests.at(-1)).toEqual({ kind: 'endRun', runId: detail.runs[0].id });
-    // Reading a page makes what the run proposes wait for a click, like the web.
     expect(detail.events.map(event => event.message)).toEqual(expect.arrayContaining(['Đã mở trang example.com', 'Đã đọc trang example.com', 'Đã chụp màn hình example.com']));
+    // Reading a page counts as untrusted input, so what the run proposes waits for a click, like the web.
+    expect(detail.appProposals.map(proposal => proposal.hold)).toEqual(['untrusted']);
 
     const backup = new Backups(store, () => false, () => {}).export();
     expect(backup).not.toContain('browser_actions');

@@ -72,7 +72,7 @@ export function BrowserSitesEditor({ sites, disabled, onChange }: { sites: reado
     </ul>}
     <div className="browser-site-add">
       <Input value={text} disabled={disabled} onChange={event => { setText(event.target.value); if (error) setError(''); }}
-        onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); add(); } }} placeholder="localhost:3000" aria-label={t('Địa chỉ trang')} aria-invalid={error ? true : undefined} maxLength={260} />
+        onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); add(); } }} placeholder={t('Thêm trang, ví dụ example.com')} aria-label={t('Địa chỉ trang')} aria-invalid={error ? true : undefined} maxLength={260} />
       <Select ariaLabel={t('Cho phép hay chặn')} size="sm" value={decision} disabled={disabled} onChange={value => setDecision(value as BrowserSiteDecision)}
         options={[{ value: 'allowed', label: decisionNames.allowed }, { value: 'blocked', label: decisionNames.blocked }]} />
       <Button type="button" variant="outline" disabled={disabled || !text.trim()} onClick={add}><Plus size={14} />{t('Thêm')}</Button>
@@ -232,8 +232,8 @@ export function BrowserProfilesSettings({ busy, act, creating, onCreating }: { b
             {profile.open && <span className="status-pill logged_in"><StatusMark variant="filled" tone="success" label={t('Đang mở')} decorative />{t('Đang mở')}</span>}
           </span>
           <span className="setting-description">{profile.lastUsedAt
-            ? t('Tạo {0} · dùng lần cuối {1}', [new Date(profile.createdAt).toLocaleDateString(currentLocale()), new Date(profile.lastUsedAt).toLocaleString(currentLocale(), { dateStyle: 'short', timeStyle: 'short' })])
-            : t('Tạo {0} · chưa dùng', [new Date(profile.createdAt).toLocaleDateString(currentLocale())])}</span>
+            ? t('Dùng lần cuối {0}', [new Date(profile.lastUsedAt).toLocaleDateString(currentLocale())])
+            : t('Chưa dùng')}</span>
         </div>
         <div className="setting-control">
           <Button variant="outline" disabled={busy || !browser} onClick={() => run(() => orglet.openBrowserProfile(profile.id), t('Đã mở {0}. Đăng nhập trong cửa sổ đó.', [profile.name]), profile.name)}><LogIn size={14} />{t('Mở để đăng nhập')}</Button>

@@ -243,8 +243,10 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
         options={browserLevels.map(level => ({ value: level, label: level === 'read' ? t('Đọc trang') : t('Không dùng trình duyệt') }))} />
       {browserLevel === 'read' && <div className="routine-browser">
         <Select label={<FieldLabel icon={UserRound}>{t('Hồ sơ trình duyệt')}</FieldLabel>} value={browserProfile} onChange={value => setBrowserProfile(value as BrowserProfileId)} options={profileOptions(browser.state, browserProfile)} />
-        <FieldLabel icon={ShieldCheck}>{t('Trang')}</FieldLabel>
-        <BrowserSitesEditor sites={browserSites} disabled={busy} onChange={setBrowserSites} />
+        <div className="routine-browser-sites">
+          <FieldLabel icon={ShieldCheck}>{t('Trang')}</FieldLabel>
+          <BrowserSitesEditor sites={browserSites} disabled={busy} onChange={setBrowserSites} />
+        </div>
         <p className="muted">{t('Lịch chỉ đọc trang, không bấm hay gửi gì. Trang trên máy này hoặc mạng nội bộ cần có trong danh sách; hồ sơ đã đăng nhập chỉ mở trang được phép.')}</p>
       </div>}
       <SwitchField checked={enabled} onChange={setEnabled}>{t('Bật lịch')}</SwitchField>

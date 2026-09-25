@@ -244,6 +244,18 @@ The model picker chips a selected or suggested ID when the cached list has `depr
 
 Gemini CLI (`@google/gemini-cli`, read against 0.61.0) is a fourth local harness: detection on `PATH`, the npm global folder and Homebrew's folders, sign-in read from its own `.gemini` folder (it has no status command), accounts through `GEMINI_CLI_HOME`, the CLI's model aliases, and runs with none of its own tools through a workspace settings file in the private folder plus flags and variables ([technical guide → Gemini CLI lockdown](technical-guide.md#gemini-cli-lockdown)). Sources are inlined as for Codex; a `tool_use` event stops the run. Tests: `tests/integration/gemini-harness.test.ts` with a fake `gemini`, plus the shared harness, login-line and tool-adapter suites; the packaged harness smoke lists Gemini CLI as found and signed out. Not verified: a signed-in run against the real CLI.
 
+## Orglet's browser, phase 1: reading pages (COD-261)
+
+A `browser.read` capability gives a chat's runs seven core browser tools that read pages in Chrome (or Edge when Chrome is absent) through `playwright-core` 1.63.0 in a separate host process, with the Clean profile (a private context) by default and named profiles kept by main ([browser.md](browser.md)). Every connection goes through a proxy in the host that refuses private and loopback addresses unless the chat lists the exact address, redirects included; each step is journaled in `browser_actions`.
+
+Verified on Windows 11 with Chrome 153 and Edge 153 (2026-09-26):
+
+- Spike: a fresh Edge profile launched through `playwright-core` signs in to the Windows Microsoft account within 8 seconds, and a persistent Edge profile is signed in to Microsoft sites even with `--disable-features=msImplicitSignin`; a Playwright private context on Edge and a persistent Chrome profile are not. AI snapshots measured 325 characters for example.com, about 58,000 for github.com/pricing and about 49,000 for claude.com/pricing (the visible text is about 7,500).
+- Tests: `tests/integration/browser-policy.test.ts` (site rules, private network, blocked schemes, the proxy against a rebinding name, capability gating, side-thread narrowing, the schedule fingerprint, journal, backups and deletion, profiles, detection) and `tests/integration/browser-tool-loop.test.ts` (a fake model drives a real headless browser against loopback servers: read, find, screenshot, a redirect and an image to an unlisted port refused with no request reaching it, Stop while a page loads, a named profile's tabs per run). The tool-loop file is skipped on a machine with neither browser.
+- Packaged app (Windows x64, `electron-forge package`): a Codex orglet with **Read pages** on opened, read and pictured example.com and answered "Example Domain"; the island read "Researcher is on example.com…"; trace rows, Details → Browser steps and the screenshot dialog, Settings → Browser with a named profile opened and closed, the orglet's Permissions tab and the schedule editor, in light and dark. A headed Clean window opened minimized and **Show browser window** restored it.
+
+Not verified: macOS and Linux, Edge-only machines beyond the spike, a named profile signed in to a real site by a person, and the Claude Code, Cursor Agent, Gemini CLI and API paths with a live model (fixture-level only).
+
 ## COD-98 tools and team coordination: implementation under verification
 
 The worktree now contains a shared tool catalog and permission checks, workspace grants, isolated Windows execution, private copies and Git worktrees, guarded file integration, durable tool/process journals, assignment ownership and dependencies, a bounded mailbox, and lead-controlled reassignment. These extend the existing orchestrator and checkpoints.
