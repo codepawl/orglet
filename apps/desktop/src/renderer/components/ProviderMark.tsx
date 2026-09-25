@@ -1,5 +1,6 @@
-import type { ProviderId } from '../../shared/contracts';
+import type { BuiltInProviderId, ProviderId } from '../../shared/contracts';
 import type { HarnessCatalogId } from '../../shared/harness';
+import { customConnectionName } from '../customConnections';
 
   // Official marks from Simple Icons 15.22.0 (CC0-1.0, https://simpleicons.org). Trademarks belong to their owners;
 // remove on request. Demo has no brand, so it keeps a plain monogram. xAI mark is the Simple Icons "x" path.
@@ -21,7 +22,8 @@ const paths = {
 /** The X mark, shared with the About tab's link to the company's X account. */
 export const xMarkPath = paths.x;
 
-const marks: Record<ProviderId | HarnessCatalogId, { name: string; path?: string; shade?: string; color?: string; letter?: string }> = {
+type Mark = { name: string; path?: string; shade?: string; color?: string; letter?: string };
+const marks: Record<BuiltInProviderId | HarnessCatalogId, Mark> = {
   demo: { name: 'Demo' },
   openai: { name: 'OpenAI API', path: paths.openai },
   anthropic: { name: 'Anthropic API', path: paths.anthropic },
@@ -37,9 +39,16 @@ const marks: Record<ProviderId | HarnessCatalogId, { name: string; path?: string
   gemini: { name: 'Gemini CLI', path: paths.gemini },
 };
 
+/** A custom connection has no brand to draw, so it wears the first letter of the name the person gave it. */
+function markOf(provider: ProviderId | HarnessCatalogId): Mark {
+  const custom = customConnectionName(provider);
+  if (custom) return { name: custom, letter: custom.slice(0, 1).toUpperCase() };
+  return marks[provider as BuiltInProviderId | HarnessCatalogId];
+}
+
 /** Pass decorative when visible text next to the mark already names the provider. */
 export function ProviderMark({ provider, size = 'default', decorative = false }: { provider: ProviderId | HarnessCatalogId; size?: 'default' | 'small'; decorative?: boolean }) {
-  const mark = marks[provider];
+  const mark = markOf(provider);
   return <span className={`provider-mark ${size}`} {...(decorative ? { 'aria-hidden': true } : { title: mark.name, 'aria-label': mark.name, role: 'img' })}>
     {mark.path ? <svg viewBox="0 0 24 24" aria-hidden="true" style={mark.color ? { color: mark.color } : undefined}><path d={mark.path} fill="currentColor" fillRule={mark.shade ? 'evenodd' : undefined} />{mark.shade && <path d={mark.shade} fill="currentColor" opacity={0.35} />}</svg> : (mark.letter ?? mark.name[0])}
   </span>;

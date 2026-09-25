@@ -2,6 +2,7 @@ import type { Source, Task } from '../../shared/contracts';
 import { isMemory, type Knowledge } from '../../shared/knowledge';
 import { KnowledgeBase } from '../context/knowledge';
 import type { Store } from './database';
+import { readCustomConnections, writeCustomConnections } from './custom-connections';
 
 /**
  * Every table a full erase empties, children before parents so the foreign keys hold. `migrations` is left alone —
@@ -60,11 +61,17 @@ export function eraseSources(store: Store): { sources: number; sourcesForgotten:
   return { sources: all.length - forgotten.length, sourcesForgotten: forgotten.length };
 }
 
-/** Back to a fresh install: every row in every table, then the worker and skill a new workspace starts with. */
+/**
+ * Back to a fresh install: every row in every table, then the worker and skill a new workspace starts with. Custom
+ * connections stay, like the API keys beside them in the credential store: a connection is set up once per machine,
+ * and dropping its name and address while its key stays would leave a secret nothing points at.
+ */
 export function eraseEverything(store: Store): { entities: number } {
   const entities = count(store, 'workers') + count(store, 'teams') + count(store, 'skills') + count(store, 'routines');
+  const connections = readCustomConnections(store);
   store.transaction(() => {
     for (const table of ERASE_TABLES) store.db.prepare(`DELETE FROM ${table}`).run();
+    if (connections.length) writeCustomConnections(store, connections);
   });
   // Seeding writes a revision of its own, in its own transaction, so it waits until the tables are empty.
   store.seedDefaults();

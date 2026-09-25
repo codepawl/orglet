@@ -4,7 +4,7 @@ import {
   type AppProposalKind, type ProposalChange, type ProposalHold, type ProposalTarget, type ProposalToolName, type ProposalUndo,
 } from '../../shared/app-proposals';
 import { ProposeSelfImprovement, type ImprovementSignal } from '../../shared/self-improvement';
-import { RoutineInput, SkillInput, TeamInput, WorkerInput, type Routine, type WorkerAvatar, type Run, type Skill, type Task, type Team, type Worker } from '../../shared/contracts';
+import { MAX_CREW_MEMBERS, RoutineInput, SkillInput, TeamInput, WorkerInput, type Routine, type WorkerAvatar, type Run, type Skill, type Task, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
 import { SelfImprovement } from './self-improvement';
 
@@ -211,7 +211,7 @@ export class AppProposals {
         const members: MemberReference[] | undefined = memberIds.length || memberRefs.length
           ? [...memberIds.map(memberId => ({ id: memberId })), ...memberRefs.map(ref => ({ ref }))] : undefined;
         const memberNames = members?.map(member => 'id' in member ? this.liveWorker(member.id).name : `ref:${refOf(member.ref, 'orglet', 'Tí')!.ref}`);
-        if (members && members.length > 4) throw new ProposalError('Một hội có tối đa 4 Tí.');
+        if (members && members.length > MAX_CREW_MEMBERS) throw new ProposalError(`Một hội có tối đa ${MAX_CREW_MEMBERS} Tí.`);
         const leadId = given(args.leadId);
         const leadRef = refOf(args.leadRef, 'orglet', 'Tí');
         const lead: MemberReference | undefined = leadId ? { id: leadId } : leadRef ? { ref: leadRef.ref } : undefined;

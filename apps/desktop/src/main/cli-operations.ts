@@ -2,6 +2,7 @@ import type { Source, Task, TaskDetail, TaskInput, TaskStatus, Team, Worker, Wor
 import { liveTeamTask, liveWorkerTask } from '../shared/live-task';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { CliAnswer, CliChat, CliErrorCode, CliRequest, ListValue, OpenValue, ReadValue, SendValue, StatusValue } from '../cli/protocol';
+import { findCustomConnection } from '../shared/custom-connections';
 
 /**
  * What each `orglet` command does inside the app (COD-234). Every step goes through the same core commands the
@@ -158,9 +159,11 @@ export class CliOperations {
   async list(): Promise<ListValue> {
     const workspace = await this.workspace();
     const nameOf = (id: string) => workspace.workers.find(worker => worker.id === id)?.name ?? id;
+    // A custom connection reads as the name the person gave it, not as `custom:<id>`.
+    const providerOf = (provider: string) => findCustomConnection(workspace.customConnections ?? [], provider)?.name ?? provider;
     const orglets = workspace.workers.map(worker => ({
       name: worker.name,
-      provider: worker.provider,
+      provider: providerOf(worker.provider),
       ...(worker.modelId ? { model: worker.modelId } : {}),
       color: defaultAvatarColor(worker),
     }));

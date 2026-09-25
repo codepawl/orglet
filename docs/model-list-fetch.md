@@ -46,6 +46,7 @@ Checked against official docs on 2026-09-18. Revalidate URLs before COD-31 lands
 | **OpenCode Zen API** | Native `GET https://opencode.ai/zen/v1/models` with the saved Zen key ([docs](https://opencode.ai/docs/zen/): "You can fetch the full list of available models and their metadata from" that URL). | The Zen plan's own list. IDs only: no prices, no endpoint per model. | **None.** |
 | **OpenCode Go API** | Native `GET https://opencode.ai/zen/go/v1/models` with the saved Go key ([docs](https://opencode.ai/docs/go/)). Never falls back to the Zen key or list. | The Go plan's own list. IDs only. | **None.** |
 | **Ollama** | Native `GET http://127.0.0.1:11434/api/tags` after the Settings toggle. | Local tags already pulled on this machine. | **None.** |
+| **Custom connection** (`custom:<id>`, COD-242) | That server's own `GET {baseUrl}/models`, with its key when one is saved and no `Authorization` header when not. Parsed like OpenAI's list, with the same display filter. | The only list that server has. No price is read or trusted from it. | **None.** |
 | **Claude Code** | No list command. Ship the documented `--model` **aliases** (`sonnet`, `opus`, `haiku`, `fable`) plus custom ID. | Official CLI has `--model` but no `claude model list` ([feature request](https://github.com/anthropics/claude-code/issues/12612)). `/model` is interactive. Anthropic Models API **rejects** Claude Code OAuth. | **None.** Aliases are not versions and have no sunset. |
 | **Codex** | Native `codex debug models` JSON on the detected executable (logged-in). Fall back to `codex debug models --bundled` if the remote catalog refresh fails. | Official CLI JSON. Do **not** start Codex app-server (`model/list`) — [capabilities.md](capabilities.md) already keeps app-server off. | No sunset date. Optional **`upgrade`** (replacement slug) and `visibility` if present. Map `upgrade` as `replacementId` for COD-30 copy, not as a date. |
 | **Cursor Agent** | Native `agent --list-models` (same as `agent models`) on the detected executable. Prefer the flag so older builds do not treat `models` as a prompt. | Official CLI. Account-specific. | **None.** Text rows `id - display name` only. |
@@ -88,7 +89,7 @@ A later COD may add an optional community overlay **only** if a native list is s
 Normalize every source into one object. Unknown fields stay omitted, never invented.
 
 ```
-provider        openai | anthropic | xai | openrouter | opencode-zen | opencode-go | ollama | claude-code | codex | cursor | gemini
+provider        openai | anthropic | xai | openrouter | opencode-zen | opencode-go | ollama | claude-code | codex | cursor | gemini | custom:<id>
 id              exact slug sent to the API or `--model`
 displayName     optional (Anthropic, Codex, Cursor, OpenRouter, Ollama, Claude Code and Gemini CLI aliases)
 aliases         optional (xAI, Claude Code, Gemini CLI)

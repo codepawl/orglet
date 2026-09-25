@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Bell, Archive, BookOpen, CalendarClock, Check, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
 import { ArrowLeft, ChevronRight, Pencil as LucidePencil, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, MessagesSquare } from 'lucide-react';
-import { emptyConnections, isPaidApi, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
+import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
 import { WorkerDialog } from './components/WorkerDialog';
@@ -26,6 +26,7 @@ import { SourcePicker } from './components/SourcePicker';
 import { Composer, FollowUpComposer } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
+import { rememberCustomConnections } from './customConnections';
 import { Startup } from './components/Startup';
 import { Starters } from './components/Starters';
 import { DetailsPanel } from './components/DetailsPanel';
@@ -48,7 +49,7 @@ import { recordNotice, useUnreadNotices } from './components/notifications';
 import { KnowledgeEditor, KnowledgeLibrary } from './components/KnowledgeLibrary';
 import type { Knowledge } from '../shared/knowledge';
 import type { HarnessInfo } from '../shared/harness';
-import { providerLabel, readiness, settingsTabFor, setupHint } from './components/providers';
+import { hasConnection, providerLabel, readiness, settingsTabFor, setupHint } from './components/providers';
 import { workerModelLabel, providerName } from './components/workerModel';
 import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
@@ -101,6 +102,13 @@ function useArrivals(ids: readonly string[], ready: boolean): (id: string) => bo
  * reading as a fault (user, 2026-09-20). The sentence stays for screen readers, which cannot see a shape. With
  * chats prefetched on hover and kept once opened (COD-218), this is only ever seen on a chat reached some other way.
  */
+/** Up to this many faces greet an empty crew or group chat at full size; more take a size down so eight fit on one line. */
+const BIG_FRESH_FACES = 4;
+
+function freshFaceSize(count: number): 'xl' | 'lg' {
+  return count > BIG_FRESH_FACES ? 'lg' : 'xl';
+}
+
 function ThreadSkeleton() {
   return <SkeletonGroup className="thread-skeleton" label={t('Đang mở cuộc trò chuyện…')}>
     <div className="thread-skeleton-ask"><Skeleton shape="block" className="thread-skeleton-bubble" /></div>
@@ -498,6 +506,8 @@ export function App() {
     onOpen: openProposalTarget,
     onOpenChat: openTask,
   };
+  // Every label, mark and byline below names a custom connection from this list (COD-242).
+  rememberCustomConnections(workspace?.customConnections);
   const worker = workspace?.workers.find(item => item.id === workerId);
   const team = workspace?.teams.find(item => item.id === teamId);
   // The group only stands while every orglet in it is still listed; the prune above drops it otherwise.
@@ -522,7 +532,7 @@ export function App() {
   });
   const nativeProviders = [...new Set(executionWorkers.map(item => item.provider).filter(provider => provider !== 'demo'))];
   const isDemo = nativeProviders.length === 0;
-  const ready = readiness(connections, harnesses);
+  const ready = readiness(connections, harnesses, workspace?.customConnections);
   const missingConnections = nativeProviders.filter(provider => !ready[provider]);
   // Choosing a model and attaching sources is the user's consent to send them; no separate permission step.
   // A group chat is budgeted like a chat with the orglet that owns its row, the first one picked.
@@ -917,7 +927,7 @@ export function App() {
       </SidebarSection>
       </div>
       {selectionBar}
-      <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><Button onClick={() => openSettings()} {...dwellHandlers(dwellAbout)}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${Object.values(connections).some(Boolean) ? 'connected' : ''}`} /></Button></div>
+      <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><Button onClick={() => openSettings()} {...dwellHandlers(dwellAbout)}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${hasConnection(connections, workspace.customConnections) ? 'connected' : ''}`} /></Button></div>
     </aside>
     {/* Collapsed sidebar keeps its two most used actions in a narrow rail, stacked like ChatGPT. */}
 
@@ -965,9 +975,9 @@ export function App() {
               first. Keyed by the chat so switching to another worker greets again. */}
           <div className="fresh-faces" key={team ? `team-${team.id}` : group ? groupChatKey(group) : worker?.id}>
             {team
-              ? roster.slice(0, 4).map(member => <Avatar key={member.id} name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xl" motion={{ lead: true, greet: true, group: `team-${team.id}` }} />)
+              ? roster.map(member => <Avatar key={member.id} name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size={freshFaceSize(roster.length)} motion={{ lead: true, greet: true, group: `team-${team.id}` }} />)
               : group
-                ? groupWorkers.slice(0, 4).map(member => <Avatar key={member.id} name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size="xl" motion={{ lead: true, greet: true, group: groupChatKey(group) }} />)
+                ? groupWorkers.slice(0, MAX_CREW_MEMBERS).map(member => <Avatar key={member.id} name={member.name} seed={member.id} mascot={member.avatar?.mascot} defaultMascot hint={member.description} color={member.avatar?.color} size={freshFaceSize(groupWorkers.length)} motion={{ lead: true, greet: true, group: groupChatKey(group) }} />)
                 : worker ? <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xxl" motion={{ lead: true, greet: true }} /> : null}
           </div>
           <h1 className="welcome">{t('Đang nhắn với {0}', [chatName])}</h1>

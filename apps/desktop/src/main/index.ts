@@ -8,7 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
 import { en, enGB } from '../shared/locales/en';
-import { commands, Id, ApiProvider, type Reply, type Command, TextFormat } from '../shared/contracts';
+import { commands, Id, ApiProvider, CredentialProvider, type Reply, type Command, type Workspace, TextFormat } from '../shared/contracts';
+import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
 import { PickWorkspace } from '../shared/workspace-access';
 import { OPENCODE_DOCS_URLS } from '../shared/opencode';
 import { markdownToPlain } from '../shared/plainText';
@@ -161,7 +162,7 @@ async function start() {
         return;
       }
       if (message.type === 'key') {
-        const provider = ApiProvider.safeParse(message.provider);
+        const provider = CredentialProvider.safeParse(message.provider);
         core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await credentials.read(provider.data) : null }); return;
       }
       if (message.type === 'profileCancel') { cancelProfile(message.id); return; }
@@ -246,6 +247,11 @@ async function start() {
     const command = envelope.command as Command;
     const args = commands[command].parse(envelope.args);
     const result = await request(command, args);
+    // The core forgot the connection; its key goes with it, so no secret is left behind that nothing points at.
+    if (command === 'deleteCustomConnection') {
+      await credentials.remove(customProviderId((args as { id: string }).id));
+      if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
+    }
     if (command === 'settings' && (args as { language?: Language }).language) {
       language = (args as { language: Language }).language;
       useSpellCheckerLanguage(language);
@@ -298,8 +304,15 @@ async function start() {
     if (window && !window.isDestroyed()) window.webContents.send('orglet:changed');
     return credentials.status();
   };
+  /** A key is only kept for a custom connection the core still has, so a stale window cannot plant an orphan secret. */
+  const assertCustomConnection = async (provider: CredentialProvider) => {
+    if (!isCustomProvider(provider)) return;
+    const workspace = await request('workspace', {}) as Workspace;
+    if (!findCustomConnection(workspace.customConnections ?? [], provider)) throw new Error('Không tìm thấy kết nối này.');
+  };
   handle('orglet:connect', async raw => {
-    const body = z.object({ provider: ApiProvider, key: z.string().min(1).max(500).optional() }).strict().parse(raw);
+    const body = z.object({ provider: CredentialProvider, key: z.string().min(1).max(500).optional() }).strict().parse(raw);
+    await assertCustomConnection(body.provider);
     if (body.provider === 'ollama' && body.key === undefined) {
       await credentials.save('ollama', OLLAMA_LOCAL_TOKEN);
       await request('invalidateModelList', 'ollama').catch(() => {});
@@ -325,7 +338,7 @@ async function start() {
     return announceConnections();
   });
   handle('orglet:disconnect', async raw => {
-    const provider = ApiProvider.parse(raw);
+    const provider = CredentialProvider.parse(raw);
     await credentials.remove(provider);
     await request('invalidateModelList', provider).catch(() => {});
     return announceConnections();

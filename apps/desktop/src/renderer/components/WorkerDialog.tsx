@@ -4,6 +4,8 @@ import { isMemory } from '../../shared/knowledge';
 import { MemoryList } from './Memories';
 import { isPaidApi, type Connections, type Worker, type Workspace } from '../../shared/contracts';
 import { CATALOG_HINT_IDS } from '../../shared/models';
+import { baseUrlHost, connectionPricing, customProviderId, findCustomConnection, type CustomConnection } from '../../shared/custom-connections';
+import { pricingLabel } from '../customConnections';
 import { liveWorkerTask, newChatKey } from '../../shared/live-task';
 import { permissionsForLevel, type WorkspaceLevel } from '../../shared/capability-status';
 import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
@@ -39,6 +41,14 @@ const tabs = [
   { id: 'memory' as const, label: 'Ghi nhớ', icon: <Brain size={16} /> },
 ];
 
+/** How this connection's requests are charged, beside its model picker. */
+function customConnectionCostNote(connection: CustomConnection): string {
+  const pricing = connectionPricing(connection);
+  if (pricing.kind === 'local') return t('Máy chủ trên máy này hoặc mạng nội bộ: tính miễn phí. Nhập giá trong Cài đặt nếu bạn muốn tính khác.');
+  if (pricing.kind === 'entered') return t('Tính theo giá bạn nhập: giữ chỗ trước mỗi request, chốt theo số token thật.');
+  return t('Orglet không biết giá của kết nối này: mỗi request giữ chỗ phần còn lại của giới hạn mỗi task cho tới khi bạn nhập chi phí thật trong Cài đặt → Chi phí & giới hạn.');
+}
+
 /** Worker create/edit. Remount (via key) to reset the draft. */
 export function WorkerDialog({ open, worker, workspace, connections, harnesses, initialTab, onClose, onOpenChat }: { open: boolean; worker?: Worker; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; /** The tab to open on; the trace above an answer opens straight onto Memory (COD-220). */ initialTab?: Tab; onClose: () => void; /** Opens the chat a memory came from; the dialog closes first. */ onOpenChat: (taskId: string) => void }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'general');
@@ -61,7 +71,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState<InvalidField>();
   const [flash, setFlash] = useState(0);
-  const ready = readiness(connections, harnesses);
+  const ready = readiness(connections, harnesses, workspace.customConnections);
+  const customConnection = findCustomConnection(workspace.customConnections, provider);
   const paid = isPaidApi(provider);
   // Claude Code is the one harness that takes a spending cap, so its chat's limit is set here too.
   const capped = paid || provider === 'claude-code';
@@ -86,6 +97,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     if (trimmedModel.length > 200) return fail('general', t('ID model tối đa 200 ký tự.'), 'modelId');
     const modelIssue = openCodeModelIssue(provider, trimmedModel);
     if (modelIssue) return fail('general', modelIssue, 'modelId');
+    // A custom connection has no default model to fall back on.
+    if (customConnection && !trimmedModel) return fail('general', t('Chọn hoặc gõ ID model cho {0}.', [customConnection.name]), 'modelId');
     setBusy(true); clearError();
     try {
       const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}) });
@@ -113,6 +126,8 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
         modelOption('opencode-zen', 'OpenCode Zen', t('trả theo mức dùng'), t('API trả phí'), ready['opencode-zen']),
         modelOption('opencode-go', 'OpenCode Go', t('gói đăng ký có hạn mức'), t('API theo gói'), ready['opencode-go']),
         modelOption('ollama', 'Ollama', t('gợi ý {0}', [CATALOG_HINT_IDS.ollama]), t('Local trên máy này'), ready.ollama),
+        // Connections the person added in Settings (COD-242), under the name they gave each one.
+        ...workspace.customConnections.map(connection => modelOption(customProviderId(connection.id), connection.name, `${baseUrlHost(connection.baseUrl)} · ${pricingLabel(connection)}`, t('Kết nối tùy chỉnh'), true)),
         // A harness carries its state as the circle the rest of the app uses for one, so the line underneath is the
         // version and one phrase rather than three things strung together on dots (user, 2026-09-22). The circle is
         // more exact than the generic "not ready" badge it stands in for: it tells missing from signed out from broken.
@@ -134,6 +149,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       {isHarness(provider) && <p className="muted">{t('Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
       {provider === 'ollama' && <p className="muted">{t('Chạy Ollama tại 127.0.0.1:11434; không tính vào ngân sách Orglet.')}</p>}
       {provider === 'opencode-zen' && <p className="muted">{t('Zen trừ số dư theo từng request; Orglet không theo dõi hay giới hạn khoản này.')}</p>}
+      {customConnection && <p className="muted">{customConnectionCostNote(customConnection)}</p>}
       {provider === 'opencode-go' && <p className="muted">{t('Tính vào hạn mức gói Go, không qua ngân sách Orglet. Bật Use balance thì phần vượt trừ vào số dư Zen.')}</p>}
       {capped && <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi task')}</FieldLabel><MoneyInput data-field="budget" type="number" min="0" step="any" value={budget} onChange={value => { setBudget(value); if (invalid === 'budget') clearError(); }} invalid={invalid === 'budget'} flash={flash} /></label>}
     </>}

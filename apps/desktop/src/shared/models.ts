@@ -1,7 +1,9 @@
 import { z } from 'zod';
+import { CustomProviderId } from './custom-connections';
 
-/** Connections that can produce a native or alias model list. Demo never fetches. */
-export const ModelListProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor', 'gemini']);
+export const BuiltInModelListProvider = z.enum(['openai', 'anthropic', 'xai', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'claude-code', 'codex', 'cursor', 'gemini']);
+/** Connections that can produce a native or alias model list, custom OpenAI-compatible ones included. Demo never fetches. */
+export const ModelListProvider = z.union([BuiltInModelListProvider, CustomProviderId]);
 export type ModelListProvider = z.infer<typeof ModelListProvider>;
 export const ModelSource = z.enum(['native', 'alias', 'catalog-hint']);
 export type ModelSource = z.infer<typeof ModelSource>;
@@ -33,19 +35,8 @@ export type ModelListRow = z.infer<typeof ModelListRow>;
 
 export const ModelListCache = z.object({
   version: z.literal(1),
-  byProvider: z.object({
-    openai: ModelListRow.optional(),
-    anthropic: ModelListRow.optional(),
-    xai: ModelListRow.optional(),
-    openrouter: ModelListRow.optional(),
-    'opencode-zen': ModelListRow.optional(),
-    'opencode-go': ModelListRow.optional(),
-    ollama: ModelListRow.optional(),
-    'claude-code': ModelListRow.optional(),
-    codex: ModelListRow.optional(),
-    cursor: ModelListRow.optional(),
-    gemini: ModelListRow.optional(),
-  }).strict(),
+  // One row per connection; a key that is neither a built-in list nor `custom:<id>` fails the whole cache.
+  byProvider: z.partialRecord(ModelListProvider, ModelListRow),
 }).strict();
 export type ModelListCache = z.infer<typeof ModelListCache>;
 

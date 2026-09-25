@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { API_PROVIDER_NAMES, type ApiProvider } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, type ApiProvider, type CredentialProvider } from '../../shared/contracts';
+import { isCustomProvider, type CustomConnection, type CustomProviderId } from '../../shared/custom-connections';
 import {
   CATALOG_HINT_IDS,
   CustomModelId,
@@ -46,7 +47,9 @@ export const GEMINI_CLI_ALIASES: ReadonlyArray<{ id: string; displayName: string
 ];
 
 export type ModelListFetchOptions = {
-  readKey: (provider: ApiProvider) => Promise<string | null>;
+  readKey: (provider: CredentialProvider) => Promise<string | null>;
+  /** The saved connection behind a `custom:<id>` provider; the service reads it from settings. */
+  customConnection?: (provider: CustomProviderId) => CustomConnection | undefined;
   fetch?: typeof fetch;
   endpoints?: Partial<Record<keyof typeof MODEL_LIST_ENDPOINTS, string>>;
   probe?: Probe;
@@ -57,7 +60,7 @@ export type ModelListFetchOptions = {
 
 /** Injected from core/entry (key IPC) and tests (HTTP/CLI fixtures). */
 export type ModelListRuntime = {
-  readKey?: (provider: ApiProvider) => Promise<string | null>;
+  readKey?: (provider: CredentialProvider) => Promise<string | null>;
   fetch?: typeof fetch;
   endpoints?: Partial<Record<keyof typeof MODEL_LIST_ENDPOINTS, string>>;
   probe?: Probe;
@@ -106,7 +109,8 @@ function xaiTenths(cents: unknown): number | undefined {
   return tenths <= 1_000_000 ? tenths : undefined;
 }
 
-export function parseOpenAIModels(payload: unknown): ModelEntry[] {
+/** OpenAI's `/v1/models` shape, which every OpenAI-compatible server copies; `provider` labels the rows. */
+export function parseOpenAIModels(payload: unknown, provider: ModelListProvider = 'openai'): ModelEntry[] {
   const data = payload && typeof payload === 'object' ? (payload as { data?: unknown }).data : undefined;
   if (!Array.isArray(data)) throw new Error(shapeError);
   const models: ModelEntry[] = [];
@@ -119,7 +123,7 @@ export function parseOpenAIModels(payload: unknown): ModelEntry[] {
     seen.add(id);
     const sunsetAt = sunsetDate(rec.shutdown_date);
     models.push({
-      provider: 'openai',
+      provider,
       id,
       source: 'native',
       ...(sunsetAt ? { deprecated: true as const, sunsetAt } : {}),
@@ -453,6 +457,21 @@ async function fetchOllama(options: ModelListFetchOptions): Promise<Pick<ModelLi
   return withCatalogHint('ollama', parseOllamaTags(payload), 'native');
 }
 
+const missingConnection = 'Kết nối tùy chỉnh này không còn. Vẫn có thể gõ ID model tùy chỉnh.';
+
+/**
+ * A custom connection lists what its own server says under `{baseUrl}/models`, with its key when it has one and no
+ * Authorization header when it does not. The OpenAI display filter hides embedding and speech IDs the same way.
+ */
+async function fetchCustomConnection(provider: CustomProviderId, options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const connection = options.customConnection?.(provider);
+  if (!connection) return withCatalogHint(provider, [], 'native', missingConnection);
+  const key = await options.readKey(provider);
+  const headers: Record<string, string> = key ? { Authorization: `Bearer ${key}` } : {};
+  const payload = await readJson(`${connection.baseUrl}/models`, headers, { fetch: options.fetch ?? fetch, timeoutMs: options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS });
+  return withCatalogHint(provider, parseOpenAIModels(payload, provider), 'native');
+}
+
 function harnessOf(list: HarnessInfo[], id: 'claude-code' | 'codex' | 'cursor') {
   return list.find(item => item.id === id);
 }
@@ -492,6 +511,7 @@ export async function fetchProviderList(provider: ModelListProvider, options: Mo
   if (provider === 'ollama') return { fetchedAt, ...await fetchOllama(options) };
   if (provider === 'claude-code') return { fetchedAt, ...withCatalogHint('claude-code', claudeCodeModels(), 'alias') };
   if (provider === 'gemini') return { fetchedAt, ...withCatalogHint('gemini', geminiCliModels(), 'alias') };
+  if (isCustomProvider(provider)) return { fetchedAt, ...await fetchCustomConnection(provider, options) };
   if (provider === 'codex') return { fetchedAt, ...await fetchCodex(options) };
   return { fetchedAt, ...await fetchCursor(options) };
 }

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { WorkerInput, SkillInput, TeamInput, type Worker, type Skill, type Team } from '../../shared/contracts';
+import { MAX_CREW_MEMBERS, WorkerInput, SkillInput, TeamInput, type Worker, type Skill, type Team } from '../../shared/contracts';
 import { Store, id } from './database';
 import { SkillPackage } from '../../shared/skill-package';
 import { packageForImport } from '../skill-package';
@@ -9,7 +9,7 @@ import { KnowledgeBase } from '../context/knowledge';
 const Key = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 const Template = z.object({
   format: z.literal('orglet-team-template'), version: z.literal(1),
-  team: TeamInput.omit({ id: true, memberIds: true, synthesizerId: true }).extend({ memberKeys: z.array(Key).min(1).max(4), synthesizerKey: Key }).strict(),
+  team: TeamInput.omit({ id: true, memberIds: true, synthesizerId: true }).extend({ memberKeys: z.array(Key).min(1).max(MAX_CREW_MEMBERS), synthesizerKey: Key }).strict(),
   // A template never carries the auto-apply switch: it is this computer's decision, not the crew's (COD-199).
   workers: z.array(WorkerInput.omit({ id: true, skillId: true, autoApplyProposals: true }).extend({ key: Key, skillKey: Key }).strict()).min(1).max(5),
   skills: z.array(SkillInput.omit({ id: true }).extend({ key: Key, package: SkillPackage.optional() }).strict()).min(1).max(5),

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import { Finding, FindingCategory, Id, Report, SourceLocation, TeamPlan, PlanAssignment, type Run, type Task } from '../../shared/contracts';
+import { Finding, FindingCategory, Id, MAX_CREW_MEMBERS, Report, SourceLocation, TeamPlan, PlanAssignment, type Run, type Task } from '../../shared/contracts';
 import { ProfileArgs } from '../../shared/profiles';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { Review } from '../../shared/review';
@@ -19,7 +19,7 @@ import { isProposalTool, ProposeCrew, ProposeCrewTemplate, ProposeOrglet, Propos
 import { ProposeSelfImprovement } from '../../shared/self-improvement';
 const ModelTeamPlan = TeamPlan.extend({ assignments: z.array(PlanAssignment.required({
   expectedOutput: true, dependsOn: true, writeResources: true,
-})).min(1).max(4) });
+})).min(1).max(MAX_CREW_MEMBERS) });
 
 export const needsReport = (run: Run) => run.stage === 'synthesis' && !!run.snapshot.team?.reviewPolicy?.requiredChecks.length;
 const Recommendation = z.string().min(1).max(2000).nullable();
@@ -110,7 +110,7 @@ function defineProposalTool(name: string, description: string, schema: z.ZodObje
 
 export const toolDefinitions: Record<string, ToolDefinition> = {
   propose_orglet: defineProposalTool('propose_orglet', `Propose creating an orglet (a worker) or editing one (targetId). name and instructions are required to create; provider null means your own provider and model; skillId null means your own skill, or skillRef for a skill proposed earlier in this reply. ${PROPOSAL_COMMON}; set ref so a later proposal (a crew member, a schedule) can point at this new orglet. You cannot set its permissions, working folder or auto-apply switch.`, ProposeOrglet),
-  propose_crew: defineProposalTool('propose_crew', `Propose creating a crew (a team of up to four orglets with a lead) or editing one (targetId). Members are existing orglet ids in memberIds and refs of orglets proposed earlier in this reply in memberRefs; the lead defaults to the first member; workflow defaults to parallel. Budgets above the current caps need the user's click. ${PROPOSAL_COMMON}; set ref so a template or schedule proposal can point at this new crew.`, ProposeCrew),
+  propose_crew: defineProposalTool('propose_crew', `Propose creating a crew (a team of up to eight orglets with a lead) or editing one (targetId). Members are existing orglet ids in memberIds and refs of orglets proposed earlier in this reply in memberRefs; the lead defaults to the first member; workflow defaults to parallel. Budgets above the current caps need the user's click. ${PROPOSAL_COMMON}; set ref so a template or schedule proposal can point at this new crew.`, ProposeCrew),
   propose_crew_template: defineProposalTool('propose_crew_template', `Propose saving a crew as a template file the user can share or import later: teamId of an existing crew, or teamRef of a crew proposed earlier in this reply. The user picks where the file goes when they apply. ${PROPOSAL_COMMON}.`, ProposeCrewTemplate),
   propose_skill: defineProposalTool('propose_skill', `Propose a new skill (reusable instructions; name and content required) or a new revision of an existing one (targetId). Runs already in progress keep the revision they started with. ${PROPOSAL_COMMON}; set ref so an orglet proposed later in this reply can use it.`, ProposeSkill),
   propose_schedule: defineProposalTool('propose_schedule', `Propose a schedule (a routine) that sends brief to one orglet or crew daily or weekly at time (24-hour HH:MM; weekday 0-6 with 0 = Sunday, default 1) in timeZone (default: this computer's), or edit one (targetId). Target null means this chat's orglet or crew; workerRef and teamRef point at ones proposed earlier in this reply. A schedule is saved switched off; the user enables it in Schedules. ${PROPOSAL_COMMON}.`, ProposeSchedule),

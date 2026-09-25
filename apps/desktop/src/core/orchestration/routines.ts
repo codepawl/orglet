@@ -3,6 +3,7 @@ import { nextOccurrence } from '../../shared/schedule';
 import { Store, id } from '../storage/database';
 import { Sources, fingerprint } from '../tools/sources';
 import { resolveWorkerModel } from '../models/resolve';
+import { readCustomConnections } from '../storage/custom-connections';
 
 /** First tick after startup, a gap, or overdue delay above this is a miss — never auto-replayed. See docs/routines.md. */
 export const ROUTINE_MISS_MS = 30_000;
@@ -27,7 +28,7 @@ export class Routines {
     // ponytail: harness version is not part of the approval fingerprint (detection is async); a CLI update does not reset approval.
     const models = workers.map(worker => {
       if (worker.provider === 'demo') return { provider: worker.provider };
-      const resolved = resolveWorkerModel(worker);
+      const resolved = resolveWorkerModel(worker, undefined, readCustomConnections(this.store));
       return { provider: worker.provider, modelId: worker.modelId ?? null, model: resolved.id ?? null, pricingVersion: resolved.pricingVersion };
     });
     return fingerprint(JSON.stringify({ team, workers, skills, models }));

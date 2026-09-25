@@ -1,13 +1,18 @@
 import { Store, id, now } from '../storage/database';
 import { modelConfig } from '../adapters/catalog';
-import type { ModelRates } from '../models/resolve';
+import type { ModelRates, TokenPrice } from '../models/resolve';
 
 export class BudgetError extends Error {}
 export type { ModelRates };
 // Integer micro-USD; round upward instead of losing fractional micro-dollars.
-export function cost(inputTokens: number, outputTokens: number, rates: string | Pick<ModelRates, 'inputTenths' | 'outputTenths'> = 'openai') {
+export function cost(inputTokens: number, outputTokens: number, rates: string | TokenPrice = 'openai') {
   if (![inputTokens, outputTokens].every(n => Number.isSafeInteger(n) && n >= 0)) throw new Error('Usage không hợp lệ.');
   const config = typeof rates === 'string' ? modelConfig(rates) : rates;
+  if ('inputMicrosPerMillion' in config) {
+    const perMillion = inputTokens * config.inputMicrosPerMillion + outputTokens * config.outputMicrosPerMillion;
+    if (!Number.isSafeInteger(perMillion)) throw new Error('Usage không hợp lệ.');
+    return Math.ceil(perMillion / 1_000_000);
+  }
   return Math.ceil((inputTokens * config.inputTenths + outputTokens * config.outputTenths) / 10);
 }
 export class BudgetLedger {
@@ -21,6 +26,20 @@ export class BudgetLedger {
       if (team && used("r.task_id IN (SELECT id FROM tasks WHERE json_extract(data,'$.teamId')=?) AND (r.month=? OR r.state!='settled')", [team.id, month]) + amount > team.limit) throw new BudgetError('Hội đã chạm giới hạn ngân sách tháng.');
       const reservation = id();
       this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?)').run(reservation, runId, taskId, provider, month, amount, 'held');
+      journal?.(reservation);
+      return reservation;
+    });
+  }
+  /**
+   * A request at a known price of zero (a free local server, COD-242). `reserve` refuses a zero hold because it would
+   * hide a missing price; here the price is known, so the row is held at zero and settled or marked unknown like any
+   * other, which keeps tokens counted and a reply without usage visible.
+   */
+  reserveAtZeroPrice(runId: string, taskId: string, provider: string, journal?: (reservationId: string) => void): string {
+    return this.store.transaction(() => {
+      const month = new Date().toISOString().slice(0, 7);
+      const reservation = id();
+      this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?)').run(reservation, runId, taskId, provider, month, 0, 'held');
       journal?.(reservation);
       return reservation;
     });

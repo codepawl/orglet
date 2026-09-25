@@ -89,6 +89,28 @@ it('joins independent artifacts, keeps source scopes local and uses at most two 
   const other = await core.command('createTemplate', { templateId: 'research-review', provider: 'demo' }) as Team;
   expect(other.memberIds.some(id => team.memberIds.includes(id))).toBe(false);
 });
+it('runs a crew of eight: the lead plans for all eight, two work at a time, and one synthesis joins them', async () => {
+  const template = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
+  const base = store.get<Worker>('workers', template.memberIds[0]);
+  const members: Worker[] = [];
+  for (let index = 0; index < 8; index++) {
+    const { id: _id, revision: _revision, ...fields } = base;
+    members.push(await core.command('saveWorker', { ...fields, name: `Member ${index + 1}` }) as Worker);
+  }
+  const memberIds = members.map(member => member.id);
+  await expect(core.command('saveTeam', { ...template, memberIds: [...memberIds, template.synthesizerId] })).rejects.toThrow();
+  const team = await core.command('saveTeam', { ...template, memberIds, maxConcurrentTasks: 8 }) as Team;
+  const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Everyone reviews one part', sourceIds: [], consent: true, budgetMicros: 5_000_000 }) as string;
+  await done(taskId);
+  const detail = store.detail(taskId);
+  expect(detail.task.status).toBe('completed');
+  const plan = detail.runs.find(run => run.stage === 'plan')!;
+  expect(plan.snapshot.plan?.assignments.map(assignment => assignment.workerId)).toEqual(memberIds);
+  expect(detail.runs.filter(run => run.stage === 'member' && run.status === 'completed')).toHaveLength(8);
+  expect(peak).toBe(2);
+  const synthesis = detail.runs.find(run => run.stage === 'synthesis')!;
+  expect(synthesis.snapshot.upstreamArtifactIds).toHaveLength(8);
+});
 it('preserves a failed role as partial and retries only missing members before a new join', async () => {
   failReviewer = true; const { taskId } = await setup(); const before = store.detail(taskId);
   expect(before.task.status).toBe('partial'); expect(before.artifacts).toHaveLength(2);

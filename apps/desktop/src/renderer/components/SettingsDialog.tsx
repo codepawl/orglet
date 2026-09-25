@@ -5,7 +5,8 @@ import { avatarPalette } from './Avatar';
 import { DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
-import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, MAX_PROVIDER_CONCURRENCY, QUIET_PARALLEL_LIMIT, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
+import { CustomConnectionsSection } from './CustomConnections';
 import { harnessCatalog, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
 import { PlanUsage } from './PlanUsage';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, INTERFACE_PREFERRED_FONTS, type FontRole } from '../../shared/fonts';
@@ -31,6 +32,9 @@ import { orglet } from '../api';
 import { CommandBlock, Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import { dwellAbout, modelLists } from '../caches';
 import { dwellHandlers } from '../prefetch';
+
+/** 1 to 8 requests in flight per provider (COD-242). */
+const concurrencyChoices = Array.from({ length: MAX_PROVIDER_CONCURRENCY }, (_, index) => index + 1);
 
 /** Fake password dots for a saved key — never the real secret; renderer never reads keys back. */
 const SAVED_KEY_MASK = '••••••••••••••••';
@@ -522,8 +526,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Cuộc trò chuyện, Tí và hội; số liệu chi phí được giữ.')}>
                 <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
               </Row>
-              <Row title={t('Request đồng thời mỗi provider')} description={t('Vượt giới hạn thì bước đó xếp hàng chờ, chưa trừ ngân sách.')}>
-                <Select ariaLabel={t('Request đồng thời mỗi provider')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={[1, 2, 3, 4].map(value => ({ value: String(value), label: `${value} request`, detail: value === 1 ? t('tuần tự') : undefined }))} />
+              <Row title={t('Request đồng thời mỗi provider')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
+                ? `${t('Vượt giới hạn thì bước đó xếp hàng chờ, chưa trừ ngân sách.')} ${t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}`
+                : t('Vượt giới hạn thì bước đó xếp hàng chờ, chưa trừ ngân sách.')}>
+                <Select ariaLabel={t('Request đồng thời mỗi provider')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={concurrencyChoices.map(value => ({ value: String(value), label: `${value} request`, detail: value === 1 ? t('tuần tự') : undefined }))} />
               </Row>
             </>}
 
@@ -598,6 +604,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                     </form>}
                 </div>;
               })}
+              <CustomConnectionsSection connections={workspace.customConnections ?? []} keys={connections.custom ?? {}} busy={busy} act={act} onConnections={changeConnections} />
             </>}
 
             {tab === 'harness' && <>
@@ -714,7 +721,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <EraseRow busy={busy} scope="everything" onErase={erase}
                 title={t('Xóa toàn bộ dữ liệu')}
                 description={t('Đưa Orglet về như mới cài.')}
-                caveat={t('Mọi trò chuyện, Tí, hội, skill, lịch, nguồn, kiến thức, ghi nhớ và cài đặt. API key được giữ lại.')}
+                caveat={t('Mọi trò chuyện, Tí, hội, skill, lịch, nguồn, kiến thức, ghi nhớ và cài đặt. API key và kết nối tùy chỉnh được giữ lại.')}
                 question={t('Xóa sạch mọi thứ trong Orglet?')} />
               <Row title={t('Nơi lưu dữ liệu')} description={t('Mọi thứ nằm trên máy này. Không có tài khoản Orglet.')} />
             </>}
