@@ -63,7 +63,7 @@ import { noSelection, pruneSelection, selectRange, toggleSelection, type Selecti
 import { groupChatFromRecipient, groupChatFromSelection, groupChatKey, groupChatNames, groupChatRecipient, groupChatTaskInput, isGroupChatTask, pruneGroupChat, type PendingGroupChat } from './groupChat';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
 import { proposedMascot, type ProposalActions } from './components/AppProposals';
-import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
+import { EditableText, Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import { dwellAbout, dwellChat, dwellModels, followWorkspace, taskDetails } from './caches';
 import { dwellHandlers } from './prefetch';
 
@@ -836,6 +836,40 @@ export function App() {
   const chatProviders = [...new Set((selected && detail ? detail.runs.map(run => run.snapshot.worker.provider) : executionWorkers.map(item => item.provider)))];
   const headerProvider = chatProviders.length === 1 ? chatProviders[0] : undefined;
   const chatName = team?.name ?? groupName ?? worker?.name ?? 'Orglet';
+  const headerName = selected ? (detail && assigneeLabel(detail.task, workspace!, { all: t('Toàn bộ Tí'), many: count => t('{0} Tí', [count]) })) ?? team?.name ?? t('Công việc') : chatName;
+  const headerRename = renameTargetOf();
+  /**
+   * The one orglet or crew this chat belongs to, whose name the header can rename in place (owner, 2026-09-25).
+   * A group chat, a chat for every orglet, or one whose detail has not loaded yet has no single owner to rename.
+   */
+  function renameTargetOf(): { kind: 'team'; team: Team } | { kind: 'worker'; worker: Worker } | undefined {
+    if (!workspace) return undefined;
+    if (selected) {
+      const task = detail?.task;
+      if (!task) return undefined;
+      const taskTeam = task.teamId ? workspace.teams.find(item => item.id === task.teamId) : undefined;
+      if (taskTeam) return { kind: 'team', team: taskTeam };
+      if (task.assignees === 'all') return undefined;
+      const owners = taskWorkers(task, workspace);
+      return owners.length === 1 ? { kind: 'worker', worker: owners[0] } : undefined;
+    }
+    if (team) return { kind: 'team', team };
+    if (group || !worker) return undefined;
+    return { kind: 'worker', worker };
+  }
+  /** Saves the new name as a new revision, the same way the orglet or crew editor would. */
+  const renameFromHeader = async (name: string) => {
+    errorAbout.current = t('Đổi tên');
+    setError('');
+    try {
+      if (headerRename?.kind === 'team') await orglet.call('saveTeam', { ...headerRename.team, name });
+      if (headerRename?.kind === 'worker') await orglet.call('saveWorker', { ...headerRename.worker, name });
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+      throw err;
+    }
+  };
   const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với hội…') : t('Nhắn với {0}…', [groupName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={!isDemo && missingConnections.length > 0} mentions={team ? { people: executionWorkers, allNames: [team.name] } : group ? { people: groupWorkers } : undefined}
     leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
     trailing={composerTrailing}
@@ -897,13 +931,18 @@ export function App() {
         <div>
           {/* An empty group chat shows who is in it, the way a crew's row does; a count alone names nobody. */}
           {!selected && group && <RosterAvatars workers={groupWorkers} size="sm" max={4} />}
-          <span className="topbar-name">{selected ? (detail && assigneeLabel(detail.task, workspace, { all: t('Toàn bộ Tí'), many: count => t('{0} Tí', [count]) })) ?? team?.name ?? t('Công việc') : chatName}</span>
+          <span className="topbar-title">
+          {headerRename
+            ? <EditableText key={headerRename.kind === 'team' ? headerRename.team.id : headerRename.worker.id} className="topbar-name" value={headerName} maxLength={80}
+              label={t('Đổi tên {0}', [headerName])} onCommit={renameFromHeader} />
+            : <span className="topbar-name">{headerName}</span>}
           {/* Which model is answering, not only whether it is Demo (user, 2026-09-19). A team running on several
               providers says nothing here; the details panel lists them one by one. */}
           {headerProvider && <span className="topbar-provider" title={headerProvider === 'demo' ? t('Demo · không gọi API') : providerLabel(headerProvider)}>
             {headerProvider !== 'demo' && <ProviderMark provider={headerProvider} size="small" decorative />}
             {providerName(headerProvider)}
           </span>}
+          </span>
         </div>
         <div className="topbar-actions">
           {selected && detail && openTaskPaid && <span className="task-cost" role="status" title={detail.usage.reservedMicros > 0 ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.reservedMicros)]) : t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}</span>}

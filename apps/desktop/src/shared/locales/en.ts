@@ -1733,6 +1733,7 @@ export const en: Dictionary = {
   'Đặt lại {0}': 'Resets {0}',
   'Đã đổi tên tài khoản': 'Account renamed',
   'Đổi tên': 'Rename',
+  'Đổi tên {0}': 'Rename {0}',
   'Đổi tên tài khoản': 'Rename account',
   'Dùng cho code, đường dẫn và các giá trị kỹ thuật.': 'Used for code, paths and technical values.',
   'Dùng cho toàn bộ chữ trong app.': 'Used for all text in the app.',

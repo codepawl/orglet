@@ -359,7 +359,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .topbar { display:flex; align-items:center; justify-content:space-between; padding:var(--chrome-y) var(--page-x); min-height:56px; gap:10px; }
 .topbar>div { display:flex; align-items:center; gap:10px; min-width:0; }
 /* The chat's name; the faces of an empty group chat sit before it (COD-215), so the name is named rather than counted. */
-.topbar-name { font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; }
+/* The name and the model beside it sit on one baseline: centred boxes of 14px and 12px text left the smaller one
+   visibly off the line (owner, 2026-09-25). */
+.topbar-title { display:inline-flex; align-items:baseline; gap:10px; min-width:0; }
+.topbar-name { font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; min-width:0; }
 .topbar-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; margin-left:auto; }
 .task-cost {
   display:inline-flex; align-items:center; gap:6px; max-width:min(280px,46vw);
