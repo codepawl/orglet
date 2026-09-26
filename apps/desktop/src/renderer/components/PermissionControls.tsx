@@ -21,11 +21,23 @@ const levelNames: Record<WorkspaceLevel, string> = translated({
   execute: 'Đọc, sửa file và chạy lệnh',
 });
 
-/** Cumulative like the folder: a later "read and act" level will include reading (COD-261). */
+/** Cumulative like the folder: "read and act" includes reading (COD-261). */
 const browserLevelNames: Record<BrowserLevel, string> = translated({
   none: 'Không dùng trình duyệt',
   read: 'Đọc trang',
+  act: 'Đọc và thao tác',
 });
+
+/**
+ * The one capability switch that moves the browser from `current` to `level`; `withCapability` keeps the levels
+ * cumulative, so acting brings reading and turning reading off takes acting with it.
+ */
+function browserLevelChange(current: BrowserLevel, level: BrowserLevel): { capability: ToolCapability; enabled: boolean } {
+  if (level === 'none') return { capability: 'browser.read', enabled: false };
+  if (level === 'act') return { capability: 'browser.act', enabled: true };
+  if (current === 'act') return { capability: 'browser.act', enabled: false };
+  return { capability: 'browser.read', enabled: true };
+}
 
 /** One reason for the whole group when no worker in the chat can use any permission. */
 const blockedReasons: Record<PermissionBlocker, string> = translated({
@@ -47,7 +59,7 @@ const partlyBlockedNotes: Record<PermissionBlocker, string> = {
  * A blocker (Demo, a model with no connection, a grant still loading) is never a third position on a control:
  * the control is disabled and one short line says why (user, COD-168).
  */
-export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, searchProvider, busy = false, locked, folderLocked, browserProfile, onCapability, onWorkspace, onConfigure, extra }: {
+export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, searchProvider, busy = false, locked, folderLocked, browserProfile, browserChoices = browserLevels, onCapability, onWorkspace, onConfigure, extra }: {
   workers: PermissionWorker[];
   capabilities?: ToolCapability[];
   /** `undefined` while the grant is still being read. */
@@ -65,6 +77,9 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
   folderLocked?: string;
   /** The name of the browser profile the chat reads pages with, shown under the browser level like a folder's name. */
   browserProfile?: string;
+  /** The browser levels on offer: a schedule's run reads pages and never acts on them. */
+  browserChoices?: readonly BrowserLevel[];
+  /** Reports one capability turned on or off; the parent keeps the browser's levels cumulative with `withCapability`. */
   onCapability: (capability: ToolCapability, enabled: boolean) => void;
   onWorkspace: (level: WorkspaceLevel) => void;
   onConfigure?: (provider: Exclude<Worker['provider'], 'demo'>) => void;
@@ -130,17 +145,22 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
       description={t('Tìm qua {0}, đọc trang web công khai.', [WEB_SEARCH_PROVIDER_NAMES[searchProvider]])}>
       <Globe size={15} aria-hidden="true" />{t('Đọc và tìm kiếm web')}
     </SwitchField>
-    {/* Orglet's own browser (COD-261): a level like the folder's, so reading and a later acting level share one control. */}
+    {/* Orglet's own browser (COD-261): a level like the folder's, so reading and acting share one control. */}
     <div className={`permission-folder${disabled ? ' permission-folder-disabled' : ''}`}>
       <span className="permission-folder-text">
         <span className="permission-folder-title"><AppWindow size={15} aria-hidden="true" />{t('Trình duyệt')}</span>
-        <span className="permission-folder-description">{t('Mở và đọc trang trong cửa sổ riêng của Orglet.')}</span>
+        <span className="permission-folder-description">{state.browser === 'act'
+          ? t('Bấm, gõ và chọn trên trang; hỏi bạn trước khi gửi, trả tiền hay xóa.')
+          : t('Mở và đọc trang trong cửa sổ riêng của Orglet.')}</span>
       </span>
       <span className="permission-folder-control">
         <Select ariaLabel={t('Trình duyệt')} size="sm" value={state.browser} disabled={disabled}
-          onChange={value => onCapability('browser.read', value === 'read')}
-          options={browserLevels.map(level => ({ value: level, label: browserLevelNames[level] }))} />
-        {state.browser === 'read' && browserProfile && <span className="permission-folder-name"><AppWindow size={13} aria-hidden="true" />{t('Hồ sơ {0}', [browserProfile])}</span>}
+          onChange={value => {
+            const change = browserLevelChange(state.browser, value as BrowserLevel);
+            onCapability(change.capability, change.enabled);
+          }}
+          options={browserChoices.map(level => ({ value: level, label: browserLevelNames[level] }))} />
+        {state.browser !== 'none' && browserProfile && <span className="permission-folder-name"><AppWindow size={13} aria-hidden="true" />{t('Hồ sơ {0}', [browserProfile])}</span>}
       </span>
     </div>
     {/* Proposing is not doing: the switch lets the worker store a card, and the card still waits for Apply (COD-199). */}

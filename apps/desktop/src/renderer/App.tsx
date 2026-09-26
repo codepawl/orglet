@@ -64,7 +64,7 @@ import { t, tMessage, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
 import { useAppChangeNotices } from './appChangeNotices';
 import type { NewChatTarget, WorkspaceGrantView } from '../shared/workspace-access';
-import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
+import { snapshotCapabilities, withCapability, type ToolCapability } from '../shared/tool-policy';
 import { permissionsForLevel, type WorkspaceLevel } from '../shared/capability-status';
 import { appView, createHistory, recordView, replaceView, stepHistory, useNavigationInput, viewKey, type AppView, type NavigationDirection, type NavigationHistory } from './navigation';
 import { noSelection, pruneSelection, selectRange, toggleSelection, type SelectionPickMode, type SidebarSelection, type SidebarSelectionSection } from './sidebarSelection';
@@ -522,11 +522,7 @@ export function App() {
       finally { setToolPolicyBusy(false); }
     })();
   };
-  const toggledCapabilities = (previous: ToolCapability[], capability: ToolCapability, enabled: boolean) => {
-    const capabilities = previous.filter(item => item !== capability);
-    if (enabled) capabilities.push(capability);
-    return capabilities;
-  };
+  const toggledCapabilities = (previous: ToolCapability[], capability: ToolCapability, enabled: boolean) => withCapability(previous, capability, enabled);
   const changeTaskCapability = (taskDetail: TaskDetail, capability: ToolCapability, enabled: boolean) => toolAction(() => {
     const provider = taskWorkers(taskDetail.task, workspace!)[0]?.provider ?? 'demo';
     const previous = taskDetail.task.toolCapabilities ?? snapshotCapabilities(provider);

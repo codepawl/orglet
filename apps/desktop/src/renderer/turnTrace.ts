@@ -12,7 +12,7 @@ import { t } from './i18n';
 export type TraceKind =
   | 'memory' | 'knowledge'
   | 'read' | 'search' | 'list' | 'skill' | 'web_search' | 'web_read' | 'dataset' | 'edit' | 'folder' | 'move' | 'delete' | 'command' | 'mcp'
-  | 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll'
+  | 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll' | 'browser_act' | 'browser_wait' | 'browser_asked'
   | 'handoff' | 'remembered' | 'proposal' | 'failed' | 'other';
 
 export type TraceEntry = {
@@ -46,7 +46,14 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Đã tìm trên trang (.+)$/, kind: 'browser_find' },
   { pattern: /^Đã chụp màn hình (.+)$/, kind: 'browser_screenshot' },
   { pattern: /^Đã cuộn trang (.+)$/, kind: 'browser_scroll' },
-  { pattern: /^Trình duyệt không (?:mở|làm được)/, kind: 'failed', note: true },
+  // Acting on a page reads as the core's whole sentence, since it names the element: "Đã bấm “Tìm” trên example.com".
+  // A step Orglet asked about says so and how the person answered; a declined one did not go through.
+  { pattern: /^Đã hỏi để .+ · được phép$/, kind: 'browser_asked', note: true },
+  { pattern: /^Đã hỏi để .+ · bị từ chối$/, kind: 'failed', note: true },
+  { pattern: /^Đã (?:bấm|gõ vào|chọn trong) “.*” trên \S+$/, kind: 'browser_act', note: true },
+  { pattern: /^Đã nhấn \S+ trên \S+$/, kind: 'browser_act', note: true },
+  { pattern: /^Đã chờ trang \S+$/, kind: 'browser_wait', note: true },
+  { pattern: /^Trình duyệt không (?:mở|làm được|làm bước này)/, kind: 'failed', note: true },
   { pattern: /^Đã kiểm tra (?:dataset|run-log): (.+?) · /, kind: 'dataset' },
   { pattern: /^Đã đọc (.+)$/, kind: 'read' },
   { pattern: /^Đã tìm (.+)$/, kind: 'search' },
@@ -150,8 +157,8 @@ export function liveTraceOf(memories: readonly RunMemory[] | undefined, steps: r
 
 /** Which summary count a row adds to; the two web kinds share one, and every browser step counts as one kind. */
 type SummaryKind = Exclude<TraceKind, 'web_search' | 'web_read' | BrowserKind> | 'web' | 'browser';
-type BrowserKind = 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll';
-const browserKinds: readonly TraceKind[] = ['browser_open', 'browser_read', 'browser_find', 'browser_screenshot', 'browser_scroll'];
+type BrowserKind = 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll' | 'browser_act' | 'browser_wait' | 'browser_asked';
+const browserKinds: readonly TraceKind[] = ['browser_open', 'browser_read', 'browser_find', 'browser_screenshot', 'browser_scroll', 'browser_act', 'browser_wait', 'browser_asked'];
 
 /** The order the counts read in: what was loaded, then a crew's handoffs, then the steps, then what the run left behind. */
 const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web', 'browser', 'mcp', 'dataset', 'edit', 'folder', 'move', 'delete', 'command', 'remembered', 'proposal', 'failed', 'other'];

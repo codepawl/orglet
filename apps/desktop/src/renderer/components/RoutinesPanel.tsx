@@ -18,7 +18,7 @@ import { toast } from './toast';
 import { Avatar, RosterAvatars } from './Avatar';
 import { teamRoster } from '../assignees';
 import { BrowserSitesEditor, profileOptions, useBrowserState } from './BrowserSettings';
-import { browserLevelOf, browserLevels, capabilitiesWithBrowserLevel, defaultBrowserChoice, type BrowserLevel, type BrowserProfileId, type BrowserSite } from '../../shared/browser';
+import { browserLevelOf, capabilitiesWithBrowserLevel, defaultBrowserChoice, routineBrowserLevels, type BrowserLevel, type BrowserProfileId, type BrowserSite } from '../../shared/browser';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
@@ -133,7 +133,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const [folder, setFolder] = useState<{ folderId: string; name: string } | undefined>(initialTrigger?.kind === 'folder' ? { folderId: initialTrigger.folderId, name: initialTrigger.folderName } : undefined);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   // A schedule may read pages with the profile and site list saved here; saving is what approves them (COD-261).
-  const [browserLevel, setBrowserLevel] = useState<BrowserLevel>(browserLevelOf(initial?.toolCapabilities ?? []));
+  // A schedule never acts on pages (COD-261), so reading is the most it can be set to.
+  const [browserLevel, setBrowserLevel] = useState<BrowserLevel>(browserLevelOf(initial?.toolCapabilities ?? []) === 'none' ? 'none' : 'read');
   const [browserProfile, setBrowserProfile] = useState<BrowserProfileId>((initial?.browser ?? defaultBrowserChoice()).profileId);
   const [browserSites, setBrowserSites] = useState<BrowserSite[]>(initial?.browser?.sites ?? []);
   const browser = useBrowserState();
@@ -240,7 +241,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       <h4 id="routine-group-limits">{t('Giới hạn & quyền')}</h4>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} required /></label>
       <Select label={<FieldLabel icon={AppWindow}>{t('Trình duyệt')}</FieldLabel>} value={browserLevel} onChange={value => setBrowserLevel(value as BrowserLevel)}
-        options={browserLevels.map(level => ({ value: level, label: level === 'read' ? t('Đọc trang') : t('Không dùng trình duyệt') }))} />
+        options={routineBrowserLevels.map(level => ({ value: level, label: level === 'read' ? t('Đọc trang') : t('Không dùng trình duyệt') }))} />
       {browserLevel === 'read' && <div className="routine-browser">
         <Select label={<FieldLabel icon={UserRound}>{t('Hồ sơ trình duyệt')}</FieldLabel>} value={browserProfile} onChange={value => setBrowserProfile(value as BrowserProfileId)} options={profileOptions(browser.state, browserProfile)} />
         <div className="routine-browser-sites">

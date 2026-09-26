@@ -27,7 +27,7 @@ import { turnMessageId } from '../../shared/message-interactions';
 import { approvalAnswerLabels, McpChatGrants } from './McpApproval';
 import { McpApprovalChoice } from '../../shared/mcp';
 import { BrowserChatSettings, BrowserSteps, browserProfileName, useBrowserState } from './BrowserSettings';
-import { defaultBrowserChoice } from '../../shared/browser';
+import { defaultBrowserChoice, routineBrowserLevels } from '../../shared/browser';
 
 /*
  * The panel beside a chat: who you are talking to, what this conversation has cost, and what happened in it.
@@ -308,6 +308,8 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           capabilities={detail ? detail.task.toolCapabilities : tools.capabilities} grant={tools.grant} taskId={detail?.task.id} sourceCount={detail?.sources.length ?? 0}
           searchProvider={workspace.webSearchProvider} busy={tools.busy} pending={tools.pending}
           browserProfile={detail ? browserProfileName((detail.task.browser ?? defaultBrowserChoice()).profileId, browser.state) : undefined}
+          // A schedule's run reads pages and never acts on them (COD-261).
+          browserChoices={detail?.task.routineId ? routineBrowserLevels : undefined}
           // A side thread takes its permissions from its main chat and can never be wider (COD-247).
           locked={detail?.task.sideOf ? t('Chat phụ dùng quyền của chat chính. Đổi quyền ở chat chính.') : undefined}
           onCapability={tools.onCapability} onWorkspace={tools.onWorkspace} onConfigure={tools.onConfigure} />

@@ -368,6 +368,10 @@ export class Store {
     this.db.exec("UPDATE reservations SET state='unknown' WHERE state='held'");
     this.db.exec("UPDATE step_attempts SET state='unknown' WHERE state='requesting'; DELETE FROM leases;");
     this.db.exec("UPDATE tool_calls SET state='uncertain' WHERE state='started'");
+    // A browser step that asked the person and never reached the tool journal was never taken: the app closed while
+    // the card waited (COD-261). One that did reach it keeps `unknown`, beside its uncertain call.
+    this.db.exec(`UPDATE browser_actions SET outcome='declined' WHERE outcome='unknown' AND risk='consequential'
+      AND NOT EXISTS (SELECT 1 FROM tool_calls WHERE tool_calls.run_id=browser_actions.run_id AND tool_calls.call_id=browser_actions.call_id)`);
     this.db.exec(`UPDATE workspace_copies SET data=json_set(data,'$.state','uncertain')
       WHERE json_extract(data,'$.state') IN ('preparing','integrating')`);
     this.db.exec(`UPDATE workspace_processes SET data=json_set(data,'$.state','uncertain')
