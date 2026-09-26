@@ -1,19 +1,15 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Slot } from '@radix-ui/react-slot';
-import { cva, type VariantProps } from 'class-variance-authority';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { X, type LucideIcon } from 'lucide-react';
 import { displayCurrency, moneySymbol } from './money';
 import { useRef, type ComponentProps, type ReactNode } from 'react';
+import { Button } from '@codepawl/orglet-ui';
 import { t } from '../i18n';
 
 export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
-const variants = cva('button', { variants: { variant: { primary: 'button-primary', ghost: 'button-ghost', outline: 'button-outline' }, size: { default: '', icon: 'button-icon' } }, defaultVariants: { variant: 'ghost', size: 'default' } });
-export function Button({ className, variant, size, asChild, ...props }: ComponentProps<'button'> & VariantProps<typeof variants> & { asChild?: boolean }) {
-  const Component = asChild ? Slot : 'button';
-  return <Component className={cn(variants({ variant, size }), className)} {...props} />;
-}
+// Moved into the kit (COD-274); re-exported so the app's many `./ui` imports need no change.
+export { Button } from '@codepawl/orglet-ui';
 /** Section title on the left with the section's own actions (create, import, export) on the right. */
 export function PanelHeading({ title, description, level = 2, children }: { title: ReactNode; description?: ReactNode; level?: 2 | 3; children?: ReactNode }) {
   const Heading = level === 2 ? 'h2' : 'h3';
