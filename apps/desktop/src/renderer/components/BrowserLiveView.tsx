@@ -453,7 +453,7 @@ export function BrowserLiveViewer({ detail }: { detail: TaskDetail }) {
     <div className="browser-live-viewer-body">
       <BrowserLiveSurface runId={watched.runId} workerName={watched.workerName} site={watched.site} controlling={live!.takenOver && !live!.inChrome} inChrome={live!.inChrome}
         onOpenInChrome={() => takeOverBrowser(detail.task.id, true, true)} onBackToOrglet={() => takeOverBrowser(detail.task.id, true)} large />
-      {approval && <BrowserApprovalCard taskId={detail.task.id} approval={approval} busy={answering} onAnswer={answer} />}
+      {approval && <BrowserApprovalCard taskId={detail.task.id} approval={approval} busy={answering} held={live!.takenOver} onAnswer={answer} />}
     </div>
   </Viewer>;
 }
