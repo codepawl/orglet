@@ -120,7 +120,7 @@ A message sent with **Send in a new thread** (the menu beside Send, or Ctrl+Shif
 
 **Forward of a forward.** Forwarding a turn that is itself a forward sends the original: its first chat, author, text and file names, without the note that came with it the first time.
 
-**In the chat.** The forwarded message sits on the person's side on the quiet surface (`ForwardedTurn` in `TaskThread.tsx`), headed **Forwarded from X**, or **Forwarded from X · written by Y** when the writer is not the chat's name; while the chat it came from exists the heading opens it. The note follows as the person's own bubble. Reactions, reply and forward act on the turn as on any message.
+**In the chat.** The forwarded message sits on the person's side on the quiet surface (`ForwardedTurn` in `TaskThread.tsx`), headed **Forwarded from X**, or **Forwarded from X · written by Y** when the writer is not the chat's name; while the chat it came from exists the heading opens it. The note follows as the person's own bubble. Reactions, reply and forward act on the turn as on any message. Search indexes the turn as it reads there, the note and then the forwarded words as plain text (`turnText` in `core/storage/chat-search.ts`), never the brief written for the model; the picker's head shows the message the same way (`forwardPreview`, through `plainSearchText`).
 
 ## Orchestrator: one message → workers → one report
 

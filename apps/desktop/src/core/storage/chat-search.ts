@@ -5,6 +5,7 @@ import {
   everyWordQuery, foldForSearch, matchesEveryWord, matchesPhrase, phraseQuery, plainSearchText, searchTerms, snippetOf,
   type ChatSearchHit, type ChatSearchResult,
 } from '../../shared/chat-search';
+import type { ForwardedMessage } from '../../shared/forward';
 import type { Store } from './database';
 
 /**
@@ -25,6 +26,20 @@ type ChatMatch = { phrase?: MessageRow; words?: MessageRow; titleMatched?: true;
 
 /** A person's message on one line, as it reads in the chat; it is plain text there, not Markdown. */
 const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+/** What a turn the person sent says, as the chat shows it. */
+export type TurnWords = { brief: string; forwarded?: ForwardedMessage };
+
+/**
+ * A turn as the chat shows it (dogfood, 2026-09-26). A typed message is its words. A forward is its note and the
+ * forwarded message, which the chat renders from Markdown, so it is read as plain text; the brief around them is
+ * written for the model ("Forwarded from the chat …", the fence), is never on screen, and is not searched.
+ */
+function turnText(turn: TurnWords): string {
+  if (!turn.forwarded) return oneLine(turn.brief);
+  const forwardedText = turn.forwarded.authorKind === 'person' ? oneLine(turn.forwarded.text) : plainSearchText(turn.forwarded.text);
+  return [turn.forwarded.note ? oneLine(turn.forwarded.note) : '', forwardedText].filter(Boolean).join(' ');
+}
 
 /**
  * What an answer says, as the chat shows it: a chat answer's message, or a report's title, summary and findings (the
@@ -47,7 +62,8 @@ function turnsOf(task: Task, runs: readonly Run[]) {
   return revisions.map(revision => {
     const runsOfTurn = runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
     const input = revision === current ? task.currentInput ?? task : runsOfTurn.find(run => run.snapshot.input)?.snapshot.input ?? task;
-    return { revision, brief: input.brief, at: runsOfTurn[0]?.startedAt ?? task.createdAt };
+    const forwarded = 'forwarded' in input ? input.forwarded : undefined;
+    return { revision, turn: { brief: input.brief, forwarded }, at: runsOfTurn[0]?.startedAt ?? task.createdAt };
   });
 }
 
@@ -63,8 +79,8 @@ export class ChatSearch {
   constructor(private readonly store: Store) {}
 
   /** What the person wrote on one turn, the first message included. Call inside the transaction that saves the turn. */
-  indexTurn(taskId: string, revision: number, brief: string, at: string) {
-    this.write({ taskId, messageId: turnMessageId(taskId, revision), kind: 'message', author: null, at, text: oneLine(brief) });
+  indexTurn(taskId: string, revision: number, turn: TurnWords, at: string) {
+    this.write({ taskId, messageId: turnMessageId(taskId, revision), kind: 'message', author: null, at, text: turnText(turn) });
   }
 
   /** An answer or report as it lands. Call inside the transaction that saves the artifact. */
@@ -196,7 +212,7 @@ export class ChatSearch {
     if (task.deletedAt) return;
     const runs = this.store.db.prepare('SELECT data FROM runs WHERE task_id=? ORDER BY rowid').all(task.id)
       .map(row => JSON.parse(String(row.data)) as Run);
-    for (const turn of turnsOf(task, runs)) this.indexTurn(task.id, turn.revision, turn.brief, turn.at);
+    for (const turn of turnsOf(task, runs)) this.indexTurn(task.id, turn.revision, turn.turn, turn.at);
     const runsById = new Map(runs.map(run => [run.id, run]));
     const sources = this.sourcesOf(task.id);
     const artifacts = this.store.db.prepare('SELECT a.data FROM artifacts a JOIN runs r ON r.id=a.run_id WHERE r.task_id=? ORDER BY a.rowid').all(task.id)

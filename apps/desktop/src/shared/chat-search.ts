@@ -227,7 +227,8 @@ export function plainSearchText(markdown: string): string {
   const lines = markdown.split(/\r?\n/)
     .filter(line => !/^\s*(```|~~~)/.test(line))
     .map(line => line
-      .replace(/^\s*(#{1,6}|>+|[-*+]|\d+[.)])\s+/, '')
+      // Markers can stack, as in a list inside a quote ("> - item").
+      .replace(/^\s*(?:(?:#{1,6}|>+|[-*+]|\d+[.)])\s+)+/, '')
       .replace(/\|/g, ' '));
   return lines.join(' ')
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')

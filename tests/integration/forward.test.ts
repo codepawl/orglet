@@ -11,7 +11,8 @@ import { commands } from '../../apps/desktop/src/shared/contracts';
 import { liveWorkerTask } from '../../apps/desktop/src/shared/live-task';
 import { turnMessageId } from '../../apps/desktop/src/shared/message-interactions';
 import { FORWARD_TEXT_CHARS, forwardBrief, type ForwardResult } from '../../apps/desktop/src/shared/forward';
-import { forwardOptions, forwardSummary } from '../../apps/desktop/src/renderer/forward';
+import { forwardOptions, forwardPreview, forwardSummary } from '../../apps/desktop/src/renderer/forward';
+import { t } from '../../apps/desktop/src/renderer/i18n';
 
 /*
  * COD-257: forwarding one message to other chats. Each place takes it as the person's own message, a turn that goes
@@ -257,5 +258,11 @@ describe('the forward picker’s places', () => {
     const text = forwardSummary(1, [{ name: 'Lan', error: 'Chat này đang làm. Chuyển tiếp sau khi xong.' }]);
     expect(text).toMatch(/Lan/);
     expect(forwardSummary(0, [{ name: 'Lan', error: 'x' }])).toMatch(/Lan: x/);
+  });
+
+  it('shows the message in the picker as plain text, the way the chat reads it', () => {
+    // Dogfood, 2026-09-26: the head read "Dev: From `src/cart.js` and `test/cart.test.js`, these cases aren't covered: - …".
+    const preview = forwardPreview({ author: 'Dev', text: '## Gaps\nFrom `src/cart.js`, these cases aren’t covered:\n\n- **Negative** coupons\n- [Rounding](https://example.com)' });
+    expect(preview).toBe(t('{0}: {1}', ['Dev', 'Gaps From src/cart.js, these cases aren’t covered: Negative coupons Rounding']));
   });
 });
