@@ -18,3 +18,6 @@ export { ReactionBadges, ReactionBar, ReactionPicker } from './components/Reacti
 export type { ReactionBadge, ReactionOption } from './components/ReactionBar';
 export { ColorPicker, normalizeHex } from './components/ColorPicker';
 export type { ColorPickerLabels, ColorPickerProps } from './components/ColorPicker';
+export { PanelHeading } from './components/PanelHeading';
+export { FieldLabel } from './components/FieldLabel';
+export type { FieldLabelIcon } from './components/FieldLabel';

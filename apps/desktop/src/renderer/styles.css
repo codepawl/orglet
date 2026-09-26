@@ -806,11 +806,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
   animation:field-flash .55s ease-in-out 2;
 }
 /* Title left, the section's create/import/export actions right. */
-.panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:36px; }
-.panel-heading h2,.panel-heading h3 { font-size:15px; font-weight:600; min-width:0; }
-.panel-heading-actions { display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
-.panel-heading+.muted { margin-top:6px; }
-.settings-panel>.panel-heading { margin-bottom:10px; }
+.org-panel-heading+.muted { margin-top:6px; }
+.settings-panel>.org-panel-heading { margin-bottom:10px; }
 .settings-subheading { font-size:13px; font-weight:500; color:var(--muted); margin:18px 0 2px; }
 /* Subheading with a small inline action: the margin sits on the row so the action shares the title line. */
 .settings-subheading-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:24px 0 2px; }
@@ -861,7 +858,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .setting-note { font-size:12px; color:var(--muted); margin:10px 0 4px; line-height:1.5; }
 /* Notes introduce the group they sit under. */
 .settings-subheading+.setting-note,.settings-subheading-row+.setting-note { margin-top:2px; }
-.panel-heading+.setting-note { margin-top:0; }
+.org-panel-heading+.setting-note { margin-top:0; }
 /* A command to paste (install, sign-in): the label, then the command on a quiet card. With a terminal picker the
    card has a top bar: the picker on the left, small, borderless and in the card's colour (user, 2026-09-25), and
    copy on the right. Both answer hover with colour only, never a background: they sit on the card's tint. Without a
@@ -1122,8 +1119,6 @@ button.notice-body { cursor:pointer; }
   .setting-row { flex-wrap:wrap; }
   .setting-control { width:100%; justify-content:flex-end; }
 }
-.field-label { display:inline-flex; align-items:center; gap:7px; }
-.field-label svg { color:var(--muted); }
 .provider-mark { display:inline-grid; place-items:center; width:26px; height:26px; border:1px solid var(--border); border-radius:8px; background:var(--bg); font-size:11px; font-weight:600; color:var(--text); flex-shrink:0; }
 .provider-mark svg { width:15px; height:15px; }
 .provider-mark.small { width:22px; height:22px; border-radius:6px; }
@@ -1287,7 +1282,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-group h4 { margin:0; font-size:13px; font-weight:600; color:var(--muted); }
 .form .routine-group input:not([type=checkbox]),.form .routine-group select,.form .routine-group textarea,.form .routine-group .money-input { background:var(--bg); }
 .routine-sources,.routine-folder,.routine-called { display:flex; flex-direction:column; gap:8px; }
-.routine-sources .panel-heading h3,.routine-folder .panel-heading h3 { font-size:13px; font-weight:500; }
+.routine-sources .org-panel-heading h3,.routine-folder .org-panel-heading h3 { font-size:13px; font-weight:500; }
 /* The watched folder: its name and its read-only level, never its path, which stays in the core. */
 .routine-folder-name { display:flex; align-items:center; gap:8px; min-width:0; margin:0; font-size:13px; }
 .routine-folder-name svg { color:var(--muted); flex-shrink:0; }
@@ -1409,7 +1404,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .brand .orglet-mark::before { left:8px; }
 .brand .orglet-mark::after { left:11px; }
 /* Required fields: a small red asterisk after the label. */
-.field-label.required::after { content:"*" / ""; color:var(--error); margin-left:-4px; font-weight:600; }
 /* Breadcrumb in a dialog title: back arrow, parent link, current page. */
 .breadcrumb { display:inline-flex; align-items:center; gap:6px; min-width:0; margin-left:-10px; }
 .breadcrumb-link { border:0; background:transparent; padding:2px 4px; border-radius:6px; color:var(--muted); font:inherit; font-weight:500; }
