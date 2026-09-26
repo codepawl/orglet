@@ -33,6 +33,20 @@ export class HandInBlockedError extends Error {
   }
 }
 
+/**
+ * The sentence a finished command leaves in the run's activity, which the chat's step list shows. It names the command
+ * on one line, the way the person would type it: "Process stopped: exited, exit code 1" left them guessing which
+ * command failed and read "exited" in English on a Vietnamese screen (dogfood, 2026-09-26).
+ */
+export function commandFinishedEvent(command: StartWorkspaceProcess, termination: WorkspaceProcess['state'], exitCode: number | null): string {
+  const line = commandLine(command, 160).replace(/\s+/g, ' ');
+  if (termination === 'timeout') return `Lệnh ${line} đã hết thời gian`;
+  if (termination === 'cancelled') return `Đã dừng lệnh ${line}`;
+  if (termination === 'output_limit') return `Lệnh ${line} in quá nhiều nên đã bị dừng`;
+  if (exitCode === null) return `Đã chạy lệnh ${line}`;
+  return `Đã chạy lệnh ${line} · mã thoát ${exitCode}`;
+}
+
 /** The limitation an answer carries when the person applied its changes past a failed command (COD-270). */
 export function acceptedFailureLine(process: Pick<WorkspaceProcess, 'command' | 'state' | 'exitCode'>): string {
   const command = commandLine(process.command);
@@ -155,7 +169,7 @@ export class WorkspaceProcesses {
         }).then(result => {
           this.save({ id: process.id, runId: process.runId, command, state: result.termination,
             exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, copyEditsAtStart: options.copyEdits });
-          this.store.event(options.runId, `Tiến trình đã dừng: ${result.termination}, mã thoát ${result.exitCode ?? 'unknown'}`);
+          this.store.event(options.runId, commandFinishedEvent(command, result.termination, result.exitCode));
         }).catch(error => {
           const uncertain: WorkspaceProcess = { id: process.id, runId: process.runId, command,
             state: 'uncertain', exitCode: null, stdout: process.stdout, stderr: process.stderr, copyEditsAtStart: options.copyEdits,
