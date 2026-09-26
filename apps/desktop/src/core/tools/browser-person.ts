@@ -7,7 +7,8 @@ import type { BrowserApprovalView } from '../../shared/browser';
  * nothing to resume.
  *
  * A wait ends when the person answers or hands back, when the run is stopped (its signal), or after `waitMs`, so a
- * run nobody attends to does not hold a browser window open forever.
+ * run nobody attends to does not hold a browser window open forever. Desktop apps (`desktop-tools.ts`) ask through
+ * the same class with their own card; they have no take-over, since the person's desktop is already theirs.
  */
 export type BrowserAnswer = 'allow' | 'decline';
 export type BrowserAskOutcome = BrowserAnswer | 'no_answer';
@@ -15,21 +16,21 @@ export type BrowserAskOutcome = BrowserAnswer | 'no_answer';
 /** How long a step waits for an answer or for the browser to be handed back. */
 export const BROWSER_PERSON_WAIT_MS = 15 * 60_000;
 
-type PendingAsk = { taskId: string; view: BrowserApprovalView; settle: (answer: BrowserAnswer) => void };
+type PendingAsk<View> = { taskId: string; view: View; settle: (answer: BrowserAnswer) => void };
 /** `inChrome`: the person moved the tabs into a Chrome window, rather than using the live view in Orglet. */
 type Holding = { since: string; released: Set<() => void>; inChrome: boolean };
 
 export const NOT_ASKING = 'Bước này không còn chờ bạn trả lời.';
 
-export class BrowserPerson {
-  private asks = new Map<string, PendingAsk>();
+export class BrowserPerson<View extends { id: string } = BrowserApprovalView> {
+  private asks = new Map<string, PendingAsk<View>>();
   private holdings = new Map<string, Holding>();
   private waitingTasks = new Map<string, number>();
 
   constructor(private notify: () => void, private waitMs = BROWSER_PERSON_WAIT_MS) {}
 
   /** Shows the card on the chat and waits for the person's answer. */
-  async ask(taskId: string, view: BrowserApprovalView, signal: AbortSignal): Promise<BrowserAskOutcome> {
+  async ask(taskId: string, view: View, signal: AbortSignal): Promise<BrowserAskOutcome> {
     signal.throwIfAborted();
     const answered = new Promise<BrowserAnswer>(resolve => {
       this.asks.set(view.id, { taskId, view, settle: resolve });
@@ -52,7 +53,7 @@ export class BrowserPerson {
   }
 
   /** The card waiting on this chat, if any. */
-  approval(taskId: string): BrowserApprovalView | undefined {
+  approval(taskId: string): View | undefined {
     for (const pending of this.asks.values()) if (pending.taskId === taskId) return pending.view;
     return undefined;
   }

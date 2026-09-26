@@ -1,4 +1,4 @@
-import { AppWindow, Database, FileText, FolderOpen, Globe, Lightbulb } from 'lucide-react';
+import { AppWindow, Database, FileText, FolderOpen, Globe, Lightbulb, MonitorSmartphone } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { permissionBlocker, permissionState, workspaceLevels, type PermissionBlocker, type WorkspaceLevel } from '../../shared/capability-status';
 import type { ToolCapability } from '../../shared/tool-policy';
@@ -11,6 +11,7 @@ import { SwitchField } from './Switch';
 import { Skeleton } from '@codepawl/orglet-ui';
 import { t, translated } from '../i18n';
 import { browserLevels, type BrowserLevel } from '../../shared/browser';
+import { desktopLevels, type DesktopLevel } from '../../shared/desktop';
 
 export type PermissionWorker = Pick<Worker, 'id' | 'name' | 'provider'> & { connected: boolean };
 
@@ -39,6 +40,20 @@ function browserLevelChange(current: BrowserLevel, level: BrowserLevel): { capab
   return { capability: 'browser.read', enabled: true };
 }
 
+/** Desktop apps take the same cumulative levels (COD-261, phase 2a). */
+const desktopLevelNames: Record<DesktopLevel, string> = translated({
+  none: 'Không dùng ứng dụng',
+  read: 'Đọc cửa sổ',
+  act: 'Đọc và thao tác',
+});
+
+function desktopLevelChange(current: DesktopLevel, level: DesktopLevel): { capability: ToolCapability; enabled: boolean } {
+  if (level === 'none') return { capability: 'desktop.read', enabled: false };
+  if (level === 'act') return { capability: 'desktop.act', enabled: true };
+  if (current === 'act') return { capability: 'desktop.act', enabled: false };
+  return { capability: 'desktop.read', enabled: true };
+}
+
 /** One reason for the whole group when no worker in the chat can use any permission. */
 const blockedReasons: Record<PermissionBlocker, string> = translated({
   unsupported: 'Tí Demo không dùng công cụ, nên chưa bật được quyền.',
@@ -59,7 +74,7 @@ const partlyBlockedNotes: Record<PermissionBlocker, string> = {
  * A blocker (Demo, a model with no connection, a grant still loading) is never a third position on a control:
  * the control is disabled and one short line says why (user, COD-168).
  */
-export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, searchProvider, busy = false, locked, folderLocked, browserProfile, browserChoices = browserLevels, onCapability, onWorkspace, onConfigure, extra }: {
+export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, searchProvider, busy = false, locked, folderLocked, browserProfile, browserChoices = browserLevels, desktopShown = true, desktopAvailable = true, desktopApps, onCapability, onWorkspace, onConfigure, extra }: {
   workers: PermissionWorker[];
   capabilities?: ToolCapability[];
   /** `undefined` while the grant is still being read. */
@@ -79,6 +94,12 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
   browserProfile?: string;
   /** The browser levels on offer: a schedule's run reads pages and never acts on them. */
   browserChoices?: readonly BrowserLevel[];
+  /** Whether the desktop apps row is shown at all: a schedule never uses desktop apps (COD-261, phase 2a). */
+  desktopShown?: boolean;
+  /** Whether desktop apps work on this computer (Windows only); elsewhere the row is disabled with one line saying so. */
+  desktopAvailable?: boolean;
+  /** How many desktop apps the chat granted, shown under the level like a folder's name. */
+  desktopApps?: number;
   /** Reports one capability turned on or off; the parent keeps the browser's levels cumulative with `withCapability`. */
   onCapability: (capability: ToolCapability, enabled: boolean) => void;
   onWorkspace: (level: WorkspaceLevel) => void;
@@ -163,6 +184,26 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
         {state.browser !== 'none' && browserProfile && <span className="permission-folder-name"><AppWindow size={13} aria-hidden="true" />{t('Hồ sơ {0}', [browserProfile])}</span>}
       </span>
     </div>
+    {/* Desktop apps (COD-261, phase 2a): a level like the browser's; the apps themselves are picked in Details. */}
+    {desktopShown && <div className={`permission-folder${disabled || !desktopAvailable ? ' permission-folder-disabled' : ''}`}>
+      <span className="permission-folder-text">
+        <span className="permission-folder-title"><MonitorSmartphone size={15} aria-hidden="true" />{t('Ứng dụng trên máy')}</span>
+        <span className="permission-folder-description">{!desktopAvailable ? t('Chỉ có trên Windows.')
+          : state.desktop === 'act' ? t('Bấm, nhập và chọn trong ứng dụng bạn cấp; hỏi bạn trước khi gửi, lưu đè hay xóa.')
+          : t('Đọc cửa sổ của ứng dụng bạn cấp, không dùng chuột thật.')}</span>
+      </span>
+      <span className="permission-folder-control">
+        <Select ariaLabel={t('Ứng dụng trên máy')} size="sm" value={state.desktop} disabled={disabled || !desktopAvailable}
+          onChange={value => {
+            const change = desktopLevelChange(state.desktop, value as DesktopLevel);
+            onCapability(change.capability, change.enabled);
+          }}
+          options={desktopLevels.map(level => ({ value: level, label: desktopLevelNames[level] }))} />
+        {desktopAvailable && state.desktop !== 'none' && desktopApps !== undefined && <span className="permission-folder-name">
+          <MonitorSmartphone size={13} aria-hidden="true" />{desktopApps === 0 ? t('Chưa cấp ứng dụng nào') : desktopApps === 1 ? t('1 ứng dụng') : t('{0} ứng dụng', [desktopApps])}
+        </span>}
+      </span>
+    </div>}
     {/* Proposing is not doing: the switch lets the worker store a card, and the card still waits for Apply (COD-199). */}
     <SwitchField checked={state.propose} disabled={disabled} onChange={enabled => onCapability('app.propose', enabled)}
       description={t('Đề xuất Tí, hội, skill và cài đặt mới.')}>

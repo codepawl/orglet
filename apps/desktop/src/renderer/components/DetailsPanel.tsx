@@ -27,6 +27,7 @@ import { turnMessageId } from '../../shared/message-interactions';
 import { approvalAnswerLabels, McpChatGrants } from './McpApproval';
 import { McpApprovalChoice } from '../../shared/mcp';
 import { BrowserChatSettings, BrowserSteps, browserProfileName, useBrowserState } from './BrowserSettings';
+import { DesktopChatSettings, DesktopSteps, desktopAppsAvailable } from './DesktopApps';
 import { defaultBrowserChoice, routineBrowserLevels } from '../../shared/browser';
 
 /*
@@ -310,13 +311,17 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           browserProfile={detail ? browserProfileName((detail.task.browser ?? defaultBrowserChoice()).profileId, browser.state) : undefined}
           // A schedule's run reads pages and never acts on them (COD-261).
           browserChoices={detail?.task.routineId ? routineBrowserLevels : undefined}
+          // A schedule never uses desktop apps (COD-261, phase 2a).
+          desktopShown={!detail?.task.routineId} desktopAvailable={desktopAppsAvailable()} desktopApps={detail ? (detail.task.desktop?.apps.length ?? 0) : undefined}
           // A side thread takes its permissions from its main chat and can never be wider (COD-247).
           locked={detail?.task.sideOf ? t('Chat phụ dùng quyền của chat chính. Đổi quyền ở chat chính.') : undefined}
           onCapability={tools.onCapability} onWorkspace={tools.onWorkspace} onConfigure={tools.onConfigure} />
         {detail && <McpChatGrants detail={detail} workers={tools.workers} workspace={workspace} />}
         {detail && <BrowserChatSettings detail={detail} />}
+        {detail && <DesktopChatSettings detail={detail} />}
       </section>}
       {detail && <BrowserSteps detail={detail} />}
+      {detail && <DesktopSteps detail={detail} />}
       {detail && recovery?.taskId === detail.task.id && onRetireWorkspace && readProcessOutput && readPrivateFile && <WorkspaceRecovery view={recovery} runs={detail.runs} focus={recoveryFocus}
         busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} onRestore={onRestoreFile}
         readOutput={readProcessOutput} readFile={readPrivateFile} />}

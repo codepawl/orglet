@@ -26,6 +26,7 @@ import { turnMessageId } from '../../shared/message-interactions';
 import { LiveRun, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, useRunProgress, withBrowserControls, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
 import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
+import { DesktopApprovalCard } from './DesktopApps';
 import { TurnTrace } from './TurnTrace';
 import { traceOf } from '../turnTrace';
 import { dockIsland } from './islandDock';
@@ -131,6 +132,9 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   // A consequential browser step waiting on the person, answered from the card in the latest turn (COD-261).
   const browserApproval = detail.browser?.approval;
   const [answeringBrowser, setAnsweringBrowser] = useState(false);
+  // And one waiting in a desktop app (COD-261, phase 2a).
+  const desktopApproval = detail.desktop?.approval;
+  const [answeringDesktop, setAnsweringDesktop] = useState(false);
   // The run whose working-copy changes are open in the diff viewer (COD-163).
   const [diffRun, setDiffRun] = useState<Run>();
   // A command that blocked a hand-in, its output open in the viewer, and whether "Vẫn áp dụng" is on its way (COD-270).
@@ -438,7 +442,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             {byline(reply.run)}
             {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest)}
           </section>)}
-          {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && (detail.task.status === 'waiting_input' || browserApproval) ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
+          {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && (detail.task.status === 'waiting_input' || browserApproval || desktopApproval) ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
             {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && pendingDecision?.approval && <McpApprovalCard approval={pendingDecision.approval} busy={answeringDecision} sideThread={Boolean(detail.task.sideOf)}
@@ -458,6 +462,15 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
                 action(async () => {
                   try { await orglet.call('answerBrowserApproval', { taskId: detail.task.id, requestId: browserApproval.id, answer }); }
                   finally { setAnsweringBrowser(false); }
+                });
+              }} />}
+            {latest && desktopApproval && <DesktopApprovalCard taskId={detail.task.id} approval={desktopApproval} busy={answeringDesktop}
+              onAnswer={answer => {
+                if (answeringDesktop) return;
+                setAnsweringDesktop(true);
+                action(async () => {
+                  try { await orglet.call('answerDesktopApproval', { taskId: detail.task.id, requestId: desktopApproval.id, answer }); }
+                  finally { setAnsweringDesktop(false); }
                 });
               }} />}
             {latest && detail.task.status === 'waiting_input' && pendingDecision && !pendingDecision.approval && <div role="group" aria-label={t('Quyết định đang chờ')}>

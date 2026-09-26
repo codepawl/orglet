@@ -2303,3 +2303,16 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .browser-live-viewer-body .browser-approval-shot { display:none; }
 .routine-browser { display:flex; flex-direction:column; gap:16px; min-width:0; }
 .routine-browser-sites { display:flex; flex-direction:column; gap:8px; min-width:0; }
+/* Desktop apps (COD-261, phase 2a): a chat's granted apps reuse the browser's site rows; the picker lists open windows. */
+.desktop-chat { margin-top:22px; }
+.desktop-app-name { font-family:inherit; font-size:13px; }
+.desktop-chat-actions { margin-top:2px; }
+.desktop-picker { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; }
+.desktop-picker-row { display:flex; align-items:center; gap:10px; min-width:0; min-height:48px; padding:4px 4px 4px 10px; border-radius:10px; }
+.desktop-picker-row:hover { background:var(--row-hover); }
+.desktop-picker-row>svg { flex-shrink:0; color:var(--muted); }
+.desktop-picker-text { display:flex; flex:1; flex-direction:column; min-width:0; }
+.desktop-picker-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13.5px; }
+.desktop-picker-meta { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--muted); }
+.desktop-picker-row>.org-button { flex-shrink:0; }
+.desktop-picker-added { display:inline-flex; flex-shrink:0; align-items:center; gap:4px; padding:0 8px; font-size:12.5px; color:var(--success); }

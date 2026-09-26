@@ -31,6 +31,7 @@ import { Input, SwitchField, Textarea } from '@codepawl/orglet-ui';
 import { taskGrants } from '../caches';
 import { Blocks, Zap } from 'lucide-react';
 import { Checkbox } from './Checkbox';
+import { desktopAppsAvailable } from './DesktopApps';
 
 const defaultInstructions = 'Work with the user like a helpful coworker: answer questions, talk things through and do what they ask. Keep replies clear and to the point. Write a formal report only when asked.';
 type Tab = 'general' | 'skill' | 'permissions' | 'memory';
@@ -284,5 +285,6 @@ function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, on
     if (picked) setPendingFolder(picked);
   });
   return <PermissionControls workers={[draft]} capabilities={capabilities} grant={grant} pending={pendingFolder} taskId={chat?.id} sourceCount={chat?.sourceIds.length ?? 0}
-    searchProvider={workspace.webSearchProvider} busy={busy} folderLocked={chat || worker ? undefined : t('Lưu Tí rồi chọn thư mục.')} onCapability={onCapability} onWorkspace={onWorkspace} extra={extra} />;
+    searchProvider={workspace.webSearchProvider} busy={busy} folderLocked={chat || worker ? undefined : t('Lưu Tí rồi chọn thư mục.')}
+    desktopAvailable={desktopAppsAvailable()} desktopApps={chat ? chat.desktop?.apps.length ?? 0 : undefined} onCapability={onCapability} onWorkspace={onWorkspace} extra={extra} />;
 }

@@ -46,7 +46,7 @@ export const REFUSED_CAPTCHA = 'Trang có CAPTCHA: Orglet không gõ gì trên t
  * accepting or agreeing signs something. Words that are just as often a page's navigation ("Archive", "Register",
  * "Apply" on a filter) are left out; a form behind them still asks when it sends.
  */
-const CONSEQUENTIAL_WORDS = [
+export const CONSEQUENTIAL_WORDS: readonly string[] = [
   'send', 'pay', 'buy', 'order', 'checkout', 'check out', 'purchase', 'delete', 'remove', 'post', 'publish', 'confirm',
   'subscribe', 'unsubscribe', 'transfer', 'sign out', 'signout', 'log out', 'logout', 'submit',
   'reply', 'comment', 'share', 'tweet', 'retweet', 'repost', 'invite', 'approve', 'merge', 'deploy', 'accept', 'agree',

@@ -64,6 +64,7 @@ export class Routines {
   save(raw: unknown) {
     const input = RoutineInput.parse(raw);
     if (input.task.toolCapabilities?.includes('browser.act')) throw new Error(SCHEDULE_NEVER_ACTS);
+    if (input.task.toolCapabilities?.includes('desktop.read') || input.task.desktop?.apps.length) throw new Error(SCHEDULE_NO_DESKTOP);
     const previous = input.id ? this.store.get<Routine>('routines', input.id) : undefined;
     if (!previous && this.store.all('routines').length >= 100) throw new Error('Workspace đã có đủ 100 lịch. Sửa một lịch hiện có.');
     // A save that names no trigger keeps the one the routine has; switching back to the clock names `schedule`.
@@ -165,6 +166,8 @@ export class Routines {
  * would is refused, and its runs are never offered the acting tools.
  */
 export const SCHEDULE_NEVER_ACTS = 'Lịch chỉ được đọc trang, không được thao tác trên trang. Chọn "Đọc trang" cho trình duyệt.';
+/** A schedule runs while the person may be using the very apps it would touch, so it never uses desktop apps (COD-261, phase 2a). */
+export const SCHEDULE_NO_DESKTOP = 'Lịch không dùng ứng dụng trên máy. Tắt "Ứng dụng trên máy" cho lịch này.';
 
 /**
  * What a scheduled run's browser is approved for: reading only, with one profile and the site list as saved. Undefined

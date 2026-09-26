@@ -42,6 +42,7 @@ What the app does today. Use the words on screen.
 | [agent-tools.md](agent-tools.md) | Workspace and web permissions, tool execution, team handoffs and interrupted attempts |
 | [mcp.md](mcp.md) | MCP servers you add: stdio or remote, which orglet may use them, approving each call, secrets, limits |
 | [browser.md](browser.md) | Orglet's browser: reading pages in a Chrome or Edge window with its own profile, site lists, what it never does |
+| [desktop.md](desktop.md) | Desktop apps on Windows: the apps a chat grants, reading and using their windows through UI Automation, when it asks, what it never does |
 | [memory.md](memory.md) | A worker remembers its chats: how it writes memory, what reaches a run, where you correct it |
 | [self-improvement.md](self-improvement.md) | A worker proposes one sentence for its own instructions after repeated feedback; the card, the click, Undo |
 | [routines.md](routines.md) | Schedules, missed runs, and catch-up (one pending, not a backlog) |

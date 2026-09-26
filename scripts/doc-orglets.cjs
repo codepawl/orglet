@@ -54,6 +54,8 @@ const pageOrglets = [
   { name: 'mcp', accessory: 'headset', colour: '#3597ab', face: 'curious', yaw: -0.3, pitch: 0.08 },
   // The browser reads pages closely, so it wears the monocle in a colour the audit page lacks.
   { name: 'browser', accessory: 'monocle', colour: '#4f7fe0', face: 'curious', yaw: 0.32, pitch: 0.08 },
+  // Desktop apps use other programs for the person, so the page wears the visor in a colour the audit page lacks.
+  { name: 'desktop', accessory: 'visor', colour: '#3f9a68', face: 'happy', yaw: -0.3, pitch: 0.08 },
 ];
 
 // The README crew: five orglets side by side, the outer ones turned towards the middle.
