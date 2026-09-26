@@ -6,17 +6,27 @@ import { isHarness } from './harness';
  * orglets open and read pages in the browser Orglet manages (COD-261); `browser.act` also lets them click, type and
  * choose on those pages, and needs `browser.read`, the way the folder's write level needs read. `desktop.read` lets
  * them read the windows of the desktop programs the chat granted, and `desktop.act` also lets them use those windows
- * through UI Automation (COD-261, phase 2a), again only with reading.
+ * through UI Automation (COD-261, phase 2a), again only with reading. `workspace.apply` lets a finished run hand its
+ * working copy in to the folder at once; without it, which is the default, a solo chat's changes wait for the person
+ * to review and apply them (COD-279). It offers no tool.
  */
-export const ToolCapability = z.enum(['source.read', 'dataset.check', 'skill.read', 'network.web', 'app.propose', 'browser.read', 'browser.act', 'desktop.read', 'desktop.act']);
+export const ToolCapability = z.enum(['source.read', 'dataset.check', 'skill.read', 'network.web', 'app.propose', 'browser.read', 'browser.act', 'desktop.read', 'desktop.act', 'workspace.apply']);
 export type ToolCapability = z.infer<typeof ToolCapability>;
-export const ToolCapabilities = z.array(ToolCapability).max(9)
+export const ToolCapabilities = z.array(ToolCapability).max(10)
   .refine(capabilities => new Set(capabilities).size === capabilities.length, 'Quyền công cụ bị trùng.')
   .refine(capabilities => !capabilities.includes('browser.act') || capabilities.includes('browser.read'), 'Thao tác trên trang cần quyền đọc trang.')
   .refine(capabilities => !capabilities.includes('desktop.act') || capabilities.includes('desktop.read'), 'Thao tác trên ứng dụng cần quyền đọc cửa sổ.');
 
 export function supportedCapabilities(_provider: string): ToolCapability[] {
-  return ['source.read', 'dataset.check', 'skill.read', 'network.web', 'app.propose', 'browser.read', 'browser.act', 'desktop.read', 'desktop.act'];
+  return ['source.read', 'dataset.check', 'skill.read', 'network.web', 'app.propose', 'browser.read', 'browser.act', 'desktop.read', 'desktop.act', 'workspace.apply'];
+}
+
+/**
+ * Whether losing this capability stops the work that uses it. Losing `workspace.apply` turns review on, which a running
+ * run meets at its hand-in anyway (its permissions are intersected with the chat's), so nothing needs to stop.
+ */
+export function removalStopsWork(capability: ToolCapability): boolean {
+  return capability !== 'workspace.apply';
 }
 
 /**

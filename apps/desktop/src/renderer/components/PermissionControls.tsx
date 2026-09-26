@@ -1,4 +1,4 @@
-import { AppWindow, Database, FileText, FolderOpen, Globe, Lightbulb, MonitorSmartphone } from 'lucide-react';
+import { AppWindow, Database, FileDiff, FileText, FolderOpen, Globe, Lightbulb, MonitorSmartphone } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { permissionBlocker, permissionState, workspaceLevels, type PermissionBlocker, type WorkspaceLevel } from '../../shared/capability-status';
 import type { ToolCapability } from '../../shared/tool-policy';
@@ -74,7 +74,7 @@ const partlyBlockedNotes: Record<PermissionBlocker, string> = {
  * A blocker (Demo, a model with no connection, a grant still loading) is never a third position on a control:
  * the control is disabled and one short line says why (user, COD-168).
  */
-export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, searchProvider, busy = false, locked, folderLocked, browserProfile, browserChoices = browserLevels, desktopShown = true, desktopAvailable = true, desktopApps, onCapability, onWorkspace, onConfigure, extra }: {
+export function PermissionControls({ workers, capabilities, grant, pending, taskId, sourceCount, searchProvider, busy = false, locked, folderLocked, browserProfile, browserChoices = browserLevels, desktopShown = true, desktopAvailable = true, desktopApps, reviewShown = true, reviewLocked, onCapability, onWorkspace, onConfigure, extra }: {
   workers: PermissionWorker[];
   capabilities?: ToolCapability[];
   /** `undefined` while the grant is still being read. */
@@ -100,6 +100,10 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
   desktopAvailable?: boolean;
   /** How many desktop apps the chat granted, shown under the level like a folder's name. */
   desktopApps?: number;
+  /** Whether the review-before-apply switch is shown with an editable folder: a schedule's run applies as it finishes (COD-279). */
+  reviewShown?: boolean;
+  /** Why this chat's changes cannot wait for review (a crew or a group chat); the switch shows off and disabled with this line. */
+  reviewLocked?: string;
   /** Reports one capability turned on or off; the parent keeps the browser's levels cumulative with `withCapability`. */
   onCapability: (capability: ToolCapability, enabled: boolean) => void;
   onWorkspace: (level: WorkspaceLevel) => void;
@@ -162,6 +166,13 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
           </span>}
       </span>
     </div>
+    {/* Review before apply (COD-279) belongs to the folder, so it shows only once the orglets may edit it. */}
+    {reviewShown && (state.workspace === 'write' || state.workspace === 'execute') && <SwitchField checked={reviewLocked === undefined && state.review}
+      disabled={disabled || folderDisabled || reviewLocked !== undefined}
+      onChange={enabled => onCapability('workspace.apply', !enabled)}
+      description={reviewLocked ?? t('Thay đổi chỉ vào thư mục khi bạn bấm Áp dụng.')}>
+      <FileDiff size={15} aria-hidden="true" />{t('Xem trước khi áp dụng')}
+    </SwitchField>}
     <SwitchField checked={state.web} disabled={disabled} onChange={enabled => onCapability('network.web', enabled)}
       description={t('Tìm qua {0}, đọc trang web công khai.', [WEB_SEARCH_PROVIDER_NAMES[searchProvider]])}>
       <Globe size={15} aria-hidden="true" />{t('Đọc và tìm kiếm web')}

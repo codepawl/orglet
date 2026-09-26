@@ -85,6 +85,48 @@ export function planIntegration(baseline: WorkspaceManifest, current: WorkspaceM
   return [...created, ...moves, ...writes, ...deletes, ...removed];
 }
 
+const isInside = (path: string, folder: string) => keyOf(path).startsWith(`${keyOf(folder)}/`);
+
+/** Where a step takes something from: a deletion's file, a move's old path. */
+function originOf(step: IntegrationStep): string | undefined {
+  if (step.kind === 'delete') return step.path;
+  if (step.kind === 'move') return step.from;
+  return undefined;
+}
+
+/**
+ * The steps for the files and folders the person left ticked in the diff viewer (COD-279), in plan order. A file step
+ * goes when any path it touches is ticked, so a move goes with either end: Git may show one renamed file where the
+ * plan has a move, or a new file plus a deletion. A new folder also goes when a kept step writes inside it, since the
+ * broker creates a new file's parents anyway. A folder removal goes only when it is ticked and nothing inside it stays
+ * behind, or the folder would not be empty; it is then skipped like any unticked row.
+ */
+export function selectSteps(steps: readonly IntegrationStep[], paths: readonly string[]): { kept: IntegrationStep[]; skipped: IntegrationStep[] } {
+  const ticked = new Set(paths.map(keyOf));
+  const keptFiles = new Set<IntegrationStep>();
+  for (const step of steps) {
+    if (step.kind === 'folder' || step.kind === 'remove_folder') continue;
+    const origin = originOf(step);
+    if (ticked.has(keyOf(step.path)) || (origin !== undefined && ticked.has(keyOf(origin)))) keptFiles.add(step);
+  }
+  const skippedOrigins = steps.filter(step => !keptFiles.has(step)).flatMap(step => originOf(step) ?? []);
+  const kept = new Set(keptFiles);
+  const skippedRemovals: string[] = [];
+  for (const step of steps) {
+    if (step.kind === 'folder') {
+      const needed = [...keptFiles].some(file => isInside(file.path, step.path)) || paths.some(path => isInside(path, step.path));
+      if (ticked.has(keyOf(step.path)) || needed) kept.add(step);
+    }
+    // Removals come innermost first, so an inner folder left in place is known before its parent is decided.
+    if (step.kind === 'remove_folder') {
+      const leftBehind = [...skippedOrigins, ...skippedRemovals].some(path => isInside(path, step.path));
+      if (ticked.has(keyOf(step.path)) && !leftBehind) kept.add(step);
+      else skippedRemovals.push(step.path);
+    }
+  }
+  return { kept: steps.filter(step => kept.has(step)), skipped: steps.filter(step => !kept.has(step)) };
+}
+
 function moveSource(file: ManifestFile, vanished: ManifestFile[]): ManifestFile | undefined {
   const candidates = vanished.filter(candidate => candidate.hash === file.hash).sort(byPath);
   const sameName = candidates.find(candidate => keyOf(nameOf(candidate.path)) === keyOf(nameOf(file.path)));

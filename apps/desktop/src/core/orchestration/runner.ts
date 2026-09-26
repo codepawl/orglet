@@ -1566,7 +1566,7 @@ export class Runner {
     this.workspace.authorize(run, 'read', control.signal);
     let limitations: string[];
     try {
-      limitations = await this.workspace.finish(run, control.signal);
+      limitations = await this.workspace.finish(run, control.signal, undefined, { hold: this.holdsForReview(run) });
     } catch (error) {
       // A crew member's or a group reply's answer belongs to a turn it cannot finish alone, so only the reason is kept.
       if (error instanceof HandInBlockedError && run.stage === undefined) error.answer = answer;
@@ -1574,6 +1574,60 @@ export class Runner {
     }
     control.signal.throwIfAborted();
     return limitations;
+  }
+
+  /**
+   * Whether a finished run's changes wait for the person before they reach the folder (COD-279): a solo chat's run,
+   * main chat or side thread, whose permissions (frozen and current alike) do not include `workspace.apply`. A crew
+   * member or a group reply hands in as it finishes, because the next orglet in the turn works from those files, and a
+   * schedule's run has nobody there to review it.
+   */
+  private holdsForReview(run: Run): boolean {
+    const task = this.store.get<Task>('tasks', run.taskId);
+    if (run.stage !== undefined || run.snapshot.team || task.routineId) return false;
+    return !hasCapability(run, task, 'workspace.apply');
+  }
+
+  /**
+   * The person applies changes a run held for review (COD-279), all of them or the files they left ticked. Held like
+   * a run while it works, so a new message or another click waits, and cancelling or revoking the folder stops it. It
+   * is reached from the `applyWorkspaceReview` command alone; no tool offers it to a model.
+   */
+  async applyWorkspaceReview(taskId: string, runId: string, paths?: readonly string[]): Promise<void> {
+    if (!this.workspace) throw new Error('Workspace runtime chưa được cấu hình.');
+    const run = this.reviewedRun(taskId, runId);
+    const controller = new AbortController();
+    this.active.set(run.id, { taskId: run.taskId, controller, signal: controller.signal, paused: false, since: Date.now() });
+    this.notify();
+    try {
+      // The run's own entry is the only active one; any other run of this chat refuses the apply.
+      const busyElsewhere = (id: string) => [...this.active.entries()].some(([activeRunId, control]) => control.taskId === id && activeRunId !== run.id);
+      const { applied, skipped } = await this.workspace.applyReview(run, paths, controller.signal, busyElsewhere);
+      this.event(run.id, skipped > 0
+        ? `Người dùng đã xem và áp dụng ${applied} thay đổi, bỏ qua ${skipped}.`
+        : `Người dùng đã xem và áp dụng ${applied} thay đổi.`);
+    } finally {
+      this.active.delete(run.id);
+      this.notify();
+    }
+  }
+
+  /** The person drops changes a run held for review (COD-279); nothing reaches the folder. */
+  async discardWorkspaceReview(taskId: string, runId: string): Promise<void> {
+    if (!this.workspace) throw new Error('Workspace runtime chưa được cấu hình.');
+    const run = this.reviewedRun(taskId, runId);
+    await this.workspace.discardReview(run, id => this.isActive(id));
+    this.event(run.id, 'Người dùng đã bỏ thay đổi; thư mục không bị sửa.');
+    this.notify();
+  }
+
+  /** The run the person is deciding on, once it is known to belong to this chat and nothing in the chat is running. */
+  private reviewedRun(taskId: string, runId: string): Run {
+    const task = this.store.get<Task>('tasks', taskId);
+    const run = this.store.get<Run>('runs', runId);
+    if (run.taskId !== task.id) throw new Error('Lần chạy không thuộc cuộc trò chuyện này.');
+    if (this.isActive(task.id)) throw new Error('Dừng công việc trước khi xử lý bản làm việc.');
+    return run;
   }
 
   /**

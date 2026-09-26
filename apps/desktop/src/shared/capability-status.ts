@@ -49,6 +49,8 @@ export type PermissionState = {
   browser: BrowserLevel;
   /** How far they may use the desktop programs the chat granted (COD-261, phase 2a); off unless the person turned it on. */
   desktop: DesktopLevel;
+  /** A finished run's changes wait for the person to review them before they reach the folder (COD-279); on unless turned off. */
+  review: boolean;
 };
 
 /**
@@ -75,6 +77,7 @@ export function permissionState(input: {
     workspace: folder ? workspaceLevelOf(folder.permissions) : 'none',
     browser: browserLevelOf(capabilities),
     desktop: desktopLevelOf(capabilities),
+    review: !capabilities.includes('workspace.apply'),
     ...(folder ? { folder: folder.name } : {}),
   };
 }

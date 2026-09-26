@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { WorkspacePath, WorkspaceRead, WorkspaceHash, WorkspaceChangeKind } from './workspace-tools';
 import { WorkspaceDiffSummary } from './workspace-diff';
+import { WorkspaceReview } from './workspace-review';
 
 export const TOOL_CALL_SUMMARY_LENGTH = 300;
 /** Why a hand-in step stopped (COD-254): the person changed, removed or created something at that path meanwhile. */
@@ -21,7 +22,11 @@ export const WorkspaceRecoveryView = z.object({
   copies: z.array(z.object({ runId: z.uuid(), state: z.enum(['preparing', 'ready', 'integrating', 'integrated', 'conflict', 'uncertain']),
     kind: z.enum(['copy', 'git-worktree']), changes: z.array(Change), changeCount: z.number().int().nonnegative(),
     /** Counts of what the copy changed since its snapshot, once the run finished; the `workspaceDiff` command has the hunks (COD-163). */
-    diff: WorkspaceDiffSummary.optional() })),
+    diff: WorkspaceDiffSummary.optional(),
+    /** Changes held for the person to review before they reach the folder, and what became of them (COD-279). */
+    review: WorkspaceReview.pick({ state: true, heldAt: true, decidedAt: true, applied: true, skipped: true }).optional(),
+    /** A later run of this chat went on in this copy, so its review covers these changes too (COD-279). */
+    carried: z.boolean().optional() })),
   processes: z.array(z.object({ id: z.uuid(), runId: z.uuid(), command: z.string().max(1000),
     state: z.enum(['running', 'exited', 'cancelled', 'timeout', 'output_limit', 'uncertain']), exitCode: z.number().int().nullable() })),
   // `tool`, `summary` and `at` are null for calls journaled before they were recorded (COD-191).

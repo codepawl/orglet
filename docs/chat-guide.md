@@ -91,9 +91,24 @@ Commands the orglet ran in the latest turn are summed in **Details**, under the 
 
 ## Diffs
 
-When a run changed files in its working copy, a line under the answer says **Files changed: 3 · +42 −7**; moves and deletions get their own count, as in **Files changed: 6 · 5 moved or renamed · 1 deleted**. Click it for a read-only diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a folder that is not a Git repository the diff lists what happened to each file (new, changed, moved, renamed, deleted) and the folders created or removed, without lines. In a crew turn each member has its own line, because each works in its own copy.
+When a run changed files in its working copy, a line under the answer says **Files changed: 3 · +42 −7**; moves and deletions get their own count, as in **Files changed: 6 · 5 moved or renamed · 1 deleted**. Click it for the diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a folder that is not a Git repository the diff lists what happened to each file (new, changed, moved, renamed, deleted) and the folders created or removed, without lines. In a crew turn each member has its own line, because each works in its own copy.
 
-The diff exists only when the working folder is a Git repository, because the comparison is against the snapshot the copy started from; a plain folder says so instead. Applying the changes to your folder, keeping your current files, and file conflicts are handled in **Details → Files and processes**, not in the viewer. Details: [worker-actions.md](worker-actions.md#where-a-diff-lives).
+The diff has line-by-line hunks only when the working folder is a Git repository, because the comparison is against the snapshot the copy started from; a plain folder says so instead. Keeping your current files and file conflicts are handled in **Details → Files and processes**. Details: [worker-actions.md](worker-actions.md#where-a-diff-lives).
+
+### Review before the folder changes
+
+An orglet never edits your folder directly. It works in a private copy, and by default its changes wait for you when it finishes:
+
+1. The answer arrives as usual. The line under it reads **Files changed: 3 · +42 −7 · Not in your folder yet · Review**.
+2. Click the line. The diff opens with **Discard changes** and **Apply** at the top.
+3. To leave some files out, untick them in the list at the top of the diff. **Apply** then reads **Apply 2 of 3**.
+4. Click **Apply**. The line then ends with **Applied**, or **Applied, 1 skipped**. **Discard changes** asks once, then the line ends with **Discarded, folder unchanged**.
+
+Nothing reaches your folder until you click **Apply**. If you edited, moved or deleted a file yourself in the meantime, Apply stops at that file instead of overwriting it; settle it in **Details → Files and processes** with **Keep current files**.
+
+Changes that wait are kept when you close the app. If you send another message before deciding, the orglet goes on in the same copy, so it sees what it did last turn. The earlier line then says **Carried into the next turn**, and the new answer's line covers the changes from both turns.
+
+To have changes applied as soon as a run finishes, turn off **Review before applying** under the working folder, in the chat's **Details → Tool permissions** or the orglet's **Permissions** tab. The switch appears once the folder level allows editing. A side thread follows its main chat. Crews and group chats apply each orglet's changes as it finishes, because the next orglet in the turn works from those files, so their switch is off and cannot be changed. A schedule's runs also apply as they finish, since nobody is there to review them.
 
 ## Details
 

@@ -1,6 +1,6 @@
 import { WorkspaceRecovery } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
-import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
+import { removalStopsWork, snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { liveTeamTask, liveWorkerTask, newChatKey, newChatKeyNames } from '../shared/live-task';
 import { withoutSourceIds } from '../shared/source-mentions';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
@@ -517,6 +517,18 @@ export class CoreService {
         await this.runner.applyBlockedHandIn(input.taskId, input.runId);
         return;
       }
+      case 'applyWorkspaceReview': {
+        const input = commands.applyWorkspaceReview.parse(args);
+        if (this.teams.isActive(input.taskId)) throw new Error('Dừng công việc trước khi xử lý bản làm việc.');
+        await this.runner.applyWorkspaceReview(input.taskId, input.runId, input.paths);
+        return;
+      }
+      case 'discardWorkspaceReview': {
+        const input = commands.discardWorkspaceReview.parse(args);
+        if (this.teams.isActive(input.taskId)) throw new Error('Dừng công việc trước khi xử lý bản làm việc.');
+        await this.runner.discardWorkspaceReview(input.taskId, input.runId);
+        return;
+      }
       case 'recoveryProcessOutput': return new WorkspaceRecovery(this.store).output(args);
       case 'retireWorkspaceAttempt': {
         new WorkspaceRecovery(this.store).retire(args, taskId => this.runner.isActive(taskId) || this.teams.isActive(taskId));
@@ -557,7 +569,7 @@ export class CoreService {
         if (task.routineId && input.capabilities.includes('desktop.read')) throw new Error(SCHEDULE_NO_DESKTOP);
         if (task.sideOf) this.sideThreads.assertCapabilitiesWithin(task, input.capabilities);
         const reduced = this.store.detail(task.id).runs.some(run =>
-          (run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider)).some(capability => !input.capabilities.includes(capability)));
+          (run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider)).some(capability => removalStopsWork(capability) && !input.capabilities.includes(capability)));
         const updated = this.store.patchTask(task.id, { toolCapabilities: input.capabilities });
         if (reduced) {
           this.teams.cancel(task.id);
