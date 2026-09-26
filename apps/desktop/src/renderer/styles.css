@@ -1842,6 +1842,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .archived-row { position:relative; }
 .archived-row > .org-row-menu { position:absolute; top:50%; right:0; transform:translateY(-50%); }
 .archived-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .history-item { padding-right:36px; }
+/* While the menu shows, it takes the pill's place instead of squeezing the name past it: an archived chat's name is
+   longer than an orglet's, and beside a group's two faces, the pill and the menu it kept four letters (COD-286). The
+   days left stay in the row's tooltip. */
+@media (hover:hover) { .archived-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .archive-age { display:none; } }
 @media (hover:none) { .archived-row .history-item { padding-right:36px; } }
 .model-picker { display:flex; align-items:center; gap:8px; }
 .model-picker-field { position:relative; flex:1; min-width:0; }
@@ -2325,8 +2329,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .side-thread-origin { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:4px 10px; margin:0 0 18px; color:var(--muted); font-size:12px; text-align:center; }
 .side-thread-origin button { padding:0; border:0; background:none; color:var(--text); font:inherit; font-weight:500; cursor:pointer; }
 .side-thread-origin button:hover { text-decoration:underline; text-underline-offset:3px; }
-/* Side threads under their orglet: a clear step below the orglet's row, a small step apart from each other. */
-.tree-children .side-thread-row .history-item { gap:8px; }
+/* Side threads under their orglet: a clear step below the orglet's row, a small step apart from each other. The rows
+   sit one indent in, so their name gets every pixel the row has (COD-286): 8px after the thread line's curve, 6px
+   around the status mark and before the schedule mark, and 6px at the end while no menu shows. At 10px on both ends
+   and 8px gaps, two invoice threads read the same fourteen letters. */
+.tree-children .side-thread-row .history-item { gap:6px; padding-left:8px; padding-right:6px; }
 /* The menu floats over the row's end and only takes room while it shows, so a quiet row gives its name the full
    width instead of truncating it next to an invisible button. */
 .side-thread-row { position:relative; }

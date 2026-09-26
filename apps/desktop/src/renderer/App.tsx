@@ -36,7 +36,7 @@ import { accentInk, accentText, DEFAULT_ACCENT_COLOR } from '../shared/accent';
 import { fontStack } from '../shared/fonts';
 import { ProviderMark } from './components/ProviderMark';
 import { GroupChatRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
-import { chatsUnder, runBy, type ChatOwner } from '../shared/schedule-runs';
+import { chatsUnder, type ChatOwner } from '../shared/schedule-runs';
 import { useChatNotices } from './chatNotices';
 import { SearchDialog } from './components/SearchDialog';
 import { SendToPicker } from './components/SendToPicker';
@@ -51,7 +51,9 @@ import { taskResultSeen } from '../shared/task-seen';
 import { RowMenu } from './components/RowMenu';
 import { Select } from './components/Select';
 import { setDisplayCurrency, formatMoney } from './components/money';
-import { Toaster, toast } from './components/toast';
+import { Toaster, toast, type ToastAction } from './components/toast';
+import { archivedChatsIn, type ArchivedChat, type ArchivedChatSection } from './sidebarChats';
+import { removalBlocker } from '../shared/removal';
 import { NoticeCentre } from './components/NoticeCentre';
 import { RunningCentre } from './components/RunningCentre';
 import { watchRunProgress } from './runProgress';
@@ -422,7 +424,8 @@ export function App() {
   // Re-opening the task already shown keeps its detail; clearing it would wait for a reload that never comes.
   // `toMessage` is set when a message in the chat takes focus instead of the main pane (a search result, COD-267).
   const openTask = (id: string, { toMessage = false }: { toMessage?: boolean } = {}) => {
-    if (id !== selected) {
+    // The ref, not this render's `selected`: a toast's Undo runs a closure from the render before its chat was left.
+    if (id !== selectedRef.current) {
       const cached = taskDetails.get(id);
       showingCachedDetail.current = cached ? id : null;
       setSelected(id);
@@ -975,27 +978,71 @@ export function App() {
       return;
     }
     const done = ids.length;
-    if (section === 'teams') toast(verb === 'archive' ? t('Đã lưu trữ {0} hội', [done]) : t('Đã xóa {0} hội', [done]), 'success');
-    else toast(verb === 'archive' ? t('Đã lưu trữ {0} Tí', [done]) : t('Đã xóa {0} Tí', [done]), 'success');
+    // Archiving is the step back from deleting, so it can be taken back at once, like a single row's archive.
+    const undo = verb === 'archive' ? { action: { label: t('Hoàn tác'), onSelect: () => restoreEntities(kind, ids) } } : {};
+    if (section === 'teams') toast(verb === 'archive' ? t('Đã lưu trữ {0} hội', [done]) : t('Đã xóa {0} hội', [done]), 'success', undefined, undo);
+    else toast(verb === 'archive' ? t('Đã lưu trữ {0} Tí', [done]) : t('Đã xóa {0} Tí', [done]), 'success', undefined, undo);
+  };
+  const restoreEntities = (kind: 'worker' | 'team', ids: readonly string[]) => rowAction(async () => {
+    for (const id of ids) await orglet.call('archiveEntity', { kind, id, archived: false });
+    toast(t('Đã khôi phục'), 'success');
+  });
+  /**
+   * A command from a sidebar row's menu. Its failure is a toast where the person clicked, with the way out when there
+   * is one, never a banner over whichever chat happens to be open (COD-286: an orglet refused because of its crews
+   * reported it inside an unrelated side thread).
+   */
+  const rowAction = (perform: () => Promise<unknown>, about?: string, wayOut?: () => ToastAction | undefined) => {
+    void perform().then(() => refresh()).catch(err => {
+      const action = wayOut?.();
+      toast((err as Error).message, 'error', about, action ? { action } : {});
+      void refresh();
+    });
+  };
+  /** What to open when an orglet or crew cannot be archived or deleted yet: the crew it is in, or the schedule that runs it. */
+  const removalWayOut = (kind: 'worker' | 'team', entityId: string): ToastAction | undefined => {
+    if (!workspace) return undefined;
+    const blocker = removalBlocker(workspace, kind, entityId);
+    if (blocker?.kind === 'crews') {
+      const crew = blocker.crews[0];
+      return { label: t('Mở hội {0}', [crew.name]), onSelect: () => { setEditingTeam(crew); setPanel('team'); } };
+    }
+    // Normally caught before the core is asked (`heldBySchedule`); this covers a schedule switched on since.
+    if (blocker?.kind === 'schedule') return { label: t('Xem lịch chạy'), onSelect: () => openRoutines() };
+    return undefined;
   };
   /** After the chat on screen was archived or deleted: a side thread goes back to its orglet's main chat. */
   const leaveClosedChat = (closed: Task | undefined) => {
     if (closed?.sideOf) { openWorker(closed.workerId); return; }
     leaveThread();
   };
-  const deleteTask = (taskId: string) => action(async () => {
+  const deleteTask = (taskId: string) => rowAction(async () => {
     const name = taskName(taskId);
     const closed = workspace?.tasks.find(item => item.id === taskId);
     await orglet.call('deleteTask', { id: taskId });
     if (selectedRef.current === taskId) { hideTaskLocally(taskId, 'deletedAt'); leaveClosedChat(closed); }
     toast(t('Đã xóa cuộc trò chuyện'), 'success', name);
   }, taskName(taskId));
-  const archiveTask = (taskId: string, archived: boolean) => action(async () => {
+  /**
+   * Archives or restores a chat. The archive toast offers Undo, which also reopens the chat when it was the one on
+   * screen; the restore toast offers Open, since a restored chat may sit far from where its archived row was.
+   */
+  const archiveTask = (taskId: string, archived: boolean) => rowAction(async () => {
     const name = taskName(taskId);
     const closed = workspace?.tasks.find(item => item.id === taskId);
+    const wasOpen = selectedRef.current === taskId;
     await orglet.call('archiveTask', { id: taskId, archived });
-    if (archived && selectedRef.current === taskId) { hideTaskLocally(taskId, 'archivedAt'); leaveClosedChat(closed); }
-    toast(archived ? t('Đã lưu trữ cuộc trò chuyện') : t('Đã khôi phục cuộc trò chuyện'), 'success', name);
+    if (archived && wasOpen) { hideTaskLocally(taskId, 'archivedAt'); leaveClosedChat(closed); }
+    if (archived) {
+      toast(t('Đã lưu trữ cuộc trò chuyện'), 'success', name, { action: { label: t('Hoàn tác'), onSelect: () => restoreTask(taskId, wasOpen) } });
+      return;
+    }
+    toast(t('Đã khôi phục cuộc trò chuyện'), 'success', name, { action: { label: t('Mở'), onSelect: () => openTask(taskId) } });
+  }, taskName(taskId));
+  /** Undo of an archive: the chat comes back, and back on screen if it was open when it was archived. */
+  const restoreTask = (taskId: string, reopen: boolean) => rowAction(async () => {
+    await orglet.call('archiveTask', { id: taskId, archived: false });
+    if (reopen) openTask(taskId);
   }, taskName(taskId));
   const renameTask = (taskId: string, title: string) => action(() => orglet.call('renameTask', { id: taskId, title }), taskName(taskId));
   setDisplayCurrency(workspace?.currency);
@@ -1050,33 +1097,35 @@ export function App() {
   };
   /**
    * An orglet or crew with a schedule switched on cannot be archived or deleted; the core refuses. Instead of that dead
-   * end, say which schedule holds it and open Schedules, where it can be turned off or deleted (COD-283).
+   * end, say which schedule holds it and open Schedules, where it can be turned off or deleted (COD-283). Crews come
+   * first, as in the core's refusal, so an orglet in a crew hears about the crew (COD-286).
    */
   const heldBySchedule = (kind: 'worker' | 'team', entityId: string): boolean => {
-    const schedule = workspace.routines.find(item => item.enabled && runBy(item.task, kind, entityId));
-    if (!schedule) return false;
+    const blocker = removalBlocker(workspace, kind, entityId);
+    if (blocker?.kind !== 'schedule') return false;
     const name = entityName(kind, entityId) ?? '';
-    toast(t('Lịch {0} đang bật cho {1}. Tắt hoặc xóa lịch đó trước.', [schedule.name, name]), 'info', name, { action: { label: t('Xem lịch chạy'), onSelect: () => openRoutines() } });
+    toast(t('Lịch {0} đang bật cho {1}. Tắt hoặc xóa lịch đó trước.', [blocker.schedule.name, name]), 'info', name, { action: { label: t('Xem lịch chạy'), onSelect: () => openRoutines() } });
     return true;
   };
   const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => {
     if (archived && heldBySchedule(kind, entityId)) return;
     archiveOrRestoreEntity(kind, entityId, archived);
   };
-  const archiveOrRestoreEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => action(async () => {
+  const archiveOrRestoreEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => rowAction(async () => {
     const name = entityName(kind, entityId);
     await orglet.call('archiveEntity', { kind, id: entityId, archived });
-    toast(archived ? t('Đã lưu trữ') : t('Đã khôi phục'), 'success', name);
-  }, entityName(kind, entityId));
+    const undo = archived ? { action: { label: t('Hoàn tác'), onSelect: () => archiveEntity(kind, entityId, false) } } : {};
+    toast(archived ? t('Đã lưu trữ') : t('Đã khôi phục'), 'success', name, undo);
+  }, entityName(kind, entityId), () => removalWayOut(kind, entityId));
   const deleteEntity = (kind: 'worker' | 'team', entityId: string) => {
     if (heldBySchedule(kind, entityId)) return;
     deleteEntityNow(kind, entityId);
   };
-  const deleteEntityNow = (kind: 'worker' | 'team', entityId: string) => action(async () => {
+  const deleteEntityNow = (kind: 'worker' | 'team', entityId: string) => rowAction(async () => {
     const name = entityName(kind, entityId);
     await orglet.call('deleteEntity', { kind, id: entityId });
     toast(t('Đã xóa'), 'success', name);
-  }, entityName(kind, entityId));
+  }, entityName(kind, entityId), () => removalWayOut(kind, entityId));
   const activeTasks = workspace.tasks.filter(task => !task.archivedAt);
   // Open group chats for their own sidebar section, newest first (COD-268).
   const groupChats = openGroupChats(workspace.tasks);
@@ -1102,7 +1151,7 @@ export function App() {
     const childrenLabel = hasThreads && hasSchedules ? t('Chat phụ và lịch chạy của {0}', [ownerName])
       : hasSchedules ? t('Lịch chạy của {0}', [ownerName])
       : t('Chat phụ của {0}', [ownerName]);
-    const children = <ShowMore items={chats} limit={3} empty="" render={chat => {
+    const children = <ShowMore items={chats} limit={3} empty="" isActive={chat => selected === chat.task.id} render={chat => {
       const task = chat.task;
       const status = taskStatusMark(task.status, taskSeen(task));
       const open = () => { clearSelection(); openTask(task.id); };
@@ -1117,6 +1166,46 @@ export function App() {
     }} />;
     return { children, childrenLabel };
   };
+  /**
+   * The "Archived chats (N)" list at the end of a sidebar section (COD-286), beside the section's archived orglets or
+   * crews: each chat with the face of whose it was, its days left, Restore and Delete permanently.
+   */
+  const archivedChatList = (section: ArchivedChatSection) => {
+    const chats = archivedChatsIn(workspace.tasks, section);
+    return <ArchivedList count={chats.length} label={t('Chat đã lưu trữ ({0})', [chats.length])}>{chats.map(archivedChatRow)}</ArchivedList>;
+  };
+  const archivedChatRow = ({ task, kind }: ArchivedChat<Task>) => {
+    const routine = kind === 'schedule' ? workspace.routines.find(item => item.id === task.routineId) : undefined;
+    const name = routine?.name ?? taskName(task.id) ?? task.brief;
+    const { ownerName, mark } = archivedChatOwner(task, name);
+    const whose = kind === 'side' ? t('Chat phụ với {0}', [ownerName])
+      : kind === 'schedule' ? t('Lần chạy lịch cho {0}', [ownerName])
+      : kind === 'group' ? t('Nhóm chat với {0}', [ownerName])
+      : t('Chat với {0}', [ownerName]);
+    const deleteQuestion = kind === 'side' ? t('Xóa chat phụ này? Không thể hoàn tác.')
+      : kind === 'schedule' ? t('Xóa lần chạy này? Không thể hoàn tác.')
+      : kind === 'group' ? t('Xóa nhóm chat này? Không thể hoàn tác.')
+      : t('Xóa cuộc trò chuyện này? Không thể hoàn tác.');
+    return <ArchivedRow key={task.id} name={name} mark={mark} archive={archiveState(task)!} title={`${name}\n${whose}`} deleteQuestion={deleteQuestion}
+      onRestore={() => archiveTask(task.id, false)} onDelete={() => deleteTask(task.id)} />;
+  };
+  /** Whose an archived chat was, named and drawn the way that orglet, crew or group is in its own archived row. */
+  const archivedChatOwner = (task: Task, chatName: string): { ownerName: string; mark: ReactNode } => {
+    if (task.teamId) {
+      const crew = [...workspace.teams, ...workspace.archivedTeams].find(item => item.id === task.teamId);
+      const ownerName = crew?.name ?? t('Hội đã xóa');
+      return { ownerName, mark: <Avatar name={ownerName} seed={task.teamId} size="xs" /> };
+    }
+    if (task.assignees) {
+      const members = taskWorkers(task, workspace);
+      const ownerName = groupChatNames(members.map(member => member.name)) ?? t('{0} Tí', [members.length]);
+      return { ownerName, mark: <RosterAvatars workers={members} size="xs" max={2} countRest={false} /> };
+    }
+    const owner = [...workspace.workers, ...workspace.archivedWorkers].find(item => item.id === task.workerId);
+    if (!owner) return { ownerName: t('Tí đã xóa'), mark: <Avatar name={chatName} seed={task.id} size="xs" /> };
+    return { ownerName: owner.name, mark: <Avatar name={owner.name} seed={owner.id} mascot={owner.avatar?.mascot} defaultMascot hint={owner.description} color={owner.avatar?.color} size="xs" /> };
+  };
+  const archivedGroupChats = archivedChatsIn(workspace.tasks, 'groups');
   const workerStatus = (id: string): StatusMarkState => {
     const live = liveWorkerTask(activeTasks, id);
     return live
@@ -1265,23 +1354,26 @@ export function App() {
           {...rowsUnder({ teamId: item.id }, item.name)} />
         )}{!workspace.teams.length && <p className="empty-history">{t('Chưa có hội nào.')}</p>}
         <ArchivedList count={workspace.archivedTeams.length}>{workspace.archivedTeams.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('team', item.id, false)} onDelete={() => deleteEntity('team', item.id)} />)}</ArchivedList>
+        {archivedChatList('teams')}
       </SidebarSection>
       <SidebarSection id="workers" title={t('Tí')} action={sectionActions('workers', t('Chọn nhiều Tí'), t('Tạo Tí'), () => { setEditingWorker(undefined); setPanel('worker'); })}>
         {workerOrder.order.map(id => workspace.workers.find(worker => worker.id === id)).filter((item): item is Worker => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`worker-${item.id}`} arriving={isArriving(`worker-${item.id}`)} name={item.name} description={item.description} avatar={<Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="sm" badge={item.provider === 'demo' ? undefined : <ProviderMark provider={item.provider} size="small" decorative />} />} active={!teamId && !group && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id)} status={workerStatus(item.id)} reorder={workerOrder.bind(item.id)} onSelect={() => { clearSelection(); openWorker(item.id); }} onDwell={dwellWorker(item)} selection={rowSelection('workers', item.id)}
           menu={<RowMenu label={t('Tùy chọn {0}', [item.name])} icon={EllipsisVertical} contextMenuOf=".tree-item" items={[{ label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => { setEditingWorker(item); setPanel('worker'); } }, { label: t('Lưu trữ'), icon: Archive, onSelect: () => archiveEntity('worker', item.id, true) }, { label: t('Xóa'), icon: Trash, danger: true, onSelect: () => deleteEntity('worker', item.id), confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [item.name]), label: t('Xóa') } }]} />}
           {...rowsUnder({ workerId: item.id }, item.name)} />)}{!workspace.workers.length && <p className="empty-history">{t('Chưa có Tí nào.')}</p>}
         <ArchivedList count={workspace.archivedWorkers.length}>{workspace.archivedWorkers.map(item => <ArchivedRow key={item.id} name={item.name} mark={<Avatar name={item.name} seed={item.id} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size="xs" />} archive={archiveState(item)!} onRestore={() => archiveEntity('worker', item.id, false)} onDelete={() => deleteEntity('worker', item.id)} />)}</ArchivedList>
+        {archivedChatList('workers')}
       </SidebarSection>
       {/* Group chats had no row, so one could only be found again through search (COD-268). */}
-      {groupChats.length > 0 && <SidebarSection id="groups" title={t('Nhóm chat')}>
-        <ShowMore items={groupChats} limit={5} empty="" render={chat => {
+      {(groupChats.length > 0 || archivedGroupChats.length > 0) && <SidebarSection id="groups" title={t('Nhóm chat')}>
+        {groupChats.length > 0 && <ShowMore items={groupChats} limit={5} empty="" isActive={chat => selected === chat.id} render={chat => {
           const members = taskWorkers(chat, workspace);
           const name = chat.title || groupChatNames(members.map(member => member.name)) || t('{0} Tí', [members.length]);
           return <GroupChatRow key={chat.id} name={name} faces={<RosterAvatars workers={members} size="sm" max={2} countRest={false} />}
             active={selected === chat.id} status={taskStatusMark(chat.status, taskSeen(chat))}
             onOpen={() => { clearSelection(); openTask(chat.id); }} onDwell={resting => dwellChat(chat.id, resting)}
             onRename={title => renameTask(chat.id, title)} onArchive={() => archiveTask(chat.id, true)} onDelete={() => deleteTask(chat.id)} />;
-        }} />
+        }} />}
+        {archivedChatList('groups')}
       </SidebarSection>}
       </div>
       {selectionBar}
