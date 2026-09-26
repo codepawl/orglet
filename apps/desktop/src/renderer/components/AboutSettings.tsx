@@ -53,7 +53,7 @@ function AboutFace() {
 }
 
 /** The places the About tab links to, each with its own mark. `releases` is not here: it belongs to the update row. */
-const links: { link: Exclude<AboutLink, 'releases'>; label: string; brand?: BrandName }[] = [
+const links: { link: Exclude<AboutLink, 'releases' | 'exaKeys'>; label: string; brand?: BrandName }[] = [
   { link: 'website', label: 'Website' },
   { link: 'github', label: 'GitHub', brand: 'github' },
   { link: 'discord', label: 'Discord', brand: 'discord' },

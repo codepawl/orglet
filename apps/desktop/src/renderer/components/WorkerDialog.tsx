@@ -285,5 +285,5 @@ function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, on
     if (picked) setPendingFolder(picked);
   });
   return <PermissionControls workers={[draft]} capabilities={capabilities} grant={grant} pending={pendingFolder} taskId={chat?.id} sourceCount={chat?.sourceIds.length ?? 0}
-    busy={busy} folderLocked={chat || worker ? undefined : t('Lưu Tí rồi chọn thư mục.')} onCapability={onCapability} onWorkspace={onWorkspace} extra={extra} />;
+    searchProvider={workspace.webSearchProvider} busy={busy} folderLocked={chat || worker ? undefined : t('Lưu Tí rồi chọn thư mục.')} onCapability={onCapability} onWorkspace={onWorkspace} extra={extra} />;
 }

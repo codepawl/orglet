@@ -21,8 +21,10 @@ export const ABOUT_LINKS = {
   x: 'https://x.com/codepawl',
   threads: 'https://www.threads.com/@codepawl',
   releases: 'https://github.com/codepawl/orglet/releases',
+  /** Where an Exa key is made, linked from Settings → Web search (COD-266). */
+  exaKeys: 'https://dashboard.exa.ai/api-keys',
 } as const;
-export const AboutLink = z.enum(['website', 'github', 'discord', 'x', 'threads', 'releases']);
+export const AboutLink = z.enum(['website', 'github', 'discord', 'x', 'threads', 'releases', 'exaKeys']);
 export type AboutLink = z.infer<typeof AboutLink>;
 
 /** The feed update.electronjs.org answers for this build: 204 when it is the newest, the update otherwise. */

@@ -995,6 +995,16 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .custom-connection-form .error { font-weight:400; line-height:1.35; }
 .custom-connection-prices { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:8px 10px; }
 .custom-connection-prices .money-input { min-width:0; }
+
+/* Settings → Web search (COD-266): the Test result under its row, in the colour of its mark. The mark sits on the
+   first line's centre, so a long error that wraps keeps it beside its first words. */
+/* The key field takes a line of its own under the key row, like an API key's, with the row's own title spacing. */
+.web-search-key { flex-wrap:wrap; }
+.web-search-key > .setting-key-form { flex:1 0 100%; order:1; margin-top:8px; }
+.web-search-outcome { display:flex; align-items:flex-start; gap:6px; }
+.web-search-outcome .status-mark { margin-top:2px; }
+.web-search-outcome.success { color:var(--success); }
+.web-search-outcome.error { color:var(--error); }
 .custom-connection-prices .money-input input { flex:1; width:auto; min-width:0; }
 .custom-connection-prices > span { grid-column:1 / -1; font-size:12.5px; font-weight:400; line-height:1.4; }
 .custom-connection-actions { display:flex; align-items:center; gap:8px; }

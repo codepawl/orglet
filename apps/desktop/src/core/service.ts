@@ -57,6 +57,10 @@ import { customProviderId, findCustomConnection, isCustomProvider } from '../sha
 import { deleteCustomConnection, readCustomConnections, requireCustomConnection, saveCustomConnection } from './storage/custom-connections';
 import { McpServers, type McpRuntime } from './tools/mcp';
 import { grantsAfterApproval, McpApprovalChoice, McpGrant } from '../shared/mcp';
+import type { WebSearchRuntime, WebSearchSettings } from './tools/web-search';
+import { WebTools } from './tools/web-tools';
+import { webNetwork } from './tools/web-network';
+import { WEB_SEARCH_TEST_QUERY, type WebSearchTest } from '../shared/web-tools';
 
 /**
  * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
@@ -115,7 +119,7 @@ export class CoreService {
   private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
   private modelListEpoch = new Map<ModelListProviderId, number>();
   private modelListFailed = new Set<ModelListProviderId>();
-  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor) {
+  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor, private webSearchRuntime: WebSearchRuntime = {}) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
     this.chatSearch = new ChatSearch(store);
@@ -127,7 +131,7 @@ export class CoreService {
     this.templates = new TeamTemplates(store, this.notify);
     this.appProposals = new AppProposals(store, this.proposalApplier());
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
-    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp);
+    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings());
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
     this.routineFolders = new RoutineFolders(store);
@@ -312,6 +316,10 @@ export class CoreService {
         this.start(revised, true); return;
       }
       case 'testMcpServer': return this.mcp.test(commands.testMcpServer.parse(args).id);
+      case 'testWebSearch': {
+        commands.testWebSearch.parse(args);
+        return this.testWebSearch();
+      }
       case 'setMcpServerEnabled': {
         const input = commands.setMcpServerEnabled.parse(args);
         await this.mcp.setEnabled(input.id, input.enabled);
@@ -739,6 +747,26 @@ export class CoreService {
     if (input.providerConcurrency) this.store.setSetting('providerConcurrency', input.providerConcurrency);
     // Standing per-provider permission (plan §12: consent scoped by connection); backups never restore it.
     if (input.providerConsent) this.store.setSetting('providerConsent', input.providerConsent);
+    if (input.webSearchProvider) this.store.setSetting('webSearchProvider', input.webSearchProvider);
+  }
+  /** Where `web_search` goes right now, and how it reaches main for the saved key (COD-266). */
+  private webSearchSettings(): WebSearchSettings {
+    return { provider: this.store.webSearchProvider(), readKey: this.webSearchRuntime.readKey };
+  }
+  /** One real query through the saved provider for Settings → Web search → Test; a failure is the plain error a worker would get. */
+  private async testWebSearch(): Promise<WebSearchTest> {
+    const settings = this.webSearchSettings();
+    // Under main's 30-second wait for any command, so a slow provider gets its own message instead of "core not answering".
+    const deadline = AbortSignal.timeout(25_000);
+    let found;
+    try {
+      found = await new WebTools(webNetwork, settings).search({ query: WEB_SEARCH_TEST_QUERY }, deadline);
+    } catch (error) {
+      if (deadline.aborted) throw new Error('Tìm kiếm thử quá 25 giây vẫn chưa xong. Thử lại sau.');
+      throw error;
+    }
+    const first = found.results[0];
+    return { provider: settings.provider, title: first?.title ?? null, url: first?.url ?? null };
   }
   /** The settings a worker may propose, as the app holds them now; the same reads `workspace()` makes. */
   private currentSettings(): CurrentSettings {

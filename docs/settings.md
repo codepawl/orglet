@@ -1,6 +1,6 @@
 # Settings
 
-**Settings** is the last button in the sidebar footer. Eight tabs, each a few rows.
+**Settings** is the last button in the sidebar footer. Nine tabs, each a few rows.
 
 Part of the [user guide](user-guide.md).
 
@@ -18,6 +18,16 @@ Language (English (US), English (UK), Tiếng Việt), **Appearance** (light or 
 ## API connections
 
 Turn a provider on, paste its key or pick a `.txt` file, save. Ollama is a switch with no key. **Custom connections** below the list add any OpenAI-compatible server by name, base URL and an optional key. See [Connections → API keys](connections.md#api-keys) and [Connections → Custom connections](connections.md#custom-connections).
+
+## Web search
+
+Where an orglet's web searches go. Orglets send only the search query, never chat text or files.
+
+- **Provider**: **Exa** (the default) or **DuckDuckGo**. Exa is free without a key but rate-limited: when its free searches run out, a search fails with a message that says so, and they come back later (on 2026-09-26 the limit reset at midnight UTC). DuckDuckGo reads its plain results page, which often asks for human verification instead of answering.
+- **Exa API key** (Exa only, optional): paste a key from **Get a key** (dashboard.exa.ai) and choose **Save key**. Searches then count against your Exa account instead of the free limit. The key is encrypted on this computer like the API keys and never shown again; **Remove key** deletes it.
+- **Try a search**: **Test** sends one real query ("Wikipedia") to the provider and shows the first result's title, or the error an orglet would get.
+
+A failed search never switches to the other provider. The switch under **Read and search the web** in a chat's permissions names the provider in use. How it works: [agent tools → Web search](agent-tools.md#web-search).
 
 ## Local harnesses
 
