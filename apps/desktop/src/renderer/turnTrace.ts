@@ -170,8 +170,11 @@ export function liveTraceOf(memories: readonly RunMemory[] | undefined, steps: r
   return [...memoryEntries(memories), ...stepEntries];
 }
 
-/** Which summary count a row adds to; the two web kinds share one, and every browser or desktop step counts as one kind. */
-type SummaryKind = Exclude<TraceKind, 'web_search' | 'web_read' | BrowserKind | DesktopKind> | 'web' | 'browser' | 'desktop';
+/**
+ * Which summary count a row adds to; every browser or desktop step counts as one kind. A web search and a web page read
+ * count apart: one count for both read "Went online 6 times", which did not say what the orglet did (dogfood, 2026-09-26).
+ */
+type SummaryKind = Exclude<TraceKind, BrowserKind | DesktopKind> | 'browser' | 'desktop';
 type DesktopKind = 'desktop_read' | 'desktop_find' | 'desktop_screenshot' | 'desktop_act' | 'desktop_asked';
 const desktopKinds: readonly TraceKind[] = ['desktop_read', 'desktop_find', 'desktop_screenshot', 'desktop_act', 'desktop_asked'];
 type BrowserKind = 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll'
@@ -180,10 +183,9 @@ const browserKinds: readonly TraceKind[] = ['browser_open', 'browser_read', 'bro
   'browser_click', 'browser_type', 'browser_select', 'browser_press', 'browser_wait', 'browser_asked'];
 
 /** The order the counts read in: what was loaded, then a crew's handoffs, then the steps, then what the run left behind. */
-const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web', 'browser', 'desktop', 'mcp', 'dataset', 'edit', 'folder', 'move', 'delete', 'command', 'remembered', 'proposal', 'failed', 'other'];
+const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web_search', 'web_read', 'browser', 'desktop', 'mcp', 'dataset', 'edit', 'folder', 'move', 'delete', 'command', 'remembered', 'proposal', 'failed', 'other'];
 
 function summaryKindOf(kind: TraceKind): SummaryKind {
-  if (kind === 'web_search' || kind === 'web_read') return 'web';
   if (browserKinds.includes(kind)) return 'browser';
   if (desktopKinds.includes(kind)) return 'desktop';
   return kind as SummaryKind;
@@ -198,7 +200,8 @@ function countPhrase(kind: SummaryKind, count: number): string {
     case 'search': return count === 1 ? t('Tìm 1 lần') : t('Tìm {0} lần', [count]);
     case 'list': return count === 1 ? t('Liệt kê tệp 1 lần') : t('Liệt kê tệp {0} lần', [count]);
     case 'skill': return count === 1 ? t('Đọc 1 tài nguyên skill') : t('Đọc {0} tài nguyên skill', [count]);
-    case 'web': return count === 1 ? t('Lên web 1 lần') : t('Lên web {0} lần', [count]);
+    case 'web_search': return count === 1 ? t('Tìm trên web 1 lần') : t('Tìm trên web {0} lần', [count]);
+    case 'web_read': return count === 1 ? t('Đọc 1 trang web') : t('Đọc {0} trang web', [count]);
     case 'mcp': return count === 1 ? t('Dùng 1 công cụ MCP') : t('Dùng {0} công cụ MCP', [count]);
     case 'browser': return count === 1 ? t('1 bước trên trình duyệt') : t('{0} bước trên trình duyệt', [count]);
     case 'desktop': return count === 1 ? t('1 bước trong ứng dụng') : t('{0} bước trong ứng dụng', [count]);
