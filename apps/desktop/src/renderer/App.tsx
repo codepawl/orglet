@@ -424,7 +424,8 @@ export function App() {
   // Re-opening the task already shown keeps its detail; clearing it would wait for a reload that never comes.
   // `toMessage` is set when a message in the chat takes focus instead of the main pane (a search result, COD-267).
   const openTask = (id: string, { toMessage = false }: { toMessage?: boolean } = {}) => {
-    if (id !== selected) {
+    // The ref, not this render's `selected`: a toast's Undo runs a closure from the render before its chat was left.
+    if (id !== selectedRef.current) {
       const cached = taskDetails.get(id);
       showingCachedDetail.current = cached ? id : null;
       setSelected(id);
@@ -1192,7 +1193,7 @@ export function App() {
   const archivedChatOwner = (task: Task, chatName: string): { ownerName: string; mark: ReactNode } => {
     if (task.teamId) {
       const crew = [...workspace.teams, ...workspace.archivedTeams].find(item => item.id === task.teamId);
-      const ownerName = crew?.name ?? t('Hội');
+      const ownerName = crew?.name ?? t('Hội đã xóa');
       return { ownerName, mark: <Avatar name={ownerName} seed={task.teamId} size="xs" /> };
     }
     if (task.assignees) {
@@ -1201,7 +1202,7 @@ export function App() {
       return { ownerName, mark: <RosterAvatars workers={members} size="xs" max={2} countRest={false} /> };
     }
     const owner = [...workspace.workers, ...workspace.archivedWorkers].find(item => item.id === task.workerId);
-    if (!owner) return { ownerName: t('Tí'), mark: <Avatar name={chatName} seed={task.id} size="xs" /> };
+    if (!owner) return { ownerName: t('Tí đã xóa'), mark: <Avatar name={chatName} seed={task.id} size="xs" /> };
     return { ownerName: owner.name, mark: <Avatar name={owner.name} seed={owner.id} mascot={owner.avatar?.mascot} defaultMascot hint={owner.description} color={owner.avatar?.color} size="xs" /> };
   };
   const archivedGroupChats = archivedChatsIn(workspace.tasks, 'groups');
