@@ -34,6 +34,8 @@ Click a **team** or **worker** in the sidebar to open that chat. One live conver
 
 Reply to a saved user or worker message to give the next turn a precise reference, or react without starting a run. Team messages appear in Details with the same actions. Reactions and reply links stay with the local chat and its backup; a reaction alone does not change permissions or dispatch work.
 
+Forward a message, yours or an orglet's, to up to five other chats at once, with a note if you like. Each chat gets it as your message and its orglet answers. Files go along only when you tick them. [How forwarding works](docs/team-chat.md#forwarding).
+
 > Orglet is early. Expect rough edges, and check answers against your own sources before you rely on them.
 
 | | |

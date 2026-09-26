@@ -1,6 +1,6 @@
 # In a chat
 
-What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, ask something on the side, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
+What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
@@ -48,6 +48,27 @@ What a side thread knows and can do:
 To use an answer in the main chat, click **Bring into main chat** (the return arrow under the answer). The answer appears in the main chat as a quote, marked with the side thread it came from. Nothing runs when you do this; the orglet reads the quote with the next message you send in the main chat.
 
 Side threads are for single orglets. A crew chat and a group chat do not have them yet. Group chats you started by picking several orglets are listed in the sidebar under **Group chats**, newest first, so you can get back to one after opening another chat.
+
+## Forward a message
+
+You can pass a message on to another orglet, a crew or another chat, the way you forward one in Messenger or WhatsApp. It works for your own messages and for an orglet's answers.
+
+1. Hover the message and click **Forward** (the arrow next to Reply).
+2. Tick where it should go: recent chats, orglets or crews. Type to narrow the list. You can pick up to five.
+3. If the message had files, tick the ones to send along. Files you leave unticked go by name only.
+4. Add a note if you like, then click **Send** (Ctrl+Enter in the note works too).
+
+Each chat you picked gets the message as yours, so the orglet or crew there answers it, the same as if you had typed it. It shows as a grey bubble headed **Forwarded from Researcher** (click it to open the chat it came from), with your note under it. It costs what any message there costs and uses that chat's own permissions and limit.
+
+A few things to know:
+
+- A chat that is working right now, or whose orglets are not connected, cannot be picked until it is ready. A message arriving would otherwise stop the work there.
+- A file you tick becomes a file of that chat, as if you had attached it there yourself. Revoking it in one chat does not revoke it in the other.
+- A side thread only uses its main chat's files, so files cannot be sent along into one.
+- `@` names inside a forwarded message do not choose who answers in a crew or group chat; only `@` names in your note do.
+- Forwarding a forwarded message passes on the original, still labelled with where it first came from.
+
+Orglets never forward anything themselves. How it works: [team-chat.md](team-chat.md#forwarding).
 
 ## Reports as documents
 

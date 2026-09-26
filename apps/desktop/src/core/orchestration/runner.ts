@@ -1,3 +1,4 @@
+import { ownWords } from '../../shared/forward';
 import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { PERMISSIONS_OFF_INSTRUCTION, permissionsOff } from './permission-hints';
 import { DEFAULT_LANGUAGE, type Language } from '../../shared/i18n';
@@ -769,7 +770,7 @@ export class Runner {
         if (run.stage === 'plan') {
           if (!run.snapshot.team) throw new Error('Phân việc cần snapshot hội.');
           this.event(run.id, 'Demo: đang phân việc, không gọi model.');
-          this.completePlan(run, defaultTeamPlan(run.snapshot.team, input.brief, run.snapshot.team.memberIds.map(id => this.store.get<Worker>('workers', id))));
+          this.completePlan(run, defaultTeamPlan(run.snapshot.team, input.brief, run.snapshot.team.memberIds.map(id => this.store.get<Worker>('workers', id)), ownWords(input)));
           return;
         }
         if (!needsReport(run)) {
@@ -836,7 +837,7 @@ export class Runner {
         if (run.stage === 'synthesis' && run.snapshot.team?.reviewPolicy) next.push({ role: 'user', content: JSON.stringify({ requiredReviewChecks: run.snapshot.team.reviewPolicy.requiredChecks, instruction: 'Include each required check by its exact name in review.checks. Missing evidence means not_assessed. A run_audit check needs a supplied audit_run_log profile; never infer stability without logs. A pair_alignment check needs a two-dataset profile with an ID column showing matching column names, equal row counts, no missing/extra IDs and no null/duplicate IDs; cite that profile and both sources. An exact_match_accuracy check needs a completed built-in exact-match profile for the explicitly chosen predictions and answers; cite both sources. It does not validate the official challenge metric.' }) });
         if (run.stage === 'plan' && run.snapshot.team) {
           const members = run.snapshot.team.memberIds.map(id => { const worker = this.store.get<Worker>('workers', id); return { id, name: worker.name, description: worker.description ?? '' }; });
-          const tagged = mentionedPeople(input.brief, members, [run.snapshot.team.name]);
+          const tagged = mentionedPeople(ownWords(input), members, [run.snapshot.team.name]);
           next.push({ role: 'user', content: JSON.stringify({
             members,
             leadId: run.snapshot.team.synthesizerId,

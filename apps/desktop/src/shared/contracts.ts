@@ -28,6 +28,7 @@ import { WebSearchProvider, type WebSearchKeyProvider, type WebSearchTest } from
 import { CustomConnectionInput, CustomProviderId, isCustomProvider, type CustomConnection } from './custom-connections';
 import { McpGrant, type McpRunTool, type McpServerView } from './mcp';
 import type { ChatQuote, SideOf } from './side-threads';
+import { ForwardedMessage, ForwardMessageArgs, type ForwardResult } from './forward';
 import type { ChatSearchResult } from './chat-search';
 import { BrowserChoice, type BrowserAction, type BrowserLive, type BrowserProfileId, type BrowserState } from './browser';
 
@@ -139,7 +140,8 @@ export const TaskInput = z.object({
   budgetMicros: z.number().int().min(1000).max(100_000_000),
 });
 export type TaskInput = z.infer<typeof TaskInput>;
-export const RunInput = TaskInput.pick({ brief: true, sourceIds: true, excludedSources: true }).extend({ replyTo: Id.optional() }).strict();
+// `forwarded` is set by the core on a forward's turn (COD-257); the window can never send one in a brief of its own.
+export const RunInput = TaskInput.pick({ brief: true, sourceIds: true, excludedSources: true }).extend({ replyTo: Id.optional(), forwarded: ForwardedMessage.optional() }).strict();
 export type RunInput = z.infer<typeof RunInput>;
 /** Orchestrator routing for one team-chat turn (COD-25). Stored on the plan run snapshot; not a user-facing artifact. */
 export const PlanAssignment = z.object({
@@ -253,12 +255,14 @@ export const commands = {
   workspace: z.object({}),
   task: z.object({ id: Id }),
   createTask: TaskInput,
-  reviseTask: RunInput.extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
+  reviseTask: RunInput.omit({ forwarded: true }).extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
   // A message sent "in a new thread" from an orglet's main chat (COD-247): a side thread of the same orglet, with the
   // main chat's permissions and never more. `taskId` is the main chat; the sources must already belong to it.
-  startSideThread: RunInput.omit({ replyTo: true }).extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
+  startSideThread: RunInput.omit({ replyTo: true, forwarded: true }).extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
   // Copies a side thread's answer into its main chat as a quoted message; it never starts a run.
   bringIntoMainChat: z.object({ artifactId: Id }).strict(),
+  // Sends one message of a chat to up to five other chats as the person's own message (COD-257); each one is a turn there.
+  forwardMessage: ForwardMessageArgs,
   setMessageReaction: SetUserReaction,
   answerDecision: z.object({ taskId: Id, requestId: Id, answer: z.string().trim().min(1).max(2000) }).strict(),
   saveWorker: WorkerInput,
@@ -372,7 +376,7 @@ export const commands = {
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { setBrowser: void; browserActions: BrowserAction[]; browserScreenshot: { mimeType: 'image/png'; bytes: Uint8Array }; answerBrowserApproval: void; browserTakeOver: boolean; searchChats: ChatSearchResult; startSideThread: string; bringIntoMainChat: string; testMcpServer: McpServerView; setMcpServerEnabled: void; setMcpGrant: void; applyAppProposal: AppProposal; dismissAppProposal: void; undoAppProposal: AppProposal; reconcileBudget: void; recoveryFile: RecoveryFile; restoreWorkspaceFile: void; workspaceDiff: WorkspaceDiff; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; harnessUsage: HarnessUsage; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; eraseData: EraseSummary; modelList: ModelListResult; saveCustomConnection: CustomConnection; deleteCustomConnection: void; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; updateMemory: Knowledge; deleteMemory: void; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void; applyBlockedHandIn: void; testWebSearch: WebSearchTest };
+export type Results = { forwardMessage: ForwardResult; setBrowser: void; browserActions: BrowserAction[]; browserScreenshot: { mimeType: 'image/png'; bytes: Uint8Array }; answerBrowserApproval: void; browserTakeOver: boolean; searchChats: ChatSearchResult; startSideThread: string; bringIntoMainChat: string; testMcpServer: McpServerView; setMcpServerEnabled: void; setMcpGrant: void; applyAppProposal: AppProposal; dismissAppProposal: void; undoAppProposal: AppProposal; reconcileBudget: void; recoveryFile: RecoveryFile; restoreWorkspaceFile: void; workspaceDiff: WorkspaceDiff; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; harnessUsage: HarnessUsage; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; eraseData: EraseSummary; modelList: ModelListResult; saveCustomConnection: CustomConnection; deleteCustomConnection: void; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; updateMemory: Knowledge; deleteMemory: void; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void; applyBlockedHandIn: void; testWebSearch: WebSearchTest };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;

@@ -50,8 +50,9 @@ function sideThreadLabel(orgletName: string | undefined): string {
   return orgletName ? t('chat phụ · {0}', [orgletName]) : t('chat phụ');
 }
 
-export function sendToOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | 'teams'>): SendToOption[] {
-  const recent = recentChats(workspace).map((task): SendToOption => {
+/** `recentCount` recent chats lead the list; the forward picker asks for a few more (COD-257). */
+export function sendToOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | 'teams'>, recentCount = RECENT_CHAT_COUNT): SendToOption[] {
+  const recent = recentChats(workspace, recentCount).map((task): SendToOption => {
     const faces = taskWorkers(task, workspace);
     return {
       key: `task:${task.id}`,

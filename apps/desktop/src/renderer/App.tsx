@@ -41,6 +41,8 @@ import { useChatNotices } from './chatNotices';
 import { SearchDialog } from './components/SearchDialog';
 import { SendToPicker } from './components/SendToPicker';
 import { sendToOptions, type SendToOption } from './sendTo';
+import { ForwardPicker, type ForwardChoice } from './components/ForwardPicker';
+import { forwardOptions, forwardSummary, type ForwardRequest } from './forward';
 import { attachIntake, carriedDraft, type Incoming, type IncomingChat, type IncomingFiles } from '../shared/incoming';
 import { tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
 import { taskResultSeen } from '../shared/task-seen';
@@ -147,6 +149,9 @@ export function App() {
   // What Explorer's Send to menu and orglet:// links sent (COD-246): files waiting for a chat, files headed for the
   // next message of a chat that already has one, and a link's text for such a chat's message bar.
   const [sentFiles, setSentFiles] = useState<IncomingFiles>();
+  // The message the forward picker is open for, and whether its Send is on its way (COD-257).
+  const [forwarding, setForwarding] = useState<ForwardRequest>();
+  const [forwardSending, setForwardSending] = useState(false);
   const [followUpPrefill, setFollowUpPrefill] = useState<ComposerPrefill & { taskId: string }>();
   const pendingIncoming = useRef<Incoming[]>([]);
   const [incomingCount, setIncomingCount] = useState(0);
@@ -857,6 +862,29 @@ export function App() {
       setError((err as Error).message);
     }
   };
+  /**
+   * Sends the message the picker is open for to the places picked (COD-257). The core makes each one a turn there; the
+   * toast says where it went and names every place it did not, and the picker stays open when nothing went.
+   */
+  const sendForward = async (choice: ForwardChoice) => {
+    if (!forwarding) return;
+    const request = forwarding;
+    setForwardSending(true);
+    errorAbout.current = t('Chuyển tiếp tin nhắn');
+    setError('');
+    try {
+      const result = await orglet.call('forwardMessage', { taskId: request.taskId, messageId: request.messageId, targets: choice.targets.map(option => option.forwardTarget), ...(choice.note ? { note: choice.note } : {}), carrySourceIds: choice.carrySourceIds });
+      if (result.sent.length) setForwarding(undefined);
+      const only = result.sent.length === 1 ? result.sent[0].taskId : undefined;
+      toast(forwardSummary(result.sent.length, result.failed), result.failed.length ? 'error' : 'success', t('Chuyển tiếp tin nhắn'),
+        only ? { action: { label: t('Mở'), onSelect: () => openTask(only) } } : {});
+      await refresh();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setForwardSending(false);
+    }
+  };
   const teamOrder = useReorder(workspace?.teams.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'teams', ids })));
   const workerOrder = useReorder(workspace?.workers.map(item => item.id) ?? [], ids => action(() => orglet.call('reorder', { kind: 'workers', ids })));
   const sectionOrder = (section: SidebarSelectionSection) => section === 'teams' ? teamOrder.order : workerOrder.order;
@@ -1230,7 +1258,7 @@ export function App() {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
-      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} /></> : <ThreadSkeleton />}</> : (team || group || worker) ? <div className="team-chat team-chat-fresh">
+      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} /></> : <ThreadSkeleton />}</> : (team || group || worker) ? <div className="team-chat team-chat-fresh">
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">
@@ -1311,6 +1339,7 @@ export function App() {
     <Toaster />
     <Confirmer />
     <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} workspace={workspace} onOpenChat={openChatAt} onOpenOrglet={openWorker} onOpenCrew={openTeam} onDwellTask={dwellChat} />
+    <ForwardPicker request={forwarding} options={forwarding ? forwardOptions(workspace, forwarding.taskId, workers => recipientReady(workers.map(item => item.provider))) : []} sending={forwardSending} onSend={choice => void sendForward(choice)} onClose={() => setForwarding(undefined)} />
     <SendToPicker open={Boolean(sentFiles)} count={sentFiles?.count ?? 0} names={sentFiles?.names ?? []} options={sentFiles ? sendToOptions(workspace) : []} onChoose={option => void sendFilesTo(option)} onClose={closeSendTo} />
     <SettingsDialog open={panel === 'settings'} tab={settingsTab} onTab={setSettingsTab} onClose={close} workspace={workspace} connections={connections} onConnections={setConnections} harnesses={harnesses} onHarnesses={setHarnesses} />
   </div>;

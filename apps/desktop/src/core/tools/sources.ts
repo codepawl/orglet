@@ -228,6 +228,21 @@ export class Sources {
   }
   /** Confirms the file is still there, unchanged and permitted, without keeping its bytes. */
   async verify(sourceId: string, allowedIds: string[]) { await this.readChecked(sourceId, allowedIds, 'hash'); }
+  /**
+   * A forwarded file the person chose to send along (COD-257): the same file on disk attached again as a new source,
+   * the way picking it would attach it, after checking it is still there, unchanged and readable by the chat it came
+   * from. The copy has its own id, so the target chat can revoke it without touching the original chat, and the
+   * reverse.
+   */
+  async copyFor(sourceId: string, allowedIds: string[]): Promise<Source> {
+    await this.readChecked(sourceId, allowedIds, 'hash');
+    const original = this.store.get<Source>('sources', sourceId);
+    const path = this.storedPath(sourceId);
+    if (!path) throw new Error(`Không còn tệp nguồn ${original.name} ở chỗ cũ.`);
+    const copy: Source = { ...original, id: id(), revoked: false };
+    this.store.put('sources', copy, { column: 'path', value: path });
+    return copy;
+  }
   /** Exact permitted, hash-checked bytes, for handing a snapshot copy to a local harness. Never media. */
   async readVerified(sourceId: string, allowedIds: string[]): Promise<Buffer> {
     const source = this.store.get<Source>('sources', sourceId);
