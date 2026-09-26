@@ -103,7 +103,7 @@ A crew's chat and a group chat have the same **Desktop apps** control as any cha
 
 **Unknown outcomes.** A reading step that was running when the app closed simply runs again when the run continues. An acting step goes through the same tool journal as file edits: an input step may run again, but a step that asked you and was running when the app closed is never run again on its own. A card that was still waiting when the app closed counts as declined.
 
-**Which apps work.** UI Automation reaches apps built with WPF, Windows Forms, classic Win32 controls and WinUI 3 well, including Notepad and the Windows dialogs. Electron apps vary: some expose their controls, some only a few. Apps that draw everything themselves, such as Flutter apps, games and canvas-based editors, expose nothing to read or press. Store apps are found through their own program, not the frame Windows wraps them in.
+**Which apps work.** UI Automation reaches apps built with WPF, Windows Forms, classic Win32 controls and WinUI 3 well: buttons, single-line fields, check boxes, lists and menus. A multi-line text box in a classic Win32 app, such as the page of the classic Notepad, can be read but not typed into, because it offers no way to set its text in the background. Electron apps vary: some expose their controls, some only a few. Apps that draw everything themselves, such as Flutter apps, games and canvas-based editors, expose nothing to read or press. Store apps are found through their own program, not the frame Windows wraps them in.
 
 ## What it never does
 

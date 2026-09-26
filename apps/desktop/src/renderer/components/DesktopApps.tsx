@@ -121,24 +121,30 @@ function shortText(text: string): string {
 
 const actingKinds: readonly DesktopActionKind[] = ['invoke', 'set_value', 'toggle', 'expand', 'collapse', 'select', 'scroll_into_view'];
 
-/** The step in words: what the orglet did, or meant to do when it did not go through. */
+/**
+ * The step in words: what the orglet did to which element, or meant to do when it did not go through. The window it
+ * happened in goes on the quieter line under it, since a window title is often long.
+ */
 function stepLabel(action: DesktopAction): string {
-  const window = action.window ? shortText(action.window) : action.program ?? '';
   const element = action.target ? shortText(action.target) : '';
-  if (actingKinds.includes(action.kind) && action.outcome !== 'done') {
-    return element ? t('Định thao tác “{0}” trong “{1}”', [element, window]) : t('Định thao tác trong “{0}”', [window]);
-  }
+  if (actingKinds.includes(action.kind) && action.outcome !== 'done') return element ? t('Định thao tác “{0}”', [element]) : t('Định thao tác');
   if (action.kind === 'windows') return t('Xem các cửa sổ được phép');
-  if (action.kind === 'snapshot') return t('Đọc cửa sổ “{0}”', [window]);
-  if (action.kind === 'find') return t('Tìm trong cửa sổ “{0}”', [window]);
-  if (action.kind === 'screenshot') return t('Chụp cửa sổ “{0}”', [window]);
-  if (action.kind === 'invoke') return t('Bấm “{0}” trong “{1}”', [element, window]);
-  if (action.kind === 'set_value') return t('Nhập vào “{0}” trong “{1}”', [element, window]);
-  if (action.kind === 'toggle') return t('Bật/tắt “{0}” trong “{1}”', [element, window]);
-  if (action.kind === 'expand') return t('Mở rộng “{0}” trong “{1}”', [element, window]);
-  if (action.kind === 'collapse') return t('Thu gọn “{0}” trong “{1}”', [element, window]);
-  if (action.kind === 'select') return t('Chọn “{0}” trong “{1}”', [element, window]);
-  return t('Cuộn tới “{0}” trong “{1}”', [element, window]);
+  if (action.kind === 'snapshot') return t('Đọc nội dung cửa sổ');
+  if (action.kind === 'find') return t('Tìm trong cửa sổ');
+  if (action.kind === 'screenshot') return t('Chụp cửa sổ');
+  if (action.kind === 'invoke') return t('Bấm “{0}”', [element]);
+  if (action.kind === 'set_value') return t('Nhập vào “{0}”', [element]);
+  if (action.kind === 'toggle') return t('Bật/tắt “{0}”', [element]);
+  if (action.kind === 'expand') return t('Mở rộng “{0}”', [element]);
+  if (action.kind === 'collapse') return t('Thu gọn “{0}”', [element]);
+  if (action.kind === 'select') return t('Chọn “{0}”', [element]);
+  return t('Cuộn tới “{0}”', [element]);
+}
+
+/** The window a step happened in, as the quiet line names it. */
+function stepWindow(action: DesktopAction): string | undefined {
+  if (action.window) return shortText(action.window);
+  return action.program ?? undefined;
 }
 
 const outcomeNames: Record<Exclude<DesktopAction['outcome'], 'done'>, string> = translated({ refused: 'bị chặn', failed: 'không thành', unknown: 'chưa rõ kết quả', declined: 'bạn không cho phép' });
@@ -169,7 +175,7 @@ export function DesktopSteps({ detail }: { detail: TaskDetail }) {
   if (!actions?.length) return null;
   const openShot = (action: DesktopAction) => void orglet.call('desktopScreenshot', { taskId: detail.task.id, id: action.screenshotId! }).then(shot => {
     const url = URL.createObjectURL(new Blob([shot.bytes as BlobPart], { type: shot.mimeType }));
-    setShown({ url, label: stepLabel(action) });
+    setShown({ url, label: [stepLabel(action), stepWindow(action)].filter(Boolean).join(' · ') });
   }).catch(error => toast(tMessage(String(error)), 'error', t('Ảnh cửa sổ')));
   const recent = [...actions].reverse().filter(action => action.kind !== 'windows').slice(0, 12);
   if (!recent.length) return null;
@@ -178,7 +184,8 @@ export function DesktopSteps({ detail }: { detail: TaskDetail }) {
     <ol className="browser-step-list">
       {recent.map(action => {
         const Icon = stepIcons[action.kind];
-        const meta = stepMeta(action, askingActionId);
+        const window = stepWindow(action);
+        const meta = [...window ? [window] : [], ...stepMeta(action, askingActionId)];
         const quiet = action.outcome !== 'done' && action.id !== askingActionId;
         return <li key={action.id} className={quiet ? 'browser-step browser-step-muted' : 'browser-step'}>
           <Icon size={14} aria-hidden="true" />
