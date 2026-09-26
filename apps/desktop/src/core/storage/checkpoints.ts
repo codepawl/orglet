@@ -26,6 +26,11 @@ export type Checkpoint = {
    */
   pendingApproval?: { requestId: string; callId: string; name: string; arguments: string };
 };
+/** A message the runner added to steer the run (the wrap-up, a report correction), not part of the work itself. */
+function isRunnerInstruction(message: RunMessage) {
+  return message.role === 'user' && typeof message.content === 'string'
+    && (message.content.startsWith('{"stepsLeft":') || message.content.startsWith('{"reportValidation":'));
+}
 // Context may contain selected source text. It stays in core storage, outside renderer IPC and backups.
 export class Checkpoints {
   constructor(private store: Store) {}
@@ -48,6 +53,34 @@ export class Checkpoints {
       this.save({ ...checkpoint, phase: 'replied', reply });
       this.store.db.prepare("UPDATE step_attempts SET state='received' WHERE run_id=? AND step=?").run(checkpoint.id, checkpoint.step);
     });
+  }
+  /**
+   * Keeps a finished run's conversation instead of dropping it, so the next turn can carry on from it when the person
+   * presses Continue (COD-257). Called inside the transaction that saves the run's answer.
+   */
+  keepFinished(runId: string) {
+    const checkpoint = this.get(runId);
+    if (checkpoint) this.save({ ...checkpoint, phase: 'done', reply: undefined, pendingApproval: undefined });
+  }
+  /**
+   * The tool calls and results a kept run made, in order, with what it had read: what a Continue turn starts from
+   * (COD-257). The wrap-up instruction is left out, and so is a call that never got its result.
+   */
+  carried(runId: string): { messages: RunMessage[]; readIds: string[]; untrustedInputs: string[] } | undefined {
+    const checkpoint = this.get(runId);
+    if (!checkpoint || checkpoint.phase !== 'done') return undefined;
+    const start = checkpoint.messages.findIndex(message => message.role === 'assistant' && Boolean(message.tool_calls?.length));
+    if (start < 0) return undefined;
+    const exchange = checkpoint.messages.slice(start).filter(message => !isRunnerInstruction(message));
+    const answered = new Set(exchange.flatMap(message => message.role === 'tool' ? [message.tool_call_id] : []));
+    const messages = exchange.filter(message => message.role !== 'assistant' || !message.tool_calls?.length
+      || message.tool_calls.every(call => answered.has(call.id)));
+    return { messages, readIds: checkpoint.readIds, untrustedInputs: checkpoint.untrustedInputs ?? [] };
+  }
+  /** Drops what a chat's finished runs kept for Continue, except `keepRunId`'s, once a newer turn starts (COD-257). */
+  dropFinished(taskId: string, keepRunId?: string) {
+    this.store.db.prepare("DELETE FROM checkpoints WHERE id IN (SELECT id FROM runs WHERE task_id=?) AND id<>? AND json_extract(data,'$.phase')='done'")
+      .run(taskId, keepRunId ?? '');
   }
   committed(checkpoint: Checkpoint, done = false, persist?: () => void) {
     this.store.transaction(() => {

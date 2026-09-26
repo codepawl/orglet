@@ -8,6 +8,8 @@ import type { ReactNode } from 'react';
 export type TurnNoticeSlots = {
   /** The one folded trace above the answer (COD-220, `TurnTrace`): memories used, notes loaded, then the steps. */
   trace?: ReactNode;
+  /** The answer is what the orglet had when its steps ran out, with Continue on the latest turn (COD-257). */
+  outOfSteps?: ReactNode;
   /** Why the changes did not reach the folder: one line per command that failed after the last edit (COD-270). */
   handIn?: ReactNode[];
   /** One line per run that changed files in its working copy (COD-163). */
@@ -24,7 +26,7 @@ export type TurnNoticeSlots = {
  *
  * Before the answer, what was loaded or decided before writing, as one trace control (COD-220) whose rows are in
  * that order themselves: the memories used, the notes loaded, then the steps the run took. Then the answer. After
- * it, what came out of the answer: why its changes were held back (COD-270), the files it changed, the app changes it
+ * it, what came out of the answer: that it was cut short by the step limit (COD-257), why its changes were held back (COD-270), the files it changed, the app changes it
  * proposed (self-improvements included), and last the message actions row. A future notice goes into the slot
  * matching when it happened, never straight into JSX.
  *
@@ -34,7 +36,7 @@ export function turnNotices(slots: TurnNoticeSlots): { before: ReactNode; after:
   const before = [slots.trace ?? null].filter(Boolean);
   const handIn = slots.handIn ?? [];
   const changes = slots.changes ?? [];
-  const after = [...handIn, ...changes, slots.proposals ?? null, slots.actions ?? null].filter(Boolean);
+  const after = [slots.outOfSteps ?? null, ...handIn, ...changes, slots.proposals ?? null, slots.actions ?? null].filter(Boolean);
   return {
     before: before.length > 0 ? <div className="turn-before">{before}</div> : null,
     after: after.length > 0 ? <div className="turn-after">{after}</div> : null,

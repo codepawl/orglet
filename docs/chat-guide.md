@@ -89,6 +89,10 @@ Afterwards the answer keeps a folded line of the steps ("Read 2 files · Searche
 
 Commands the orglet ran in the latest turn are summed in **Details**, under the goal it worked from, last command first: "Last command exited 0 · earlier: 1 failed." A turn that ran a failing test, fixed the code and ran it again reads that way instead of "1 exited 0, 1 failed". Their full output is in the same panel. Exit 0 means that command finished; it does not mean the task passed.
 
+### When the orglet runs out of steps
+
+Each reply gets a fixed number of steps, where a step is one thing the orglet does, such as a search or a page read: from 6 for a chat with only its files up to 40 for one with a working folder. Web search and MCP tools get 24. Two steps before the end the orglet stops looking things up and writes its best answer from what it has. That answer then reads **Ran out of steps before finishing; this is what it got done.** In a chat with one orglet and no working folder, **Continue** sits next to it while it is the latest message. Continue sends "Continue from where you stopped." as your next message, and the orglet picks up with everything it already searched and read, so it does not read the same pages again. Every step still counts against the chat's spending limit. Crews have no Continue: the crew's answer names the member that ran out of steps instead.
+
 ## Diffs
 
 When a run changed files in its working copy, a line under the answer says **Files changed: 3 · +42 −7**; moves and deletions get their own count, as in **Files changed: 6 · 5 moved or renamed · 1 deleted**. Click it for the diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a folder that is not a Git repository the diff lists what happened to each file (new, changed, moved, renamed, deleted) and the folders created or removed, without lines. In a crew turn each member has its own line, because each works in its own copy.
