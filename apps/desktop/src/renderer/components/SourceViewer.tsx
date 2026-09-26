@@ -214,7 +214,8 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
     // A backup carries no file contents, so a restored file waits until the person points it at the same file here.
     if (state === 'revoked' && restoredWithoutFile) return <div className="preview-state source-restored">
       <p>{t('Tệp này đến từ bản sao lưu nên chưa có trên máy này. Chọn đúng tệp {0} để mở lại.', [source.name])}</p>
-      <Button variant="outline" onClick={() => void relink()}><FolderOpen size={14} />{t('Chọn tệp trên máy')}</Button>
+      <Button variant="primary" onClick={() => void relink()}><FolderOpen size={14} />{t('Chọn tệp trên máy')}</Button>
+      {error && <p role="alert" className="error">{error}</p>}
     </div>;
     if (state === 'revoked') return <p className="preview-state">{t('Đã thu hồi quyền đọc')}</p>;
     if (state === 'parquet') return <p className="preview-state">{t('Parquet chưa xem được; chạy checker local để xem cột và số dòng.')}</p>;
@@ -224,7 +225,7 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
     return <SourcePreview name={source.name} kind={previewKindOf(source)} text={content.text} media={content.media} citedLines={lines} openExternally={externally} />;
   }
   return <SourceViewer {...frame} className="source-file" onClose={onClose} actions={actions}>
-    {error && <p role="alert" className="error">{error}</p>}
+    {error && !restoredWithoutFile && <p role="alert" className="error">{error}</p>}
     {body(source)}
   </SourceViewer>;
 }
