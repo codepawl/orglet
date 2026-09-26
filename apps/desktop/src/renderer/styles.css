@@ -110,6 +110,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The close button sits in the top-right corner, so the head starts below where the curve ends. */
 .details-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:var(--panel-inset) 10px 8px 16px; }
 .details-head h2 { font-size:15px; font-weight:600; }
+/* Opening Details from the keyboard lands on this heading (COD-284); the ring keeps clear of the letters. */
+.details-head h2:focus-visible { outline-offset:3px; border-radius:4px; }
 .details-body { flex:1; min-height:0; overflow:auto; padding:0 16px 16px; }
 .details-body .form { gap:14px; }
 /* Details: plain words on the surface, machine detail in one collapsed block at the end (user, 2026-09-19). */
@@ -383,8 +385,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer.expanded.has-context { grid-template-areas:"context context context" "attach attach attach" "input input input" "lead . send"; }
 .composer.expanded.has-context.has-trailing { grid-template-areas:"context context context context" "attach attach attach attach" "input input input input" "lead . trail send"; }
 .composer-context { grid-area:context; min-width:0; }
-/* Focus shows as a slightly stronger outline of the whole bar, plus the caret. */
+/* Focus inside the bar darkens its outline. Typing in it rings the whole pill in the focus colour, two pixels like
+   every other focus ring (COD-284): the border turns and an inset line adds the second pixel, so nothing around the
+   bar moves and the idle bar stays as quiet as before. A button inside the bar keeps its own ring instead. */
 .composer:focus-within { border-color:var(--bar-line-focus); }
+.composer:has(> textarea:focus-visible) { border-color:var(--focus); box-shadow:inset 0 0 0 1px var(--focus), 0 1px 2px #0000000d, 0 6px 20px #00000014; }
 /* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
    text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
@@ -1945,6 +1950,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 }
 /* One outline for tab and bar: the same colour the bar's own focus rule sets. */
 .thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); }
+.thread-composer:has(.composer > textarea:focus-visible) .live-island { --island-line:var(--focus); }
 .live-island::before,.live-island::after { content:""; position:absolute; bottom:1px; width:calc(var(--island-fillet) + 1px); height:calc(var(--island-fillet) + 1px); }
 .live-island::before { left:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 0 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
 .live-island::after { right:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 100% 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }

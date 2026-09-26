@@ -30,6 +30,19 @@ describe('Viewer', () => {
     expect(document.querySelector('.org-viewer-meta')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Close document' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('gives focus back to what opened it when Escape closes it', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const opener = screen.getByRole('button', { name: 'Open report' });
+    opener.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(opener);
   });
 
   it('shows the meta line under the title when given', async () => {

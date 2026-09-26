@@ -208,6 +208,17 @@ Orglet is local: the renderer asks the core over IPC and the core reads SQLite, 
 - **Never "not found" while still looking.** The harness tab shows three row shapes until the first detection lands; the empty-state sentence appears only once detection has answered. Errors are shown, never hidden behind a shape.
 - **No waterfalls.** A refresh asks for the open chat, the workspace, the connections, the grant and the recovery view in one `Promise.all`; harness detection lands on its own; nothing on the network runs before first paint.
 
+## Keyboard focus
+
+Focus never falls to the page after something the person did (COD-284). The rules, so new work keeps them:
+
+- **The message box is never disabled while a message is on its way.** Disabling a focused textarea blurs it, so the next words typed went nowhere. The follow-up bar (`FollowUpComposer`) and the empty chat's bar (`send` in `App.tsx`) empty the box the moment a message goes and hold back only a second send (`sendDisabled`). If the call fails, `restoreUnsent` puts the message back in front of whatever was typed since. The empty chat's first message opens a new chat whose bar is a different element, so the words typed while it went and the focus move there through the bar's `prefill`. A new request waiting for the old turn to stop (`pendingStart`) also only blocks sending.
+- **Sending keeps focus in the box**, including with the send button or the send options menu, whose button the emptied bar disables.
+- **The + menu hands focus to the message box** before the file dialog opens (`MessageBoxFocus` in `SourcePicker.tsx`, provided by `Composer`), so the window gives it back there when the dialog closes.
+- **Dialogs return focus to what opened them.** Radix only does that for a `Dialog.Trigger`, and Orglet opens its dialogs from state, so the kit's `useReturnFocus` remembers the focused element when a dialog opens and focuses it again when it closes. `Drawer`, `TabbedDialog` (Settings and every tabbed editor), `Confirmer`, `Viewer` and the forward picker use it.
+- **Details takes focus when it opens** (its heading) and gives it back to what opened it when it closes with focus inside. A link that opens Details on one message or attempt focuses that on a later frame.
+- **The prompt bar shows focus like every other control**: typing in it rings the pill in `--focus`, two pixels, and the live tab docked on it follows. The idle bar keeps its quiet outline.
+
 ## What is running and the queue
 
 The **Running** view (COD-244) is built by the core, not guessed by the window. The `workspace` command returns it as `running` (`runningView` in `core/orchestration/running.ts`), so it arrives in the same snapshot as the tasks the sidebar draws, and a `changed` event refreshes both. The step each run is on comes from the same `progress` events the chat uses; the window keeps the newest one per run from launch (`renderer/runProgress.ts`).

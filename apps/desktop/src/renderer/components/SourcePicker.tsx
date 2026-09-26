@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { FileText, FolderOpen, Plus } from 'lucide-react';
 import { Button } from './ui';
 import { t } from '../i18n';
+
+/**
+ * What takes focus once a choice closes the menu: the message box of the bar the picker sits in. `Composer` provides
+ * it; outside a bar the menu's own button takes focus back.
+ */
+export const MessageBoxFocus = createContext<(() => void) | undefined>(undefined);
 
 /** One entry point for adding sources; files and folder intake stay separate choices inside the menu. */
 export function SourcePicker({ onFiles, onFolder }: { onFiles: () => void; onFolder: () => void }) {
@@ -16,7 +22,15 @@ export function SourcePicker({ onFiles, onFolder }: { onFiles: () => void; onFol
     document.addEventListener('pointerdown', outside);
     return () => document.removeEventListener('pointerdown', outside);
   }, [open]);
-  const choose = (fn: () => void) => { setOpen(false); fn(); };
+  const focusMessageBox = useContext(MessageBoxFocus);
+  const choose = (fn: () => void) => {
+    setOpen(false);
+    // The chosen item leaves with the menu, which would drop focus to the page. Focus moves before the file dialog
+    // opens, so the window hands it back to the same place once the dialog closes.
+    if (focusMessageBox) focusMessageBox();
+    else trigger.current?.focus();
+    fn();
+  };
   const toggle = () => {
     if (!open) setOpenBelow(!hasRoomAbove(trigger.current));
     setOpen(!open);

@@ -1,5 +1,6 @@
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
 import { ArrowLeft, ChevronRight, Pencil as LucidePencil, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, MessagesSquare } from 'lucide-react';
@@ -22,7 +23,7 @@ import { ArchivedList, ArchivedRow, type ArchiveState } from './components/Sideb
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
-import { Composer, FollowUpComposer, withPrefill, type ComposerPrefill } from './components/Composer';
+import { Composer, FollowUpComposer, restoreUnsent, withPrefill, type ComposerPrefill } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
@@ -638,7 +639,8 @@ export function App() {
     }
     // A side thread appearing is never this chat (COD-247): only a new main chat is adopted, with the draft.
     const adopted = liveChatToAdopt(workspace.tasks, chat, baseline.liveId);
-    if (adopted) adoptLiveChat(adopted);
+    // A chat this box is creating right now is opened by the send itself, with the words typed meanwhile (COD-284).
+    if (adopted && !busy) adoptLiveChat(adopted);
   }, [workspace, selected, team?.id, worker?.id, group]);
   /**
    * The empty chat's message bar keeps what was typed and added, per orglet, crew or group, while the app is open
@@ -697,24 +699,48 @@ export function App() {
     if (group) return groupChatTaskInput(group, message);
     return { ...message, workerId };
   };
+  // What the empty chat's box holds now, read once a send is through (COD-284).
+  const briefNow = useRef(brief);
+  briefNow.current = brief;
+  /**
+   * The box empties at once and stays enabled while the first message goes, so the next one can be typed straight
+   * away (COD-284). Whatever was typed meanwhile, and the focus, move on to the chat's message bar.
+   */
   const send = async () => {
     if (!brief.trim() || busy || (!team && !worker && !group)) return;
     setBusy(true); setError('');
+    const sentBrief = brief;
+    setBrief('');
     try {
       // A group chat has no live thread to continue: its first message always creates the row.
       const thread = team ? liveTeamTask(workspace!.tasks, team.id) : group ? undefined : liveWorkerTask(workspace!.tasks, workerId);
+      let chatId: string;
       if (thread) {
-        await orglet.call('reviseTask', { taskId: thread.id, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: thread.budgetMicros });
-        setSelected(thread.id);
+        await orglet.call('reviseTask', { taskId: thread.id, brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: thread.budgetMicros });
+        chatId = thread.id;
       } else {
-        const id = await orglet.call('createTask', firstMessageInput({ brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: taskBudgetMicros }));
-        setGroupChat(undefined);
-        setSelected(id);
+        chatId = await orglet.call('createTask', firstMessageInput({ brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: taskBudgetMicros }));
       }
-      // Sent, so this empty chat's bar holds nothing any more.
-      if (emptyDraftKey) dropDraft(emptyDraftKey);
-      setBrief(''); setSources([]);
-    } catch (err) { errorAbout.current = t('Gửi tin cho {0}', [team?.name ?? groupName ?? worker?.name ?? '']); setError((err as Error).message); } finally { setBusy(false); }
+      // The chat's bar exists only once its detail is on screen. Loading it before switching keeps this box, and the
+      // keys typed into it, until the bar takes over. The switch is one synchronous commit, so no key lands between
+      // reading what was typed and the bar that carries it on.
+      const opened = await taskDetails.refresh(chatId).catch(() => undefined);
+      const typedSince = briefNow.current;
+      const typing = document.activeElement === composer.current;
+      flushSync(() => {
+        if (!thread) setGroupChat(undefined);
+        setSelected(chatId);
+        if (opened) setDetail(opened);
+        if (typedSince.trim() || typing) setFollowUpPrefill({ taskId: chatId, text: typedSince.trim() ? typedSince : undefined, at: Date.now() });
+        // Sent, so this empty chat's bar holds nothing any more.
+        if (emptyDraftKey) dropDraft(emptyDraftKey);
+        setBrief(''); setSources([]);
+      });
+    } catch (err) {
+      setBrief(current => restoreUnsent(sentBrief, current));
+      errorAbout.current = t('Gửi tin cho {0}', [team?.name ?? groupName ?? worker?.name ?? '']);
+      setError((err as Error).message);
+    } finally { setBusy(false); }
   };
   const close = () => { setPanel(null); setWorkerDialogTab(undefined); setWorkerDialogField(undefined); void refresh(); };
   /** The trace above an answer links to the worker's Memory tab (COD-220): the dialog opens on that tab this once. */
@@ -1203,7 +1229,7 @@ export function App() {
       throw err;
     }
   };
-  const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với hội…') : t('Nhắn với {0}…', [groupName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={!isDemo && missingConnections.length > 0} mentions={team ? { people: executionWorkers, allNames: [team.name] } : group ? { people: groupWorkers } : undefined}
+  const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với hội…') : t('Nhắn với {0}…', [groupName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} sendDisabled={busy || (!isDemo && missingConnections.length > 0)} mentions={team ? { people: executionWorkers, allNames: [team.name] } : group ? { people: groupWorkers } : undefined}
     leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
     trailing={composerTrailing}
     attachments={sources} onRemoveAttachment={id => setSources(sources.filter(source => source.id !== id))} />;
