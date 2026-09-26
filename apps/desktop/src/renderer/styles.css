@@ -61,8 +61,6 @@ button,input,textarea,select { -webkit-tap-highlight-color:transparent; }
 /* Focus ring sits on the control's own edge, so bordered inputs, selects and buttons show one ring, not two. */
 :focus-visible { outline:2px solid var(--focus); outline-offset:-1px; }
 input[type=checkbox]:focus-visible,input[type=radio]:focus-visible { outline-offset:2px; }
-/* Wrappers that draw the border for an inner borderless field reuse the same single ring. */
-.money-input:focus-within { border-color:var(--focus); box-shadow:0 0 0 1px var(--focus); }
 h1,h2,h3,p { margin:0; }
 h1 { font-size:1.7rem; font-weight:600; letter-spacing:-.6px; }
 h2 { font-size:1.15rem; font-weight:600; line-height:1.4; }
@@ -790,13 +788,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 }
 .form :is(input, textarea, select):not(.org-input)[aria-invalid=true],
 .form .select-trigger[aria-invalid=true],
-.form .money-input.invalid,
+.form .org-money-input.org-money-input-invalid,
 .setting-key-form input[aria-invalid=true] {
   border-color:var(--error);
 }
 .form :is(input, textarea, select):not(.org-input)[aria-invalid=true][data-flash],
 .form .select-trigger[aria-invalid=true][data-flash],
-.form .money-input.invalid[data-flash],
+.form .org-money-input.org-money-input-invalid[data-flash],
 .form .org-checkbox-input[aria-invalid=true][data-flash] + .org-checkbox-box,
 .setting-key-form input[aria-invalid=true][data-flash] {
   animation:field-flash .55s ease-in-out 2;
@@ -848,8 +846,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .setting-control { display:flex; align-items:center; gap:8px; flex-shrink:0; }
 .setting-control .org-button { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; }
 /* Every select and number field in a settings row shares one width, so the right edge reads as one column. */
-.setting-control .setting-select,.setting-control .money-input { width:210px; }
-.setting-control .money-input input { flex:1; width:auto; min-width:0; }
+.setting-control .setting-select,.setting-control .org-money-input { width:210px; }
+.setting-control .org-money-input input { flex:1; width:auto; min-width:0; }
 .setting-value { font-size:14px; font-variant-numeric:tabular-nums; }
 .setting-note { font-size:12px; color:var(--muted); margin:10px 0 4px; line-height:1.5; }
 /* Notes introduce the group they sit under. */
@@ -882,7 +880,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .budget-review-form label:not(.org-checkbox) { display:flex; flex-direction:column; gap:5px; }
 .budget-review-form .org-checkbox { width:100%; }
 .budget-review-form .error { width:100%; margin:0; }
-.budget-review-form .money-input,.budget-review-form .select { width:210px; }
+.budget-review-form .org-money-input,.budget-review-form .select { width:210px; }
 .budget-review-history summary { cursor:pointer; font-size:13px; }
 .budget-review-history ul { margin-top:10px; }
 .budget-review-history li { display:flex; flex-wrap:wrap; gap:5px 10px; font-size:12px; color:var(--muted); }
@@ -928,7 +926,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .custom-connection-form { width:340px; max-width:calc(100vw - 48px); gap:14px; padding:14px; }
 .custom-connection-form .error { font-weight:400; line-height:1.35; }
 .custom-connection-prices { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:8px 10px; }
-.custom-connection-prices .money-input { min-width:0; }
+.custom-connection-prices .org-money-input { min-width:0; }
 
 /* Settings → Web search (COD-266): the Test result under its row, in the colour of its mark. The mark sits on the
    first line's centre, so a long error that wraps keeps it beside its first words. */
@@ -939,7 +937,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .web-search-outcome .org-status-mark { margin-top:2px; }
 .web-search-outcome.success { color:var(--success); }
 .web-search-outcome.error { color:var(--error); }
-.custom-connection-prices .money-input input { flex:1; width:auto; min-width:0; }
+.custom-connection-prices .org-money-input input { flex:1; width:auto; min-width:0; }
 .custom-connection-prices > span { grid-column:1 / -1; font-size:12.5px; font-weight:400; line-height:1.4; }
 .custom-connection-actions { display:flex; align-items:center; gap:8px; }
 .custom-connection-actions .dialog-footer-spacer { flex:1; }
@@ -1023,8 +1021,6 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .erase-form div { display:flex; align-items:center; gap:6px; }
 .erase-form input { flex:1; min-width:120px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
 .settings-message { font-size:13px; margin-top:14px; color:var(--muted); }
-.money-input { display:inline-flex; align-items:center; gap:4px; min-height:36px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); }
-.money-input>span { color:var(--muted); font-size:14px; }
 /* ChatGPT-style toast: inverted pill at the top centre, above dialogs, never blocking clicks. */
 /* The notice centre: what the app has said, after the toast has gone. Filters are chips rather than a select,
    because there are four and the count on each is half the information. */
@@ -1095,13 +1091,10 @@ button.notice-body { cursor:pointer; }
 @keyframes toast-in { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
 /* One on/off setting inside a form (components/Switch.tsx): title left, switch right, vertically centred on the
    text block beside it. Its description sits directly under its title, where a loose paragraph used to. */
-.money-input .money-currency { font-size:12px; margin-left:auto; }
-.form .money-input { width:100%; min-height:var(--control-height); }
-.form .money-input input { flex:1; width:auto; min-width:0; min-height:0; border:0; padding:0; border-radius:0; background:transparent; }
-.form .money-input input:focus-visible { outline:none; }
-.money-input input { width:90px; border:0; outline:none; background:transparent; font-size:14px; font-variant-numeric:tabular-nums; }
+.form .org-money-input { width:100%; min-height:var(--control-height); }
+.form .org-money-input input { flex:1; width:auto; min-width:0; min-height:0; border:0; padding:0; border-radius:0; background:transparent; }
+.form .org-money-input input:focus-visible { outline:none; }
 
-.money-input.invalid { border-color:var(--error); }
 /* Status label and mark share one colour: green when ready, red when blocked, grey otherwise. */
 .status-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:500; color:var(--muted); white-space:nowrap; }
 .status-pill .org-status-mark { margin-left:0; }
@@ -1267,7 +1260,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-editor-title { display:inline-flex; align-items:center; gap:6px; margin-left:-8px; }
 .form .routine-group { display:flex; flex-direction:column; gap:16px; padding:16px; border-radius:14px; background:var(--surface); }
 .routine-group h4 { margin:0; font-size:13px; font-weight:600; color:var(--muted); }
-.form .routine-group input:not([type=checkbox]),.form .routine-group select,.form .routine-group textarea,.form .routine-group .money-input { background:var(--bg); }
+.form .routine-group input:not([type=checkbox]),.form .routine-group select,.form .routine-group textarea,.form .routine-group .org-money-input { background:var(--bg); }
 .routine-sources,.routine-folder,.routine-called { display:flex; flex-direction:column; gap:8px; }
 .routine-sources .org-panel-heading h3,.routine-folder .org-panel-heading h3 { font-size:13px; font-weight:500; }
 /* The watched folder: its name and its read-only level, never its path, which stays in the core. */
