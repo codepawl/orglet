@@ -37,18 +37,13 @@ export function restoreUnsent(unsent: string, typedSince: string): string {
 export type ComposerAttachment = { id: string; name: string; bytes?: number };
 
 /**
- * Where the strip should come to rest: as far along as it can go while a card still starts exactly at its left
- * edge (user, 2026-09-20). Scrolling to the very end lands mid-card, and the part left showing is a card's tail,
- * which is blank past the meta line — it reads as an empty tile rather than as "there is more this way". Stopping
- * on a whole number of cards puts the clipping on the right instead, where a card's icon and name are what peek.
+ * Where the strip comes to rest after a file is added: its very end, so the card just added shows whole (COD-292).
+ * It used to stop on a whole card (user, 2026-09-20), because a card cut at the left edge shows its blank tail and read
+ * as an empty tile; but that left the newest card cut on the right and the first file gone with no sign. The strip's
+ * left end now fades out while cards are scrolled past it, so the cut card reads as "there is more this way".
  */
 function restingScrollLeft(strip: HTMLUListElement) {
-  const furthest = strip.scrollWidth - strip.clientWidth;
-  const [first, second] = strip.children;
-  if (!(first instanceof HTMLElement) || furthest <= 0) return Math.max(furthest, 0);
-  const pitch = second instanceof HTMLElement ? second.offsetLeft - first.offsetLeft : first.offsetWidth;
-  if (pitch <= 0) return furthest;
-  return Math.floor(furthest / pitch) * pitch;
+  return Math.max(strip.scrollWidth - strip.clientWidth, 0);
 }
 
 type StripOverflow = { start: boolean; end: boolean };

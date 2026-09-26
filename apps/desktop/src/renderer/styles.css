@@ -393,8 +393,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
    text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
-/* Proximity, not mandatory: under mandatory Chromium insists the last card be reachable, so at the end it clamps
-   to the very edge and lands mid-card — the exact thing Composer.tsx computes a resting place to avoid. */
+/* Proximity, not mandatory: a wheel or a drag may stop between cards, and the strip rests at its very end after a
+   file is added (Composer.tsx), where the faded left end says there is more that way (COD-292). */
 .composer-attachments { --strip-fade-start:0px; --strip-fade-end:0px; grid-area:attach; display:flex; gap:8px; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity;
   mask-image:linear-gradient(to right, transparent 0, #000 var(--strip-fade-start), #000 calc(100% - var(--strip-fade-end)), transparent 100%); }
 /* An end with cards scrolled past it fades out, so a file off the left edge is announced, not silently gone (COD-292). */
