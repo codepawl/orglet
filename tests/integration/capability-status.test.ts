@@ -97,3 +97,12 @@ it('keeps task capability status aligned with the frozen execution policy on res
   expect(hasCapability(run, task, 'source.read')).toBe(false);
   expect(toolsFor(run, task).some(tool => tool.type === 'function' && tool.function.name === 'read_source')).toBe(false);
 });
+
+it('offers to change the working folder in one step, only while the folder control can be used (COD-257)', () => {
+  const html = render({});
+  expect(html).toContain('aria-label="Change working folder project"');
+  expect(html).toMatch(/project · <button type="button" class="text-link"[^>]*>Change<\/button>/);
+  expect(render({ workers: [demo] })).not.toContain('Change working folder');
+  expect(render({ busy: true })).not.toContain('Change working folder');
+  expect(render({ grant: null })).not.toContain('Change working folder');
+});
