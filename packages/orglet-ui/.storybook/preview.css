@@ -1,0 +1,17 @@
+/* The kit's components assume border-box sizing (a full-width field otherwise overflows by its padding), the same
+   reset Orglet's own styles.css sets. Until the kit sets it itself, the gallery provides it like a host would. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* The canvas behind every story wears the kit's own page colour and type, so a story reads as it would in an app. */
+html,
+body {
+  background: var(--org-bg);
+  color: var(--org-text);
+  font-family: var(--org-font);
+  font-size: var(--org-font-size);
+  line-height: var(--org-line-height);
+}

@@ -165,8 +165,27 @@ The build is tsdown. It keeps each component in its own file and copies its styl
 The root `pnpm test` runs these tests too, as the `orglet-ui` Vitest project. CI builds the kit and runs
 `check:package` on every pull request.
 
+### The gallery
+
+Every component has stories in `stories/`, one per meaningful state, in [Storybook](https://storybook.js.org) 10:
+
+```sh
+pnpm --filter @codepawl/orglet-ui storybook         # the gallery at http://localhost:6006
+pnpm --filter @codepawl/orglet-ui build-storybook   # a static copy in storybook-static/ (not committed, not deployed)
+pnpm --filter @codepawl/orglet-ui check:stories     # every story of the static copy, light and dark, rendered and axe-checked
+```
+
+The toolbar's Theme switch sets `data-theme` on the root element, exactly as an application does, and the
+Accessibility panel runs axe on the open story. Foundations → Tokens is read from `tokens.css` itself, so it never
+drifts from what ships. `check:stories` opens each story in headless Chromium (Playwright), fails on a render error, a
+console error or a WCAG 2.2 A/AA violation, and with `--screenshots <folder>` saves each story at 1280 and 740 wide. A
+story that needs an exception says so in its `a11y` parameter, with the reason beside it.
+
+Storybook and everything it pulls in are development dependencies of this package only: the app never imports
+`stories/` or `.storybook/`, and the published package still ships `dist` alone.
+
 A new component comes with a test in `test/`: it renders with its required text, works from the keyboard, applies
-`className` last, and passes an axe check. `test/styles.test.ts` checks every stylesheet for the `org-` prefix and for
+`className` last, and passes an axe check. It also gets stories in `stories/`. `test/styles.test.ts` checks every stylesheet for the `org-` prefix and for
 reduced motion.
 
 ## What belongs here
