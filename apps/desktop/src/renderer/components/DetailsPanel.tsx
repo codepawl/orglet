@@ -307,6 +307,8 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
     busy: boolean;
     onCapability: (capability: ToolCapability, enabled: boolean) => void;
     onWorkspace: (level: WorkspaceLevel) => void;
+    /** Why nothing here can change right now, such as a chat that is read-only (COD-282). */
+    locked?: string;
   };
 }) {
   const [technical, setTechnical] = useState(false);
@@ -375,7 +377,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           reviewShown={!detail?.task.routineId}
           reviewLocked={team || group ? t('Hội và chat nhóm áp dụng thay đổi của từng Tí ngay khi Tí đó xong, vì Tí sau làm tiếp trên các tệp đó.') : undefined}
           // A side thread takes its permissions from its main chat and can never be wider (COD-247).
-          locked={detail?.task.sideOf ? t('Chat phụ dùng quyền của chat chính. Đổi quyền ở chat chính.') : undefined}
+          locked={tools.locked ?? (detail?.task.sideOf ? t('Chat phụ dùng quyền của chat chính. Đổi quyền ở chat chính.') : undefined)}
           onCapability={tools.onCapability} onWorkspace={tools.onWorkspace} onConfigure={tools.onConfigure} />
         {detail && <McpChatGrants detail={detail} workers={tools.workers} workspace={workspace} />}
         {detail && <BrowserChatSettings detail={detail} />}

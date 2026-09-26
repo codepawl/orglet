@@ -1235,6 +1235,7 @@ export class CoreService {
    */
   private reviseTask(input: Args<'reviseTask'>, forwarded?: ForwardedMessage) {
     const task = this.store.get<Task>('tasks', input.taskId);
+    this.assertChatOpen(task);
     if (input.replyTo) new MessageInteractions(this.store).target(task.id, input.replyTo);
     if (input.continueFrom) this.assertContinuable(task, input.continueFrom);
     if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
@@ -1380,6 +1381,22 @@ export class CoreService {
   private assertAssignable(kind: 'worker' | 'team', entityId: string) {
     const found = this.entity(kind, entityId);
     if (!found || found.archived) throw new Error(`${found?.row.name ?? (kind === 'worker' ? 'Tí' : 'Hội')} đã được lưu trữ hoặc xóa. Đổi người nhận trong Thiết lập công việc.`);
+  }
+  /**
+   * A chat takes no new message while it is archived, or while the one orglet or crew it belongs to is archived or
+   * deleted; the refusal says which and what brings it back (COD-282). A group chat has no single owner, and
+   * `prepareTask` checks the orglets its turn goes to.
+   */
+  private assertChatOpen(task: Task) {
+    if (task.archivedAt) throw new Error('Cuộc trò chuyện này đã được lưu trữ. Khôi phục để nhắn tiếp.');
+    if (task.assignees) return;
+    const kind = task.teamId ? 'team' : 'worker';
+    const ownerId = task.teamId ?? task.workerId;
+    const state = this.store.entityState()[`${kind}s`][ownerId];
+    if (!state?.archivedAt && !state?.deletedAt) return;
+    const name = this.store.get<Worker | Team>(`${kind}s`, ownerId).name;
+    if (state.deletedAt) throw new Error(`${name} đã bị xóa, nên cuộc trò chuyện này chỉ còn để đọc.`);
+    throw new Error(`${name} đã được lưu trữ. Khôi phục để nhắn tiếp.`);
   }
   private liveTask(taskId: string) {
     const task = this.store.get<Task>('tasks', taskId);

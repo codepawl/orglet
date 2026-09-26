@@ -184,6 +184,12 @@ A chat where your words appear together, in the order you typed them, comes befo
 
 Archived chats are found too; deleted chats are not. A crew's chat is found by its combined answer, not by the reports its members handed in. Search runs on this computer only. After an update from a version that searched only first messages, Orglet adds your existing chats in the background once it has started; until then the search window says a few results may be missing. How it works: [technical guide](technical-guide.md#search).
 
+### Archived and deleted chats
+
+An archived chat opens from search like any other, to read. Its message box is turned off, and a line under it says the chat is archived, with **Restore** next to it; restoring puts it back in the sidebar and you can write again. The same happens when the orglet or crew the chat belongs to was archived: the line names it, and **Restore** brings the orglet or crew back. When that orglet or crew was deleted, the chat stays readable with its name in the header, and nothing can be sent there.
+
+When the chat you have open is deleted, from its menu or with **Settings → Data → Delete chat history**, Orglet moves to the orglet's or crew's main chat, or to the first orglet when that one is gone too. Nothing is reported as a problem.
+
 ## Notifications
 
 Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked. A confirmation of something you just did (saved, created, copied, archived) is listed but does not count, since you saw it as it happened. Problems count, and so does news that arrived on its own: an answer in a side thread, a schedule's run that finished or needs you, a downloaded update, a change an orglet applied by itself.

@@ -255,6 +255,12 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
  */
 export type ComposerPrefill = { text?: string; intake?: FolderIntake; at: number };
 
+/**
+ * Why a chat takes no new message (COD-282): it was archived, or its orglet or crew was archived or deleted. The bar
+ * stays where it was, turned off, with this sentence under it and the one step that opens it again, if there is one.
+ */
+export type ReadOnlyChat = { note: string; action?: { label: string; onSelect: () => void } };
+
 /** A link's text goes after a draft already in the bar, never over it. */
 export function withPrefill(current: string, prefill: string): string {
   if (!current.trim()) return prefill;
@@ -269,7 +275,7 @@ export function withPrefill(current: string, prefill: string): string {
  * `onPrefilled` lets the caller forget it once it is in. What is typed and added but not sent stays with the chat
  * while the app is open (COD-257, `drafts.ts`), so leaving the chat and coming back finds it on the bar.
  */
-export function FollowUpComposer({ detail, workspace, ready, openSettings, openChat, action, prefill, onPrefilled }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void }) {
+export function FollowUpComposer({ detail, workspace, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat }) {
   const draftKey = taskDraftKey(detail.task.id);
   const [text, setText] = useState(() => readDraft(draftKey)?.text ?? '');
   // Files added for the next message, and what could not be added with the reason, as in the empty chat.
@@ -295,7 +301,7 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
   const selectedReply = useReplyTarget();
   const reply = selectedReply?.taskId === detail.task.id ? selectedReply : undefined;
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
-  const blocked = missing.length > 0;
+  const blocked = missing.length > 0 || Boolean(readOnly);
   // An MCP approval card is answered with its buttons; typing sends a new message instead (COD-241).
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt && !request.approval);
   const send = () => {
@@ -342,7 +348,7 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
   }
   const removeFile = (sourceId: string) => setAdded(current => ({ ...current, sources: current.sources.filter(source => source.id !== sourceId) }));
   // An orglet's own main chat can send a message into a new side thread instead (COD-247); crews and group chats cannot.
-  const sideThreads = canStartSideThread(detail.task);
+  const sideThreads = canStartSideThread(detail.task) && !readOnly;
   const sendInNewThread = () => {
     const brief = text.trim();
     if (!brief || blocked || submitting) return;
@@ -362,7 +368,7 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
     items={[{ label: t('Gửi trong chat phụ mới'), icon: MessageSquarePlus, shortcut: 'Ctrl+Shift+Enter', onSelect: sendInNewThread }]} /> : undefined;
   return <div className="thread-composer">
     <IslandDock />
-    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} label={t('Tin nhắn')} placeholder={detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(detail.task.pendingStart) || submitting} sendDisabled={blocked}
+    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} label={t('Tin nhắn')} placeholder={readOnly ? t('Chỉ đọc') : detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(detail.task.pendingStart) || submitting || Boolean(readOnly)} sendDisabled={blocked}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
       context={reply && !pendingDecision ? <div className="composer-reply">
@@ -371,8 +377,9 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
         <Button type="button" size="icon" aria-label={t('Bỏ trả lời')} title={t('Bỏ trả lời')} onClick={clearReplyTarget}><X size={14} /></Button>
       </div> : undefined}
       attachments={added.sources} onRemoveAttachment={removeFile}
-      leading={<SourcePicker onFiles={() => action(async () => addFiles({ sources: await orglet.pickSources(), skipped: [] }))} onFolder={() => action(async () => addFiles(await orglet.pickFolder()))} />} />
+      leading={<SourcePicker disabled={Boolean(readOnly)} onFiles={() => action(async () => addFiles({ sources: await orglet.pickSources(), skipped: [] }))} onFolder={() => action(async () => addFiles(await orglet.pickFolder()))} />} />
     {added.skipped.length > 0 && <details className="intake-skipped"><summary>{t('{0} mục không được thêm vào task', [added.skipped.length])}</summary><ul>{added.skipped.map((item, index) => <li key={index}>{item.name}: {tMessage(item.reason)}</li>)}</ul></details>}
-    {!busy && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
+    {readOnly && <p className="composer-note" role="status">{readOnly.note}{readOnly.action && <button type="button" onClick={readOnly.action.onSelect}>{readOnly.action.label}</button>}</p>}
+    {!busy && !readOnly && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
   </div>;
 }

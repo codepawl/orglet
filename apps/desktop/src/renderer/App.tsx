@@ -22,7 +22,7 @@ import { ArchivedList, ArchivedRow, type ArchiveState } from './components/Sideb
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
-import { Composer, FollowUpComposer, withPrefill, type ComposerPrefill } from './components/Composer';
+import { Composer, FollowUpComposer, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
@@ -77,6 +77,7 @@ import { proposedMascot, type ProposalActions } from './components/AppProposals'
 import { EditableText, Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import { dwellAbout, dwellChat, dwellModels, followWorkspace, taskDetails } from './caches';
 import { dwellHandlers } from './prefetch';
+import { chatClosure, closedChatDestination, openChatRefresh, type ChatDestination, type OpenChatReads } from './openChat';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -85,6 +86,13 @@ function readSeenStorage(): Record<string, SeenInfo> {
 }
 function writeSeenStorage(value: Record<string, SeenInfo>) {
   try { localStorage.setItem(seenStorageKey, JSON.stringify(value)); } catch { /* ignore quota */ }
+}
+
+/** How a chat is named in the sidebar: its title, or the first line of what was asked. */
+function taskNameOf(workspace: Pick<Workspace, 'tasks'>, taskId: string): string | undefined {
+  const task = workspace.tasks.find(item => item.id === taskId);
+  if (!task) return undefined;
+  return task.title || task.brief.split('\n')[0].trim();
 }
 
 const SIDEBAR_WIDTH = { min: 190, max: 420, default: 228, step: 16 };
@@ -274,14 +282,12 @@ export function App() {
   // Refreshes started by older callbacks (an action finishing, a change event) must load the task shown now, not the
   // one selected when they were created; otherwise a late refresh replaces the open task with nothing.
   const selectedRef = useRef(selected); selectedRef.current = selected;
+  const workspaceRef = useRef(workspace); workspaceRef.current = workspace;
+  // The open chat, once a refresh found the workspace no longer lists it, and where the view goes instead (COD-282).
+  const [goneChat, setGoneChat] = useState<{ taskId: string; destination?: ChatDestination }>();
   /** What was being done when the banner's error was set; the notice centre shows it under the message (COD-174). */
   const errorAbout = useRef<string | undefined>(undefined);
-  /** How a chat is named in the sidebar: its title, or the first line of what was asked. */
-  const taskName = (taskId: string) => {
-    const task = workspace?.tasks.find(item => item.id === taskId);
-    if (!task) return undefined;
-    return task.title || task.brief.split('\n')[0].trim();
-  };
+  const taskName = (taskId: string) => workspace ? taskNameOf(workspace, taskId) : undefined;
   const entityName = (kind: 'worker' | 'team', entityId: string) => {
     if (!workspace) return undefined;
     const listed = kind === 'worker' ? [...workspace.workers, ...workspace.archivedWorkers] : [...workspace.teams, ...workspace.archivedTeams];
@@ -290,20 +296,29 @@ export function App() {
   const refresh = useCallback(async () => {
     const requestId = ++refreshId.current;
     const selected = selectedRef.current;
+    // The open chat's row as last seen, so a chat that disappears can hand over to its own orglet or crew.
+    const previousRow = selected ? workspaceRef.current?.tasks.find(task => task.id === selected) ?? taskDetails.get(selected)?.task : undefined;
     try {
       // Harness detection is cached after its first, slow run. Waiting for it here held every refresh — and so the first
       // settings change after launch — for about three seconds, so it lands on its own.
       void orglet.call('harnesses', { refresh: false }).then(setHarnesses).catch(() => undefined);
       // Everything a refresh needs goes out at once (COD-218): reading the open task before the workspace was a
       // waterfall on every change event. Its seen stamp is merged below from whichever copy is newer, so the
-      // order the two land in does not matter.
-      const [taskDetail, next, connectionState, grant, recovery] = await Promise.all([
-        selected ? taskDetails.refresh(selected) : Promise.resolve(undefined),
-        orglet.call('workspace', {}), orglet.connections(),
-        selected ? orglet.call('workspaceAccess', { taskId: selected }) : Promise.resolve(null),
-        selected ? orglet.call('workspaceRecovery', { taskId: selected }) : Promise.resolve(undefined)]);
+      // order the two land in does not matter. The chat's reads are settled one by one and never fail the refresh
+      // (COD-282): a chat archived, deleted or erased since refuses some of them, and the sidebar must still follow.
+      const chatReads: Promise<OpenChatReads> | undefined = selected
+        ? Promise.allSettled([
+          taskDetails.refresh(selected),
+          orglet.call('workspaceAccess', { taskId: selected }),
+          orglet.call('workspaceRecovery', { taskId: selected }),
+        ]).then(([detailRead, grantRead, recoveryRead]) => ({ detail: detailRead, grant: grantRead, recovery: recoveryRead }))
+        : undefined;
+      const [next, connectionState] = await Promise.all([orglet.call('workspace', {}), orglet.connections()]);
+      const reads = chatReads ? await chatReads : undefined;
       if (requestId !== refreshId.current) return;
       followWorkspace(next);
+      const openChat = selected && reads ? openChatRefresh(selected, next.tasks, reads) : undefined;
+      const taskDetail = openChat && !openChat.gone ? openChat.detail : undefined;
       if (taskDetail?.task.seenStamp) {
         seenInfo.current[taskDetail.task.id] = { seenStamp: taskDetail.task.seenStamp, lastArtifactId: taskDetail.task.lastArtifactId };
       }
@@ -317,11 +332,33 @@ export function App() {
       });
       writeSeenStorage(seenInfo.current);
       if (taskDetail) showingCachedDetail.current = null;
-      setWorkspace({ ...next, tasks }); setConnections(connectionState); setDetail(taskDetail); setWorkerId(value => value || next.workers[0]?.id || '');
-      setWorkspaceAccess(selected ? { taskId: selected, grant } : undefined);
-      setWorkspaceRecovery(recovery);
+      setWorkspace({ ...next, tasks }); setConnections(connectionState); setWorkerId(value => value || next.workers[0]?.id || '');
+      if (selected && openChat?.gone) {
+        setGoneChat({ taskId: selected, destination: closedChatDestination(previousRow, next) });
+        return;
+      }
+      // A failed read keeps the copy on screen rather than blanking the chat.
+      if (!selected || taskDetail) setDetail(taskDetail);
+      setWorkspaceAccess(selected && openChat && !openChat.gone && openChat.grant !== undefined ? { taskId: selected, grant: openChat.grant } : undefined);
+      setWorkspaceRecovery(openChat && !openChat.gone ? openChat.recovery : undefined);
+      if (selected && openChat && !openChat.gone && openChat.error) {
+        errorAbout.current = taskNameOf(next, selected);
+        setError(openChat.error);
+      }
     } catch (err) { if (requestId === refreshId.current) { errorAbout.current = t('Đọc dữ liệu từ phần lõi'); setError((err as Error).message); } }
   }, []);
+  // A chat the workspace stopped listing (deleted, or erased with the chat history) closes to its orglet's or crew's
+  // main chat, or the first orglet, rewriting the history entry rather than adding one (COD-282).
+  useEffect(() => {
+    if (!goneChat) return;
+    setGoneChat(undefined);
+    if (selectedRef.current !== goneChat.taskId) return;
+    replaceNextView.current = true;
+    const destination = goneChat.destination;
+    if (destination?.kind === 'team') openTeam(destination.id);
+    else if (destination) openWorker(destination.id);
+    else leaveThread();
+  }, [goneChat]);
   useEffect(() => {
     if (!window.orglet) { setError(t('Mở Orglet bằng pnpm dev để dùng desktop core. Bản web không có quyền truy cập dữ liệu.')); return; }
     return orglet.onChange(() => void refresh());
@@ -1153,9 +1190,17 @@ export function App() {
   // A schedule's run is named after its schedule, so it does not read as the orglet's main chat (COD-258).
   const openScheduleRun = selected && detail?.task.routineId ? detail.task : undefined;
   const openSchedule = openScheduleRun ? workspace.routines.find(item => item.id === openScheduleRun.routineId) : undefined;
+  // The open chat takes no new message while it, or the orglet or crew it belongs to, is archived or deleted (COD-282).
+  const openChatClosure = selected && detail ? chatClosure(detail, workspace) : undefined;
+  const closedOwner = openChatClosure?.owner;
+  const closedOwnerName = closedOwner ? closedOwner.name || (closedOwner.kind === 'team' ? t('Hội này') : t('Tí này')) : undefined;
+  const readOnlyChat: ReadOnlyChat | undefined = !selected || !openChatClosure ? undefined
+    : openChatClosure.archived ? { note: t('Cuộc trò chuyện này đã được lưu trữ. Khôi phục để nhắn tiếp.'), action: { label: t('Khôi phục'), onSelect: () => archiveTask(selected, false) } }
+    : closedOwner?.state === 'archived' ? { note: t('{0} đã được lưu trữ. Khôi phục để nhắn tiếp.', [closedOwnerName]), action: { label: t('Khôi phục'), onSelect: () => archiveEntity(closedOwner.kind, closedOwner.id, false) } }
+    : { note: t('{0} đã bị xóa, nên cuộc trò chuyện này chỉ còn để đọc.', [closedOwnerName]) };
   const headerName = openSideThread ? taskName(openSideThread.id) ?? openSideThread.brief
     : openSchedule ? openSchedule.name
-    : selected ? (detail && assigneeLabel(detail.task, workspace!, { all: t('Toàn bộ Tí'), many: count => groupChatNames(openTaskWorkers.map(item => item.name)) ?? t('{0} Tí', [count]) })) ?? team?.name ?? t('Công việc') : chatName;
+    : selected ? (detail && assigneeLabel(detail.task, workspace!, { all: t('Toàn bộ Tí'), many: count => groupChatNames(openTaskWorkers.map(item => item.name)) ?? t('{0} Tí', [count]) })) ?? team?.name ?? closedOwnerName ?? t('Công việc') : chatName;
   // An open group chat keeps the faces and names it had before its first message, rather than turning into a count.
   const openGroupFaces = selected && detail && isGroupChat(detail.task) && detail.task.assignees !== 'all' ? openTaskWorkers : undefined;
   /** The line at the top of a schedule's run: which schedule, who ran it, and the way to the schedule. */
@@ -1304,7 +1349,7 @@ export function App() {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
-      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} /></> : <ThreadSkeleton />}</> : (team || group || worker) ? <div className="team-chat team-chat-fresh">
+      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} /></> : <ThreadSkeleton />}</> : (team || group || worker) ? <div className="team-chat team-chat-fresh">
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">
@@ -1348,6 +1393,7 @@ export function App() {
         onConfigure: provider => openSettings(settingsTabFor([provider])),
         grant: workspaceAccess?.taskId === detail.task.id ? workspaceAccess.grant : undefined,
         busy: toolPolicyBusy,
+        locked: readOnlyChat?.note,
         onCapability: (capability, enabled) => changeTaskCapability(detail, capability, enabled),
         onWorkspace: level => toolAction(() => level === 'none'
           ? orglet.call('revokeWorkspace', { taskId: detail.task.id })

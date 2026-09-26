@@ -3035,6 +3035,12 @@ export const en: Dictionary = {
   'Bản sửa phải giữ loại tệp gốc.': 'An edited version keeps the original file type.',
   'Chưa sửa được {0} trong Orglet.': '{0} cannot be edited in Orglet yet.',
   'Không lưu được bản sửa khi dữ liệu không nằm trong thư mục.': 'Edits cannot be saved when Orglet’s data is not in a folder.',
+  // A chat that takes no new message (COD-282).
+  'Cuộc trò chuyện này đã được lưu trữ. Khôi phục để nhắn tiếp.': 'This chat is archived. Restore it to keep chatting.',
+  '{0} đã được lưu trữ. Khôi phục để nhắn tiếp.': '{0} is archived. Restore it to keep chatting.',
+  '{0} đã bị xóa, nên cuộc trò chuyện này chỉ còn để đọc.': '{0} was deleted, so this chat is read-only.',
+  'Tí này': 'This orglet',
+  'Hội này': 'This crew',
 };
 
 // British English differs from the US text only in these spellings, so it is derived instead of duplicated.
