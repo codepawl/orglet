@@ -656,6 +656,21 @@ export class Runner {
   }
   private event(runId: string, message: string) { this.store.event(runId, message); this.notify(); }
   /**
+   * Says in the turn's steps which attached images this run cannot see, as the run starts (COD-292). Before, the line
+   * appeared only when the orglet asked for the image, so an orglet that never asked answered as if it had seen every
+   * file. Each image is announced once per chat, and a later request for it adds no second line.
+   */
+  private announceWithheldImages(run: Run, task: Task, manifest: readonly Source[], seesImages: boolean) {
+    const said = new Set(this.store.detail(task.id).events.map(event => event.message));
+    for (const source of manifest) {
+      if (source.media !== 'image' || !withheldSourceNote(source, seesImages)) continue;
+      const line = withheldEventLine(source, seesImages);
+      if (said.has(line)) continue;
+      this.event(run.id, line);
+      said.add(line);
+    }
+  }
+  /**
    * The messages as the next request sends them, with each image's bytes added (COD-260). Every image is read again
    * through the permission, revoke and hash checks, so an image removed from the chat since cannot go out; the
    * checkpoint keeps the references only.
@@ -866,6 +881,7 @@ export class Runner {
       const seesImages = isHarness(run.snapshot.worker.provider)
         ? oneShotHarness && harnessSeesImages(run.snapshot.worker.provider)
         : modelSeesImages(run.snapshot.worker.provider, run.snapshot.model, readModelListCache(this.store));
+      if (!resume) this.announceWithheldImages(run, task, manifest, seesImages);
       const assemble = (layer: ReturnType<typeof compactThread>) => {
         const next: RunMessage[] = [{ role: 'system', content: compiled.system }];
         if (compiled.knowledgeMessage) next.push({ role: 'user', content: compiled.knowledgeMessage });
@@ -1535,7 +1551,9 @@ export class Runner {
         const withheld = requested ? withheldSourceNote(requested, seesImages) : null;
         if (requested && withheld) {
           // A worker asking for a file it cannot take in is not a failed run: it is told plainly, and the turn goes on.
-          this.event(run.id, withheldEventLine(requested, seesImages));
+          // An image was already announced when the run started; anything else gets its line now.
+          const line = withheldEventLine(requested, seesImages);
+          if (!this.store.detail(task.id).events.some(event => event.message === line)) this.event(run.id, line);
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ sourceId, error: withheld, readable: false }) });
           checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] }; this.checkpoints.committed(checkpoint);
           continue;

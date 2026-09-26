@@ -181,6 +181,25 @@ describe('images for API connections (COD-260)', () => {
     expect(detail.events.map(event => event.message)).toContain('Tí không xem được ảnh shot.png: kết nối này không nhận ảnh.');
   }, 20_000);
 
+  it('say an image was not shown as the run starts, once, even when the orglet never asks for it (COD-292)', async () => {
+    // Dogfood round 6: the trace said "Read 3 files" while the answer claimed four; the image line only came on a request.
+    const image = join(directory, 'shot.png'); await writeFile(image, pngBytes);
+    const [shot] = await core.sources.import([image]);
+    replies.push(answer('I read the notes.'));
+    const detail = await chatWith('xai', [shot.id], 'Summarise what I attached.');
+    const line = 'Tí không xem được ảnh shot.png: kết nối này không nhận ảnh.';
+    expect(detail.events.map(event => event.message).filter(message => message === line)).toHaveLength(1);
+  }, 20_000);
+
+  it('announce a withheld image once when the orglet asks for it after the start line', async () => {
+    const image = join(directory, 'shot.png'); await writeFile(image, pngBytes);
+    const [shot] = await core.sources.import([image]);
+    replies.push(call('read_source', { sourceId: shot.id }), answer('I cannot see that image.'));
+    const detail = await chatWith('xai', [shot.id], 'What does this screenshot show?');
+    const line = 'Tí không xem được ảnh shot.png: kết nối này không nhận ảnh.';
+    expect(detail.events.map(event => event.message).filter(message => message === line)).toHaveLength(1);
+  }, 20_000);
+
   it('keep SVG, BMP and images over 5 MB from every model, with the reason', async () => {
     const vector = join(directory, 'logo.svg'); await writeFile(vector, '<svg xmlns="http://www.w3.org/2000/svg"/>');
     const big = await sparseFile('photo.jpg', IMAGE_SEND_LIMIT + 1);
