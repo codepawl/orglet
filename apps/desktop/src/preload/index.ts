@@ -3,6 +3,7 @@ import type { Bridge, Reply } from '../shared/contracts';
 import type { RunProgressUpdate } from '../shared/progress';
 import type { UpdateState } from '../shared/updates';
 import type { OpenChatTarget } from '../shared/cli';
+import type { OverlayBridge, OverlayView } from '../shared/desktop-overlay';
 
 async function invoke<T>(channel: string, args?: unknown): Promise<T> {
   const reply: Reply<T> = await ipcRenderer.invoke(channel, args);
@@ -96,3 +97,24 @@ const bridge: Bridge = {
   },
 };
 contextBridge.exposeInMainWorld('orglet', bridge);
+
+/**
+ * The desktop glow's page (COD-261): what to draw, where the real cursor is while the mouse is borrowed, whether the
+ * pointer is over the pill, and Stop. Main answers these only from the overlay window, and Stop only for the run it shows.
+ */
+const overlayBridge: OverlayBridge = {
+  onView: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, view: OverlayView) => callback(view);
+    ipcRenderer.on('orglet-overlay:view', listener);
+    return () => ipcRenderer.removeListener('orglet-overlay:view', listener);
+  },
+  onRealCursor: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, point: { x: number; y: number }) => callback(point);
+    ipcRenderer.on('orglet-overlay:real-cursor', listener);
+    return () => ipcRenderer.removeListener('orglet-overlay:real-cursor', listener);
+  },
+  ready: () => ipcRenderer.send('orglet-overlay:ready'),
+  pointer: inside => ipcRenderer.send('orglet-overlay:pointer', inside),
+  stop: () => ipcRenderer.invoke('orglet-overlay:stop'),
+};
+contextBridge.exposeInMainWorld('orgletOverlay', overlayBridge);

@@ -48,6 +48,16 @@ export function Avatar({ name, seed, emoji, mascot, defaultMascot, hint, color, 
   </span>;
 }
 
+/**
+ * The colour a worker's face is drawn in, exactly as `Avatar` with `defaultMascot` picks it: the colour the person set,
+ * or the colour of its mascot. The orglet's cursor and the desktop glow's peek use it, so they match its avatar.
+ */
+export function workerInk(worker: { id: string; name: string; description?: string; avatar?: { mascot?: string; color?: string } }): string {
+  if (worker.avatar?.color) return worker.avatar.color;
+  const face = isMascot(worker.avatar?.mascot) ? worker.avatar.mascot : autoMascot(mascotIds, worker.id, { name: worker.name, description: worker.description });
+  return mascotColors[face];
+}
+
 /** One idle cycle (`--motion-idle` in styles.css: a blink, and on a prominent face a look-up); the delay is spread across it. */
 const IDLE_SECONDS = 7;
 

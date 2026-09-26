@@ -103,7 +103,9 @@ For these, the orglet asks you to take over.
 
 While a run is using the browser, the bar above the message box says where it is, **Researcher is on example.com…**, with **Watch**. **Watch** opens the live view over the chat: the page as the orglet sees it, updated as it changes. **Details → Browser** shows the same view, smaller, above the list of steps; **View larger** opens the big one.
 
-The orglet's cursor is an arrow with its name. Before each click, choice or typing step it moves to the element, so you see where it is about to act: the middle of a button, a little way into a field it types in. A click leaves a small ring where it landed. Orglet draws the cursor over the picture itself; it is not part of the page, so a page cannot see it or fake it.
+The orglet's cursor is the orglet itself: the Orglet bubble, turned so its tighter corner is the tip, in the orglet's colour with its two eyes, and its name beside it. Before each click, choice or typing step it glides to the element, so you see where it is about to act: the middle of a button, a little way into a field it types in. A click squashes it for a moment and leaves a ripple in its colour. While it types it rests there with its eyes on the field. With reduced motion turned on in Windows it jumps and does not animate. Orglet draws the cursor over the picture itself; it is not part of the page, so a page cannot see it or fake it.
+
+While the orglet is acting, the live view's edges glow softly in your accent colour (**Settings → General → Accent color**), the same glow Orglet draws around a [desktop app](desktop.md#the-glow) an orglet uses. Once you take the browser over, the glow goes: the page is yours, and its focus ring shows it. A Chrome window you move the tabs into gets no glow, since you are the one using it. The browser runs without a window of its own, so nothing is drawn on your desktop for it.
 
 When the orglet asks you about a step, the card shows under the live view too, with the orglet's cursor already at the element it asks about, beside it rather than over it.
 

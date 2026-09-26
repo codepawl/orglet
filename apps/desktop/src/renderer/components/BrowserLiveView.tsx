@@ -10,6 +10,8 @@ import {
 } from '../../shared/browser-live';
 import { Button } from './ui';
 import { BrowserApprovalCard } from './BrowserApproval';
+import { OrgletCursor } from './OrgletCursor';
+import { workerInk } from './Avatar';
 import { browsingSiteOf } from './LiveRun';
 import { t, tMessage, translated } from '../i18n';
 import { orglet } from '../api';
@@ -310,8 +312,8 @@ const suggestionText: Record<BrowserSuggestion, string> = translated({
  * `controlling` view takes focus when clicked and keeps it until the person clicks elsewhere; its keys, Escape
  * included, go to the page.
  */
-export function BrowserLiveSurface({ runId, workerName, site, controlling, inChrome, onOpenInChrome, onBackToOrglet, large }: {
-  runId: string; workerName: string; site?: string; controlling: boolean; inChrome: boolean; onOpenInChrome: () => void; onBackToOrglet: () => void; large?: boolean;
+export function BrowserLiveSurface({ runId, workerName, workerColor, site, controlling, inChrome, onOpenInChrome, onBackToOrglet, large }: {
+  runId: string; workerName: string; workerColor: string; site?: string; controlling: boolean; inChrome: boolean; onOpenInChrome: () => void; onBackToOrglet: () => void; large?: boolean;
 }) {
   const surface = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -341,8 +343,11 @@ export function BrowserLiveSurface({ runId, workerName, site, controlling, inChr
     <div ref={surface} className={controlling ? 'browser-live browser-live-controlling' : 'browser-live'}
       style={{ aspectRatio: ratio }} role={controlling ? 'application' : 'img'} aria-label={label} aria-roledescription={controlling ? t('trang điều khiển được') : undefined} {...pointerHandlers}>
       <canvas ref={canvas} className="browser-live-canvas" aria-hidden="true" />
+      {/* While the orglet acts, not the person, the page glows at its edges in the accent colour, as the desktop glow does. */}
+      {!controlling && <div className="browser-live-glow orglet-glow" aria-hidden="true" />}
       {!live.page && <Skeleton shape="block" className="browser-live-waiting" />}
-      {cursorAt && !controlling && <AgentCursor key={live.cursor!.tabId} x={cursorAt.x} y={cursorAt.y} name={workerName} clicks={live.cursor!.action === 'click' ? live.cursorMoves : 0} />}
+      {cursorAt && !controlling && <OrgletCursor key={live.cursor!.tabId} x={cursorAt.x} y={cursorAt.y} name={workerName} color={workerColor}
+        action={live.cursor!.action === 'type' ? 'type' : 'move'} presses={live.cursor!.action === 'click' ? live.cursorMoves : 0} />}
       {controlling && <textarea ref={typing} className="browser-live-typing" aria-label={t('Gõ vào trang')} data-popup-open="" autoComplete="off" autoCorrect="off" spellCheck={false} {...typingHandlers} />}
     </div>
     {live.suggestion && <div className="browser-live-suggestion" role="status">
@@ -351,19 +356,6 @@ export function BrowserLiveSurface({ runId, workerName, site, controlling, inChr
       <Button variant="outline" onClick={onOpenInChrome}><ExternalLink size={14} />{t('Mở trong Chrome')}</Button>
       <Button size="icon" variant="ghost" aria-label={t('Bỏ qua gợi ý')} title={t('Bỏ qua gợi ý')} onClick={live.dismissSuggestion}><X size={14} /></Button>
     </div>}
-  </div>;
-}
-
-/**
- * The orglet's cursor: an arrow with its name, drawn by Orglet where the orglet last pointed and moved there on a
- * transition, so the person follows it from step to step. A click leaves a ring where it landed.
- */
-function AgentCursor({ x, y, name, clicks }: { x: number; y: number; name: string; clicks: number }) {
-  const style = { transform: `translate(${Math.round(x)}px, ${Math.round(y)}px)` } as CSSProperties;
-  return <div className="browser-agent-cursor" style={style} aria-hidden="true">
-    {clicks > 0 && <span key={clicks} className="browser-agent-click" />}
-    <svg width="18" height="20" viewBox="0 0 18 20"><path d="M1.5 1.5 L1.5 16.2 L5.6 12.6 L8.4 18.6 L11 17.4 L8.3 11.6 L14 11.2 Z" /></svg>
-    <span className="browser-agent-name">{name}</span>
   </div>;
 }
 
@@ -380,7 +372,7 @@ function watchedRun(detail: TaskDetail) {
   const runId = detail.browser?.runId;
   const run = runId ? detail.runs.find(candidate => candidate.id === runId) : undefined;
   const site = runId ? browsingSiteOf(detail.events.filter(event => event.runId === runId).map(event => event.message)) : undefined;
-  return run ? { runId: run.id, workerName: run.snapshot.worker.name, site } : undefined;
+  return run ? { runId: run.id, workerName: run.snapshot.worker.name, workerColor: workerInk(run.snapshot.worker), site } : undefined;
 }
 
 /** Take over or hand back, and Open in Chrome, for the chat's browser; shared by Details and the large view. */
@@ -419,7 +411,7 @@ export function BrowserLivePanel({ detail }: { detail: TaskDetail }) {
   if (!showsLivePanel(detail) || !watched || !live) return null;
   return <div className="browser-live-panel">
     {/* The large view shows the same picture; this one steps aside so one run streams once. */}
-    {!viewerOpen && <BrowserLiveSurface runId={watched.runId} workerName={watched.workerName} site={watched.site} controlling={live.takenOver && !live.inChrome}
+    {!viewerOpen && <BrowserLiveSurface runId={watched.runId} workerName={watched.workerName} workerColor={watched.workerColor} site={watched.site} controlling={live.takenOver && !live.inChrome}
       inChrome={live.inChrome} onOpenInChrome={() => takeOverBrowser(detail.task.id, true, true)} onBackToOrglet={() => takeOverBrowser(detail.task.id, true)} />}
     <div className="actions browser-step-actions"><LiveActions detail={detail} /></div>
   </div>;
@@ -451,7 +443,7 @@ export function BrowserLiveViewer({ detail }: { detail: TaskDetail }) {
   return <Viewer open onClose={() => openBrowserViewer(undefined)} title={t('Trình duyệt của {0}', [watched.workerName])} icon={<AppWindow size={15} aria-hidden="true" />}
     meta={meta} actions={<LiveActions detail={detail} />} closeLabel={t('Đóng')} closeIcon={<X size={16} />} className="browser-live-viewer">
     <div className="browser-live-viewer-body">
-      <BrowserLiveSurface runId={watched.runId} workerName={watched.workerName} site={watched.site} controlling={live!.takenOver && !live!.inChrome} inChrome={live!.inChrome}
+      <BrowserLiveSurface runId={watched.runId} workerName={watched.workerName} workerColor={watched.workerColor} site={watched.site} controlling={live!.takenOver && !live!.inChrome} inChrome={live!.inChrome}
         onOpenInChrome={() => takeOverBrowser(detail.task.id, true, true)} onBackToOrglet={() => takeOverBrowser(detail.task.id, true)} large />
       {approval && <BrowserApprovalCard taskId={detail.task.id} approval={approval} busy={answering} held={live!.takenOver} onAnswer={answer} />}
     </div>

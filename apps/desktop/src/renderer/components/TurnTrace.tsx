@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AppWindow, Ban, Blocks, BookOpen, Brain, Camera, ChevronRight, FileDiff, FileText, FolderInput, FolderPlus, FolderSearch, Globe, Hourglass, Keyboard, Lightbulb, ListChecks, MonitorSmartphone, MousePointerClick, MoveVertical, ScanSearch, Search, ShieldCheck, Table2, Terminal, TextCursorInput, Trash2, UserRound, Wrench, type LucideIcon } from 'lucide-react';
+import { AppWindow, Ban, Blocks, BookOpen, Brain, Camera, ChevronRight, FileDiff, FileText, FolderInput, FolderPlus, FolderSearch, Globe, Hourglass, Keyboard, Lightbulb, ListChecks, MonitorSmartphone, Mouse, MousePointerClick, MoveVertical, ScanSearch, Search, ShieldCheck, Table2, Terminal, TextCursorInput, Trash2, UserRound, Wrench, type LucideIcon } from 'lucide-react';
 import { t, tMessage } from '../i18n';
 import { traceSummary, type TraceEntry, type TraceKind } from '../turnTrace';
 
@@ -35,7 +35,7 @@ const traceIcons: Record<TraceKind, LucideIcon> = {
   remembered: Brain, proposal: Lightbulb, failed: Ban, other: Wrench, mcp: Blocks,
   browser_open: AppWindow, browser_read: AppWindow, browser_find: ScanSearch, browser_screenshot: Camera, browser_scroll: MoveVertical,
   browser_click: MousePointerClick, browser_type: TextCursorInput, browser_select: ListChecks, browser_press: Keyboard, browser_wait: Hourglass, browser_asked: ShieldCheck,
-  desktop_read: MonitorSmartphone, desktop_find: ScanSearch, desktop_screenshot: Camera, desktop_act: MousePointerClick, desktop_asked: ShieldCheck,
+  desktop_read: MonitorSmartphone, desktop_find: ScanSearch, desktop_screenshot: Camera, desktop_act: MousePointerClick, desktop_asked: ShieldCheck, desktop_borrow: Mouse,
 };
 
 /** The row's verb, worded as what the worker did, never which tool it called (docs/worker-actions.md). */
@@ -72,6 +72,7 @@ function traceVerb(kind: TraceKind): string {
     case 'desktop_screenshot': return t('Chụp cửa sổ');
     case 'desktop_act': return t('Thao tác trong ứng dụng');
     case 'desktop_asked': return t('Đã hỏi bạn');
+    case 'desktop_borrow': return t('Mượn chuột và bàn phím');
     case 'handoff': return t('Giao việc cho');
     case 'remembered': return t('Ghi nhớ thêm');
     case 'proposal': return t('Đề xuất');

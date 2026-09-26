@@ -50,7 +50,7 @@ Renderer talks to core through `preload` → typed `Bridge` / `commands` in `app
 | Permissions, working folder, commands, web tools, app-change proposals | [docs/agent-tools.md](docs/agent-tools.md) | `core/tools/catalog.ts`, `core/orchestration/app-proposals.ts` |
 | MCP servers, per-orglet choice, approving calls, secrets in main | [docs/mcp.md](docs/mcp.md) | `core/tools/mcp.ts`, `shared/mcp.ts`, `main/mcp-secrets.ts` |
 | Orglet's browser: reading pages, profiles, site lists, the journal | [docs/browser.md](docs/browser.md) | `core/tools/browser-tools.ts`, `core/tools/browser-policy.ts`, `browser/` (host process), `main/browser-*.ts` |
-| Desktop apps on Windows: granted programs, UI Automation reading and acting, the journal | [docs/desktop.md](docs/desktop.md) | `core/tools/desktop-tools.ts`, `core/tools/desktop-risk.ts`, `core/tools/desktop-host.ps1` (helper process), `shared/desktop.ts` |
+| Desktop apps on Windows: granted programs, UI Automation reading and acting, borrowing the real mouse after asking, the journal | [docs/desktop.md](docs/desktop.md) | `core/tools/desktop-tools.ts`, `core/tools/desktop-risk.ts`, `core/tools/desktop-host.ps1` (helper process), `shared/desktop.ts` |
 | Memory | [docs/memory.md](docs/memory.md) | `core/context/knowledge.ts` |
 | Self-improvement proposals | [docs/self-improvement.md](docs/self-improvement.md) | `core/orchestration/self-improvement.ts` |
 | The trace in the chat and the diff | [docs/worker-actions.md](docs/worker-actions.md) | `renderer/components/LiveRun.tsx`, `core/tools/workspace-diff.ts` |
