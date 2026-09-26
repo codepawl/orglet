@@ -119,9 +119,11 @@ export function DiffViewer({ diff, workerName, info, onClose }: { diff: Workspac
 export function DiffBody({ diff }: { diff: WorkspaceDiff }) {
   const withLines = diff.lines !== false;
   const folders = diff.folders ?? [];
+  // One file with its lines needs no list to jump from: its heading already names it (dogfood, 2026-09-26).
+  const listed = !withLines || diff.files.length + folders.length > 1;
   return <div className="diff-view">
     {!withLines && <p className="preview-note">{t('Thư mục này không phải Git repository nên chỉ hiện tệp nào đã thay đổi, không hiện từng dòng.')}</p>}
-    <ul className="diff-files" aria-label={t('Tệp đã thay đổi')}>
+    {listed && <ul className="diff-files" aria-label={t('Tệp đã thay đổi')}>
       {diff.files.map((file, index) => <li key={file.path}>
         {withLines
           ? <button type="button" className="diff-file-row" onClick={() => document.getElementById(fileElementId(index))?.scrollIntoView({ block: 'start' })}>
@@ -135,7 +137,7 @@ export function DiffBody({ diff }: { diff: WorkspaceDiff }) {
           <span className="diff-file-status">{folderLabels[folder.status]}</span>
         </span>
       </li>)}
-    </ul>
+    </ul>}
     {diff.truncated && <p className="preview-note">{t('Diff quá dài: một số tệp chỉ hiện số dòng thay đổi, không hiện nội dung.')}</p>}
     {withLines && diff.files.map((file, index) => <FileSection key={file.path} file={file} id={fileElementId(index)} />)}
   </div>;
