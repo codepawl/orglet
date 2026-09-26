@@ -81,6 +81,8 @@ A reply that comes back without token counts stays unknown in **Charges to recon
 
 For everything but Demo, an orglet has a model ID. The picker lists that provider's own models, fetched from the provider's API or CLI and cached on this computer for 24 hours; you can also type any ID. Built-in names such as GPT-4.1 mini are suggestions, not a lock. If the list fails to load, typing still works.
 
+Some connections have no model to fall back on: a custom connection, OpenCode Zen and OpenCode Go. There **Model ID** is marked required, and an empty field starts on the first model the connection lists (the only one, when it lists one). Ollama does the same when its suggestion, llama3.2, is not installed. You can change the ID or clear it. Saving with it empty turns the field red and scrolls it into view.
+
 When the provider's own list marks the chosen model as deprecated, the picker shows a quiet chip; a sunset date appears only when the provider included one. OpenCode Zen and Go have no default: pick a model from that plan's list, and models the OpenCode docs put on another endpoint show as **Not supported**. Details: [model-list-fetch.md](model-list-fetch.md).
 
 ## Cost limits

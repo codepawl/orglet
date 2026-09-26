@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { ArrowUp, ChevronRight, ChevronUp, MessageSquarePlus, Reply, Square, X } from 'lucide-react';
+import { ArrowUp, ChevronRight, ChevronUp, MessageSquarePlus, Plug, Reply, Square, X } from 'lucide-react';
 import type { FolderIntake, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { addToNextMessage } from '../../shared/incoming';
 import { MessageBoxFocus, SourcePicker } from './SourcePicker';
@@ -12,6 +12,7 @@ import { MentionText } from './mentions';
 import { providerLabel, settingsTabFor, type Readiness } from './providers';
 import { t, tMessage } from '../i18n';
 import { taskWorkers } from '../assignees';
+import { demoWorkerToConnect } from '../chatSettings';
 import { orglet } from '../api';
 import { clearReplyTarget, useReplyTarget } from './messageMarks';
 import { IslandDock } from './islandDock';
@@ -320,6 +321,21 @@ export function withPrefill(current: string, prefill: string): string {
 }
 
 /**
+ * The line under a message box while its chat runs on Demo, with the one step out of it (COD-293). A newcomer read the
+ * Demo answer's pointer to "the orglet settings… local harness" and found no button; this is that button, in the
+ * words the answer uses. `onConnect` decides where it leads (`connectModelStep`).
+ */
+export function DemoNote({ someOnDemo, preflight, onConnect }: { /** Only some of the chat's orglets are on Demo. */ someOnDemo?: string; /** A crew with a local check before its sample report. */ preflight?: boolean; onConnect: () => void }) {
+  const sentence = someOnDemo ? t('{0} đang dùng Demo: câu trả lời mẫu, chưa đọc tệp.', [someOnDemo])
+    : preflight ? t('Demo · không gọi API; checker local sẽ chạy trước báo cáo mẫu.')
+    : t('Đang dùng Demo: câu trả lời mẫu, chưa đọc tệp.');
+  return <div className="demo-note">
+    <p>{sentence}</p>
+    <Button type="button" variant="outline" onClick={onConnect}><Plug size={14} aria-hidden="true" />{t('Kết nối model')}</Button>
+  </div>;
+}
+
+/**
  * Follow-up bar under a task: the next message of a chat that already has one. It carries the files the latest
  * message had, plus any added here with + (or sent from Explorer), which sit on the bar as cards the way an empty
  * chat's do (COD-257; an older "Attach files" dialog used to take them). While a run is on, the island saying what the
@@ -327,7 +343,7 @@ export function withPrefill(current: string, prefill: string): string {
  * `onPrefilled` lets the caller forget it once it is in. What is typed and added but not sent stays with the chat
  * across restarts (COD-257, `drafts.ts`), so leaving the chat and coming back finds it on the bar.
  */
-export function FollowUpComposer({ detail, workspace, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat }) {
+export function FollowUpComposer({ detail, workspace, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void }) {
   const draftKey = taskDraftKey(detail.task.id);
   const [text, setText] = useState(() => readDraft(draftKey)?.text ?? '');
   // Files added for the next message, and what could not be added with the reason, as in the empty chat.
@@ -351,6 +367,7 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
   const team = detail.task.teamId ? workspace.teams.find(item => item.id === detail.task.teamId) : undefined;
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
   const missing = providers.filter(provider => !ready[provider]);
+  const demoWorker = demoWorkerToConnect(workers, team);
   const selectedReply = useReplyTarget();
   const reply = selectedReply?.taskId === detail.task.id ? selectedReply : undefined;
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
@@ -467,5 +484,6 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
     <SkippedFiles items={added.skipped} />
     {readOnly && <p className="composer-note" role="status">{readOnly.note}{readOnly.action && <button type="button" onClick={readOnly.action.onSelect}>{readOnly.action.label}</button>}</p>}
     {!busy && !readOnly && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
+    {!readOnly && !blocked && demoWorker && onConnectModel && <DemoNote someOnDemo={providers.length > 0 ? demoWorker.name : undefined} preflight={providers.length === 0 && Boolean(team?.preflight)} onConnect={() => onConnectModel(demoWorker)} />}
   </div>;
 }

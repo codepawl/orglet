@@ -14,6 +14,7 @@ import { harnessCatalog, harnessNames, isHarness, type HarnessInfo } from '../..
 import { FieldLabel, MoneyInput } from './ui';
 import { Select, type SelectOption } from './Select';
 import { ModelPicker } from './ModelPicker';
+import { modelIdRequired } from './workerModel';
 import { ProviderMark } from './ProviderMark';
 import { StatusMark } from './StatusMark';
 import { AvatarPicker } from './Avatar';
@@ -122,7 +123,7 @@ export function defaultWorkerProvider(options: readonly SelectOption[]): Worker[
 }
 
 /** Worker create/edit. Remount (via key) to reset the draft. */
-export function WorkerDialog({ open, worker, workspace, connections, harnesses, initialTab, initialField, onClose, onOpenChat, onCreated }: { open: boolean; worker?: Worker; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; /** The tab to open on; the trace above an answer opens straight onto Memory (COD-220). */ initialTab?: Tab; /** The field to land on; the empty chat's "Đổi model" opens on the Model menu (COD-255). */ initialField?: 'provider'; onClose: () => void; /** Opens the chat a memory came from; the dialog closes first. */ onOpenChat: (taskId: string) => void; /** A new worker was saved; the app opens its chat (COD-255). Not called when an existing one is saved. */ onCreated?: (workerId: string) => void }) {
+export function WorkerDialog({ open, worker, workspace, connections, harnesses, initialTab, initialField, connectModel, onClose, onOpenChat, onCreated }: { open: boolean; worker?: Worker; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; /** The tab to open on; the trace above an answer opens straight onto Memory (COD-220). */ initialTab?: Tab; /** The field to land on; the Demo chat's "Kết nối model" opens on the Model menu (COD-255). */ initialField?: 'provider'; /** Opened from "Kết nối model" (COD-293): an orglet still on Demo starts on the first connection that can run, as a new one does, and Save switches it. */ connectModel?: boolean; onClose: () => void; /** Opens the chat a memory came from; the dialog closes first. */ onOpenChat: (taskId: string) => void; /** A new worker was saved; the app opens its chat (COD-255). Not called when an existing one is saved. */ onCreated?: (workerId: string) => void }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'general');
   // Faces other workers already show, so suggestions lean towards a different one.
   const takenMascots = workspace.workers.filter(item => item.id !== worker?.id).map(item => isMascot(item.avatar?.mascot) ? item.avatar.mascot : autoMascot(mascotIds, item.id, { name: item.name, description: item.description }));
@@ -131,13 +132,14 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const ready = readiness(connections, harnesses, workspace.customConnections);
   const providerOptions = workerProviderOptions(ready, harnesses, workspace.customConnections);
   const suggestedProvider = defaultWorkerProvider(providerOptions);
-  const [provider, setProvider] = useState<Worker['provider']>(worker?.provider ?? suggestedProvider);
-  // Until the person picks a model for a new worker, the start follows what is ready: harness detection finishes after
-  // the dialog opens, and a harness signed in then should not leave the new worker on Demo.
+  const startsOnSuggestion = !worker || (connectModel === true && worker.provider === 'demo');
+  const [provider, setProvider] = useState<Worker['provider']>(startsOnSuggestion ? suggestedProvider : worker.provider);
+  // Until the person picks a model for a new worker (or a Demo one opened to connect a model), the start follows what
+  // is ready: harness detection finishes after the dialog opens, and a harness signed in then should not leave it on Demo.
   const [providerPicked, setProviderPicked] = useState(false);
-  const [modelId, setModelId] = useState(worker?.modelId ?? '');
+  const [modelId, setModelId] = useState(startsOnSuggestion ? '' : worker.modelId ?? '');
   const [skillId, setSkill] = useState(worker?.skillId ?? workspace.skills[0].id);
-  const [budget, setBudget] = useState(() => worker ? initialBudget(worker) : budgetForProvider(DEFAULT_TASK_BUDGET, suggestedProvider));
+  const [budget, setBudget] = useState(() => startsOnSuggestion ? budgetForProvider(worker ? initialBudget(worker) : DEFAULT_TASK_BUDGET, suggestedProvider) : initialBudget(worker));
   const [avatar, setAvatar] = useState(worker?.avatar ?? {});
   const [description, setDescription] = useState(worker?.description ?? '');
   // Saved with the worker, like its other fields; off for every worker until the person turns it on (COD-199).
@@ -152,11 +154,11 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [invalid, setInvalid] = useState<InvalidField>();
   const [flash, setFlash] = useState(0);
   useEffect(() => {
-    if (worker || providerPicked || suggestedProvider === provider) return;
+    if (!startsOnSuggestion || providerPicked || suggestedProvider === provider) return;
     setProvider(suggestedProvider);
     setModelId('');
     setBudget(current => budgetForProvider(current, suggestedProvider));
-  }, [worker, providerPicked, suggestedProvider, provider]);
+  }, [startsOnSuggestion, providerPicked, suggestedProvider, provider]);
   const customConnection = findCustomConnection(workspace.customConnections, provider);
   const paid = isPaidApi(provider);
   // Claude Code is the one harness that takes a spending cap, so its chat's limit is set here too.
@@ -172,7 +174,17 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const clearError = () => { setError(''); setInvalid(undefined); };
   const fail = (at: Tab, message: string, field?: InvalidField) => {
     setTab(at); setError(message); setInvalid(field); setFlash(n => n + 1);
-    if (field) setTimeout(() => (document.querySelector(`#worker-panel [data-field="${field}"]`) as HTMLElement | null)?.focus(), 0);
+    if (field) setTimeout(() => focusInvalidField(field), 0);
+  };
+  /**
+   * Brings the field at fault to the middle of the panel before focusing it (COD-293): a plain focus scrolled it only
+   * to the panel's edge, behind the sticky Save row, so the red field and its flash could not be seen.
+   */
+  const focusInvalidField = (field: InvalidField) => {
+    const element = document.querySelector<HTMLElement>(`#worker-panel [data-field="${field}"]`);
+    if (!element) return;
+    element.scrollIntoView({ block: 'center' });
+    element.focus({ preventScroll: true });
   };
 
   const submit = async () => {
@@ -212,7 +224,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
       {worker && <p className="muted">{t('Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.')}</p>}
       <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProviderPicked(true); setProvider(next); if (next !== provider) { setModelId(''); setBudget(current => budgetForProvider(current, next)); } }}
         options={providerOptions} />
-      {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} />}
+      {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} required={modelIdRequired(provider)} />}
       {isHarness(provider) && <p className="muted">{t('Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
       {provider === 'ollama' && <p className="muted">{t('Chạy Ollama tại 127.0.0.1:11434; không tính vào ngân sách Orglet.')}</p>}
       {provider === 'opencode-zen' && <p className="muted">{t('Zen trừ số dư theo từng request; Orglet không theo dõi hay giới hạn khoản này.')}</p>}

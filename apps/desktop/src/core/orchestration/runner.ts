@@ -861,11 +861,12 @@ export class Runner {
         }
         if (!needsReport(run)) {
           this.event(run.id, 'Demo: đang trả lời mẫu, không gọi model.');
-          this.commit(task, run, chatReport('Mình là Tí demo nên chưa đọc tệp hay gọi model thật. Chọn OpenAI, Anthropic hoặc harness trên máy (Claude Code, Codex) trong thiết lập Tí để trò chuyện và làm việc thật nhé.'), options.keepTaskOpen);
+          // Plain words and the name of the button under the message box (COD-293): "harness" meant nothing to a newcomer.
+          this.commit(task, run, chatReport('Mình là Tí demo nên chưa đọc tệp hay gọi model thật. Bấm Kết nối model dưới khung chat để chọn một model thật, rồi mình trò chuyện và làm việc thật nhé.'), options.keepTaskOpen);
           return;
         }
         this.event(run.id, 'Demo: đang tạo báo cáo mẫu, không gọi model.');
-        this.commit(task, run, { title: 'Báo cáo mẫu', summary: 'Đây là dữ liệu demo để thử giao việc, lịch sử và xuất báo cáo. Chưa có phân tích từ model.', findings: [], limitations: ['Báo cáo mẫu không chứa phân tích từ model. Kết quả checker local, nếu có, được hiển thị riêng.', 'Chọn OpenAI, Anthropic hoặc harness trên máy (Claude Code, Codex) trong thiết lập Tí để chạy phân tích bằng model.', ...preflightLimits, ...(options.limitations ?? [])] }, options.keepTaskOpen);
+        this.commit(task, run, { title: 'Báo cáo mẫu', summary: 'Đây là dữ liệu demo để thử giao việc, lịch sử và xuất báo cáo. Chưa có phân tích từ model.', findings: [], limitations: ['Báo cáo mẫu không chứa phân tích từ model. Kết quả checker local, nếu có, được hiển thị riêng.', 'Bấm Kết nối model dưới khung chat để chạy phân tích bằng một model thật.', ...preflightLimits, ...(options.limitations ?? [])] }, options.keepTaskOpen);
         return;
       }
       if (!task.consent || !(task.providerScopes ?? ['openai']).includes(run.snapshot.worker.provider)) throw new Error('Task chưa có quyền gửi dữ liệu đến provider này. Tạo task mới và xác nhận provider đã chọn.');

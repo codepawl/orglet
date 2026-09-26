@@ -1433,7 +1433,7 @@ export class CoreService {
   /** Workers and teams chosen for new work must be active. */
   private assertAssignable(kind: 'worker' | 'team', entityId: string) {
     const found = this.entity(kind, entityId);
-    if (!found || found.archived) throw new Error(`${found?.row.name ?? (kind === 'worker' ? 'Tí' : 'Hội')} đã được lưu trữ hoặc xóa. Đổi người nhận trong Thiết lập công việc.`);
+    if (!found || found.archived) throw new Error(`${found?.row.name ?? (kind === 'worker' ? 'Tí' : 'Hội')} đã được lưu trữ hoặc xóa. Đổi người nhận trong Thiết lập chat.`);
   }
   /**
    * A chat takes no new message while it is archived, or while the one orglet or crew it belongs to is archived or
