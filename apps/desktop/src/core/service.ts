@@ -1,7 +1,7 @@
 import { WorkspaceRecovery } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
-import { newChatKey, newChatKeyNames } from '../shared/live-task';
+import { liveTeamTask, liveWorkerTask, newChatKey, newChatKeyNames } from '../shared/live-task';
 import { withoutSourceIds } from '../shared/source-mentions';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
 import { GrantWorkspace, type NewChatTarget } from '../shared/workspace-access';
@@ -52,6 +52,8 @@ import { assertOpenCodeModel, isOpenCodePlan } from '../shared/opencode';
 import { MessageInteractions } from './orchestration/message-interactions';
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
+import { Forwards, type ForwardSource } from './orchestration/forwards';
+import { ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
 import type { Args } from '../shared/contracts';
 import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
 import { deleteCustomConnection, readCustomConnections, requireCustomConnection, saveCustomConnection } from './storage/custom-connections';
@@ -74,6 +76,9 @@ export const localHarnessRuntime = (accountRoot?: string): HarnessRuntime => ({
   usage: (harness, executable, configDir) => readHarnessUsage(harness, executable, configDir),
   ...(accountRoot ? { accountRoot } : {}),
 });
+
+/** The Limit per task of a chat whose orglet or crew never set one, as the composer and the terminal command use. */
+const DEFAULT_TASK_BUDGET_MICROS = 500_000;
 
 /** A folder waiting for a chat's first message, checked again at that moment (COD-186). */
 type NewChatFolder = { pending: PendingWorkspace; resolved: ResolvedDirectory; failure?: undefined } | { pending: PendingWorkspace; resolved?: undefined; failure: string };
@@ -111,6 +116,8 @@ export class CoreService {
   readonly mcp: McpServers;
   /** Side threads of orglets' main chats and how their permissions follow the main chat (COD-247). */
   readonly sideThreads: SideThreads;
+  /** Reads the message a forward carries out of saved history (COD-257). */
+  readonly forwards: Forwards;
   /** Search across every message, answer and name (COD-267). */
   readonly chatSearch: ChatSearch;
   /** The core side of Orglet's browser: site rules, the journal and screenshots (COD-261). */
@@ -132,6 +139,7 @@ export class CoreService {
     this.sources = new Sources(store, profiler, pdfText);
     this.workspaceGrants = new WorkspaceGrants(store);
     this.sideThreads = new SideThreads(store, this.workspaceGrants);
+    this.forwards = new Forwards(store);
     this.templates = new TeamTemplates(store, this.notify);
     this.appProposals = new AppProposals(store, this.proposalApplier());
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
@@ -289,6 +297,7 @@ export class CoreService {
         return this.createTask(input, undefined, await this.resolveNewChatWorkspace(input));
       }
       case 'startSideThread': return this.startSideThread(commands.startSideThread.parse(args));
+      case 'forwardMessage': return this.forwardMessage(args);
       case 'bringIntoMainChat': {
         const mainTaskId = this.sideThreads.bringIn(commands.bringIntoMainChat.parse(args).artifactId);
         this.notify();
@@ -298,30 +307,7 @@ export class CoreService {
         new MessageInteractions(this.store).userReaction(commands.setMessageReaction.parse(args));
         this.notify(); return;
       }
-      case 'reviseTask': {
-        const input = commands.reviseTask.parse(args);
-        const task = this.store.get<Task>('tasks', input.taskId);
-        if (input.replyTo) new MessageInteractions(this.store).target(task.id, input.replyTo);
-        if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
-        if (this.sources.isChecking()) throw new Error('Đợi checker kết thúc trước khi tạo revision.');
-        const active = this.runner.isActive(task.id) || this.teams.isActive(task.id);
-        if (!active && ['queued', 'running', 'pausing'].includes(task.status)) throw new Error('Task chưa dừng ở ranh giới an toàn.');
-        const prepared = this.prepareTask({ ...input, workerId: task.workerId, ...(task.teamId ? { teamId: task.teamId } : {}), ...(task.assignees ? { assignees: task.assignees } : {}) });
-        const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
-        if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
-        this.policy.assertStart(task.teamId, task.id);
-        const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
-          decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
-            ? { ...request, interruptedAt: now() } : request) };
-        this.store.transaction(() => {
-          // Preserve readable input for older runs before expanding the task's history scope.
-          for (const run of this.store.detail(task.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources } } });
-          this.store.update('tasks', revised);
-          this.chatSearch.indexTurn(revised.id, revised.inputRevision ?? 0, input.brief, now());
-        });
-        if (active) { this.teams.cancel(task.id); this.runner.cancel(task.id); this.notify(); return; }
-        this.start(revised, true); return;
-      }
+      case 'reviseTask': return this.reviseTask(commands.reviseTask.parse(args));
       case 'testMcpServer': return this.mcp.test(commands.testMcpServer.parse(args).id);
       case 'testWebSearch': {
         commands.testWebSearch.parse(args);
@@ -1177,6 +1163,115 @@ export class CoreService {
     for (const sideTaskId of this.sideThreads.narrowWorkspace(main)) this.stopRuns(sideTaskId);
   }
   /**
+   * The next message of a chat that already has one: a new turn on the same row. A forward's turn (COD-257) comes
+   * through here too, with the record the chat draws in place of its brief.
+   */
+  private reviseTask(input: Args<'reviseTask'>, forwarded?: ForwardedMessage) {
+    const task = this.store.get<Task>('tasks', input.taskId);
+    if (input.replyTo) new MessageInteractions(this.store).target(task.id, input.replyTo);
+    if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
+    if (this.sources.isChecking()) throw new Error('Đợi checker kết thúc trước khi tạo revision.');
+    const active = this.runner.isActive(task.id) || this.teams.isActive(task.id);
+    if (!active && ['queued', 'running', 'pausing'].includes(task.status)) throw new Error('Task chưa dừng ở ranh giới an toàn.');
+    const prepared = this.prepareTask({ ...input, workerId: task.workerId, ...(task.teamId ? { teamId: task.teamId } : {}), ...(task.assignees ? { assignees: task.assignees } : {}) });
+    const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
+    if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
+    this.policy.assertStart(task.teamId, task.id);
+    const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}) }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
+      decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
+        ? { ...request, interruptedAt: now() } : request) };
+    this.store.transaction(() => {
+      // Preserve readable input for older runs before expanding the task's history scope.
+      for (const run of this.store.detail(task.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources } } });
+      this.store.update('tasks', revised);
+      this.chatSearch.indexTurn(revised.id, revised.inputRevision ?? 0, input.brief, now());
+    });
+    if (active) { this.teams.cancel(task.id); this.runner.cancel(task.id); this.notify(); return; }
+    this.start(revised, true);
+  }
+  /**
+   * Sends one message to up to five other chats as the person's own message (COD-257). Each place is its own turn,
+   * through `reviseTask` or `createTask` like any message the person types, so budgets, permissions and the queue
+   * apply unchanged; one place failing does not stop the others, and the result names every one that did not go.
+   * Only the person forwards: no worker tool reaches this command.
+   */
+  private async forwardMessage(raw: unknown): Promise<ForwardResult> {
+    const input = ForwardMessageArgs.parse(raw);
+    const origin = this.liveTask(input.taskId);
+    const message = this.forwards.message(origin, input.messageId);
+    const carried = [...new Set(input.carrySourceIds)];
+    if (carried.some(sourceId => !message.files.some(file => file.sourceId === sourceId))) throw new Error('Chỉ gửi kèm được tệp của chính tin này.');
+    // An orglet and its main chat picked from Recent are one place: it gets the message once.
+    const places = input.targets.map(target => this.forwardChatOf(target)?.id ?? `${target.kind}:${target.id}`);
+    if (new Set(places).size !== places.length) throw new Error('Nơi nhận bị trùng.');
+    const note = input.note?.trim() || undefined;
+    const result: ForwardResult = { sent: [], failed: [] };
+    for (const target of input.targets) {
+      try {
+        result.sent.push({ target, taskId: await this.forwardTo(origin, message, target, note, carried) });
+      } catch (error) {
+        result.failed.push({ target, name: this.forwards.targetName(target), error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    this.notify();
+    return result;
+  }
+  /** One place of a forward: the chat it lands in takes it as its next message, or the first one starts that chat. */
+  private async forwardTo(origin: Task, message: ForwardSource, target: ForwardTarget, note: string | undefined, carried: string[]): Promise<string> {
+    if (target.kind === 'task') this.liveTask(target.id);
+    const existing = this.forwardChatOf(target);
+    if (existing?.archivedAt) throw new Error('Chat này đã được lưu trữ. Khôi phục rồi chuyển tiếp lại.');
+    if (existing?.id === origin.id) throw new Error('Tin này đã ở trong chat đó.');
+    // A message arriving would stop the work there; a person typing into a busy chat chooses that, a forward does not.
+    if (existing && (existing.pendingStart || this.runner.isActive(existing.id) || this.teams.isActive(existing.id) || ['queued', 'running', 'pausing'].includes(existing.status))) {
+      throw new Error('Chat này đang làm. Chuyển tiếp sau khi xong.');
+    }
+    // A side thread never holds a file its main chat does not (COD-247), and a carried file is a new one.
+    if (existing?.sideOf && carried.length) throw new Error('Chat phụ chỉ dùng tệp của chat chính. Bỏ chọn tệp rồi chuyển tiếp lại.');
+    const kept = existing ? (existing.currentInput ?? existing).sourceIds.filter(sourceId => !this.store.get<Source>('sources', sourceId).revoked) : [];
+    if (new Set([...kept, ...carried]).size > 20) throw new Error('Một tin nhắn mang tối đa 20 tệp.');
+    const copies = new Map<string, Source>();
+    for (const sourceId of carried) copies.set(sourceId, await this.sources.copyFor(sourceId, origin.sourceIds));
+    const forwarded = ForwardedMessage.parse({
+      fromTaskId: message.fromTaskId, messageId: message.messageId, from: message.from, authorKind: message.authorKind,
+      ...(message.author ? { author: message.author } : {}),
+      text: forwardText(message.text),
+      files: message.files.map(file => {
+        const copy = file.sourceId ? copies.get(file.sourceId) : undefined;
+        return { name: file.name, ...(copy ? { sourceId: copy.id } : {}) };
+      }),
+      ...(note ? { note } : {}),
+    });
+    const brief = forwardBrief(forwarded);
+    const sourceIds = [...new Set([...kept, ...[...copies.values()].map(copy => copy.id)])];
+    // Sending is the consent, as it is from the composer and the terminal command: the providers of the orglets that run.
+    if (existing) {
+      const providerScopes = this.chatProviders(existing);
+      const excludedSources = (existing.currentInput ?? existing).excludedSources;
+      this.reviseTask({ taskId: existing.id, brief, sourceIds, excludedSources, consent: true, providerScopes, budgetMicros: existing.budgetMicros }, forwarded);
+      return existing.id;
+    }
+    const team = target.kind === 'team' ? this.store.get<Team>('teams', target.id) : undefined;
+    const owner = team ? { workerId: team.synthesizerId, teamId: team.id } : { workerId: target.id };
+    const budgetMicros = (team ?? this.store.get<Worker>('workers', owner.workerId)).taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS;
+    const taskInput: TaskInput = { ...owner, brief, sourceIds, consent: true, providerScopes: this.chatProviders(owner), budgetMicros };
+    return this.createTask(taskInput, undefined, await this.resolveNewChatWorkspace(taskInput), forwarded);
+  }
+  /** The chat a forward to this place lands in: that chat, or the orglet's or crew's main chat once it has one. */
+  private forwardChatOf(target: ForwardTarget): Task | undefined {
+    const tasks = this.store.all<Task>('tasks');
+    if (target.kind === 'task') return tasks.find(task => task.id === target.id && !task.deletedAt);
+    return target.kind === 'worker' ? liveWorkerTask(tasks, target.id) : liveTeamTask(tasks, target.id);
+  }
+  /** The non-Demo providers of every orglet that runs in this chat, the scopes a send from the composer consents to. */
+  private chatProviders(chat: Pick<Task, 'workerId' | 'teamId' | 'assignees'>): NonNullable<TaskInput['providerScopes']> {
+    const team = chat.teamId ? this.store.get<Team>('teams', chat.teamId) : undefined;
+    const workers = team ? [...team.memberIds, team.synthesizerId].map(workerId => this.store.get<Worker>('workers', workerId))
+      : this.groupWorkers(chat) ?? [this.store.get<Worker>('workers', chat.workerId)];
+    const providers = workers.map(worker => worker.provider).filter(provider => provider !== 'demo');
+    return [...new Set(providers)] as NonNullable<TaskInput['providerScopes']>;
+  }
+  /**
    * A message sent "in a new thread" from an orglet's main chat (COD-247). It becomes a side thread: its own row of
    * the same orglet, marked with the main chat and how far that chat had got, so its first turn reads those turns.
    * It starts with a copy of the main chat's tool permissions, folder grant and MCP grants and nothing more; the
@@ -1304,7 +1399,8 @@ export class CoreService {
   private groupTurnWorkers(task: Task) {
     const group = this.groupWorkers(task);
     if (!group) return undefined;
-    const brief = (task.currentInput ?? task).brief;
+    // A name tagged inside a forwarded message is not the person tagging it (COD-257).
+    const brief = ownWords(task.currentInput ?? task);
     return mentionedPeople(brief, group) ?? group;
   }
   private prepareTask(input: TaskInput): Task {
@@ -1347,7 +1443,7 @@ export class CoreService {
       return { pending, failure: error instanceof Error ? error.message : String(error) };
     }
   }
-  private createTask(input: TaskInput, routine?: Routine, folder?: NewChatFolder): string {
+  private createTask(input: TaskInput, routine?: Routine, folder?: NewChatFolder, forwarded?: ForwardedMessage): string {
     // The first message of a worker, team or group chat takes the permissions chosen while the chat was still empty.
     const liveChat = this.isLiveChatStart(input, routine) && input.toolCapabilities === undefined;
     const chosen = liveChat ? this.pendingNewChatCapabilities(this.newChatTarget(input)) : undefined;
@@ -1357,6 +1453,8 @@ export class CoreService {
     this.policy.assertStart(task.teamId);
     if (routine && task.toolCapabilities?.includes('browser.act')) throw new Error(SCHEDULE_NEVER_ACTS);
     if (routine) task.routineId = routine.id;
+    // A forward's first turn keeps its record on the current input, where every later turn keeps its own (COD-257).
+    if (forwarded) task.currentInput = { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, forwarded };
     this.store.transaction(() => {
       this.store.put('tasks', task);
       this.chatSearch.indexTurn(task.id, 0, task.brief, task.createdAt);

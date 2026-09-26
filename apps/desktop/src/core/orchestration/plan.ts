@@ -6,9 +6,12 @@ export { UNASSIGNED_PLAN_ERROR, MISSING_PLAN_ERROR, INVALID_PLAN_ERROR } from '.
 
 type Assignment = TeamPlan['assignments'][number];
 
-/** Demo and fail-closed default: tagged members, or every member when nobody in the roster was @mentioned. Never invents extra workers. */
-export function defaultTeamPlan(team: Team, brief: string, members: readonly MentionPerson[] = []) {
-  const tagged = members.length ? mentionedPeople(brief, members, [team.name]) : undefined;
+/**
+ * Demo and fail-closed default: tagged members, or every member when nobody in the roster was @mentioned. Never invents
+ * extra workers. Tags are read from `ownText`, the person's own words, which leaves out a forwarded message (COD-257).
+ */
+export function defaultTeamPlan(team: Team, brief: string, members: readonly MentionPerson[] = [], ownText = brief) {
+  const tagged = members.length ? mentionedPeople(ownText, members, [team.name]) : undefined;
   const assigned = tagged?.length ? team.memberIds.filter(workerId => tagged.some(member => member.id === workerId)) : team.memberIds;
   const workerIds = assigned.length ? assigned : team.memberIds;
   return TeamPlan.parse({

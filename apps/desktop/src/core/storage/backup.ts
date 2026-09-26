@@ -204,6 +204,11 @@ function validateRelations(data: Payload) {
   }
   if (ready.length !== runs.size) fail('Join có vòng lặp giữa các báo cáo.');
   for (const run of runs.values()) if (run.snapshot.input?.sourceIds.some(id => !tasks.get(run.taskId)!.sourceIds.includes(id))) fail('Snapshot tham chiếu nguồn ngoài task.');
+  // A file a forward carried is one of that turn's own files (COD-257).
+  const carriesOwnFiles = (input: { sourceIds: string[]; forwarded?: { files: { sourceId?: string }[] } } | undefined) =>
+    (input?.forwarded?.files ?? []).every(file => !file.sourceId || input!.sourceIds.includes(file.sourceId));
+  for (const task of tasks.values()) if (!carriesOwnFiles(task.currentInput)) fail('Tin chuyển tiếp tham chiếu tệp ngoài lượt.');
+  for (const run of runs.values()) if (!carriesOwnFiles(run.snapshot.input)) fail('Tin chuyển tiếp tham chiếu tệp ngoài lượt.');
   const events = new Map(data.events.map(event => [event.id, event]));
   const messageScope = new Map<string, { taskId: string; revision: number; kind: 'user' | 'answer' | 'team' }>();
   const addMessage = (id: string, taskId: string, revision: number, kind: 'user' | 'answer' | 'team') => {

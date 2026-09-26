@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -42,6 +42,8 @@ import { ChangedFilesLine, DiffDialog } from './DiffViewer';
 import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import type { AppProposal } from '../../shared/app-proposals';
 import type { ChatQuote } from '../../shared/side-threads';
+import type { ForwardedMessage } from '../../shared/forward';
+import type { ForwardRequest } from '../forward';
 import { McpApprovalCard } from './McpApproval';
 import { turnNotices } from './turnNotices';
 import { withoutSourceIds } from '../../shared/source-mentions';
@@ -110,7 +112,7 @@ function accountLabel(harness: HarnessInfo, accountId: string) {
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
 
-type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; replyTo?: string; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
+type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; replyTo?: string; forwarded?: ForwardedMessage; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
 
 /**
  * A task shown as one chat (user decision 2026-09-17): every message the user sent, oldest first, each followed by the
@@ -118,11 +120,12 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
+export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
   /** Opens another chat: the side thread a quote came from, or the main chat an answer was brought into (COD-247). */ openChat?: (taskId: string) => void;
   /** Opens an orglet's main chat from one of its side threads. */ openMainChat?: (workerId: string) => void;
   /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule: () => void };
-  /** Puts a reply in this chat's composer without sending it: "Nhờ sửa" on a blocked hand-in (COD-270). */ askToFix?: (text: string) => void }) {
+  /** Puts a reply in this chat's composer without sending it: "Nhờ sửa" on a blocked hand-in (COD-270). */ askToFix?: (text: string) => void;
+  /** Opens the forward picker for one message of this chat (COD-257). */ forward?: (request: ForwardRequest) => void }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   // A consequential browser step waiting on the person, answered from the card in the latest turn (COD-261).
@@ -144,7 +147,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     const artifact = detail.artifacts.findLast(item => runs.some(run => run.id === item.runId && (!detail.task.teamSnapshot || run.stage === 'synthesis')));
     // Group chat: each worker's latest answered run for this message, in the order they answered.
     const replies = runs.filter(run => run.stage === 'group').flatMap(run => { const reply = detail.artifacts.find(item => item.runId === run.id); return reply ? [{ run, artifact: reply }] : []; });
-    return { revision, runs, sentAt: runs[0]?.startedAt ?? detail.task.createdAt, brief: input.brief, replyTo: 'replyTo' in input ? input.replyTo : undefined, sources: input.sourceIds.map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
+    return { revision, runs, sentAt: runs[0]?.startedAt ?? detail.task.createdAt, brief: input.brief, replyTo: 'replyTo' in input ? input.replyTo : undefined, forwarded: 'forwarded' in input ? input.forwarded : undefined, sources: input.sourceIds.map(id => detail.sources.find(source => source.id === id)).filter(Boolean) as TaskDetail['sources'], artifact, author: artifact ? detail.runs.find(run => run.id === artifact.runId) : runs.at(-1), replies };
   });
   const replyLabel = (messageId?: string) => {
     if (!messageId) return undefined;
@@ -311,6 +314,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       // A chat answer copies and downloads from its row; a report keeps those in its viewer's toolbar.
       actions: <MessageActions key="actions" taskId={detail.task.id} messageId={artifact.id} author={authorName} reactions={detail.task.messageReactions ?? []} action={action}
         text={chat ? replyText : tMessage(artifact.report.title)}
+        onForward={forward ? () => forward({ taskId: detail.task.id, messageId: artifact.id, author: authorName, text: chat ? replyText : `${tMessage(artifact.report.title)}\n\n${tMessage(artifact.report.summary)}`, files: [] }) : undefined}
         leading={<>
           {chat && <ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [authorName])} action={action} />}
           {detail.task.sideOf && <BringIntoMainChat artifactId={artifact.id} brought={broughtIn.has(artifact.id)} about={t('Câu trả lời của {0}', [authorName])} action={action} openChat={openChat} />}
@@ -410,16 +414,21 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
           {addedFiles.length > 0 && <ul className="message-files" aria-label={t('Tệp đính kèm')}>
             {addedFiles.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}
           </ul>}
-          <div className="user-message" id={`message-${turnMessageId(detail.task.id, turn.revision)}`} tabIndex={-1}>
-            {turn.replyTo && <button type="button" className="message-reply-context" onClick={() => openMessage(turn.replyTo!)}>
-              <Reply size={13} aria-hidden="true" />{t('Mở tin gốc: {0}', [replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')])}
-            </button>}
-            <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
-            {/* On the bubble's start corner: the bubble is right-aligned, so that corner faces the thread. */}
-            <MessageBadges taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="start" />
-          </div>
+          {turn.forwarded
+            ? <ForwardedTurn forwarded={turn.forwarded} elementId={`message-${turnMessageId(detail.task.id, turn.revision)}`} mentionPeople={mentionPeople} mentionAllNames={mentionAllNames}
+              openOrigin={openChat && workspace.tasks.some(task => task.id === turn.forwarded!.fromTaskId) ? () => openChat(turn.forwarded!.fromTaskId) : undefined}
+              badges={<MessageBadges taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="start" />} />
+            : <div className="user-message" id={`message-${turnMessageId(detail.task.id, turn.revision)}`} tabIndex={-1}>
+              {turn.replyTo && <button type="button" className="message-reply-context" onClick={() => openMessage(turn.replyTo!)}>
+                <Reply size={13} aria-hidden="true" />{t('Mở tin gốc: {0}', [replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')])}
+              </button>}
+              <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
+              {/* On the bubble's start corner: the bubble is right-aligned, so that corner faces the thread. */}
+              <MessageBadges taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="start" />
+            </div>}
           {/* Under the bubble, as a worker's answer carries them, so both sides of the chat act the same way. */}
-          <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.brief} reactions={detail.task.messageReactions ?? []} action={action} />
+          <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.forwarded ? turn.forwarded.note ?? turn.forwarded.text : turn.brief} reactions={detail.task.messageReactions ?? []} action={action}
+            onForward={forward ? () => forward({ taskId: detail.task.id, messageId: turnMessageId(detail.task.id, turn.revision), author: turn.forwarded ? forwardedAuthor(turn.forwarded) : t('Bạn'), text: turn.forwarded ? turn.forwarded.text : turn.brief, files: addedFiles }) : undefined} />
           {latest && workFrame && <p className="muted" role="status">{t('Mục tiêu Tí hiểu: {0}', [workFrame.goal])}</p>}
           {latest && outcomeText && <p className="muted" role="status">{outcomeText}</p>}
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
@@ -550,6 +559,35 @@ function HeldReply({ runId, title, text, limitations, notices }: { runId: string
     </div>}
     {notices.after}
   </div>;
+}
+
+/** Who wrote a forwarded message, as the chat names them. */
+function forwardedAuthor(forwarded: ForwardedMessage): string {
+  return forwarded.authorKind === 'person' ? t('Bạn') : forwarded.author ?? 'Orglet';
+}
+
+/**
+ * A turn that is a forward (COD-257), the way Messenger draws one: the forwarded message on the quiet surface, so it
+ * is not mistaken for something the person typed, headed by where it came from (which opens that chat while it
+ * exists), then the note, if any, as the person's own bubble. Files that were not sent along are named under the
+ * text; the ones that were are this turn's files and sit above it like any attachment.
+ */
+function ForwardedTurn({ forwarded, elementId, badges, openOrigin, mentionPeople, mentionAllNames }: { forwarded: ForwardedMessage; elementId: string; badges: ReactNode; openOrigin?: () => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
+  const author = forwardedAuthor(forwarded);
+  const sameName = forwarded.authorKind === 'orglet' && author === forwarded.from;
+  const origin = sameName ? t('Chuyển tiếp từ {0}', [forwarded.from]) : t('Chuyển tiếp từ {0} · {1} viết', [forwarded.from, author]);
+  const unshared = forwarded.files.filter(file => !file.sourceId).map(file => file.name);
+  return <>
+    <div className="user-message forwarded-message" id={elementId} tabIndex={-1}>
+      {openOrigin
+        ? <button type="button" className="message-reply-context" onClick={openOrigin}><Forward size={13} aria-hidden="true" />{origin}</button>
+        : <p className="message-reply-context"><Forward size={13} aria-hidden="true" />{origin}</p>}
+      {forwarded.authorKind === 'orglet' ? <Markdown className="prose" text={forwarded.text} /> : <p>{forwarded.text}</p>}
+      {unshared.length > 0 && <p className="forwarded-files"><FileX size={13} aria-hidden="true" />{t('Không gửi kèm: {0}', [unshared.join(', ')])}</p>}
+      {badges}
+    </div>
+    {forwarded.note && <div className="user-message forward-note"><p><MentionText text={forwarded.note} people={mentionPeople ?? []} allNames={mentionAllNames} /></p></div>}
+  </>;
 }
 
 /**

@@ -743,6 +743,27 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .intake-skipped summary { cursor:pointer; }
 .intake-skipped ul { margin:4px 0 0; padding-left:18px; }
 .send-to-note { margin:0; padding:6px 26px 16px; font-size:13px; line-height:18px; color:var(--muted); }
+/* Forward picker (COD-257): the Send to palette with a tick on every row, so several places can be picked, and a foot
+   on a faint tint for the files, the note and Send, so the list scrolls above it without a rule between them. The row
+   keeps Send to's height and edge; the tick sits where the row starts, then the faces in their two-face slot. */
+.forward-dialog .send-to-search .org-input { flex:1; min-width:0; min-height:0; height:100%; padding:0; border:0; border-radius:0; outline:none; background:transparent; font-size:15px; }
+.forward-options { flex:1 1 auto; min-height:120px; }
+.forward-option.org-checkbox { align-items:center; gap:14px; min-height:44px; margin:0; padding:6px 14px 6px 16px; border-radius:10px; color:var(--text); }
+.forward-option.org-checkbox:hover:not(.org-checkbox-disabled) { background:var(--row-hover); }
+.forward-option .org-checkbox-box { margin-top:0; }
+.forward-option .org-checkbox-input { left:16px; top:calc(50% - 9px); }
+.forward-option .org-checkbox-text { flex:1; line-height:20px; }
+.forward-option-row { display:flex; align-items:center; gap:12px; min-width:0; }
+.forward-option-row > .avatar, .forward-option-row > .composer-to-avatars { flex:0 0 auto; }
+.forward-option-row > .avatar { margin-right:14px; }
+.forward-option-row > .composer-to-avatars { width:38px; }
+.forward-option.side-thread .send-to-option-detail { flex:0 0 auto; }
+.forward-foot { display:flex; flex-direction:column; gap:10px; padding:12px 24px 16px 26px; background:color-mix(in srgb, var(--surface) 55%, var(--bg)); }
+.forward-files { display:flex; flex-direction:column; gap:6px; }
+.forward-files .org-checkbox { margin:0; }
+.forward-note.org-input { min-height:60px; font-size:14px; line-height:20px; resize:none; }
+.forward-actions { display:flex; align-items:center; gap:12px; }
+.forward-hint { flex:1; min-width:0; margin:0; font-size:13px; line-height:18px; color:var(--muted); }
 .dialog-footer-spacer { flex:1; min-width:0; }
 .form-error { flex:1; min-width:0; margin:0; margin-right:auto; font-size:13px; color:var(--error); line-height:1.35; text-align:left; }
 @keyframes field-flash {
@@ -2163,6 +2184,11 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
    is not mistaken for something they typed, with where it came from on top. */
 .brought-in { display:flex; flex-direction:column; gap:6px; width:fit-content; max-width:var(--bubble-max); margin:16px 0 0 auto; padding:10px 16px 12px; border-radius:18px; background:var(--surface); animation:turn-in var(--motion-base) var(--ease-out); }
 @media(max-width:460px) { .brought-in { max-width:100%; } }
+/* A forward (COD-257): the forwarded message on the same quiet surface, headed by where it came from, and the note
+   after it as the person's own bubble, close enough to read as one message. */
+.user-message.forwarded-message { display:flex; flex-direction:column; gap:6px; background:var(--surface); }
+.forwarded-files { display:flex; align-items:center; gap:6px; font-size:12px; line-height:16px; color:var(--muted); }
+.user-message.forward-note { margin-top:6px; }
 /* The line at the top of a side thread saying what it is, with the way back to the main chat. */
 .side-thread-origin { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:4px 10px; margin:0 0 18px; color:var(--muted); font-size:12px; text-align:center; }
 .side-thread-origin button { padding:0; border:0; background:none; color:var(--text); font:inherit; font-weight:500; cursor:pointer; }
