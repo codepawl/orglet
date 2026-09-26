@@ -1,0 +1,111 @@
+.org-tabbed-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  z-index: 11;
+  width: var(--org-panel-width, min(720px, calc(100vw - 32px)));
+  height: var(--org-panel-height, min(640px, calc(100dvh - 32px)));
+  background: var(--org-bg, #fff);
+  border-radius: 16px;
+  box-shadow: 0 16px 48px #00000033;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+.org-tabbed-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px 24px;
+}
+.org-tabbed-dialog-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+.org-tabbed-dialog-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+/* The panel scrolls on its own and rounds its own corner, since the dialog does not clip menus that overflow it. */
+.org-tabbed-dialog-panel {
+  overflow: auto;
+  padding: 18px 24px 24px;
+  overscroll-behavior: contain;
+  border-bottom-right-radius: 16px;
+}
+.org-tabbed-dialog-panel > .org-panel-heading { margin-bottom: 10px; }
+.org-tabbed-dialog-form {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.org-tabbed-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+}
+.org-tabbed-dialog-footer-spacer {
+  flex: 1;
+  min-width: 0;
+}
+.org-tabbed-dialog-error {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--org-error, #a82626);
+  line-height: 1.35;
+  text-align: left;
+}
+
+.org-dialog-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+}
+.org-dialog-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--org-control-height, 34px);
+  padding: 7px 11px;
+  border: 0;
+  border-radius: var(--org-radius, 9px);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--org-text, #171717);
+  cursor: pointer;
+}
+.org-dialog-tabs button svg { color: var(--org-muted, #666); }
+.org-dialog-tabs button:hover { background: var(--org-sidebar, #f7f7f8); }
+.org-dialog-tabs button[aria-selected=true] {
+  background: var(--org-surface, #f4f4f4);
+  font-weight: 500;
+}
+
+/* On a narrow window the tabs become a row above the panel that scrolls sideways. */
+@media (max-width: 640px) {
+  .org-tabbed-dialog-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .org-dialog-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px;
+  }
+  .org-dialog-tabs button {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .org-tabbed-dialog-panel { padding: 14px 16px 20px; }
+}

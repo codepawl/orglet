@@ -1,66 +1,17 @@
-import * as Dialog from '@radix-ui/react-dialog';
-import { DialogOverlay } from '@codepawl/orglet-ui';
-import type { ReactNode } from 'react';
+import type { ComponentProps } from 'react';
 import { X } from 'lucide-react';
-import { Button, PanelHeading, keepOpenForPopup } from './ui';
+import { TabbedFormDialog as KitTabbedFormDialog, type DialogTab } from '@codepawl/orglet-ui';
 import { t } from '../i18n';
 
-export type DialogTab<T extends string> = { id: T; label: string; icon: ReactNode };
+export type { DialogTab };
 
-/** Vertical tab list for settings-style dialogs; arrow keys move and select, matching the WAI-ARIA tabs pattern. */
-export function DialogTabs<T extends string>({ label, tabs, value, onChange, panelId }: { label: string; tabs: DialogTab<T>[]; value: T; onChange: (tab: T) => void; panelId: string }) {
-  return <nav className="settings-tabs" role="tablist" aria-orientation="vertical" aria-label={label} onKeyDown={event => {
-    if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-    event.preventDefault();
-    const index = tabs.findIndex(item => item.id === value);
-    const next = tabs[(index + (event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
-    onChange(next.id); document.getElementById(`${panelId}-tab-${next.id}`)?.focus();
-  }}>
-    {tabs.map(item => <button key={item.id} id={`${panelId}-tab-${item.id}`} type="button" role="tab" aria-selected={value === item.id} aria-controls={panelId} tabIndex={value === item.id ? 0 : -1} onClick={() => onChange(item.id)}>{item.icon}<span>{t(item.label)}</span></button>)}
-  </nav>;
-}
+type KitProps<T extends string> = ComponentProps<typeof KitTabbedFormDialog<T>>;
 
 /**
- * Centred editor with the Settings layout: tabs on the left, the current section on the right and Save/Cancel pinned
- * at the bottom so they stay reachable whichever section is open.
+ * The kit's tabbed editor (COD-274) with the app's labels: tab names are Vietnamese source strings translated here, and
+ * the fields sit in the app's `.form` layout.
  */
-export function TabbedFormDialog<T extends string>({ open, onClose, title, tabs, tab, onTab, panelId, onSubmit, submitLabel, busy, actions, description, error, focusField, children }: { open: boolean; onClose: () => void; title: string; tabs: DialogTab<T>[]; tab: T; onTab: (tab: T) => void; panelId: string; onSubmit: () => void; submitLabel: string; busy: boolean; actions?: ReactNode; description?: ReactNode; error?: string;
-  /**
-   * The `data-field` to focus when the dialog opens, scrolled into view, instead of the first control. A link that
-   * names one field (the empty chat's "Đổi model") lands on it rather than at the top of the tab (COD-255).
-   */
-  focusField?: string; children: ReactNode }) {
-  const current = tabs.find(item => item.id === tab);
-  const focusNamedField = (event: Event) => {
-    const field = focusField ? document.querySelector<HTMLElement>(`#${panelId} [data-field="${focusField}"]`) : null;
-    if (!field) return;
-    event.preventDefault();
-    field.scrollIntoView({ block: 'center' });
-    // The link was clicked with the pointer, which would leave the field focused without its ring: the ring is what
-    // shows where the dialog landed.
-    field.focus({ preventScroll: true, focusVisible: true });
-  };
-  return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
-    <Dialog.Portal>
-      <DialogOverlay />
-      <Dialog.Content className="settings-dialog" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup} onOpenAutoFocus={focusNamedField}>
-        <div className="settings-header"><Dialog.Title>{title}</Dialog.Title><Dialog.Close asChild><Button size="icon" aria-label={t('Đóng {0}', [title.toLowerCase()])}><X size={18} /></Button></Dialog.Close></div>
-        {/* noValidate: fields on hidden tabs are unmounted, so validation happens in onSubmit and switches to the tab at fault. */}
-        <form className="dialog-form" noValidate onSubmit={event => { event.preventDefault(); onSubmit(); }}>
-          <div className="settings-body">
-            <DialogTabs label={title} tabs={tabs} value={tab} onChange={onTab} panelId={panelId} />
-            <section className="settings-panel" id={panelId} role="tabpanel" aria-labelledby={`${panelId}-tab-${tab}`}>
-              <PanelHeading title={current ? t(current.label) : undefined} description={description}>{actions}</PanelHeading>
-              <div className="form">{children}</div>
-            </section>
-          </div>
-          <div className="dialog-footer">
-            {error ? <p className="form-error" role="alert">{error}</p> : <span className="dialog-footer-spacer" />}
-            <Dialog.Close asChild><Button type="button" variant="outline" disabled={busy}>{t('Hủy')}</Button></Dialog.Close>
-            <Button type="submit" variant="primary" disabled={busy}>{busy ? t('Đang lưu…') : submitLabel}</Button>
-          </div>
-        </form>
-      </Dialog.Content>
-    </Dialog.Portal>
-  </Dialog.Root>;
+export function TabbedFormDialog<T extends string>({ tabs, title, ...props }: Omit<KitProps<T>, 'closeLabel' | 'closeIcon' | 'busyLabel' | 'cancelLabel' | 'fieldsClassName'>) {
+  return <KitTabbedFormDialog {...props} title={title} tabs={tabs.map(tab => ({ ...tab, label: t(tab.label) }))}
+    closeLabel={t('Đóng {0}', [title.toLowerCase()])} closeIcon={<X size={18} />} busyLabel={t('Đang lưu…')} cancelLabel={t('Hủy')} fieldsClassName="form" />;
 }

@@ -1,5 +1,4 @@
-import * as Dialog from '@radix-ui/react-dialog';
-import { DialogOverlay } from '@codepawl/orglet-ui';
+import { TabbedDialog } from '@codepawl/orglet-ui';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow } from 'lucide-react';
 import { avatarPalette } from './Avatar';
@@ -11,7 +10,7 @@ import { CustomConnectionsSection } from './CustomConnections';
 import { harnessCatalog, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
 import { PlanUsage } from './PlanUsage';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, INTERFACE_PREFERRED_FONTS, type FontRole } from '../../shared/fonts';
-import { Button, PanelHeading, keepOpenForPopup } from './ui';
+import { Button } from './ui';
 import { Select } from './Select';
 import { CurrencyFlag } from './CurrencyFlag';
 import { BudgetReconciliation } from './BudgetReconciliation';
@@ -469,33 +468,19 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     setLimitError('');
     if (micros !== savedLimit.current) { savedLimit.current = micros; void save({ connectionLimitMicros: micros }); }
   };
-  const current = tabs.find(item => item.id === tab)!;
   /** The MCP server open in its editor, or a new one; the heading's Add opens it (COD-241). */
   const [mcpEditing, setMcpEditing] = useState<McpEditing>();
   /** Whether the new browser profile form is open; the heading's Add opens it (COD-261). */
   const [creatingProfile, setCreatingProfile] = useState(false);
 
-  return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
-    <Dialog.Portal>
-      <DialogOverlay />
-      <Dialog.Content className="settings-dialog" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup}>
-        <div className="settings-header"><Dialog.Title>{t('Cài đặt')}</Dialog.Title><Dialog.Close asChild><Button size="icon" aria-label={t('Đóng cài đặt')}><X size={18} /></Button></Dialog.Close></div>
-        <div className="settings-body">
-          <nav className="settings-tabs" role="tablist" aria-orientation="vertical" aria-label={t('Mục cài đặt')} onKeyDown={event => {
-            if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-            event.preventDefault();
-            const index = tabs.findIndex(item => item.id === tab);
-            const next = tabs[(index + (event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
-            onTab(next.id); document.getElementById(`settings-tab-${next.id}`)?.focus();
-          }}>
-            {/* The About tab reads the build, the updater and the release list; resting on its tab fetches them ahead of the click. */}
-            {tabs.map(item => <button key={item.id} id={`settings-tab-${item.id}`} type="button" role="tab" aria-selected={tab === item.id} aria-controls="settings-panel" tabIndex={tab === item.id ? 0 : -1} onClick={() => onTab(item.id)} {...(item.id === 'about' ? dwellHandlers(dwellAbout) : {})}>{item.icon}<span>{t(item.label)}</span></button>)}
-          </nav>
-          <section className="settings-panel" id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
-            <PanelHeading title={t(current.label)} description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}>{tab === 'harness' && <>
+  // The About tab reads the build, the updater and the release list; resting on its tab fetches them ahead of the click.
+  const shownTabs = tabs.map(item => ({ ...item, label: t(item.label), ...(item.id === 'about' ? { buttonProps: dwellHandlers(dwellAbout) } : {}) }));
+  return <TabbedDialog open={open} onClose={onClose} title={t('Cài đặt')} closeLabel={t('Đóng cài đặt')} closeIcon={<X size={18} />} tabsLabel={t('Mục cài đặt')}
+    tabs={shownTabs} tab={tab} onTab={onTab} panelId="settings-panel" description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}
+    actions={<>{tab === 'harness' && <>
               {/* The button says it is checking instead of a line beside it, so the heading never reflows while it runs. */}
               <Button disabled={busy || harnesses === undefined} onClick={detectAgain} aria-live="polite" data-checking={detecting || undefined}><RefreshCw size={13} /><span className="steady-label"><span aria-hidden={detecting}>{t('Dò lại')}</span><span aria-hidden={!detecting}>{t('Đang dò lại…')}</span></span></Button>
-            </>}{tab === 'mcp' && <McpHeadingActions busy={busy} act={act} onAdd={() => setMcpEditing('new')} />}{tab === 'browser' && <BrowserHeadingActions busy={busy} onCreate={() => setCreatingProfile(true)} />}</PanelHeading>
+            </>}{tab === 'mcp' && <McpHeadingActions busy={busy} act={act} onAdd={() => setMcpEditing('new')} />}{tab === 'browser' && <BrowserHeadingActions busy={busy} onCreate={() => setCreatingProfile(true)} />}</>}>
 
             {tab === 'general' && <>
               <Row title={t('Ngôn ngữ')} description={t('Cho cả giao diện và thông báo.')}>
@@ -764,9 +749,5 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
             </>}
 
             {tab === 'about' && <AboutSettings workspace={workspace} busy={busy} act={act} onAutoUpdate={value => void save({ autoUpdate: value })} />}
-          </section>
-        </div>
-      </Dialog.Content>
-    </Dialog.Portal>
-  </Dialog.Root>;
+  </TabbedDialog>;
 }

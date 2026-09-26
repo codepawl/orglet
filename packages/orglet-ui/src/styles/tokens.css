@@ -25,6 +25,8 @@
 
   /* A row reacts to the pointer with a wash, never with a border. */
   --org-row-hover: #f1f1f2;
+  /* A quiet fill for a hovered tab or a side list, a step off the background. */
+  --org-sidebar: #f7f7f8;
   --org-row-active: #e8e8ea;
 
   /* The one strong colour a component may use on its own: a primary button, a checked box. */
@@ -74,6 +76,7 @@
   --org-muted: #b4b4b4;
   --org-border: #404040;
   --org-row-hover: #252525;
+  --org-sidebar: #171717;
   --org-row-active: #323232;
   --org-primary: #ececec;
   --org-primary-text: #171717;
@@ -95,6 +98,7 @@
     --org-muted: #b4b4b4;
     --org-border: #404040;
     --org-row-hover: #252525;
+    --org-sidebar: #171717;
     --org-row-active: #323232;
     --org-primary: #ececec;
     --org-primary-text: #171717;
