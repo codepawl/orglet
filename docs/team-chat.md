@@ -77,6 +77,18 @@ There is no separate `threads` table.
 
 Find-or-create lives in `apps/desktop/src/shared/live-task.ts` (`liveWorkerTask`, `liveTeamTask`, `nextWorkerMessage`, `nextTeamMessage`). Every one of them skips a row with `sideOf`, so everything built on them (the worker row, the empty-chat composer, the worker dialog's Permissions tab, the `orglet` terminal command) keeps meaning the main chat. The renderer uses it when you click a worker or team and when you send from the empty composer. `createTask` itself is unchanged, so routines and explicit extra rows can still insert their own records. Group chats (`assignees`) stay reachable from search; they are not the primary sidebar, and are started from a selection as described above.
 
+### When the open chat closes
+
+A refresh reads the workspace and the connections, and beside them the open chat's own detail, folder grant and working-copy recovery. The chat's reads are settled one by one and never fail the refresh (COD-282): a chat archived, deleted or erased since refuses some of them, and the sidebar still has to follow. `openChatRefresh` in `apps/desktop/src/renderer/openChat.ts` sorts them against the fresh workspace:
+
+| The workspace says | The view |
+|---|---|
+| The chat is not listed (deleted, or erased with the chat history) | It closes to its crew's or orglet's main chat while that one is listed, otherwise the first orglet, then the first crew (`closedChatDestination`). The history entry is rewritten, not added to. No error is shown. |
+| The chat is archived | It stays open to read. Its grant counts as no folder, since `workspaceAccess` refuses a closed chat and that refusal is expected. |
+| Anything else | A read that failed is shown in the banner; the copy on screen stays. |
+
+A chat that is open but takes no new message is **read-only** (`chatClosure`): the chat itself is archived, or the one orglet or crew it belongs to was archived or deleted. The follow-up composer is turned off, the add-files button with it, and a line under it says why with **Restore** (the chat, or the orglet or crew) where restoring is possible; chat Details locks the permissions with the same sentence. The header keeps the orglet's or crew's name: an archived one from `archivedWorkers` / `archivedTeams`, a deleted one from the chat's own record (the crew it froze, the orglet its latest run used). A group chat has no single owner and is left to the core. The core refuses the same cases in `reviseTask` (`assertChatOpen`) with the same sentences, so a message from anywhere else (a forward, the `orglet` command) meets the same answer.
+
 ## Side threads
 
 A message sent with **Send in a new thread** (the menu beside Send, or Ctrl+Shift+Enter) from a worker's main chat becomes a side thread ([COD-247](https://linear.app/codepawl/issue/COD-247)). Only a worker's own open main chat can start one: `startSideThread` refuses a crew chat, a group chat, a scheduled run's row, an archived chat and a side thread. The option is not shown in those chats.
