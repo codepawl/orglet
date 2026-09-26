@@ -35,3 +35,6 @@ service-account*.json
 .claude/worktrees/
 .pnpm-store/
 .worktrees/
+
+# The kit gallery's static build (pnpm --filter @codepawl/orglet-ui build-storybook).
+storybook-static/
