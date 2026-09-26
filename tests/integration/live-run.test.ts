@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { islandBeforeStreaming, islandOf, liveRunOf, workingWorkers } from '../../apps/desktop/src/renderer/components/LiveRun';
+import { islandBeforeStreaming, islandOf, liveRunOf, withBrowserControls, workingWorkers } from '../../apps/desktop/src/renderer/components/LiveRun';
+import type { BrowserApprovalView, BrowserLive } from '../../apps/desktop/src/shared/browser';
 import type { Run, Worker } from '../../apps/desktop/src/shared/contracts';
 import { emptyProgress, type ActivityStep, type RunProgressUpdate } from '../../apps/desktop/src/shared/progress';
 
@@ -140,4 +141,22 @@ it('cuts the sentence around the one name it carries, wherever the translation p
   expect(islandBeforeStreaming({ workers: [worker], stage: 'member', pausing: false }).named).toEqual({ before: 'Working with ', name: 'Minh', after: '…' });
   expect(islandOf(emptyProgress(), false, [worker, other]).named).toBeUndefined();
   expect(islandOf(emptyProgress(), true, [worker]).named).toBeUndefined();
+});
+
+it('says the person has the browser while a card waits, and waits for the OK again once it is handed back (COD-257)', () => {
+  const running = islandBeforeStreaming({ workers: [worker], pausing: false });
+  const controls = { watch: () => {}, handBack: () => {} };
+  const approval = { id: 'card', runId: 'run', actionId: 'action', workerName: 'Minh' } as BrowserApprovalView;
+  const held: BrowserLive = { approval, takenOver: true, inChrome: false, using: true, waiting: false, runId: 'run' };
+  const island = withBrowserControls(running, held, [worker], controls);
+  expect(island.label).toBe('You have the browser');
+  expect(island.actions?.map(action => action.kind)).toEqual(['watch', 'handBack']);
+  // With the tabs in Chrome there is nothing to watch in Orglet, so only Hand back stays.
+  const inChrome = withBrowserControls(running, { ...held, inChrome: true }, [worker], controls);
+  expect(inChrome.label).toBe('You have the page in Chrome');
+  expect(inChrome.actions?.map(action => action.kind)).toEqual(['handBack']);
+  // Handed back with the card still open: the island waits for the OK again.
+  const handedBack = withBrowserControls(running, { ...held, takenOver: false }, [worker], controls);
+  expect(handedBack.label).toBe('Minh is waiting for your OK…');
+  expect(handedBack.actions).toBeUndefined();
 });
