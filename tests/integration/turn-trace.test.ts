@@ -145,6 +145,24 @@ it('reads a saved step from each sentence the core writes, the specific ones bef
   expect(traceSummary(traceOf({ runId, events }))).toBe('Read 1 file · Searched once · Listed files 2 times · Went online once · Checked data once · Edited 1 file · Ran 1 command · Proposed 1 change');
 });
 
+it('names each command it ran and how it ended, and still reads the older sentence that did not', () => {
+  const events = [
+    eventOf(runId, 'Đã chạy lệnh npm test · mã thoát 1'),
+    eventOf(runId, 'Lệnh node build.js đã hết thời gian'),
+    eventOf(runId, 'Đã dừng lệnh npm run dev'),
+    eventOf(runId, 'Lệnh npm run lint in quá nhiều nên đã bị dừng'),
+    eventOf(runId, 'Tiến trình đã dừng: exited, mã thoát 0'),
+  ];
+  const entries = traceOf({ runId, events });
+  expect(entries.map(entry => entry.kind)).toEqual(['command', 'command', 'command', 'command', 'command']);
+  expect(traceSummary(entries)).toBe('Ran 5 commands');
+  const html = renderToStaticMarkup(createElement(TurnTrace, { entries }));
+  expect(html).toContain('Ran npm test · exit code 1');
+  expect(html).toContain('node build.js timed out');
+  expect(html).toContain('Stopped npm run dev');
+  expect(html).toContain('npm run lint printed too much and was stopped');
+});
+
 it('reads folders, moves and deletions as their own rows, and a refused one as a step that did not go through (COD-254)', () => {
   const events = [
     eventOf(runId, 'Workspace create_folder: receipts'),

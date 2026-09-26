@@ -77,6 +77,21 @@ it('waits for cancellation and does not present a cancelled check as success', a
   expect(() => processes!.assertSuccessful(run.id, 0)).toThrow('chưa hoàn tất thành công');
 });
 
+it('names the command and how it ended in the activity the chat step list shows', async () => {
+  const outcomes: SandboxResult[] = [
+    { exitCode: 1, stdout: '', stderr: 'fail', termination: 'exited' },
+    { exitCode: null, stdout: '', stderr: '', termination: 'timeout' },
+  ];
+  processes = new WorkspaceProcesses(store, { runCommand: async () => outcomes.shift()! });
+  const failing = await start(id(), { program: 'shell', arguments: ['npm test'], timeoutMs: 5000 });
+  await processes.status(run.id, failing.processId, 1000, signal(), () => {});
+  const slow = await start(id(), { program: 'node', arguments: ['scripts/build.js', '--watch'], timeoutMs: 5000 });
+  await processes.status(run.id, slow.processId, 1000, signal(), () => {});
+  const sentences = store.detail(run.taskId).events.map(event => event.message);
+  expect(sentences).toContain('Đã chạy lệnh npm test · mã thoát 1');
+  expect(sentences).toContain('Lệnh node scripts/build.js --watch đã hết thời gian');
+});
+
 it('keeps a failed check visible until that same command passes', async () => {
   let exitCode = 1;
   processes = new WorkspaceProcesses(store, { runCommand: async () => ({ ...success, exitCode }) });

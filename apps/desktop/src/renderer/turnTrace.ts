@@ -80,6 +80,9 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Workspace (?:manifest|snapshot): ?$/, kind: 'other' },
   { pattern: /^Không có tệp hoặc thư mục: /, kind: 'failed', note: true },
   { pattern: /^Không (?:chuyển|xóa|tạo) được/, kind: 'failed', note: true },
+  // A command names itself (dogfood, 2026-09-26); runs saved before that say only how a process stopped.
+  { pattern: /^(?:Đã chạy lệnh|Đã dừng lệnh) /, kind: 'command', note: true },
+  { pattern: /^Lệnh .+ (?:đã hết thời gian|in quá nhiều nên đã bị dừng)$/, kind: 'command', note: true },
   { pattern: /^Tiến trình đã dừng: /, kind: 'command', note: true },
   { pattern: /^(?:Đã ghi nhớ một điều|Đã gộp vào một ghi nhớ|Đã ghi một ghi nhớ)/, kind: 'remembered', note: true },
   { pattern: /^Không ghi nhớ được/, kind: 'failed', note: true },
