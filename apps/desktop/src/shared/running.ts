@@ -79,9 +79,23 @@ export function runningListsTask(task: Pick<Task, 'status' | 'deletedAt' | 'deci
 }
 
 /**
- * How many items are under way or will start on their own: the count on the footer button. A paused chat and a
- * chat stopped at its budget wait for the person, so they are listed but not counted.
+ * Whether an item goes on only once the person acts: a chat paused at a checkpoint, one waiting for an answer or an
+ * MCP approval, and one stopped at its budget until the limit is raised. The Running view lists these under
+ * "Waiting for you".
  */
+export function waitsForPerson(item: RunningItem): boolean {
+  return item.state === 'paused' || item.wait?.kind === 'budget';
+}
+
+/** How many items are under way or will start on their own: the first count on the footer button. */
 export function runningCount(items: readonly RunningItem[]): number {
-  return items.filter(item => item.state !== 'paused' && item.wait?.kind !== 'budget').length;
+  return items.filter(item => !waitsForPerson(item)).length;
+}
+
+/**
+ * How many items wait for the person: the second count on the footer button (COD-287). Kept apart from
+ * `runningCount`, because work that goes on by itself and work that stands still until you act are different news.
+ */
+export function waitingForPersonCount(items: readonly RunningItem[]): number {
+  return items.filter(waitsForPerson).length;
 }

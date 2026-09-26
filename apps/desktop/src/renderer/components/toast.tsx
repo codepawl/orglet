@@ -15,6 +15,8 @@ export type ToastOptions = {
   unread?: boolean;
   /** The chat the toast is about: its notice in Notifications opens that chat when clicked (COD-258). */
   chat?: string;
+  /** Its notice takes the place of the group's unread one, standing for `size` pieces of news (COD-287). */
+  group?: { key: string; size: number };
 };
 
 /**
@@ -25,7 +27,7 @@ export type ToastOptions = {
 export function toast(text: string, tone: ToastTone = 'success', about?: string, options: ToastOptions = {}) {
   const confirmation = tone === 'success' && !options.unread;
   // Every toast is also kept, so a message missed while looking elsewhere can still be found (user, 2026-09-20).
-  recordNotice(text, tone === 'error' ? 'error' : 'done', about, { confirmation, taskId: options.chat });
+  recordNotice(text, tone === 'error' ? 'error' : 'done', about, { confirmation, taskId: options.chat, group: options.group?.key, groupSize: options.group?.size });
   showToast(text, tone, options.action);
 }
 

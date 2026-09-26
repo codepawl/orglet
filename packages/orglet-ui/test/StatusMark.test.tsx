@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { axe } from 'vitest-axe';
-import { StatusMark } from '../src';
+import { StatusMark, type StatusMarkTone, type StatusMarkVariant } from '../src';
 
 describe('StatusMark', () => {
   it('is a status named by its label, with its state in its classes', () => {
@@ -12,15 +12,23 @@ describe('StatusMark', () => {
   });
 
   it('draws a different glyph for each state, so colour is never the only difference', () => {
-    const drawn = (variant: 'empty' | 'dashed' | 'filled' | 'busy', tone: 'muted' | 'success' | 'error' | 'working') => {
+    const drawn = (variant: StatusMarkVariant, tone: StatusMarkTone) => {
       const { container, unmount } = render(<StatusMark variant={variant} tone={tone} label={`${variant} ${tone}`} />);
       const glyph = container.querySelector('svg')!.innerHTML;
       unmount();
       return glyph;
     };
-    const glyphs = [drawn('empty', 'muted'), drawn('dashed', 'muted'), drawn('busy', 'working'), drawn('filled', 'success'), drawn('filled', 'error')];
+    const glyphs = [drawn('empty', 'muted'), drawn('dashed', 'muted'), drawn('paused', 'muted'), drawn('busy', 'working'), drawn('filled', 'success'), drawn('filled', 'error')];
     expect(new Set(glyphs).size).toBe(glyphs.length);
     expect(drawn('dashed', 'error')).toBe(drawn('filled', 'error'));
+  });
+
+  it('draws a pause as two bars on a tint, never as a ring like idle (COD-287)', () => {
+    const { container } = render(<StatusMark variant="paused" label="Paused" />);
+    const mark = container.querySelector('.org-status-mark')!;
+    expect(mark.className).toContain('org-status-mark-paused');
+    expect(mark.querySelector('circle')).toBeNull();
+    expect(mark.querySelector('path')!.getAttribute('d')).toMatch(/^M[\d.]+ [\d.]+v[\d.]+M[\d.]+ [\d.]+v[\d.]+$/);
   });
 
   it('stays out of the accessible name when decorative, and applies the caller class last', () => {

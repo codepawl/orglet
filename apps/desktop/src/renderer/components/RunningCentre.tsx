@@ -9,7 +9,8 @@ import { toast } from './toast';
 import { orglet } from '../api';
 import { t } from '../i18n';
 import { useAllRunProgress } from '../runProgress';
-import { runningChatName, runningControls, runningGroups, runningMeta, runningStatusLine, type RunningGroupId } from '../runningList';
+import { footerCount, runningChatName, runningControls, runningGroups, runningMeta, runningStatusLine, type RunningGroupId } from '../runningList';
+import { Pause as PauseBars } from './icons';
 
 const groupTitles: Record<RunningGroupId, () => string> = {
   running: () => t('Đang chạy'),
@@ -44,6 +45,19 @@ export function RunningCentre({ open, items, tasks, teams, onClose, onOpenChat }
   return <Drawer open onClose={onClose} title={t('Đang chạy')} description={t('Mọi lượt đang chạy hoặc đang chờ, ở mọi chat.')}>
     <RunningGroups items={items} tasks={tasks} teams={teams} onOpenChat={onOpenChat} />
   </Drawer>;
+}
+
+/**
+ * The counts on the footer's Running button (COD-287): a quiet count of what is under way or in line, and beside it,
+ * in the accent with the pause bars, what waits for the person, so a paused crew or an unanswered question shows on
+ * the button instead of hiding behind it. The button's own label says both for a screen reader.
+ */
+export function RunningCounts({ running, waiting }: { running: number; waiting: number }) {
+  if (running === 0 && waiting === 0) return null;
+  return <span className="running-counts" aria-hidden="true">
+    {running > 0 && <span className="badge running-count" title={t('{0} đang chạy hoặc chờ lượt', [running])}>{footerCount(running)}</span>}
+    {waiting > 0 && <span className="badge running-waiting" title={t('{0} chờ bạn', [waiting])}><PauseBars size={12} strokeWidth={2.4} />{footerCount(waiting)}</span>}
+  </span>;
 }
 
 /** The sections, with one clock and one progress subscription shared by every row. */

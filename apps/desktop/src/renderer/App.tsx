@@ -55,9 +55,10 @@ import { Select } from './components/Select';
 import { setDisplayCurrency, formatMoney } from './components/money';
 import { Toaster, toast } from './components/toast';
 import { NoticeCentre } from './components/NoticeCentre';
-import { RunningCentre } from './components/RunningCentre';
+import { RunningCentre, RunningCounts } from './components/RunningCentre';
 import { watchRunProgress } from './runProgress';
-import { runningCount } from '../shared/running';
+import { runningCount, waitingForPersonCount } from '../shared/running';
+import { runningButtonLabel } from './runningList';
 import { recordNotice, useUnreadNotices } from './components/notifications';
 import { KnowledgeEditor, KnowledgeLibrary } from './components/KnowledgeLibrary';
 import type { Knowledge } from '../shared/knowledge';
@@ -239,8 +240,10 @@ export function App() {
   // Everything in the sidebar footer that waits for you reads the same way: a dot on the icon and a count (user, 2026-09-23).
   const pendingRoutines = workspace?.routines.filter(item => item.pending).length ?? 0;
   const knowledgeToReview = workspace?.knowledge.filter(item => item.status === 'proposed').length ?? 0;
-  // Runs under way or in line (COD-244). A plain count, not the accent dot: nothing here waits for the person.
+  // Runs under way or in line (COD-244), a plain count; and beside it, in the accent, the chats that wait for the
+  // person (COD-287), which a paused crew used to hide behind a button with no count.
   const runningNow = runningCount(workspace?.running ?? []);
+  const waitingForYou = waitingForPersonCount(workspace?.running ?? []);
   const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   // Dragging tracks the pointer; a width is the distance from the window edge minus the gap the panel sits in.
   const sidebarPane = usePaneWidth({ storageKey: 'orglet.sidebar-width', bounds: SIDEBAR_WIDTH, widthFromPointer: clientX => clientX - shellGap(), widerKey: 'ArrowRight' });
@@ -1315,7 +1318,7 @@ export function App() {
       </SidebarSection>}
       </div>
       {selectionBar}
-      <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => setRunningOpen(true)} aria-label={runningNow > 0 ? t('Đang chạy, {0} lượt', [runningNow]) : t('Đang chạy')}><Activity size={18} />{t('Đang chạy')}{runningNow > 0 && <span className="badge running-count" aria-hidden="true">{runningNow > 99 ? '99+' : runningNow}</span>}</Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><Button onClick={() => openSettings()} {...dwellHandlers(dwellAbout)}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${hasConnection(connections, workspace.customConnections) ? 'connected' : ''}`} /></Button></div>
+      <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => setRunningOpen(true)} aria-label={runningButtonLabel(runningNow, waitingForYou)}><Activity size={18} />{t('Đang chạy')}<RunningCounts running={runningNow} waiting={waitingForYou} /></Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><Button onClick={() => openSettings()} {...dwellHandlers(dwellAbout)}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${hasConnection(connections, workspace.customConnections) ? 'connected' : ''}`} /></Button></div>
     </aside>
     {/* Collapsed sidebar keeps its two most used actions in a narrow rail, stacked like ChatGPT. */}
 

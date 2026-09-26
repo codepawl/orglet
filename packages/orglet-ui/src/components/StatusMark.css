@@ -18,6 +18,8 @@
 .org-status-mark-error { color: var(--org-error, #c62828); }
 .org-status-mark-working { color: var(--org-working, #4473d3); }
 .org-status-mark-empty { color: color-mix(in srgb, var(--org-muted, #666) 55%, transparent); }
+/* A pause waits for the person, so it sits on a tint like the other states that carry news; idle stays plain. */
+.org-status-mark-paused { background: color-mix(in srgb, currentColor 13%, transparent); }
 .org-status-mark-busy {
   background: color-mix(in srgb, currentColor 13%, transparent);
   color: var(--org-working, #4473d3);

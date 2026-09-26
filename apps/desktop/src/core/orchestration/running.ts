@@ -1,4 +1,5 @@
-import { isLocalApi, isPlanApi, type Run, type Task, type Worker } from '../../shared/contracts';
+import { isLocalApi, isPlanApi, type Activity, type Run, type Task, type Worker } from '../../shared/contracts';
+import { pausedAfter } from '../../shared/paused-turn';
 import { isHarness } from '../../shared/harness';
 import { connectionPricing, findCustomConnection, isCustomProvider } from '../../shared/custom-connections';
 import { readCustomConnections } from '../storage/custom-connections';
@@ -86,8 +87,11 @@ function stoppedItem(store: Store, task: Task, runs: Run[]): RunningItem {
   if (task.status === 'waiting_input' && decision) return decisionItem(store, task, runs, decision);
   const revision = task.inputRevision ?? 0;
   const turn = runs.filter(run => (run.snapshot.inputRevision ?? 0) === revision);
+  // A crew pauses its runs that had not started too, so after the run that stopped mid-work comes the one that took
+  // the last step before the pause (COD-287), not the first run still waiting.
   const stopped = turn.find(run => run.status === 'waiting_budget')
     ?? turn.find(run => run.status === 'paused' && hasCheckpoint(store, run.id))
+    ?? (task.teamId ? pausedAfter(turn, eventsOf(store, turn)) : undefined)
     ?? turn.find(run => run.status === 'paused')
     ?? turn.at(-1)
     ?? runs.at(-1);
@@ -130,6 +134,16 @@ function chatWorker(store: Store, task: Task, runs: Run[]): Worker {
 
 function hasCheckpoint(store: Store, runId: string): boolean {
   return !!store.db.prepare('SELECT 1 FROM checkpoints WHERE id=?').get(runId);
+}
+
+/** The activity lines of these runs, in the order they were written. */
+function eventsOf(store: Store, runs: readonly Run[]): Activity[] {
+  const events: { rowid: number; event: Activity }[] = [];
+  const query = store.db.prepare('SELECT rowid, data FROM events WHERE run_id=?');
+  for (const run of runs) {
+    for (const row of query.all(run.id)) events.push({ rowid: Number(row.rowid), event: JSON.parse(String(row.data)) as Activity });
+  }
+  return events.sort((first, second) => first.rowid - second.rowid).map(entry => entry.event);
 }
 
 function lastEvent(store: Store, runId: string): string | undefined {

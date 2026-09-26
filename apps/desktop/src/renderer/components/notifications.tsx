@@ -32,6 +32,13 @@ export type Notice = {
   confirmation?: true;
   /** The chat this notice is about, such as a schedule's run that finished (COD-258): its row opens that chat. */
   taskId?: string;
+  /**
+   * One kind of news from one place, such as one orglet's side-thread answers (COD-287). A new notice of the group
+   * replaces the group's unread one, so the list and the count grow by one row however many answers land.
+   */
+  group?: string;
+  /** How many pieces of news a grouped notice stands for; absent means one. */
+  groupSize?: number;
 };
 
 export const noticeKindNames: Record<NoticeKind, string> = translated({ error: 'Lỗi', done: 'Đã xong', info: 'Thông tin' });
@@ -63,8 +70,10 @@ const save = () => {
   try { localStorage.setItem(storageKey, JSON.stringify(notices)); } catch { /* a blocked store costs the note, not the app */ }
 };
 
+export type NoticeDetails = { confirmation?: boolean; taskId?: string; group?: string; groupSize?: number };
+
 /** Records one message. Called by `toast`, so nothing has to remember to do both. */
-export function recordNotice(text: string, kind: NoticeKind, about?: string, details: { confirmation?: boolean; taskId?: string } = {}) {
+export function recordNotice(text: string, kind: NoticeKind, about?: string, details: NoticeDetails = {}) {
   const trimmedAbout = about?.trim();
   const notice: Notice = {
     id: nextId++,
@@ -74,10 +83,41 @@ export function recordNotice(text: string, kind: NoticeKind, about?: string, det
     ...(trimmedAbout ? { about: trimmedAbout } : {}),
     ...(details.confirmation ? { confirmation: true as const } : {}),
     ...(details.taskId ? { taskId: details.taskId } : {}),
+    ...(details.group ? { group: details.group } : {}),
+    ...(details.group && details.groupSize && details.groupSize > 1 ? { groupSize: details.groupSize } : {}),
   };
-  notices = [...notices, notice].slice(-LIMIT);
+  const next = withNotice(notices, seenAt, notice);
+  if (next === notices) return;
+  notices = next;
   save();
   emit();
+}
+
+/**
+ * The list once one more notice arrives (COD-287). A problem that is already waiting unread, word for word about
+ * the same thing, is the same problem still happening: a refresh that keeps failing, or the same action refused
+ * again, adds nothing until the person has looked (the list comes back unchanged, the same array). A grouped notice
+ * takes the place of its group's unread one.
+ */
+export function withNotice(list: Notice[], seenSince: number, notice: Notice): Notice[] {
+  const repeatsProblem = notice.kind === 'error' && list.some(existing => existing.kind === 'error' && isUnreadNotice(existing, seenSince) && sameNotice(existing, notice));
+  if (repeatsProblem) return list;
+  const kept = notice.group
+    ? list.filter(existing => existing.group !== notice.group || !isUnreadNotice(existing, seenSince))
+    : list;
+  return [...kept, notice].slice(-LIMIT);
+}
+
+/** How many pieces of news a group's unread notice already stands for, so the next one can say the new total. */
+export function unreadGroupSize(list: readonly Notice[], seenSince: number, group: string): number {
+  const waiting = list.findLast(existing => existing.group === group && isUnreadNotice(existing, seenSince));
+  if (!waiting) return 0;
+  return waiting.groupSize ?? 1;
+}
+
+/** `unreadGroupSize` for the notices kept in this window. */
+export function pendingGroupSize(group: string): number {
+  return unreadGroupSize(notices, seenAt, group);
 }
 
 export function useNotices() {
