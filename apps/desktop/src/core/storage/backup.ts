@@ -39,7 +39,7 @@ const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'syn
 const Event = z.object({ id: Id, runId: Id, sequence: Integer.optional(), message: z.string(), createdAt: z.iso.datetime(), teamMessage: TeamMessage.optional() }).strict();
 const UsedMemory = z.object({ id: Id, revision: z.number().int().positive(), text: z.string().min(1).max(500) }).strict();
 const Artifact = z.object({ id: Id, runId: Id, report: Report, hash: Hash, createdAt: z.iso.datetime(), replyTo: Id.optional(), usedMemories: z.array(UsedMemory).max(60).optional() }).strict();
-const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional(), media: z.enum(['image', 'video', 'audio', 'pdf']).optional() }).strict();
+const Source = z.object({ id: Id, name: z.string(), bytes: Integer, hash: Hash, revoked: z.boolean(), format: DataFormat.optional(), media: z.enum(['image', 'video', 'audio', 'pdf']).optional(), editedFrom: Id.optional() }).strict();
 const Profile = z.object({ id: Id, taskId: Id, runId: Id.optional(), createdAt: z.iso.datetime(), sourceHashes: z.record(Id, Hash), result: DatasetProfile }).strict();
 const manualScoreAvailable = (profile: z.infer<typeof Profile>, run: z.infer<typeof Run>) => !profile.runId && !!profile.result.exactMatch && profile.createdAt <= run.startedAt
   && !!run.snapshot.scoreProfileIds?.includes(profile.id) && Object.keys(profile.sourceHashes).every(sourceId => run.snapshot.input?.sourceIds.includes(sourceId));

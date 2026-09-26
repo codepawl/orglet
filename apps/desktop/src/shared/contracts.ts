@@ -13,7 +13,7 @@ import { Schedule, WorkHours } from './schedule';
 import { RoutineTrigger, type WatchFolderView } from './routine-triggers';
 import { SkillPackage, type PackageReview } from './skill-package';
 import { RunAuditArgs } from './run-audit';
-import type { MediaKind } from './source-kinds';
+import { DATASET_SOURCE_LIMIT, INLINE_PREVIEW_LIMIT, type MediaKind } from './source-kinds';
 import { Review, ReviewPolicy, type EvidenceRequest } from './review';
 import { KnowledgeInput, MEMORY_TEXT_LIMIT, type Knowledge, type RunContext } from './knowledge';
 import { HarnessCatalogId, type HarnessInfo, type HarnessUsage } from './harness';
@@ -207,8 +207,11 @@ export const Report = z.object({
 export type Report = z.infer<typeof Report>;
 export type Worker = WorkerInput & { id: string; revision: number };
 export type Skill = z.infer<typeof SkillInput> & { id: string; revision: number; package?: SkillPackage };
-/** `format` marks a dataset the checkers can profile; `media` marks a preview-only file no worker can read yet. */
-export type Source = { id: string; name: string; bytes: number; hash: string; revoked: boolean; format?: DataFormat; media?: MediaKind };
+/**
+ * `format` marks a dataset the checkers can profile; `media` marks a preview-only file no worker can read yet.
+ * `editedFrom` is the source this one was edited from in the viewer (COD-280); the edit is Orglet's own copy.
+ */
+export type Source = { id: string; name: string; bytes: number; hash: string; revoked: boolean; format?: DataFormat; media?: MediaKind; editedFrom?: string };
 /** Where an attached file was picked from, for the person's own eyes only; never sent to a model. */
 export type SourceOrigin = { id: string; path: string | null };
 /** Verified bytes of a media source for an inline preview. */
@@ -316,6 +319,14 @@ export const commands = {
   previewSource: z.object({ taskId: Id, id: Id }),
   sourceBytes: z.object({ taskId: Id, id: Id }).strict(),
   sourceOrigins: z.object({ taskId: Id }).strict(),
+  /**
+   * The person saved an edit of a chat's source in the viewer (COD-280): text for a text or data file, PNG bytes for an
+   * image, PDF bytes for a PDF. It becomes a new source of the same chat; the original is never written.
+   */
+  saveSourceVersion: z.union([
+    z.object({ taskId: Id, sourceId: Id, name: z.string().min(1).max(255), text: z.string().max(DATASET_SOURCE_LIMIT) }).strict(),
+    z.object({ taskId: Id, sourceId: Id, name: z.string().min(1).max(255), bytes: z.instanceof(Uint8Array).refine(bytes => bytes.byteLength > 0 && bytes.byteLength <= INLINE_PREVIEW_LIMIT) }).strict(),
+  ]),
   sourceMetadata: z.object({ ids: z.array(Id).max(20) }),
   profileSources: ProfileArgs.extend({ taskId: Id }),
   auditRunLog: RunAuditArgs.extend({ taskId: Id }),
@@ -396,7 +407,7 @@ export const commands = {
 } as const;
 export type Command = keyof typeof commands;
 export type Args<C extends Command> = z.infer<(typeof commands)[C]>;
-export type Results = { forwardMessage: ForwardResult; setBrowser: void; browserActions: BrowserAction[]; browserScreenshot: { mimeType: 'image/png'; bytes: Uint8Array }; answerBrowserApproval: void; browserTakeOver: boolean; setDesktop: void; desktopWindows: DesktopWindowsView; desktopActions: DesktopAction[]; desktopScreenshot: { mimeType: 'image/png'; bytes: Uint8Array }; answerDesktopApproval: void; searchChats: ChatSearchResult; startSideThread: string; bringIntoMainChat: string; testMcpServer: McpServerView; setMcpServerEnabled: void; setMcpGrant: void; applyAppProposal: AppProposal; dismissAppProposal: void; undoAppProposal: AppProposal; reconcileBudget: void; recoveryFile: RecoveryFile; restoreWorkspaceFile: void; workspaceDiff: WorkspaceDiff; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; harnessUsage: HarnessUsage; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; eraseData: EraseSummary; modelList: ModelListResult; saveCustomConnection: CustomConnection; deleteCustomConnection: void; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; updateMemory: Knowledge; deleteMemory: void; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void; applyBlockedHandIn: void; applyWorkspaceReview: void; discardWorkspaceReview: void; testWebSearch: WebSearchTest; runRoutineNow: string };
+export type Results = { forwardMessage: ForwardResult; setBrowser: void; browserActions: BrowserAction[]; browserScreenshot: { mimeType: 'image/png'; bytes: Uint8Array }; answerBrowserApproval: void; browserTakeOver: boolean; setDesktop: void; desktopWindows: DesktopWindowsView; desktopActions: DesktopAction[]; desktopScreenshot: { mimeType: 'image/png'; bytes: Uint8Array }; answerDesktopApproval: void; searchChats: ChatSearchResult; startSideThread: string; bringIntoMainChat: string; testMcpServer: McpServerView; setMcpServerEnabled: void; setMcpGrant: void; applyAppProposal: AppProposal; dismissAppProposal: void; undoAppProposal: AppProposal; reconcileBudget: void; recoveryFile: RecoveryFile; restoreWorkspaceFile: void; workspaceDiff: WorkspaceDiff; recoveryProcessOutput: RecoveryOutput; retireWorkspaceAttempt: void; workspaceRecovery: WorkspaceRecoveryView; workspaceAccess: WorkspaceGrantView | null; revokeWorkspace: void; setToolCapabilities: void; setMessageReaction: void; renameTask: void; updateTask: void; archiveTask: void; deleteTask: void; archiveEntity: void; deleteEntity: void; reorder: void; saveAvatarColors: void; setCurrency: CurrencyState; refreshCurrency: CurrencyState; harnesses: HarnessInfo[]; harnessUsage: HarnessUsage; saveHarnessAccount: HarnessInfo[]; removeHarnessAccount: HarnessInfo[]; selectHarnessAccount: HarnessInfo[]; eraseData: EraseSummary; modelList: ModelListResult; saveCustomConnection: CustomConnection; deleteCustomConnection: void; saveKnowledge: Knowledge; reviewKnowledge: void; searchKnowledge: Knowledge[]; updateMemory: Knowledge; deleteMemory: void; reviseTask: void; answerDecision: void; acknowledgeEvidence: void; auditRunLog: DatasetProfile; scoreExactMatch: DatasetProfile; inspectSkill: PackageReview; reviewSkill: void; workspace: Workspace; task: TaskDetail; createTask: string; saveWorker: Worker; saveTeam: Team; createTemplate: Team; saveSkill: Skill; saveRoutine: Routine; dismissRoutine: void; catchUpRoutine: string; cancel: void; pause: void; resume: void; retry: void; revoke: void; sourceMetadata: Source[]; previewSource: { name: string; text: string; hash: string }; sourceBytes: SourceBytes; sourceOrigins: SourceOrigin[]; saveSourceVersion: Source; profileSources: DatasetProfile; cancelCheckers: void; accept: void; markTaskSeen: Task; settings: void; applyBlockedHandIn: void; applyWorkspaceReview: void; discardWorkspaceReview: void; testWebSearch: WebSearchTest; runRoutineNow: string };
 export type Reply<T> = { ok: true; value: T } | { ok: false; error: string };
 export interface Bridge {
   call<C extends Command>(command: C, args: Args<C>): Promise<Results[C]>;

@@ -21,7 +21,10 @@ export const id = () => randomUUID();
 export class Store {
   readonly db: DatabaseSync;
   readonly sqliteVersion: string;
+  /** Where the database lives; files Orglet keeps for the person (edited sources, COD-280) sit in the same folder. */
+  readonly databasePath: string;
   constructor(path: string) {
+    this.databasePath = path;
     this.db = new DatabaseSync(path);
     this.sqliteVersion = String(this.db.prepare('SELECT sqlite_version() AS v').get()!.v);
     const [major, minor, patch] = this.sqliteVersion.split('.').map(Number);
