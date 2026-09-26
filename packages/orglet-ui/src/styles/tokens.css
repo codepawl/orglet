@@ -46,6 +46,10 @@
   --org-icon-size: 32px;
   --org-radius: 9px;
   --org-radius-menu: 12px;
+  /* A select's trigger follows the control height unless tuned on its own; its menu rows are a touch taller. */
+  --org-select-height: var(--org-control-height);
+  --org-select-radius: var(--org-radius);
+  --org-select-option-height: 36px;
   /* A dialog's size, and the backdrop behind it. */
   --org-panel-width: min(720px, calc(100vw - 32px));
   --org-panel-height: min(640px, calc(100dvh - 32px));

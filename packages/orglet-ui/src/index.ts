@@ -31,3 +31,5 @@ export type { FileKind } from './components/Attachment';
 export { Confirmer, DialogOverlay, Drawer, OPEN_POPUP_SELECTOR, confirmAction, keepOpenForPopup } from './components/Dialog';
 export { Toaster, showToast } from './components/Toaster';
 export type { ToastAction, ToastTone } from './components/Toaster';
+export { Select } from './components/Select';
+export type { SelectOption } from './components/Select';

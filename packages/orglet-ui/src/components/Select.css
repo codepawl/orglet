@@ -1,0 +1,172 @@
+/* The trigger reads like a field: one border, darker on hover and while its list is open. */
+.org-select-trigger {
+  --org-select-icon-slot: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--org-select-height, 34px);
+  padding: 6px 12px;
+  border: 1px solid var(--org-border, #e5e5e5);
+  border-radius: var(--org-select-radius, 9px);
+  background: var(--org-bg, #fff);
+  color: var(--org-text, #171717);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: left;
+}
+.org-select-trigger > .org-select-icon { min-width: var(--org-select-icon-slot); }
+.org-select-trigger:hover:not(:disabled) { border-color: var(--org-muted, #666); }
+.org-select-trigger[aria-expanded=true] { border-color: var(--org-muted, #666); }
+.org-select-trigger:disabled { opacity: .55; }
+.org-select-trigger.org-select-sm {
+  --org-select-height: 32px;
+  --org-select-icon-slot: 0px;
+  gap: 8px;
+  padding: 3px 8px 3px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.org-select-trigger[aria-invalid=true] { border-color: var(--org-error, #a82626); }
+/* The shake replays whenever `data-flash` changes, so choosing nothing twice stays visible. */
+.org-select-trigger[aria-invalid=true][data-flash] { animation: org-select-flash .55s ease-in-out 2; }
+@keyframes org-select-flash {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  40% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--org-error, #a82626) 35%, transparent); }
+}
+.org-select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.org-select-placeholder,
+.org-select-detail { color: var(--org-muted, #666); }
+.org-select-chevron {
+  flex-shrink: 0;
+  color: var(--org-muted, #666);
+  transition: transform var(--org-motion-base, 170ms) var(--org-ease-out, ease-out);
+}
+.org-select-trigger[aria-expanded=true] .org-select-chevron { transform: rotate(180deg); }
+.org-select-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--org-muted, #666);
+}
+
+.org-select-menu {
+  z-index: 30;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  overscroll-behavior: contain;
+  background: var(--org-bg, #fff);
+  border: 1px solid var(--org-border, #e5e5e5);
+  border-radius: var(--org-radius-menu, 12px);
+  box-shadow: 0 12px 32px #00000026;
+  pointer-events: auto;
+  animation: org-select-in 120ms ease-out;
+}
+.org-select-menu.org-select-menu-above { animation-name: org-select-in-above; }
+@keyframes org-select-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes org-select-in-above {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.org-select-group {
+  padding: 8px 10px 4px;
+  color: var(--org-muted, #666);
+  font-size: 12px;
+  font-weight: 500;
+}
+.org-select-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--org-select-option-height, 36px);
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--org-text, #171717);
+}
+.org-select-option + .org-select-option,
+.org-select-group + .org-select-option { margin-top: 2px; }
+.org-select-option + .org-select-group { margin-top: 10px; }
+.org-select-option.org-select-option-active { background: var(--org-surface, #f4f4f4); }
+.org-select-option[aria-disabled=true],
+.org-select-option.org-select-option-dimmed { opacity: .45; }
+.org-select-option[aria-disabled=true] { cursor: default; }
+.org-select-option-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.org-select-option-text > span:first-child { overflow-wrap: anywhere; }
+/* The note stays in the interface font when `labelStyle` draws the label in another. */
+.org-select-note {
+  color: var(--org-muted, #666);
+  font-family: inherit;
+  font-size: .85em;
+  font-weight: 400;
+}
+/* A detail is one line of meta (a model, a count, an account): it ends in an ellipsis instead of breaking a model id
+   across lines, and the option's tooltip carries the whole text. */
+.org-select-option .org-select-detail {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.org-select-option-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--org-surface, #f4f4f4);
+  color: var(--org-muted, #666);
+  white-space: nowrap;
+}
+.org-select-option.org-select-option-dimmed .org-select-option-badge,
+.org-select-option[aria-disabled=true] .org-select-option-badge { background: var(--org-bg, #fff); }
+.org-select-check {
+  flex-shrink: 0;
+  visibility: hidden;
+}
+.org-select-option[aria-selected=true] .org-select-check { visibility: visible; }
+
+.org-select-inline-detail .org-select-option-text {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+}
+.org-select-inline-detail .org-select-option-text > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.org-select-inline-detail .org-select-option-text > span:first-child {
+  flex-shrink: 0;
+  min-width: 2.6em;
+}
+.org-select-inline-detail .org-select-detail { font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .org-select-menu,
+  .org-select-trigger[aria-invalid=true][data-flash] { animation: none; }
+}
