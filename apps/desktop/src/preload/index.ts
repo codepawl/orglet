@@ -14,6 +14,7 @@ const bridge: Bridge = {
   pickSources: () => invoke('orglet:pick'),
   pickFolder: () => invoke('orglet:pick-folder'),
   openSource: (taskId, id) => invoke('orglet:open-source', { taskId, id }),
+  relinkSource: (taskId, id) => invoke('orglet:relink-source', { taskId, id }),
   pickWorkspace: (taskId, permissions) => invoke('orglet:pick-workspace', { taskId, permissions }),
   pickNewChatWorkspace: (chat, permissions) => invoke('orglet:pick-workspace', { ...chat, permissions }),
   pickWatchFolder: () => invoke('orglet:pick-workspace', { watch: true, permissions: ['read'] }),

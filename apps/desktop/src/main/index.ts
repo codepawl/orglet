@@ -551,6 +551,13 @@ async function start() {
     const failure = await shell.openPath(path);
     if (failure) throw new Error('Không mở được tệp bằng ứng dụng mặc định.');
   });
+  // A source a backup restored without its file: the person picks the file here and the core checks it is the same bytes.
+  handle('orglet:relink-source', async raw => {
+    const input = z.object({ taskId: Id, id: Id }).strict().parse(raw);
+    const result = await dialog.showOpenDialog(window, { title: tr('Chọn lại tệp đã đính kèm'), properties: ['openFile'] });
+    if (result.canceled) return null;
+    return request('relinkSource', { taskId: input.taskId, sourceId: input.id, path: result.filePaths[0] });
+  });
   /** Which API and web search keys are saved, never the keys. */
   const connectionStatus = async (): Promise<Connections> => ({ ...await credentials.status(), search: await webSearchKeys.status() });
   handle('orglet:connections', async () => connectionStatus());
@@ -684,14 +691,32 @@ async function start() {
     } as const;
     await shell.openExternal(pricing[ApiProvider.parse(raw)]);
   });
+  // A restore that fails says so in a dialog over the window the person clicked in, and that nothing changed (COD-281).
+  const showRestoreFailure = async (error: unknown) => {
+    const reason = translateMessage(activeDictionary(), error instanceof Error ? error.message : String(error));
+    await dialog.showMessageBox(window, { type: 'error', title: tr('Khôi phục bản sao lưu'), message: tr('Không khôi phục được bản sao lưu này'),
+      detail: tr('Chưa có gì trong Orglet bị thay đổi.\n\nLý do: {0}', [reason]), buttons: [tr('Đóng')], noLink: true });
+  };
   handle('orglet:restore', async () => {
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn bản sao lưu Orglet'), properties: ['openFile'], filters: [{ name: 'Orglet backup', extensions: ['json'] }] });
     if (result.canceled) return false;
-    const content = await readBoundedText(result.filePaths[0], 50 * 1024 * 1024);
-    const summary = await request('backupPreview', content) as BackupSummary;
-    const confirmation = await dialog.showMessageBox(window, { type: 'question', title: tr('Khôi phục bản sao lưu'), message: tr('Bổ sung các mục còn thiếu?'), detail: tr('Bản sao lưu chứa {0} Tí, {1} hội, {2} công việc và {3} báo cáo.\nDữ liệu, cài đặt và chi phí hiện tại được giữ lại. Nguồn khôi phục không được cấp quyền đọc; công việc đang chạy trong bản sao lưu sẽ chuyển sang gián đoạn.', [summary.workers, summary.teams, summary.tasks, summary.reports]), buttons: [tr('Hủy'), tr('Khôi phục')], defaultId: 0, cancelId: 0, noLink: true });
+    let summary: BackupSummary;
+    try {
+      const content = await readBoundedText(result.filePaths[0], 50 * 1024 * 1024);
+      summary = await request('backupPreview', content) as BackupSummary;
+    } catch (error) {
+      await showRestoreFailure(error);
+      return false;
+    }
+    const confirmation = await dialog.showMessageBox(window, { type: 'question', title: tr('Khôi phục bản sao lưu'), message: tr('Bổ sung các mục còn thiếu?'), detail: tr('Bản sao lưu chứa {0} Tí, {1} hội, {2} công việc và {3} báo cáo.\nDữ liệu, cài đặt và chi phí hiện tại được giữ lại. Tệp đính kèm không nằm trong bản sao lưu: mở tệp và chọn lại đúng tệp đó trên máy này; công việc đang chạy trong bản sao lưu sẽ chuyển sang gián đoạn.', [summary.workers, summary.teams, summary.tasks, summary.reports]), buttons: [tr('Hủy'), tr('Khôi phục')], defaultId: 0, cancelId: 0, noLink: true });
     if (confirmation.response !== 1) return false;
-    await request('backupRestore', summary.token); return true;
+    try {
+      await request('backupRestore', summary.token);
+    } catch (error) {
+      await showRestoreFailure(error);
+      return false;
+    }
+    return true;
   });
   handle('orglet:template-export', async raw => {
     const template = await request('templateExport', Id.parse(raw));

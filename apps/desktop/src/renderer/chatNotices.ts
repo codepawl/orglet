@@ -9,6 +9,7 @@ import { groupChatNames } from './groupChat';
 const BUSY: readonly TaskStatus[] = ['queued', 'running', 'pausing'];
 const NEEDS_YOU: readonly TaskStatus[] = ['waiting_input', 'waiting_budget'];
 const NEEDS_LOOK: readonly TaskStatus[] = ['failed', 'partial', 'interrupted'];
+const LOOK_MARGIN_MS = 60_000;
 
 /** How a chat stopped working: with its answer, stuck on something that went wrong, or waiting for the person. */
 export type ChatOutcome = 'done' | 'needs_look' | 'needs_you';
@@ -33,9 +34,10 @@ export function chatStatuses(tasks: readonly Task[]): Map<string, TaskStatus> {
  * The chats that stopped working since `previous` was taken: busy then, done, stuck or waiting now. Only a chat seen
  * busy counts, so opening the app on finished chats announces nothing (COD-247). A schedule's run is the one
  * exception (COD-258): it is started by the clock, a folder or `orglet run`, not from this window, and a short run
- * can start and end between two looks, so one that appears already finished counts too.
+ * can start and end between two looks, so one that appears already finished counts too, unless it started before
+ * `lookedAt`: then it was not started here but brought in by a restored backup, and it is history (COD-281).
  */
-export function finishedChats(previous: ReadonlyMap<string, TaskStatus>, tasks: readonly Task[]): FinishedChat[] {
+export function finishedChats(previous: ReadonlyMap<string, TaskStatus>, tasks: readonly Task[], lookedAt?: string): FinishedChat[] {
   const finished: FinishedChat[] = [];
   for (const task of tasks) {
     if (task.deletedAt || BUSY.includes(task.status)) continue;
@@ -43,7 +45,8 @@ export function finishedChats(previous: ReadonlyMap<string, TaskStatus>, tasks: 
     if (!outcome) continue;
     const before = previous.get(task.id);
     const wasBusy = before !== undefined && BUSY.includes(before);
-    const appearedFinished = before === undefined && Boolean(task.routineId);
+    const startedSinceLook = !lookedAt || task.createdAt >= lookedAt;
+    const appearedFinished = before === undefined && Boolean(task.routineId) && startedSinceLook;
     if (wasBusy || appearedFinished) finished.push({ task, outcome });
   }
   return finished;
@@ -129,15 +132,17 @@ export function backgroundNotices(finished: readonly FinishedChat[], names: Chat
  * notification, unless Settings turned that off; main shows it only while the window is in the background.
  */
 export function useChatNotices(workspace: Workspace | undefined, openChat: string | null, open: (taskId: string) => void) {
-  const previous = useRef<Map<string, TaskStatus>>(undefined);
+  const previous = useRef<{ statuses: Map<string, TaskStatus>; at: number }>(undefined);
   const openRef = useRef(open);
   openRef.current = open;
   useEffect(() => {
     if (!workspace) return;
     const known = previous.current;
-    previous.current = chatStatuses(workspace.tasks);
+    previous.current = { statuses: chatStatuses(workspace.tasks), at: Date.now() };
     if (!known) return;
-    const finished = finishedChats(known, workspace.tasks);
+    // A run started while the last workspace was on its way here is still news, hence the margin.
+    const lookedAt = new Date(known.at - LOOK_MARGIN_MS).toISOString();
+    const finished = finishedChats(known.statuses, workspace.tasks, lookedAt);
     if (!finished.length) return;
     for (const chat of finished) {
       if (chat.task.id === openChat) continue;

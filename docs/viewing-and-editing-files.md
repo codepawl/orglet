@@ -27,6 +27,8 @@ The buttons at the top right:
 - The **i** shows the file's kind, size, where it came from and its hash.
 - **⋯ → Revoke read access** stops the orglet reading the file.
 
+A file in a chat restored from a backup opens with **Choose file** instead of its content, since a backup holds no file contents. Pick the same file on this computer and it opens again, for you and the orglet. A different file is refused, even with the same name.
+
 ## Edit text and code
 
 1. Open a text, code, Markdown, CSV or JSON file.

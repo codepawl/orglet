@@ -36,6 +36,12 @@ describe('which chats stopped working', () => {
     expect(finishedChats(before, now).map(finished => finished.task.id)).toEqual(['run']);
   });
 
+  it('says nothing of schedule runs a restored backup brought in, which started before the last look (COD-281)', () => {
+    const before = chatStatuses([chat('main', 'completed')]);
+    const now = [chat('main', 'completed'), scheduleRun('restored', 'completed'), scheduleRun('fresh', 'completed', { createdAt: '2026-09-27T10:00:30.000Z' })];
+    expect(finishedChats(before, now, '2026-09-27T10:00:00.000Z').map(finished => finished.task.id)).toEqual(['fresh']);
+  });
+
   it('tells a finished run from one that failed and one that waits for the person, and says nothing of a pause', () => {
     const before = chatStatuses(['done', 'partial', 'interrupted', 'input', 'budget', 'paused'].map(id => chat(id, 'running')));
     const now = [chat('done', 'completed'), chat('partial', 'partial'), chat('interrupted', 'interrupted'), chat('input', 'waiting_input'), chat('budget', 'waiting_budget'), chat('paused', 'paused')];
