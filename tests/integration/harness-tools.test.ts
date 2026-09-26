@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { harnessToolAdapter, harnessToolSchema, STEP_NOTES_CHARACTERS } from '../../apps/desktop/src/core/harness/tool-adapter';
-import { toolDefinitions } from '../../apps/desktop/src/core/tools/catalog';
+import { toolCallProblem, toolDefinitions } from '../../apps/desktop/src/core/tools/catalog';
+import type { Run, Task } from '../../apps/desktop/src/shared/contracts';
 import { prepareHarnessToolPolicy } from '../../apps/desktop/src/core/harness/exec';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -67,11 +68,20 @@ it.each([
   { name: 'workspace_write', arguments: {} },
   { name: 'workspace_read', arguments: { path: '../escape', offset: 0 } },
   { name: 'workspace_read', arguments: { path: 'note.txt', offset: 0, execute: 'unapproved' } },
-])('rejects unsupported or malformed CLI calls before dispatch: %j', async call => {
+])('leaves unsupported or malformed CLI calls to the core check, which refuses them before dispatch: %j', async call => {
   const adapter = harnessToolAdapter({ request: { harness: 'codex', executable: 'fixture', cwd: 'fixture', maxBudgetUsd: 1 },
     execute: async () => ({ output: { call }, costUsd: null }), onResult: () => {},
   });
-  await expect(adapter.request([], [toolDefinitions.workspace_read.model], new AbortController().signal, () => {})).rejects.toThrow();
+  // The CLI's call reaches the runner as it was chosen, so a refusal goes back to the CLI like an API worker's (COD-289).
+  const reply = await adapter.request([], [toolDefinitions.workspace_read.model], new AbortController().signal, () => {});
+  expect(reply.calls).toEqual([{ id: expect.any(String), name: call.name, arguments: JSON.stringify(call.arguments) }]);
+  // A run whose folder allows reading only: the runner's check refuses each call before anything runs.
+  const taskId = '00000000-0000-4000-8000-000000000002';
+  const task = { id: taskId, toolCapabilities: [] } as unknown as Task;
+  const run = { id: '00000000-0000-4000-8000-000000000003', taskId, snapshot: { worker: { provider: 'codex' }, toolCapabilities: [],
+    workspaceGrant: { id: '00000000-0000-4000-8000-000000000004', taskId, revision: 1, permissions: ['read'] } } } as unknown as Run;
+  const problem = toolCallProblem(run, task, reply.calls[0].name, reply.calls[0].arguments);
+  expect(problem?.kind).toBe(call.name === 'workspace_write' ? 'not_offered' : 'invalid_arguments');
 });
 
 it.each(['claude-code', 'codex', 'cursor', 'gemini'] as const)('lets %s keep notes beside its call, cut to a bounded length (COD-264)', async harness => {

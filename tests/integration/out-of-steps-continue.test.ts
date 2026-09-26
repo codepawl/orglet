@@ -105,13 +105,13 @@ it('gives web research 24 steps and hands in its best answer when they run out',
   const { detail } = await startResearch('Look up 3 competitors and their prices.');
   const run = detail.runs[0];
   expect(RESEARCH_STEP_LIMIT).toBe(24);
-  // Two steps before the limit the orglet is told to hand in, so it read 22 pages, not the 14 that 16 steps allowed.
-  expect(toolResults(requests.at(-1)!)).toHaveLength(RESEARCH_STEP_LIMIT - 2);
+  // Only once its 24 steps are used is the orglet told to hand in, so it read 24 pages, not the 14 that 16 steps allowed (COD-289).
+  expect(toolResults(requests.at(-1)!)).toHaveLength(RESEARCH_STEP_LIMIT);
   expect(run.status).toBe('completed');
   expect(run.outOfSteps).toBe(true);
   expect(canContinueRun(run)).toBe(true);
   expect(detail.task.status).toBe('completed');
-  expect(detail.artifacts[0].report.summary).toBe('Read 22 pages.');
+  expect(detail.artifacts[0].report.summary).toBe('Read 24 pages.');
   // The answer says it was cut short and offers Continue.
   const html = thread(detail.task.id);
   expect(html).toContain('Ran out of steps before finishing; this is what it got done.');
@@ -122,15 +122,15 @@ it('continues from the calls and results the cut-short run already made', async 
   const { taskId, detail } = await startResearch('Look up 3 competitors and their prices.');
   const cutShort = detail.runs[0];
   expect(new Checkpoints(store).get(cutShort.id)?.phase).toBe('done');
-  pagesWanted = 25;
+  pagesWanted = 27;
   requests = [];
   await followUp(taskId, CONTINUE_BRIEF, cutShort.id);
   const after = await settled(taskId);
   const continued = after.runs.find(run => run.id !== cutShort.id)!;
   expect(continued.snapshot.input?.continueFrom).toBe(cutShort.id);
-  // The first request already carries the 22 pages, after the instruction that says what they are.
+  // The first request already carries the 24 pages, after the instruction that says what they are.
   const first = requests[0];
-  expect(toolResults(first)).toHaveLength(22);
+  expect(toolResults(first)).toHaveLength(24);
   expect(first.some(message => message.role === 'user' && String(message.content).includes('ran out of steps before finishing, and the person asked you to continue'))).toBe(true);
   // The wrap-up the earlier run was given is not carried over.
   expect(wrappingUp(first)).toBe(false);
@@ -138,8 +138,8 @@ it('continues from the calls and results the cut-short run already made', async 
   expect(requests).toHaveLength(4);
   expect(continued.status).toBe('completed');
   expect(continued.outOfSteps).toBeUndefined();
-  expect(after.artifacts.find(artifact => artifact.runId === continued.id)?.report.summary).toBe('Read 25 pages.');
-  expect(after.events.some(event => event.runId === continued.id && event.message === 'Tiếp tục từ 22 bước của lượt trước.')).toBe(true);
+  expect(after.artifacts.find(artifact => artifact.runId === continued.id)?.report.summary).toBe('Read 27 pages.');
+  expect(after.events.some(event => event.runId === continued.id && event.message === 'Tiếp tục từ 24 bước của lượt trước.')).toBe(true);
   // The cut-short run keeps what it carried until a newer turn starts; the finished one keeps nothing.
   expect(new Checkpoints(store).get(continued.id)).toBeUndefined();
   // A backup keeps both marks, and never the kept conversation.
