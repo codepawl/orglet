@@ -113,7 +113,7 @@ it('archives, restores and deletes workers and teams without breaking history, a
   // New work cannot go to an archived worker; old chats and backups still read fine.
   const other = await core.command('saveWorker', { name: 'Người khác', instructions: 'Help.', provider: 'demo', skillId, taskBudgetMicros: 100_000 }) as Worker;
   await core.command('archiveEntity', { kind: 'worker', id: researcher.id, archived: true });
-  await expect(core.command('reviseTask', { taskId, brief: 'Còn đó không?', sourceIds: [], consent: false, providerScopes: [], budgetMicros: 100_000 })).rejects.toThrow('lưu trữ hoặc xóa');
+  await expect(core.command('reviseTask', { taskId, brief: 'Còn đó không?', sourceIds: [], consent: false, providerScopes: [], budgetMicros: 100_000 })).rejects.toThrow('đã được lưu trữ. Khôi phục để nhắn tiếp.');
   expect(store.detail(taskId).artifacts).toHaveLength(1);
   expect(() => core.backups.preview(core.backups.export())).not.toThrow();
   expect(other.id).toBeTruthy();
@@ -123,4 +123,23 @@ it('archives, restores and deletes workers and teams without breaking history, a
   clock = new Date(clock.getTime() + 8 * 86_400_000); await core.tick();
   expect((await workspace()).archivedWorkers).toHaveLength(0);
   expect(store.entityState().workers[researcher.id].deletedAt).toBeTruthy();
+});
+
+it('refuses a message to an archived chat, or to a chat whose orglet was archived or deleted, and says what to do', async () => {
+  const [researcher] = store.all<Worker>('workers');
+  const revise = (taskId: string) => core.command('reviseTask', { taskId, brief: 'Còn đó không?', sourceIds: [], consent: false, providerScopes: [], budgetMicros: 100_000 });
+  const archivedChat = await task('demo');
+  await core.command('archiveTask', { id: archivedChat, archived: true });
+  await expect(revise(archivedChat)).rejects.toThrow('Cuộc trò chuyện này đã được lưu trữ. Khôi phục để nhắn tiếp.');
+  await core.command('archiveTask', { id: archivedChat, archived: false });
+
+  const helper = await core.command('saveWorker', { name: 'Trợ lý', instructions: 'Help.', provider: 'demo', skillId: researcher.skillId, taskBudgetMicros: 100_000 }) as Worker;
+  const helperChat = await core.command('createTask', { workerId: helper.id, brief: 'Một câu hỏi', sourceIds: [], consent: false, providerScopes: [], budgetMicros: 100_000 }) as string;
+  await until(() => store.detail(helperChat).task.status === 'completed');
+  await core.command('archiveEntity', { kind: 'worker', id: helper.id, archived: true });
+  await expect(revise(helperChat)).rejects.toThrow('Trợ lý đã được lưu trữ. Khôi phục để nhắn tiếp.');
+  await core.command('deleteEntity', { kind: 'worker', id: helper.id });
+  await expect(revise(helperChat)).rejects.toThrow('Trợ lý đã bị xóa, nên cuộc trò chuyện này chỉ còn để đọc.');
+  // The chat itself still reads fine.
+  expect((await core.command('task', { id: helperChat }) as { artifacts: unknown[] }).artifacts).toHaveLength(1);
 });
