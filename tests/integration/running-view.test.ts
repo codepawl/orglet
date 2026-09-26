@@ -3,7 +3,8 @@ import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import type { ModelAdapter } from '../../apps/desktop/src/core/adapters/openai';
 import type { Run, Task, Team, Workspace, Worker } from '../../apps/desktop/src/shared/contracts';
-import { runningCount, runningListsTask, type RunningItem } from '../../apps/desktop/src/shared/running';
+import { runningCount, runningListsTask, waitingForPersonCount, type RunningItem } from '../../apps/desktop/src/shared/running';
+import { pausedAfter } from '../../apps/desktop/src/shared/paused-turn';
 import { crewWaits } from '../../apps/desktop/src/core/orchestration/crew-waits';
 import { taskStatusMark } from '../../apps/desktop/src/renderer/components/StatusMark';
 import { isPlanRequest, planReply } from './team-plan';
@@ -88,7 +89,7 @@ function expectSidebarAgrees() {
   const listed = new Set(core.running().map(item => item.taskId));
   for (const task of store.all<Task>('tasks')) {
     const mark = taskStatusMark(task.status, true);
-    const drawnAsActive = mark.variant === 'busy' || (mark.variant === 'dashed' && mark.tone === 'muted');
+    const drawnAsActive = mark.variant === 'busy' || mark.variant === 'paused';
     if (task.status !== 'waiting_input') expect(drawnAsActive).toBe(listed.has(task.id));
     expect(runningListsTask(task)).toBe(listed.has(task.id));
   }
@@ -246,6 +247,23 @@ describe('crew queue', () => {
     openNextGate();
     await until(() => !core.teams.isActive(taskId));
     expect(statusOf(taskId)).toBe('completed');
+  });
+
+  it('names the member whose step came last when a crew pauses, not the next one waiting (COD-287)', async () => {
+    const { team, taskId } = await crewOfThree('sequential');
+    openPlan();
+    await until(() => gates.length === 1);
+    const names = team.memberIds.map(workerId => store.get<Worker>('workers', workerId).name);
+    await core.command('pause', { id: taskId });
+    openNextGate();
+    await until(() => statusOf(taskId) === 'paused' && !core.teams.isActive(taskId));
+    const detail = store.detail(taskId);
+    // The members after the first and the combining step never started, yet a pause marks them paused as well.
+    expect(detail.runs.filter(run => run.status === 'paused').length).toBeGreaterThanOrEqual(3);
+    expect(pausedAfter(detail.runs, detail.events)?.snapshot.worker.name).toBe(names[0]);
+    expect(itemsOf(taskId).map(item => [item.state, item.worker.name])).toEqual([['paused', names[0]]]);
+    expect(waitingForPersonCount(core.running())).toBe(1);
+    expectSidebarAgrees();
   });
 
   it('cancels a crew turn whose members are still queued', async () => {

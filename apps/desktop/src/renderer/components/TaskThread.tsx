@@ -12,6 +12,7 @@ import { Avatar } from './Avatar';
 import { toast } from './toast';
 import { t } from '../i18n';
 import { filesAddedWith } from '../turnFiles';
+import { pausedAfter } from '../../shared/paused-turn';
 import { DocumentCard, DocumentViewer } from './DocumentViewer';
 import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
@@ -481,7 +482,12 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         const askingRun = latest && detail.task.status === 'waiting_input' && pendingDecision
           ? detail.runs.find(run => run.id === pendingDecision.runId)
           : undefined;
-        const waitingAuthor = askingRun ?? turn.author;
+        // A paused crew turn is signed by whoever took the last step before the pause, not by the combining step
+        // that has not started (COD-287); before anyone started, by the lead who hands out the work.
+        const pausedCrewTurn = latest && detail.task.status === 'paused' && turn.runs.some(run => run.snapshot.team);
+        const stoppedAfter = pausedCrewTurn ? pausedAfter(turn.runs, detail.events) : undefined;
+        const pausedAuthor = pausedCrewTurn ? stoppedAfter ?? turn.runs.find(run => run.stage === 'plan') : undefined;
+        const waitingAuthor = askingRun ?? pausedAuthor ?? turn.author;
         return <div className="chat-turn" key={turn.revision}>
           {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
@@ -567,7 +573,9 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             </div>}
             {latest && busy && runStatus && <RunStatusLine line={runStatus} />}
             {latest && busy && liveUpdate && <LiveRun update={liveUpdate} memories={live?.run.snapshot.context?.memories} />}
-            {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
+            {latest && detail.task.status === 'paused' && <p role="status">{stoppedAfter
+              ? t('Đã tạm dừng sau bước của {0}, chờ bạn tiếp tục. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.', [stoppedAfter.snapshot.worker.name])
+              : t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
             {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{turn.runs.some(run => run.status === 'interrupted') ? t('Lượt này dừng giữa chừng vì app đã đóng.') : t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
