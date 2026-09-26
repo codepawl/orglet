@@ -2562,7 +2562,6 @@ export const en: Dictionary = {
   'Chưa có trình duyệt': 'No browser yet',
   'Đã tìm thấy': 'Found',
   'Không tìm thấy': 'Not found',
-  'Tí mở trang trong cửa sổ riêng của Orglet, với hồ sơ riêng, không bao giờ dùng hồ sơ hằng ngày của bạn.': 'Orglets open pages in Orglet’s own window, with profiles of its own, never your everyday profile.',
   'Cài Chrome hoặc Edge để Tí đọc được trang.': 'Install Chrome or Edge so orglets can read pages.',
   'Phiên bản {0}.': 'Version {0}.',
   'Edge tự đăng nhập các trang Microsoft bằng tài khoản Windows trong hồ sơ có tên. Hồ sơ Sạch thì không. Có Chrome thì Orglet dùng Chrome.': 'In a named profile, Edge signs in to Microsoft sites with your Windows account on its own. The Clean profile does not. When Chrome is installed, Orglet uses Chrome.',
