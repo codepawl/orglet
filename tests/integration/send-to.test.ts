@@ -153,11 +153,14 @@ function fakeShortcuts() {
 
 describe('the Send to shortcut', () => {
   const folder = 'C:\\Users\\An\\AppData\\Roaming\\Microsoft\\Windows\\SendTo';
-  const stub = 'C:\\Users\\An\\AppData\\Local\\Orglet\\Orglet.exe';
+  const setupFolder = 'C:\\Users\\An\\AppData\\Local\\Orglet';
+  const stub = `${setupFolder}\\Orglet.exe`;
+  const setupCopy = { executable: `${setupFolder}\\app-0.2.12\\Orglet.exe`, setupFolder };
+  const zipCopy = { executable: 'D:\\Test builds\\Orglet-win32-x64\\Orglet.exe' };
 
   it('points at the stable launcher with the Send to flag, and goes away again', async () => {
     const { files, shortcuts } = fakeShortcuts();
-    const installer = new SendToInstaller(folder, stub, shortcuts);
+    const installer = new SendToInstaller(folder, stub, shortcuts, setupCopy);
     expect(installer.isInstalled()).toBe(false);
     await installer.install();
     const written = files.get(`${folder}\\${SEND_TO_SHORTCUT_NAME}`) ?? files.get(`${folder}/${SEND_TO_SHORTCUT_NAME}`);
@@ -169,11 +172,12 @@ describe('the Send to shortcut', () => {
     expect(files.size).toBe(0);
   });
 
-  it('is repointed on start when an older build wrote it, and never added back on start', async () => {
+  it('is repointed on start when an older version of this install wrote it, and never added back on start', async () => {
     const { files, shortcuts } = fakeShortcuts();
-    const older = new SendToInstaller(folder, 'D:\\Orglet-old\\Orglet.exe', shortcuts);
+    const older = new SendToInstaller(folder, `${setupFolder}\\app-0.2.5\\Orglet.exe`, shortcuts, setupCopy);
     await older.install();
-    const current = new SendToInstaller(folder, stub, shortcuts);
+    const current = new SendToInstaller(folder, stub, shortcuts, setupCopy);
+    expect(current.owner()).toEqual({ kind: 'this' });
     await current.refresh();
     expect([...files.values()][0].target).toBe(stub);
     await current.remove();
@@ -185,10 +189,44 @@ describe('the Send to shortcut', () => {
     const { shortcuts } = fakeShortcuts();
     let writes = 0;
     const counting: ShortcutFiles = { ...shortcuts, write: async (path, shortcut) => { writes += 1; await shortcuts.write(path, shortcut); } };
-    const installer = new SendToInstaller(folder, stub, counting);
+    const installer = new SendToInstaller(folder, stub, counting, setupCopy);
     await installer.install();
     await installer.refresh();
     expect(writes).toBe(1);
+  });
+
+  it('a test build leaves the chosen install’s shortcut alone, and says whose it is (COD-296)', async () => {
+    const { files, shortcuts } = fakeShortcuts();
+    await new SendToInstaller(folder, stub, shortcuts, setupCopy).install();
+    const before = [...files.values()][0];
+    const testBuild = new SendToInstaller(folder, zipCopy.executable, shortcuts, zipCopy);
+    await testBuild.refresh();
+    await testBuild.installUnlessTaken();
+    await testBuild.removeUnlessTaken();
+    expect([...files.values()]).toEqual([before]);
+    expect(testBuild.owner()).toEqual({ kind: 'other', copy: setupFolder });
+    await testBuild.install();
+    expect([...files.values()][0].target).toBe(zipCopy.executable);
+  });
+
+  it('an update or uninstall of the Setup install keeps a ZIP copy the person chose (COD-296)', async () => {
+    const { files, shortcuts } = fakeShortcuts();
+    await new SendToInstaller(folder, zipCopy.executable, shortcuts, zipCopy).install();
+    const setup = new SendToInstaller(folder, stub, shortcuts, setupCopy);
+    await setup.refresh();
+    await setup.installUnlessTaken();
+    await setup.removeUnlessTaken();
+    expect([...files.values()][0].target).toBe(zipCopy.executable);
+    expect(setup.owner()).toEqual({ kind: 'other', copy: 'D:\\Test builds\\Orglet-win32-x64' });
+  });
+
+  it('an update puts a missing shortcut back, and uninstall takes this install’s away', async () => {
+    const { files, shortcuts } = fakeShortcuts();
+    const setup = new SendToInstaller(folder, stub, shortcuts, setupCopy);
+    await setup.installUnlessTaken();
+    expect([...files.values()][0].target).toBe(stub);
+    await setup.removeUnlessTaken();
+    expect(files.size).toBe(0);
   });
 });
 

@@ -41,6 +41,7 @@ A link can only open a chat and prefill a message. It cannot send, change a sett
 - **When Orglet is already open,** the new start hands its arguments to the open window and quits. Otherwise the new start is the app, and reads them itself.
 - **Files stay in the main process.** The window gets the number of files and their names, never their paths. When you pick a chat, the main process imports the files through the same checks as **+ → Files**, one at a time, so one bad file does not stop the others.
 - **A ZIP copy** has no Setup: it registers no links. **Settings → About** can still add the Send to entry, pointing at that copy's `Orglet.exe`.
+- **One entry, one copy.** The Send to entry starts the copy you chose last: the one you ran Setup for, or the one where you turned it on or clicked **Use this copy**. Only that copy updates the entry when it starts or updates. Starting another copy, such as a ZIP or a test build, never rewrites it, and uninstalling Setup leaves an entry that starts another copy. **Settings → About** in any other copy shows the folder the entry starts instead.
 - macOS has neither for now.
 
 The automatic tests cover reading the arguments and links (valid, malformed, oversized, unknown names), the file limits and skipped files, and Setup's install, update and uninstall steps against a fake SendTo folder. They do not click in the real Explorer or open a link from a browser.
