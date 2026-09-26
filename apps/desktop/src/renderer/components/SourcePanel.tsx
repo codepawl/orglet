@@ -57,12 +57,14 @@ function CheckResult({ profile, sources }: { profile: ProfileRecord; sources: Ta
   const sourceName = (id: string) => sources.find(source => source.id === id)?.name;
   return <details className="check-result" id={`checker-${profile.id}`} tabIndex={-1}>
     <summary className="activity-summary"><ChevronRight size={13} aria-hidden="true" className="activity-chevron" />{title} · {new Date(profile.createdAt).toLocaleString(currentLocale())}</summary>
-    {result.runAudit && <RunAuditView audit={result.runAudit} />}
-    {result.exactMatch && <ExactMatchView score={result.exactMatch} sources={sources} />}
-    {result.datasets.map(dataset => <DatasetResult key={dataset.sourceId} dataset={dataset} name={sourceName(dataset.sourceId)} />)}
-    {result.comparison && <ComparisonLine comparison={result.comparison} />}
-    <ul className="muted">{result.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
-    <p className="muted">{t('Đọc bằng {0}', [result.engine])}</p>
+    <div className="check-result-body">
+      {result.runAudit && <RunAuditView audit={result.runAudit} />}
+      {result.exactMatch && <ExactMatchView score={result.exactMatch} sources={sources} />}
+      {result.datasets.map(dataset => <DatasetResult key={dataset.sourceId} dataset={dataset} name={sourceName(dataset.sourceId)} />)}
+      {result.comparison && <ComparisonLine comparison={result.comparison} />}
+      <ul className="muted">{result.limitations.map((limitation, index) => <li key={index}>{tMessage(limitation)}</li>)}</ul>
+      <p className="muted">{t('Đọc bằng {0}', [result.engine])}</p>
+    </div>
   </details>;
 }
 
@@ -156,21 +158,23 @@ export function SourcePanel({ detail, refresh, target, openSource }: { detail: T
     {newestFirst.length > 0 && <div className="check-results">{newestFirst.map(record => <CheckResult key={record.id} profile={record} sources={detail.sources} />)}</div>}
     {dataSources.length > 0 && <details className="more-checks">
       <summary className="activity-summary"><ChevronRight size={13} aria-hidden="true" className="activity-chevron" />{t('Kiểm tra khác')}</summary>
-      {readableDataSources.length >= 2 && <section className="form"><h3>{t('So với đáp án')}</h3>
-        <p className="muted">{t('Đếm bao nhiêu dòng khớp đáp án, ghép hai tệp theo cột mã. Đây là phép đếm đơn giản, không phải điểm chính thức.')}</p>
-        <Select label={t('Tệp cần so')} value={predictionSourceId} onChange={setPredictionSourceId} options={[{ value: '', label: t('Chọn tệp') }, ...readableDataSources.map(source => ({ value: source.id, label: source.name, disabled: source.id === answerSourceId }))]} />
-        <Select label={t('Tệp đáp án')} value={answerSourceId} onChange={setAnswerSourceId} options={[{ value: '', label: t('Chọn tệp') }, ...readableDataSources.map(source => ({ value: source.id, label: source.name, disabled: source.id === predictionSourceId }))]} />
-        <label>{t('Cột ID')}<Input value={scoreIdColumn} onChange={event => setScoreIdColumn(event.target.value)} maxLength={256} placeholder="id" /></label>
-        <label>{t('Cột cần so')}<Input value={predictionColumn} onChange={event => setPredictionColumn(event.target.value)} maxLength={256} placeholder="prediction" /></label>
-        <label>{t('Cột đáp án')}<Input value={answerColumn} onChange={event => setAnswerColumn(event.target.value)} maxLength={256} placeholder="answer" /></label>
-        <Button variant="outline" disabled={busy || !predictionSourceId || !answerSourceId || predictionSourceId === answerSourceId || !scoreIdColumn.trim() || !predictionColumn.trim() || !answerColumn.trim()} onClick={score}>{busy ? t('Đang kiểm tra…') : t('Đếm dòng khớp')}</Button>
-      </section>}
-      <section className="form"><h3>{t('Kiểm tra run-log')}</h3>
-        <p className="muted">{t('Cho tệp ghi điểm của nhiều lần chạy thử (cột solution, run, split, metric, status và score): chọn đúng một tệp ở trên, Orglet xếp hạng từng cách làm và xem thứ hạng có giữ nguyên giữa các phần dữ liệu không.')}</p>
-        <Select label={t('Chiều tối ưu của metric')} value={direction} onChange={value => setDirection(value as typeof direction)} options={[{ value: '', label: t('Chọn theo định nghĩa metric'), icon: <HelpCircle size={16} /> }, { value: 'higher', label: t('Điểm cao hơn tốt hơn'), icon: <TrendingUp size={16} /> }, { value: 'lower', label: t('Điểm thấp hơn tốt hơn'), icon: <TrendingDown size={16} /> }]} />
-        <Button variant="outline" disabled={busy || !direction || selected.length !== 1 || selectedRevoked} onClick={audit}>{t('Kiểm tra run-log local')}</Button>
-        <p className="muted">{t('Orglet chỉ đọc điểm có sẵn trong tệp, không chạy lại gì. Thứ hạng đổi chưa chắc là dữ liệu có vấn đề.')}</p>
-      </section>
+      <div className="more-checks-body">
+        {readableDataSources.length >= 2 && <section className="form"><h3>{t('So với đáp án')}</h3>
+          <p className="muted">{t('Đếm bao nhiêu dòng khớp đáp án, ghép hai tệp theo cột mã. Đây là phép đếm đơn giản, không phải điểm chính thức.')}</p>
+          <Select label={t('Tệp cần so')} value={predictionSourceId} onChange={setPredictionSourceId} options={[{ value: '', label: t('Chọn tệp') }, ...readableDataSources.map(source => ({ value: source.id, label: source.name, disabled: source.id === answerSourceId }))]} />
+          <Select label={t('Tệp đáp án')} value={answerSourceId} onChange={setAnswerSourceId} options={[{ value: '', label: t('Chọn tệp') }, ...readableDataSources.map(source => ({ value: source.id, label: source.name, disabled: source.id === predictionSourceId }))]} />
+          <label>{t('Cột ID')}<Input value={scoreIdColumn} onChange={event => setScoreIdColumn(event.target.value)} maxLength={256} placeholder="id" /></label>
+          <label>{t('Cột cần so')}<Input value={predictionColumn} onChange={event => setPredictionColumn(event.target.value)} maxLength={256} placeholder="prediction" /></label>
+          <label>{t('Cột đáp án')}<Input value={answerColumn} onChange={event => setAnswerColumn(event.target.value)} maxLength={256} placeholder="answer" /></label>
+          <Button variant="outline" disabled={busy || !predictionSourceId || !answerSourceId || predictionSourceId === answerSourceId || !scoreIdColumn.trim() || !predictionColumn.trim() || !answerColumn.trim()} onClick={score}>{busy ? t('Đang kiểm tra…') : t('Đếm dòng khớp')}</Button>
+        </section>}
+        <section className="form"><h3>{t('Kiểm tra run-log')}</h3>
+          <p className="muted">{t('Cho tệp ghi điểm của nhiều lần chạy thử (cột solution, run, split, metric, status và score): chọn đúng một tệp ở trên, Orglet xếp hạng từng cách làm và xem thứ hạng có giữ nguyên giữa các phần dữ liệu không.')}</p>
+          <Select label={t('Chiều tối ưu của metric')} value={direction} onChange={value => setDirection(value as typeof direction)} options={[{ value: '', label: t('Chọn theo định nghĩa metric'), icon: <HelpCircle size={16} /> }, { value: 'higher', label: t('Điểm cao hơn tốt hơn'), icon: <TrendingUp size={16} /> }, { value: 'lower', label: t('Điểm thấp hơn tốt hơn'), icon: <TrendingDown size={16} /> }]} />
+          <Button variant="outline" disabled={busy || !direction || selected.length !== 1 || selectedRevoked} onClick={audit}>{t('Kiểm tra run-log local')}</Button>
+          <p className="muted">{t('Orglet chỉ đọc điểm có sẵn trong tệp, không chạy lại gì. Thứ hạng đổi chưa chắc là dữ liệu có vấn đề.')}</p>
+        </section>
+      </div>
     </details>}
   </div>;
 }
