@@ -17,33 +17,54 @@ export const format = (template: string, params?: readonly unknown[]) =>
 export const translate = (dictionary: Dictionary | null, key: string, params?: readonly unknown[]) => format(dictionary?.[key] ?? key, params);
 
 const escape = (text: string) => text.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
-const patternCache = new WeakMap<Dictionary, { pattern: RegExp; template: string }[]>();
+const patternCache = new WeakMap<Dictionary, { key: string; pattern: RegExp; template: string }[]>();
 const translateValue = (dictionary: Dictionary, value: string) => dictionary[value] ?? value;
+/**
+ * Keys with a value that is itself a finished core message, mapped to that value's placeholder: the error that
+ * stopped a crew role, and the error that refused a memory or an app-change proposal, in the answer's notes and in
+ * the run's trace (COD-252). That value is translated like a whole message. Other values are names, numbers or model
+ * text and only match an exact key, so a sentence that merely starts like a label ("Mở …") stays as written.
+ */
+const messageValues = new Map([
+  ['Role chưa hoàn tất: {0}: {1}', '1'],
+  ['Ghi nhớ thứ {0} bị từ chối: {1}', '1'],
+  ['Không ghi nhớ được: {0}', '0'],
+  ['Đề xuất thay đổi trong app thứ {0} ({1}) bị từ chối: {2}', '2'],
+  ['Đề xuất thay đổi trong app bị từ chối: {0}', '0'],
+  ['Đề xuất sửa hướng dẫn của Tí bị từ chối: {0}', '0'],
+]);
 
 /** How much fixed text a key has besides its placeholders. */
 const literalLength = (key: string) => key.replace(/\{\d+\}/g, '').length;
 
 /**
  * Translates a finished message, e.g. an error text built by the core with values filled in.
- * Exact keys win; otherwise keys with placeholders are matched as patterns (compiled once per dictionary), the most
- * specific first, so a general key such as "{0}: {1}" never answers for a message that has its own (COD-246).
+ * Exact keys win; otherwise keys with placeholders are matched as patterns (compiled once per dictionary). Keys that
+ * hold another message go first, since the message inside can have more fixed text than the key around it; then the
+ * most specific first, so a general key such as "{0}: {1}" never answers for a message that has its own (COD-246).
  */
-export function translateMessage(dictionary: Dictionary | null, message: string) {
+export function translateMessage(dictionary: Dictionary | null, message: string): string {
   if (!dictionary) return message;
   if (dictionary[message]) return dictionary[message];
   let patterns = patternCache.get(dictionary);
   if (!patterns) {
     const keyed = Object.entries(dictionary).filter(([key]) => /\{\d+\}/.test(key));
-    const mostSpecificFirst = keyed.sort(([first], [second]) => literalLength(second) - literalLength(first));
-    patterns = mostSpecificFirst.map(([key, template]) => ({
-      pattern: new RegExp(`^${escape(key).replace(/\\\{(\d+)\\\}/g, '(?<p$1>[\\s\\S]*?)')}$`), template,
+    const ordered = keyed.sort(([first], [second]) =>
+      Number(messageValues.has(second)) - Number(messageValues.has(first)) || literalLength(second) - literalLength(first));
+    patterns = ordered.map(([key, template]) => ({
+      key, pattern: new RegExp(`^${escape(key).replace(/\\\{(\d+)\\\}/g, '(?<p$1>[\\s\\S]*?)')}$`), template,
     }));
     patternCache.set(dictionary, patterns);
   }
-  for (const { pattern, template } of patterns) {
+  for (const { key, pattern, template } of patterns) {
     const match = pattern.exec(message);
-    // A filled-in value can itself be a known message, such as the reason inside "Search failed: {0}".
-    if (match) return template.replace(/\{(\d+)\}/g, (_, index: string) => translateValue(dictionary, match.groups?.[`p${index}`] ?? ''));
+    if (!match) continue;
+    return template.replace(/\{(\d+)\}/g, (_, index: string) => {
+      const value = match.groups?.[`p${index}`] ?? '';
+      if (messageValues.get(key) === index) return translateMessage(dictionary, value);
+      // A filled-in value can itself be a known message, such as the reason inside "Search failed: {0}".
+      return translateValue(dictionary, value);
+    });
   }
   return message;
 }

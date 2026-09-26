@@ -52,6 +52,19 @@ function given<Value>(value: Value | null | undefined): Value | undefined {
   return value === null ? undefined : value;
 }
 
+/** The kinds of proposal a later one in the same reply can point at by ref. */
+type RefKind = Extract<AppProposalKind, 'orglet' | 'crew' | 'skill'>;
+
+/**
+ * A ref to an earlier proposal of this kind that the reply never made. Each kind is its own sentence so the English
+ * gets the right noun: the bare word "Tí" is also the sidebar heading "Orglets" (COD-252).
+ */
+function missingRefMessage(kind: RefKind, ref: string) {
+  if (kind === 'orglet') return `Không có Tí nào được đề xuất với ref "${ref}" trong lượt này.`;
+  if (kind === 'crew') return `Không có hội nào được đề xuất với ref "${ref}" trong lượt này.`;
+  return `Không có skill nào được đề xuất với ref "${ref}" trong lượt này.`;
+}
+
 /** One line of a card: text on one line and no longer than a glance, numbers and flags as plain words the renderer maps. */
 function describe(value: unknown): string {
   if (Array.isArray(value)) return value.map(describe).join(', ');
@@ -164,11 +177,11 @@ export class AppProposals {
   }
 
   private draft(run: Run, task: Task, name: ProposalToolName, rawArguments: unknown, earlier: AppProposal[]): { kind: AppProposalKind; action: AppProposal['action']; ref?: string; title: string; changes: ProposalChange[]; payload: Record<string, unknown>; hold: ProposalHold | null; improvement?: AppProposal['improvement'] } {
-    const refOf = (ref: string | null | undefined, kind: AppProposalKind, what: string) => {
+    const refOf = (ref: string | null | undefined, kind: RefKind) => {
       const value = given(ref);
       if (value === undefined) return undefined;
       const found = earlier.find(proposal => proposal.ref === value && proposal.kind === kind);
-      if (!found) throw new ProposalError(`Không có ${what} nào được đề xuất với ref "${value}" trong lượt này.`);
+      if (!found) throw new ProposalError(missingRefMessage(kind, value));
       return { ref: value, title: found.title };
     };
     const proposer = run.snapshot.worker;
@@ -176,7 +189,7 @@ export class AppProposals {
     switch (name) {
       case 'propose_orglet': {
         const args = ProposeOrglet.partial().parse(rawArguments);
-        const skillRef = refOf(args.skillRef, 'skill', 'skill');
+        const skillRef = refOf(args.skillRef, 'skill');
         const skillId = given(args.skillId);
         if (skillId) this.liveSkill(skillId);
         const chosen: Partial<WorkerInput> = {
@@ -210,10 +223,10 @@ export class AppProposals {
         const memberRefs = given(args.memberRefs) ?? [];
         const members: MemberReference[] | undefined = memberIds.length || memberRefs.length
           ? [...memberIds.map(memberId => ({ id: memberId })), ...memberRefs.map(ref => ({ ref }))] : undefined;
-        const memberNames = members?.map(member => 'id' in member ? this.liveWorker(member.id).name : `ref:${refOf(member.ref, 'orglet', 'Tí')!.ref}`);
+        const memberNames = members?.map(member => 'id' in member ? this.liveWorker(member.id).name : `ref:${refOf(member.ref, 'orglet')!.ref}`);
         if (members && members.length > MAX_CREW_MEMBERS) throw new ProposalError(`Một hội có tối đa ${MAX_CREW_MEMBERS} Tí.`);
         const leadId = given(args.leadId);
-        const leadRef = refOf(args.leadRef, 'orglet', 'Tí');
+        const leadRef = refOf(args.leadRef, 'orglet');
         const lead: MemberReference | undefined = leadId ? { id: leadId } : leadRef ? { ref: leadRef.ref } : undefined;
         const leadName = leadId ? this.liveWorker(leadId).name : leadRef ? `ref:${leadRef.ref}` : undefined;
         const chosen: CrewPayload['fields'] = {
@@ -243,7 +256,7 @@ export class AppProposals {
       case 'propose_crew_template': {
         const args = ProposeCrewTemplate.partial().parse(rawArguments);
         const teamId = given(args.teamId);
-        const teamRef = refOf(args.teamRef, 'crew', 'hội');
+        const teamRef = refOf(args.teamRef, 'crew');
         if (!teamId && !teamRef) throw new ProposalError('Cần teamId của hội có sẵn hoặc teamRef của hội vừa đề xuất.');
         const title = teamId ? this.liveTeam(teamId).name : teamRef!.title;
         const payload: TemplatePayload = { team: teamId ? { id: teamId } : { ref: teamRef!.ref } };
@@ -266,9 +279,9 @@ export class AppProposals {
       case 'propose_schedule': {
         const args = ProposeSchedule.partial().parse(rawArguments);
         const workerId = given(args.workerId);
-        const workerRef = refOf(args.workerRef, 'orglet', 'Tí');
+        const workerRef = refOf(args.workerRef, 'orglet');
         const teamId = given(args.teamId);
-        const teamRef = refOf(args.teamRef, 'crew', 'hội');
+        const teamRef = refOf(args.teamRef, 'crew');
         if ([workerId, workerRef, teamId, teamRef].filter(Boolean).length > 1) throw new ProposalError('Một lịch chạy cho đúng một Tí hoặc một hội.');
         const target: SchedulePayload['fields']['target'] = workerId ? { worker: { id: workerId } } : workerRef ? { worker: { ref: workerRef.ref } }
           : teamId ? { team: { id: teamId } } : teamRef ? { team: { ref: teamRef.ref } } : undefined;
