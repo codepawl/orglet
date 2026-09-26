@@ -102,6 +102,17 @@ export function cursorPointFor(action: BrowserCursorAction, box: Box, viewport: 
 }
 
 /**
+ * Where the cursor waits while a card asks about a step on an element: its tip on the element's lower right corner,
+ * so the cursor and its name hang below and to the right of the element instead of over it. At the element's centre
+ * they covered a small control, a checkbox or a short button, the very thing the card asks about (dogfood,
+ * 2026-09-26). Once the step is allowed the cursor moves to `cursorPointFor` and acts there. Kept inside the viewport.
+ */
+export function askingPointFor(box: Box, viewport: Size): { x: number; y: number } {
+  const clamp = (value: number, limit: number) => Math.round(Math.min(Math.max(value, 0), limit - 1));
+  return { x: clamp(box.x + box.width, viewport.width), y: clamp(box.y + box.height, viewport.height) };
+}
+
+/**
  * Where the orglet last pointed, per run and tab. The host keeps it so a view opened between steps shows the cursor
  * where it was, and forgets a tab when it closes and a run when it ends.
  */
