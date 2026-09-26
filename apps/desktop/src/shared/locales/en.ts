@@ -894,6 +894,7 @@ export const en: Dictionary = {
   'Đặt tên sau câu trả lời đầu; tên bạn tự đổi được giữ.': 'Named after the first answer; a name you set yourself is kept.',
   'Đổi model': 'Change model',
   'Chưa có câu trả lời cho tin nhắn này.': 'No reply to this message yet.',
+  'Lượt này dừng giữa chừng vì app đã đóng.': 'This turn stopped partway because the app closed.',
   'Chấp nhận báo cáo': 'Accept report',
   'Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.': 'Waiting for more evidence. Attach more sources to check again, or accept the report with the stated limitations.',
   'Quyết định đang chờ': 'Decision needed',
