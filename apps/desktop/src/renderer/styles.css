@@ -292,14 +292,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The menu floats over the row's end and only takes room while it shows, as a side thread's does (COD-247): a quiet
    row gives its name the full width instead of truncating it next to an invisible button. */
 .worker-row { position:relative; }
-.worker-row > [data-no-drag]:has(> .row-menu) { position:absolute; top:50%; right:0; transform:translateY(-50%); }
+.worker-row > [data-no-drag]:has(> .org-row-menu) { position:absolute; top:50%; right:0; transform:translateY(-50%); }
 .worker-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .worker { padding-right:36px; }
 @media (hover:none) { .worker-row .worker { padding-right:36px; } }
-.row-menu-popover { position:fixed; z-index:30; width:max-content; min-width:200px; max-width:280px; padding:6px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001f; display:flex; flex-direction:column; gap:2px; animation:menu-in var(--motion-quick) var(--ease-out); }
 @keyframes menu-in { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
-.row-menu-popover button { display:flex; align-items:center; gap:10px; width:100%; min-height:36px; padding:6px 10px; border:0; border-radius:8px; background:transparent; font-size:14px; text-align:left; }
-.row-menu-popover button svg { color:var(--muted); }
-.row-menu-popover button:hover,.row-menu-popover button:focus-visible { background:var(--surface); }
 .worker { display:flex; align-items:center; gap:8px; padding:7px 10px; background:transparent; border:0; border-radius:var(--radius); text-align:left; min-width:0; flex:1; font-size:13px; }
 .worker span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .worker .org-status-mark svg { color:inherit; }
@@ -1915,15 +1911,13 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .archived-tasks summary::-webkit-details-marker { display:none; }
 .archived-tasks summary:hover { background:var(--row-hover); color:var(--text); }
 .archived-tasks[open] summary { margin-bottom:4px; }
-.row-menu-popover button.danger,.row-menu-popover button.danger svg { color:var(--error); }
-.row-menu-question { margin:4px 10px 6px; font-size:12px; color:var(--muted); }
 .archived-row .history-item .avatar { margin-right:1px; }
 .archived-row .history-item { cursor:default; }
 .archived-row .row-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* Like the orglet rows: the menu floats over the end and takes room only while it shows, so the name and its
    days-left pill get the whole row. */
 .archived-row { position:relative; }
-.archived-row > .row-menu { position:absolute; top:50%; right:0; transform:translateY(-50%); }
+.archived-row > .org-row-menu { position:absolute; top:50%; right:0; transform:translateY(-50%); }
 .archived-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .history-item { padding-right:36px; }
 @media (hover:none) { .archived-row .history-item { padding-right:36px; } }
 .select-option + .select-group { margin-top:10px; }
@@ -1998,7 +1992,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .new-task-row:hover:not(:disabled) { background:var(--row-hover); }
 .new-task-row .shortcut { margin-left:auto; padding:1px 7px; border-radius:6px; background:var(--surface); color:var(--muted); font:500 11px/18px var(--font); opacity:0; transition:opacity .12s; }
 .new-task-row:hover .shortcut,.new-task-row:focus-visible .shortcut { opacity:1; }
-.row-menu-popover { color:var(--text); }
 
 /* Live island (COD-164, the owner's dynamic-island reference; docked on the prompt bar in COD-167): a working run
    is one tab on the bar, in the bar's own colour and outline, with the faces of the workers at work and one label
@@ -2266,11 +2259,6 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .composer .composer-send-options { width:28px; height:28px; min-height:28px; padding:0; border-radius:50%; color:var(--muted); background:transparent; }
 .composer .composer-send-options:hover:not(:disabled),.composer .composer-send-options[aria-expanded=true] { background:transparent; color:var(--text); }
 .composer .composer-send-options:disabled { opacity:.35; }
-/* A menu item's shortcut rides at its end, quieter than its label. */
-.row-menu-shortcut { margin-left:auto; padding-left:16px; font:inherit; font-size:12px; color:var(--muted); white-space:nowrap; }
-/* An item with a shortcut keeps its label on one line; the menu grows to fit both instead. */
-.row-menu-popover:has(.row-menu-shortcut) { max-width:min(380px, calc(100vw - 32px)); }
-.row-menu-popover button:has(.row-menu-shortcut) > span { white-space:nowrap; }
 /* A toast that offers something to do takes the pointer; the rest of the stack still lets clicks through. */
 .toast.has-action { pointer-events:auto; }
 .toast-action { margin-left:6px; padding:2px 4px; border:0; border-radius:6px; background:transparent; color:inherit; font:inherit; font-weight:600; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
@@ -2288,7 +2276,7 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 /* The menu floats over the row's end and only takes room while it shows, so a quiet row gives its name the full
    width instead of truncating it next to an invisible button. */
 .side-thread-row { position:relative; }
-.side-thread-row > .row-menu { position:absolute; top:50%; right:2px; transform:translateY(-50%); }
+.side-thread-row > .org-row-menu { position:absolute; top:50%; right:2px; transform:translateY(-50%); }
 .side-thread-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .history-item { padding-right:36px; }
 .tree-children .tree-more { margin-left:0; }
 /* Thread lines (COD-262), after Discord's thread list: a line runs down from under the orglet's face and curves into

@@ -16,9 +16,9 @@ it('defaults the shell to SF Pro, with the bundled font and the platform sans be
 
 // COD-249 UI audit: rules that keep text readable and on one line; each was measured failing before.
 it('lets a quiet sidebar row give its name the width the hidden menu used to reserve', () => {
-  expect(css).toContain('.worker-row > [data-no-drag]:has(> .row-menu) { position:absolute;');
+  expect(css).toContain('.worker-row > [data-no-drag]:has(> .org-row-menu) { position:absolute;');
   expect(css).toContain('.worker-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .worker { padding-right:36px; }');
-  expect(css).toContain('.archived-row > .row-menu { position:absolute;');
+  expect(css).toContain('.archived-row > .org-row-menu { position:absolute;');
 });
 
 it('gives the sidebar a background when it floats over the chat at the minimum window', () => {

@@ -23,3 +23,5 @@ export { FieldLabel } from './components/FieldLabel';
 export type { FieldLabelIcon } from './components/FieldLabel';
 export { InfoTip } from './components/InfoTip';
 export type { InfoTipRow } from './components/InfoTip';
+export { RowMenu } from './components/RowMenu';
+export type { RowMenuIcon, RowMenuItem } from './components/RowMenu';

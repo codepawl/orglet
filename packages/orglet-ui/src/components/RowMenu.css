@@ -1,0 +1,65 @@
+.org-row-menu-panel {
+  position: fixed;
+  z-index: 30;
+  width: max-content;
+  min-width: 200px;
+  max-width: 280px;
+  padding: 6px;
+  background: var(--org-bg, #fff);
+  color: var(--org-text, #1f1f1f);
+  border: 1px solid var(--org-border, #e5e5e5);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px #0000001f;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: org-row-menu-in var(--org-motion-quick, 110ms) var(--org-ease-out, ease-out);
+}
+@keyframes org-row-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.org-row-menu-panel button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 14px;
+  text-align: left;
+}
+.org-row-menu-panel button svg { color: var(--org-muted, #666); }
+.org-row-menu-panel button:hover,
+.org-row-menu-panel button:focus-visible { background: var(--org-surface, #f1f1f1); }
+.org-row-menu-panel button.org-row-menu-danger,
+.org-row-menu-panel button.org-row-menu-danger svg { color: var(--org-error, #c62828); }
+.org-row-menu-question {
+  margin: 4px 10px 6px;
+  font-size: 12px;
+  color: var(--org-muted, #666);
+}
+/* An item's shortcut rides at its end, quieter than its label. */
+.org-row-menu-shortcut {
+  margin-left: auto;
+  padding-left: 16px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--org-muted, #666);
+  white-space: nowrap;
+}
+/* An item with a shortcut keeps its label on one line; the menu grows to fit both instead. */
+.org-row-menu-panel:has(.org-row-menu-shortcut) { max-width: min(380px, calc(100vw - 32px)); }
+.org-row-menu-panel button:has(.org-row-menu-shortcut) > span { white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .org-row-menu-panel { animation: none; }
+}

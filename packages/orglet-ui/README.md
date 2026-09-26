@@ -88,6 +88,11 @@ loads the switch's styles.
   open on click so a row's copy button can be reached, closes on Escape, focus leaving or a pointer outside. `rows` of
   `{ label, value, mono?, onCopy? }`; `label` names the trigger, `icon` is what it shows, `copyLabel` names each copy
   button. Portaled, so a scrolling dialog cannot clip it.
+- `RowMenu`: a row's actions behind an icon button (`icon`, named by `label`). Items (`{ label, icon, onSelect,
+  danger?, confirm?, shortcut? }`) close the menu when chosen; one with `confirm` asks inside the panel first, with
+  `cancelLabel` as the way back, and `asksOnOpen` opens a lone asking item straight on its question. Arrow keys move
+  between items, Escape and a pointer outside close it, and `contextMenuOf` opens it at the pointer on a right-click
+  in the matching ancestor.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
