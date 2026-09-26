@@ -5,7 +5,7 @@
   <img src="images/orglets/browser-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-An orglet can open and read web pages in a real Chrome or Edge window that Orglet starts for it. The window uses a profile of Orglet's own, never your everyday browser profile. At the first level the orglet only reads: it opens a page, reads it as text, looks for something on it, scrolls it and keeps a screenshot for you. At the second level, **Read and act**, it can also click, type, choose from lists and press keys. Anything that could send, pay, buy or delete stops and asks you first, every time.
+An orglet can open and read web pages in a real Chrome or Edge that Orglet starts for it. The browser runs without a window, so it never covers your work or takes your typing; you watch it inside Orglet, with the orglet's cursor moving from step to step, and take it over there. It uses a profile of Orglet's own, never your everyday browser profile. At the first level the orglet only reads: it opens a page, reads it as text, looks for something on it, scrolls it and keeps a screenshot for you. At the second level, **Read and act**, it can also click, type, choose from lists and press keys. Anything that could send, pay, buy or delete stops and asks you first, every time.
 
 Use it when [reading a web page](agent-tools.md#public-web-tools) is not enough: a page that only shows its content after its scripts run, a long page you want searched, a site you signed in to yourself, a search box or a filter you want used, or an app running on your own computer at `localhost`.
 
@@ -26,6 +26,8 @@ A profile is what the browser remembers: cookies, sign-ins and site data.
 
 - **Clean** is the default. Each run opens a private window that is signed in nowhere, and everything it stored is thrown away when the run ends.
 - A **named profile** is one you make and sign in to yourself. Open **Settings → Browser**, choose **Add profile** and give it a name, for example `Work`. Then choose **Open to sign in**: a normal browser window opens, and you sign in to the sites you want orglets to read. Close the window when you are done. In a chat's **Details**, pick the profile under **Browser profile**.
+
+  While a run is using a named profile, **Open to sign in** says so and waits, because the run's browser has the profile open. Use **Open in Chrome** in that chat instead, or wait for the run to end. If you already have the profile open to sign in when a run starts, the run uses that window.
 
 Each named profile has a menu with **Close window**, **Clear data** (removes every sign-in, cookie and site's data in it, and keeps the profile) and **Delete profile**. A profile a run is using cannot be closed, cleared or deleted until the run ends.
 
@@ -97,23 +99,48 @@ Only a chat with one orglet can ask, side threads included. In a crew, a group c
 
 For these, the orglet asks you to take over.
 
+## Watch it work
+
+While a run is using the browser, the bar above the message box says where it is, **Researcher is on example.com…**, with **Watch**. **Watch** opens the live view over the chat: the page as the orglet sees it, updated as it changes. **Details → Browser** shows the same view, smaller, above the list of steps; **View larger** opens the big one.
+
+The orglet's cursor is an arrow with its name. Before each click, choice or typing step it moves to the element, so you see where it is about to act: the middle of a button, a little way into a field it types in. A click leaves a small ring where it landed. Orglet draws the cursor over the picture itself; it is not part of the page, so a page cannot see it or fake it.
+
+When the orglet asks you about a step, the card shows under the live view too, with the orglet's cursor already on the element it asks about.
+
+The live view runs only while it is open. Closing it, or the run ending, stops the picture.
+
 ## Take over and hand back
 
-While a run is using the browser, **Take over** is on the bar above the message box and in **Details → Browser**. It brings the browser window forward and holds the orglet's next browser step until you give the browser back. Use it to sign in, enter payment details, get past a CAPTCHA or pick a file yourself. While you hold it, a page may open a new window, such as a sign-in window, and it stays open for you. The site rules still apply.
+**Take over** is in the live view and in **Details → Browser**. It holds the orglet's next browser step until you give the browser back. In the live view you then click, scroll and type on the page yourself: click once in the picture and your keys go to the page, Escape included, until you click elsewhere. Typing goes through your usual input method, and pasting pastes the text. Use it to sign in, answer a question on the page, get past a CAPTCHA, or show the orglet the way. While you hold it, a page may open a new window, such as a sign-in window; it opens as another tab, and the view follows it. The site rules still apply.
 
-When you are done, choose **Hand back**. The step that was waiting goes on. If the orglet's turn ended while you held the browser, its tabs stay open until you hand it back, then they close.
+When you are done, choose **Hand back**, in the live view, in **Details** or on the bar. The step that was waiting goes on. If the orglet's turn ended while you held the browser, its tabs stay open until you hand it back, then they close.
 
 Holding the browser pauses only its steps. The orglet can still think and write, and a step that waits for more than 15 minutes comes back to it as "the person still has the browser", so it can answer with what it has.
 
-Signing in happens only here, on the pages of the run you took over, or in **Settings → Browser → Open to sign in**. The orglet never types a password.
+## Open in Chrome
+
+**Open in Chrome** moves the run's tabs into a real Chrome or Edge window you can use like any other, and takes the browser over if you had not already. The window opens at the same pages. For the **Clean** profile it carries the run's cookies and site data over, and brings them back when you hand back; what a page kept only in memory, such as a half-filled form, does not come along. A named profile opens in a window with everything it has stored.
+
+While the tabs are in Chrome, the live view says so, with **Show Chrome window** and **Watch in Orglet**, which brings the tabs back into the live view while you keep holding the browser. **Hand back** brings them back and lets the orglet go on. Closing the Chrome window does the same as **Hand back**.
+
+**Open in Chrome** is for what the live view cannot do. Orglet suggests it, in one quiet line under the live view with the reason, when:
+
+- the page asks for a passkey,
+- the page asks you to pick a file,
+- the page asked a question in a dialog (Orglet closes those, since nothing in Orglet may answer them),
+- you click into a password or card field while you hold the browser, so the browser's own autofill can help,
+- the page asks you to sign in through the browser's own sign-in box.
+
+It only suggests. Nothing moves to a window until you choose **Open in Chrome**.
+
+Signing in happens only here: on the pages of a run you took over, in the live view or in Chrome, or in **Settings → Browser → Open to sign in**. The orglet never types a password.
 
 ## What you see
 
-- While it works, the bar above the message box says where it is: **Researcher is on example.com…**, with **Take over**. While a card waits: **Researcher is waiting for your OK…**. While you hold the browser: **You have the browser**, with **Hand back**.
+- While it works, the bar above the message box says where it is: **Researcher is on example.com…**, with **Watch**. While a card waits: **Researcher is waiting for your OK…**. While you hold the browser: **You have the browser**, with **Watch** and **Hand back**; with the tabs in Chrome, **You have the page in Chrome**.
 - In the answer's steps: **Opened example.com**, **Read the page example.com**, **Searched the page**, **Took a screenshot of example.com**, **Typed into “Search” on example.com**, **Clicked “Search” on example.com**, **Asked to click “Place order” on shop.example.com · allowed** or **· declined**. A step the rules refused shows as a step that did not go through, with the reason.
-- **Details → Browser** lists the chat's browser steps, newest first, each with its site and time. An acting step names its element and says whether it was plain **input** or **asked first**, and whether you allowed it. A step with a screenshot, including the picture a card showed, has a button to view it.
-- The window is real, and it stays minimized while the orglet works so it does not cover your work or take your typing. Chrome and Edge bring a window up for a moment when a tab opens, including a tab a page opens on its own; Orglet minimizes it again at once, and the app you were using gets the keyboard back. The browser shows on the taskbar while a run uses it. Chrome and Edge show the bar that says the browser is controlled by automated software.
-- **Show browser window** in **Details → Browser** brings the window forward without holding the orglet's steps. From then until the run ends, Orglet leaves the window where you put it. **Take over** does the same, and so does **Hand back** afterwards: the window stays where it is. A named profile you opened with **Open to sign in** is never minimized while it is open, and neither are the runs using it.
+- **Details → Browser** shows the live view while a run uses the browser, then lists the chat's browser steps, newest first, each with its site and time. An acting step names its element and says whether it was plain **input** or **asked first**, and whether you allowed it. A step with a screenshot, including the picture a card showed, has a button to view it.
+- No browser window opens while the orglet works, so nothing takes the foreground or your typing, and nothing shows on the taskbar. A window opens only when you ask for one: **Open in Chrome**, or **Open to sign in** in Settings. That window shows the bar that says the browser is controlled by automated software.
 - **Stop** stops a step in the middle, a page that is still loading included.
 
 ## Schedules and crews
@@ -130,11 +157,21 @@ A crew's chat and a group chat have the same **Browser** control as any chat, an
 
 **An acting step.** The host takes a fresh reading of the page and reports the element (its role and name, the kind of field, the form it belongs to and how that form sends, the link it sits in) and the page (a visible password or card field, a payment provider's frame or an address like `/checkout`, a CAPTCHA). The core sets the risk from those facts alone (`core/tools/browser-risk.ts`). A step that asks waits in the running turn: the card lives in the core's memory, the window shows it, and your click is a command only the window sends. Right before the step, the host checks the page is still at the same address and the element still has the same role and name; a page that swapped "Next" for "Place order" while you were asked gets read again instead of clicked.
 
-**The window.** Chrome shows a window for each new Clean run and brings a minimized window back up, taking the foreground, whenever a tab opens in it: a run's second tab, or a link or script on the page that opens a new one. The host minimizes the run's window right after every new tab, every popup, every page load and every step, unless the person asked to see it, which gives the foreground back to the app they were using. It reads and sets the window's state with Chrome's own window commands and never brings a window to the front, except for **Show browser window**, **Take over** and **Open to sign in**. A named profile opens with a blank window of its own; when a run opened the profile, that window is minimized at launch too. Chrome and Edge give a minimized window's pages little time to draw, so a click or typing step can take a few seconds there. Chrome keeps only the last `--disable-features` switch it is given, so the one the host passes lists Playwright's disabled features as well as its own; otherwise HTTPS upgrades, Translate and paint holding would come back on.
+**No window.** A run's browser is Chrome's own headless mode: the real browser, with no window. Pages see the same user agent that browser sends with a window, passed as the `--user-agent` switch so the header and the client hints (`Sec-CH-UA`, `navigator.userAgentData`) agree; a plain headless user agent says `HeadlessChrome`, and some sites refuse it. Nothing else is hidden: `navigator.webdriver` stays true and Orglet never turns off Chrome's automation signals. We measured this on Windows 11 with Chrome 153 across 23 sites, two visits each: with its own user agent, headless was blocked on 6 of 46 visits and met a challenge page on 14; with the headed user agent, 2 blocks and 12 challenges, the same as a window kept off screen. Unlike a minimized window, it never took the foreground: 0 ms over two rounds of opening tabs, clicking, typing and a popup, where a minimized window came to the front five times for 60 to 95 ms each. Chrome keeps only the last `--disable-features` switch it is given, so the one the host passes lists Playwright's disabled features as well as its own; otherwise HTTPS upgrades, Translate and paint holding would come back on.
 
-**Holding the browser.** **Take over** is a command to the core. It marks the chat's browser as held and tells the host, which brings the window forward, lets popups stay open and stops catching file pickers. Every browser step of the chat's runs checks the mark before it starts and waits while it is set. **Hand back** clears it, the waiting step goes on, and the host goes back to closing popups and catching file pickers. The mark lives in memory, so quitting the app clears it along with the run.
+**The live view.** While a view is open, the host streams the tab the run used last with Chrome's screencast (`Page.startScreencast`): JPEG pictures at quality 60, no wider than the view draws them, and at most ten a second, because the host acknowledges each picture only after 100 ms and Chrome sends the next one only then. A page that does not change sends none. Chrome can drop a frame that comes while earlier ones wait for that acknowledgement, which left the last change of a burst unsent in our tests, so 400 ms after the last frame the host sends one picture of the tab as it is. While Orglet takes a screenshot of its own for a card, which covers password fields and outlines the element for that moment, frames are held back. The pictures pass from the host through the main process to the window and are drawn on a canvas; they are never written anywhere, and the window gets nothing else from the page. A view renews its watch every 10 seconds, and the host stops streaming a watch that is not renewed within 30, so a window that reloaded does not leave a stream running.
 
-**What is kept.** Each step is a journal row: the run, the step, the tab, what kind of step, the site, the element for an acting step, the risk the core set (read, input or consequential), what came of it (done, refused, failed, declined or unknown) and the screenshot, if any. Screenshots, including the pictures cards show, are PNG files kept in Orglet's database on this computer, at most ten per run. Both go when you delete the chat, and neither goes into a [backup](settings.md#backup-and-restore). A backup carries no browser profile and no site list; after a restore, turn the browser on again and pick the profile.
+**The cursor.** Before a click, a choice or typing, the host scrolls the element into view, reads its box, and tells the window where the orglet points, in the page's pixels. The host keeps the last point per run and tab, so a view opened between steps shows it at once. A card that asks about a step puts the cursor on its element when its picture is taken. While someone watches, the step waits 300 ms for the drawn cursor to arrive before it acts; with nobody watching it does not wait. In our scenario a click took about 0.65 s and typing about 0.6 s with the live view open, against about 0.35 s and 0.29 s with it closed.
+
+**Your input.** In the live view, a point is turned into the page's pixels from the size the view is drawn at and the size of the page the pictures report, so the window's display scaling does not matter. Clicks, the wheel and keys go to the tab through the main process and the host, which sends them as Chrome input events with Playwright's mouse and keyboard, one at a time and in order. The host takes them only while you hold the browser. Characters come from a hidden text field, so an input method composes them first, and are entered as text.
+
+**Open in Chrome.** A named profile's folder is locked by the browser using it, so the host closes the headless browser and opens the same profile with a window, at the tabs' addresses. A Clean run gets a private window of its own, with the cookies and site data of its headless context; handing back copies them into a new headless context the same way. A tab closed in the window is forgotten; the window closing (all of the run's tabs at once) counts as handing back, and the run goes on headless at the addresses its tabs were at. **Open to sign in** needs the profile's folder too, so it is refused while a run uses that profile headless.
+
+**Suggestions.** The host notes a passkey request (a small script in each headless page calls Orglet before `navigator.credentials.get` or `create` asks for a passkey, and otherwise leaves the call as it was), a file picker it caught, a dialog it dismissed, a page that failed on the browser's own sign-in box (`ERR_INVALID_AUTH_CREDENTIALS`, or a 401 or 407 asking for one), and, after each click or key while you hold the browser, whether the page's focus is in a password or card field. The same suggestion is not repeated within 10 seconds, and handing back clears it.
+
+**Holding the browser.** **Take over** is a command to the core. It marks the chat's browser as held and tells the host, which keeps popups open as the run's tabs and takes your input from the live view; with **Open in Chrome** it also moves the tabs into a window, where file pickers and dialogs are yours. Every browser step of the chat's runs checks the mark before it starts and waits while it is set. **Hand back** first brings tabs in Chrome back to the headless browser, then clears the mark, and the waiting step goes on. The mark lives in memory, so quitting the app clears it along with the run.
+
+**What is kept.** Each step is a journal row: the run, the step, the tab, what kind of step, the site, the element for an acting step, the risk the core set (read, input or consequential), what came of it (done, refused, failed, declined or unknown) and the screenshot, if any. Screenshots, including the pictures cards show, are PNG files kept in Orglet's database on this computer, at most ten per run. Both go when you delete the chat, and neither goes into a [backup](settings.md#backup-and-restore). The live view's pictures and the cursor's position are never kept at all. A backup carries no browser profile and no site list; after a restore, turn the browser on again and pick the profile.
 
 **Unknown outcomes.** A reading step that was running when the app closed simply runs again when the run continues. An acting step goes through the same tool journal as file edits: an input step may run again, but a step that asked you and was running when the app closed is never run again on its own; its outcome stays unknown for you to check. A card that was still waiting when the app closed counts as declined, since nothing was done.
 
@@ -148,8 +185,10 @@ A crew's chat and a group chat have the same **Browser** control as any chat, an
 - Act on a page at **Read pages**, or in a schedule.
 - Take a step that could send, pay, buy, order, delete, post or sign out without asking you first, or ask in a way that lets you say "always".
 - Type a password or a card number, touch a CAPTCHA, answer a dialog, download, or upload a file.
+- Hide that the browser is automated.
+- Open a browser window you did not ask for.
 - Open settings, extension or file pages, or a page on this computer or your network you did not allow.
-- Sign in for you. You sign in yourself, after **Take over** or in **Open to sign in**.
+- Sign in for you. You sign in yourself, after **Take over**, in **Open in Chrome** or in **Open to sign in**.
 - Send anything to Orglet or anyone else. `playwright-core` sends no usage data; Chrome and Edge follow their own settings.
 
 ## Limits
@@ -168,3 +207,5 @@ A crew's chat and a group chat have the same **Browser** control as any chat, an
 | Sites per chat | 100 |
 | Named profiles | 20 |
 | Browser left open after the last run | 1 minute |
+| Live view pictures | 10 a second at most, JPEG quality 60 |
+| Live view without a renewal | 30 seconds |

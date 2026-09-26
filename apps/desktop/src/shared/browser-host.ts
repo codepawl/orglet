@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BrowserKey, BrowserProfileId, BrowserRef, BrowserScrollDirection, BrowserSites, BrowserTabId, CLEAN_BROWSER_PROFILE, MAX_BROWSER_TYPED_CHARACTERS, MAX_BROWSER_WAIT_MS, type BrowserChoice } from './browser';
+import { BrowserCursor, BrowserCursorAction, BrowserInputEvent, BrowserSuggestion } from './browser-live';
 
 /**
  * What the core asks of the browser host process, and what main asks of it for Settings (COD-261). The core has
@@ -40,21 +41,33 @@ export type BrowserExpectedTarget = z.infer<typeof BrowserExpectedTarget>;
 export const BrowserHostRequest = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('open'), runId: RunId, profileId: BrowserProfileId, policy: BrowserPolicy, tabId: BrowserTabId.nullable(), url: z.string().min(1).max(4096) }).strict(),
   z.object({ kind: z.literal('snapshot'), runId: RunId, policy: BrowserPolicy, tabId: BrowserTabId }).strict(),
-  /** `highlight` outlines one element in the picture, for the card that asks the person about it. */
-  z.object({ kind: z.literal('screenshot'), runId: RunId, policy: BrowserPolicy, tabId: BrowserTabId, highlight: BrowserRef.optional() }).strict(),
+  /**
+   * `highlight` outlines one element in the picture, for the card that asks the person about it; `pointer` also puts
+   * the orglet's cursor on it, as the step it asks about would.
+   */
+  z.object({ kind: z.literal('screenshot'), runId: RunId, policy: BrowserPolicy, tabId: BrowserTabId, highlight: BrowserRef.optional(), pointer: BrowserCursorAction.optional() }).strict(),
   /** What the page reports about an element before a step on it (`ref` null: the focused one, for a key press). */
   z.object({ kind: z.literal('inspect'), runId: RunId, policy: BrowserPolicy, tabId: BrowserTabId, ref: BrowserRef.nullable() }).strict(),
   /** Acts on a page; `url` and `expect` are what the core saw when it decided, and the host checks both again first. */
   z.object({ kind: z.literal('act'), runId: RunId, policy: BrowserPolicy, tabId: BrowserTabId, step: BrowserActStep, url: z.string().max(4096), expect: BrowserExpectedTarget.nullable() }).strict(),
-  /** The person takes the run's browser over (its window comes forward and popups stay open) or hands it back. */
-  z.object({ kind: z.literal('hold'), runId: RunId, held: z.boolean() }).strict(),
+  /**
+   * The person takes the run's browser over (its popups stay open and its steps wait) or hands it back. `inChrome`
+   * moves the run's tabs into a Chrome window for them; without it they use the live view in Orglet, and a run that
+   * was in Chrome goes back to the headless browser.
+   */
+  z.object({ kind: z.literal('hold'), runId: RunId, held: z.boolean(), inChrome: z.boolean() }).strict(),
+  /**
+   * A view in the window starts or stops watching a run's browser, or renews its watch. `width` is how many pixels
+   * wide the view draws the page, so frames are no larger than it needs.
+   */
+  z.object({ kind: z.literal('watch'), runId: RunId, watching: z.boolean(), width: z.number().int().min(160).max(4096) }).strict(),
+  /** A click, a wheel turn or a key the person gave the live view; only accepted while they hold the browser. */
+  z.object({ kind: z.literal('input'), runId: RunId, event: BrowserInputEvent }).strict(),
   z.object({ kind: z.literal('scroll'), runId: RunId, policy: BrowserPolicy, tabId: BrowserTabId, direction: BrowserScrollDirection }).strict(),
   z.object({ kind: z.literal('tabs'), runId: RunId }).strict(),
   z.object({ kind: z.literal('close'), runId: RunId, tabId: BrowserTabId }).strict(),
   /** The run ended: its tabs close, and a Clean context is thrown away with everything the pages stored. */
   z.object({ kind: z.literal('endRun'), runId: RunId }).strict(),
-  /** Brings the window of a run's tab to the front, or the newest browser window when no run is named. */
-  z.object({ kind: z.literal('show'), runId: RunId.nullable() }).strict(),
   z.object({ kind: z.literal('detect') }).strict(),
   /** Opens a named profile in a normal window so the person can sign in to sites themselves. */
   z.object({ kind: z.literal('openProfile'), profileId: z.uuid() }).strict(),
@@ -127,6 +140,21 @@ export const BrowserActResult = BrowserTabView.extend({
   stale: z.string().max(500).optional(),
 }).strict();
 export type BrowserActResult = z.infer<typeof BrowserActResult>;
+
+/**
+ * What the host tells main without being asked, for the window or the core: a frame of the tab a view watches (JPEG,
+ * base64, never kept), where the orglet just pointed, a suggestion to open the page in Chrome, and `released` when the
+ * person closed the Chrome window they had been handed, which hands the browser back.
+ */
+export const BrowserHostEvent = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('frame'), runId: RunId, tabId: BrowserTabId, data: z.string().max(12_000_000), width: z.number().int().min(1).max(10_000), height: z.number().int().min(1).max(10_000) }).strict(),
+  z.object({ kind: z.literal('cursor'), runId: RunId, cursor: BrowserCursor }).strict(),
+  z.object({ kind: z.literal('suggest'), runId: RunId, suggestion: BrowserSuggestion }).strict(),
+  z.object({ kind: z.literal('released'), runId: RunId }).strict(),
+]);
+export type BrowserHostEvent = z.infer<typeof BrowserHostEvent>;
+
+export const BrowserHoldResult = z.object({ inChrome: z.boolean() }).strict();
 
 /** How the core reaches the host: one request, cancelled through the signal. The real one relays through main. */
 export type BrowserHost = { request(request: BrowserHostRequest, signal: AbortSignal): Promise<unknown> };

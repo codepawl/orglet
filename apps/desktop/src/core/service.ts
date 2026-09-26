@@ -362,7 +362,7 @@ export class CoreService {
       case 'browserTakeOver': {
         const input = commands.browserTakeOver.parse(args);
         const taskId = this.liveTask(input.taskId).id;
-        if (input.taken) return this.browser.takeOver(taskId);
+        if (input.taken) return this.browser.takeOver(taskId, input.inChrome ?? false);
         await this.browser.handBack(taskId);
         return false;
       }

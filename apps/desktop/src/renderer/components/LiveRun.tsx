@@ -188,20 +188,24 @@ function browserSiteOfEvent(message: string): string | undefined {
 
 const askingDoing: Doing = { state: 'waiting', sentence: name => t('{0} đang chờ bạn cho phép…', [name]), line: () => t('Đang chờ bạn cho phép…') };
 const holdingDoing: Doing = { state: 'pausing', sentence: () => t('Bạn đang dùng trình duyệt'), line: () => t('Bạn đang dùng trình duyệt') };
+const inChromeDoing: Doing = { state: 'pausing', sentence: () => t('Bạn đang dùng trang trong Chrome'), line: () => t('Bạn đang dùng trang trong Chrome') };
 const handBackDoing: Doing = { state: 'waiting', sentence: name => t('{0} đang chờ bạn trả lại trình duyệt…', [name]), line: () => t('Đang chờ bạn trả lại trình duyệt…') };
 
 /**
  * The island of a run that uses Orglet's browser (COD-261): waiting on the card that asks about a step, or, while
- * the person has taken the browser over, saying so with Hand back; otherwise the run's own island with Take over.
+ * the person has taken the browser over, saying so with Watch (unless the tabs are in Chrome) and Hand back;
+ * otherwise the run's own island with Watch, which opens the live view where Take over is.
  */
-export function withBrowserControls(view: IslandView, live: BrowserLive | undefined, workers: readonly Worker[], takeOver: (taken: boolean) => void): IslandView {
+export function withBrowserControls(view: IslandView, live: BrowserLive | undefined, workers: readonly Worker[], controls: { watch: () => void; handBack: () => void }): IslandView {
   if (!live) return view;
   if (live.approval) return islandFor(askingDoing, workers);
+  const watch = { kind: 'watch' as const, label: t('Theo dõi'), onSelect: controls.watch };
   if (live.takenOver) {
-    const handBack = { kind: 'handBack' as const, label: t('Trả lại'), onSelect: () => takeOver(false) };
-    return { ...islandFor(live.waiting ? handBackDoing : holdingDoing, workers), action: handBack };
+    const handBack = { kind: 'handBack' as const, label: t('Trả lại'), onSelect: controls.handBack };
+    const doing = live.waiting ? handBackDoing : live.inChrome ? inChromeDoing : holdingDoing;
+    return { ...islandFor(doing, workers), actions: live.inChrome ? [handBack] : [watch, handBack] };
   }
-  if (live.using) return { ...view, action: { kind: 'takeOver', label: t('Tiếp quản'), onSelect: () => takeOver(true) } };
+  if (live.using) return { ...view, actions: [watch] };
   return view;
 }
 

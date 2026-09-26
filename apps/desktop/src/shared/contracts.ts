@@ -370,8 +370,9 @@ export const commands = {
   browserScreenshot: z.object({ taskId: Id, id: Id }).strict(),
   // The person's answer to the card that asks about one consequential browser step; there is no "always".
   answerBrowserApproval: z.object({ taskId: Id, requestId: Id, answer: z.enum(['allow', 'decline']) }).strict(),
-  // Take the chat's browser over (true) or hand it back (false); the result says whether a window came forward.
-  browserTakeOver: z.object({ taskId: Id, taken: z.boolean() }).strict(),
+  // Take the chat's browser over (true) or hand it back (false). Taken over, the person uses it in Orglet's live view,
+  // or with `inChrome` in a Chrome window; the result says whether the tabs are in Chrome now.
+  browserTakeOver: z.object({ taskId: Id, taken: z.boolean(), inChrome: z.boolean().optional() }).strict(),
   settings: z.object({ language: Language.optional(), autoTitles: z.boolean().optional(), confirmOpenTask: z.boolean().optional(), copyFormat: FormatPreference.optional(), downloadFormat: FormatPreference.optional(), archiveRetentionDays: ArchiveRetention.optional(), theme: z.enum(['system', 'light', 'dark']), connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000), providerConcurrency: z.number().int().min(1).max(MAX_PROVIDER_CONCURRENCY).optional(), providerConsent: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES).refine(items => new Set(items).size === items.length, 'Duplicate provider').optional(), accentColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), logoColor: LogoColor.optional(), interfaceFont: FontFamily.nullable().optional(), codeFont: FontFamily.nullable().optional(), autoUpdate: z.boolean().optional(), backgroundNotifications: z.boolean().optional(), webSearchProvider: WebSearchProvider.optional() }),
 } as const;
 export type Command = keyof typeof commands;
@@ -462,8 +463,15 @@ export interface Bridge {
   /** Empties a profile's folder: every sign-in, cookie and site's data in it. */
   clearBrowserProfile(id: string): Promise<BrowserState>;
   deleteBrowserProfile(id: string): Promise<BrowserState>;
-  /** Brings the browser window of a run's tab to the front, or the newest one; false when no window is open. */
-  showBrowser(runId: string | null): Promise<boolean>;
+  /**
+   * Starts, renews or stops watching a run's browser in the live view (COD-261); `width` is how wide the view draws
+   * the page, in device pixels. Null when the browser is not running.
+   */
+  watchBrowser(runId: string, watching: boolean, width: number): Promise<import('./browser-live').BrowserWatchState | null>;
+  /** A click, wheel turn or key from the live view; the host refuses it unless the person holds the browser. */
+  browserInput(runId: string, event: import('./browser-live').BrowserInputEvent): Promise<void>;
+  /** Frames, the cursor and suggestions for the runs a view watches, pushed by main. */
+  onBrowserLive(callback: (event: import('./browser-live').BrowserLiveEvent) => void): () => void;
 }
 declare global { interface Window { orglet: Bridge } }
 

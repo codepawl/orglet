@@ -12,7 +12,8 @@ export class BrowserHostProcess {
   private starting?: Promise<Electron.UtilityProcess>;
   private pending = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
 
-  constructor(private profilesRoot: string) {}
+  /** `onEvent` gets what the host sends on its own: frames, the cursor, suggestions and a closed Chrome window. */
+  constructor(private profilesRoot: string, private onEvent: (event: unknown) => void = () => {}) {}
 
   get running() {
     return this.child !== undefined;
@@ -34,6 +35,10 @@ export class BrowserHostProcess {
           clearTimeout(timer);
           this.child = child;
           resolve(child);
+          return;
+        }
+        if (message?.event !== undefined) {
+          this.onEvent(message.event);
           return;
         }
         const waiting = typeof message?.id === 'string' ? this.pending.get(message.id) : undefined;

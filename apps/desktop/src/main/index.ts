@@ -42,7 +42,8 @@ import { BackgroundNotice } from '../shared/background-notice';
 import { BrowserHostProcess } from './browser-host';
 import { BrowserProfiles } from './browser-profiles';
 import { detectBrowser } from '../browser/detect';
-import { BrowserHostRequest } from '../shared/browser-host';
+import { BrowserHostEvent, BrowserHostRequest } from '../shared/browser-host';
+import { BrowserInputEvent, type BrowserLiveEvent } from '../shared/browser-live';
 import { CLEAN_BROWSER_PROFILE, type BrowserState } from '../shared/browser';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
@@ -302,7 +303,7 @@ async function browserState(): Promise<BrowserState> {
   };
 }
 /** The kinds of request the core may send the host; Settings' own requests (sign-in windows) come only from main. */
-const CORE_BROWSER_KINDS = new Set(['open', 'snapshot', 'screenshot', 'inspect', 'act', 'hold', 'scroll', 'tabs', 'close', 'endRun', 'show']);
+const CORE_BROWSER_KINDS = new Set(['open', 'snapshot', 'screenshot', 'inspect', 'act', 'hold', 'scroll', 'tabs', 'close', 'endRun']);
 /** Passes one of the core's browser steps to the host, after checking a named profile still exists. */
 async function relayBrowser(id: string, raw: unknown) {
   const reply = (args: unknown) => { if (ready) core.postMessage({ id, command: 'browserReply', args }); };
@@ -319,13 +320,32 @@ async function relayBrowser(id: string, raw: unknown) {
     reply({ ok: false, error: error instanceof z.ZodError ? 'Yêu cầu trình duyệt không hợp lệ.' : error instanceof Error ? error.message : 'Trình duyệt gặp lỗi.' });
   }
 }
+/**
+ * What the browser host sends on its own (COD-261). Frames, the cursor and suggestions go to the window, which shows
+ * them in the live view; a frame's picture is passed on as bytes and kept nowhere. A Chrome window the person closed
+ * hands the browser back, which is the core's to do.
+ */
+function relayBrowserEvent(raw: unknown) {
+  const parsed = BrowserHostEvent.safeParse(raw);
+  if (!parsed.success) return;
+  const event = parsed.data;
+  if (event.kind === 'released') {
+    void request('browserReleased', event.runId).catch(() => undefined);
+    return;
+  }
+  if (!window || window.isDestroyed()) return;
+  const live: BrowserLiveEvent = event.kind === 'frame'
+    ? { kind: 'frame', runId: event.runId, tabId: event.tabId, bytes: Buffer.from(event.data, 'base64'), width: event.width, height: event.height }
+    : event;
+  window.webContents.send('orglet:browser-live', live);
+}
 async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
   credentials = new Credentials(directory);
   mcpSecrets = new McpSecretStore(directory, safeStorage);
   webSearchKeys = new WebSearchKeys(directory, safeStorage);
   browserProfiles = new BrowserProfiles(join(directory, 'browser'));
-  browserHost = new BrowserHostProcess(browserProfiles.profilesRoot);
+  browserHost = new BrowserHostProcess(browserProfiles.profilesRoot, relayBrowserEvent);
   const workspaceRuntimePaths = app.isPackaged ? {
     sandboxExecutable: join(process.resourcesPath, 'wxc-exec.exe'),
     helperPath: join(process.resourcesPath, 'workspace-helper.cjs'),
@@ -500,10 +520,15 @@ async function start() {
     await browserProfiles.remove(profileId);
     return browserState();
   });
-  handle('orglet:browser-show', async raw => {
-    const runId = z.union([Id, z.null()]).parse(raw);
-    const shown = await browserHost!.requestIfRunning({ kind: 'show', runId }) as { shown?: boolean } | undefined;
-    return shown?.shown === true;
+  // The live view of a run's browser (COD-261): the window watches a run it read from the chat, and while the person
+  // holds the browser its clicks and keys go to the tab. The host refuses input for a run nobody took over.
+  handle('orglet:browser-watch', async raw => {
+    const input = z.object({ runId: Id, watching: z.boolean(), width: z.number().int().min(160).max(4096) }).strict().parse(raw);
+    return await browserHost!.requestIfRunning({ kind: 'watch', ...input }) ?? null;
+  });
+  handle('orglet:browser-input', async raw => {
+    const input = z.object({ runId: Id, event: BrowserInputEvent }).strict().parse(raw);
+    await browserHost!.requestIfRunning({ kind: 'input', ...input });
   });
   // The renderer names a link; the address comes from the allowlist, so nothing shown in the window can choose one.
   handle('orglet:open-link', async raw => { await shell.openExternal(ABOUT_LINKS[AboutLink.parse(raw)]); });

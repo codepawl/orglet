@@ -121,13 +121,16 @@ function linkDoesSomething(href: string): boolean {
   return words.some(word => CONSEQUENTIAL_PATH_WORDS.includes(word));
 }
 
-function isPasswordField(target: BrowserTargetFacts): boolean {
+/** What a field says about itself, which is all the password and card checks read. */
+type FieldFacts = Pick<BrowserTargetFacts, 'inputType' | 'autocomplete' | 'fieldName'>;
+
+export function isPasswordField(target: FieldFacts): boolean {
   if (target.inputType === 'password') return true;
   const tokens = (target.autocomplete ?? '').toLowerCase().split(/\s+/);
   return tokens.some(token => token === 'current-password' || token === 'new-password' || token === 'one-time-code');
 }
 
-function isCardField(target: BrowserTargetFacts): boolean {
+export function isCardField(target: FieldFacts): boolean {
   const tokens = (target.autocomplete ?? '').toLowerCase().split(/\s+/);
   if (tokens.some(token => token.startsWith('cc-'))) return true;
   const name = folded((target.fieldName ?? '').toLowerCase()).replace(/[_-]/g, ' ');
