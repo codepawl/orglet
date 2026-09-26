@@ -1,4 +1,4 @@
-import { ownWords } from '../../shared/forward';
+import { chatHeadline, ownWords } from '../../shared/forward';
 import { canContinueRun } from '../../shared/out-of-steps';
 import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { PERMISSIONS_OFF_INSTRUCTION, permissionsOff } from './permission-hints';
@@ -487,13 +487,14 @@ class Paused extends Error {}
 const chatReport = (message: string): Report => ({ format: 'chat', title: message.trim().split('\n')[0].replace(/^#+\s*/, '').slice(0, 120) || 'Trả lời', summary: message.trim(), findings: [], limitations: [] });
 /**
  * Name for a task after its first answer: the model's suggestion, else a requested report's own title, else the first
- * line of the message shortened at a word. Returns nothing when that would only repeat the message.
+ * line of the message shortened at a word. Returns nothing when that would only repeat the message. `headline` is the
+ * line a chat goes by (`chatHeadline`): for a chat that began with a forward, what was forwarded (COD-285).
  */
-export function taskTitle(suggested: string | null, report: Report, brief: string) {
+export function taskTitle(suggested: string | null, report: Report, brief: string, headline = brief) {
   const cleaned = suggested?.replace(/^["'“”\s]+|["'“”.\s]+$/g, '').slice(0, 80);
   if (cleaned) return cleaned;
   if (report.format !== 'chat' && report.title !== 'Báo cáo mẫu') return report.title.slice(0, 80);
-  const line = brief.trim().split('\n')[0].replace(/\s+/g, ' ').replace(/[.:;,!?…]+$/, '');
+  const line = headline.trim().split('\n')[0].replace(/\s+/g, ' ').replace(/[.:;,!?…]+$/, '');
   const short = line.length <= 48 ? line : `${line.slice(0, 48).replace(/\s+\S*$/, '')}…`;
   return short && short !== brief.trim() ? short : undefined;
 }
@@ -2111,7 +2112,8 @@ export class Runner {
       new ChatSearch(this.store).indexAnswer(artifact, run);
       if (proposals.length) new KnowledgeBase(this.store).propose(run, artifact.id, proposals);
       if (this.wantsTitle(task, run)) {
-        const title = taskTitle(suggestedTitle, report, this.store.get<Task>('tasks', task.id).brief);
+        const current = this.store.get<Task>('tasks', task.id);
+        const title = taskTitle(suggestedTitle, report, current.brief, chatHeadline(current));
         if (title) this.store.setSetting('taskTitles', { ...this.store.setting<Record<string, string>>('taskTitles', {}), [task.id]: title });
       }
       const missing = report.review?.checks.filter(check => check.status === 'not_assessed').map(check => check.name) ?? [];
