@@ -1,0 +1,140 @@
+.org-color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--org-surface, #f1f1f1);
+}
+.org-color-picker-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.org-color-picker-area {
+  position: relative;
+  height: 140px;
+  border-radius: 10px;
+  cursor: crosshair;
+  touch-action: none;
+  background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(var(--org-hue) 100% 50%));
+}
+.org-color-picker-area:focus-visible {
+  outline: 2px solid var(--org-text, #1f1f1f);
+  outline-offset: 2px;
+}
+.org-color-picker-thumb {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #0005;
+  pointer-events: none;
+}
+/* Three classes and an element, so a form's own input rules (commonly a class, an element and a :not()) cannot win
+   even when the application's stylesheet loads after the kit's. */
+.org-color-picker .org-color-picker-editor input.org-color-picker-hue {
+  width: 100%;
+  height: 12px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+.org-color-picker-hue::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px #0004, 0 1px 3px #0003;
+  cursor: pointer;
+}
+.org-color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.org-color-picker-preview {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px #0000001a;
+}
+.org-color-picker-hex {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 4px 10px;
+  font-family: var(--org-font-mono, ui-monospace, monospace);
+  font-size: 13px;
+}
+.org-color-picker-action {
+  min-height: 32px;
+  padding: 4px 10px;
+  flex-shrink: 0;
+  gap: 6px;
+  font-size: 13px;
+}
+.org-color-picker-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.org-color-picker-title {
+  font-size: 12px;
+  color: var(--org-muted, #666);
+}
+.org-color-picker-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.org-color-picker-swatch {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--org-swatch);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px #0000001a;
+}
+.org-color-picker-swatch[aria-pressed=true] { box-shadow: 0 0 0 2px var(--org-surface, #f1f1f1), 0 0 0 4px var(--org-text, #1f1f1f); }
+.org-color-picker-saved {
+  position: relative;
+  display: inline-grid;
+}
+.org-color-picker-remove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--org-text, #1f1f1f);
+  color: var(--org-bg, #fff);
+  opacity: 0;
+  transition: opacity var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-color-picker-saved:hover .org-color-picker-remove,
+.org-color-picker-remove:focus-visible { opacity: 1; }
+.org-color-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+}

@@ -16,3 +16,5 @@ export { StatusMark } from './components/StatusMark';
 export type { StatusMarkState, StatusMarkTone, StatusMarkVariant } from './components/StatusMark';
 export { ReactionBadges, ReactionBar, ReactionPicker } from './components/ReactionBar';
 export type { ReactionBadge, ReactionOption } from './components/ReactionBar';
+export { ColorPicker, normalizeHex } from './components/ColorPicker';
+export type { ColorPickerLabels, ColorPickerProps } from './components/ColorPicker';

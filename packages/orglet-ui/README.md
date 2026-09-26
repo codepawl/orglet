@@ -76,6 +76,10 @@ loads the switch's styles.
   `icon`) that opens a floating row of faces (`options` of `{ name, emoji, meaning }`, the `picked` one pressed;
   picking it again takes it off). The badges sit on a bubble's corner (`align` `start`, `end` or `inline`), one
   button each with a count above one. Where reactions are stored is the application's.
+- `ColorPicker` and `normalizeHex`: a saturation and brightness area (pointer and arrow keys), a hue slider and a hex
+  field that change the colour live, preset swatches, and saved colours with save and remove. Every string comes in
+  `labels`, including the ones built from a value (`areaValue`, `presetColor`, `removeColor`). It sets
+  `data-popup-open`, so Escape closes it rather than a dialog around it.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
