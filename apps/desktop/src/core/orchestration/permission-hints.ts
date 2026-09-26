@@ -18,6 +18,8 @@ type HintInput = {
   sideThread: boolean;
   /** A schedule's run: its browser can never act, so acting is not a switch to point at. */
   schedule?: boolean;
+  /** Whether desktop apps work on this computer (Windows only); elsewhere there is no switch to point at. */
+  desktopAvailable?: boolean;
 };
 
 /** Vietnamese labels as the controls show them; the dictionary gives the English ones. */
@@ -42,6 +44,11 @@ export function permissionsOff(input: HintInput): { permissions: string[]; where
   }
   if (!input.capabilities.includes('browser.read')) permissions.push(`${label('Trình duyệt')}: ${label('Đọc trang')}`);
   else if (!input.capabilities.includes('browser.act') && !input.schedule) permissions.push(`${label('Trình duyệt')}: ${label('Đọc và thao tác')}`);
+  // A schedule never uses desktop apps (COD-261, phase 2a), so it has no desktop switch to point at.
+  if (input.desktopAvailable && !input.schedule) {
+    if (!input.capabilities.includes('desktop.read')) permissions.push(`${label('Ứng dụng trên máy')}: ${label('Đọc cửa sổ')}`);
+    else if (!input.capabilities.includes('desktop.act')) permissions.push(`${label('Ứng dụng trên máy')}: ${label('Đọc và thao tác')}`);
+  }
   if (!input.workspacePermissions?.length) permissions.push(label('Thư mục làm việc'));
   else if (!input.workspacePermissions.includes('execute')) permissions.push(`${label('Thư mục làm việc')}: ${label('Đọc, sửa file và chạy lệnh')}`);
   if (!permissions.length) return null;

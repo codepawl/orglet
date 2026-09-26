@@ -24,7 +24,7 @@ import { ReviewPolicy } from '../shared/review';
 import { Preflight } from './orchestration/preflight';
 import { PreflightPolicy, type PreflightRecord } from '../shared/preflight';
 import { TeamTemplates } from './storage/templates';
-import { Routines, SCHEDULE_NEVER_ACTS } from './orchestration/routines';
+import { Routines, SCHEDULE_NEVER_ACTS, SCHEDULE_NO_DESKTOP } from './orchestration/routines';
 import { FolderTriggers } from './orchestration/folder-triggers';
 import { RoutineFolders } from './storage/routine-folders';
 import type { WatchFolderView } from '../shared/routine-triggers';
@@ -64,6 +64,9 @@ import { WebTools } from './tools/web-tools';
 import { webNetwork } from './tools/web-network';
 import { WEB_SEARCH_TEST_QUERY, type WebSearchTest } from '../shared/web-tools';
 import { BrowserTools } from './tools/browser-tools';
+import { DesktopTools } from './tools/desktop-tools';
+import type { DesktopHost } from '../shared/desktop-host';
+import { neverDesktopProgram } from '../shared/desktop';
 import type { BrowserHost } from '../shared/browser-host';
 
 /**
@@ -122,6 +125,8 @@ export class CoreService {
   readonly chatSearch: ChatSearch;
   /** The core side of Orglet's browser: site rules, the journal and screenshots (COD-261). */
   readonly browser: BrowserTools;
+  /** The core side of desktop apps: granted programs, the journal and window pictures (COD-261, phase 2a). */
+  readonly desktop: DesktopTools;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
   readonly harnessAccounts: HarnessAccounts;
@@ -130,7 +135,7 @@ export class CoreService {
   private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
   private modelListEpoch = new Map<ModelListProviderId, number>();
   private modelListFailed = new Set<ModelListProviderId>();
-  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor, private webSearchRuntime: WebSearchRuntime = {}, browserHost?: BrowserHost) {
+  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor, private webSearchRuntime: WebSearchRuntime = {}, browserHost?: BrowserHost, desktopHost?: DesktopHost, private ownPrograms: readonly string[] = []) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
     this.chatSearch = new ChatSearch(store);
@@ -144,7 +149,8 @@ export class CoreService {
     this.appProposals = new AppProposals(store, this.proposalApplier());
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
     this.browser = new BrowserTools(store, browserHost, () => this.notify());
-    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings(), this.browser);
+    this.desktop = new DesktopTools(store, desktopHost, () => this.notify(), ownPrograms);
+    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings(), this.browser, this.desktop);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
     this.routineFolders = new RoutineFolders(store);
@@ -228,7 +234,7 @@ export class CoreService {
         this.markTaskSeen(id);
         const taskId = this.liveTask(id).id;
         // The browser card, take-over and whether a run uses the browser live in memory, beside the saved chat (COD-261).
-        return { ...this.store.detail(taskId), browser: this.browser.live(taskId) };
+        return { ...this.store.detail(taskId), browser: this.browser.live(taskId), desktop: this.desktop.live(taskId) };
       }
       case 'reconcileBudget': {
         const input = commands.reconcileBudget.parse(args);
@@ -369,6 +375,34 @@ export class CoreService {
       case 'browserScreenshot': {
         const input = commands.browserScreenshot.parse(args);
         return this.browser.screenshot(this.liveTask(input.taskId).id, input.id);
+      }
+      case 'setDesktop': {
+        const input = commands.setDesktop.parse(args);
+        const task = this.liveTask(input.taskId);
+        // A side thread always uses its main chat's apps, narrowed to them (COD-247, COD-261).
+        if (task.sideOf) throw new Error('Chat phụ dùng ứng dụng của chat chính. Đổi ở chat chính.');
+        if (input.desktop.apps.some(app => neverDesktopProgram(app.program, this.ownPrograms))) throw new Error('Orglet không bao giờ dùng ứng dụng này.');
+        // Nothing stops here: a run keeps the apps it started with, and every step checks that the chat still grants them.
+        const updated = this.store.patchTask(task.id, { desktop: input.desktop });
+        this.sideThreads.narrowDesktop(updated);
+        this.notify();
+        return;
+      }
+      case 'desktopWindows': {
+        commands.desktopWindows.parse(args);
+        return this.desktop.pickerWindows();
+      }
+      case 'desktopActions': return this.desktop.actions(this.liveTask(commands.desktopActions.parse(args).taskId).id);
+      case 'desktopScreenshot': {
+        const input = commands.desktopScreenshot.parse(args);
+        return this.desktop.screenshot(this.liveTask(input.taskId).id, input.id);
+      }
+      case 'answerDesktopApproval': {
+        // The person's answer to a card that asks about one desktop step; only a click in the window sends it.
+        const input = commands.answerDesktopApproval.parse(args);
+        this.desktop.person.answer(this.liveTask(input.taskId).id, input.requestId, input.answer);
+        this.notify();
+        return;
       }
       case 'answerDecision': {
         const input = commands.answerDecision.parse(args);
@@ -519,6 +553,7 @@ export class CoreService {
           : task.assignees ?? [task.workerId];
         for (const workerId of workers) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, input.capabilities);
         if (task.routineId && input.capabilities.includes('browser.act')) throw new Error(SCHEDULE_NEVER_ACTS);
+        if (task.routineId && input.capabilities.includes('desktop.read')) throw new Error(SCHEDULE_NO_DESKTOP);
         if (task.sideOf) this.sideThreads.assertCapabilitiesWithin(task, input.capabilities);
         const reduced = this.store.detail(task.id).runs.some(run =>
           (run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider)).some(capability => !input.capabilities.includes(capability)));
@@ -1287,6 +1322,7 @@ export class CoreService {
       consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(main) ?? input.budgetMicros,
       ...(main.toolCapabilities ? { toolCapabilities: [...main.toolCapabilities] } : {}),
       ...(main.browser ? { browser: structuredClone(main.browser) } : {}),
+      ...(main.desktop ? { desktop: structuredClone(main.desktop) } : {}),
     });
     task.sideOf = { taskId: main.id, throughRevision: main.inputRevision ?? 0 };
     if (main.mcpGrants?.length) task.mcpGrants = main.mcpGrants.map(grant => ({ ...grant }));
@@ -1356,6 +1392,7 @@ export class CoreService {
         db.prepare('DELETE FROM leases WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM app_proposals WHERE run_id=?').run(run.id);
         this.browser.deleteRun(run.id);
+        this.desktop.deleteRun(run.id);
       }
       db.prepare('DELETE FROM profiles WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM preflights WHERE task_id=?').run(task.id);
@@ -1452,6 +1489,7 @@ export class CoreService {
     for (const workerId of workerIds) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, task.toolCapabilities);
     this.policy.assertStart(task.teamId);
     if (routine && task.toolCapabilities?.includes('browser.act')) throw new Error(SCHEDULE_NEVER_ACTS);
+    if (routine && (task.toolCapabilities?.includes('desktop.read') || task.desktop?.apps.length)) throw new Error(SCHEDULE_NO_DESKTOP);
     if (routine) task.routineId = routine.id;
     // A forward's first turn keeps its record on the current input, where every later turn keeps its own (COD-257).
     if (forwarded) task.currentInput = { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, forwarded };

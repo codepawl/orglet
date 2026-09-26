@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { z } from 'zod';
 import { Store } from './storage/database';
 import { CoreService, localHarnessRuntime } from './service';
@@ -19,6 +19,7 @@ import { emptyMcpSecrets, McpSecrets } from '../shared/mcp';
 import { pdfTextInWorker } from './tools/pdf-text';
 import type { WebSearchKeyProvider } from '../shared/web-tools';
 import type { BrowserHost } from '../shared/browser-host';
+import { DesktopHelperProcess } from './tools/desktop-helper';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
@@ -71,6 +72,11 @@ const browserHost: BrowserHost = {
     port.postMessage({ type: 'browser', id: requestId, request });
   }),
 };
+/**
+ * Desktop apps (COD-261, phase 2a) have a helper of their own, a Windows PowerShell process this core starts when a step
+ * needs it and stops after a minute of nothing to do. Only Windows has one; elsewhere the control says so.
+ */
+const desktopHelper = process.platform === 'win32' ? new DesktopHelperProcess() : undefined;
 const pendingProfiles = new Map<string, (reply: unknown) => void>();
 const profile: ProfileExecutor = (input, signal) => new Promise((resolve, reject) => {
   const id = crypto.randomUUID();
@@ -123,8 +129,13 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   // stops them, and a reused id is never taken for one of them.
   onProcesses: processes => port.postMessage({ type: 'mcpProcesses', processes }),
   // Each PDF is read in a worker thread built next to this file, so one slow or hostile file cannot stall the core.
-}, pdfTextInWorker(join(__dirname, 'pdf-text.js')), { readKey: requestSearchKey }, browserHost);
+}, pdfTextInWorker(join(__dirname, 'pdf-text.js')), { readKey: requestSearchKey }, browserHost, desktopHelper, [basename(process.execPath).toLowerCase()]);
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
+/** What quitting stops besides this process: the MCP servers and the desktop helper. */
+async function shutdownHelpers() {
+  desktopHelper?.stop();
+  await core.mcp.shutdown();
+}
 port.on('message', async ({ data }) => {
   const envelope = z.object({ id: z.string(), command: z.string(), args: z.unknown() }).safeParse(data);
   if (!envelope.success) return;
@@ -166,7 +177,7 @@ port.on('message', async ({ data }) => {
       // Only main sends these three: it has split the secret values off a server before saving it (COD-241).
       : command === 'saveMcpServer' ? await core.saveMcpServer(args)
       : command === 'removeMcpServer' ? await core.removeMcpServer(args)
-      : command === 'shutdown' ? await core.mcp.shutdown()
+      : command === 'shutdown' ? await shutdownHelpers()
       // Only main sends this: the person closed the Chrome window a run's tabs were in, which hands the browser back.
       : command === 'browserReleased' ? await core.browser.released(Id.parse(args))
       : await core.command(command as Command, args);

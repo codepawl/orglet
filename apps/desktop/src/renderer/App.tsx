@@ -492,8 +492,9 @@ export function App() {
       if (event.ctrlKey && event.key.toLowerCase() === 'k') { event.preventDefault(); setSearchOpen(true); }
       // A dialog or menu that took this Escape has already prevented it; otherwise a sidebar selection goes first.
       if (event.key === 'Escape' && !event.defaultPrevented && selectionActiveRef.current) { event.preventDefault(); clearSelection(); return; }
-      // The details panel is part of the page, not a dialog, so Escape has to close it here.
-      if (event.key === 'Escape' && detailsOpenRef.current) { event.preventDefault(); setPanel(null); }
+      // The details panel is part of the page, not a dialog, so Escape has to close it here, unless a dialog opened from
+      // it (the desktop app picker, a screenshot) took this Escape first.
+      if (event.key === 'Escape' && !event.defaultPrevented && detailsOpenRef.current) { event.preventDefault(); setPanel(null); }
     };
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
   }, [teamId, workerId, groupChat, workspace]);

@@ -186,6 +186,16 @@ export class Store {
         CREATE TABLE IF NOT EXISTS browser_screenshots (
           id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), hash TEXT NOT NULL, mime TEXT NOT NULL, bytes BLOB NOT NULL, created_at TEXT NOT NULL
         ); INSERT OR IGNORE INTO migrations VALUES (19);`);
+      // Every step a run took in a desktop app, and the window pictures it kept (COD-261, phase 2a). Local only, like
+      // the browser's. New tables and no schema version, so an older build can still open the workspace.
+      this.db.exec(`CREATE TABLE IF NOT EXISTS desktop_actions (
+          id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), call_id TEXT NOT NULL, kind TEXT NOT NULL,
+          program TEXT, window_title TEXT, target TEXT, risk TEXT NOT NULL, outcome TEXT NOT NULL, screenshot_id TEXT, at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS desktop_actions_run ON desktop_actions(run_id);
+        CREATE TABLE IF NOT EXISTS desktop_screenshots (
+          id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), hash TEXT NOT NULL, mime TEXT NOT NULL, bytes BLOB NOT NULL, created_at TEXT NOT NULL
+        );`);
       // The orglet form used to force the $0.50 default limit on Claude Code orglets, which stopped real work after a
       // few calls. An orglet on Claude Code now runs on the person's plan unless it has a limit of its own (COD-253),
       // so that forced default is dropped once; any other limit someone picked is kept. A settings row, not a schema
@@ -372,6 +382,8 @@ export class Store {
     // the card waited (COD-261). One that did reach it keeps `unknown`, beside its uncertain call.
     this.db.exec(`UPDATE browser_actions SET outcome='declined' WHERE outcome='unknown' AND risk='consequential'
       AND NOT EXISTS (SELECT 1 FROM tool_calls WHERE tool_calls.run_id=browser_actions.run_id AND tool_calls.call_id=browser_actions.call_id)`);
+    this.db.exec(`UPDATE desktop_actions SET outcome='declined' WHERE outcome='unknown' AND risk='consequential'
+      AND NOT EXISTS (SELECT 1 FROM tool_calls WHERE tool_calls.run_id=desktop_actions.run_id AND tool_calls.call_id=desktop_actions.call_id)`);
     this.db.exec(`UPDATE workspace_copies SET data=json_set(data,'$.state','uncertain')
       WHERE json_extract(data,'$.state') IN ('preparing','integrating')`);
     this.db.exec(`UPDATE workspace_processes SET data=json_set(data,'$.state','uncertain')

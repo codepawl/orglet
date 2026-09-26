@@ -4,6 +4,7 @@ import { mcpCallGranted, type McpGrant } from '../../shared/mcp';
 import { canStartSideThread, ChatQuote, MAX_CHAT_QUOTES, quoteText } from '../../shared/side-threads';
 import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
 import { defaultBrowserChoice, narrowBrowserChoice } from '../../shared/browser';
+import { defaultDesktopChoice, narrowDesktopChoice } from '../../shared/desktop';
 import { Store, id, now } from '../storage/database';
 import type { WorkspaceGrants } from '../storage/workspace-grants';
 
@@ -96,6 +97,15 @@ export class SideThreads {
     for (const side of this.of(main.id)) {
       const narrowed = narrowBrowserChoice(side.browser ?? defaultBrowserChoice(), mainChoice);
       if (JSON.stringify(narrowed) !== JSON.stringify(side.browser ?? defaultBrowserChoice())) this.store.patchTask(side.id, { browser: narrowed });
+    }
+  }
+
+  /** After the main chat's desktop apps changed (COD-261, phase 2a): each side thread keeps only apps the main chat still grants. */
+  narrowDesktop(main: Task) {
+    const mainChoice = main.desktop ?? defaultDesktopChoice();
+    for (const side of this.of(main.id)) {
+      const narrowed = narrowDesktopChoice(side.desktop ?? defaultDesktopChoice(), mainChoice);
+      if (JSON.stringify(narrowed) !== JSON.stringify(side.desktop ?? defaultDesktopChoice())) this.store.patchTask(side.id, { desktop: narrowed });
     }
   }
 
