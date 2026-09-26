@@ -108,7 +108,7 @@ Each reply gets a fixed number of steps, where a step is one thing the orglet do
 
 ## Diffs
 
-When a run changed files in its working copy, a line under the answer says **Files changed: 3 · +42 −7**; moves and deletions get their own count, as in **Files changed: 6 · 5 moved or renamed · 1 deleted**. Click it for the diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a folder that is not a Git repository the diff lists what happened to each file (new, changed, moved, renamed, deleted) and the folders created or removed, without lines. In a crew turn each member has its own line, because each works in its own copy.
+When a run changed files in its working copy, a line under the answer says **Changed 3 files · +42 −7** and ends with what happened to them: **Applied**, **Not in your folder yet**, or **Discarded, folder unchanged**. Moves and deletions get their own count, as in **Changed 6 files · 5 moved or renamed · 1 deleted**. Click it for the diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a folder that is not a Git repository the diff lists what happened to each file (new, changed, moved, renamed, deleted) and the folders created or removed, without lines. In a crew turn each member has its own line, **Writer changed 1 file · +3 · Applied**, because each works in its own copy. A diff keeps opening after you change the folder's level; once you remove the folder or point the chat at another one, it says it can no longer be opened.
 
 The diff has line-by-line hunks only when the working folder is a Git repository, because the comparison is against the snapshot the copy started from; a plain folder says so instead. Keeping your current files and file conflicts are handled in **Details → Files and processes**. Details: [worker-actions.md](worker-actions.md#where-a-diff-lives).
 
@@ -116,9 +116,9 @@ The diff has line-by-line hunks only when the working folder is a Git repository
 
 An orglet never edits your folder directly. It works in a private copy, and by default its changes wait for you when it finishes:
 
-1. The answer arrives as usual. The line under it reads **Files changed: 3 · +42 −7 · Not in your folder yet · Review**.
+1. The answer arrives as usual. The line under it reads **Changed 3 files · +42 −7 · Not in your folder yet · Review**.
 2. Click the line. The diff opens with **Discard changes** and **Apply** at the top.
-3. To leave some files out, untick them in the list at the top of the diff. **Apply** then reads **Apply 2 of 3**.
+3. To leave some files out, untick them in the list at the top of the diff. **Apply** then reads **Apply 2 of 3**. A new folder follows the files in it: untick its only file and the folder is not made either. A folder the orglet made empty on purpose has its own tick.
 4. Click **Apply**. The line then ends with **Applied**, or **Applied, 1 skipped**. **Discard changes** asks once, then the line ends with **Discarded, folder unchanged**.
 
 Nothing reaches your folder until you click **Apply**. If you edited, moved or deleted a file yourself in the meantime, Apply stops at that file instead of overwriting it; settle it in **Details → Files and processes** with **Keep current files**.
@@ -132,7 +132,7 @@ To have changes applied as soon as a run finishes, turn off **Review before appl
 **Details** at the top of a chat opens the panel that holds everything the chat does not show inline:
 
 - **Tool permissions** and the working folder for this chat ([Permissions](permissions-and-learning.md#permissions)).
-- Cost so far, and for each internal job (a crew's plan, members and combining step) its status, retry and cancel. **Pause after this step** and **Continue from checkpoint** let you stop a long run and pick it up later; **Retry with current settings** starts a new run for what did not finish.
+- Cost so far, and how long the orglets worked, such as **30s of work**: each run's own time added up, so the gaps between your messages do not count, and crew members working at the same time count once. Each internal job (a crew's plan, members and combining step) shows its status, retry and cancel. **Pause after this step** and **Continue from checkpoint** let you stop a long run and pick it up later; **Retry with current settings** starts a new run for what did not finish.
 - **What happened**: the run's activity, the sources it cited, and **Loaded context**, the exact instructions, skill, knowledge and memory the run started with.
 - **Chat decisions**: questions an orglet paused to ask you, with your answers. **Turn goal**: how an orglet understood the request, its assumptions, and the checks it planned (planned is not done).
 - **Files and processes**: every attempt that changed files, with its outcome, its commands and their output. An attempt whose outcome is unknown after a crash or cancel blocks the chat until you check your files and choose **Keep current files**. See [Reviewing an interrupted attempt](agent-tools.md#reviewing-an-interrupted-attempt).

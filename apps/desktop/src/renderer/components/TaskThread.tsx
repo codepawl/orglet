@@ -73,13 +73,19 @@ export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecovery
   });
 }
 
+/**
+ * Where a turn's changes stand, for its files line (COD-291): every line says it, whether the changes waited for review
+ * or handed in at once (review off, Apply anyway, a crew member). A copy still `ready` without a review was kept out of
+ * the folder by a failed command or a refused plan.
+ */
 function reviewStatusOf(copy: WorkspaceRecoveryView['copies'][number]): ReviewStatus | undefined {
   if (copy.carried || copy.review?.state === 'carried') return { state: 'carried' };
-  // The review is settled before the first step runs, so the copy says how far the apply got.
-  if (copy.review?.state === 'applied' && copy.state === 'integrating') return { state: 'applying' };
-  if (copy.review?.state === 'applied' && (copy.state === 'conflict' || copy.state === 'uncertain')) return { state: 'stopped' };
-  if (copy.review?.state === 'applied') return { state: 'applied', skipped: copy.review.skipped ?? 0 };
   if (copy.review?.state === 'pending' || copy.review?.state === 'discarded') return { state: copy.review.state };
+  // An applied review is settled before the first step runs, so the copy says how far the apply got.
+  if (copy.state === 'integrating') return { state: 'applying' };
+  if (copy.state === 'conflict' || copy.state === 'uncertain') return { state: 'stopped' };
+  if (copy.state === 'integrated') return { state: 'applied', skipped: copy.review?.skipped ?? 0 };
+  if (copy.state === 'ready') return { state: 'unapplied' };
   return undefined;
 }
 

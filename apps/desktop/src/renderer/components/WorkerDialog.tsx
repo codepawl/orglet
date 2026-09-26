@@ -22,7 +22,7 @@ import { autoMascot, defaultAvatarColor, distinctAvatar } from './mascotSuggest'
 import { TabbedFormDialog } from './DialogTabs';
 import { readiness, readyFirst, type ProviderChoice, type Readiness } from './providers';
 import { openCodeModelIssue } from './openCodeModel';
-import { PermissionControls } from './PermissionControls';
+import { PermissionControls, type FolderChoice } from './PermissionControls';
 import { toAmount, toMicros } from './money';
 import { toast } from './toast';
 import { t, tMessage } from '../i18n';
@@ -295,9 +295,10 @@ function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, on
     else onDraftCapabilities(next);
     setCapabilities(next);
   });
-  const onWorkspace = (level: WorkspaceLevel) => change(async () => {
+  const onWorkspace = (level: WorkspaceLevel, folder: FolderChoice) => change(async () => {
     if (chat) {
       if (level === 'none') await orglet.call('revokeWorkspace', { taskId: chat.id });
+      else if (folder === 'keep') await orglet.call('setWorkspaceLevel', { taskId: chat.id, permissions: permissionsForLevel(level) });
       else await orglet.pickWorkspace(chat.id, permissionsForLevel(level));
       await readGrant(chat.id);
       return;
@@ -306,6 +307,12 @@ function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, on
     if (level === 'none') {
       await orglet.call('revokeWorkspace', { workerId: worker.id });
       setPendingFolder(undefined);
+      return;
+    }
+    if (folder === 'keep' && pendingFolder) {
+      const permissions = permissionsForLevel(level);
+      await orglet.call('setWorkspaceLevel', { workerId: worker.id, permissions });
+      setPendingFolder({ ...pendingFolder, permissions });
       return;
     }
     const picked = await orglet.pickNewChatWorkspace({ workerId: worker.id }, permissionsForLevel(level));

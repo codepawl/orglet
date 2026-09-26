@@ -30,6 +30,7 @@ import { rememberCustomConnections } from './customConnections';
 import { Startup } from './components/Startup';
 import { Starters } from './components/Starters';
 import { DetailsPanel } from './components/DetailsPanel';
+import type { FolderChoice } from './components/PermissionControls';
 import type { WorkspaceRecoveryView } from '../shared/workspace-recovery';
 import type { RecoveryFocus } from './components/WorkspaceRecovery';
 import { suggestStarters } from '../shared/starters';
@@ -720,9 +721,10 @@ export function App() {
     const capabilities = toggledCapabilities(previous, capability, enabled);
     return orglet.call('setToolCapabilities', { ...newChatTarget, capabilities });
   });
-  const changeNewChatWorkspace = (level: WorkspaceLevel) => toolAction(async () => {
+  const changeNewChatWorkspace = (level: WorkspaceLevel, folder: FolderChoice) => toolAction(async () => {
     if (!newChatTarget) return;
     if (level === 'none') await orglet.call('revokeWorkspace', newChatTarget);
+    else if (folder === 'keep') await orglet.call('setWorkspaceLevel', { ...newChatTarget, permissions: permissionsForLevel(level) });
     else await orglet.pickNewChatWorkspace(newChatTarget, permissionsForLevel(level));
   });
   const nativeProviders = [...new Set(executionWorkers.map(item => item.provider).filter(provider => provider !== 'demo'))];
@@ -1542,9 +1544,11 @@ export function App() {
         busy: toolPolicyBusy,
         locked: readOnlyChat?.note,
         onCapability: (capability, enabled) => changeTaskCapability(detail, capability, enabled),
-        onWorkspace: level => toolAction(() => level === 'none'
-          ? orglet.call('revokeWorkspace', { taskId: detail.task.id })
-          : orglet.pickWorkspace(detail.task.id, permissionsForLevel(level))),
+        onWorkspace: (level, folder) => toolAction(async () => {
+          if (level === 'none') await orglet.call('revokeWorkspace', { taskId: detail.task.id });
+          else if (folder === 'keep') await orglet.call('setWorkspaceLevel', { taskId: detail.task.id, permissions: permissionsForLevel(level) });
+          else await orglet.pickWorkspace(detail.task.id, permissionsForLevel(level));
+        }),
       } : !selected && newChatTarget ? {
         workers: executionWorkers,
         connectedProviders: (Object.keys(ready) as Worker['provider'][]).filter(provider => ready[provider as keyof typeof ready]),

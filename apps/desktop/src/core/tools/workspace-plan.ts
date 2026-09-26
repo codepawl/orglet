@@ -94,37 +94,74 @@ function originOf(step: IntegrationStep): string | undefined {
   return undefined;
 }
 
+const isFolderStep = (step: IntegrationStep) => step.kind === 'folder' || step.kind === 'remove_folder';
+
+/** Every path a step touches: where it leaves something, and where a move or deletion takes something from. */
+function touchedPaths(step: IntegrationStep): string[] {
+  const origin = originOf(step);
+  return origin === undefined ? [step.path] : [step.path, origin];
+}
+
+/**
+ * Whether a folder step stands on its own (COD-291): nothing else in the plan happens inside it, so it is a folder
+ * the orglet created or removed empty, on purpose. Only such a folder is a row the person ticks; a folder that holds
+ * other changes follows them.
+ */
+export function standsAlone(steps: readonly IntegrationStep[], folder: IntegrationStep): boolean {
+  return !steps.some(step => step !== folder && touchedPaths(step).some(path => isInside(path, folder.path)));
+}
+
 /**
  * The steps for the files and folders the person left ticked in the diff viewer (COD-279), in plan order. A file step
  * goes when any path it touches is ticked, so a move goes with either end: Git may show one renamed file where the
- * plan has a move, or a new file plus a deletion. A new folder also goes when a kept step writes inside it, since the
- * broker creates a new file's parents anyway. A folder removal goes only when it is ticked and nothing inside it stays
- * behind, or the folder would not be empty; it is then skipped like any unticked row.
+ * plan has a move, or a new file plus a deletion.
+ *
+ * A folder follows what is inside it, whatever was ticked (COD-291): a new folder goes only when a kept step lands
+ * inside it, so unticking the one file of a new folder leaves no empty folder behind; a folder removal goes only when
+ * nothing inside it stays behind, or the folder would not be empty. A folder with nothing else in the plan inside it,
+ * one the orglet made or removed empty on purpose, has nothing to follow, so it goes when its own path is ticked.
  */
 export function selectSteps(steps: readonly IntegrationStep[], paths: readonly string[]): { kept: IntegrationStep[]; skipped: IntegrationStep[] } {
   const ticked = new Set(paths.map(keyOf));
-  const keptFiles = new Set<IntegrationStep>();
+  const kept = new Set<IntegrationStep>();
   for (const step of steps) {
-    if (step.kind === 'folder' || step.kind === 'remove_folder') continue;
-    const origin = originOf(step);
-    if (ticked.has(keyOf(step.path)) || (origin !== undefined && ticked.has(keyOf(origin)))) keptFiles.add(step);
+    if (isFolderStep(step)) continue;
+    if (touchedPaths(step).some(path => ticked.has(keyOf(path)))) kept.add(step);
   }
-  const skippedOrigins = steps.filter(step => !keptFiles.has(step)).flatMap(step => originOf(step) ?? []);
-  const kept = new Set(keptFiles);
-  const skippedRemovals: string[] = [];
+  const alone = new Set(steps.filter(step => isFolderStep(step) && standsAlone(steps, step)));
+  for (const step of alone) {
+    if (ticked.has(keyOf(step.path))) kept.add(step);
+  }
+  // New folders come outermost first, so decide them innermost first: an inner folder kept makes its parent needed.
+  const created = steps.filter(step => step.kind === 'folder' && !alone.has(step)).reverse();
+  for (const folder of created) {
+    const needed = [...kept].some(step => step.kind !== 'remove_folder' && isInside(step.path, folder.path));
+    if (needed) kept.add(folder);
+  }
+  // Removals come innermost first, so an inner folder left in place is known before its parent is decided.
+  const leftInPlace = steps.filter(step => !kept.has(step) && !isFolderStep(step)).flatMap(step => originOf(step) ?? []);
   for (const step of steps) {
-    if (step.kind === 'folder') {
-      const needed = [...keptFiles].some(file => isInside(file.path, step.path)) || paths.some(path => isInside(path, step.path));
-      if (ticked.has(keyOf(step.path)) || needed) kept.add(step);
+    if (step.kind !== 'remove_folder') continue;
+    if (alone.has(step)) {
+      if (!kept.has(step)) leftInPlace.push(step.path);
+      continue;
     }
-    // Removals come innermost first, so an inner folder left in place is known before its parent is decided.
-    if (step.kind === 'remove_folder') {
-      const leftBehind = [...skippedOrigins, ...skippedRemovals].some(path => isInside(path, step.path));
-      if (ticked.has(keyOf(step.path)) && !leftBehind) kept.add(step);
-      else skippedRemovals.push(step.path);
-    }
+    const leftBehind = leftInPlace.some(path => isInside(path, step.path));
+    if (leftBehind) leftInPlace.push(step.path);
+    else kept.add(step);
   }
   return { kept: steps.filter(step => kept.has(step)), skipped: steps.filter(step => !kept.has(step)) };
+}
+
+/**
+ * How many changes some of a plan's steps make, counted the way the diff viewer lists them (COD-291): a file once
+ * whatever steps it takes (a renamed file whose bytes changed is a move and a write), and a folder only when it stands
+ * on its own row; a folder that follows its files is not counted again.
+ */
+export function countChanges(plan: readonly IntegrationStep[], picked: readonly IntegrationStep[]): number {
+  const files = new Set(picked.filter(step => !isFolderStep(step)).map(step => keyOf(step.path)));
+  const folders = picked.filter(step => isFolderStep(step) && standsAlone(plan, step));
+  return files.size + folders.length;
 }
 
 function moveSource(file: ManifestFile, vanished: ManifestFile[]): ManifestFile | undefined {
