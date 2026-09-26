@@ -1,5 +1,6 @@
 import { SkillLibrary, SkillLibraryActions } from './components/SkillReview';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
 import { ArrowLeft, ChevronRight, Pencil as LucidePencil, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, MessagesSquare } from 'lucide-react';
@@ -22,7 +23,7 @@ import { ArchivedList, ArchivedRow, type ArchiveState } from './components/Sideb
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
-import { Composer, FollowUpComposer, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
+import { Composer, FollowUpComposer, restoreUnsent, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
@@ -36,7 +37,7 @@ import { accentInk, accentText, DEFAULT_ACCENT_COLOR } from '../shared/accent';
 import { fontStack } from '../shared/fonts';
 import { ProviderMark } from './components/ProviderMark';
 import { GroupChatRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
-import { chatsUnder, type ChatOwner } from '../shared/schedule-runs';
+import { chatsUnder, runBy, type ChatOwner } from '../shared/schedule-runs';
 import { useChatNotices } from './chatNotices';
 import { SearchDialog } from './components/SearchDialog';
 import { SendToPicker } from './components/SendToPicker';
@@ -46,6 +47,7 @@ import { forwardOptions, forwardSummary, type ForwardRequest } from './forward';
 import { chatHeadline } from '../shared/forward';
 import { attachIntake, carriedDraft, type Incoming, type IncomingChat, type IncomingFiles } from '../shared/incoming';
 import { dropDraft, emptyChatDraftKey, keepDraft, readDraft } from './drafts';
+import { chatToReopen, rememberedChat, rememberOpenChat } from './lastChat';
 import { tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
 import { taskResultSeen } from '../shared/task-seen';
 import { RowMenu } from './components/RowMenu';
@@ -381,6 +383,7 @@ export function App() {
     });
   }, []);
   useEffect(() => { if (window.orglet) void refresh(); }, [refresh, selected]);
+  useEffect(() => { if (selected) rememberOpenChat(selected); }, [selected]);
   useEffect(() => { setLanguage(workspace?.language); }, [workspace?.language]);
   useEffect(() => {
     if (!workspace) return;
@@ -563,6 +566,8 @@ export function App() {
     if (!workspace || !workerId || bootedLiveThread.current) return;
     bootedLiveThread.current = true;
     if (selected || teamId) return;
+    const lastOpen = chatToReopen(workspace.tasks, rememberedChat());
+    if (lastOpen) { replaceNextView.current = true; openTask(lastOpen.id); return; }
     const live = liveWorkerTask(workspace.tasks, workerId);
     if (live) { replaceNextView.current = true; openTask(live.id); }
   }, [workspace, selected, teamId, workerId]);
@@ -676,7 +681,8 @@ export function App() {
     }
     // A side thread appearing is never this chat (COD-247): only a new main chat is adopted, with the draft.
     const adopted = liveChatToAdopt(workspace.tasks, chat, baseline.liveId);
-    if (adopted) adoptLiveChat(adopted);
+    // A chat this box is creating right now is opened by the send itself, with the words typed meanwhile (COD-284).
+    if (adopted && !busy) adoptLiveChat(adopted);
   }, [workspace, selected, team?.id, worker?.id, group]);
   /**
    * The empty chat's message bar keeps what was typed and added, per orglet, crew or group, across restarts
@@ -735,24 +741,48 @@ export function App() {
     if (group) return groupChatTaskInput(group, message);
     return { ...message, workerId };
   };
+  // What the empty chat's box holds now, read once a send is through (COD-284).
+  const briefNow = useRef(brief);
+  briefNow.current = brief;
+  /**
+   * The box empties at once and stays enabled while the first message goes, so the next one can be typed straight
+   * away (COD-284). Whatever was typed meanwhile, and the focus, move on to the chat's message bar.
+   */
   const send = async () => {
     if (!brief.trim() || busy || (!team && !worker && !group)) return;
     setBusy(true); setError('');
+    const sentBrief = brief;
+    setBrief('');
     try {
       // A group chat has no live thread to continue: its first message always creates the row.
       const thread = team ? liveTeamTask(workspace!.tasks, team.id) : group ? undefined : liveWorkerTask(workspace!.tasks, workerId);
+      let chatId: string;
       if (thread) {
-        await orglet.call('reviseTask', { taskId: thread.id, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: thread.budgetMicros });
-        setSelected(thread.id);
+        await orglet.call('reviseTask', { taskId: thread.id, brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: thread.budgetMicros });
+        chatId = thread.id;
       } else {
-        const id = await orglet.call('createTask', firstMessageInput({ brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: taskBudgetMicros }));
-        setGroupChat(undefined);
-        setSelected(id);
+        chatId = await orglet.call('createTask', firstMessageInput({ brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: taskBudgetMicros }));
       }
-      // Sent, so this empty chat's bar holds nothing any more.
-      if (emptyDraftKey) dropDraft(emptyDraftKey);
-      setBrief(''); setSources([]);
-    } catch (err) { errorAbout.current = t('Gửi tin cho {0}', [team?.name ?? groupName ?? worker?.name ?? '']); setError((err as Error).message); } finally { setBusy(false); }
+      // The chat's bar exists only once its detail is on screen. Loading it before switching keeps this box, and the
+      // keys typed into it, until the bar takes over. The switch is one synchronous commit, so no key lands between
+      // reading what was typed and the bar that carries it on.
+      const opened = await taskDetails.refresh(chatId).catch(() => undefined);
+      const typedSince = briefNow.current;
+      const typing = document.activeElement === composer.current;
+      flushSync(() => {
+        if (!thread) setGroupChat(undefined);
+        setSelected(chatId);
+        if (opened) setDetail(opened);
+        if (typedSince.trim() || typing) setFollowUpPrefill({ taskId: chatId, text: typedSince.trim() ? typedSince : undefined, at: Date.now() });
+        // Sent, so this empty chat's bar holds nothing any more.
+        if (emptyDraftKey) dropDraft(emptyDraftKey);
+        setBrief(''); setSources([]);
+      });
+    } catch (err) {
+      setBrief(current => restoreUnsent(sentBrief, current));
+      errorAbout.current = t('Gửi tin cho {0}', [team?.name ?? groupName ?? worker?.name ?? '']);
+      setError((err as Error).message);
+    } finally { setBusy(false); }
   };
   const close = () => { setPanel(null); setWorkerDialogTab(undefined); setWorkerDialogField(undefined); void refresh(); };
   /** The trace above an answer links to the worker's Memory tab (COD-220): the dialog opens on that tab this once. */
@@ -1085,12 +1115,31 @@ export function App() {
     const share = daysLeft / retention;
     return { daysLeft, tone: share > 0.5 ? 'fresh' : share > 0.2 ? 'aging' : 'expiring' };
   };
-  const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => action(async () => {
+  /**
+   * An orglet or crew with a schedule switched on cannot be archived or deleted; the core refuses. Instead of that dead
+   * end, say which schedule holds it and open Schedules, where it can be turned off or deleted (COD-283).
+   */
+  const heldBySchedule = (kind: 'worker' | 'team', entityId: string): boolean => {
+    const schedule = workspace.routines.find(item => item.enabled && runBy(item.task, kind, entityId));
+    if (!schedule) return false;
+    const name = entityName(kind, entityId) ?? '';
+    toast(t('Lịch {0} đang bật cho {1}. Tắt hoặc xóa lịch đó trước.', [schedule.name, name]), 'info', name, { action: { label: t('Xem lịch chạy'), onSelect: () => openRoutines() } });
+    return true;
+  };
+  const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => {
+    if (archived && heldBySchedule(kind, entityId)) return;
+    archiveOrRestoreEntity(kind, entityId, archived);
+  };
+  const archiveOrRestoreEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => action(async () => {
     const name = entityName(kind, entityId);
     await orglet.call('archiveEntity', { kind, id: entityId, archived });
     toast(archived ? t('Đã lưu trữ') : t('Đã khôi phục'), 'success', name);
   }, entityName(kind, entityId));
-  const deleteEntity = (kind: 'worker' | 'team', entityId: string) => action(async () => {
+  const deleteEntity = (kind: 'worker' | 'team', entityId: string) => {
+    if (heldBySchedule(kind, entityId)) return;
+    deleteEntityNow(kind, entityId);
+  };
+  const deleteEntityNow = (kind: 'worker' | 'team', entityId: string) => action(async () => {
     const name = entityName(kind, entityId);
     await orglet.call('deleteEntity', { kind, id: entityId });
     toast(t('Đã xóa'), 'success', name);
@@ -1199,16 +1248,18 @@ export function App() {
     : openChatClosure.archived ? { note: t('Cuộc trò chuyện này đã được lưu trữ. Khôi phục để nhắn tiếp.'), action: { label: t('Khôi phục'), onSelect: () => archiveTask(selected, false) } }
     : closedOwner?.state === 'archived' ? { note: t('{0} đã được lưu trữ. Khôi phục để nhắn tiếp.', [closedOwnerName]), action: { label: t('Khôi phục'), onSelect: () => archiveEntity(closedOwner.kind, closedOwner.id, false) } }
     : { note: t('{0} đã bị xóa, nên cuộc trò chuyện này chỉ còn để đọc.', [closedOwnerName]) };
+  // A deleted schedule's runs keep its name (COD-283), so they still do not read as the orglet's main chat.
+  const openScheduleName = openSchedule?.name ?? openScheduleRun?.routineName;
   const headerName = openSideThread ? taskName(openSideThread.id) ?? openSideThread.brief
-    : openSchedule ? openSchedule.name
+    : openScheduleName ? openScheduleName
     : selected ? (detail && assigneeLabel(detail.task, workspace!, { all: t('Toàn bộ Tí'), many: count => groupChatNames(openTaskWorkers.map(item => item.name)) ?? t('{0} Tí', [count]) })) ?? team?.name ?? closedOwnerName ?? t('Công việc') : chatName;
   // An open group chat keeps the faces and names it had before its first message, rather than turning into a count.
   const openGroupFaces = selected && detail && isGroupChat(detail.task) && detail.task.assignees !== 'all' ? openTaskWorkers : undefined;
   /** The line at the top of a schedule's run: which schedule, who ran it, and the way to the schedule. */
-  const scheduleRunOrigin = openScheduleRun && openSchedule ? {
-    name: openSchedule.name,
+  const scheduleRunOrigin = openScheduleRun && openScheduleName ? {
+    name: openScheduleName,
     owner: assigneeLabel(openScheduleRun, workspace, { all: t('Toàn bộ Tí'), many: count => t('{0} Tí', [count]) }) ?? detail?.runs[0]?.snapshot.worker.name ?? 'Orglet',
-    openSchedule: () => openRoutines({ editing: true, routine: openSchedule }),
+    openSchedule: openSchedule ? () => openRoutines({ editing: true, routine: openSchedule }) : undefined,
   } : undefined;
   const headerRename = renameTargetOf();
   /**
@@ -1249,7 +1300,7 @@ export function App() {
       throw err;
     }
   };
-  const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với hội…') : t('Nhắn với {0}…', [groupName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} disabled={busy} sendDisabled={!isDemo && missingConnections.length > 0} mentions={team ? { people: executionWorkers, allNames: [team.name] } : group ? { people: groupWorkers } : undefined}
+  const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với hội…') : t('Nhắn với {0}…', [groupName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} sendDisabled={busy || (!isDemo && missingConnections.length > 0)} mentions={team ? { people: executionWorkers, allNames: [team.name] } : group ? { people: groupWorkers } : undefined}
     leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
     trailing={composerTrailing}
     attachments={sources} onRemoveAttachment={id => setSources(sources.filter(source => source.id !== id))} />;

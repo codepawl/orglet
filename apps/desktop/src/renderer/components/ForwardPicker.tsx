@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Checkbox, DialogOverlay, Input, Textarea } from '@codepawl/orglet-ui';
+import { Checkbox, DialogOverlay, Input, Textarea, useReturnFocus } from '@codepawl/orglet-ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Forward, Search, X } from 'lucide-react';
 import { Button } from './ui';
@@ -66,11 +66,13 @@ export function ForwardPicker({ request, options, sending, onSend, onClose }: {
     onSend({ targets: pickedOptions, note: note.trim(), carrySourceIds: toSideThread ? [] : carried });
   };
   const sendLabel = picked.length > 1 ? t('Gửi ({0})', [picked.length]) : t('Gửi');
+  // Closing, sent or not, lands back on the Forward button of the message.
+  const returnFocus = useReturnFocus();
 
   return <Dialog.Root open={Boolean(request)} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
       <DialogOverlay />
-      <Dialog.Content className="send-to-dialog forward-dialog">
+      <Dialog.Content className="send-to-dialog forward-dialog" {...returnFocus}>
         <div className="send-to-head">
           <div className="send-to-heading">
             <Dialog.Title className="send-to-title">{t('Chuyển tiếp tin nhắn')}</Dialog.Title>

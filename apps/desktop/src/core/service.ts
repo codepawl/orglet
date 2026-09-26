@@ -70,6 +70,7 @@ import { DesktopTools } from './tools/desktop-tools';
 import type { DesktopHost } from '../shared/desktop-host';
 import { neverDesktopProgram } from '../shared/desktop';
 import type { BrowserHost } from '../shared/browser-host';
+import { runBy } from '../shared/schedule-runs';
 
 /**
  * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
@@ -461,6 +462,7 @@ export class CoreService {
       case 'dismissRoutine': this.routines.dismiss((args as { id: string }).id); return;
       case 'catchUpRoutine': return this.routines.catchUp((args as { id: string }).id);
       case 'runRoutineNow': return this.routines.runCalled((args as { id: string }).id, []);
+      case 'deleteRoutine': return this.deleteRoutine(commands.deleteRoutine.parse(args).id);
       case 'cancel': {
         const taskId = (args as { id: string }).id;
         this.teams.cancel(taskId); this.runner.cancel(taskId);
@@ -835,6 +837,11 @@ export class CoreService {
     void this.folderTriggers.sync().catch(() => {});
     return routine;
   }
+  /** A deleted folder routine stops watching now; its past runs stay as chats (COD-283). */
+  private deleteRoutine(routineId: string) {
+    this.routines.remove(routineId);
+    void this.folderTriggers.sync().catch(() => {});
+  }
   /** Writes the settings given; a key left out keeps its value. The settings dialog and an applied proposal share this. */
   private applySettings(input: Partial<Args<'settings'>>) {
     if (input.theme) this.store.setSetting('theme', input.theme);
@@ -1177,9 +1184,9 @@ export class CoreService {
       const team = workspace.teams.find(item => [...item.memberIds, item.synthesizerId].includes(entityId));
       if (team) throw new Error(`Bỏ ${name} khỏi hội ${team.name} trước.`);
     }
-    const uses = (task: { workerId: string; teamId?: string; assignees?: 'all' | string[] }) => kind === 'team' ? task.teamId === entityId : !task.teamId && (task.workerId === entityId || (Array.isArray(task.assignees) && task.assignees.includes(entityId)));
+    const uses = (task: { workerId: string; teamId?: string; assignees?: 'all' | string[] }) => runBy(task, kind, entityId);
     const routine = workspace.routines.find(item => item.enabled && uses(item.task));
-    if (routine) throw new Error(`Tắt hoặc đổi lịch chạy ${routine.name} trước.`);
+    if (routine) throw new Error(`Tắt hoặc xóa lịch ${routine.name} trước.`);
     if (this.store.all<Task>('tasks').some(task => !task.deletedAt && ['queued', 'running', 'pausing'].includes(task.status) && (uses(task) || (kind === 'worker' && task.assignees === 'all')))) throw new Error('Đợi công việc đang chạy xong rồi thử lại.');
   }
   private deleteEntity(kind: 'worker' | 'team', entityId: string) {

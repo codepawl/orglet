@@ -159,7 +159,7 @@ In a saved team's settings, choose **Xuất template đã lưu** to export its s
 
 ## Routines and work hours
 
-Choose **Lên lịch cho công việc này** after writing a brief and selecting sources, or open **Lịch chạy → Tạo lịch**. Set a daily or weekly time, an IANA timezone such as `Asia/Ho_Chi_Minh`, and a per-task budget. Enabling a schedule requires recurring approval for its selected content and providers. A change to worker, skill, team, model or pricing configuration blocks automatic dispatch until you review and save the schedule again.
+Choose **Lên lịch cho công việc này** after writing a brief and selecting sources, or open **Lịch chạy → Tạo lịch**. Set a daily or weekly time, a time zone from the list (every IANA zone the app knows, this computer's first, UTC last), and a per-task budget. Enabling a schedule requires recurring approval for its selected content and providers. A change to worker, skill, team, model or pricing configuration blocks automatic dispatch until you review and save the schedule again.
 
 Orglet checks schedules while the app is open. Closing it or putting the machine to sleep prevents execution. The next due time stays on the calendar. On return, missed occurrences become **one** **Chạy bù một lần** choice (`pending`); they are never queued in bulk and never start automatically. **Bỏ qua lần lỡ** dismisses that choice. See [Routine catch-up](routines.md) for the exact miss threshold (30 seconds), reopen/first-tick rule, and N=1 coalescing. A prior paused, interrupted or budget-blocked task must be resolved before another occurrence runs. Changed or revoked source files block execution. Turning off a schedule does not cancel its current task. There are at most 100 saved schedules.
 
@@ -207,6 +207,17 @@ Orglet is local: the renderer asks the core over IPC and the core reads SQLite, 
 - **No spinners.** A wait that cannot be hidden shows the shape of what is coming: `Skeleton`, `SkeletonText` and `SkeletonGroup` from `packages/orglet-ui`, bars the height of the text they stand in for, sweeping under a second per pass and still (not sweeping) under `prefers-reduced-motion`, with one spoken label per group. Something fetched again behind content already on screen says so in a quiet word beside its title (`Đang dò lại…`, `Đang tải lại…`), never with a spinner. A spinner inside a button is allowed only for a click that takes real time, such as fetching a model list from the provider.
 - **Never "not found" while still looking.** The harness tab shows three row shapes until the first detection lands; the empty-state sentence appears only once detection has answered. Errors are shown, never hidden behind a shape.
 - **No waterfalls.** A refresh asks for the open chat, the workspace, the connections, the grant and the recovery view in one `Promise.all`; harness detection lands on its own; nothing on the network runs before first paint.
+
+## Keyboard focus
+
+Focus never falls to the page after something the person did (COD-284). The rules, so new work keeps them:
+
+- **The message box is never disabled while a message is on its way.** Disabling a focused textarea blurs it, so the next words typed went nowhere. The follow-up bar (`FollowUpComposer`) and the empty chat's bar (`send` in `App.tsx`) empty the box the moment a message goes and hold back only a second send (`sendDisabled`). If the call fails, `restoreUnsent` puts the message back in front of whatever was typed since. The empty chat's first message opens a new chat whose bar is a different element, so the words typed while it went and the focus move there through the bar's `prefill`. A new request waiting for the old turn to stop (`pendingStart`) also only blocks sending.
+- **Sending keeps focus in the box**, including with the send button or the send options menu, whose button the emptied bar disables.
+- **The + menu hands focus to the message box** before the file dialog opens (`MessageBoxFocus` in `SourcePicker.tsx`, provided by `Composer`), so the window gives it back there when the dialog closes.
+- **Dialogs return focus to what opened them.** Radix only does that for a `Dialog.Trigger`, and Orglet opens its dialogs from state, so the kit's `useReturnFocus` remembers the focused element when a dialog opens and focuses it again when it closes, but only when focus would otherwise be lost (on the page or inside the closed dialog): a link inside a viewer that closes it and focuses its target, such as a report's checker link, keeps that focus. `Drawer`, `TabbedDialog` (Settings and every tabbed editor), `Confirmer`, `Viewer` and the forward picker use it.
+- **Details takes focus when it opens** (its heading) and gives it back to what opened it when it closes with focus inside. A link that opens Details on one message or attempt focuses that on a later frame.
+- **The prompt bar shows focus like every other control**: typing in it rings the pill in `--focus`, two pixels, and the live tab docked on it follows. The idle bar keeps its quiet outline.
 
 ## What is running and the queue
 

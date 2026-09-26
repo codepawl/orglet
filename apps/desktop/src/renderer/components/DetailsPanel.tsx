@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Clock, Copy, Cpu, FileText, ListOrdered, MessageSquare, ShieldCheck, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
 import { t, currentLocale, tMessage, withNodes, NODE_MARKERS } from '../i18n';
 import { Avatar, RosterAvatars } from './Avatar';
@@ -323,10 +323,24 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
   const finishedAt = lastRun && detail ? runEndedAt(lastRun.id, detail.events) : undefined;
   const took = firstRun && finishedAt ? elapsedLabel(firstRun.startedAt, finishedAt) : undefined;
   const latestOutcome = detail && recovery?.taskId === detail.task.id ? latestTurnOutcome(detail, recovery) : null;
+  const pane = useRef<HTMLElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  // Opening Details moves focus onto its heading, so the keyboard carries on inside the panel, and closing it, with
+  // its button or Escape, gives focus back to what opened it (COD-284). A link that opens Details on one message or
+  // attempt focuses that afterwards, on a later frame.
+  useLayoutEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = pane.current;
+    heading.current?.focus({ preventScroll: true });
+    return () => {
+      const focusInside = panel?.contains(document.activeElement);
+      if (focusInside && opener?.isConnected) opener.focus();
+    };
+  }, []);
 
-  return <aside className="details-pane" aria-label={t('Chi tiết')}>
+  return <aside ref={pane} className="details-pane" aria-label={t('Chi tiết')}>
     <div className="details-head">
-      <h2>{t('Chi tiết')}</h2>
+      <h2 ref={heading} tabIndex={-1}>{t('Chi tiết')}</h2>
       <Button size="icon" aria-label={t('Đóng panel')} onClick={onClose}><X size={18} /></Button>
     </div>
     <div className="details-body">

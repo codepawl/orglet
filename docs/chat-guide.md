@@ -1,6 +1,6 @@
 # In a chat
 
-What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
+What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, keep typing from the keyboard, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
@@ -12,7 +12,7 @@ An orglet reads only what you attach to **that** chat, or what is inside the wor
 2. Pick **Files**, or **Folder** for up to 20 supported files from one folder (hidden and generated files are skipped, and the chat lists what was left out).
 3. Write what you want done, then send.
 
-Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed under **Details → Sources**. Files and words you have not sent yet stay on that chat's message box when you open another chat and come back, until you send or remove them; each chat, and each orglet's or crew's new chat, keeps its own. They are still there after Orglet restarts, for example to install an update; erasing chats, sources or everything in **Settings → Data** clears them. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. In the viewer you can edit a text or code file or mark up an image; saving adds a new version to the chat and leaves your file as it was ([Viewing and editing files](viewing-and-editing-files.md)).
+Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed under **Details → Sources**. Files and words you have not sent yet stay on that chat's message box when you open another chat and come back, until you send or remove them; each chat, and each orglet's or crew's new chat, keeps its own. They are still there after Orglet restarts, for example to install an update, and Orglet opens the chat you were in when it closed; erasing chats, sources or everything in **Settings → Data** clears them. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. In the viewer you can edit a text or code file or mark up an image; saving adds a new version to the chat and leaves your file as it was ([Viewing and editing files](viewing-and-editing-files.md)).
 
 What the orglet gets from each kind:
 
@@ -27,6 +27,13 @@ Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. A PDF's text 
 Type a colon and at least two letters of an emoji's name, such as `:sk`, and a small menu lists the emoji that fit. Arrow keys move through it, Enter or Tab inserts the one highlighted, Escape closes it. A full name such as `:skull:` becomes 💀 as soon as you type the closing colon.
 
 The names are GitHub's, which Slack and Discord mostly share. The menu only opens at the start of the message or after a space or bracket, and only when an emoji matches, so times like `10:30` and links stay as you typed them.
+
+## Keyboard
+
+- After you send, the message box stays ready, so you can type the next message straight away. If a message cannot be sent, it comes back in the box, in front of anything you typed since.
+- After you pick files or a folder with **+**, the cursor is back in the message box.
+- Opening **Details** moves the keyboard into the panel. Its close button or **Escape** puts you back where you were.
+- Closing Settings, a viewer or any other window with **Escape** puts you back on the button that opened it.
 
 ## Side threads
 
@@ -132,10 +139,12 @@ If the app closes while an orglet works, that turn stops where it was and is not
 A schedule sends the same request to an orglet or crew daily or weekly, while Orglet is open.
 
 1. Click **Schedules** in the footer, then **New schedule**.
-2. Name it, write the repeating brief, choose the orglet or crew, the frequency, the weekday and run time, the time zone, and a limit per run. Under **Limits & permissions**, turn on **Read and search the web** if each run should look things up, and set **Browser** to **Read pages** if it should open pages in Orglet's browser. Attach sources if the request needs them.
+2. Name it, write the repeating brief, choose the orglet or crew, the frequency, the weekday and run time, the time zone (picked from a list, this computer's first), and a limit per run. Under **Limits & permissions**, turn on **Read and search the web** if each run should look things up, and set **Browser** to **Read pages** if it should open pages in Orglet's browser. Attach sources if the request needs them.
 3. Choose **Enable schedule**. Enabling is your approval for that content and connection; a later change to the orglet, crew, model or sources turns the schedule off until you review and save it again.
 
-Orglet checks schedules only while it is open. If the computer was off or asleep at the time, the missed run becomes one **Run once to catch up** choice, or **Skip missed run**; missed days are never queued up, and the next time stays on the calendar. Scheduled runs cannot write memory, react, or propose app changes, since nobody is watching. There are at most 100 schedules. Policy detail: [routines.md](routines.md).
+Orglet checks schedules only while it is open. If the computer was off or asleep at the time, the card says which run it missed and when, with one **Run once to catch up** choice, or **Skip missed run**; missed days are never queued up, and the next time stays on the calendar. Scheduled runs cannot write memory, react, or propose app changes, since nobody is watching. There are at most 100 schedules.
+
+To delete a schedule, open the **⋮** menu on its card and choose **Delete schedule**; the menu asks once more before it deletes. Its past runs stay as chats: they keep the schedule's name, say it was deleted, and are still in Search. An orglet or crew with a schedule switched on cannot be archived or deleted; Orglet names the schedule and offers **View schedules**, where you can turn it off or delete it. Policy detail: [routines.md](routines.md).
 
 Each run is its own chat, apart from the orglet's main chat. You find it three ways:
 

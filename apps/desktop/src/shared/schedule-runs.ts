@@ -1,4 +1,4 @@
-import type { Routine, Task } from './contracts';
+import type { Routine, Task, TaskInput } from './contracts';
 import { sideThreadsOf } from './side-threads';
 
 /**
@@ -49,4 +49,15 @@ export function chatsUnder<T extends RunRow, R extends ScheduleRow>(tasks: reado
   const schedules: ChildChat<T, R>[] = scheduleRunsOf(tasks, routines, owner).map(({ routine, run }) => ({ kind: 'schedule', task: run, routine }));
   const threads: ChildChat<T, R>[] = 'workerId' in owner ? sideThreadsOf(tasks, owner.workerId).map(task => ({ kind: 'side', task })) : [];
   return [...schedules, ...threads].sort((first, second) => second.task.createdAt.localeCompare(first.task.createdAt));
+}
+
+/**
+ * Whether a schedule's task (or a chat) is run by this orglet on its own or by this crew. An orglet or crew with a
+ * schedule switched on cannot be archived or deleted; the core refuses, and the window offers the way out first
+ * (COD-283). A crew's members are not counted here: the crew itself holds them.
+ */
+export function runBy(task: Pick<TaskInput, 'workerId' | 'teamId' | 'assignees'>, kind: 'worker' | 'team', entityId: string): boolean {
+  if (kind === 'team') return task.teamId === entityId;
+  if (task.teamId) return false;
+  return task.workerId === entityId || (Array.isArray(task.assignees) && task.assignees.includes(entityId));
 }
