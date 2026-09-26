@@ -1,8 +1,9 @@
 import type { Language } from '../../shared/i18n';
-import { translate } from '../../shared/i18n';
+import { translate, translateMessage } from '../../shared/i18n';
 import { en, enGB } from '../../shared/locales/en';
 import type { ToolCapability } from '../../shared/tool-policy';
 import type { WorkspacePermission } from '../../shared/workspace-access';
+import type { ToolCallProblem } from '../tools/catalog';
 
 /**
  * The permissions a chat has turned off, named the way the person sees them in the chat's Details (COD-257). Asked
@@ -57,4 +58,102 @@ export function permissionsOff(input: HintInput): { permissions: string[]; where
   const details = `${label('Chi tiết')} → ${label('Quyền công cụ')}`;
   const where = input.sideThread ? `${label('Chat chính')}: ${details}` : details;
   return { permissions, where };
+}
+
+/** Where a chat's permissions are changed, as one message value the dictionary translates whole. */
+const PERMISSIONS_WHERE = 'Chi tiết → Quyền công cụ';
+/** A side thread is never wider than its main chat, so the change is made there. */
+const MAIN_CHAT_PERMISSIONS_WHERE = 'Chat chính: Chi tiết → Quyền công cụ';
+
+/** The switch a capability-gated tool needs, as the controls label it; the browser and desktop levels share one name. */
+const CAPABILITY_LABELS: Partial<Record<ToolCapability, string>> = {
+  ...SWITCH_LABELS,
+  'browser.read': 'Trình duyệt',
+  'browser.act': 'Trình duyệt',
+  'desktop.read': 'Ứng dụng trên máy',
+  'desktop.act': 'Ứng dụng trên máy',
+};
+
+/** How many refused calls in a row end a run: a worker that keeps calling what it cannot use is stuck, not adapting. */
+export const MAX_REFUSED_CALLS_IN_A_ROW = 3;
+
+type RefusalInput = {
+  problem: ToolCallProblem;
+  /** The tools the run may call now. */
+  offered: readonly string[];
+  /** The folder levels the run froze, or undefined without a folder. */
+  workspacePermissions: readonly WorkspacePermission[] | undefined;
+  language: Language;
+  sideThread: boolean;
+};
+
+/** The model's answer to a call it may correct, and the activity line the person reads (Vietnamese source, like every event). */
+export type ToolCallRefusal = { result: Record<string, unknown>; event: string };
+
+/**
+ * What the person would change for a tool this run was not offered, as an activity line, or null when the tool is not
+ * something a permission gives (a crew-only tool, another stage's tool). The line names the control and where it is.
+ */
+function permissionLine(problem: Extract<ToolCallProblem, { kind: 'not_offered' }>, input: RefusalInput): string | null {
+  const where = input.sideThread ? MAIN_CHAT_PERMISSIONS_WHERE : PERMISSIONS_WHERE;
+  if (problem.workspacePermission) {
+    if (!input.workspacePermissions?.length) return `Chưa dùng được thư mục vì chat này chưa có thư mục làm việc. Chọn một thư mục ở ${where} → Thư mục làm việc, rồi gửi lại tin nhắn.`;
+    if (problem.workspacePermission === 'write') return `Chưa sửa được tệp vì thư mục làm việc chỉ cho đọc. Đổi thành “Đọc và sửa file” ở ${where} → Thư mục làm việc, rồi gửi lại tin nhắn.`;
+    if (problem.workspacePermission === 'execute') return `Chưa chạy được lệnh vì thư mục làm việc chưa cho chạy lệnh. Đổi thành “Đọc, sửa file và chạy lệnh” ở ${where} → Thư mục làm việc, rồi gửi lại tin nhắn.`;
+    return null;
+  }
+  const label = problem.capability ? CAPABILITY_LABELS[problem.capability] : undefined;
+  if (!label) return null;
+  return `Chưa dùng được “${label}” vì quyền này đang tắt. Bật ở ${where}, rồi gửi lại tin nhắn.`;
+}
+
+/**
+ * The tool's answer to a call the worker can correct (COD-289), instead of a failed run: which tools it has, and for a
+ * permission the chat has off, the sentence to tell the person, in the app's language. Before this, an orglet asked
+ * to edit in a folder narrowed to reading failed with "The tool is not allowed by policy." and never learned it could
+ * only read.
+ */
+export function toolCallRefusal(input: RefusalInput): ToolCallRefusal {
+  const { problem } = input;
+  if (problem.kind === 'invalid_arguments') {
+    return {
+      result: { toolError: 'invalid_arguments', tool: problem.tool, error: `The arguments do not match ${problem.tool}.`, issues: problem.issues,
+        next: 'Nothing was run. Call it again with arguments that match its schema.' },
+      event: `Tham số công cụ không hợp lệ: ${problem.tool}`,
+    };
+  }
+  const available = [...input.offered];
+  if (problem.kind === 'unknown') {
+    return {
+      result: { toolError: 'unknown', tool: problem.tool, error: `No tool is named ${problem.tool}.`, available,
+        next: 'Nothing was run. Use one of the available tools.' },
+      event: `Công cụ không có trong chat này: ${problem.tool}`,
+    };
+  }
+  const line = permissionLine(problem, input);
+  if (!line) {
+    return {
+      result: { toolError: 'not_offered', tool: problem.tool, error: `${problem.tool} is not available here.`, available,
+        next: 'Nothing was run. Do not call it again in this turn; use one of the available tools.' },
+      event: `Công cụ không có trong chat này: ${problem.tool}`,
+    };
+  }
+  const forThePerson = translateMessage(dictionaryFor(input.language), line);
+  return {
+    result: { toolError: 'not_offered', tool: problem.tool, error: `${problem.tool} is not allowed in this chat.`, available,
+      next: `Nothing was run. Do not call it again in this turn. Do what you can with the available tools, and tell the person in one sentence what to change, in their language: ${forThePerson}` },
+    event: line,
+  };
+}
+
+/** How many of the latest tool results in a row were refused calls, so a worker that keeps retrying can be stopped. */
+export function refusedCallsInARow(messages: readonly { role: string; content?: unknown }[]): number {
+  let count = 0;
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role !== 'tool') continue;
+    if (typeof message.content !== 'string' || !message.content.startsWith('{"toolError":')) break;
+    count++;
+  }
+  return count;
 }
