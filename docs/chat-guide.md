@@ -122,6 +122,8 @@ Each run is its own chat, apart from the orglet's main chat. You find it three w
 - **In Notifications.** When a run finishes, stops with a problem or waits for you, a message names the schedule ("Daily standup note is ready", "Daily standup note needs you") with **Open**, and stays unread in Notifications until you look.
 - **In Schedules**, where each card has **Open latest run**.
 
+To try a schedule without waiting for its time, click **Run now** (the play button) on its card. It runs the same way a scheduled run does, with the same checks, and opens the run; the next scheduled time does not move. A schedule that is switched off, changed since you saved it, or still busy with its previous run does not start, and Schedules says why. A switched-off schedule's button stays greyed out.
+
 The run's header shows the schedule's name with the same calendar mark, and the top of the chat says which schedule it is and who ran it, with **Open schedule**.
 
 You can also ask an orglet, in its chat, to schedule something ("run this every Monday at 9"); it answers with a proposal card, and the schedule it creates is saved switched off until you enable it ([App-change proposals](permissions-and-learning.md#app-change-proposals)).

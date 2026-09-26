@@ -114,6 +114,27 @@ it('keeps one catch-up after reopen across a long overdue window', async () => {
   expect(store.get<Routine>('routines', routine.id).pending).toBeNull();
   await expect(core.command('catchUpRoutine', { id: routine.id })).rejects.toThrow('Không có lần chạy bù đang chờ.');
 });
+it('runs a schedule now from the window through the guards a trigger passes, and keeps its next time', async () => {
+  const routine = await save();
+  const nextDueAt = store.get<Routine>('routines', routine.id).nextDueAt;
+  // The window names the schedule and nothing else: it cannot add files to the run.
+  await expect(core.command('runRoutineNow', { id: routine.id, sourceIds: [] })).rejects.toThrow();
+
+  const taskId = await core.command('runRoutineNow', { id: routine.id }) as string;
+  await idle();
+  const ran = store.get<Routine>('routines', routine.id);
+  expect(store.get<Task>('tasks', taskId).routineId).toBe(routine.id);
+  expect(ran.lastTaskId).toBe(taskId);
+  expect(ran.nextDueAt).toBe(nextDueAt);
+  expect(ran.pending).toBeNull();
+
+  await core.command('saveRoutine', { id: routine.id, name: routine.name, enabled: false, schedule, task: routine.task });
+  await expect(core.command('runRoutineNow', { id: routine.id })).rejects.toThrow('Lịch đang tắt');
+  await core.command('saveRoutine', { id: routine.id, name: routine.name, enabled: true, schedule, task: routine.task });
+  await core.command('saveWorker', { ...store.workspace().workers[0], instructions: 'Changed instructions' });
+  await expect(core.command('runRoutineNow', { id: routine.id })).rejects.toThrow('đã đổi');
+  expect(store.workspace().tasks).toHaveLength(1);
+});
 it('dismisses a coalesced miss without creating a task or moving the next due time', async () => {
   const routine = await save();
   current = new Date('2026-02-04T04:00:00Z'); await core.tick();

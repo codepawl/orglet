@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Routine, TaskInput, Worker, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
-import { AppWindow, ShieldCheck, CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
+import { AppWindow, ShieldCheck, CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
 import { TimeZone } from '../../shared/schedule';
@@ -79,6 +79,10 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
             <p className="routine-subline"><span className={`status-pill ${item.enabled ? 'logged_in' : ''}`}><StatusMark variant={item.enabled ? 'filled' : 'empty'} tone={item.enabled ? 'success' : 'muted'} label={item.enabled ? t('Đang bật') : t('Đã tắt')} decorative />{item.enabled ? t('Đang bật') : t('Đã tắt')}</span><span className="routine-trigger" title={summary}>{summary}</span></p>
           </div>
           <div className="routine-actions">
+            {/* Run now goes through the guards a trigger passes (switched on, approved as it is, previous run done)
+                and opens the run like any scheduled one; the next scheduled time stays as it was. */}
+            <Button size="icon" aria-label={t('Chạy ngay lịch {0}', [item.name])} title={item.enabled ? t('Chạy ngay') : t('Bật lịch để chạy ngay')} disabled={busy || !item.enabled}
+              onClick={() => void action(async () => openTask(await orglet.call('runRoutineNow', { id: item.id })))}><Play size={16} /></Button>
             <Button size="icon" aria-label={t('Sửa lịch {0}', [item.name])} title={t('Sửa lịch')} disabled={busy} onClick={() => onView({ editing: true, routine: item })}><Pencil size={16} /></Button>
             {/* On or off is two states, so it wears a switch (user, 2026-09-19). Its name stays "Bật lịch"
                 whichever way it is set, because the state is what aria-checked says. */}

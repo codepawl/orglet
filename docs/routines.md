@@ -17,7 +17,7 @@ The editor's **Starts** field picks one trigger per routine (COD-245):
 | **When a file arrives** | A new file lands in the folder you picked | Nothing is recorded and nothing is replayed |
 | **Only when called** | `orglet run "<name>"` calls it from a terminal ([cli.md](cli.md#run)) | The command starts the app first; nothing is queued |
 
-Every trigger fires only while Orglet is open. The two event triggers are a clear break from the clock's catch-up: an event that happens while the app is closed is gone, and opening the app never runs it late. Any routine, whatever its trigger, can also be started with `orglet run`.
+Every trigger fires only while Orglet is open. The two event triggers are a clear break from the clock's catch-up: an event that happens while the app is closed is gone, and opening the app never runs it late. Any routine, whatever its trigger, can also be started with `orglet run`, or with **Run now** (the play button) on its card in **Schedules** (`runRoutineNow`). Run now takes the same path as `orglet run` without files (`Routines.runCalled`): the routine must be switched on, approved as it is now and done with its previous run, it runs with the routine's own sources only, and it leaves the next scheduled time where it was. The run opens like any scheduled run.
 
 The row in **Schedules** says the trigger on the line under the name: "Daily at 09:00", "When a file arrives in Invoices" or "Only when called". A routine saved before triggers existed runs on its clock, as it always did.
 
