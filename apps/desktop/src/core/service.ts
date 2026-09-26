@@ -438,6 +438,12 @@ export class CoreService {
         if (!this.workspaceRuntime) throw new Error('Workspace runtime chưa được cấu hình.');
         return this.workspaceRuntime.diff(args);
       }
+      case 'applyBlockedHandIn': {
+        const input = commands.applyBlockedHandIn.parse(args);
+        if (this.teams.isActive(input.taskId)) throw new Error('Dừng công việc trước khi xử lý bản làm việc.');
+        await this.runner.applyBlockedHandIn(input.taskId, input.runId);
+        return;
+      }
       case 'recoveryProcessOutput': return new WorkspaceRecovery(this.store).output(args);
       case 'retireWorkspaceAttempt': {
         new WorkspaceRecovery(this.store).retire(args, taskId => this.runner.isActive(taskId) || this.teams.isActive(taskId));
