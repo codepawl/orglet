@@ -18,6 +18,7 @@ import { IslandDock } from './islandDock';
 import { RowMenu } from './RowMenu';
 import { toast } from './toast';
 import { canStartSideThread } from '../../shared/side-threads';
+import { keepDraft, readDraft, taskDraftKey } from '../drafts';
 
 const SINGLE_LINE = 40;
 
@@ -265,12 +266,15 @@ export function withPrefill(current: string, prefill: string): string {
  * message had, plus any added here with + (or sent from Explorer), which sit on the bar as cards the way an empty
  * chat's do (COD-257; an older "Attach files" dialog used to take them). While a run is on, the island saying what the
  * worker is doing sits on the bar's top edge (COD-167, `IslandDock`). `prefill` fills it without sending;
- * `onPrefilled` lets the caller forget it once it is in.
+ * `onPrefilled` lets the caller forget it once it is in. What is typed and added but not sent stays with the chat
+ * while the app is open (COD-257, `drafts.ts`), so leaving the chat and coming back finds it on the bar.
  */
 export function FollowUpComposer({ detail, workspace, ready, openSettings, openChat, action, prefill, onPrefilled }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void }) {
-  const [text, setText] = useState('');
+  const draftKey = taskDraftKey(detail.task.id);
+  const [text, setText] = useState(() => readDraft(draftKey)?.text ?? '');
   // Files added for the next message, and what could not be added with the reason, as in the empty chat.
-  const [added, setAdded] = useState<FolderIntake>({ sources: [], skipped: [] });
+  const [added, setAdded] = useState<FolderIntake>(() => readDraft(draftKey)?.intake ?? { sources: [], skipped: [] });
+  useEffect(() => { keepDraft(draftKey, { text, intake: added }); }, [draftKey, text, added]);
   const textarea = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (!prefill) return;
