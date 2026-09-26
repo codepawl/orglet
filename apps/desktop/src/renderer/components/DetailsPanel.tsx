@@ -29,6 +29,7 @@ import { McpApprovalChoice } from '../../shared/mcp';
 import { BrowserChatSettings, BrowserSteps, browserProfileName, useBrowserState } from './BrowserSettings';
 import { DesktopChatSettings, DesktopSteps, desktopAppsAvailable } from './DesktopApps';
 import { defaultBrowserChoice, routineBrowserLevels } from '../../shared/browser';
+import { workOutcomes } from '../../shared/work-outcomes';
 
 /*
  * The panel beside a chat: who you are talking to, what this conversation has cost, and what happened in it.
@@ -218,6 +219,25 @@ async function copyRunId(id: string) {
   }
 }
 
+/**
+ * What the commands of the chat's latest turn came to, in one line: how many exited 0, failed or never finished, and
+ * any file conflict or step of unknown outcome. It lives in Details, beside the goal the turn worked from, rather than
+ * under the person's message (owner, 2026-09-26).
+ */
+function latestTurnOutcome(detail: TaskDetail, recovery: WorkspaceRecoveryView | undefined): string {
+  const latestRevision = detail.task.inputRevision ?? 0;
+  const runIds = new Set(detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === latestRevision).map(run => run.id));
+  const outcomes = workOutcomes(recovery, runIds);
+  if (!outcomes) return '';
+  const commandCount = outcomes.passedCommands + outcomes.failedCommands + outcomes.unfinishedCommands;
+  return [
+    commandCount > 0 ? t('Lệnh: {0} thoát 0, {1} lỗi, {2} chưa hoàn tất.', [outcomes.passedCommands, outcomes.failedCommands, outcomes.unfinishedCommands]) : '',
+    outcomes.fileConflicts ? t('{0} bản file xung đột hoặc chưa rõ.', [outcomes.fileConflicts]) : '',
+    outcomes.uncertainCalls ? t('{0} thao tác chưa rõ kết quả.', [outcomes.uncertainCalls]) : '',
+    outcomes.truncated ? t('Chỉ tính bản ghi gần đây.') : '',
+  ].filter(Boolean).join(' ');
+}
+
 export function DetailsPanel({ workspace, team, worker, group, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, onRestoreFile, readProcessOutput, readPrivateFile }: {
   workspace: Workspace;
   team?: Team;
@@ -264,6 +284,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
   const model = lastRun?.snapshot.model;
   const finishedAt = lastRun && detail ? runEndedAt(lastRun.id, detail.events) : undefined;
   const took = firstRun && finishedAt ? elapsedLabel(firstRun.startedAt, finishedAt) : undefined;
+  const latestOutcome = detail && recovery?.taskId === detail.task.id ? latestTurnOutcome(detail, recovery) : '';
 
   return <aside className="details-pane" aria-label={t('Chi tiết')}>
     <div className="details-head">
@@ -326,7 +347,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
         busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} onRestore={onRestoreFile}
         readOutput={readProcessOutput} readFile={readPrivateFile} />}
 
-      {detail && detail.runs.some(run => run.snapshot.workFrame) && <Section icon={MessageSquare} title={t('Mục tiêu của lượt')}>
+      {detail && (detail.runs.some(run => run.snapshot.workFrame) || latestOutcome) && <Section icon={MessageSquare} title={t('Mục tiêu của lượt')}>
         {detail.runs.filter(run => run.snapshot.workFrame).map(run => {
           const frame = run.snapshot.workFrame!;
           return <div key={run.id} className="details-run">
@@ -338,6 +359,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
             </div>
           </div>;
         })}
+        {latestOutcome && <p className="muted details-outcome">{latestOutcome}</p>}
       </Section>}
 
       {detail && Boolean(detail.task.decisionRequests?.length) && <Section icon={MessageSquare} title={t('Quyết định trong chat')}>

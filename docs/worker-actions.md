@@ -45,6 +45,7 @@ The live words come from `ActivityKind` in `shared/progress.ts` and the sentence
 - **The step list, the timer and the worker's notes** sit behind one folded control above the streaming text: the same trace the finished answer keeps (`TurnTrace`, below), with the memories the run froze as its first rows. The control counts what has happened so far ("Dùng 1 ghi nhớ · Đọc 2 tệp · Tìm 1 lần"), or says *Chi tiết* when only notes are there.
 - **The answer** appears as it is written, as a normal message.
 - **Thinking** shows only inside that folded control, as the worker's notes, and only when the model shares it. It is not on the page by default. It is never saved: `HarnessProgress` lives in memory and is dropped when the run stops.
+- **The working line** in the chat, under the orglet's name, repeats the island's sentence without the name ("Writing a reply…", "Reading src/sum.js…") while no answer text has arrived, with a light sweeping across the words so the chat itself shows the work is alive. It goes as soon as the answer starts streaming, holds still under reduced motion, and is not announced again, since the island already is (COD-257).
 - **A crew run** reads as one island counting the workers at work ("3 Tí đang làm việc…"), with every face. The lead's planning and combining use the same island with the core's own states. Members' internal jobs stay under **Details**.
 
 ## Afterwards
