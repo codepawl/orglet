@@ -84,6 +84,10 @@ loads the switch's styles.
   actions (its children) on the right, vertically centred.
 - `FieldLabel`: a field's title with a small decorative leading `icon` (any icon component that takes `size`, such as
   one from lucide-react); `required` draws the red asterisk without adding it to the field's name.
+- `InfoTip`: technical detail (ids, paths, hashes) behind a small button: opens on hover and keyboard focus, pins
+  open on click so a row's copy button can be reached, closes on Escape, focus leaving or a pointer outside. `rows` of
+  `{ label, value, mono?, onCopy? }`; `label` names the trigger, `icon` is what it shows, `copyLabel` names each copy
+  button. Portaled, so a scrolling dialog cannot clip it.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming

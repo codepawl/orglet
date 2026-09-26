@@ -21,3 +21,5 @@ export type { ColorPickerLabels, ColorPickerProps } from './components/ColorPick
 export { PanelHeading } from './components/PanelHeading';
 export { FieldLabel } from './components/FieldLabel';
 export type { FieldLabelIcon } from './components/FieldLabel';
+export { InfoTip } from './components/InfoTip';
+export type { InfoTipRow } from './components/InfoTip';

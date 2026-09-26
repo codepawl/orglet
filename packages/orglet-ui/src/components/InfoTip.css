@@ -1,0 +1,62 @@
+.org-info-tip { display: inline-flex; }
+.org-info-tip-panel {
+  position: fixed;
+  z-index: 30;
+  padding: 10px 12px;
+  background: var(--org-bg, #fff);
+  border: 1px solid var(--org-border, #e5e5e5);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px #0000001f;
+  font-size: 12.5px;
+  color: var(--org-text, #1f1f1f);
+  animation: org-info-tip-in var(--org-motion-quick, 110ms) var(--org-ease-out, ease-out);
+}
+@keyframes org-info-tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.org-info-tip-rows {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.org-info-tip-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+.org-info-tip-row dt {
+  color: var(--org-muted, #666);
+  padding-top: 2px;
+}
+.org-info-tip-row dd {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.org-info-tip-row dd.org-info-tip-mono {
+  font-family: var(--org-font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+}
+.org-info-tip-value {
+  flex: 1;
+  min-width: 0;
+  padding-top: 2px;
+}
+/* Named with the row so the icon button's own size (two classes) does not win. */
+.org-info-tip-row .org-button.org-info-tip-copy {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .org-info-tip-panel { animation: none; }
+}
