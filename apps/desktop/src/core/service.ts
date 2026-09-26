@@ -24,7 +24,7 @@ import { ReviewPolicy } from '../shared/review';
 import { Preflight } from './orchestration/preflight';
 import { PreflightPolicy, type PreflightRecord } from '../shared/preflight';
 import { TeamTemplates } from './storage/templates';
-import { Routines } from './orchestration/routines';
+import { Routines, SCHEDULE_NEVER_ACTS } from './orchestration/routines';
 import { FolderTriggers } from './orchestration/folder-triggers';
 import { RoutineFolders } from './storage/routine-folders';
 import type { WatchFolderView } from '../shared/routine-triggers';
@@ -135,7 +135,7 @@ export class CoreService {
     this.templates = new TeamTemplates(store, this.notify);
     this.appProposals = new AppProposals(store, this.proposalApplier());
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
-    this.browser = new BrowserTools(store, browserHost);
+    this.browser = new BrowserTools(store, browserHost, () => this.notify());
     this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings(), this.browser);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
@@ -218,7 +218,9 @@ export class CoreService {
       case 'task': {
         const id = (args as { id: string }).id;
         this.markTaskSeen(id);
-        return this.store.detail(this.liveTask(id).id);
+        const taskId = this.liveTask(id).id;
+        // The browser card, take-over and whether a run uses the browser live in memory, beside the saved chat (COD-261).
+        return { ...this.store.detail(taskId), browser: this.browser.live(taskId) };
       }
       case 'reconcileBudget': {
         const input = commands.reconcileBudget.parse(args);
@@ -364,6 +366,20 @@ export class CoreService {
         return;
       }
       case 'browserActions': return this.browser.actions(this.liveTask(commands.browserActions.parse(args).taskId).id);
+      case 'answerBrowserApproval': {
+        // The person's answer to a card that asks about one step; only a click in the window sends it (COD-261).
+        const input = commands.answerBrowserApproval.parse(args);
+        this.browser.person.answer(this.liveTask(input.taskId).id, input.requestId, input.answer);
+        this.notify();
+        return;
+      }
+      case 'browserTakeOver': {
+        const input = commands.browserTakeOver.parse(args);
+        const taskId = this.liveTask(input.taskId).id;
+        if (input.taken) return this.browser.takeOver(taskId);
+        await this.browser.handBack(taskId);
+        return false;
+      }
       case 'browserScreenshot': {
         const input = commands.browserScreenshot.parse(args);
         return this.browser.screenshot(this.liveTask(input.taskId).id, input.id);
@@ -516,6 +532,7 @@ export class CoreService {
           : task.assignees === 'all' ? this.store.all<Worker>('workers').map(worker => worker.id)
           : task.assignees ?? [task.workerId];
         for (const workerId of workers) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, input.capabilities);
+        if (task.routineId && input.capabilities.includes('browser.act')) throw new Error(SCHEDULE_NEVER_ACTS);
         if (task.sideOf) this.sideThreads.assertCapabilitiesWithin(task, input.capabilities);
         const reduced = this.store.detail(task.id).runs.some(run =>
           (run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider)).some(capability => !input.capabilities.includes(capability)));
@@ -1338,6 +1355,7 @@ export class CoreService {
     const workerIds = task.teamSnapshot ? [...task.teamSnapshot.memberIds, task.teamSnapshot.synthesizerId] : task.assignees === 'all' ? this.store.all<Worker>('workers').map(worker => worker.id) : task.assignees ?? [task.workerId];
     for (const workerId of workerIds) snapshotCapabilities(this.store.get<Worker>('workers', workerId).provider, task.toolCapabilities);
     this.policy.assertStart(task.teamId);
+    if (routine && task.toolCapabilities?.includes('browser.act')) throw new Error(SCHEDULE_NEVER_ACTS);
     if (routine) task.routineId = routine.id;
     this.store.transaction(() => {
       this.store.put('tasks', task);

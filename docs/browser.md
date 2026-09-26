@@ -5,18 +5,18 @@
   <img src="images/orglets/browser-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-An orglet can open and read web pages in a real Chrome or Edge window that Orglet starts for it. The window uses a profile of Orglet's own, never your everyday browser profile. This first version only reads: the orglet opens a page, reads it as text, looks for something on it, scrolls it and keeps a screenshot for you. It never clicks, types, submits a form, downloads or uploads anything.
+An orglet can open and read web pages in a real Chrome or Edge window that Orglet starts for it. The window uses a profile of Orglet's own, never your everyday browser profile. At the first level the orglet only reads: it opens a page, reads it as text, looks for something on it, scrolls it and keeps a screenshot for you. At the second level, **Read and act**, it can also click, type, choose from lists and press keys. Anything that could send, pay, buy or delete stops and asks you first, every time.
 
-Use it when [reading a web page](agent-tools.md#public-web-tools) is not enough: a page that only shows its content after its scripts run, a long page you want searched, a site you signed in to yourself, or an app running on your own computer at `localhost`.
+Use it when [reading a web page](agent-tools.md#public-web-tools) is not enough: a page that only shows its content after its scripts run, a long page you want searched, a site you signed in to yourself, a search box or a filter you want used, or an app running on your own computer at `localhost`.
 
 Part of the [user guide](user-guide.md). The other permissions are in [agent-tools.md](agent-tools.md).
 
 ## Turn it on
 
 1. Open the chat's **Details** and find **Tool permissions**, or open the orglet's settings and its **Permissions** tab.
-2. Set **Browser** to **Read pages**.
+2. Set **Browser** to **Read pages**, or to **Read and act** to let the orglet use pages as well.
 
-**Browser** is off in every chat until you turn it on, including chats you had before this version. Demo orglets do not use tools, so the control is disabled for them with one line saying why.
+**Browser** is off in every chat until you turn it on, including chats you had before this version. **Read and act** is never on unless you choose it. Demo orglets do not use tools, so the control is disabled for them with one line saying why.
 
 With the browser on, the chat's **Details** also shows **Browser profile** and **Sites** under the MCP permissions.
 
@@ -43,11 +43,13 @@ Each chat has its own site list under **Details → Tool permissions → Sites**
 - On a **named profile**, only allowed sites open.
 - Settings, extension and file pages (`chrome://`, `edge://`, `file://` and the like) never open, whatever the list says.
 
-The rules apply to every step, not only to the address the orglet asked for. A redirect, a frame inside a page, an image, a script, a web socket: each connection is checked, and one the list does not allow is refused. A shorter list takes effect at the orglet's next step.
+The rules apply to every step, not only to the address the orglet asked for. A redirect, a frame inside a page, an image, a script, a web socket: each connection is checked, and one the list does not allow is refused. A click that leads to a site the list refuses is stopped the same way. A shorter list takes effect at the orglet's next step.
 
-A [side thread](team-chat.md#side-threads) uses its main chat's profile and site list and cannot change them. It is never wider than its main chat: a site is allowed only when both lists allow it, and what the main chat blocks is blocked there too.
+A [side thread](team-chat.md#side-threads) uses its main chat's profile and site list and cannot change them. It is never wider than its main chat: a site is allowed only when both lists allow it, and what the main chat blocks is blocked there too. It has **Read and act** only while its main chat has it.
 
 ## What the orglet can do
+
+At **Read pages**:
 
 - Open a page, in a new tab or in one it already has open. A run has at most four tabs.
 - Read the page. It gets the page's structure as text: headings, text, links, buttons and form fields with their labels. It is not a picture. A long page comes in parts of 20,000 characters.
@@ -56,42 +58,95 @@ A [side thread](team-chat.md#side-threads) uses its main chat's profile and site
 - Keep a screenshot of what the page shows, for you to look at. The orglet itself cannot see images in this version.
 - List and close its own tabs. A run never sees another run's tabs or yours, and its tabs close when its turn ends.
 
-What a page says is untrusted, like a [web page](agent-tools.md#public-web-tools): instructions on it do not give the orglet any permission, and an app change the orglet proposes after reading a page always waits for your click.
+At **Read and act**, also:
+
+- Click a link, a button or a checkbox.
+- Type into a field, replacing what is there, and press Enter after it if asked to.
+- Choose from a list.
+- Press one key: Enter, Tab, Escape, the arrow keys, Page Up, Page Down, Home, End or Backspace.
+- Wait up to five seconds for a page that is still loading.
+
+The orglet names each element by a mark from its latest reading of the page. If the page no longer has that element, or the element changed its name, the step is refused and the orglet reads the page again.
+
+What a page says is untrusted, like a [web page](agent-tools.md#public-web-tools): instructions on it do not give the orglet any permission, words on a page can never make a step count as less serious, and an app change the orglet proposes after reading a page always waits for your click.
+
+## When the orglet asks you
+
+Orglet decides how serious each step is from what the page shows about the element and the page. The orglet has no say in it.
+
+A step **asks you first** when it could:
+
+- Send a form that sends data somewhere (a search box that only opens a results page does not count).
+- Send what was typed, such as Enter in a message box.
+- Open a file picker, or download a file.
+- Do what its name says, when the name is like send, pay, buy, order, checkout, purchase, delete, remove, post, publish, confirm, subscribe, transfer, sign out or submit, or the Vietnamese gửi, thanh toán, mua, đặt hàng, xoá or xóa, đăng, xác nhận, chuyển tiền. So do the buttons a site often sends with a script instead of a form: reply, comment, share, repost, invite, approve, merge, deploy, accept, agree, book now, reserve, donate, revoke, deactivate, uninstall, and trả lời, bình luận, chia sẻ, mời, phê duyệt, đồng ý, chấp nhận, đặt chỗ, đặt phòng, đặt vé, đặt bàn, quyên góp, nạp tiền, rút tiền. Accents do not matter: "Thanh toan" counts, and so does "XÓA". A word written with other accents is another word, so "Mới nhất" is not "mời".
+- Happen on a page that looks like a sign-in, a payment or a CAPTCHA page.
+
+The card appears in the chat under the orglet's name: **Researcher wants to click “Place order” on shop.example.com**, with the text it would type, why Orglet asks, and a picture of the page with the element outlined. Choose **Allow once** or **Don't allow**. There is no "always": the next such step asks again. A declined step comes back to the orglet as declined, and it does not try it again in that turn. Nothing reaches the site until you allow it.
+
+Only a chat with one orglet can ask, side threads included. In a crew, a group chat or a schedule, a step that would ask is refused, and the orglet tells you what is left for you to do.
+
+**Stop** while a card is waiting cancels the step and the run; nothing is sent. A card nobody answers for 15 minutes counts as not allowed.
+
+## Never, whoever asks
+
+- Type into a password field or a card field.
+- Type anything on a page with a CAPTCHA, or click the CAPTCHA itself.
+- Answer a page's pop-up question (a JavaScript dialog). Orglet dismisses it and tells the orglet.
+- Download a file, or choose a file to upload. A file picker the page opens is caught and left empty.
+
+For these, the orglet asks you to take over.
+
+## Take over and hand back
+
+While a run is using the browser, **Take over** is on the bar above the message box and in **Details → Browser**. It brings the browser window forward and holds the orglet's next browser step until you give the browser back. Use it to sign in, enter payment details, get past a CAPTCHA or pick a file yourself. While you hold it, a page may open a new window, such as a sign-in window, and it stays open for you. The site rules still apply.
+
+When you are done, choose **Hand back**. The step that was waiting goes on. If the orglet's turn ended while you held the browser, its tabs stay open until you hand it back, then they close.
+
+Holding the browser pauses only its steps. The orglet can still think and write, and a step that waits for more than 15 minutes comes back to it as "the person still has the browser", so it can answer with what it has.
+
+Signing in happens only here, on the pages of the run you took over, or in **Settings → Browser → Open to sign in**. The orglet never types a password.
 
 ## What you see
 
-- While it works, the bar above the message box says where it is: **Researcher is on example.com…**
-- In the answer's steps: **Opened example.com**, **Read the page example.com**, **Searched the page**, **Took a screenshot of example.com**. A page the rules refused shows as a step that did not go through, with the reason.
-- **Details → Browser** lists the chat's browser steps, newest first, each with its site and time. A step with a screenshot has a button to view it.
-- The window is real. It opens minimized so it does not cover your work; the browser shows on the taskbar while a run uses it. **Show browser window** in **Details → Browser** brings it forward. Chrome and Edge show the bar that says the browser is controlled by automated software.
+- While it works, the bar above the message box says where it is: **Researcher is on example.com…**, with **Take over**. While a card waits: **Researcher is waiting for your OK…**. While you hold the browser: **You have the browser**, with **Hand back**.
+- In the answer's steps: **Opened example.com**, **Read the page example.com**, **Searched the page**, **Took a screenshot of example.com**, **Typed into “Search” on example.com**, **Clicked “Search” on example.com**, **Asked to click “Place order” on shop.example.com · allowed** or **· declined**. A step the rules refused shows as a step that did not go through, with the reason.
+- **Details → Browser** lists the chat's browser steps, newest first, each with its site and time. An acting step names its element and says whether it was plain **input** or **asked first**, and whether you allowed it. A step with a screenshot, including the picture a card showed, has a button to view it.
+- The window is real. It opens minimized so it does not cover your work; the browser shows on the taskbar while a run uses it. **Show browser window** in **Details → Browser** brings it forward without holding the orglet's steps. Chrome and Edge show the bar that says the browser is controlled by automated software.
 - **Stop** stops a step in the middle, a page that is still loading included.
 
 ## Schedules and crews
 
-A [schedule](routines.md) can read pages too. In the schedule's editor, under **Limits & permissions**, set **Browser** to **Read pages**, pick a profile and fill in its sites. Saving the schedule approves that profile and that list: change either and the schedule needs saving again before it runs.
+A [schedule](routines.md) can read pages too. In the schedule's editor, under **Limits & permissions**, set **Browser** to **Read pages**, pick a profile and fill in its sites. Saving the schedule approves that profile and that list: change either and the schedule needs saving again before it runs. A schedule never acts on pages: nobody is there to answer a card, so **Read and act** is not offered and a schedule that carries it is not saved.
 
-A crew's chat has the same **Browser** control as any chat, and every member that runs in it may read pages under the chat's list.
+A crew's chat and a group chat have the same **Browser** control as any chat, and every member that runs in them may read pages under the chat's list. At **Read and act** they may type, click and choose, but a step that would ask you is refused.
 
 ## How it works
 
-**Where each part runs.** The core decides every step before it happens: whether the chat has the browser on, whether the profile is the one the run started with, and whether the address passes the site list. It records each step in a journal. A separate browser host process, started by the main process the first time a run needs it, drives Chrome or Edge through `playwright-core` over a pipe, never a debugging port. The main process keeps the named profiles, as folders under Orglet's data folder, and relays the core's steps to the host. The window only shows state: profile names and dates, never their folders.
+**Where each part runs.** The core decides every step before it happens: whether the chat has the browser on, whether the profile is the one the run started with, whether the address passes the site list, and for an acting step how serious it is. It records each step in a journal. A separate browser host process, started by the main process the first time a run needs it, drives Chrome or Edge through `playwright-core` over a pipe, never a debugging port. The main process keeps the named profiles, as folders under Orglet's data folder, and relays the core's steps to the host. The window only shows state: profile names and dates, never their folders.
 
-**The two gates.** Every connection the browser makes goes through a small proxy inside the host process, including connections to this computer. The proxy looks each name up itself, refuses one that points into a private network unless the chat allows that exact address, and connects to the address it checked, so a name cannot switch to a local address between the check and the connection. It sees every hop of a redirect, which a hook on the page's requests does not. A second check on the page's requests refuses blocked sites and, on a named profile, pages and frames on sites that are not allowed. Before a page is read or pictured, the page's address and every frame's address are checked again.
+**The two gates.** Every connection the browser makes goes through a small proxy inside the host process, including connections to this computer. The proxy looks each name up itself, refuses one that points into a private network unless the chat allows that exact address, and connects to the address it checked, so a name cannot switch to a local address between the check and the connection. It sees every hop of a redirect, which a hook on the page's requests does not. A second check on the page's requests refuses blocked sites and, on a named profile, pages and frames on sites that are not allowed. Before a page is read or pictured, the page's address and every frame's address are checked again, and after an acting step the address the page landed on is checked too.
 
-**What is kept.** Each step is a journal row: the run, the step, the tab, what kind of step, the site, the risk (every step here is a read), what came of it and the screenshot, if any. Screenshots are PNG files kept in Orglet's database on this computer, at most ten per run. Both go when you delete the chat, and neither goes into a [backup](settings.md#backup-and-restore). A backup carries no browser profile and no site list; after a restore, turn the browser on again and pick the profile.
+**An acting step.** The host takes a fresh reading of the page and reports the element (its role and name, the kind of field, the form it belongs to and how that form sends, the link it sits in) and the page (a visible password or card field, a payment provider's frame or an address like `/checkout`, a CAPTCHA). The core sets the risk from those facts alone (`core/tools/browser-risk.ts`). A step that asks waits in the running turn: the card lives in the core's memory, the window shows it, and your click is a command only the window sends. Right before the step, the host checks the page is still at the same address and the element still has the same role and name; a page that swapped "Next" for "Place order" while you were asked gets read again instead of clicked.
 
-**Unknown outcomes.** Every step here is a read. A step that was running when the app closed simply runs again when the run continues.
+**Holding the browser.** **Take over** is a command to the core. It marks the chat's browser as held and tells the host, which brings the window forward, lets popups stay open and stops catching file pickers. Every browser step of the chat's runs checks the mark before it starts and waits while it is set. **Hand back** clears it, the waiting step goes on, and the host goes back to closing popups and catching file pickers. The mark lives in memory, so quitting the app clears it along with the run.
+
+**What is kept.** Each step is a journal row: the run, the step, the tab, what kind of step, the site, the element for an acting step, the risk the core set (read, input or consequential), what came of it (done, refused, failed, declined or unknown) and the screenshot, if any. Screenshots, including the pictures cards show, are PNG files kept in Orglet's database on this computer, at most ten per run. Both go when you delete the chat, and neither goes into a [backup](settings.md#backup-and-restore). A backup carries no browser profile and no site list; after a restore, turn the browser on again and pick the profile.
+
+**Unknown outcomes.** A reading step that was running when the app closed simply runs again when the run continues. An acting step goes through the same tool journal as file edits: an input step may run again, but a step that asked you and was running when the app closed is never run again on its own; its outcome stays unknown for you to check. A card that was still waiting when the app closed counts as declined, since nothing was done.
 
 **Network.** The browser has network, the way an [MCP server](mcp.md) you add does. Commands in a working folder still have none, not even loopback, and turning the browser on does not change that.
 
-**Cost.** Each model step sends the conversation again. A page's text can be long (a pricing page read at about 50,000 characters in our tests), so only the latest page stays whole in later steps and older ones keep their first 1,500 characters. Looking something up on a page returns only the matching lines.
+**Cost.** Each model step sends the conversation again. A page's text can be long (a pricing page read at about 50,000 characters in our tests), so only the latest page stays whole in later steps and older ones keep their first 1,500 characters. Looking something up on a page returns only the matching lines, and an acting step returns only the lines that changed.
 
 ## What it never does
 
 - Use or attach to your everyday browser profile.
-- Click, type, submit, download, upload, accept a dialog or follow a popup.
+- Act on a page at **Read pages**, or in a schedule.
+- Take a step that could send, pay, buy, order, delete, post or sign out without asking you first, or ask in a way that lets you say "always".
+- Type a password or a card number, touch a CAPTCHA, answer a dialog, download, or upload a file.
 - Open settings, extension or file pages, or a page on this computer or your network you did not allow.
-- Solve a CAPTCHA or sign in for you. You sign in yourself, in **Open to sign in**.
+- Sign in for you. You sign in yourself, after **Take over** or in **Open to sign in**.
 - Send anything to Orglet or anyone else. `playwright-core` sends no usage data; Chrome and Edge follow their own settings.
 
 ## Limits
@@ -99,20 +154,14 @@ A crew's chat has the same **Browser** control as any chat, and every member tha
 | Limit | Value |
 |---|---|
 | Tabs per run | 4 |
-| Screenshots per run | 10 |
+| Screenshots per run, card pictures included | 10 |
 | Snapshot part | 20,000 characters |
+| Lines that changed, returned after an acting step | 3,000 characters |
+| Text typed in one step | 2,000 characters |
+| One wait | 5 seconds |
 | Opening a page | 30 seconds |
+| Waiting for your answer, or for the browser back | 15 minutes |
+| Model steps in a run that may act | 24 |
 | Sites per chat | 100 |
 | Named profiles | 20 |
 | Browser left open after the last run | 1 minute |
-
-## Acting on pages before Orglet can
-
-Clicking and typing on pages is planned, with a card that asks you before anything that submits, pays or deletes. Until then, you can add Microsoft's Playwright MCP server by hand in **Settings → MCP** ([mcp.md](mcp.md)). Set it up so it cannot reach your own browser:
-
-1. **Command:** `npx`. **Arguments**, one per line: `-y`, `@playwright/mcp@0.0.82`, `--isolated`, `--image-responses`, `omit`.
-2. Pin the version, as above. `@latest` would run whatever was published most recently.
-3. Keep `--isolated`, so the server's browser keeps its profile in memory and forgets it. Never add `--extension`, which attaches to your own signed-in browser.
-4. `--image-responses omit` keeps screenshots out of the answers, which Orglet does not show to the model anyway.
-
-Know what you give up: an MCP server's calls are approved per tool, not per site, its `--allowed-origins` option is not a security boundary and does not cover redirects, schedules never get MCP tools, and nothing it does appears in **Details → Browser**. For Chrome DevTools MCP, add `--no-usage-statistics` and `--no-performance-crux`; it sends usage data and page addresses by default.

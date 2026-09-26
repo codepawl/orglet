@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppWindow, Ban, Camera, Check, ExternalLink, Image, LogIn, MoveVertical, Plus, ScanSearch, ShieldCheck, Trash2, UserRound, X, type LucideIcon } from 'lucide-react';
+import { AppWindow, Ban, Camera, Check, ExternalLink, Hand, Hourglass, Image, Keyboard, ListChecks, LogIn, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldCheck, TextCursorInput, Trash2, Undo2, UserRound, X, type LucideIcon } from 'lucide-react';
 import { Input } from '@codepawl/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import { CLEAN_BROWSER_PROFILE, defaultBrowserChoice, normalizeBrowserSite, type BrowserAction, type BrowserActionKind, type BrowserChoice, type BrowserSite, type BrowserSiteDecision, type BrowserState } from '../../shared/browser';
@@ -122,17 +122,69 @@ export function BrowserChatSettings({ detail }: { detail: TaskDetail }) {
 
 const stepIcons: Record<BrowserActionKind, LucideIcon> = {
   open: AppWindow, snapshot: AppWindow, find: ScanSearch, screenshot: Camera, scroll: MoveVertical, tabs: AppWindow, close: X,
+  click: MousePointerClick, type: TextCursorInput, select: ListChecks, press: Keyboard, wait: Hourglass,
 };
 
-/** One journaled step in words: what the worker did, never which tool it called. */
+/** An element's name as Details shows it: a long link text keeps its start. */
+const ELEMENT_CHARACTERS = 48;
+
+function shortElement(name: string): string {
+  const characters = Array.from(name);
+  return characters.length > ELEMENT_CHARACTERS ? `${characters.slice(0, ELEMENT_CHARACTERS - 1).join('').trimEnd()}…` : name;
+}
+
+/**
+ * One journaled step in words: what the worker did, never which tool it called. An acting step names its element,
+ * or only the page when it failed before the page was read.
+ */
+/**
+ * The step's name. An acting step that did not go through (waiting for the person, declined, refused, failed or of
+ * unknown outcome) is named as what the orglet was going to do, never as done.
+ */
 function stepLabel(action: BrowserAction): string {
   const site = action.origin ? new URL(action.origin).host : '';
+  const element = action.target ? shortElement(action.target) : '';
+  if (isActing(action.kind) && action.outcome !== 'done') return intendedLabel(action.kind, element, site);
+  if (action.kind === 'click') return element ? t('Bấm “{0}” trên {1}', [element, site]) : t('Bấm trên trang {0}', [site]);
+  if (action.kind === 'type') return element ? t('Gõ vào “{0}” trên {1}', [element, site]) : t('Gõ trên trang {0}', [site]);
+  if (action.kind === 'select') return element ? t('Chọn trong “{0}” trên {1}', [element, site]) : t('Chọn trên trang {0}', [site]);
+  if (action.kind === 'press') return element ? t('Nhấn {0} trên {1}', [element, site]) : t('Nhấn phím trên trang {0}', [site]);
+  if (action.kind === 'wait') return site ? t('Chờ trang {0}', [site]) : t('Chờ trang');
   const verb = action.kind === 'open' ? t('Mở trang') : action.kind === 'snapshot' ? t('Đọc nội dung trang') : action.kind === 'find' ? t('Tìm trên trang')
     : action.kind === 'screenshot' ? t('Chụp màn hình') : action.kind === 'scroll' ? t('Cuộn trang') : action.kind === 'tabs' ? t('Xem các tab') : t('Đóng tab');
   return site ? `${verb} ${site}` : verb;
 }
 
-const outcomeNames: Record<Exclude<BrowserAction['outcome'], 'done'>, string> = translated({ refused: 'bị chặn', failed: 'không thành', unknown: 'chưa rõ kết quả' });
+const actingKinds: readonly BrowserAction['kind'][] = ['click', 'type', 'select', 'press'];
+
+function isActing(kind: BrowserAction['kind']): boolean {
+  return actingKinds.includes(kind);
+}
+
+function intendedLabel(kind: BrowserAction['kind'], element: string, site: string): string {
+  if (!element) return t('Định thao tác trên trang {0}', [site]);
+  if (kind === 'click') return t('Định bấm “{0}” trên {1}', [element, site]);
+  if (kind === 'type') return t('Định gõ vào “{0}” trên {1}', [element, site]);
+  if (kind === 'select') return t('Định chọn trong “{0}” trên {1}', [element, site]);
+  return t('Định nhấn {0} trên {1}', [element, site]);
+}
+
+const outcomeNames: Record<Exclude<BrowserAction['outcome'], 'done'>, string> = translated({ refused: 'bị chặn', failed: 'không thành', unknown: 'chưa rõ kết quả', declined: 'bạn không cho phép' });
+
+/**
+ * What a step's risk and outcome read as after its name. A reading step says nothing more when it went through; an
+ * acting one says whether it was plain input or asked first, and whether the person allowed it.
+ */
+function stepMeta(action: BrowserAction, askingActionId: string | undefined): string[] {
+  if (action.id === askingActionId) return [t('hỏi trước'), t('đang chờ bạn')];
+  const meta: string[] = [];
+  const asked = action.risk === 'consequential' && (action.outcome === 'done' || action.outcome === 'declined');
+  if (action.risk === 'input') meta.push(t('nhập liệu'));
+  if (asked) meta.push(t('hỏi trước'));
+  if (asked && action.outcome === 'done') meta.push(t('đã cho phép'));
+  if (action.outcome !== 'done') meta.push(outcomeNames[action.outcome]);
+  return meta;
+}
 
 /**
  * The browser steps of this chat in Details, newest first: each with its site and what came of it, and a screenshot
@@ -142,15 +194,18 @@ export function BrowserSteps({ detail }: { detail: TaskDetail }) {
   const [actions, setActions] = useState<BrowserAction[]>();
   const [shown, setShown] = useState<{ url: string; label: string }>();
   const eventCount = detail.events.length;
+  // A card appearing or going changes a step's row without adding an event, so it reads the journal again too.
+  const askingActionId = detail.browser?.approval?.actionId;
   useEffect(() => {
     let live = true;
     void orglet.call('browserActions', { taskId: detail.task.id }).then(next => { if (live) setActions(next); }).catch(() => undefined);
     return () => { live = false; };
-  }, [detail.task.id, eventCount]);
+  }, [detail.task.id, eventCount, askingActionId]);
   useEffect(() => () => { if (shown) URL.revokeObjectURL(shown.url); }, [shown]);
   if (!actions?.length) return null;
   const latestRun = actions.at(-1)!.runId;
   const running = detail.runs.some(run => run.id === latestRun && run.status === 'running');
+  const live = detail.browser;
   const showWindow = () => void orglet.showBrowser(running ? latestRun : null).then(opened => {
     if (!opened) toast(t('Không có cửa sổ trình duyệt nào đang mở.'), 'info', t('Trình duyệt'));
   }).catch(error => toast(tMessage(String(error)), 'error', t('Trình duyệt')));
@@ -164,20 +219,37 @@ export function BrowserSteps({ detail }: { detail: TaskDetail }) {
     <ol className="browser-step-list">
       {recent.map(action => {
         const Icon = stepIcons[action.kind];
-        const outcome = action.outcome === 'done' ? undefined : outcomeNames[action.outcome];
-        return <li key={action.id} className={action.outcome === 'done' ? 'browser-step' : 'browser-step browser-step-muted'}>
+        const meta = stepMeta(action, askingActionId);
+        const quiet = action.outcome !== 'done' && action.id !== askingActionId;
+        return <li key={action.id} className={quiet ? 'browser-step browser-step-muted' : 'browser-step'}>
           <Icon size={14} aria-hidden="true" />
-          <span className="browser-step-text">{stepLabel(action)}{outcome && <span className="muted"> · {outcome}</span>}</span>
+          <span className="browser-step-text">{stepLabel(action)}{meta.length > 0 && <span className="muted browser-step-meta">{meta.join(' · ')}</span>}</span>
           <time dateTime={action.at}>{new Date(action.at).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })}</time>
           {action.screenshotId && <Button size="icon" aria-label={t('Xem ảnh màn hình')} title={t('Xem ảnh màn hình')} onClick={() => openShot(action)}><Image size={14} /></Button>}
         </li>;
       })}
     </ol>
-    <Button variant="outline" onClick={showWindow}><ExternalLink size={15} />{t('Hiện cửa sổ trình duyệt')}</Button>
+    {live?.takenOver && <p className="muted browser-hold-note">{t('Bạn đang cầm trình duyệt. Tí chờ tới khi bạn trả lại.')}</p>}
+    <div className="actions browser-step-actions">
+      {live?.takenOver
+        ? <Button variant="primary" onClick={() => takeOverBrowser(detail.task.id, false)}><Undo2 size={15} />{t('Trả lại trình duyệt')}</Button>
+        : live?.using && <Button variant="outline" onClick={() => takeOverBrowser(detail.task.id, true)}><Hand size={15} />{t('Tiếp quản')}</Button>}
+      <Button variant="outline" onClick={showWindow}><ExternalLink size={15} />{t('Hiện cửa sổ trình duyệt')}</Button>
+    </div>
     {shown && <Drawer open onClose={() => setShown(undefined)} title={shown.label}>
       <img className="browser-screenshot" src={shown.url} alt={t('Ảnh màn hình: {0}', [shown.label])} />
     </Drawer>}
   </section>;
+}
+
+/**
+ * Takes the chat's browser over (its window comes forward and the orglet's browser steps wait) or hands it back.
+ * Details and the island share it.
+ */
+export function takeOverBrowser(taskId: string, taken: boolean) {
+  void orglet.call('browserTakeOver', { taskId, taken }).then(shown => {
+    if (taken && !shown) toast(t('Không đưa được cửa sổ trình duyệt lên trước. Tìm nó trên thanh tác vụ.'), 'info', t('Trình duyệt'));
+  }).catch(error => toast(tMessage(String(error)), 'error', t('Trình duyệt')));
 }
 
 type Act = (action: () => Promise<string | void>, about?: string) => Promise<void>;

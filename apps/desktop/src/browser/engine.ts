@@ -1,11 +1,17 @@
 import { lookup } from 'node:dns/promises';
 import { join } from 'node:path';
-import { chromium, type Browser, type BrowserContext, type Page, type Route } from 'playwright-core';
-import { BrowserHostRequest, type BrowserPolicy, type BrowserTabView } from '../shared/browser-host';
+import { setTimeout as delay } from 'node:timers/promises';
+import { chromium, type Browser, type BrowserContext, type FileChooser, type Page, type Route } from 'playwright-core';
+import {
+  BrowserHostRequest, type BrowserActResult, type BrowserActStep, type BrowserExpectedTarget, type BrowserInspectResult, type BrowserPageFacts,
+  type BrowserPolicy, type BrowserTabView,
+} from '../shared/browser-host';
 import { BROWSER_OPEN_TIMEOUT_MS, CLEAN_BROWSER_PROFILE, MAX_BROWSER_TABS, type BrowserInfo } from '../shared/browser';
 import { requestRefusal, type ResolveAddresses } from '../core/tools/browser-policy';
 import type { DetectedBrowser } from './detect';
 import { PolicyProxy } from './proxy';
+import { focusedElement, newSnapshotLines, snapshotElement, type SnapshotElement } from './snapshot-lines';
+import { CAPTCHA_FRAME, PAYMENT_FRAME, PAYMENT_PATH, readElementFacts, readFrameFacts } from './page-facts';
 
 /**
  * The hands of Orglet's browser (COD-261): a real Chrome or Edge driven through playwright-core over a pipe, never
@@ -34,6 +40,17 @@ type RunSession = {
   policy: BrowserPolicy;
   /** A Clean run's own network gate, closed with it. */
   proxy?: PolicyProxy;
+  /** The person has taken this run's browser over: its popups stay open and a file picker is theirs to use. */
+  held: boolean;
+  /**
+   * What the run's pages tried that Orglet stopped, counted so a step can say what happened during it. Dialogs are
+   * numbered, since only the last few are kept.
+   */
+  dialogs: { number: number; type: string; message: string }[];
+  dialogCount: number;
+  downloads: number;
+  fileChoosers: number;
+  popupsClosed: number;
 };
 
 export type BrowserEngineOptions = {
@@ -67,6 +84,20 @@ export const PROFILE_IN_USE = 'Một Tí đang dùng hồ sơ này. Đợi lư�
 export const OTHER_PROFILE = 'Lần chạy này đang dùng một hồ sơ khác. Nhắn tin mới để dùng hồ sơ vừa chọn.';
 export const WINDOW_CLOSED = 'Cửa sổ trình duyệt đã đóng. Mở lại trang để tiếp tục.';
 export const FRAME_REFUSED = 'Trang này có một khung hiện trang mà luật trang của chat không cho phép, nên không đọc trang này.';
+export const PAGE_MOVED = 'Trang đã chuyển sang địa chỉ khác trước bước này nên không làm gì. Đọc lại trang bằng browser_snapshot.';
+export const ELEMENT_CHANGED = 'Phần tử này đã đổi hoặc không còn trên trang nên không làm gì. Đọc lại trang bằng browser_snapshot rồi dùng mã mới.';
+
+/** Characters of the changed snapshot lines a step returns; the worker reads the rest with browser_snapshot. */
+const CHANGED_LINES_CHARACTERS = 3_000;
+/** Frames whose facts are read before a step; a page with more is judged on these. */
+const FACT_FRAMES = 20;
+const FRAME_FACTS_TIMEOUT_MS = 1_500;
+/** A step that opens a page gets this long to load before its result is read. */
+const SETTLE_LOAD_MS = 5_000;
+/** The colour the element the person is asked about is outlined in, on the picture the card shows. */
+const ASKING_OUTLINE = '[data-orglet-asking]{outline:3px solid #e5484d !important;outline-offset:2px !important}';
+/** The size of the part of the page a card's picture keeps around the element. */
+const ASKING_PICTURE = { width: 720, height: 405 };
 
 export class BrowserEngine {
   private cleanBrowser?: Promise<Browser>;
@@ -77,6 +108,7 @@ export class BrowserEngine {
   private signIn = new Set<string>();
   private runs = new Map<string, RunSession>();
   private pageOwners = new WeakMap<Page, RunSession>();
+  private fileChooserListeners = new WeakMap<RunSession, (chooser: FileChooser) => void>();
   private dnsCache = new Map<string, { at: number; addresses: string[] }>();
   private idleTimer?: NodeJS.Timeout;
   private resolve: ResolveAddresses;
@@ -104,10 +136,12 @@ export class BrowserEngine {
       }
       case 'screenshot': {
         const page = await this.allowedTab(request.runId, request.tabId, request.policy);
-        // Password fields are painted over, so a screenshot never shows what someone typed into one.
-        const png = await page.screenshot({ type: 'png', timeout: STEP_TIMEOUT_MS, animations: 'disabled', caret: 'hide', mask: [page.locator('input[type="password"]')] });
+        const png = await this.picture(page, request.highlight);
         return { ...await this.tabView(request.tabId, page), png: png.toString('base64') };
       }
+      case 'inspect': return this.inspect(request.runId, request.tabId, request.policy, request.ref, signal);
+      case 'act': return this.act(request.runId, request.tabId, request.policy, request.step, request.url, request.expect, signal);
+      case 'hold': return this.hold(request.runId, request.held);
       case 'scroll': {
         const page = await this.allowedTab(request.runId, request.tabId, request.policy);
         const metrics = await page.evaluate(direction => {
@@ -257,15 +291,47 @@ export class BrowserEngine {
 
   /**
    * Checks every request of a context against the site rules of the run that owns the page making it, before any
-   * page of that context loads. A popup a run's page opens is closed: reading never follows one.
+   * page of that context loads. A popup a run's page opens is closed, unless the person has taken the browser over:
+   * a sign-in window is theirs to use then. Its requests still follow the run's site rules.
    */
   private async watchContext(context: BrowserContext) {
     await context.route('**/*', route => this.onRoute(context, route));
     context.on('page', page => {
       void this.ownerOfOpener(page).then(owner => {
-        if (owner) void page.close().catch(() => {});
+        if (!owner || owner.held) return;
+        owner.popupsClosed += 1;
+        void page.close().catch(() => {});
       });
     });
+  }
+
+  /**
+   * What a run's tab does with the things a page can try on its own. A JavaScript dialog is dismissed and noted,
+   * since nothing may answer one; a download is cancelled (the context accepts none) and noted; a file picker is
+   * caught before it opens and never filled, unless the person has the browser.
+   */
+  private watchTab(session: RunSession, page: Page) {
+    page.on('dialog', dialog => {
+      session.dialogCount += 1;
+      session.dialogs.push({ number: session.dialogCount, type: dialog.type().slice(0, 20), message: dialog.message().slice(0, 300) });
+      session.dialogs = session.dialogs.slice(-5);
+      void dialog.dismiss().catch(() => {});
+    });
+    page.on('download', download => {
+      session.downloads += 1;
+      void download.cancel().catch(() => {});
+    });
+    if (!session.held) page.on('filechooser', this.catchFileChooser(session));
+  }
+
+  /** One listener per run, so handing the browser over can take it off every tab and put it back. */
+  private catchFileChooser(session: RunSession) {
+    let listener = this.fileChooserListeners.get(session);
+    if (!listener) {
+      listener = () => { session.fileChoosers += 1; };
+      this.fileChooserListeners.set(session, listener);
+    }
+    return listener;
   }
 
   private async ownerOfOpener(page: Page): Promise<RunSession | undefined> {
@@ -326,12 +392,12 @@ export class BrowserEngine {
       const server = await proxy.start();
       const context = await browser.newContext({ viewport: VIEWPORT, acceptDownloads: false, serviceWorkers: 'block', proxy: { server } });
       await this.watchContext(context);
-      const session: RunSession = { runId, profileId, context, ownsContext: true, tabs: new Map(), nextTab: 1, policy, proxy };
+      const session: RunSession = { runId, profileId, context, ownsContext: true, tabs: new Map(), nextTab: 1, policy, proxy, ...quietSession() };
       this.runs.set(runId, session);
       return session;
     }
     const context = await this.profileContext(profileId);
-    const session: RunSession = { runId, profileId, context, ownsContext: false, tabs: new Map(), nextTab: 1, policy };
+    const session: RunSession = { runId, profileId, context, ownsContext: false, tabs: new Map(), nextTab: 1, policy, ...quietSession() };
     this.runs.set(runId, session);
     return session;
   }
@@ -354,6 +420,7 @@ export class BrowserEngine {
       session.nextTab += 1;
       session.tabs.set(pageTabId, page);
       this.pageOwners.set(page, session);
+      this.watchTab(session, page);
       page.on('close', () => { if (session.tabs.get(pageTabId) === page) session.tabs.delete(pageTabId); });
       if (!session.ownsContext) await page.setViewportSize(VIEWPORT).catch(() => {});
       // The window is real and stays reachable from the taskbar and from Details, but it opens out of the way.
@@ -406,6 +473,150 @@ export class BrowserEngine {
   private async tabView(tabId: string, page: Page): Promise<BrowserTabView> {
     const title = await page.title().catch(() => '');
     return { tabId, url: page.url(), title: title.slice(0, 300) };
+  }
+
+  /**
+   * A PNG of what the tab shows. Password fields are painted over, so a picture never shows what someone typed into
+   * one. `highlight` scrolls one element into view, outlines it and keeps only the part of the page around it, so
+   * the card's small picture still shows the element and its words.
+   */
+  private async picture(page: Page, highlight?: string): Promise<Buffer> {
+    const options = { type: 'png' as const, timeout: STEP_TIMEOUT_MS, animations: 'disabled' as const, caret: 'hide' as const, mask: [page.locator('input[type="password"]')] };
+    if (!highlight) return page.screenshot(options);
+    const element = page.locator(`aria-ref=${highlight}`);
+    await element.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => {});
+    const marked = await element.evaluate(node => node.setAttribute('data-orglet-asking', ''), undefined, { timeout: 3_000 }).then(() => true, () => false);
+    const box = await element.boundingBox({ timeout: 3_000 }).catch(() => null);
+    const viewport = page.viewportSize() ?? VIEWPORT;
+    const clip = box ? regionAround(box, viewport) : undefined;
+    try {
+      return await page.screenshot({ ...options, style: ASKING_OUTLINE, ...(clip ? { clip } : {}) });
+    } finally {
+      if (marked) await element.evaluate(node => node.removeAttribute('data-orglet-asking'), undefined, { timeout: 3_000 }).catch(() => {});
+    }
+  }
+
+  /** Signs of a password, payment or CAPTCHA page, read from the page's address and its first frames. */
+  private async pageFacts(page: Page): Promise<BrowserPageFacts> {
+    const facts: BrowserPageFacts = { passwordField: false, cardField: false, payment: false, captcha: false };
+    try {
+      facts.payment = PAYMENT_PATH.test(new URL(page.url()).pathname);
+    } catch {
+      facts.payment = false;
+    }
+    for (const frame of page.frames().slice(0, FACT_FRAMES)) {
+      const frameUrl = frame.url();
+      if (CAPTCHA_FRAME.test(frameUrl)) facts.captcha = true;
+      if (PAYMENT_FRAME.test(frameUrl)) facts.payment = true;
+      if (!/^(?:https?:|about:blank|about:srcdoc)/i.test(frameUrl)) continue;
+      const reading = frame.evaluate(readFrameFacts).catch(() => undefined);
+      const found = await Promise.race([reading, delay(FRAME_FACTS_TIMEOUT_MS).then(() => undefined)]);
+      if (!found) continue;
+      facts.passwordField ||= found.passwordField;
+      facts.cardField ||= found.cardField;
+      facts.captcha ||= found.captcha;
+    }
+    return facts;
+  }
+
+  /**
+   * What the page reports about one element before a step on it, from a snapshot taken now: its role and name as the
+   * snapshot shows them, and the facts the core judges the step by. `ref` null reads the focused element.
+   */
+  private async inspect(runId: string, tabId: string, policy: BrowserPolicy, ref: string | null, signal: AbortSignal): Promise<BrowserInspectResult> {
+    const page = await this.allowedTab(runId, tabId, policy);
+    const snapshot = await page.ariaSnapshot({ mode: 'ai', timeout: STEP_TIMEOUT_MS, signal });
+    const view = await this.tabView(tabId, page);
+    const facts = await this.pageFacts(page);
+    const element = ref ? snapshotElement(snapshot, ref) : focusedElement(snapshot);
+    if (!element) return { ...view, target: null, page: facts };
+    const located = page.locator(`aria-ref=${element.ref}`);
+    if (await located.count() === 0) return { ...view, target: null, page: facts };
+    const elementFacts = await located.evaluate(readElementFacts, undefined, { timeout: STEP_TIMEOUT_MS });
+    return { ...view, target: { ref: element.ref, role: element.role.slice(0, 60), name: element.name.slice(0, 300), ...elementFacts }, page: facts };
+  }
+
+  /** The person takes a run's browser over, or hands it back. */
+  private async hold(runId: string, held: boolean) {
+    const session = this.runs.get(runId);
+    if (!session) return { shown: false };
+    session.held = held;
+    const listener = this.catchFileChooser(session);
+    for (const page of session.tabs.values()) {
+      page.off('filechooser', listener);
+      if (!held) page.on('filechooser', listener);
+    }
+    if (!held) return { shown: false };
+    return this.show(runId);
+  }
+
+  /**
+   * One step on a page the core has allowed. The page must still be where the core saw it, and the element must
+   * still carry the role and name the core judged; otherwise nothing is done and the worker is told to read the page
+   * again. After the step the page gets a moment to load, the address it lands on must pass the chat's site rules,
+   * and the result says what changed and what the page tried that Orglet stopped.
+   */
+  private async act(runId: string, tabId: string, policy: BrowserPolicy, step: BrowserActStep, url: string, expect: BrowserExpectedTarget | null, signal: AbortSignal): Promise<BrowserActResult> {
+    const page = await this.allowedTab(runId, tabId, policy);
+    const session = this.runs.get(runId);
+    if (!session) throw new Error(NO_TAB);
+    const beforeView = await this.tabView(tabId, page);
+    const before = { url: beforeView.url, title: beforeView.title };
+    const quiet = { changes: '', changesCut: false, dialogs: [], downloadBlocked: false, popupClosed: false, fileChooser: false };
+    // A wait changes nothing, so it only needs the tab; every other step needs the page the core judged.
+    if (step.kind !== 'wait' && !sameAddress(page.url(), url)) return { ...beforeView, before, ...quiet, stale: PAGE_MOVED };
+    const beforeSnapshot = await page.ariaSnapshot({ mode: 'ai', timeout: STEP_TIMEOUT_MS, signal });
+    if (step.kind !== 'wait') {
+      const current = step.kind === 'press' ? focusedElement(beforeSnapshot) : snapshotElement(beforeSnapshot, step.ref);
+      if (!sameElement(current, expect)) return { ...beforeView, before, ...quiet, stale: ELEMENT_CHANGED };
+    }
+    const counted = { dialogs: session.dialogCount, downloads: session.downloads, fileChoosers: session.fileChoosers, popups: session.popupsClosed };
+    await this.perform(page, step, signal);
+    await this.settleAfterStep(page, step);
+    signal.throwIfAborted();
+    if (page.isClosed()) throw new Error(WINDOW_CLOSED);
+    const landed = page.url();
+    const refusal = landed === 'about:blank' ? undefined : await requestRefusal(landed, session.policy, true, this.resolve);
+    const tried = {
+      dialogs: session.dialogs.filter(dialog => dialog.number > counted.dialogs).map(dialog => ({ type: dialog.type, message: dialog.message })),
+      downloadBlocked: session.downloads > counted.downloads,
+      popupClosed: session.popupsClosed > counted.popups,
+      fileChooser: session.fileChoosers > counted.fileChoosers,
+    };
+    if (refusal) {
+      await page.goto('about:blank').catch(() => {});
+      return { ...await this.tabView(tabId, page), before, changes: '', changesCut: false, ...tried, blocked: refusal };
+    }
+    const afterSnapshot = await page.ariaSnapshot({ mode: 'ai', timeout: STEP_TIMEOUT_MS, signal }).catch(() => '');
+    const changed = newSnapshotLines(beforeSnapshot, afterSnapshot, CHANGED_LINES_CHARACTERS);
+    return { ...await this.tabView(tabId, page), before, changes: changed.text, changesCut: changed.cut, ...tried };
+  }
+
+  private async perform(page: Page, step: BrowserActStep, signal: AbortSignal) {
+    const options = { timeout: STEP_TIMEOUT_MS, signal };
+    if (step.kind === 'wait') {
+      await delay(step.ms, undefined, { signal });
+      return;
+    }
+    if (step.kind === 'press') {
+      await page.keyboard.press(step.key);
+      return;
+    }
+    const element = page.locator(`aria-ref=${step.ref}`);
+    if (step.kind === 'click') await element.click(options);
+    if (step.kind === 'select') await element.selectOption(step.values, options);
+    if (step.kind === 'type') {
+      await element.fill(step.text, options);
+      if (step.submit) await element.press('Enter', options);
+    }
+  }
+
+  /** A step that starts loading a page gets up to a few seconds for it; one that only changes the page, a moment. */
+  private async settleAfterStep(page: Page, step: BrowserActStep) {
+    if (step.kind === 'wait') return;
+    await delay(250);
+    await page.waitForLoadState('domcontentloaded', { timeout: SETTLE_LOAD_MS }).catch(() => {});
+    await page.waitForLoadState('load', { timeout: SETTLE_LOAD_MS }).catch(() => {});
   }
 
   private async endRun(runId: string) {
@@ -494,6 +705,35 @@ export class BrowserEngine {
       await session.detach().catch(() => {});
     }
   }
+}
+
+/** The part of the page a card's picture shows: 720 by 405 pixels around the element, kept inside the viewport. */
+function regionAround(box: { x: number; y: number; width: number; height: number }, viewport: { width: number; height: number }) {
+  const width = Math.min(ASKING_PICTURE.width, viewport.width);
+  const height = Math.min(ASKING_PICTURE.height, viewport.height);
+  const centreX = box.x + box.width / 2;
+  const centreY = box.y + box.height / 2;
+  const x = Math.round(Math.min(Math.max(centreX - width / 2, 0), viewport.width - width));
+  const y = Math.round(Math.min(Math.max(centreY - height / 2, 0), viewport.height - height));
+  return { x, y, width, height };
+}
+
+/** A new run starts with nothing held and nothing stopped yet. */
+function quietSession(): Pick<RunSession, 'held' | 'dialogs' | 'dialogCount' | 'downloads' | 'fileChoosers' | 'popupsClosed'> {
+  return { held: false, dialogs: [], dialogCount: 0, downloads: 0, fileChoosers: 0, popupsClosed: 0 };
+}
+
+/** The same page address, whatever its fragment says: a script moving the #part is not a new page. */
+function sameAddress(current: string, expected: string): boolean {
+  const withoutFragment = (address: string) => address.split('#')[0];
+  return withoutFragment(current) === withoutFragment(expected);
+}
+
+/** Whether the element found now is the one the core judged: same ref, role and name, or both nothing focused. */
+function sameElement(current: SnapshotElement | undefined, expected: BrowserExpectedTarget | null): boolean {
+  if (!current || !expected) return !current && !expected;
+  // The core keeps names and roles at the lengths the journal holds, so they are compared at those lengths.
+  return current.ref === expected.ref && current.role.slice(0, 60) === expected.role && current.name.slice(0, 300) === expected.name;
 }
 
 /** A page that did not open, in words the worker and the person can act on; the browser's own code stays at the end. */

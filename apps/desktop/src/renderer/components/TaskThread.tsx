@@ -23,7 +23,9 @@ import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { LiveRun, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, useRunProgress, workingWorkers } from './LiveRun';
+import { LiveRun, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, useRunProgress, withBrowserControls, workingWorkers } from './LiveRun';
+import { BrowserApprovalCard } from './BrowserApproval';
+import { takeOverBrowser } from './BrowserSettings';
 import { TurnTrace } from './TurnTrace';
 import { traceOf } from '../turnTrace';
 import { dockIsland } from './islandDock';
@@ -123,6 +125,9 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   /** Puts a reply in this chat's composer without sending it: "Nhờ sửa" on a blocked hand-in (COD-270). */ askToFix?: (text: string) => void }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
   const [answeringDecision, setAnsweringDecision] = useState(false);
+  // A consequential browser step waiting on the person, answered from the card in the latest turn (COD-261).
+  const browserApproval = detail.browser?.approval;
+  const [answeringBrowser, setAnsweringBrowser] = useState(false);
   // The run whose working-copy changes are open in the diff viewer (COD-163).
   const [diffRun, setDiffRun] = useState<Run>();
   // A command that blocked a hand-in, its output open in the viewer, and whether "Vẫn áp dụng" is on its way (COD-270).
@@ -190,12 +195,18 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   // none is yet (the run is still queued for a turn), the run the island is about.
   const working = latestTurn ? workingWorkers(latestTurn.runs, liveRuns) : [];
   const islandWorkers = working.length > 0 ? working : dockedRun ? [dockedRun.snapshot.worker] : [];
-  const dockedIsland = dockedRun
+  // A run that ended while the person held its browser keeps its tabs open for them (COD-261), so the island stays
+  // with Hand back until they give it back.
+  const heldRun = !dockedRun && detail.browser?.takenOver ? latestTurn?.runs.at(-1) : undefined;
+  const runIsland = dockedRun
     ? latestLive?.update.progress
       ? islandOf(latestLive.update.progress, pausing, islandWorkers)
       : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing,
         site: browsingSiteOf(detail.events.filter(event => event.runId === dockedRun.id).map(event => event.message)) })
-    : undefined;
+    : heldRun ? islandBeforeStreaming({ workers: [heldRun.snapshot.worker], pausing: true }) : undefined;
+  // While a run uses Orglet's browser the island carries Take over or Hand back, and waits with the card (COD-261).
+  const browserWorkers = dockedRun ? islandWorkers : heldRun ? [heldRun.snapshot.worker] : [];
+  const dockedIsland = runIsland && withBrowserControls(runIsland, detail.browser, browserWorkers, taken => takeOverBrowser(detail.task.id, taken));
   const islandWorkerKey = islandWorkers.map(worker => worker.id).join(',');
   // Once no run is on, the island offers this chat's knowledge suggestions instead (COD-208). Dismissing hides the
   // offer for that set only, remembered per chat in localStorage; the notes themselves stay in Thư viện → Knowledge.
@@ -254,7 +265,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     });
     else if (knowledgeShown) dockIsland({ kind: 'knowledge', key: suggestionKey, count: proposals.length, review: () => knowledgeActions.current.review(), dismiss: () => knowledgeActions.current.dismiss() });
     else dockIsland(undefined);
-  }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt]);
+  }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, dockedIsland?.action?.kind, islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt]);
   useEffect(() => () => dockIsland(undefined), []);
 
   // A face nods when its answer lands, not when an old chat opens: the runs already finished when this chat was
@@ -415,7 +426,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             {byline(reply.run)}
             {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest)}
           </section>)}
-          {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && detail.task.status === 'waiting_input' ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
+          {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && (detail.task.status === 'waiting_input' || browserApproval) ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
             {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && pendingDecision?.approval && <McpApprovalCard approval={pendingDecision.approval} busy={answeringDecision} sideThread={Boolean(detail.task.sideOf)}
@@ -426,6 +437,15 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
                 action(async () => {
                   try { await orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: choice }); }
                   finally { setAnsweringDecision(false); }
+                });
+              }} />}
+            {latest && browserApproval && <BrowserApprovalCard taskId={detail.task.id} approval={browserApproval} busy={answeringBrowser}
+              onAnswer={answer => {
+                if (answeringBrowser) return;
+                setAnsweringBrowser(true);
+                action(async () => {
+                  try { await orglet.call('answerBrowserApproval', { taskId: detail.task.id, requestId: browserApproval.id, answer }); }
+                  finally { setAnsweringBrowser(false); }
                 });
               }} />}
             {latest && detail.task.status === 'waiting_input' && pendingDecision && !pendingDecision.approval && <div role="group" aria-label={t('Quyết định đang chờ')}>

@@ -2,9 +2,10 @@ import { z } from 'zod';
 import type { ToolCapability } from './tool-policy';
 
 /**
- * Browser use, phase 1: reading pages (COD-261). An orglet opens and reads pages in a real Chrome or Edge window that
- * Orglet starts with a profile of its own, never the person's everyday one. The core decides which site and which step
- * and journals every call; the browser host process only carries it out. docs/browser.md is the user-facing page.
+ * Browser use (COD-261): reading pages, and at the "read and act" level clicking, typing and choosing on them. An
+ * orglet works in a real Chrome or Edge window that Orglet starts with a profile of its own, never the person's
+ * everyday one. The core decides which site and which step, sets each step's risk and journals every call; the
+ * browser host process only carries it out. docs/browser.md is the user-facing page.
  */
 
 /** The profile that keeps nothing: each run gets a private window context that is thrown away when the run ends. */
@@ -60,7 +61,8 @@ export const BrowserSites = z.array(BrowserSite).max(MAX_BROWSER_SITES)
 
 /**
  * What one chat's browser uses: which profile, and its site list. Absent on a chat means the Clean profile and an
- * empty list. The level itself is the `browser.read` capability, so it follows the chat's other permissions.
+ * empty list. The level itself is the `browser.read` and `browser.act` capabilities, so it follows the chat's other
+ * permissions.
  */
 export const BrowserChoice = z.object({ profileId: BrowserProfileId, sites: BrowserSites }).strict();
 export type BrowserChoice = z.infer<typeof BrowserChoice>;
@@ -82,19 +84,23 @@ export function narrowBrowserChoice(side: BrowserChoice, main: BrowserChoice): B
 }
 
 /**
- * How far a chat's browser reaches. Cumulative like the working folder's levels: a later "read and act" will include
- * reading. `none` is no browser at all.
+ * How far a chat's browser reaches. Cumulative like the working folder's levels: "read and act" (`browser.act`)
+ * includes reading. `none` is no browser at all.
  */
-export type BrowserLevel = 'none' | 'read';
-export const browserLevels: readonly BrowserLevel[] = ['none', 'read'];
+export type BrowserLevel = 'none' | 'read' | 'act';
+export const browserLevels: readonly BrowserLevel[] = ['none', 'read', 'act'];
+/** A schedule runs with nobody there to ask, so it may read pages and never act on them. */
+export const routineBrowserLevels: readonly BrowserLevel[] = ['none', 'read'];
 
 export function browserLevelOf(capabilities: readonly ToolCapability[]): BrowserLevel {
+  if (capabilities.includes('browser.act') && capabilities.includes('browser.read')) return 'act';
   return capabilities.includes('browser.read') ? 'read' : 'none';
 }
 
 /** The chat's capabilities with the browser at `level`, every other capability kept as it was. */
 export function capabilitiesWithBrowserLevel(capabilities: readonly ToolCapability[], level: BrowserLevel): ToolCapability[] {
-  const others = capabilities.filter(capability => capability !== 'browser.read');
+  const others = capabilities.filter(capability => capability !== 'browser.read' && capability !== 'browser.act');
+  if (level === 'act') return [...others, 'browser.read', 'browser.act'];
   if (level === 'read') return [...others, 'browser.read'];
   return others;
 }
@@ -110,20 +116,48 @@ export const BrowserScrollDirection = z.enum(['down', 'up', 'top', 'bottom']);
 export const BrowserScrollArgs = z.object({ tabId: BrowserTabId, direction: BrowserScrollDirection }).strict();
 export const BrowserTabsArgs = z.object({}).strict();
 
-/** Every step a browser tool can take. Phase 1 has only the reading ones; acting adds its own later. */
-export const BrowserActionKind = z.enum(['open', 'snapshot', 'find', 'screenshot', 'scroll', 'tabs', 'close']);
-export type BrowserActionKind = z.infer<typeof BrowserActionKind>;
 /**
- * How much a step could change, decided by the core and never lowered by the model. Every phase 1 step is `read`;
- * `input` and `consequential` are for acting on pages, which is not built yet.
+ * An element of a page, as the latest snapshot marks it: e12, or f1e3 for one inside a frame. The host looks it up in
+ * a snapshot it takes again just before the step, so an element that went away or changed its role or name no longer
+ * answers to the ref the worker saw.
+ */
+export const BrowserRef = z.string().regex(/^(?:f\d{1,4})?e\d{1,6}$/, 'Mã phần tử không hợp lệ.');
+/** Longest text one browser_type may enter. */
+export const MAX_BROWSER_TYPED_CHARACTERS = 2_000;
+/** Longest pause one browser_wait may take. */
+export const MAX_BROWSER_WAIT_MS = 5_000;
+/** The only keys browser_press sends: moving around a page and a form, never a shortcut. */
+export const BrowserKey = z.enum(['Enter', 'Tab', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', 'Backspace']);
+export type BrowserKey = z.infer<typeof BrowserKey>;
+export const BrowserClickArgs = z.object({ tabId: BrowserTabId, ref: BrowserRef }).strict();
+export const BrowserTypeArgs = z.object({ tabId: BrowserTabId, ref: BrowserRef, text: z.string().max(MAX_BROWSER_TYPED_CHARACTERS), submit: z.boolean() }).strict();
+export const BrowserSelectArgs = z.object({ tabId: BrowserTabId, ref: BrowserRef, values: z.array(z.string().min(1).max(200)).min(1).max(20) }).strict();
+export const BrowserPressArgs = z.object({ tabId: BrowserTabId, key: BrowserKey }).strict();
+export const BrowserWaitArgs = z.object({ tabId: BrowserTabId, ms: z.number().int().min(100).max(MAX_BROWSER_WAIT_MS) }).strict();
+
+/** Every step a browser tool can take: the reading ones, then acting on a page (`browser.act`). */
+export const BrowserActionKind = z.enum(['open', 'snapshot', 'find', 'screenshot', 'scroll', 'tabs', 'close', 'click', 'type', 'select', 'press', 'wait']);
+export type BrowserActionKind = z.infer<typeof BrowserActionKind>;
+/** The steps that act on a page, with what each hands the page. */
+export type BrowserActKind = 'click' | 'type' | 'select' | 'press';
+/**
+ * How much a step could change, decided by the core from what the page reports about the element and never by the
+ * model. `read` changes nothing; `input` fills in or moves around a page; `consequential` could send, pay, delete or
+ * sign something away, and asks the person first.
  */
 export const BrowserRisk = z.enum(['read', 'input', 'consequential']);
 export type BrowserRisk = z.infer<typeof BrowserRisk>;
-/** `unknown` is a step the app closed in the middle of; a read step is simply run again. */
-export const BrowserOutcome = z.enum(['done', 'refused', 'failed', 'unknown']);
+/**
+ * `unknown` is a step the app closed in the middle of: a read step simply runs again, an acting one is left for the
+ * person to check. `declined` is a step the person did not allow.
+ */
+export const BrowserOutcome = z.enum(['done', 'refused', 'failed', 'unknown', 'declined']);
 export type BrowserOutcome = z.infer<typeof BrowserOutcome>;
 
-/** One journaled browser step as the chat's Details lists it. */
+/**
+ * One journaled browser step as the chat's Details lists it. `target` is the page's address for a reading step and
+ * the element's name as the person sees it ("Place order") for an acting one; the page is then `origin`.
+ */
 export const BrowserAction = z.object({
   id: z.uuid(),
   runId: z.uuid(),
@@ -153,3 +187,38 @@ export type BrowserInfo = { kind: BrowserKind; name: string; version: string | n
 /** A profile as the window sees it: a name and dates, never its folder. */
 export type BrowserProfileView = { id: string; name: string; createdAt: string; lastUsedAt: string | null; open: boolean };
 export type BrowserState = { browser: BrowserInfo | null; profiles: BrowserProfileView[] };
+
+/**
+ * A consequential step waiting for the person in a solo chat: who wants to do what to which element on which site,
+ * why the core asks, and a picture of the page with the element outlined when one could be kept. Every such step asks
+ * again; there is no "always".
+ */
+export type BrowserApprovalView = {
+  id: string;
+  runId: string;
+  /** The journal row of the step being asked about, so Details can show it as waiting. */
+  actionId: string;
+  workerName: string;
+  kind: BrowserActKind;
+  /** The element's name as the page gives it, or its role when it has none. */
+  element: string;
+  site: string;
+  url: string;
+  /** What would be typed, for a step that types. */
+  text?: string;
+  /** The key, for a step that presses one. */
+  key?: string;
+  /** The choices, for a step that picks from a list. */
+  values?: string[];
+  /** Why the core asks, as short Vietnamese phrases the window translates. */
+  reasons: string[];
+  screenshotId?: string;
+  requestedAt: string;
+};
+
+/**
+ * What the chat's window shows about the browser right now, kept in memory by the core: a step waiting for the
+ * person's answer, whether the person has taken the browser over, whether a run is using it, and whether a step is
+ * waiting for it to be handed back.
+ */
+export type BrowserLive = { approval?: BrowserApprovalView; takenOver: boolean; using: boolean; waiting: boolean };

@@ -14,5 +14,5 @@ it('names the switches that are off the way the person sees them, in their langu
 it('points a side thread at its main chat, and says nothing when everything is on', () => {
   const side = permissionsOff({ capabilities: ['source.read', 'dataset.check', 'network.web'], workspacePermissions: ['read', 'write', 'execute'], language: 'en', sideThread: true });
   expect(side).toEqual({ permissions: ['Browser: Read pages'], where: 'Main chat: Details → Tool permissions' });
-  expect(permissionsOff({ capabilities: ['source.read', 'dataset.check', 'network.web', 'browser.read'], workspacePermissions: ['read', 'write', 'execute'], language: 'en-GB', sideThread: false })).toBeNull();
+  expect(permissionsOff({ capabilities: ['source.read', 'dataset.check', 'network.web', 'browser.read', 'browser.act'], workspacePermissions: ['read', 'write', 'execute'], language: 'en-GB', sideThread: false })).toBeNull();
 });

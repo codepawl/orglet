@@ -2050,6 +2050,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* A harness account that ran out (COD-225) wears the suggestions' tab: the gauge where the bulb sits, the switch as its
    one action, or when the account resets in the quiet colour of a second line. */
 .live-island-account .live-island-meta { margin-right:4px; color:var(--muted); font-size:13px; white-space:nowrap; }
+/* Take over / Hand back on a run that uses Orglet's browser (COD-261): the suggestions' quiet 24px control, colour-only
+   hover, after the sentence. The sentence gives up some of its width so the pair still fits a narrow bar. */
+.live-island .live-island-browser { height:24px; min-height:24px; flex-shrink:0; gap:4px; padding:0 6px; border-radius:12px; font-size:13px; color:var(--muted); }
+.live-island .live-island-browser:hover:not(:disabled) { background:transparent; color:var(--text); }
+.live-island-content:has(.live-island-browser) .live-island-label { max-width:min(40ch, calc(100cqw - 205px - var(--island-faces, 24px))); }
 /* The state, in the faces (COD-171). Thinking: the head turns from side to side, the eyes leading (the byline's
    Thinking without the hop, since the tab itself has just risen). Reading, listing files and running a step: the
    head leans in and the eyes read a line, jumping back with a blink. Searching: the eyes look about and the head
@@ -2206,6 +2211,20 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .mcp-arguments { margin:0; max-height:160px; overflow:auto; padding:10px 12px; border-radius:10px; background:var(--surface); font-family:var(--font-mono); font-size:12px; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; }
 .mcp-approval .actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .mcp-approval>.muted { margin:0; font-size:12px; }
+/* A consequential browser step waiting for the person (COD-261): the MCP card's question and buttons, the text it would
+   type, and the page with the element outlined as a thumbnail that opens larger. No surface of its own. */
+.browser-approval { display:flex; flex-direction:column; gap:10px; }
+.browser-approval .actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.browser-approval-values { margin:0; font-size:13px; }
+.browser-approval-reasons { margin:0; font-size:12px; }
+.browser-approval-shot { display:block; width:min(100%, 360px); padding:0; border:1px solid var(--border-subtle); border-radius:10px; overflow:hidden; background:var(--surface); cursor:zoom-in; }
+.browser-approval-shot img { display:block; width:100%; height:auto; }
+.browser-step-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+/* A step's risk and outcome ("Asked first · allowed") on a quiet line of their own under its name, so the name wraps
+   alone in the narrow Details column. */
+.browser-step-meta { display:block; }
+.browser-step-meta::first-letter { text-transform:uppercase; }
+.browser-hold-note { margin:0; font-size:12.5px; }
 /* A fieldset for its legend and grouping only: the form's boxed fieldset look does not apply here. */
 .form fieldset.mcp-picker,.mcp-grants { min-width:0; margin:22px 0 0; border:0; padding:0; }
 .form fieldset.mcp-picker legend { padding:0; margin-bottom:6px; font-size:14px; font-weight:400; }

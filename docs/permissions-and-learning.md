@@ -18,7 +18,7 @@ Permissions belong to a **chat**. You find the same controls in two places:
 | **Read and search the web** | Reading public web pages and searching. Pages come back as text; nothing runs, and the content is treated as untrusted. Searches go to the provider in **Settings → Web search** (Exa unless you pick DuckDuckGo), which the switch names; only the query is sent. |
 | **Propose app changes** | Suggesting a new orglet, crew, skill, schedule or setting as a card you apply ([below](#app-change-proposals)). On by default. |
 | **Working folder** | **No folder**, **Read files only**, **Read and edit files**, or **Read, edit files and run commands**. Choosing a level opens the folder picker, which states the access asked for. To point the chat at another folder, click **Change** beside the folder's name: the picker opens at the same level, and cancelling it keeps the current folder. |
-| **Browser** | **No browser** or **Read pages**: opening and reading pages in Orglet's own Chrome or Edge window, with the chat's profile and site list. Off until you turn it on. See [Orglet's browser](browser.md). |
+| **Browser** | **No browser**, **Read pages**, or **Read and act**: opening and reading pages in Orglet's own Chrome or Edge window, with the chat's profile and site list, and at the last level also clicking, typing and choosing on them. A step that could send, pay, buy or delete asks you every time. Off until you turn it on; a schedule can read pages but never act. See [Orglet's browser](browser.md). |
 
 A control the orglet cannot use yet, because it is on Demo or its connection is missing, is disabled with the reason beside it.
 

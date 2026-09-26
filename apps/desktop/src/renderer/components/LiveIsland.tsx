@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { Gauge, Lightbulb, X } from 'lucide-react';
+import { Gauge, Hand, Lightbulb, Undo2, X } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { RosterAvatars } from './Avatar';
 import { Button } from './ui';
@@ -17,7 +17,13 @@ export type IslandState = 'thinking' | 'reading' | 'searching' | 'listing' | 'to
  * workers whose runs are really running, whose faces the island carries (COD-169). `named` is the label cut around
  * the one worker's name, when it names one (COD-250); the label stays the whole sentence.
  */
-export type IslandView = { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[] };
+export type IslandView = { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; action?: IslandAction };
+
+/**
+ * One control the island may carry while a run uses Orglet's browser (COD-261): take the browser over, or hand it back.
+ * `kind` picks the icon and tells two views apart; the parent owns what it does.
+ */
+export type IslandAction = { kind: 'takeOver' | 'handBack'; label: string; onSelect: () => void };
 
 /** A sentence around a worker's name: "" + "Researcher" + " is reading invoice.xlsx…". */
 export type NamedSentence = { before: string; name: string; after: string };
@@ -46,7 +52,7 @@ const NAME_FLOOR_EM = 6;
  * `receipt` is left out where the run reports no steps, and passed as an empty string while the first step is still
  * running; the line takes room only once it has something to say.
  */
-export function LiveIsland({ state, label, named, receipt, workers, leaving }: { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; leaving?: boolean }) {
+export function LiveIsland({ state, label, named, receipt, workers, action, leaving }: { state: IslandState; label: string; named?: NamedSentence; receipt?: string; workers: readonly Worker[]; action?: IslandAction; leaving?: boolean }) {
   const content = useRef<HTMLSpanElement>(null);
   const faces = useRef<HTMLSpanElement>(null);
   const width = useMeasuredWidth(content);
@@ -64,6 +70,9 @@ export function LiveIsland({ state, label, named, receipt, workers, leaving }: {
           <RosterAvatars workers={workers} size="sm" max={workers.length} />
         </span>
         <IslandSentence key={label} label={label} named={named} />
+        {action && <Button type="button" className="live-island-browser" onClick={action.onSelect}>
+          {action.kind === 'takeOver' ? <Hand size={14} aria-hidden="true" /> : <Undo2 size={14} aria-hidden="true" />}{action.label}
+        </Button>}
       </span>
     </div>
   </div>;

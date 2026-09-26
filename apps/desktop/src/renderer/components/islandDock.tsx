@@ -32,7 +32,7 @@ function sameView(a: DockedIsland | undefined, b: DockedIsland | undefined) {
   if (a.kind === 'knowledge') return b.kind === 'knowledge' && a.key === b.key && a.count === b.count;
   if (a.kind === 'account') return b.kind === 'account' && a.key === b.key && a.target?.label === b.target?.label && a.target?.usedPercent === b.target?.usedPercent && a.resetsAt === b.resetsAt;
   if (b.kind !== 'run') return false;
-  return a.state === b.state && a.label === b.label && a.receipt === b.receipt && sameWorkers(a, b);
+  return a.state === b.state && a.label === b.label && a.receipt === b.receipt && a.action?.kind === b.action?.kind && a.action?.label === b.action?.label && sameWorkers(a, b);
 }
 
 function sameWorkers(a: IslandView, b: IslandView) {
@@ -84,7 +84,7 @@ export function IslandDock() {
   if (!shown) return null;
   if (shown.kind === 'knowledge') return <KnowledgeIsland count={shown.count} review={shown.review} dismiss={shown.dismiss} leaving={leaving} />;
   if (shown.kind === 'account') return <AccountIsland harnessName={shown.harnessName} target={shown.target} resetsAt={shown.resetsAt} switchAccount={shown.switchAccount} dismiss={shown.dismiss} leaving={leaving} />;
-  return <LiveIsland state={shown.state} label={shown.label} named={shown.named} receipt={shown.receipt} workers={shown.workers} leaving={leaving} />;
+  return <LiveIsland state={shown.state} label={shown.label} named={shown.named} receipt={shown.receipt} workers={shown.workers} action={shown.action} leaving={leaving} />;
 }
 
 function prefersReducedMotion() {

@@ -8,7 +8,7 @@ import { baseUrlHost, connectionPricing, customProviderId, findCustomConnection,
 import { pricingLabel } from '../customConnections';
 import { liveWorkerTask, newChatKey } from '../../shared/live-task';
 import { permissionsForLevel, type WorkspaceLevel } from '../../shared/capability-status';
-import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
+import { snapshotCapabilities, withCapability, type ToolCapability } from '../../shared/tool-policy';
 import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/workspace-access';
 import { harnessCatalog, harnessNames, isHarness, type HarnessInfo } from '../../shared/harness';
 import { FieldLabel, MoneyInput } from './ui';
@@ -261,8 +261,7 @@ function WorkerChatPermissions({ worker, workspace, draft, draftCapabilities, on
     void perform().catch(error => toast(tMessage(String(error)), 'error', t('Quyền của {0}', [draft.name]))).finally(() => setBusy(false));
   };
   const onCapability = (capability: ToolCapability, enabled: boolean) => change(async () => {
-    const next = (capabilities ?? snapshotCapabilities(draft.provider)).filter(item => item !== capability);
-    if (enabled) next.push(capability);
+    const next = withCapability(capabilities ?? snapshotCapabilities(draft.provider), capability, enabled);
     if (chat) await orglet.call('setToolCapabilities', { taskId: chat.id, capabilities: next });
     else if (worker) await orglet.call('setToolCapabilities', { workerId: worker.id, capabilities: next });
     else onDraftCapabilities(next);

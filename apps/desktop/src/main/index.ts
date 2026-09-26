@@ -302,7 +302,7 @@ async function browserState(): Promise<BrowserState> {
   };
 }
 /** The kinds of request the core may send the host; Settings' own requests (sign-in windows) come only from main. */
-const CORE_BROWSER_KINDS = new Set(['open', 'snapshot', 'screenshot', 'scroll', 'tabs', 'close', 'endRun', 'show']);
+const CORE_BROWSER_KINDS = new Set(['open', 'snapshot', 'screenshot', 'inspect', 'act', 'hold', 'scroll', 'tabs', 'close', 'endRun', 'show']);
 /** Passes one of the core's browser steps to the host, after checking a named profile still exists. */
 async function relayBrowser(id: string, raw: unknown) {
   const reply = (args: unknown) => { if (ready) core.postMessage({ id, command: 'browserReply', args }); };

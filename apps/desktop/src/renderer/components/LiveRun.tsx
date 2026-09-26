@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Run, Worker } from '../../shared/contracts';
+import type { BrowserLive } from '../../shared/browser';
 import type { RunMemory } from '../../shared/knowledge';
 import type { ActivityStep, HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 
@@ -177,9 +178,31 @@ export function islandBeforeStreaming({ workers, stage, message, pausing, site }
 /** The site a browser event names ("Đã mở trang example.com"), or undefined for any other line (COD-261). */
 function browserSiteOfEvent(message: string): string | undefined {
   if (message === 'Đã đọc trang web dưới dạng dữ liệu không đáng tin.') return undefined;
-  const step = /^(?:Đã mở trang|Đã đọc trang|Đã chụp màn hình|Đã cuộn trang) (.+)$/.exec(message);
+  const step = /^(?:Đã mở trang|Đã đọc trang|Đã chụp màn hình|Đã cuộn trang|Đã chờ trang) (.+)$/.exec(message);
   if (step) return step[1];
+  // Acting on a page names the element in quotes, or the key, then the site, and an asked step adds its answer.
+  const acted = /^(?:Đã (?:hỏi để )?(?:bấm|gõ vào|chọn trong) “.*”|Đã (?:hỏi để )?nhấn \S+) trên (\S+)(?: · .+)?$/.exec(message);
+  if (acted) return acted[1];
   return /^Đã tìm trên trang ([^:\s]+):/.exec(message)?.[1];
+}
+
+const askingDoing: Doing = { state: 'waiting', sentence: name => t('{0} đang chờ bạn cho phép…', [name]), line: () => t('Đang chờ bạn cho phép…') };
+const holdingDoing: Doing = { state: 'pausing', sentence: () => t('Bạn đang dùng trình duyệt'), line: () => t('Bạn đang dùng trình duyệt') };
+const handBackDoing: Doing = { state: 'waiting', sentence: name => t('{0} đang chờ bạn trả lại trình duyệt…', [name]), line: () => t('Đang chờ bạn trả lại trình duyệt…') };
+
+/**
+ * The island of a run that uses Orglet's browser (COD-261): waiting on the card that asks about a step, or, while
+ * the person has taken the browser over, saying so with Hand back; otherwise the run's own island with Take over.
+ */
+export function withBrowserControls(view: IslandView, live: BrowserLive | undefined, workers: readonly Worker[], takeOver: (taken: boolean) => void): IslandView {
+  if (!live) return view;
+  if (live.approval) return islandFor(askingDoing, workers);
+  if (live.takenOver) {
+    const handBack = { kind: 'handBack' as const, label: t('Trả lại'), onSelect: () => takeOver(false) };
+    return { ...islandFor(live.waiting ? handBackDoing : holdingDoing, workers), action: handBack };
+  }
+  if (live.using) return { ...view, action: { kind: 'takeOver', label: t('Tiếp quản'), onSelect: () => takeOver(true) } };
+  return view;
 }
 
 /**
