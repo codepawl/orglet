@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupChatFromRecipient, groupChatFromSelection, groupChatKey, groupChatNames, groupChatRecipient, groupChatTaskInput, isGroupChatTask, openGroupChats, pruneGroupChat } from '../../apps/desktop/src/renderer/groupChat';
+import { groupChatFromRecipient, groupChatFromSelection, groupChatKey, groupChatNames, groupChatRecipient, groupChatTaskInput, isGroupChat, isGroupChatTask, openGroupChats, pruneGroupChat } from '../../apps/desktop/src/renderer/groupChat';
 import { newChatKey, newChatKeyNames } from '../../apps/desktop/src/shared/live-task';
 import { noSelection } from '../../apps/desktop/src/renderer/sidebarSelection';
 
@@ -65,6 +65,17 @@ describe('isGroupChatTask', () => {
     expect(isGroupChatTask({ assignees: 'all' }, group)).toBe(false);
     expect(isGroupChatTask({ teamId: 't', assignees: ['a', 'b'] }, group)).toBe(false);
     expect(isGroupChatTask({}, group)).toBe(false);
+  });
+});
+
+describe('isGroupChat', () => {
+  it('is a chat two or more orglets answer, so an open one keeps its faces and names in the header', () => {
+    expect(isGroupChat({ id: 'g', createdAt: '', assignees: ['a', 'b'] })).toBe(true);
+    expect(isGroupChat({ id: 'g', createdAt: '', assignees: 'all' })).toBe(true);
+    expect(isGroupChat({ id: 'g', createdAt: '', assignees: ['a'] })).toBe(false);
+    expect(isGroupChat({ id: 'g', createdAt: '', teamId: 't', assignees: ['a', 'b'] })).toBe(false);
+    expect(isGroupChat({ id: 'g', createdAt: '', routineId: 'r', assignees: ['a', 'b'] })).toBe(false);
+    expect(isGroupChat({ id: 'g', createdAt: '', sideOf: {}, assignees: ['a', 'b'] })).toBe(false);
   });
 });
 
