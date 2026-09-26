@@ -118,8 +118,8 @@ export function ContextManifestView({ run, workspace }: { run: { snapshot: { con
   const knowledgeTitle = (id?: string) => context.knowledge.find(entry => entry.id === id)?.title ?? workspace.knowledge.find(entry => entry.id === id)?.title;
   const memoryText = (id?: string) => { const text = context.memories?.find(entry => entry.id === id)?.text ?? workspace.knowledge.find(entry => entry.id === id)?.content; return text && text.length > 80 ? `${text.slice(0, 80)}…` : text; };
   const detail = (entry: { kind: string; id?: string }) => entry.kind === 'knowledge' ? `: ${knowledgeTitle(entry.id) ?? entry.id}` : entry.kind === 'remembered' ? `: ${memoryText(entry.id) ?? entry.id}` : '';
-  return <details><summary>{t('Context đã nạp · {0} phần', [context.manifest.loaded.length])}</summary>
-    {context.manifest.mainChatTurns != null && <p className="muted">{t('Đọc {0} tin gần nhất của chat chính', [context.manifest.mainChatTurns])}</p>}
+  return <details><summary>{context.manifest.loaded.length === 1 ? t('Context đã nạp · 1 phần') : t('Context đã nạp · {0} phần', [context.manifest.loaded.length])}</summary>
+    {context.manifest.mainChatTurns != null && <p className="muted">{context.manifest.mainChatTurns === 1 ? t('Đọc tin gần nhất của chat chính') : t('Đọc {0} tin gần nhất của chat chính', [context.manifest.mainChatTurns])}</p>}
     {context.manifest.verbatimTurns != null && <p className="muted">{t('Lượt gần: {0} · tóm tắt {1} ký tự · {2} ghi chú cũ', [context.manifest.verbatimTurns, context.manifest.summaryChars ?? 0, context.manifest.retrievedSnippets ?? 0])}</p>}
     <ul>{context.manifest.loaded.map((entry, index) => <li key={index}>{names[entry.kind]}{detail(entry)}{entry.revision ? ` · v${entry.revision}` : ''} · {entry.bytes} bytes</li>)}</ul>
     {context.manifest.omitted.length > 0 && <><h4>{t('Không nạp')}</h4><ul>{context.manifest.omitted.map((entry, index) => <li key={index}>{names[entry.kind]}{entry.kind === 'knowledge' || entry.kind === 'remembered' ? detail(entry) : entry.revision ? ` · v${entry.revision}` : ''} · {reasons[entry.reason]}</li>)}</ul></>}

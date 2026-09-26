@@ -127,7 +127,7 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
           <li>{assigneeFace(item)}{assignee(item)}</li>
           <li><Wallet size={14} aria-hidden="true" />{t('{0} mỗi lần', [formatMoney(item.task.budgetMicros)])}</li>
           {/* A schedule with no sources says nothing about them, rather than "0 sources" (COD-258). */}
-          {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{t('{0} nguồn', [item.task.sourceIds.length])}</li>}
+          {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{item.task.sourceIds.length === 1 ? t('1 nguồn') : t('{0} nguồn', [item.task.sourceIds.length])}</li>}
         </ul>
         <p className="routine-brief"><MessageSquareText size={14} aria-hidden="true" /><span>{item.task.brief}</span></p>
         {/* A miss is news, not an error (COD-283): which run, when, why in plain words, and what catching up does. */}
@@ -321,7 +321,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       {/* Where the data goes is worth saying; it just is not worth asking about twice, since saving is the
           permission (user, 2026-09-19). It stays as a plain line rather than a tick. */}
       {enabled && <p className="muted">{sources.length > 0
-        ? t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, destination])
+        ? sources.length === 1 ? t('Mỗi lần chạy gửi brief và nguồn này {0}, trong giới hạn trên.', [destination]) : t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, destination])
         : t('Mỗi lần chạy gửi brief này {0}, trong giới hạn trên.', [destination])}</p>}
       <p className="muted">{browserLevel === 'read' ? t('Đổi Tí, skill, hội, model, hồ sơ hay danh sách trang thì cần lưu lịch lại.') : t('Đổi Tí, skill, hội hay model thì cần lưu lịch lại.')}</p>
     </section>

@@ -57,7 +57,7 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
     {tab === 'general' && <>
       <label><FieldLabel icon={Type}>{t('Tên công việc')}</FieldLabel><Input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} placeholder={task.brief.split('\n')[0].slice(0, 120)} /></label>
       <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={mode} onChange={value => { setMode(value); if (invalid === 'assignees') clearError(); }} invalid={invalid === 'assignees'} flash={flash} options={[
-        { value: 'all', label: t('Toàn bộ Tí'), detail: t('{0} Tí, gồm cả người thêm sau', [workspace.workers.length]), icon: <UsersRound size={16} /> },
+        { value: 'all', label: t('Toàn bộ Tí'), detail: workspace.workers.length === 1 ? t('1 Tí, gồm cả người thêm sau') : t('{0} Tí, gồm cả người thêm sau', [workspace.workers.length]), icon: <UsersRound size={16} /> },
         { value: 'workers', label: t('Chọn Tí'), detail: t('Một hoặc nhiều người'), icon: <UserRound size={16} /> },
         ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })),
       ]} />

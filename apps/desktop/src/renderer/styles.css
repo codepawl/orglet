@@ -758,7 +758,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .send-to-empty { margin:0; padding:14px 24px 10px; color:var(--muted); font-size:14px; text-align:center; }
 /* Files a picker, a folder or Send to left out, with the reason: quiet text, the list indented under its summary. */
 .intake-skipped { font-size:13px; line-height:18px; color:var(--muted); }
-.intake-skipped summary { cursor:pointer; }
+.intake-skipped > summary { list-style:none; cursor:pointer; }
+.intake-skipped > summary::-webkit-details-marker { display:none; }
+.intake-skipped[open] > summary .activity-chevron { transform:rotate(90deg); }
 .intake-skipped ul { margin:4px 0 0; padding-left:18px; }
 .send-to-note { margin:0; padding:6px 26px 16px; font-size:13px; line-height:18px; color:var(--muted); }
 /* Forward picker (COD-257): the Send to palette with a tick on every row, so several places can be picked, and a foot
@@ -1208,6 +1210,19 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+/* Chat sources → data check (COD-292): results sit right under the Check button, newest first, each folded under its
+   time with the trace's chevron; the specialist checks fold under one "More checks" line at the end. */
+.check-results { display:flex; flex-direction:column; gap:4px; }
+.check-result > summary, .more-checks > summary { list-style:none; cursor:pointer; }
+.check-result > summary::-webkit-details-marker, .more-checks > summary::-webkit-details-marker { display:none; }
+.check-result[open] > summary .activity-chevron, .more-checks[open] > summary .activity-chevron { transform:rotate(90deg); }
+/* A <details> does not lay its content out as flex items, so each keeps a body that does. */
+.check-result-body { display:flex; flex-direction:column; gap:12px; padding:8px 0 12px; }
+.check-result-body > section { display:flex; flex-direction:column; gap:8px; }
+.check-result-body > section > :is(h4, p) { margin:0; }
+.check-result-body > ul { display:flex; flex-direction:column; gap:4px; margin:0; padding:0; list-style:none; font-size:12.5px; line-height:1.45; }
+.check-result-body > p.muted { margin:0; font-size:12px; }
+.more-checks-body { display:flex; flex-direction:column; gap:16px; padding-top:8px; }
 .profile-table { overflow-x: auto; max-width: 100%; }
 .profile-table table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .profile-table th, .profile-table td { text-align: left; padding: 6px; overflow-wrap: anywhere; }

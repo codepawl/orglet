@@ -70,6 +70,13 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Đã đọc (.+)$/, kind: 'read' },
   { pattern: /^Đã tìm (.+)$/, kind: 'search' },
   { pattern: /^Đã liệt kê tệp (.+)$/, kind: 'list' },
+  { pattern: /^Đã liệt kê tệp$/, kind: 'list' },
+  // Steps in the private copy (COD-292); the "Workspace <tool>: <path>" lines below are how saved runs wrote them.
+  { pattern: /^Đã ghi trong bản làm việc: (.+)$/, kind: 'edit' },
+  { pattern: /^Đã tạo thư mục trong bản làm việc: (.+)$/, kind: 'folder' },
+  { pattern: /^Đã chuyển trong bản làm việc: (.+)$/, kind: 'move' },
+  { pattern: /^Đã xóa trong bản làm việc: (.+)$/, kind: 'delete' },
+  { pattern: /^Đã xem lại bản làm việc$/, kind: 'other' },
   { pattern: /^Workspace (?:read|blob): (.+)$/, kind: 'read' },
   { pattern: /^Workspace search: (.+)$/, kind: 'search' },
   { pattern: /^Workspace write: (.+)$/, kind: 'edit' },

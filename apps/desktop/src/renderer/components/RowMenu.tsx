@@ -9,9 +9,11 @@ export type { RowMenuItem } from '@codepawl/orglet-ui';
 
 type KitProps = ComponentProps<typeof KitRowMenu>;
 
-export function RowMenu({ icon = EllipsisVertical, className = 'row-action', ...props }: Omit<KitProps, 'icon' | 'cancelLabel' | 'className'> & {
+export function RowMenu({ icon = EllipsisVertical, className = 'row-action', cancelLabel, ...props }: Omit<KitProps, 'icon' | 'cancelLabel' | 'className'> & {
   icon?: KitProps['icon'];
   className?: string;
+  /** The way back from a confirming item, when a plain "No" would not say what it keeps. */
+  cancelLabel?: string;
 }) {
-  return <KitRowMenu {...props} icon={icon} className={className} cancelLabel={t('Không')} />;
+  return <KitRowMenu {...props} icon={icon} className={className} cancelLabel={cancelLabel ?? t('Không')} />;
 }

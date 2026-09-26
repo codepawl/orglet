@@ -109,7 +109,7 @@ export function CommandOutputDialog({ taskId, command, onClose }: { taskId: stri
     {tails && streams.length > 0 && <div className="command-output">
       {streams.map(stream => <section key={stream} className="command-output-stream" aria-label={stream}>
         <h3 className="diff-file-heading"><span className="diff-file-path">{stream}</span></h3>
-        {tails[stream].cut && <p className="preview-note">{t('Đang hiện {0} dòng cuối.', [tails[stream].lines])}</p>}
+        {tails[stream].cut && <p className="preview-note">{tails[stream].lines === 1 ? t('Đang hiện dòng cuối.') : t('Đang hiện {0} dòng cuối.', [tails[stream].lines])}</p>}
         <CodePreview text={tails[stream].text} language="text" />
       </section>)}
     </div>}

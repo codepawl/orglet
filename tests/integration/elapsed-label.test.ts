@@ -12,7 +12,9 @@ it('names a duration in at most two units, up to days', () => {
   expect(elapsedLabel(start, after(3600 * 5 + 60 * 7))).toBe('5h 7m');
   // A chat open for days used to read "8625m 31s".
   expect(elapsedLabel(start, after(8625 * 60 + 31))).toBe('5d 23h');
-  expect(elapsedLabel(start, after(86400 * 2))).toBe('2 days');
+  // Whole days read like the other units, so one day is never "1 days" (COD-292).
+  expect(elapsedLabel(start, after(86400))).toBe('1d');
+  expect(elapsedLabel(start, after(86400 * 2))).toBe('2d');
 });
 
 describe('the time a chat worked (COD-291)', () => {

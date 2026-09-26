@@ -20,7 +20,7 @@ What the orglet gets from each kind:
 - **Images (PNG, JPEG, GIF, WebP, up to 5 MB):** shown to the orglet when its connection can see images. Claude, most OpenAI models, Claude Code and Codex can. When the connection cannot, the orglet tells you instead of guessing. SVG and BMP are never shown. [Which connections see images](capabilities.md#pdfs-and-images).
 - **Video and audio:** preview only. The orglet is told they are there but cannot read them.
 
-Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. A PDF's text is held to the same 256 KB per file: a longer PDF is cut after the last page that fits, and the orglet is told where it stops. CSV, JSONL and Parquet files can also be checked locally under **Details → Sources**: schema, row counts, duplicate and missing IDs, and, for two files, an exact-match accuracy. Demo cannot analyze files; switch **Model** off Demo first.
+Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. A PDF's text is held to the same 256 KB per file: a longer PDF is cut after the last page that fits, and the orglet is told where it stops. CSV, JSONL and Parquet files can also be checked on this computer under **Chat sources → Check data**: rows, columns, empty cells and, with an ID column, repeated or missing IDs. The result opens under the button when the check finishes. Comparing a file with an answer key and the run-log check are under **More checks**. Demo cannot analyze files; switch **Model** off Demo first.
 
 ## Emoji
 

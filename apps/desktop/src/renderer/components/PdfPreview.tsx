@@ -80,8 +80,8 @@ export function PdfPreview({ bytes, name, fallback }: { bytes: Uint8Array; name:
       {Array.from({ length: visible }, (_, index) => <PdfPage key={index + 1} document={document} pageNumber={index + 1} />)}
     </div>
     <p className="preview-note">
-      {visible < total ? t('Đang hiện {0} trong {1} trang.', [visible, total]) : t('{0} trang', [total])}
-      {visible < total && <Button variant="outline" onClick={() => setShown(current => current + PAGE_BATCH)}>{t('Thêm {0} trang', [Math.min(PAGE_BATCH, total - visible)])}</Button>}
+      {visible < total ? t('Đang hiện {0} trong {1} trang.', [visible, total]) : total === 1 ? t('1 trang') : t('{0} trang', [total])}
+      {visible < total && <Button variant="outline" onClick={() => setShown(current => current + PAGE_BATCH)}>{total - visible === 1 ? t('Thêm 1 trang') : t('Thêm {0} trang', [Math.min(PAGE_BATCH, total - visible)])}</Button>}
     </p>
   </div>;
 }
