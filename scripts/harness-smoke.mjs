@@ -98,7 +98,7 @@ try {
   const section = page.getByRole('region', { name: 'Harness trên máy' });
   await section.waitFor();
   // The no-Demo note lives on the settings panel heading. Auth-fail rows also mention it, so do not search the whole panel.
-  await page.locator('#settings-panel p.heading-description').getByText('không chuyển sang Demo', { exact: false }).waitFor();
+  await page.locator('#settings-panel p.org-panel-heading-description').getByText('không chuyển sang Demo', { exact: false }).waitFor();
   for (const item of detected) {
     const row = section.locator('.harness-row', { hasText: item.name });
     await row.getByText(item.name, { exact: true }).waitFor();

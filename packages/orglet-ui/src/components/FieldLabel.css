@@ -1,0 +1,13 @@
+.org-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.org-field-label svg { color: var(--org-muted, #666); }
+/* The asterisk has empty alternative text, so a screen reader reads the field's name without it. */
+.org-field-label-required::after {
+  content: "*" / "";
+  color: var(--org-error, #c62828);
+  margin-left: -4px;
+  font-weight: 600;
+}

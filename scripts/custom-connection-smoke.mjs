@@ -112,8 +112,8 @@ async function addConnection(page, { name, url, key, inputPrice, outputPrice, sc
   if (outputPrice) await form.getByLabel(/^Output price/).fill(outputPrice);
   if (measureLabels) {
     await settle(page);
-    await measure('input price label', form.locator('.field-label', { hasText: 'Input price' }));
-    await measure('output price label', form.locator('.field-label', { hasText: 'Output price' }));
+    await measure('input price label', form.locator('.org-field-label', { hasText: 'Input price' }));
+    await measure('output price label', form.locator('.org-field-label', { hasText: 'Output price' }));
   }
   if (screenshot) {
     await settle(page);
@@ -195,7 +195,7 @@ try {
   await unknown.scrollIntoViewIfNeeded();
   await settle(page);
   await page.screenshot({ path: join(output, 'custom-connection-list.png') });
-  await measure('section description', page.locator('.custom-connections .heading-description'));
+  await measure('section description', page.locator('.custom-connections .org-panel-heading-description'));
   for (const name of ['LM Studio (fake)', 'Hosted (priced)', 'Hosted (unknown)']) {
     await measure(`${name} meta line`, page.getByRole('region', { name }).locator('.custom-connection-meta'));
   }

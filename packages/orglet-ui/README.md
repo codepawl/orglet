@@ -80,6 +80,10 @@ loads the switch's styles.
   field that change the colour live, preset swatches, and saved colours with save and remove. Every string comes in
   `labels`, including the ones built from a value (`areaValue`, `presetColor`, `removeColor`). It sets
   `data-popup-open`, so Escape closes it rather than a dialog around it.
+- `PanelHeading`: a section's title (`level` 2 or 3) with its `description` under it on the left and the section's
+  actions (its children) on the right, vertically centred.
+- `FieldLabel`: a field's title with a small decorative leading `icon` (any icon component that takes `size`, such as
+  one from lucide-react); `required` draws the red asterisk without adding it to the field's name.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
