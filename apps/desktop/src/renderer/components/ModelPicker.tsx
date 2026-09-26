@@ -191,22 +191,22 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
     </p>}
     <p id={noteId} className="muted model-picker-note">{note}</p>
     {open && options.length > 0 && createPortal(<ul ref={menu} id={listId} role="listbox" aria-labelledby={labelId}
-      className={`select-menu ${placement?.above ? 'above' : ''}`} style={placement?.style ?? { position: 'fixed', visibility: 'hidden', left: 0, top: 0 }}>
+      className={`org-select-menu ${placement?.above ? 'org-select-menu-above' : ''}`} style={placement?.style ?? { position: 'fixed', visibility: 'hidden', left: 0, top: 0 }}>
       {options.map((option, index) => (
         <li key={option.id} id={`${id}-option-${index}`} data-index={index} role="option" aria-selected={option.id === value}
           aria-disabled={runnable(option) ? undefined : true}
-          className={`select-option${index === active ? ' active' : ''}`}
+          className={`org-select-option${index === active ? ' org-select-option-active' : ''}`}
           onPointerMove={() => { if (index !== active) setActive(index); }} onPointerDown={event => event.preventDefault()} onClick={() => choose(index)}>
           {/* The provider is the same for every row, but without its mark a list of bare slugs says nothing about
               what it belongs to (user, 2026-09-19). */}
           <ProviderMark provider={provider} size="small" decorative />
-          <span className="select-option-text">
+          <span className="org-select-option-text">
             <span>{option.displayName ?? option.id}</span>
-            {option.displayName ? <span className="select-detail">{option.id}</span> : option.source === 'catalog-hint' ? <span className="select-detail">{t('Gợi ý')}</span> : null}
+            {option.displayName ? <span className="org-select-detail">{option.id}</span> : option.source === 'catalog-hint' ? <span className="org-select-detail">{t('Gợi ý')}</span> : null}
           </span>
-          {option.deprecated && <span className="select-option-badge model-deprecation-chip">{t('Sắp ngừng')}</span>}
-          {!runnable(option) && <span className="select-option-badge">{t('Chưa hỗ trợ')}</span>}
-          <Check size={16} className="select-check" aria-hidden="true" />
+          {option.deprecated && <span className="org-select-option-badge model-deprecation-chip">{t('Sắp ngừng')}</span>}
+          {!runnable(option) && <span className="org-select-option-badge">{t('Chưa hỗ trợ')}</span>}
+          <Check size={16} className="org-select-check" aria-hidden="true" />
         </li>
       ))}
     </ul>, container())}

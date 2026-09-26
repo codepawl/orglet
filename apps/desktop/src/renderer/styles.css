@@ -156,13 +156,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .permission-folder-description { font-size:12px; color:var(--muted); }
 .permission-folder-control { display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex-shrink:0; }
 /* The dropdown keeps the settings column width whichever level is chosen, so it never resizes under the pointer. */
-.permission-folder-control .select-trigger { width:210px; }
+.permission-folder-control .org-select-trigger { width:210px; }
 .permission-folder-name { display:inline-flex; align-items:center; gap:5px; max-width:210px; font-size:12px; overflow-wrap:anywhere; }
 .permission-folder-pending { color:var(--muted); }
 @container (width < 400px) {
   .permission-folder { flex-direction:column; align-items:stretch; gap:8px; }
   .permission-folder-control { align-items:flex-start; }
-  .permission-folder-control .select-trigger { width:100%; }
+  .permission-folder-control .org-select-trigger { width:100%; }
   .permission-folder-name { max-width:none; }
 }
 .permission-footnote { font-size:12px; line-height:1.45; }
@@ -433,26 +433,26 @@ svg { flex-shrink:0; stroke-width:1.7; }
    one-to-one chat puts the worker's model, since its header already names the worker (user, 2026-09-19). */
 /* Shorter than the send button: it is the secondary control, and at the send button's height its pill crowded
    the prompt bar's own corner curve (user, 2026-09-19). */
-.composer-trailing .composer-to-select.select-trigger,
-.composer-trailing .composer-model-select.select-trigger {
+.composer-trailing .composer-to-select.org-select-trigger,
+.composer-trailing .composer-model-select.org-select-trigger {
   width:auto; max-width:100%; min-height:30px; padding:3px 10px; gap:6px;
   border:0; border-radius:999px; background:transparent; box-shadow:none;
 }
-.composer-trailing .composer-to-select.select-trigger:hover:not(:disabled),
-.composer-trailing .composer-to-select.select-trigger[aria-expanded=true],
-.composer-trailing .composer-model-select.select-trigger:hover:not(:disabled),
-.composer-trailing .composer-model-select.select-trigger[aria-expanded=true] {
+.composer-trailing .composer-to-select.org-select-trigger:hover:not(:disabled),
+.composer-trailing .composer-to-select.org-select-trigger[aria-expanded=true],
+.composer-trailing .composer-model-select.org-select-trigger:hover:not(:disabled),
+.composer-trailing .composer-model-select.org-select-trigger[aria-expanded=true] {
   background:var(--surface); border-color:transparent;
 }
-.composer-trailing .composer-to-select .select-value,
-.composer-trailing .composer-model-select .select-value { font-size:12px; font-weight:500; color:var(--muted); }
-.composer-trailing .composer-to-select.select-trigger:hover .select-value,
-.composer-trailing .composer-to-select.select-trigger[aria-expanded=true] .select-value,
-.composer-trailing .composer-model-select.select-trigger:hover .select-value,
-.composer-trailing .composer-model-select.select-trigger[aria-expanded=true] .select-value { color:var(--text); }
-.composer-trailing .composer-to-select .select-chevron,
-.composer-trailing .composer-model-select .select-chevron { width:14px; height:14px; flex-shrink:0; color:var(--muted); }
-.composer-trailing .composer-to-select .select-icon { display:flex; }
+.composer-trailing .composer-to-select .org-select-value,
+.composer-trailing .composer-model-select .org-select-value { font-size:12px; font-weight:500; color:var(--muted); }
+.composer-trailing .composer-to-select.org-select-trigger:hover .org-select-value,
+.composer-trailing .composer-to-select.org-select-trigger[aria-expanded=true] .org-select-value,
+.composer-trailing .composer-model-select.org-select-trigger:hover .org-select-value,
+.composer-trailing .composer-model-select.org-select-trigger[aria-expanded=true] .org-select-value { color:var(--text); }
+.composer-trailing .composer-to-select .org-select-chevron,
+.composer-trailing .composer-model-select .org-select-chevron { width:14px; height:14px; flex-shrink:0; color:var(--muted); }
+.composer-trailing .composer-to-select .org-select-icon { display:flex; }
 .composer-to {
   display:inline-flex; align-items:center; gap:6px; max-width:100%; min-height:36px; padding:3px 8px 3px 4px;
   border:0; border-radius:999px; background:transparent; color:var(--text); font:inherit; cursor:pointer;
@@ -762,13 +762,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
   40% { box-shadow:0 0 0 3px color-mix(in srgb, var(--error) 35%, transparent); }
 }
 .form :is(input, textarea, select):not(.org-input)[aria-invalid=true],
-.form .select-trigger[aria-invalid=true],
 .form .org-money-input.org-money-input-invalid,
 .setting-key-form input[aria-invalid=true] {
   border-color:var(--error);
 }
 .form :is(input, textarea, select):not(.org-input)[aria-invalid=true][data-flash],
-.form .select-trigger[aria-invalid=true][data-flash],
 .form .org-money-input.org-money-input-invalid[data-flash],
 .form .org-checkbox-input[aria-invalid=true][data-flash] + .org-checkbox-box,
 .setting-key-form input[aria-invalid=true][data-flash] {
@@ -834,13 +832,13 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    picker, copy keeps the card's top corner. The command breaks only after a path separator or a space
    (breakableCommand). */
 /* The terminal picker in a command card's top bar: a small chip in the card's own colour, no border, colour-only hover. */
-.login-shell-select.select-trigger { width:auto; min-height:24px; padding:0 6px; gap:5px; border:0; background:transparent; box-shadow:none; }
-.login-shell-select.select-trigger:hover:not(:disabled),
-.login-shell-select.select-trigger[aria-expanded=true] { background:transparent; border-color:transparent; }
-.login-shell-select .select-value { font-size:12px; font-weight:500; color:var(--muted); }
-.login-shell-select.select-trigger:is(:hover, [aria-expanded=true]) .select-value { color:var(--text); }
-.login-shell-select .select-icon { display:flex; color:var(--muted); }
-.login-shell-select .select-chevron { width:13px; height:13px; color:var(--muted); }
+.login-shell-select.org-select-trigger { width:auto; min-height:24px; padding:0 6px; gap:5px; border:0; background:transparent; box-shadow:none; }
+.login-shell-select.org-select-trigger:hover:not(:disabled),
+.login-shell-select.org-select-trigger[aria-expanded=true] { background:transparent; border-color:transparent; }
+.login-shell-select .org-select-value { font-size:12px; font-weight:500; color:var(--muted); }
+.login-shell-select.org-select-trigger:is(:hover, [aria-expanded=true]) .org-select-value { color:var(--text); }
+.login-shell-select .org-select-icon { display:flex; color:var(--muted); }
+.login-shell-select .org-select-chevron { width:13px; height:13px; color:var(--muted); }
 .budget-reviews { display:flex; flex-direction:column; gap:10px; margin-top:22px; }
 .budget-reviews h3 { margin:0; font-size:15px; }
 .budget-reviews>p { margin:0; }
@@ -1281,6 +1279,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
   --org-ease-out:var(--ease-out); --org-ease-spring:var(--ease-spring);
   --org-panel-width:var(--panel-width); --org-panel-height:var(--panel-height); --org-overlay:#0000002e;
   --org-toast-error:#ff8a8a;
+  --org-select-height:var(--select-height); --org-select-radius:var(--select-radius); --org-select-option-height:var(--select-option-height);
 }
 /* The dialog backdrop and the toasts are portaled to the page, so they follow the page's theme. */
 :root[data-theme=dark] { --org-overlay:#00000059; --org-toast-error:#a82626; }
@@ -1294,49 +1293,10 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    y = 9.5: at device scale 1 the icon's strokes smeared over two pixel rows and it sat half a pixel below the
    caps. The icon slot is as wide as a flag (20px), so a 16px icon is inset from the left edge as far as the chevron
    is from the right, and the text of every select in a settings column starts at the same x. */
-.select-trigger { --select-icon-slot:20px; display:flex; align-items:center; gap:8px; width:100%; min-width:0; min-height:var(--select-height); padding:6px 12px; border:1px solid var(--border); border-radius:var(--select-radius); background:var(--bg); color:var(--text); font-size:14px; font-weight:400; line-height:20px; text-align:left; }
-.select-trigger>.select-icon { min-width:var(--select-icon-slot); }
-.select-trigger:hover:not(:disabled) { border-color:var(--muted); }
-.select-trigger[aria-expanded=true] { border-color:var(--muted); }
-.select-trigger:disabled { opacity:.55; }
-.select-trigger.sm { --select-height:32px; --select-icon-slot:0px; gap:8px; padding:3px 8px 3px 10px; font-size:13px; border-radius:8px; }
-.select-value { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.select-placeholder,.select-detail { color:var(--muted); }
-.select-chevron { flex-shrink:0; color:var(--muted); transition:transform .15s; }
-.select-trigger[aria-expanded=true] .select-chevron { transform:rotate(180deg); }
-.select-icon { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--muted); }
-.select-menu { z-index:30; margin:0; padding:6px; list-style:none; overscroll-behavior:contain; background:var(--bg); border:1px solid var(--border); border-radius:var(--select-menu-radius); box-shadow:0 12px 32px #00000026; pointer-events:auto; animation:select-in .12s ease-out; }
-.select-menu.above { animation-name:select-in-above; }
-@keyframes select-in { from { opacity:0; transform:translateY(-4px); } }
-@keyframes select-in-above { from { opacity:0; transform:translateY(4px); } }
-.select-group { padding:8px 10px 4px; color:var(--muted); font-size:12px; font-weight:500; }
-.select-option { display:flex; align-items:center; gap:12px; min-height:var(--select-option-height); padding:7px 12px; border-radius:8px; cursor:pointer; font-size:14px; color:var(--text); }
-.select-option.active { background:var(--surface); }
-.select-option[aria-disabled=true],
-.select-option.dimmed { opacity:.45; }
-.select-option[aria-disabled=true] { cursor:default; }
-.select-option-text { flex:1; min-width:0; display:flex; flex-direction:column; }
-.select-option-text>span:first-child { overflow-wrap:anywhere; }
-.select-note { color:var(--muted); font-family:var(--font); font-size:.85em; font-weight:400; }
-/* A detail is one line of meta (a model, a count, an account): it ends in an ellipsis instead of breaking a model id
-   across lines, and the option's tooltip carries the whole text. */
-.select-option .select-detail { font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.select-option-badge {
-  flex-shrink:0; font-size:10px; font-weight:500; line-height:1.2; padding:2px 6px;
-  border-radius:999px; background:var(--surface); color:var(--muted); white-space:nowrap;
-}
-.select-option.dimmed .select-option-badge,
-.select-option[aria-disabled=true] .select-option-badge { background:var(--bg); }
-.select-check { flex-shrink:0; visibility:hidden; }
-.select-option[aria-selected=true] .select-check { visibility:visible; }
 .currency-flag { display:block; border-radius:50%; }
-.revision-select .select-trigger { width:auto; }
+.revision-select .org-select-trigger { width:auto; }
 /* Dialogs no longer clip their children (dropdowns overflow them), so inner scroll areas round their own corners. */
 .settings-panel { border-bottom-right-radius:16px; }
-.select-menu.inline-detail .select-option-text { flex-direction:row; align-items:baseline; gap:8px; }
-.select-menu.inline-detail .select-option-text>span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.select-menu.inline-detail .select-option-text>span:first-child { flex-shrink:0; min-width:2.6em; }
-.select-menu.inline-detail .select-detail { font-size:13px; }
 /* Press-and-hold reorder: the held row lifts with a grip, the others slide aside. */
 .tree-item { position:relative; border-radius:10px; transition:transform .16s ease; user-select:none; -webkit-user-select:none; }
 .tree-item.dragging { z-index:3; transition:none; background:var(--bg); box-shadow:0 8px 24px #00000024; cursor:grabbing; }
@@ -1347,7 +1307,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .row-rename { flex:1; min-width:0; height:32px; margin:3px 4px 3px 2px; padding:4px 8px; border:1px solid var(--focus); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; font-size:14px; outline:none; user-select:text; }
 .history-item.editing { padding:3px 6px 3px 12px; }
 .history-item.editing .row-rename { margin:0; font-size:13px; }
-.select-option+.select-option,.select-group+.select-option { margin-top:2px; }
 /* Brand mark sized to the wordmark's cap height. */
 .brand { gap:8px; }
 .brand .orglet-mark { width:20px; height:20px; }
@@ -1871,7 +1830,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .archived-row > .org-row-menu { position:absolute; top:50%; right:0; transform:translateY(-50%); }
 .archived-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .history-item { padding-right:36px; }
 @media (hover:none) { .archived-row .history-item { padding-right:36px; } }
-.select-option + .select-group { margin-top:10px; }
 .model-picker { display:flex; align-items:center; gap:8px; }
 .model-picker-field { position:relative; flex:1; min-width:0; }
 .model-picker-field input { padding-right:32px; }
@@ -2289,7 +2247,7 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .browser-site>button { flex-shrink:0; }
 .browser-site-add { display:flex; align-items:center; gap:8px; min-width:0; }
 .browser-site-add>input { flex:1; min-width:0; }
-.browser-site-add .select-trigger { width:auto; min-width:96px; }
+.browser-site-add .org-select-trigger { width:auto; min-width:96px; }
 @container (max-width: 400px) {
   .browser-site-add { flex-wrap:wrap; }
   .browser-site-add>input { flex-basis:100%; }

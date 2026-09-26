@@ -26,7 +26,8 @@ it('gives the sidebar a background when it floats over the chat at the minimum w
 });
 
 it('keeps a select option detail to one line instead of breaking a model id', () => {
-  expect(css).toMatch(/\.select-option \.select-detail \{[^}]*white-space:nowrap;[^}]*text-overflow:ellipsis;/);
+  const selectCss = readFileSync(join(__dirname, '../../packages/orglet-ui/src/components/Select.css'), 'utf8');
+  expect(selectCss).toMatch(/\.org-select-option \.org-select-detail \{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;/);
 });
 
 it('never fades working controls or small counts with opacity', () => {
