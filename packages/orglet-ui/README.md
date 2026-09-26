@@ -106,6 +106,10 @@ loads the switch's styles.
   default labels.
 - `DialogOverlay`, `keepOpenForPopup` and `OPEN_POPUP_SELECTOR`: the frosted backdrop for any Radix dialog, and the
   Escape rule that closes an open menu inside a dialog before the dialog.
+- `showToast` and `Toaster`: `showToast(text, tone?, action?)` shows a short message at the top centre, `success`,
+  `error` or `info`, with at most one `{ label, onSelect }` action. A repeated message replaces its older copy, three
+  at most are visible, and a plain success goes after 3 s, anything else after 6 s. Render one
+  `<Toaster icons={{ success, error, info }} renderText? />`; it portals to the page, so an open modal does not hide it.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
