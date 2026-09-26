@@ -73,7 +73,7 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
 const settingNames = translated({
   language: 'Ngôn ngữ', theme: 'Giao diện', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Phông chữ', codeFont: 'Phông chữ code',
   autoTitles: 'Tự đặt tên cuộc trò chuyện', copyFormat: 'Định dạng khi sao chép', downloadFormat: 'Định dạng khi tải xuống', confirmOpenTask: 'Hỏi trước khi mở công việc',
-  archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi kết nối / tháng', providerConcurrency: 'Số yêu cầu cùng lúc cho mỗi nhà cung cấp', providerConsent: 'Provider được phép',
+  archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi kết nối / tháng', providerConcurrency: 'Yêu cầu cùng lúc mỗi nhà cung cấp', providerConsent: 'Provider được phép',
   autoUpdate: 'Tự động cập nhật', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', webSearchProvider: 'Nhà cung cấp tìm kiếm web',
 });
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
@@ -548,10 +548,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Chat, Tí, hội; giữ số liệu chi phí.')}>
                 <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
               </Row>
-              <Row title={t('Số yêu cầu cùng lúc cho mỗi nhà cung cấp')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
+              <Row title={t('Yêu cầu cùng lúc mỗi nhà cung cấp')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
                 ? `${t('Quá mức thì chờ, chưa trừ ngân sách.')} ${t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}`
                 : t('Quá mức thì chờ, chưa trừ ngân sách.')}>
-                <Select ariaLabel={t('Số yêu cầu cùng lúc cho mỗi nhà cung cấp')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={concurrencyChoices.map(value => ({ value: String(value), label: value === 1 ? t('1 yêu cầu') : t('{0} yêu cầu', [value]), detail: value === 1 ? t('tuần tự') : undefined }))} />
+                <Select ariaLabel={t('Yêu cầu cùng lúc mỗi nhà cung cấp')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={concurrencyChoices.map(value => ({ value: String(value), label: value === 1 ? t('1 yêu cầu') : t('{0} yêu cầu', [value]), detail: value === 1 ? t('tuần tự') : undefined }))} />
               </Row>
             </>}
 

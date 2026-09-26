@@ -1196,7 +1196,7 @@ export const en: Dictionary = {
   'Request bị gián đoạn chưa rõ kết quả. Không gửi lại tự động; kiểm tra chi phí rồi chọn thử lại nếu cần.': 'An interrupted request has an unknown outcome. It is not resent automatically; check costs, then retry if needed.',
   'Request model không hoàn tất. Chi phí chưa rõ vẫn được giữ chỗ; kiểm tra kết nối hoặc quota trước khi thử lại.': 'The model request did not finish. The unknown cost stays reserved; check the connection or quota before retrying.',
   'Yêu cầu đang chạy hoặc chưa rõ chi phí.': 'Requests still running or with unknown cost.',
-  'Số yêu cầu cùng lúc cho mỗi nhà cung cấp': 'Concurrent requests per provider',
+  'Yêu cầu cùng lúc mỗi nhà cung cấp': 'Concurrent requests per provider',
   '1 yêu cầu': '1 request',
   '{0} yêu cầu': '{0} requests',
   'Reservation không khớp run/ledger.': 'The reservation does not match the run or ledger.',

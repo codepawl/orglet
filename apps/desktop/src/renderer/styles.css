@@ -1210,7 +1210,11 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .check-result > summary, .more-checks > summary { list-style:none; cursor:pointer; }
 .check-result > summary::-webkit-details-marker, .more-checks > summary::-webkit-details-marker { display:none; }
 .check-result[open] > summary .activity-chevron, .more-checks[open] > summary .activity-chevron { transform:rotate(90deg); }
-.check-result[open] { display:flex; flex-direction:column; gap:8px; padding-bottom:8px; }
+.check-result[open] { display:flex; flex-direction:column; gap:12px; padding-bottom:12px; }
+.check-result > section { display:flex; flex-direction:column; gap:8px; }
+.check-result > section > :is(h4, p) { margin:0; }
+.check-result > ul { display:flex; flex-direction:column; gap:4px; margin:0; padding-left:18px; font-size:12.5px; line-height:1.45; }
+.check-result > p.muted { margin:0; font-size:12px; }
 .more-checks[open] { display:flex; flex-direction:column; gap:16px; }
 .profile-table { overflow-x: auto; max-width: 100%; }
 .profile-table table { border-collapse: collapse; width: 100%; font-size: 12px; }
