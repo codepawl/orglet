@@ -117,6 +117,13 @@ loads the switch's styles.
   the window and only scrolls when it must. Arrows, Page Up and Down, Home and End, typing to jump, Enter or Space to
   choose, Escape to close without closing the dialog. Sizes come from `--org-select-height`, `--org-select-radius` and
   `--org-select-option-height`.
+- `TabbedDialog`, `TabbedFormDialog` and `DialogTabs`: the settings layout, a title and close button on top, the tabs
+  on the left (a row on a narrow window) and the open section headed by its tab's `label`, with `description` and
+  `actions`, scrolling on its own. `TabbedDialog` applies changes at once; with `onSubmit` its body and `footer` form
+  one form. `TabbedFormDialog` pins Cancel and Save at the bottom with the `error` beside them, shows `busyLabel`
+  while saving, and lands on the field named by `focusField`. A tab's `buttonProps` reach its button, such as a
+  handler that prefetches on hover. Tabs follow the WAI-ARIA pattern: the arrows move and open, only the open tab is
+  in the Tab order.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming

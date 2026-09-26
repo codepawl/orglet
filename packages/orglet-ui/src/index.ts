@@ -33,3 +33,5 @@ export { Toaster, showToast } from './components/Toaster';
 export type { ToastAction, ToastTone } from './components/Toaster';
 export { Select } from './components/Select';
 export type { SelectOption } from './components/Select';
+export { DialogTabs, TabbedDialog, TabbedFormDialog } from './components/TabbedDialog';
+export type { DialogTab } from './components/TabbedDialog';

@@ -128,7 +128,7 @@ try {
   await page.getByText('Đã dò lại harness', { exact: true }).waitFor();
   await page.screenshot({ path: 'test-results/settings-connections.png' });
   await page.setViewportSize({ width: 600, height: 760 });
-  assert.equal(await page.evaluate(() => { const panel = document.querySelector('.settings-panel'); return panel.scrollWidth > panel.clientWidth + 1; }), false);
+  assert.equal(await page.evaluate(() => { const panel = document.querySelector('.org-tabbed-dialog-panel'); return panel.scrollWidth > panel.clientWidth + 1; }), false);
   await page.screenshot({ path: 'test-results/settings-connections-narrow.png' });
   await page.setViewportSize({ width: 1200, height: 820 });
   await page.getByRole('tab', { name: 'Chi phí & giới hạn', exact: true }).click();

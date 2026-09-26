@@ -743,18 +743,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .intake-skipped summary { cursor:pointer; }
 .intake-skipped ul { margin:4px 0 0; padding-left:18px; }
 .send-to-note { margin:0; padding:6px 26px 16px; font-size:13px; line-height:18px; color:var(--muted); }
-.settings-dialog { position:fixed; inset:0; margin:auto; z-index:11; width:var(--panel-width); height:var(--panel-height); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; }
-.settings-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px 24px; }
-.settings-header h2 { font-size:18px; font-weight:600; }
-.settings-body { flex:1; min-height:0; display:grid; grid-template-columns:200px minmax(0,1fr); }
-.settings-tabs { display:flex; flex-direction:column; gap:2px; padding:12px 8px; }
-.settings-tabs button { display:flex; align-items:center; gap:10px; min-height:var(--control-height); padding:7px 11px; border:0; border-radius:var(--radius); background:transparent; font-size:13px; text-align:left; color:var(--text); }
-.settings-tabs button svg { color:var(--muted); }
-.settings-tabs button:hover { background:var(--sidebar); }
-.settings-tabs button[aria-selected=true] { background:var(--surface); font-weight:500; }
-.settings-panel { overflow:auto; padding:18px 24px 24px; overscroll-behavior:contain; }
-.dialog-form { flex:1; min-height:0; display:flex; flex-direction:column; }
-.dialog-footer { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:12px 16px; }
 .dialog-footer-spacer { flex:1; min-width:0; }
 .form-error { flex:1; min-width:0; margin:0; margin-right:auto; font-size:13px; color:var(--error); line-height:1.35; text-align:left; }
 @keyframes field-flash {
@@ -774,7 +762,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 }
 /* Title left, the section's create/import/export actions right. */
 .org-panel-heading+.muted { margin-top:6px; }
-.settings-panel>.org-panel-heading { margin-bottom:10px; }
 .settings-subheading { font-size:13px; font-weight:500; color:var(--muted); margin:18px 0 2px; }
 /* Subheading with a small inline action: the margin sits on the row so the action shares the title line. */
 .settings-subheading-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:24px 0 2px; }
@@ -1066,10 +1053,6 @@ button.notice-body { cursor:pointer; }
 .status-pill.logged_in { color:var(--success); }
 .status-pill.logged_out,.status-pill.auth_error { color:var(--error); }
 @media(max-width:640px) {
-  .settings-body { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); }
-  .settings-tabs { flex-direction:row; overflow-x:auto; padding:8px; }
-  .settings-tabs button { white-space:nowrap; flex-shrink:0; }
-  .settings-panel { padding:14px 16px 20px; }
   .setting-row { flex-wrap:wrap; }
   .setting-control { width:100%; justify-content:flex-end; }
 }
@@ -1280,6 +1263,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
   --org-panel-width:var(--panel-width); --org-panel-height:var(--panel-height); --org-overlay:#0000002e;
   --org-toast-error:#ff8a8a;
   --org-select-height:var(--select-height); --org-select-radius:var(--select-radius); --org-select-option-height:var(--select-option-height);
+  --org-sidebar:var(--sidebar);
 }
 /* The dialog backdrop and the toasts are portaled to the page, so they follow the page's theme. */
 :root[data-theme=dark] { --org-overlay:#00000059; --org-toast-error:#a82626; }
@@ -1295,8 +1279,6 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    is from the right, and the text of every select in a settings column starts at the same x. */
 .currency-flag { display:block; border-radius:50%; }
 .revision-select .org-select-trigger { width:auto; }
-/* Dialogs no longer clip their children (dropdowns overflow them), so inner scroll areas round their own corners. */
-.settings-panel { border-bottom-right-radius:16px; }
 /* Press-and-hold reorder: the held row lifts with a grip, the others slide aside. */
 .tree-item { position:relative; border-radius:10px; transition:transform .16s ease; user-select:none; -webkit-user-select:none; }
 .tree-item.dragging { z-index:3; transition:none; background:var(--bg); box-shadow:0 8px 24px #00000024; cursor:grabbing; }
