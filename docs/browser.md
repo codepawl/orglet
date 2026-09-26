@@ -84,7 +84,7 @@ A step **asks you first** when it could:
 - Do what its name says, when the name is like send, pay, buy, order, checkout, purchase, delete, remove, post, publish, confirm, subscribe, transfer, sign out or submit, or the Vietnamese gửi, thanh toán, mua, đặt hàng, xoá or xóa, đăng, xác nhận, chuyển tiền. So do the buttons a site often sends with a script instead of a form: reply, comment, share, repost, invite, approve, merge, deploy, accept, agree, book now, reserve, donate, revoke, deactivate, uninstall, and trả lời, bình luận, chia sẻ, mời, phê duyệt, đồng ý, chấp nhận, đặt chỗ, đặt phòng, đặt vé, đặt bàn, quyên góp, nạp tiền, rút tiền. Accents do not matter: "Thanh toan" counts, and so does "XÓA". A word written with other accents is another word, so "Mới nhất" is not "mời".
 - Happen on a page that looks like a sign-in, a payment or a CAPTCHA page.
 
-The card appears in the chat under the orglet's name: **Researcher wants to click “Place order” on shop.example.com**, with the text it would type, why Orglet asks, and a picture of the page with the element outlined. Choose **Allow once** or **Don't allow**. There is no "always": the next such step asks again. A declined step comes back to the orglet as declined, and it does not try it again in that turn. Nothing reaches the site until you allow it.
+The card appears in the chat under the orglet's name: **Researcher wants to click “Place order” on shop.example.com**, with the text it would type, why Orglet asks, and a picture of the page with the element outlined, framed on the element with its label and neighbours around it. Choose **Allow once** or **Don't allow**. There is no "always": the next such step asks again. A declined step comes back to the orglet as declined, and it does not try it again in that turn. Nothing reaches the site until you allow it.
 
 Only a chat with one orglet can ask, side threads included. In a crew, a group chat or a schedule, a step that would ask is refused, and the orglet tells you what is left for you to do.
 
@@ -101,7 +101,7 @@ For these, the orglet asks you to take over.
 
 ## Watch it work
 
-While a run is using the browser, the bar above the message box says where it is, **Researcher is on example.com…**, with **Watch**. **Watch** opens the live view over the chat: the page as the orglet sees it, updated as it changes. **Details → Browser** shows the same view, smaller, above the list of steps; **View larger** opens the big one.
+While a run is using the browser, the bar above the message box says where it is, **Researcher is on example.com…**, with **Watch**. **Watch** opens the live view over the chat: the page as the orglet sees it, updated as it changes. **Details → Browser** shows the same view, smaller, above the list of steps; **View larger** opens the big one. When a card asks about a step, the big view puts the card beside the page, so the page stays large enough to read; in a narrow window the card goes under it.
 
 The orglet's cursor is an arrow with its name. Before each click, choice or typing step it moves to the element, so you see where it is about to act: the middle of a button, a little way into a field it types in. A click leaves a small ring where it landed. Orglet draws the cursor over the picture itself; it is not part of the page, so a page cannot see it or fake it.
 

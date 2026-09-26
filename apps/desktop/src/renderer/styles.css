@@ -395,7 +395,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
 /* Proximity, not mandatory: under mandatory Chromium insists the last card be reachable, so at the end it clamps
    to the very edge and lands mid-card — the exact thing Composer.tsx computes a resting place to avoid. */
-.composer-attachments { grid-area:attach; display:flex; gap:8px; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; }
+.composer-attachments { --strip-fade-start:0px; --strip-fade-end:0px; grid-area:attach; display:flex; gap:8px; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity;
+  mask-image:linear-gradient(to right, transparent 0, #000 var(--strip-fade-start), #000 calc(100% - var(--strip-fade-end)), transparent 100%); }
+/* An end with cards scrolled past it fades out, so a file off the left edge is announced, not silently gone (COD-292). */
+.composer-attachments[data-more-start] { --strip-fade-start:48px; }
+.composer-attachments[data-more-end] { --strip-fade-end:48px; }
 /* The one place a scrollbar is hidden rather than styled: the global 12px bar is a quarter of the strip and sits
    inside the prompt pill, where it reads as chrome the bar does not carry anywhere else. The card clipped at the
    edge says there is more, and Composer.tsx turns a vertical wheel here into sideways scrolling so a plain mouse
@@ -2133,7 +2137,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* The picture only takes focus back from a closed label; it is not a control, so it draws no ring. */
 .markup-frame:focus-visible { outline:none; }
 .markup-canvas { display:block; border-radius:4px; touch-action:none; }
-.markup-entry.org-input { position:absolute; width:auto; min-width:140px; min-height:0; padding:0 4px; margin:-2px 0 0 -5px; border-color:var(--accent); background:color-mix(in srgb, var(--bg) 80%, transparent); line-height:1.25; }
+/* The label box grows with what is typed and stops at the picture's right edge (COD-292), never running past it. */
+.markup-entry.org-input { position:absolute; width:auto; field-sizing:content; min-width:4ch; min-height:0; padding:0 4px; margin:-2px 0 0 -5px; border-color:var(--accent); background:color-mix(in srgb, var(--bg) 80%, transparent); line-height:1.25; }
 /* Lines added and removed wear the diff's own colours and a heavier weight, so they read apart from the file count. */
 .diff-counts { font-variant-numeric:tabular-nums; font-weight:600; }
 .diff-count-added { color:var(--success); }
@@ -2163,6 +2168,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* The last lines of a blocking command's output, stdout then stderr, each under its stream's name. */
 .command-output { display:flex; flex-direction:column; gap:20px; }
 .command-output-stream { display:flex; flex-direction:column; gap:8px; }
+/* A command's output is what the process printed, not code: one colour and no ligatures, so `!==` stays three
+   characters (COD-292). */
+.command-output .source-preview { font-variant-ligatures:none; font-feature-settings:"liga" 0, "calt" 0; }
+.command-output .source-preview [class^="tok-"] { color:inherit; font-style:inherit; font-weight:inherit; }
 /* The diff viewer (COD-163), redrawn in COD-279 after the owner called it ugly: a code review surface in the app's
    quiet style. On the viewer's grey stage sit one card listing the files and one card per file; cards and a tinted
    band per hunk tell things apart, never a rule. A path keeps the file's name in full weight and lets its folder
@@ -2445,8 +2454,16 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .browser-live-viewer .org-viewer-scroll { padding:16px; }
 .browser-live-viewer-body { display:flex; flex-direction:column; gap:16px; }
 .browser-live-viewer-body>.browser-approval { width:min(100%, 640px); margin:0 auto; }
-/* With a card asking under it, the page gives up height so the question and its answers fit on screen. */
-.browser-live-viewer-body:has(>.browser-approval) :is(.browser-live-stack, .browser-live-away)[data-large] { width:min(100%, 640px); }
+/* With a card asking about a step, the card sits beside the page when there is room, so the page keeps a readable
+   size instead of shrinking to 640px (COD-292); in a narrow window the card goes under the page, which gives up height
+   so the question and its answers still fit on screen. */
+.browser-live-viewer-body:has(>.browser-approval) { display:grid; grid-template-columns:minmax(0, 1fr) 300px; align-items:start; gap:20px; }
+.browser-live-viewer-body:has(>.browser-approval)>.browser-approval { width:auto; margin:0; }
+@media (max-width:999px) {
+  .browser-live-viewer-body:has(>.browser-approval) { display:flex; }
+  .browser-live-viewer-body:has(>.browser-approval)>.browser-approval { width:min(100%, 640px); margin:0 auto; }
+  .browser-live-viewer-body:has(>.browser-approval) :is(.browser-live-stack, .browser-live-away)[data-large] { width:min(100%, calc((100dvh - 400px) * var(--browser-live-ratio, 1.6))); }
+}
 /* The live view above already shows the page with the orglet's cursor on the element, so the card drops its picture. */
 .browser-live-viewer-body .browser-approval-shot { display:none; }
 .routine-browser { display:flex; flex-direction:column; gap:16px; min-width:0; }

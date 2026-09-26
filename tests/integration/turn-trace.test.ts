@@ -247,3 +247,17 @@ it('shows the timer alone while a run has streamed nothing to trace', () => {
   expect(html).not.toContain('turn-trace');
   expect(html).toContain('activity-elapsed-plain');
 });
+
+it('says in the chat when an image was not shown to the orglet (COD-292)', () => {
+  const events = [
+    eventOf(runId, 'Đã đọc report.pdf'),
+    eventOf(runId, 'Đã đọc sales.csv'),
+    eventOf(runId, 'Tí không xem được ảnh photo.png: kết nối này không nhận ảnh.'),
+  ];
+  const entries = traceOf({ runId, events });
+  expect(entries.map(entry => entry.kind)).toEqual(['read', 'read', 'withheld']);
+  expect(traceSummary(entries)).toBe('Read 2 files · 1 image not shown to the orglet');
+  const html = renderToStaticMarkup(createElement(TurnTrace, { entries }));
+  expect(html).toContain('trace-row trace-row-muted');
+  expect(html).toContain('photo.png');
+});

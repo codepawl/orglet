@@ -1,5 +1,6 @@
 import { connectionPricing, findCustomConnection, isCustomProvider, type CustomConnection } from '../shared/custom-connections';
-import { t } from './i18n';
+import type { ModelListResult } from '../shared/models';
+import { t, tMessage } from './i18n';
 import { formatMoney } from './components/money';
 
 /**
@@ -35,4 +36,16 @@ export function pricingLabel(connection: Pick<CustomConnection, 'baseUrl' | 'pri
   const output = formatMoney(pricing.price.outputMicrosPerMillion);
   if (full) return t('{0} vào · {1} ra mỗi 1M token', [input, output]);
   return t('{0} / {1} mỗi 1M', [input, output]);
+}
+
+/**
+ * What testing a custom connection found (COD-292): the test asks its server for its model list again, so an answer
+ * means the address and key work and says how many models it offers, and a failure carries the server's own reason.
+ */
+export function connectionTestOutcome(name: string, result: Pick<ModelListResult, 'models' | 'error'>): { ok: boolean; text: string } {
+  if (result.error) return { ok: false, text: t('{0} không trả lời: {1}', [name, tMessage(result.error)]) };
+  const count = result.models.length;
+  if (count === 0) return { ok: true, text: t('{0} đã trả lời nhưng chưa có model nào.', [name]) };
+  if (count === 1) return { ok: true, text: t('{0} đã trả lời · 1 model', [name]) };
+  return { ok: true, text: t('{0} đã trả lời · {1} model', [name, count]) };
 }

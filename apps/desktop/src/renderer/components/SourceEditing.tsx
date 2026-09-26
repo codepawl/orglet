@@ -32,17 +32,18 @@ export async function leaveUnsaved(dirty: boolean): Promise<boolean> {
 }
 
 /**
- * The actions of an edit mode, on the viewer's toolbar: Cancel goes back to reading, Save keeps the edit as a new
- * version (Ctrl+S), and Ask about this saves if needed and puts the version on the chat's next message.
+ * The actions of an edit mode, on the viewer's toolbar: Cancel goes back to reading, Ask about this saves if needed
+ * and puts the version on the chat's next message, and Save keeps the edit as a new version (Ctrl+S). Save is the
+ * primary action while editing, last in the row (COD-292).
  */
 function EditActions({ dirty, busy, onCancel, onSave, onAsk }: { dirty: boolean; busy: boolean; onCancel: () => void; onSave: () => void; onAsk: () => void }) {
   return <>
     <Button type="button" variant="ghost" className="doc-action" disabled={busy} onClick={onCancel}>{t('Hủy')}</Button>
-    <Button type="button" variant="outline" className="doc-action edit-save" aria-label={t('Lưu bản mới')} disabled={busy || !dirty} title={t('Lưu thành bản mới (Ctrl+S)')} aria-keyshortcuts="Control+S" onClick={onSave}>
-      <Save size={15} /><span className="edit-action-label">{t('Lưu bản mới')}</span>
-    </Button>
-    <Button type="button" variant="primary" className="doc-action edit-ask" aria-label={t('Hỏi về bản này')} disabled={busy} onClick={onAsk}>
+    <Button type="button" variant="outline" className="doc-action edit-ask" aria-label={t('Hỏi về bản này')} disabled={busy} onClick={onAsk}>
       <MessageSquarePlus size={15} /><span className="edit-action-label">{t('Hỏi về bản này')}</span>
+    </Button>
+    <Button type="button" variant="primary" className="doc-action edit-save" aria-label={t('Lưu bản mới')} disabled={busy || !dirty} title={t('Lưu thành bản mới (Ctrl+S)')} aria-keyshortcuts="Control+S" onClick={onSave}>
+      <Save size={15} /><span className="edit-action-label">{t('Lưu bản mới')}</span>
     </Button>
   </>;
 }

@@ -53,7 +53,7 @@ Find and replace:
 1. Open an image.
 2. Click **Mark up**.
 3. Pick a tool, a colour and a width in the bar under the file name, then draw on the picture.
-4. Click **Save**, or click **Ask about this** to save and put it on your next message at once.
+4. Click **Save**, or click **Ask about this** to save and put it on your next message at once. While you edit, **Save** is the main button, at the end of the row.
 
 | Tool | Key | What it does |
 |---|---|---|

@@ -51,6 +51,18 @@ function restingScrollLeft(strip: HTMLUListElement) {
   return Math.floor(furthest / pitch) * pitch;
 }
 
+type StripOverflow = { start: boolean; end: boolean };
+
+/** Whether cards are scrolled past the strip's left end and past its right end. A pixel of slack absorbs rounding. */
+export function stripOverflow(strip: Pick<HTMLElement, 'scrollLeft' | 'clientWidth' | 'scrollWidth'>): StripOverflow {
+  return {
+    start: strip.scrollLeft > 1,
+    end: strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1,
+  };
+}
+
+const sameOverflow = (first: StripOverflow, second: StripOverflow) => first.start === second.start && first.end === second.end;
+
 /**
  * ChatGPT-style prompt bar: a one-line pill with the add button, input and send button on one row.
  * It grows into a multi-line box once the text wraps or attachments appear, and stays grown until cleared
@@ -118,6 +130,25 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
   }, [hasAttachments]);
+  // Which ends of the strip have cards scrolled past them. Each such end fades out, so a card hidden off the left
+  // after a new one scrolled into view is announced instead of silently gone (COD-292).
+  const [stripMore, setStripMore] = useState<StripOverflow>({ start: false, end: false });
+  useEffect(() => {
+    const element = strip.current;
+    if (!element) return;
+    const measure = () => {
+      const next = stripOverflow(element);
+      setStripMore(current => sameOverflow(current, next) ? current : next);
+    };
+    measure();
+    element.addEventListener('scroll', measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      element.removeEventListener('scroll', measure);
+      observer.disconnect();
+    };
+  }, [hasAttachments, attachmentCount]);
   const mentionable = Boolean(mentions && (mentions.people.length > 1 || mentions.allNames?.length));
   const query = mentionable && !disabled ? mentionQueryAt(value, cursor) : undefined;
   const options = query && query.start !== dismissed ? mentionOptions(query.query, mentions!.people) : [];
@@ -237,7 +268,8 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
       })}
     </ul>}
     {context && <div className="composer-context">{context}</div>}
-    {attachments && hasAttachments && <ul className="composer-attachments" ref={strip} aria-label={t('Tệp đính kèm')}>
+    {attachments && hasAttachments && <ul className="composer-attachments" ref={strip} aria-label={t('Tệp đính kèm')}
+      data-more-start={stripMore.start ? '' : undefined} data-more-end={stripMore.end ? '' : undefined}>
       {attachments.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onRemove={onRemoveAttachment ? () => onRemoveAttachment(item.id) : undefined} />)}
     </ul>}
     <div className="composer-leading"><MessageBoxFocus.Provider value={focusMessageBox}>{leading}</MessageBoxFocus.Provider></div>

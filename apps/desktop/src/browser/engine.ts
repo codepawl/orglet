@@ -143,8 +143,11 @@ const FRAME_FACTS_TIMEOUT_MS = 1_500;
 const SETTLE_LOAD_MS = 5_000;
 /** The colour the element the person is asked about is outlined in, on the picture the card shows. */
 const ASKING_OUTLINE = '[data-orglet-asking]{outline:3px solid #e5484d !important;outline-offset:2px !important}';
-/** The size of the part of the page a card's picture keeps around the element. */
+/** The largest part of the page a card's picture keeps around the element, and the smallest. */
 const ASKING_PICTURE = { width: 720, height: 405 };
+const ASKING_PICTURE_MIN = { width: 400, height: 225 };
+/** The room kept on each side of the element, so its label and neighbours show with it. */
+const ASKING_MARGIN = { x: 200, y: 100 };
 
 export class BrowserEngine {
   private cleanBrowser?: Promise<Browser>;
@@ -1262,10 +1265,19 @@ async function withinFrameTimeout<Result>(reading: Promise<Result>): Promise<Res
   return Promise.race([answer, delay(FRAME_FACTS_TIMEOUT_MS).then(() => undefined)]);
 }
 
-/** The part of the page a card's picture shows: 720 by 405 pixels around the element, kept inside the viewport. */
-function regionAround(box: { x: number; y: number; width: number; height: number }, viewport: { width: number; height: number }) {
-  const width = Math.min(ASKING_PICTURE.width, viewport.width);
-  const height = Math.min(ASKING_PICTURE.height, viewport.height);
+/**
+ * The part of the page a card's picture shows: the element with room around it, in the picture's 16:9 shape, between
+ * 400 by 225 and 720 by 405 pixels, kept inside the viewport. A fixed 720-wide cut around a small button left it tiny
+ * in a mostly empty picture, with the page's heading cut in half at the edge (COD-292).
+ */
+export function regionAround(box: { x: number; y: number; width: number; height: number }, viewport: { width: number; height: number }) {
+  const shape = ASKING_PICTURE.width / ASKING_PICTURE.height;
+  let width = Math.max(box.width + ASKING_MARGIN.x * 2, ASKING_PICTURE_MIN.width);
+  let height = Math.max(box.height + ASKING_MARGIN.y * 2, ASKING_PICTURE_MIN.height);
+  if (width / height > shape) height = width / shape;
+  else width = height * shape;
+  width = Math.round(Math.min(width, ASKING_PICTURE.width, viewport.width));
+  height = Math.round(Math.min(height, ASKING_PICTURE.height, viewport.height));
   const centreX = box.x + box.width / 2;
   const centreY = box.y + box.height / 2;
   const x = Math.round(Math.min(Math.max(centreX - width / 2, 0), viewport.width - width));
