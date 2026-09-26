@@ -87,7 +87,7 @@ While an orglet works, a tab docks onto the message box: the faces of the orglet
 
 Afterwards the answer keeps a folded line of the steps ("Read 2 files · Searched 1 time"); open it for the targets. Above it, **Memories used: N** opens the memories the orglet was given ([Memory](memory.md)). An orglet's thinking shows only inside the folded control, only when the model shares it, and is not saved.
 
-Commands the orglet ran in the latest turn are summed in **Details**, under the goal it worked from ("Commands: 2 exited 0, 1 failed"), with their full output in the same panel. Exit 0 means that command finished; it does not mean the task passed.
+Commands the orglet ran in the latest turn are summed in **Details**, under the goal it worked from, last command first: "Last command exited 0 · earlier: 1 failed." A turn that ran a failing test, fixed the code and ran it again reads that way instead of "1 exited 0, 1 failed". Their full output is in the same panel. Exit 0 means that command finished; it does not mean the task passed.
 
 ## Diffs
 
@@ -111,7 +111,7 @@ The diff exists only when the working folder is a Git repository, because the co
 A schedule sends the same request to an orglet or crew daily or weekly, while Orglet is open.
 
 1. Click **Schedules** in the footer, then **New schedule**.
-2. Name it, write the repeating brief, choose the orglet or crew, the frequency, the weekday and run time, the time zone, and a limit per run. Attach sources if the request needs them.
+2. Name it, write the repeating brief, choose the orglet or crew, the frequency, the weekday and run time, the time zone, and a limit per run. Under **Limits & permissions**, turn on **Read and search the web** if each run should look things up, and set **Browser** to **Read pages** if it should open pages in Orglet's browser. Attach sources if the request needs them.
 3. Choose **Enable schedule**. Enabling is your approval for that content and connection; a later change to the orglet, crew, model or sources turns the schedule off until you review and save it again.
 
 Orglet checks schedules only while it is open. If the computer was off or asleep at the time, the missed run becomes one **Run once to catch up** choice, or **Skip missed run**; missed days are never queued up, and the next time stays on the calendar. Scheduled runs cannot write memory, react, or propose app changes, since nobody is watching. There are at most 100 schedules. Policy detail: [routines.md](routines.md).
@@ -165,7 +165,7 @@ Archived chats are found too; deleted chats are not. A crew's chat is found by i
 
 Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked. A confirmation of something you just did (saved, created, copied, archived) is listed but does not count, since you saw it as it happened. Problems count, and so does news that arrived on its own: an answer in a side thread, a schedule's run that finished or needs you, a downloaded update, a change an orglet applied by itself.
 
-The list is newest first, grouped by day, with new rows marked. Filter it by **All**, **Problems**, **Done** or **Info**. Each row says what happened and what it was about (the setting, the orglet, the chat, the command); a run of identical notices is one row with a count. A row about a chat, such as a side thread's answer or a schedule's run, opens that chat when you click it, as long as the chat still exists. Every app change an orglet makes through a proposal is announced here too. **Clear all** empties the list.
+What counts as new since you last looked comes first, under **New**; the rest follows newest first, grouped by day. Filter it by **All**, **Problems**, **Done** or **Info**. Each row says what happened and what it was about (the setting, the orglet, the chat, the command); a run of identical notices is one row with a count. A row about a chat, such as a side thread's answer or a schedule's run, opens that chat when you click it, as long as the chat still exists. Every app change an orglet makes through a proposal is announced here too. **Clear all** empties the list.
 
 ### While Orglet is in the background
 

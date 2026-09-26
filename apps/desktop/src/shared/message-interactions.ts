@@ -3,6 +3,19 @@ import { z } from 'zod';
 export const Reaction = z.enum(['agree', 'delighted', 'funny', 'unsure', 'watching', 'against']);
 export type Reaction = z.infer<typeof Reaction>;
 
+/**
+ * What the person's reaction on the previous answer asks of the next one, in the words the model reads. The window
+ * shows the same meanings, in the person's language, as each reaction button's label.
+ */
+export const REACTION_FEEDBACK: Record<Reaction, string> = {
+  agree: 'That works for me, keep going this way.',
+  delighted: 'Exactly what I needed, more like that.',
+  funny: 'That one made me laugh, stay this loose.',
+  unsure: 'I am not sure about this part, explain it further.',
+  watching: 'I am reading this part closely, be careful with it.',
+  against: 'Not right yet, try another angle.',
+};
+
 export const MessageReaction = z.object({
   messageId: z.uuid(), emoji: Reaction, actor: z.enum(['user', 'worker']),
   workerId: z.uuid().optional(), runId: z.uuid().optional(), callId: z.string().max(200).optional(),

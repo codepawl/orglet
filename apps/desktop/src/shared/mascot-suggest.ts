@@ -120,13 +120,14 @@ export function autoMascot(ids: readonly MascotId[], seed: string, hints: Mascot
 /**
  * A face for a new orglet that another orglet does not already show, in face or colour, when a close match exists
  * (COD-265). Orglets made together for similar roles (a writer and an editor) otherwise got the same best match and
- * the same colour. With nothing taken it is the plain automatic face.
+ * the same colour. With nothing taken it is the plain automatic face. `shownColors` are the colours the other orglets
+ * really show, a colour the person picked included; without it, each taken face counts with its own colour.
  */
-export function distinctMascot(hints: MascotHints, seed: string, taken: readonly MascotId[]): MascotId {
+export function distinctMascot(hints: MascotHints, seed: string, taken: readonly MascotId[], shownColors?: readonly string[]): MascotId {
   if (!taken.length) return autoMascot(MASCOT_IDS, seed, hints);
-  const takenColors = new Set(taken.map(id => mascotColors[id]));
+  const takenColors = new Set((shownColors ?? taken.map(id => mascotColors[id])).map(color => color.toLowerCase()));
   const options = suggestedMascots(hints, { limit: MASCOT_IDS.length, taken });
-  const freshFaceAndColor = options.find(id => !taken.includes(id) && !takenColors.has(mascotColors[id]));
+  const freshFaceAndColor = options.find(id => !taken.includes(id) && !takenColors.has(mascotColors[id].toLowerCase()));
   const freshFace = options.find(id => !taken.includes(id));
   return freshFaceAndColor ?? freshFace ?? autoMascot(MASCOT_IDS, seed, hints);
 }
@@ -155,7 +156,22 @@ export function suggestedColors(face: MascotId, seed: string, hints: MascotHints
   return [...new Set(colors)].slice(0, count);
 }
 
-export type AvatarOwner = { id?: string; name: string; description?: string; avatar?: { mascot?: string; color?: string } };
+/**
+ * The face and colour a new orglet starts with when the person picks nothing (dogfood, 2026-09-26: two orglets made in
+ * a row, a developer and a writer, both came out purple). The face is `distinctMascot`; when every fitting face's
+ * colour is already shown, the face stays and the colour moves to the first suggested or palette colour nobody shows.
+ * `color` is left out when the face's own colour is free, so the orglet keeps following its face.
+ */
+export function distinctAvatar(hints: MascotHints, seed: string, taken: readonly MascotId[], shownColors: readonly string[]): { mascot: MascotId; color?: string } {
+  const mascot = distinctMascot(hints, seed, taken, shownColors);
+  const used = new Set(shownColors.map(color => color.toLowerCase()));
+  if (!used.has(mascotColors[mascot].toLowerCase())) return { mascot };
+  const candidates = suggestedColors(mascot, seed, hints, avatarPalette.length + 1);
+  const free = candidates.find(color => !used.has(color.toLowerCase()));
+  return free ? { mascot, color: free } : { mascot };
+}
+
+export type AvatarOwner ={ id?: string; name: string; description?: string; avatar?: { mascot?: string; color?: string } };
 
 /**
  * The colour an orglet shows, the same rule as a default-mascot `Avatar`: the colour the person picked, otherwise the

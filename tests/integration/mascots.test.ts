@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import { Mascot, bubbleOutline, eyeColor, mascots, mascotIds, smallGlyphs } from '../../apps/desktop/src/renderer/components/mascots';
 import { mascotGlyph } from '../../apps/desktop/src/renderer/components/Avatar';
-import { autoMascot, distinctMascot, mascotCategoryIds, mascotColors, rankMascots, suggestMascots, suggestedColors, suggestedMascots } from '../../apps/desktop/src/renderer/components/mascotSuggest';
+import { autoMascot, avatarPalette, defaultAvatarColor, distinctAvatar, distinctMascot, mascotCategoryIds, mascotColors, rankMascots, suggestMascots, suggestedColors, suggestedMascots } from '../../apps/desktop/src/renderer/components/mascotSuggest';
 
 const all = Object.values(mascotCategoryIds).flat();
 const top = (name: string, description?: string) => suggestMascots({ name, description })[0];
@@ -172,4 +172,24 @@ it('gives orglets made together for similar roles different faces and colours (C
   // With every colour already taken it still picks a face nobody shows.
   const crowd = mascotIds.filter(id => id !== 'notes');
   expect(distinctMascot(editorHints, 'editor-seed', crowd)).toBe('notes');
+});
+
+it('starts a new orglet in a colour the other orglets do not show (dogfood, 2026-09-26)', () => {
+  // Dev came out purple, and a Writer made next came out purple too.
+  const dev = { id: 'dev-id', name: 'Dev' };
+  expect(defaultAvatarColor(dev)).toBe(mascotColors.coder);
+  const writerHints = { name: 'Writer' };
+  expect(mascotColors[autoMascot(mascotIds, 'writer-seed', writerHints)]).toBe(defaultAvatarColor(dev));
+  const writer = distinctAvatar(writerHints, 'writer-seed', ['coder'], [defaultAvatarColor(dev)]);
+  const writerColor = writer.color ?? mascotColors[writer.mascot];
+  expect(writerColor).not.toBe(defaultAvatarColor(dev));
+  // A colour the person picked for another orglet counts as shown, whatever its face.
+  const picked = distinctAvatar(writerHints, 'writer-seed', ['classic'], [mascotColors.notes, mascotColors.writer]);
+  expect([mascotColors.notes, mascotColors.writer]).not.toContain(picked.color ?? mascotColors[picked.mascot]);
+  // When no fitting face has a free colour, the face stays and only the colour moves.
+  const allButTeal = avatarPalette.filter(color => color !== mascotColors.chart);
+  const crowded = distinctAvatar(writerHints, 'writer-seed', ['coder'], allButTeal);
+  expect(crowded).toEqual({ mascot: 'writer', color: mascotColors.chart });
+  // Nobody else yet: the plain automatic face in its own colour.
+  expect(distinctAvatar(writerHints, 'writer-seed', [], [])).toEqual({ mascot: autoMascot(mascotIds, 'writer-seed', writerHints) });
 });

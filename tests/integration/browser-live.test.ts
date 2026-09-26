@@ -10,7 +10,7 @@ import { detectBrowser } from '../../apps/desktop/src/browser/detect';
 import { headedUserAgent, LAUNCH_ARGS, launchArgs } from '../../apps/desktop/src/browser/launch';
 import { suggestionFor, SuggestionLog, SUGGESTION_QUIET_MS } from '../../apps/desktop/src/browser/detector';
 import { snapshotElement } from '../../apps/desktop/src/browser/snapshot-lines';
-import { BrowserCursorTrack, BrowserInputEvent, cursorPointFor, pageToView, viewToPage, type BrowserWatchState } from '../../apps/desktop/src/shared/browser-live';
+import { BrowserCursorTrack, BrowserInputEvent, askingPointFor, cursorPointFor, pageToView, viewToPage, type BrowserWatchState } from '../../apps/desktop/src/shared/browser-live';
 import { CLEAN_BROWSER_PROFILE } from '../../apps/desktop/src/shared/browser';
 import type { BrowserHostEvent } from '../../apps/desktop/src/shared/browser-host';
 
@@ -56,6 +56,14 @@ describe('the cursor', () => {
   it('stays inside the viewport for an element partly off screen', () => {
     expect(cursorPointFor('click', { x: 1250, y: 790, width: 100, height: 40 }, viewport)).toEqual({ x: 1279, y: 799 });
     expect(cursorPointFor('click', { x: -80, y: -30, width: 40, height: 20 }, viewport)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('waits on the lower right corner of what a card asks about, so it does not cover it (dogfood, 2026-09-26)', () => {
+    // A 13px checkbox: at its centre the cursor hid it, and its name covered the button under it.
+    const checkbox = { x: 20, y: 172, width: 13, height: 13 };
+    expect(askingPointFor(checkbox, viewport)).toEqual({ x: 33, y: 185 });
+    expect(askingPointFor(checkbox, viewport)).not.toEqual(cursorPointFor('click', checkbox, viewport));
+    expect(askingPointFor({ x: 1250, y: 790, width: 100, height: 40 }, viewport)).toEqual({ x: 1279, y: 799 });
   });
 
   it('is kept per run and tab, and forgotten with the tab and the run', () => {
@@ -268,14 +276,15 @@ describe.runIf(found !== null)('the live view of a real headless browser', { tim
     await until(() => framesOf(runId).length > before, 5_000);
   });
 
-  it('puts the cursor on the element a card asks about when its picture is taken', async () => {
+  it('puts the cursor at the corner of the element a card asks about when its picture is taken', async () => {
     const runId = randomUUID();
     await open(runId);
     await watch(runId);
     const { snapshot: text } = await snapshot(runId);
     const ref = /\[ref=([a-z0-9]+)\]/.exec(text.split('\n').find(line => /button "Go"/.test(line))!)![1];
     await engine.handle({ kind: 'screenshot', runId, policy: policy(), tabId: 't1', highlight: ref, pointer: 'click' }, signal);
-    expect(events.filter(event => event.kind === 'cursor').at(-1)).toEqual({ kind: 'cursor', runId, cursor: { tabId: 't1', x: 160, y: 220, action: 'click' } });
+    // The Go button's lower right corner, beside it rather than over it; the click itself goes to its centre.
+    expect(events.filter(event => event.kind === 'cursor').at(-1)).toEqual({ kind: 'cursor', runId, cursor: { tabId: 't1', x: 220, y: 240, action: 'click' } });
     // The outline the card's picture draws is gone again, and the view ends on the page as it is.
     const before = framesOf(runId).length;
     await until(() => framesOf(runId).length > before, 5_000);

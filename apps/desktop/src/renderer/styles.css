@@ -326,9 +326,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .worker-row > .row-check .org-checkbox-input { top:0; }
 .worker-row > .row-check .org-checkbox-box { margin-top:0; }
 .tree-item.selected .worker-row,.tree-item.selected .worker-row:hover { background:color-mix(in srgb, var(--accent) 14%, transparent); }
-.selection-bar { display:flex; align-items:center; gap:2px; margin:8px 12px 0 0; padding:3px 3px 3px 12px; border-radius:14px; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter:blur(10px) saturate(1.2); box-shadow:0 6px 20px #0000001f; animation:menu-in var(--motion-quick) var(--ease-out); }
+/* Four actions and "12 selected" have to fit the default sidebar: the actions are a size smaller than a row's, with no gap. */
+.selection-bar { display:flex; align-items:center; gap:0; margin:8px 12px 0 0; padding:3px 3px 3px 10px; border-radius:14px; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter:blur(10px) saturate(1.2); box-shadow:0 6px 20px #0000001f; animation:menu-in var(--motion-quick) var(--ease-out); }
 .selection-count { flex:1; min-width:0; font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.selection-bar .row-action { margin-right:0; color:var(--muted); }
+.selection-bar .row-action { width:28px; height:28px; min-height:28px; padding:6px; margin-right:0; color:var(--muted); }
 .selection-bar .row-action:hover:not(:disabled),.selection-bar .row-action:focus-visible,.selection-bar .row-action[aria-expanded=true] { color:var(--text); border-color:transparent; }
 .selection-bar .row-action.danger,.selection-bar .row-action.danger:hover:not(:disabled) { color:var(--error); }
 .selection-bar .row-action.danger:hover:not(:disabled) { background:var(--row-hover); border-color:transparent; }
@@ -668,8 +669,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .form select:hover:not(:disabled),.form input:not(.org-input):hover:not(:disabled):not(:focus) { border-color:var(--muted); }
 
 .form textarea:not(.org-input) { resize:vertical; min-height:100px; line-height:1.6; }
-.form fieldset { border:1px solid var(--border); border-radius:10px; padding:12px; }
-.form legend { font-size:13px; padding:0 4px; }
+/* A group of choices under one title (a crew's members, a shift's days): the title sits above the box like any field's
+   label, 8px over it, and the choices sit in the box; a legend drawn on the box's edge read as squeezed onto the line
+   (dogfood, 2026-09-26). The legend is a flex box, so no line box of its own adds to those 8px. */
+.form fieldset { border:0; padding:0; margin:0; min-width:0; }
+.form legend { display:flex; font-size:13px; font-weight:500; padding:0 0 8px; }
+.fieldset-options { border:1px solid var(--border); border-radius:10px; padding:12px; }
 
 .form section { display:flex; flex-direction:column; gap:10px; }
 .form section+.form section { padding-top:8px; }
@@ -1244,8 +1249,10 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 /* Sidebar tree: teams open to their workers, workers open to their tasks. */
 .row-disclosure:hover { color:var(--text); }
 .worker-row .row-disclosure+.worker { padding-left:6px; }
-/* Children sit a clear step below their parent and a small step apart from each other. */
-.tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 10px 21px; padding-left:25px; }
+/* Children sit a clear step below their parent and a small step apart from each other. The group has the same 8px of
+   air under it as over it: the list's own 4px gap follows it, so its bottom margin is the other 4px. A 10px margin
+   there put the next orglet 48px below the last side thread where rows otherwise step 38px (dogfood, 2026-09-26). */
+.tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 4px 21px; padding-left:25px; }
 .tree-children[hidden] { display:none; }
 .tree-leaf { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; padding:6px 10px; border:0; border-radius:10px; background:transparent; font-size:13px; text-align:left; }
 /* Row icons are muted, but an avatar keeps its own colour. */

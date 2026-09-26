@@ -82,12 +82,12 @@ it('renders exactly one trace control before the bubble, with the memory, the no
   expect(html.match(/class="turn-trace"/g)).toHaveLength(1);
   expect(html).not.toContain('used-memories');
   const [trace, memoryRow, noteRow, readRow, webRow, skillRow, rememberedRow, link, bubble] = orderOf(html, [
-    'class="turn-trace"', 'Thích câu trả lời ngắn.', 'Quy ước hóa đơn', 'invoice.xlsx', 'Searched the web', 'references/invoices.md',
+    'class="turn-trace"', 'Thích câu trả lời ngắn.', 'Quy ước hóa đơn', 'invoice.xlsx', '>Searched the web<', 'references/invoices.md',
     'Remembered something for later chats.', 'Open the Memory tab', `id="message-${artifactId}"`,
   ]);
   expect([trace, memoryRow, noteRow, readRow, webRow, skillRow, rememberedRow, link, bubble]).toEqual([...[trace, memoryRow, noteRow, readRow, webRow, skillRow, rememberedRow, link, bubble]].sort((a, b) => a - b));
   // The folded line counts each kind; the runner's own status lines are not actions and count for nothing.
-  expect(html).toContain('Used 1 memory · Loaded 1 note · Read 1 file · Read 1 skill resource · Went online once · Remembered 1 thing');
+  expect(html).toContain('Used 1 memory · Loaded 1 note · Read 1 file · Read 1 skill resource · Searched the web once · Remembered 1 thing');
   expect(html).not.toContain('Đang gọi model');
   // A real disclosure with a list a screen reader can read.
   expect(html).toContain('<details class="turn-trace"><summary class="activity-summary">');
@@ -142,7 +142,34 @@ it('reads a saved step from each sentence the core writes, the specific ones bef
     ['command', 'Tiến trình đã dừng: exited, mã thoát 0'],
     ['proposal', 'Đã ghi một đề xuất thay đổi trong app; chờ bạn áp dụng.'],
   ]);
-  expect(traceSummary(traceOf({ runId, events }))).toBe('Read 1 file · Searched once · Listed files 2 times · Went online once · Checked data once · Edited 1 file · Ran 1 command · Proposed 1 change');
+  expect(traceSummary(traceOf({ runId, events }))).toBe('Read 1 file · Searched once · Listed files 2 times · Read 1 web page · Checked data once · Edited 1 file · Ran 1 command · Proposed 1 change');
+});
+
+it('counts web searches and web pages apart, so the folded line says what went online (dogfood, 2026-09-26)', () => {
+  const search = 'Đã tìm kiếm web; kết quả chưa được xác minh.';
+  const page = 'Đã đọc trang web dưới dạng dữ liệu không đáng tin.';
+  const events = [search, page, page, search, page, page].map(message => eventOf(runId, message));
+  // The same six steps used to read "Went online 6 times".
+  expect(traceSummary(traceOf({ runId, events }))).toBe('Searched the web 2 times · Read 4 web pages');
+  expect(traceSummary(traceOf({ runId, events: [eventOf(runId, page)] }))).toBe('Read 1 web page');
+});
+
+it('names each command it ran and how it ended, and still reads the older sentence that did not', () => {
+  const events = [
+    eventOf(runId, 'Đã chạy lệnh npm test · mã thoát 1'),
+    eventOf(runId, 'Lệnh node build.js đã hết thời gian'),
+    eventOf(runId, 'Đã dừng lệnh npm run dev'),
+    eventOf(runId, 'Lệnh npm run lint in quá nhiều nên đã bị dừng'),
+    eventOf(runId, 'Tiến trình đã dừng: exited, mã thoát 0'),
+  ];
+  const entries = traceOf({ runId, events });
+  expect(entries.map(entry => entry.kind)).toEqual(['command', 'command', 'command', 'command', 'command']);
+  expect(traceSummary(entries)).toBe('Ran 5 commands');
+  const html = renderToStaticMarkup(createElement(TurnTrace, { entries }));
+  expect(html).toContain('Ran npm test · exit code 1');
+  expect(html).toContain('node build.js timed out');
+  expect(html).toContain('Stopped npm run dev');
+  expect(html).toContain('npm run lint printed too much and was stopped');
 });
 
 it('reads folders, moves and deletions as their own rows, and a refused one as a step that did not go through (COD-254)', () => {
