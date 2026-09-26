@@ -255,9 +255,10 @@ export function App() {
   useAppChangeNotices(workspace?.recentAppChanges);
   // A side thread or a schedule's run that finishes while the person is elsewhere says so, with Open (COD-247,
   // COD-258); any chat that stops while the window is in the background also raises a system notification.
-  useChatNotices(workspace, selected, taskId => openTask(taskId));
+  useChatNotices(workspace, selected, taskId => openTask(taskId), () => openRoutines());
   // Everything in the sidebar footer that waits for you reads the same way: a dot on the icon and a count (user, 2026-09-23).
-  const pendingRoutines = workspace?.routines.filter(item => item.pending).length ?? 0;
+  // A schedule that did not run (its folder gone, files that could not start) waits for you as much as a missed one (COD-294).
+  const pendingRoutines = workspace?.routines.filter(item => item.pending || item.notice).length ?? 0;
   const knowledgeToReview = workspace?.knowledge.filter(item => item.status === 'proposed').length ?? 0;
   // Runs under way or in line (COD-244), a plain count; and beside it, in the accent, the chats that wait for the
   // person (COD-287), which a paused crew used to hide behind a button with no count.

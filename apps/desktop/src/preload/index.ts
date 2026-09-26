@@ -18,6 +18,7 @@ const bridge: Bridge = {
   pickWorkspace: (taskId, permissions) => invoke('orglet:pick-workspace', { taskId, permissions }),
   pickNewChatWorkspace: (chat, permissions) => invoke('orglet:pick-workspace', { ...chat, permissions }),
   pickWatchFolder: () => invoke('orglet:pick-workspace', { watch: true, permissions: ['read'] }),
+  pickRoutineWorkspace: permissions => invoke('orglet:pick-workspace', { routine: true, permissions }),
   connections: () => invoke('orglet:connections'),
   connect: (provider, key) => invoke('orglet:connect', key === undefined ? { provider } : { provider, key }),
   disconnect: provider => invoke('orglet:disconnect', provider),

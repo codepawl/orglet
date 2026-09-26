@@ -53,9 +53,11 @@ export function permissionsOff(input: HintInput): { permissions: string[]; where
   if (!input.workspacePermissions?.length) permissions.push(label('Thư mục làm việc'));
   else if (!input.workspacePermissions.includes('execute')) permissions.push(`${label('Thư mục làm việc')}: ${label('Đọc, sửa file và chạy lệnh')}`);
   if (!permissions.length) return null;
-  // A side thread can never be wider than its main chat, so the switch that matters is the main chat's. Built from the
-  // labels on screen, so it reads the same as the path the person clicks.
+  // A side thread can never be wider than its main chat, so the switch that matters is the main chat's, and a
+  // schedule's runs take theirs from the schedule (COD-294). Built from the labels on screen, so it reads the same as
+  // the path the person clicks.
   const details = `${label('Chi tiết')} → ${label('Quyền công cụ')}`;
+  if (input.schedule) return { permissions, where: `${label('Lịch chạy')} → ${label('Sửa lịch')}` };
   const where = input.sideThread ? `${label('Chat chính')}: ${details}` : details;
   return { permissions, where };
 }
@@ -85,6 +87,8 @@ type RefusalInput = {
   workspacePermissions: readonly WorkspacePermission[] | undefined;
   language: Language;
   sideThread: boolean;
+  /** A schedule's run: its folder and level come from the schedule, so that is where to change them (COD-294). */
+  schedule?: boolean;
 };
 
 /** The model's answer to a call it may correct, and the activity line the person reads (Vietnamese source, like every event). */
@@ -96,6 +100,7 @@ export type ToolCallRefusal = { result: Record<string, unknown>; event: string }
  */
 function permissionLine(problem: Extract<ToolCallProblem, { kind: 'not_offered' }>, input: RefusalInput): string | null {
   const where = input.sideThread ? MAIN_CHAT_PERMISSIONS_WHERE : PERMISSIONS_WHERE;
+  if (problem.workspacePermission && input.schedule) return scheduleFolderLine(problem.workspacePermission, input.workspacePermissions);
   if (problem.workspacePermission) {
     if (!input.workspacePermissions?.length) return `Chưa dùng được thư mục vì chat này chưa có thư mục làm việc. Chọn một thư mục ở ${where} → Thư mục làm việc, rồi gửi lại tin nhắn.`;
     if (problem.workspacePermission === 'write') return `Chưa sửa được tệp vì thư mục làm việc chỉ cho đọc. Đổi thành “Đọc và sửa file” ở ${where} → Thư mục làm việc, rồi gửi lại tin nhắn.`;
@@ -105,6 +110,17 @@ function permissionLine(problem: Extract<ToolCallProblem, { kind: 'not_offered' 
   const label = problem.capability ? CAPABILITY_LABELS[problem.capability] : undefined;
   if (!label) return null;
   return `Chưa dùng được “${label}” vì quyền này đang tắt. Bật ở ${where}, rồi gửi lại tin nhắn.`;
+}
+
+/**
+ * What to change for a folder tool a schedule's run was not offered (COD-294). Pointing at the run's own Details fixed
+ * only that one run, and the next day's run failed the same way; the folder and its level belong to the schedule.
+ */
+function scheduleFolderLine(needed: WorkspacePermission, granted: readonly WorkspacePermission[] | undefined): string | null {
+  if (!granted?.length) return 'Chưa dùng được thư mục vì lịch này chưa có thư mục làm việc. Chọn một thư mục ở Lịch chạy → Sửa lịch → Thư mục làm việc, rồi lưu lịch.';
+  if (needed === 'write') return 'Chưa sửa được tệp vì thư mục làm việc của lịch chỉ cho đọc. Đổi thành “Đọc và sửa file” ở Lịch chạy → Sửa lịch → Thư mục làm việc, rồi lưu lịch.';
+  if (needed === 'execute') return 'Chưa chạy được lệnh vì thư mục làm việc của lịch chưa cho chạy lệnh. Đổi thành “Đọc, sửa file và chạy lệnh” ở Lịch chạy → Sửa lịch → Thư mục làm việc, rồi lưu lịch.';
+  return null;
 }
 
 /**

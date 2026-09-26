@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import type { Task, TaskStatus, Workspace } from '../shared/contracts';
+import type { Routine, Task, TaskStatus, Workspace } from '../shared/contracts';
+import { SKIPPED_WHILE_INACTIVE } from '../shared/schedule';
 import { BACKGROUND_NOTICE_CHARS, type BackgroundNotice } from '../shared/background-notice';
-import { t } from './i18n';
+import { t, tMessage } from './i18n';
 import { chatHeadline } from '../shared/forward';
 import { toast } from './components/toast';
 import { pendingGroupSize } from './components/notifications';
@@ -16,8 +17,11 @@ const LOOK_MARGIN_MS = 60_000;
 /** How a chat stopped working: with its answer, stuck on something that went wrong, or waiting for the person. */
 export type ChatOutcome = 'done' | 'needs_look' | 'needs_you';
 export type FinishedChat = { task: Task; outcome: ChatOutcome };
-/** What the chat notices read about the workspace: the names of orglets, crews and schedules. */
-export type ChatNames = Pick<Workspace, 'workers' | 'teams' | 'routines'>;
+/**
+ * What the chat notices read about the workspace: the names of orglets, crews and schedules, and which chats hold
+ * changes for review, so a schedule's run can say its changes wait (COD-294).
+ */
+export type ChatNames = Pick<Workspace, 'workers' | 'teams' | 'routines'> & Partial<Pick<Workspace, 'heldForReview'>>;
 
 /** A paused or cancelled chat stopped because the person asked, so it is not news. */
 function outcomeOf(status: TaskStatus): ChatOutcome | undefined {
@@ -107,7 +111,7 @@ export function inAppNotice(chat: FinishedChat, names: ChatNames, earlierInGroup
   const tone = outcome === 'done' ? 'success' : 'error';
   if (task.routineId) {
     const schedule = scheduleName(task, names);
-    const text = outcome === 'done' ? t('{0} đã xong', [schedule])
+    const text = outcome === 'done' ? heldForReview(task, names) ? t('{0} đã xong, thay đổi đang chờ bạn xem', [schedule]) : t('{0} đã xong', [schedule])
       : outcome === 'needs_you' ? t('{0} đang chờ bạn', [schedule])
       : t('{0} cần xem lại', [schedule]);
     return { taskId: task.id, text, tone, about: ownerName(task, names) };
@@ -121,6 +125,48 @@ export function inAppNotice(chat: FinishedChat, names: ChatNames, earlierInGroup
     return { taskId: task.id, text: t('{0} đã trả lời trong {1} chat phụ', [author, size]), tone, about: t('Mới nhất: {0}', [chatName(task)]), group: { key: group, size } };
   }
   return undefined;
+}
+
+/** Whether the chat's changes wait for the person's Apply or Discard (COD-279). */
+function heldForReview(task: Task, names: ChatNames): boolean {
+  return names.heldForReview?.includes(task.id) ?? false;
+}
+
+/**
+ * Whether a chat that stopped is announced inside the window. The chat on screen says nothing, since the person is
+ * reading it, with one exception (COD-294): a schedule's run that failed or waits for the person always does. Run now
+ * opens the run it starts, and a run that then failed left no trace in Notifications, so a problem with unattended
+ * work could be missed once the person moved on.
+ */
+export function announcedInWindow(chat: FinishedChat, openTask: Pick<Task, 'id' | 'sideOf'> | undefined): boolean {
+  const open = chat.task.id === openTask?.id;
+  if (open) return Boolean(chat.task.routineId) && chat.outcome !== 'done';
+  if (chat.outcome === 'done' && besideSideThread(chat.task, openTask)) return false;
+  return true;
+}
+
+/** A schedule that could not start a run, and why: what the card's "did not run" or missed note says (COD-294). */
+export type BlockedSchedule = { routine: Routine; reason: string };
+
+/**
+ * The schedules whose last attempt to start was refused since `previous` was read: a new "did not run" note (a folder
+ * gone, files that could not start a run) or a new missed run whose reason is not that the app was closed. A miss
+ * while Orglet was closed is not a problem; the card and the catch-up banner already offer to run it once.
+ */
+export function blockedSchedules(previous: readonly Routine[], routines: readonly Routine[]): BlockedSchedule[] {
+  const blocked: BlockedSchedule[] = [];
+  for (const routine of routines) {
+    const before = previous.find(item => item.id === routine.id);
+    const noticeIsNew = routine.notice && routine.notice.at !== before?.notice?.at;
+    if (routine.notice && noticeIsNew) {
+      blocked.push({ routine, reason: routine.notice.reason });
+      continue;
+    }
+    const pending = routine.pending;
+    const missedIsNew = pending && pending.reason !== SKIPPED_WHILE_INACTIVE && pending.reason !== before?.pending?.reason;
+    if (pending && missedIsNew) blocked.push({ routine, reason: pending.reason });
+  }
+  return blocked;
 }
 
 function clipped(text: string): string {
@@ -137,7 +183,8 @@ export function backgroundNotice(chat: FinishedChat, names: ChatNames): Backgrou
   const { task, outcome } = chat;
   const owner = ownerName(task, names);
   const title = task.routineId ? scheduleName(task, names) : task.sideOf ? t('{0} · chat phụ', [owner]) : owner;
-  const body = outcome === 'done' ? t('Đã xong') : outcome === 'needs_you' ? t('Đang chờ bạn') : t('Cần xem lại');
+  const body = outcome === 'done' ? heldForReview(task, names) ? t('Thay đổi đang chờ bạn xem') : t('Đã xong')
+    : outcome === 'needs_you' ? t('Đang chờ bạn') : t('Cần xem lại');
   return { taskId: task.id, title: clipped(title), body: clipped(body) };
 }
 
@@ -157,23 +204,28 @@ export function backgroundNotices(finished: readonly FinishedChat[], names: Chat
  * already open says nothing. Any chat that finished, failed or needs the person is also offered to main as a system
  * notification, unless Settings turned that off; main shows it only while the window is in the background.
  */
-export function useChatNotices(workspace: Workspace | undefined, openChat: string | null, open: (taskId: string) => void) {
-  const previous = useRef<{ statuses: Map<string, TaskStatus>; at: number }>(undefined);
+export function useChatNotices(workspace: Workspace | undefined, openChat: string | null, open: (taskId: string) => void, openSchedules: () => void) {
+  const previous = useRef<{ statuses: Map<string, TaskStatus>; routines: Routine[]; at: number }>(undefined);
   const openRef = useRef(open);
   openRef.current = open;
+  const openSchedulesRef = useRef(openSchedules);
+  openSchedulesRef.current = openSchedules;
   useEffect(() => {
     if (!workspace) return;
     const known = previous.current;
-    previous.current = { statuses: chatStatuses(workspace.tasks), at: Date.now() };
+    previous.current = { statuses: chatStatuses(workspace.tasks), routines: workspace.routines, at: Date.now() };
     if (!known) return;
+    // A schedule that could not start is unattended work that did not happen, so it is a problem to look at (COD-294).
+    for (const blocked of blockedSchedules(known.routines, workspace.routines)) {
+      toast(t('{0} chưa chạy', [blocked.routine.name]), 'error', tMessage(blocked.reason), { action: { label: t('Xem lịch chạy'), onSelect: () => openSchedulesRef.current() } });
+    }
     // A run started while the last workspace was on its way here is still news, hence the margin.
     const lookedAt = new Date(known.at - LOOK_MARGIN_MS).toISOString();
     const finished = finishedChats(known.statuses, workspace.tasks, lookedAt);
     if (!finished.length) return;
     const openTask = openChat ? workspace.tasks.find(task => task.id === openChat) : undefined;
     for (const chat of finished) {
-      if (chat.task.id === openChat) continue;
-      if (chat.outcome === 'done' && besideSideThread(chat.task, openTask)) continue;
+      if (!announcedInWindow(chat, openTask)) continue;
       const notice = inAppNotice(chat, workspace, pendingGroupSize);
       if (!notice) continue;
       // An answer that landed while the person was elsewhere is news, so it waits in Notifications (COD-255).

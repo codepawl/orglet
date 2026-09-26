@@ -578,7 +578,8 @@ export class Backups {
       const incomingRunIds = new Set(incoming.runs.map(run => run.id));
       const revivedRunIds = new Set(incoming.runs.filter(run => revived.has(run.taskId)).map(run => run.id));
       const restoredSources = incoming.sources.map(source => ({ ...source, revoked: true }));
-      const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, task: { ...routine.task, toolCapabilities: [], browser: undefined, desktop: undefined, consent: false, providerScopes: [] } }));
+      // A backup never brings a folder grant with it, so a restored schedule has no working folder until one is picked here (COD-294).
+      const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, workspace: undefined, task: { ...routine.task, toolCapabilities: [], browser: undefined, desktop: undefined, consent: false, providerScopes: [] } }));
       const pendingDecisionRuns = new Set(incoming.tasks.flatMap(task => (task.decisionRequests ?? [])
         .filter(request => !request.answer && !request.interruptedAt).map(request => request.runId)));
       const restoredTasks = incoming.tasks.map(task => {

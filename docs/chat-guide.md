@@ -125,7 +125,7 @@ Nothing reaches your folder until you click **Apply**. If you edited, moved or d
 
 Changes that wait are kept when you close the app. If you send another message before deciding, the orglet goes on in the same copy, so it sees what it did last turn. The earlier line then says **Carried into the next turn**, and the new answer's line covers the changes from both turns.
 
-To have changes applied as soon as a run finishes, turn off **Review before applying** under the working folder, in the chat's **Details → Tool permissions** or the orglet's **Permissions** tab. The switch appears once the folder level allows editing. A side thread follows its main chat. Crews and group chats apply each orglet's changes as it finishes, because the next orglet in the turn works from those files, so their switch is off and cannot be changed. A schedule's runs also apply as they finish, since nobody is there to review them.
+To have changes applied as soon as a run finishes, turn off **Review before applying** under the working folder, in the chat's **Details → Tool permissions** or the orglet's **Permissions** tab. The switch appears once the folder level allows editing. A side thread follows its main chat. Crews and group chats apply each orglet's changes as it finishes, because the next orglet in the turn works from those files, so their switch is off and cannot be changed. A schedule's runs wait for review in their own chat too, unless you turn **Review before applying** off in the schedule ([Schedules](#schedules)).
 
 ## Details
 
@@ -145,8 +145,10 @@ If the app closes while an orglet works, that turn stops where it was and is not
 A schedule sends the same request to an orglet or crew daily or weekly, while Orglet is open.
 
 1. Click **Schedules** in the footer, then **New schedule**.
-2. Name it, write the repeating brief, choose the orglet or crew, the frequency, the weekday and run time, the time zone (picked from a list, this computer's first), and a limit per run. Under **Limits & permissions**, turn on **Read and search the web** if each run should look things up, and set **Browser** to **Read pages** if it should open pages in Orglet's browser. Attach sources if the request needs them.
+2. Name it, write the repeating brief, choose the orglet or crew, the frequency, the weekday and run time, the time zone (picked from a list, this computer's first), and a limit per run. Under **Limits & permissions**, set **Working folder** if each run should work in a folder (below), turn on **Read and search the web** if each run should look things up, and set **Browser** to **Read pages** if it should open pages in Orglet's browser. Attach sources if the request needs them.
 3. Choose **Enable schedule**. Enabling is your approval for that content and connection; a later change to the orglet, crew, model or sources turns the schedule off until you review and save it again.
+
+**A folder for the schedule.** A scheduled run is its own chat, so it does not get the folder you gave the orglet's chat. To have a schedule check a repository or tidy a folder, choose a level in **Working folder**: **Read files only**, **Read and edit files**, or **Read, edit files and run commands**. Orglet opens the folder picker at that level; pick the folder. Each run works in its own copy of it, and commands run without network access. A lower level keeps the folder; a higher one asks for the folder again, and **Change** picks another. With an editing level, **Review before applying** is on: a run's changes wait in that run's chat until you open it and click **Apply** or **Discard changes**, and the schedule's next run waits until you have. Turn it off to have changes reach the folder as each run finishes. A crew's schedule always applies as each orglet finishes. If the folder is moved, deleted or replaced, the schedule does not run and its card says so; pick the folder again and save.
 
 Orglet checks schedules only while it is open. If the computer was off or asleep at the time, the card says which run it missed and when, with one **Run once to catch up** choice, or **Skip missed run**; missed days are never queued up, and the next time stays on the calendar. Scheduled runs cannot write memory, react, or propose app changes, since nobody is watching. There are at most 100 schedules.
 
@@ -155,8 +157,8 @@ To delete a schedule, open the **⋮** menu on its card and choose **Delete sche
 Each run is its own chat, apart from the orglet's main chat. You find it three ways:
 
 - **In the sidebar**, under the orglet or crew it ran for, next to the side threads: one row per schedule, named after it with a small calendar mark, showing its newest run and that run's status mark. The row's menu opens the schedule, archives the run or deletes it.
-- **In Notifications.** When a run finishes, stops with a problem or waits for you, a message names the schedule ("Daily standup note is ready", "Daily standup note needs you") with **Open**, and stays unread in Notifications until you look. Runs that come back with a restored backup are history and send no message.
-- **In Schedules**, where each card has **Open latest run**.
+- **In Notifications.** When a run finishes, stops with a problem or waits for you, a message names the schedule ("Daily standup note is ready", "Daily standup note needs you", "Daily repo check is ready; its changes wait for your review") with **Open**, and stays unread in Notifications until you look. A run that failed or waits for you is listed under **Problems** even when you were looking at it. A schedule that could not start at all ("Daily repo check did not run") is a problem too, with the reason and **View schedules**. Runs that come back with a restored backup are history and send no message.
+- **In Schedules**, where each card's **Open latest run** says what became of that run: **Done**, **Needs attention**, **Needs you**, **Running** or **Changes wait for your review**.
 
 To try a schedule without waiting for its time, click **Run now** (the play button) on its card. It runs the same way a scheduled run does, with the same checks, and opens the run; the next scheduled time does not move. A schedule that is switched off, changed since you saved it, or still busy with its previous run does not start, and Schedules says why. A switched-off schedule's button stays greyed out.
 

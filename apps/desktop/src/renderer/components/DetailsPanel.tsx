@@ -208,6 +208,22 @@ function ChatSubject({ team, worker, group, members }: { team?: Team; worker?: W
 const routineChatter = [/^Đang gọi model · bước /, /^Model đang trả kết quả/, /^Đã lưu câu trả lời/, /^Đang chờ lượt/];
 const worthKeeping = (message: string) => !routineChatter.some(pattern => pattern.test(message));
 
+/**
+ * The lines of one run's story: progress already shown live left out, and each line once (COD-294). A worker that
+ * kept calling a tool it was refused wrote the same refusal three times, and the run then stopped with that same line,
+ * so "What happened" read one sentence four times. The first time it happened is the one kept.
+ */
+export function storyEvents<Event extends { message: string }>(events: readonly Event[]): Event[] {
+  const seen = new Set<string>();
+  const story: Event[] = [];
+  for (const event of events) {
+    if (!worthKeeping(event.message) || seen.has(event.message)) continue;
+    seen.add(event.message);
+    story.push(event);
+  }
+  return story;
+}
+
 /** One run as a line of the story: who spoke, what part they were doing, how long it took and what it reported. */
 function RunEntry({ run, events }: { run: Run; events: { id: string; message: string; createdAt: string }[] }) {
   const person = run.snapshot.worker;
@@ -222,7 +238,7 @@ function RunEntry({ run, events }: { run: Run; events: { id: string; message: st
         {stage && <small>{stage}</small>}
         {took && <time className="details-run-took" title={t('Bước này mất bao lâu')}>{took}</time>}
       </p>
-      {events.filter(event => worthKeeping(event.message)).map(event => <p key={event.id} className="muted">
+      {storyEvents(events).map(event => <p key={event.id} className="muted">
         <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' })}</time>
         <span>{tMessage(event.message)}</span>
       </p>)}
@@ -436,9 +452,8 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           browserChoices={detail?.task.routineId ? routineBrowserLevels : undefined}
           // A schedule never uses desktop apps (COD-261, phase 2a).
           desktopShown={!detail?.task.routineId} desktopAvailable={desktopAppsAvailable()} desktopApps={detail ? (detail.task.desktop?.apps.length ?? 0) : undefined}
-          // Review before apply (COD-279): a schedule's run applies as it finishes, and a crew or a group chat applies
-          // each orglet's changes as it finishes, since the next one in the turn works from those files.
-          reviewShown={!detail?.task.routineId}
+          // Review before apply (COD-279): a crew or a group chat applies each orglet's changes as it finishes, since
+          // the next one in the turn works from those files. A schedule's run holds them like any solo chat (COD-294).
           reviewLocked={team || group ? t('Hội và chat nhóm áp dụng thay đổi của từng Tí ngay khi Tí đó xong, vì Tí sau làm tiếp trên các tệp đó.') : undefined}
           // A side thread takes its permissions from its main chat and can never be wider (COD-247).
           locked={tools.locked ?? (detail?.task.sideOf ? t('Chat phụ dùng quyền của chat chính. Đổi quyền ở chat chính.') : undefined)}

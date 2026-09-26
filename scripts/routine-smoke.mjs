@@ -38,8 +38,11 @@ try {
   assert.deepEqual(routine.task.providerScopes, []);
   assert.equal(routine.task.consent, false);
   console.log(JSON.stringify({ waitingForScheduledDemo: routine.nextDueAt, directory }));
-  await region.getByRole('button', { name: 'Mở lần chạy gần nhất', exact: true }).waitFor({ timeout: 100_000 });
-  await region.getByRole('button', { name: 'Mở lần chạy gần nhất', exact: true }).click();
+  // The card says what became of the newest run beside the button that opens it (COD-294).
+  const latestRun = region.getByRole('button', { name: /^Mở lần chạy gần nhất/ });
+  await latestRun.waitFor({ timeout: 100_000 });
+  await region.getByRole('button', { name: /^Mở lần chạy gần nhất.*Đã xong$/ }).waitFor({ timeout: 100_000 });
+  await latestRun.click();
   await page.locator('.chat-reply, .report').first().waitFor();
   const completed = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks;
   assert.equal(completed.length, 1); assert.equal(completed[0].routineId, routine.id);
