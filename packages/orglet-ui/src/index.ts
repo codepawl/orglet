@@ -35,3 +35,4 @@ export { Select } from './components/Select';
 export type { SelectOption } from './components/Select';
 export { DialogTabs, TabbedDialog, TabbedFormDialog } from './components/TabbedDialog';
 export type { DialogTab } from './components/TabbedDialog';
+export { Viewer } from './components/Viewer';

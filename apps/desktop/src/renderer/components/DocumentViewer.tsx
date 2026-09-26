@@ -1,8 +1,6 @@
-import * as Dialog from '@radix-ui/react-dialog';
-import { DialogOverlay } from '@codepawl/orglet-ui';
+import { Viewer } from '@codepawl/orglet-ui';
 import type { ReactNode } from 'react';
 import { FileText, X } from 'lucide-react';
-import { Button, keepOpenForPopup } from './ui';
 import { t } from '../i18n';
 
 /**
@@ -18,17 +16,8 @@ export function DocumentCard({ name, meta, onOpen }: { name: string; meta: strin
 }
 
 export function DocumentViewer({ open, onClose, name, actions, children }: { open: boolean; onClose: () => void; name: string; actions?: ReactNode; children: ReactNode }) {
-  return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
-    <Dialog.Portal>
-      <DialogOverlay />
-      <Dialog.Content className="doc-viewer" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup}>
-        <div className="doc-toolbar">
-          <Dialog.Close asChild><Button size="icon" aria-label={t('Đóng tài liệu')} title={t('Đóng tài liệu')}><X size={18} /></Button></Dialog.Close>
-          <Dialog.Title className="doc-title"><FileText size={15} aria-hidden="true" /><span>{name}</span></Dialog.Title>
-          <div className="doc-actions">{actions}</div>
-        </div>
-        <div className="doc-scroll"><article className="doc-page">{children}</article></div>
-      </Dialog.Content>
-    </Dialog.Portal>
-  </Dialog.Root>;
+  return <Viewer open={open} onClose={onClose} title={name} icon={<FileText size={15} aria-hidden="true" />} actions={actions}
+    closeLabel={t('Đóng tài liệu')} closeIcon={<X size={18} />}>
+    <article className="doc-page">{children}</article>
+  </Viewer>;
 }

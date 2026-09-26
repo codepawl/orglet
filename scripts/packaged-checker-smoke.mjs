@@ -68,7 +68,7 @@ try {
   assert.ok(layout.main <= layout.viewport + 1 && layout.settings <= layout.viewport + 1, 'Long report and role list must keep main/sidebar footers inside the viewport');
   console.log(JSON.stringify({ automaticPreflight: 'passed', taskId: preflightTaskId, checks: preflightDetail.profiles.length, reports: preflightDetail.artifacts.length, layout }));
   await page.keyboard.press('Escape');
-  await page.locator('.doc-viewer').waitFor({ state: 'detached' });
+  await page.locator('.org-viewer').waitFor({ state: 'detached' });
   const templatePath = join(directory, 'team-template.json');
   await app.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, templatePath);
   await page.getByRole('button', { name: 'Tùy chọn hội Eris Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();

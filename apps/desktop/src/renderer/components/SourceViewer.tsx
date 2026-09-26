@@ -1,10 +1,9 @@
-import * as Dialog from '@radix-ui/react-dialog';
-import { DialogOverlay } from '@codepawl/orglet-ui';
+import { Viewer } from '@codepawl/orglet-ui';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ExternalLink, ShieldOff, X } from 'lucide-react';
 import type { Source, SourceBytes, TaskDetail } from '../../shared/contracts';
 import { INLINE_PREVIEW_LIMIT } from '../../shared/source-kinds';
-import { Button, keepOpenForPopup } from './ui';
+import { Button } from './ui';
 import { InfoTip, type InfoTipRow } from './InfoTip';
 import { RowMenu, type RowMenuItem } from './RowMenu';
 import { fileKindIcon, fileKindLabel, fileSize } from './Attachment';
@@ -26,26 +25,15 @@ export function SourceViewer({ open, onClose, name, meta, icon: KindIcon, info, 
   open: boolean; onClose: () => void; name: string; meta: string; icon: Icon; info: InfoTipRow[]; infoLabel: string;
   menu?: RowMenuItem[]; menuLabel: string; actions?: ReactNode; children: ReactNode;
 }) {
-  return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
-    <Dialog.Portal>
-      <DialogOverlay />
-      <Dialog.Content id="source-viewer" className="doc-viewer source-viewer" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup}>
-        <div className="doc-toolbar">
-          <Dialog.Close asChild><Button size="icon" aria-label={t('Đóng tệp')} title={t('Đóng tệp')}><X size={18} /></Button></Dialog.Close>
-          <div className="source-viewer-heading">
-            <Dialog.Title className="doc-title"><KindIcon size={16} aria-hidden="true" /><span>{name}</span></Dialog.Title>
-            <span className="source-viewer-meta">{meta}</span>
-          </div>
-          <div className="doc-actions">
-            {actions}
-            <InfoTip label={infoLabel} rows={info} />
-            {menu && menu.length > 0 && <RowMenu label={menuLabel} className="source-action" items={menu} />}
-          </div>
-        </div>
-        <div className="doc-scroll"><div className="source-stage">{children}</div></div>
-      </Dialog.Content>
-    </Dialog.Portal>
-  </Dialog.Root>;
+  return <Viewer open={open} onClose={onClose} id="source-viewer" className="source-viewer" title={name} icon={<KindIcon size={16} aria-hidden="true" />} meta={meta}
+    closeLabel={t('Đóng tệp')} closeIcon={<X size={18} />}
+    actions={<>
+      {actions}
+      <InfoTip label={infoLabel} rows={info} />
+      {menu && menu.length > 0 && <RowMenu label={menuLabel} className="source-action" items={menu} />}
+    </>}>
+    <div className="source-stage">{children}</div>
+  </Viewer>;
 }
 
 /** What has been fetched for the open source: text for text kinds, bytes for media, or why nothing could be. */
