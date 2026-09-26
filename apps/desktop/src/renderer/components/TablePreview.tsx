@@ -1,7 +1,14 @@
 import { useMemo } from 'react';
-import { t } from '../i18n';
+import { currentLocale, t } from '../i18n';
 
 const ROW_CAP = 200;
+
+/** "1,204 rows · 3 columns", with each count's own word for one (COD-292). */
+export function tableSizeLabel(rowCount: number, columnCount: number): string {
+  const rows = rowCount === 1 ? t('1 dòng') : t('{0} dòng', [rowCount.toLocaleString(currentLocale())]);
+  const columns = columnCount === 1 ? t('1 cột') : t('{0} cột', [columnCount.toLocaleString(currentLocale())]);
+  return `${rows} · ${columns}`;
+}
 
 /** Splits delimited text into rows, honouring quoted cells with embedded delimiters, quotes and line breaks. */
 export function parseDelimited(text: string, delimiter: ',' | '\t'): string[][] {
@@ -47,6 +54,6 @@ export function TablePreview({ text, delimiter }: { text: string; delimiter: ','
     </div>
     <p className="preview-note">{body.length > shown.length
       ? t('Đang hiện {0} trong {1} dòng.', [shown.length.toLocaleString(), body.length.toLocaleString()])
-      : t('{0} dòng · {1} cột', [body.length.toLocaleString(), header.length])}</p>
+      : tableSizeLabel(body.length, header.length)}</p>
   </div>;
 }

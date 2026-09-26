@@ -249,7 +249,7 @@ export type ArchiveState = { daysLeft: number | null; tone: 'fresh' | 'aging' | 
  * which promises old chats keep their history and so does not fit a chat.
  */
 export function ArchivedRow({ name, mark, archive, title, deleteQuestion, onRestore, onDelete }: { name: string; mark: ReactNode; archive: ArchiveState; title?: string; deleteQuestion?: string; onRestore: () => void; onDelete: () => void }) {
-  const deletesIn = archive.daysLeft !== null ? t('Tự xóa sau {0} ngày', [archive.daysLeft]) : undefined;
+  const deletesIn = archive.daysLeft !== null ? archive.daysLeft === 1 ? t('Tự xóa sau 1 ngày') : archive.daysLeft === 1 ? t('Tự xóa sau 1 ngày') : t('Tự xóa sau {0} ngày', [archive.daysLeft]) : undefined;
   // The pill gives way to the menu on hover, so the row's own tooltip also says when it deletes itself.
   const tooltip = [title ?? name, deletesIn].filter(Boolean).join('\n');
   return <div className="task-row archived-row" title={tooltip}>

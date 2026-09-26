@@ -23,7 +23,7 @@ import { ArchivedList, ArchivedRow, type ArchiveState } from './components/Sideb
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
-import { Composer, FollowUpComposer, restoreUnsent, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
+import { Composer, FollowUpComposer, SkippedFiles, restoreUnsent, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
@@ -69,7 +69,7 @@ import { hasConnection, providerLabel, readiness, settingsTabFor, setupHint } fr
 import { workerModelLabel, providerName } from './components/workerModel';
 import { usePaneWidth, shellGap } from './usePaneWidth';
 import { ComposerModel } from './components/ComposerModel';
-import { t, tMessage, setLanguage, useLanguage } from './i18n';
+import { t, setLanguage, useLanguage } from './i18n';
 import { orglet } from './api';
 import { useAppChangeNotices } from './appChangeNotices';
 import type { NewChatTarget, WorkspaceGrantView } from '../shared/workspace-access';
@@ -128,6 +128,14 @@ function useArrivals(ids: readonly string[], ready: boolean): (id: string) => bo
  */
 /** Up to this many faces greet an empty crew or group chat at full size; more take a size down so eight fit on one line. */
 const BIG_FRESH_FACES = 4;
+
+/** The toast after archiving or deleting several ticked rows, with its own words for one (COD-292). */
+function bulkDoneMessage(kind: 'teams' | 'workers', verb: 'archive' | 'delete', done: number): string {
+  if (kind === 'teams' && verb === 'archive') return done === 1 ? t('Đã lưu trữ 1 hội') : t('Đã lưu trữ {0} hội', [done]);
+  if (kind === 'teams') return done === 1 ? t('Đã xóa 1 hội') : t('Đã xóa {0} hội', [done]);
+  if (verb === 'archive') return done === 1 ? t('Đã lưu trữ 1 Tí') : t('Đã lưu trữ {0} Tí', [done]);
+  return done === 1 ? t('Đã xóa 1 Tí') : t('Đã xóa {0} Tí', [done]);
+}
 
 function freshFaceSize(count: number): 'xl' | 'lg' {
   return count > BIG_FRESH_FACES ? 'lg' : 'xl';
@@ -1050,8 +1058,7 @@ export function App() {
     const done = ids.length;
     // Archiving is the step back from deleting, so it can be taken back at once, like a single row's archive.
     const undo = verb === 'archive' ? { action: { label: t('Hoàn tác'), onSelect: () => restoreEntities(kind, ids) } } : {};
-    if (section === 'teams') toast(verb === 'archive' ? t('Đã lưu trữ {0} hội', [done]) : t('Đã xóa {0} hội', [done]), 'success', undefined, undo);
-    else toast(verb === 'archive' ? t('Đã lưu trữ {0} Tí', [done]) : t('Đã xóa {0} Tí', [done]), 'success', undefined, undo);
+    toast(bulkDoneMessage(section === 'teams' ? 'teams' : 'workers', verb, done), 'success', undefined, undo);
   };
   const restoreEntities = (kind: 'worker' | 'team', ids: readonly string[]) => rowAction(async () => {
     for (const id of ids) await orglet.call('archiveEntity', { kind, id, archived: false });
@@ -1150,7 +1157,7 @@ export function App() {
       return {
         value: `team:${item.id}`,
         label: item.name,
-        detail: t('{0} Tí', [members.length]),
+        detail: members.length === 1 ? t('1 Tí') : t('{0} Tí', [members.length]),
         group: t('Hội'),
         icon: <RosterAvatars workers={members} max={2} />,
         ...(available ? {} : { dimmed: true, badge: unavailable }),
@@ -1514,7 +1521,7 @@ export function App() {
           <div className="thread-composer">
             {composerBar}
             {composerHint}
-            {skippedSources.length > 0 && <details className="intake-skipped"><summary>{t('{0} mục không được thêm vào task', [skippedSources.length])}</summary><ul>{skippedSources.map((item, index) => <li key={index}>{item.name}: {tMessage(item.reason)}</li>)}</ul></details>}
+            <SkippedFiles items={skippedSources} />
           </div>
           <Starters starters={starters} onPick={pickStarter}
             canSchedule={Boolean(brief.trim())}

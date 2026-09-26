@@ -124,10 +124,23 @@ function changedTheCopy(request: WorkspaceOperation, result: unknown): boolean {
   return request.operation === 'move' || request.operation === 'delete';
 }
 
-/** What a change to the private copy looks like in the run's activity; the trace reads these sentences. */
+/**
+ * What a step in the private copy looks like in the run's activity, in words a person reads (COD-292); the trace reads
+ * these sentences, and still reads the older "Workspace <tool>: <path>" ones kept in saved runs.
+ */
 function copyEvent(request: WorkspaceOperation): string {
-  if (request.operation === 'move') return `Workspace move: ${request.from} → ${request.to}`;
-  return `Workspace ${request.operation}: ${'path' in request ? request.path : ''}`;
+  switch (request.operation) {
+    case 'read':
+    case 'blob': return `Đã đọc ${request.path}`;
+    case 'list': return request.path ? `Đã liệt kê tệp ${request.path}` : 'Đã liệt kê tệp';
+    case 'search': return `Đã tìm “${request.text}”`;
+    case 'write': return `Đã ghi trong bản làm việc: ${request.path}`;
+    case 'create_folder': return `Đã tạo thư mục trong bản làm việc: ${request.path}`;
+    case 'move': return `Đã chuyển trong bản làm việc: ${request.from} → ${request.to}`;
+    case 'delete': return `Đã xóa trong bản làm việc: ${request.path}`;
+    case 'manifest':
+    case 'snapshot': return 'Đã xem lại bản làm việc';
+  }
 }
 
 function refusedEvent(request: WorkspaceOperation): string {
@@ -401,7 +414,7 @@ export class WorkspaceRuntime {
             this.store.db.prepare(`INSERT INTO workspace_read_evidence(id,run_id,call_id,data) VALUES(?,?,?,?)
               ON CONFLICT(run_id,call_id) DO UPDATE SET id=excluded.id,data=excluded.data`)
               .run(evidence.id, run.id, callId, JSON.stringify(evidence));
-            this.store.event(run.id, `Workspace ${request.operation}: ${request.path}`);
+            this.store.event(run.id, copyEvent(request));
             this.notify();
             return { ...read, evidenceId: evidence.id };
           }

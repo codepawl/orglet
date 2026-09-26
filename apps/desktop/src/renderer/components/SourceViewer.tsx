@@ -20,7 +20,7 @@ import type { Icon } from './icons';
 
 /** What every mode of the source viewer shows the same way: the name, kind and size, the info and the options. */
 export type SourceViewerFrame = {
-  name: string; meta: ReactNode; icon: Icon; info: InfoTipRow[]; infoLabel: string; menu?: RowMenuItem[]; menuLabel: string;
+  name: string; meta: ReactNode; icon: Icon; info: InfoTipRow[]; infoLabel: string; menu?: RowMenuItem[]; menuLabel: string; menuCancel?: string;
 };
 
 /**
@@ -30,7 +30,7 @@ export type SourceViewerFrame = {
  * came from, id, hash, access) lives behind the info button; revoking is a quiet menu item with its own question.
  * An edit mode (COD-280) adds its tools in a second row (`toolbar`) and its own actions.
  */
-export function SourceViewer({ open = true, onClose, name, meta, icon: KindIcon, info, infoLabel, menu, menuLabel, actions, toolbar, className, children }: SourceViewerFrame & {
+export function SourceViewer({ open = true, onClose, name, meta, icon: KindIcon, info, infoLabel, menu, menuLabel, menuCancel, actions, toolbar, className, children }: SourceViewerFrame & {
   open?: boolean; onClose: () => void; actions?: ReactNode; toolbar?: ReactNode; className?: string; children: ReactNode;
 }) {
   return <Viewer open={open} onClose={onClose} id="source-viewer" className={className ? `source-viewer ${className}` : 'source-viewer'} title={name} icon={<KindIcon size={16} aria-hidden="true" />} meta={meta}
@@ -38,7 +38,7 @@ export function SourceViewer({ open = true, onClose, name, meta, icon: KindIcon,
     actions={<>
       {actions}
       <InfoTip label={infoLabel} rows={info} />
-      {menu && menu.length > 0 && <RowMenu label={menuLabel} className="source-action" items={menu} />}
+      {menu && menu.length > 0 && <RowMenu label={menuLabel} className="source-action" items={menu} cancelLabel={menuCancel} />}
     </>}>
     <div className="source-stage">{children}</div>
   </Viewer>;
@@ -172,11 +172,11 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
   info.push({ label: t('Quyền truy cập'), value: restoredWithoutFile ? t('Từ bản sao lưu, chưa có tệp trên máy này') : source.revoked ? t('Đã thu hồi quyền đọc') : t('Chỉ đọc trong task') });
   const menu: RowMenuItem[] = source.revoked ? [] : [{
     label: t('Thu hồi quyền đọc'), icon: ShieldOff, danger: true, onSelect: () => void revoke(),
-    confirm: { question: t('Tí sẽ không đọc được tệp này nữa. Nội dung đã gửi đến provider không thu hồi được.'), label: t('Thu hồi quyền đọc') },
+    confirm: { question: t('Tí sẽ không đọc được tệp này nữa. Phần đã gửi cho nhà cung cấp model thì không lấy lại được.'), label: t('Thu hồi quyền đọc') },
   }];
   const kindAndSize = `${fileKindLabel(source.name)} · ${fileSize(source.bytes)}`;
   const meta = editedFrom ? t('{0} · sửa từ {1}', [kindAndSize, editedFrom.name]) : kindAndSize;
-  const frame: SourceViewerFrame = { name: source.name, meta, icon: fileKindIcon(source.name), info, infoLabel: t('Thông tin về {0}', [source.name]), menu, menuLabel: t('Tùy chọn cho {0}', [source.name]) };
+  const frame: SourceViewerFrame = { name: source.name, meta, icon: fileKindIcon(source.name), info, infoLabel: t('Thông tin về {0}', [source.name]), menu, menuLabel: t('Tùy chọn cho {0}', [source.name]), menuCancel: t('Giữ quyền đọc') };
   const original = source;
   async function saveVersion(edit: { text: string } | { bytes: Uint8Array<ArrayBuffer> }): Promise<Source> {
     const takenNames = detail.sources.map(item => item.name);

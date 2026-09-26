@@ -73,7 +73,7 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
 const settingNames = translated({
   language: 'Ngôn ngữ', theme: 'Giao diện', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Phông chữ', codeFont: 'Phông chữ code',
   autoTitles: 'Tự đặt tên cuộc trò chuyện', copyFormat: 'Định dạng khi sao chép', downloadFormat: 'Định dạng khi tải xuống', confirmOpenTask: 'Hỏi trước khi mở công việc',
-  archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi connection / tháng', providerConcurrency: 'Request đồng thời mỗi provider', providerConsent: 'Provider được phép',
+  archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi kết nối / tháng', providerConcurrency: 'Số yêu cầu cùng lúc cho mỗi nhà cung cấp', providerConsent: 'Provider được phép',
   autoUpdate: 'Tự động cập nhật', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', webSearchProvider: 'Nhà cung cấp tìm kiếm web',
 });
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
@@ -457,10 +457,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     if (summary.scope === 'everything') return t('Đã xóa toàn bộ dữ liệu. Orglet trở lại như mới cài.');
     if (summary.scope === 'knowledge') return t('Đã xóa {0} mục kiến thức.', [summary.knowledge]);
     if (summary.scope === 'memory') return t('Đã xóa {0} ghi nhớ.', [summary.memory]);
-    if (summary.scope === 'chats') return t('Đã xóa {0} cuộc trò chuyện.', [summary.chats]);
+    if (summary.scope === 'chats') return summary.chats === 1 ? t('Đã xóa 1 cuộc trò chuyện.') : t('Đã xóa {0} cuộc trò chuyện.', [summary.chats]);
     return summary.sourcesForgotten
       ? t('Đã xóa {0} nguồn, thu hồi {1} nguồn còn được trò chuyện nhắc tới.', [summary.sources, summary.sourcesForgotten])
-      : t('Đã xóa {0} nguồn.', [summary.sources]);
+      : summary.sources === 1 ? t('Đã xóa 1 nguồn.') : t('Đã xóa {0} nguồn.', [summary.sources]);
   };
   const erase = (scope: EraseScope, confirm?: string) => void act(async () => {
     const summary = await orglet.call('eraseData', { scope, ...(confirm ? { confirm } : {}) });
@@ -548,10 +548,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Chat, Tí, hội; giữ số liệu chi phí.')}>
                 <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
               </Row>
-              <Row title={t('Request đồng thời mỗi provider')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
+              <Row title={t('Số yêu cầu cùng lúc cho mỗi nhà cung cấp')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
                 ? `${t('Quá mức thì chờ, chưa trừ ngân sách.')} ${t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}`
                 : t('Quá mức thì chờ, chưa trừ ngân sách.')}>
-                <Select ariaLabel={t('Request đồng thời mỗi provider')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={concurrencyChoices.map(value => ({ value: String(value), label: `${value} request`, detail: value === 1 ? t('tuần tự') : undefined }))} />
+                <Select ariaLabel={t('Số yêu cầu cùng lúc cho mỗi nhà cung cấp')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={concurrencyChoices.map(value => ({ value: String(value), label: value === 1 ? t('1 yêu cầu') : t('{0} yêu cầu', [value]), detail: value === 1 ? t('tuần tự') : undefined }))} />
               </Row>
             </>}
 
@@ -695,8 +695,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
 
             {tab === 'usage' && <>
               <Row title={t('Đã đối soát')} description={t('Phần provider đã chốt số và tính tiền.')}><span className="setting-value">{formatMoney(workspace.usage.chargedMicros)}</span></Row>
-              <Row title={t('Đang giữ chỗ')} description={workspace.usage.uncertainCount > 0 ? <span className="error">{t('{0} request chưa rõ chi phí, vẫn được tính vào giới hạn.', [workspace.usage.uncertainCount])}</span> : t('Request đang chạy hoặc chưa rõ chi phí.')}><span className="setting-value">{formatMoney(workspace.usage.reservedMicros)}</span></Row>
-              <Row id="limit-label" title={t('Giới hạn mỗi connection / tháng')} description={limitError ? <span className="error" id="limit-error">{limitError}</span> : t('Tháng tính theo UTC. Áp dụng riêng cho từng API provider.')}>
+              <Row title={t('Đang giữ chỗ')} description={workspace.usage.uncertainCount > 0 ? <span className="error">{workspace.usage.uncertainCount === 1 ? t('1 yêu cầu chưa rõ chi phí, vẫn được tính vào giới hạn.') : t('{0} yêu cầu chưa rõ chi phí, vẫn được tính vào giới hạn.', [workspace.usage.uncertainCount])}</span> : t('Yêu cầu đang chạy hoặc chưa rõ chi phí.')}><span className="setting-value">{formatMoney(workspace.usage.reservedMicros)}</span></Row>
+              <Row id="limit-label" title={t('Giới hạn mỗi kết nối / tháng')} description={limitError ? <span className="error" id="limit-error">{limitError}</span> : t('Tháng tính theo UTC. Áp dụng riêng cho từng kết nối API.')}>
                 <span className={`org-money-input ${limitError ? 'org-money-input-invalid' : ''}`}><span aria-hidden>{moneySymbol()}</span><input aria-labelledby="limit-label" aria-invalid={Boolean(limitError)} aria-describedby={limitError ? 'limit-error' : undefined} inputMode="decimal" value={limit} disabled={busy} onChange={event => setLimit(event.target.value)} onBlur={commitLimit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitLimit(); } }} /></span>
               </Row>
               <Row title={t('Tiền tệ')} description={currency.code === 'USD' ? t('Lưu bằng USD theo giá provider.') : t('1 USD = {0} {1}{2}. Chi phí vẫn lưu bằng USD, chỉ quy đổi khi hiển thị.', [new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(currency.rate), currency.code, currency.updatedAt ? t(' · cập nhật {0}', [new Date(currency.updatedAt).toLocaleString('vi-VN')]) : ''])}>

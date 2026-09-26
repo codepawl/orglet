@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
-import { ArrowUp, ChevronUp, MessageSquarePlus, Reply, Square, X } from 'lucide-react';
+import { ArrowUp, ChevronRight, ChevronUp, MessageSquarePlus, Reply, Square, X } from 'lucide-react';
 import type { FolderIntake, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { addToNextMessage } from '../../shared/incoming';
 import { MessageBoxFocus, SourcePicker } from './SourcePicker';
@@ -31,6 +31,16 @@ export type MentionRoster = { people: readonly Worker[]; allNames?: readonly str
 export function restoreUnsent(unsent: string, typedSince: string): string {
   if (!typedSince.trim()) return unsent;
   return `${unsent}\n\n${typedSince}`;
+}
+
+/** Files a pick could not add, folded under one line that counts them, with the app's own chevron (COD-292). */
+export function SkippedFiles({ items }: { items: readonly { name: string; reason: string }[] }) {
+  if (!items.length) return null;
+  const summary = items.length === 1 ? t('1 mục không được thêm vào chat') : t('{0} mục không được thêm vào chat', [items.length]);
+  return <details className="intake-skipped">
+    <summary className="activity-summary"><ChevronRight size={13} aria-hidden="true" className="activity-chevron" />{summary}</summary>
+    <ul>{items.map((item, index) => <li key={index}>{item.name}: {tMessage(item.reason)}</li>)}</ul>
+  </details>;
 }
 
 /** A file attached to the message being written. `bytes` shows as the size on the card. */
@@ -427,7 +437,7 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
       </div> : undefined}
       attachments={added.sources} onRemoveAttachment={removeFile}
       leading={<SourcePicker disabled={Boolean(readOnly)} onFiles={() => action(async () => addFiles({ sources: await orglet.pickSources(), skipped: [] }))} onFolder={() => action(async () => addFiles(await orglet.pickFolder()))} />} />
-    {added.skipped.length > 0 && <details className="intake-skipped"><summary>{t('{0} mục không được thêm vào task', [added.skipped.length])}</summary><ul>{added.skipped.map((item, index) => <li key={index}>{item.name}: {tMessage(item.reason)}</li>)}</ul></details>}
+    <SkippedFiles items={added.skipped} />
     {readOnly && <p className="composer-note" role="status">{readOnly.note}{readOnly.action && <button type="button" onClick={readOnly.action.onSelect}>{readOnly.action.label}</button>}</p>}
     {!busy && !readOnly && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
   </div>;

@@ -76,7 +76,8 @@ function McpServerRow({ server, busy, act, onEdit }: { server: McpServerView; bu
   const test = () => void act(async () => {
     const view = await orglet.call('testMcpServer', { id: server.id });
     if (view.status === 'error') throw new Error(view.error ? tMessage(view.error) : t('Không kết nối được.'));
-    return t('{0} có {1} công cụ', [server.name, view.tools?.length ?? 0]);
+    const toolCount = view.tools?.length ?? 0;
+    return toolCount === 1 ? t('{0} có 1 công cụ', [server.name]) : t('{0} có {1} công cụ', [server.name, toolCount]);
   }, server.name);
   return <div className="setting-row harness-row mcp-row">
     <span className="mcp-mark" aria-hidden="true">{server.transport.kind === 'http' ? <Globe size={18} /> : <SquareTerminal size={18} />}</span>

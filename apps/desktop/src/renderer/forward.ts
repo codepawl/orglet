@@ -68,5 +68,6 @@ export function forwardSummary(sent: number, failed: readonly { name: string; er
   if (!failed.length) return sent === 1 ? t('Đã chuyển tiếp') : t('Đã chuyển tiếp tới {0} chat', [sent]);
   const reasons = failed.map(item => t('{0}: {1}', [item.name, tMessage(item.error)])).join(' ');
   if (!sent) return t('Chưa chuyển tiếp được. {0}', [reasons]);
+  if (sent === 1) return t('Đã chuyển tiếp tới 1 chat. Chưa gửi được: {0}', [reasons]);
   return t('Đã chuyển tiếp tới {0} chat. Chưa gửi được: {1}', [sent, reasons]);
 }

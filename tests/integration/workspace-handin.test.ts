@@ -208,7 +208,8 @@ it('hands in an inbox tidy-up through Runner: folders, moves, renames and the du
   expect(store.db.prepare("SELECT COUNT(*) AS count FROM tool_calls WHERE state!='completed'").get()!.count).toBe(0);
   expect(new WorkspaceRecovery(store).view(task.id).copies[0].diff).toEqual({ files: 6, additions: 0, deletions: 0, moved: 5, removed: 1, folders: 4, lines: false });
   expect(detail.events.map(event => event.message)).toEqual(expect.arrayContaining([
-    'Workspace create_folder: receipts', 'Workspace move: receipt 3.pdf → receipts/2026-03 receipt.pdf', 'Workspace delete: contract-old.pdf',
+    'Đã tạo thư mục trong bản làm việc: receipts', 'Đã chuyển trong bản làm việc: receipt 3.pdf → receipts/2026-03 receipt.pdf',
+    'Đã xóa trong bản làm việc: contract-old.pdf',
     'Đã tạo thư mục: receipts', 'Đã chuyển tệp: receipt 3.pdf → receipts/2026-03 receipt.pdf', 'Đã xóa tệp và giữ bản gốc riêng: contract-old.pdf',
   ]));
   expect(detail.artifacts).toHaveLength(1);

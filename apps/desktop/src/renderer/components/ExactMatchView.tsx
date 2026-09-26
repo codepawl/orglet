@@ -24,6 +24,6 @@ export function ExactMatchView({ score, sources }: { score: ExactMatchAccuracy; 
       ? <p>{t('{0} / {1} đúng · accuracy {2}', [score.matched, score.total, new Intl.NumberFormat(currentLocale(), { style: 'percent', maximumFractionDigits: 2 }).format(score.accuracy!)])}</p>
       : <p>{t('Chưa có điểm: {0}', [reasonLabel(score.reason!)])}</p>}
     <p className="muted">{t('Predictions: {0} ({1}). Answers: {2} ({3}). ID: {4}.', [predictionName, score.predictionColumn, answerName, score.answerColumn, score.idColumn])}</p>
-    <p className="muted">{score.version} · {t('Không xác nhận metric chính thức hoặc khả năng giải challenge.')}</p>
+    <p className="muted">{t('Chỉ là phép đếm đơn giản, không phải điểm chính thức.')}</p>
   </section>;
 }

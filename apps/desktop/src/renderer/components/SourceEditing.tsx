@@ -151,7 +151,7 @@ export function ImageEditing({ frame, source, media, save, onDone, onSaved, onAs
   else if (!picture) body = <p className="preview-state">{t('Không mở được ảnh này để đánh dấu.')}</p>;
   else {
     const markCount = history.present.marks.length;
-    const label = markCount > 0 ? t('{0}, {1} dấu', [source.name, markCount]) : source.name;
+    const label = markCount === 1 ? t('{0}, 1 dấu', [source.name]) : markCount > 0 ? t('{0}, {1} dấu', [source.name, markCount]) : source.name;
     body = <MarkupCanvas picture={picture.picture} size={picture.size} markup={history.present} tool={tool} color={color}
       width={strokeWidth(level, picture.size)} fontSize={textSize(level, picture.size)} label={label}
       onCommit={next => setHistory(current => commit(current, next))} />;
