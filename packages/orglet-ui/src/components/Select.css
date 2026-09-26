@@ -106,8 +106,10 @@
 .org-select-group + .org-select-option { margin-top: 2px; }
 .org-select-option + .org-select-group { margin-top: 10px; }
 .org-select-option.org-select-option-active { background: var(--org-surface, #f4f4f4); }
-.org-select-option[aria-disabled=true],
-.org-select-option.org-select-option-dimmed { opacity: .45; }
+.org-select-option[aria-disabled=true] { opacity: .45; }
+/* A dimmed choice still works, so its words keep a readable contrast: muted text, with only the icon faded. */
+.org-select-option.org-select-option-dimmed { color: var(--org-muted, #666); }
+.org-select-option.org-select-option-dimmed > .org-select-icon { opacity: .45; }
 .org-select-option[aria-disabled=true] { cursor: default; }
 .org-select-option-text {
   flex: 1;
