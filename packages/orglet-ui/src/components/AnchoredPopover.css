@@ -1,0 +1,24 @@
+.org-anchored-popover {
+  z-index: 30;
+  border-radius: 14px;
+  background: var(--org-bg, #fff);
+  border: 1px solid var(--org-border, #e5e5e5);
+  box-shadow: 0 12px 32px #00000026;
+  animation: org-popover-in var(--org-motion-quick, 110ms) var(--org-ease-out, ease-out);
+}
+.org-anchored-popover-above { animation-name: org-popover-in-above; }
+@keyframes org-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes org-popover-in-above {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .org-anchored-popover { animation: none; }
+}

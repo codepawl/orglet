@@ -57,6 +57,13 @@ loads the switch's styles.
   terminal picker, goes in its `toolbar`, on the card's top bar. The application does the copying in `onCopy`.
 - `EditableText`: a name renamed where it is shown. A click, Enter or F2 turns it into a field; Enter or leaving the
   field keeps the change, Escape puts the old value back. `onCommit` does the saving and may be async.
+- `Checkbox`: a tick for picking items out of a list or confirming something once, never for an on/off setting
+  (that is a `Switch`). A real, hidden `<input type="checkbox">` with a drawn box, so forms and keyboards work as
+  usual; every input prop passes through. `description` adds a second line, `required` draws the red asterisk
+  without the browser's own validation bubble.
+- `AnchoredPopover`: a panel attached to a trigger (`anchor` ref). It floats below it, flips above when there is no
+  room, stays inside the window, closes on Escape or a pointer outside and gives focus back to the anchor. Inside an
+  open dialog it portals into that dialog and sets `data-popup-open`, so Escape closes the popover, not the dialog.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming

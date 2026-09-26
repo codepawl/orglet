@@ -1,0 +1,77 @@
+/* The input stays in the layout, invisible, exactly over the drawn box, so a click on the box reaches it. */
+.org-checkbox {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 6px 0;
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.org-checkbox-disabled {
+  cursor: default;
+  opacity: .55;
+}
+.org-checkbox-input {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.org-checkbox-box {
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 1.5px solid var(--org-muted, #666);
+  border-radius: 5px;
+  background: var(--org-bg, #fff);
+  color: var(--org-accent-ink, #fff);
+  transition: background var(--org-motion-quick, 110ms) var(--org-ease-out, ease), border-color var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-checkbox-box svg {
+  opacity: 0;
+  transform: scale(.6);
+  transition: opacity var(--org-motion-quick, 110ms) var(--org-ease-out, ease), transform var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+}
+.org-checkbox:hover:not(.org-checkbox-disabled) .org-checkbox-box { border-color: var(--org-text, #111); }
+.org-checkbox-input:checked + .org-checkbox-box {
+  background: var(--org-accent, #4473d3);
+  border-color: var(--org-accent, #4473d3);
+}
+.org-checkbox-input:checked + .org-checkbox-box svg {
+  opacity: 1;
+  transform: none;
+}
+.org-checkbox-input:focus-visible + .org-checkbox-box {
+  outline: 2px solid var(--org-focus, #4473d3);
+  outline-offset: 2px;
+}
+.org-checkbox-input[aria-invalid=true] + .org-checkbox-box { border-color: var(--org-error, #c62828); }
+.org-checkbox-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 22px;
+}
+/* The asterisk is drawn, with empty alternative text, so it never becomes part of the accessible name. */
+.org-checkbox-required::after {
+  content: "*" / "";
+  color: var(--org-error, #c62828);
+  margin-left: 3px;
+  font-weight: 600;
+}
+.org-checkbox-description {
+  color: var(--org-muted, #666);
+  font-size: 12px;
+  line-height: 1.45;
+}
