@@ -135,6 +135,61 @@ async function remove(root: string, path: string) {
   return { path, type: 'file' };
 }
 
+/** The bytes' hash of a file the worker may replace, or null when it cannot be read within the tool's limits. */
+async function currentHashOf(target: string): Promise<string | null> {
+  return boundedFile(target).then(digest, () => null);
+}
+
+/**
+ * A new file whose path is taken. Nothing was written: the check ran before the file was opened, or the create-new
+ * open itself failed, which the file system does before any byte (COD-289). The current hash lets the worker replace it.
+ */
+async function pathTaken(target: string, path: string, entry: { isDirectory(): boolean }) {
+  if (entry.isDirectory()) return refused(`A folder already has this name: ${path}`, 'Choose another file name.');
+  const currentHash = await currentHashOf(target);
+  return { ...refused(`A file already exists at ${path}`, 'To replace it, read it first or write again with expectedHash set to currentHash. To keep it, choose another path.'), path, currentHash };
+}
+
+/**
+ * Writes one file in the copy. A path that is taken, or a file whose bytes no longer match expectedHash, is refused
+ * before anything is written, so it is the tool's answer and never an unknown outcome (COD-289). A failure after the
+ * file was opened for writing still throws: some bytes may have been written.
+ */
+async function write(root: string, request: Extract<WorkspaceOperation, { operation: 'write' }>) {
+  const bytes = Buffer.from(request.content, 'utf8');
+  if (bytes.length > MAX_FILE_BYTES) throw new Error('Tệp vượt giới hạn 1 MiB của workspace tools.');
+  // Refuses a link anywhere on the way, the file itself included (COD-190).
+  const target = await within(root, request.path);
+  const existing = await lstat(target).catch(missingAsUndefined);
+  if (request.expectedHash !== null) {
+    if (existing?.isDirectory()) return refused(`A folder has this name, not a file: ${request.path}`, 'Write to a file path.');
+    // A file that is not there throws ENOENT here, which core answers as a missing path.
+    const currentHash = digest(await boundedFile(target));
+    if (currentHash !== request.expectedHash) {
+      return { ...refused(`The file changed since you read it: ${request.path}`, 'Read it again before editing, then write with the hash that read returns.'), path: request.path, currentHash };
+    }
+    await writeFile(target, bytes);
+    return { path: request.path, hash: digest(bytes), bytes: bytes.length };
+  }
+  if (existing) return pathTaken(target, request.path, existing);
+  // A new file may sit in folders the copy does not have yet (COD-190).
+  await mkdir(dirname(target), { recursive: true });
+  let handle;
+  try {
+    handle = await open(target, 'wx');
+  } catch (error) {
+    // Something appeared at the path since the check; the create-new open refused it before writing anything.
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    return pathTaken(target, request.path, await lstat(target));
+  }
+  try {
+    await handle.writeFile(bytes);
+  } finally {
+    await handle.close();
+  }
+  return { path: request.path, hash: digest(bytes), bytes: bytes.length };
+}
+
 /** Always called inside the OS sandbox in production. Path checks complement that boundary. */
 export async function executeWorkspaceOperation(directory: string, raw: unknown): Promise<unknown> {
   const request = WorkspaceOperation.parse(raw);
@@ -147,24 +202,8 @@ export async function executeWorkspaceOperation(directory: string, raw: unknown)
     return inventory(request.source, root);
   }
   if (request.operation === 'manifest') return inventory(root);
-  if (request.operation === 'write') {
-    const path = join(root, request.path);
-    // Core serializes this private worktree. The user directory is integrated separately under an OS file lock.
-    const parent = relative(root, dirname(path)).replaceAll('\\', '/');
-    await within(root, parent);
-    // A new file may sit in folders the copy does not have yet; the walk above refused any link on the way (COD-190).
-    await mkdir(dirname(path), { recursive: true });
-    const bytes = Buffer.from(request.content, 'utf8');
-    if (bytes.length > MAX_FILE_BYTES) throw new Error('Tệp vượt giới hạn 1 MiB của workspace tools.');
-    if (request.expectedHash === null) {
-      await writeFile(path, bytes, { flag: 'wx' });
-    } else {
-      const actual = await within(root, request.path);
-      if (digest(await boundedFile(actual)) !== request.expectedHash) throw new Error('Tệp đã thay đổi; đọc lại trước khi sửa.');
-      await writeFile(actual, bytes);
-    }
-    return { path: request.path, hash: digest(bytes), bytes: bytes.length };
-  }
+  // Core serializes this private worktree. The user directory is integrated separately under an OS file lock.
+  if (request.operation === 'write') return write(root, request);
   if (request.operation === 'create_folder') return createFolder(root, request.path);
   if (request.operation === 'move') return move(root, request.from, request.to);
   if (request.operation === 'delete') return remove(root, request.path);

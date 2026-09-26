@@ -2,9 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { withoutImages, type ModelAdapter } from '../adapters/openai';
-import { toolDefinitions } from '../tools/catalog';
 import type { HarnessExecutor, HarnessRequest, HarnessResult } from './exec';
-import { isMcpToolName } from '../../shared/mcp';
 
 /** Longest note a step keeps; a longer one is cut rather than refused, since the call beside it is what matters. */
 export const STEP_NOTES_CHARACTERS = 2000;
@@ -62,16 +60,10 @@ export function harnessToolAdapter(options: {
     signal.throwIfAborted();
     const { call, notes } = ToolResponse.parse(result.output);
     const keptNotes = notes?.trim() ? notes.trim().slice(0, STEP_NOTES_CHARACTERS) : undefined;
-    const offered = tools.some(tool => tool.type === 'function' && tool.function.name === call.name);
-    // An MCP tool is not in the static catalog: the runner checks it against the run's frozen list (COD-241).
-    const known = Object.hasOwn(toolDefinitions, call.name) || isMcpToolName(call.name);
-    if (!offered || !known) throw new Error('Tool không được policy cho phép.');
-    // The runner validates submit_report and can request one correction without
-    // persisting the invalid report body or replaying completed workspace tools.
-    if (call.name === 'submit_report') return { calls: [{ id: randomUUID(), name: call.name,
-      arguments: typeof call.arguments === 'string' ? call.arguments : JSON.stringify(call.arguments) }], ...(keptNotes ? { notes: keptNotes } : {}) };
-    const argumentsValue = typeof call.arguments === 'string' ? JSON.parse(call.arguments) as unknown : call.arguments;
-    if (!isMcpToolName(call.name)) toolDefinitions[call.name].schema.parse(argumentsValue);
-    return { calls: [{ id: randomUUID(), name: call.name, arguments: JSON.stringify(argumentsValue) }], ...(keptNotes ? { notes: keptNotes } : {}) };
+    // The runner checks every call before anything runs (`toolCallProblem`): a tool this run was not offered, or
+    // arguments off its schema, go back to the CLI as the tool's answer, the same as for an API worker (COD-289).
+    // submit_report keeps its own correction, which never replays completed workspace tools.
+    const argumentsText = typeof call.arguments === 'string' ? call.arguments : JSON.stringify(call.arguments);
+    return { calls: [{ id: randomUUID(), name: call.name, arguments: argumentsText }], ...(keptNotes ? { notes: keptNotes } : {}) };
   } };
 }

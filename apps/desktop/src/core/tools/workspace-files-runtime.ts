@@ -17,6 +17,17 @@ const HelperReply = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(false), error: z.string() }).strict(),
 ]);
 
+/** A path inside a private working copy, `…\copies\<id>\worktree\…` or `…\seed\…`, as a file-system error names it. */
+const COPY_PATH = /(?:[A-Za-z]:)?(?:[\\/][^'"\n\\/]*)*?[\\/]copies[\\/][0-9a-f-]{36}[\\/](?:worktree|seed)(?:[\\/]([^'"\n]*))?/g;
+
+/**
+ * The same text with every private working-copy path cut to the path inside the copy (COD-289). A file-system error
+ * names the full path under Orglet's app data, which means nothing to the person and is not theirs to open.
+ */
+export function withoutCopyPaths(text: string): string {
+  return text.replace(COPY_PATH, (_match, inside: string | undefined) => inside ? inside.replaceAll('\\', '/') : '.');
+}
+
 export class WorkspaceFilesRuntime {
   constructor(private options: {
     sandbox: WindowsSandbox;
@@ -71,7 +82,7 @@ export class WorkspaceFilesRuntime {
     let reply: z.infer<typeof HelperReply>;
     try { reply = HelperReply.parse(JSON.parse(result.stdout)); }
     catch { throw new Error('Helper workspace không trả kết quả hợp lệ.'); }
-    if (!reply.ok) throw new Error(reply.error);
+    if (!reply.ok) throw new Error(withoutCopyPaths(reply.error));
     if (result.exitCode !== 0) throw new Error('Helper workspace không trả kết quả hợp lệ.');
     return reply.value;
   }

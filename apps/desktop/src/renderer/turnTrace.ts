@@ -86,7 +86,9 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Workspace list: (.+)$/, kind: 'list' },
   { pattern: /^Workspace (?:manifest|snapshot): ?$/, kind: 'other' },
   { pattern: /^Không có tệp hoặc thư mục: /, kind: 'failed', note: true },
-  { pattern: /^Không (?:chuyển|xóa|tạo) được/, kind: 'failed', note: true },
+  { pattern: /^Không (?:chuyển|xóa|tạo|ghi) được/, kind: 'failed', note: true },
+  // A call the chat does not allow or the worker got wrong (COD-289); a permission line says what to change and where.
+  { pattern: /^(?:Chưa (?:sửa|chạy|dùng) được .+ rồi gửi lại tin nhắn\.|Công cụ không có trong chat này: |Tham số công cụ không hợp lệ: )/, kind: 'failed', note: true },
   // A command names itself (dogfood, 2026-09-26); runs saved before that say only how a process stopped.
   { pattern: /^(?:Đã chạy lệnh|Đã dừng lệnh) /, kind: 'command', note: true },
   { pattern: /^Lệnh .+ (?:đã hết thời gian|in quá nhiều nên đã bị dừng)$/, kind: 'command', note: true },
