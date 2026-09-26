@@ -2356,13 +2356,61 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .browser-live-controlling { cursor:default; touch-action:none; }
 .browser-live-controlling:focus-within { box-shadow:0 0 0 2px var(--focus); }
 .browser-live-typing { position:absolute; left:0; top:0; width:1px; height:1px; padding:0; border:0; opacity:0; resize:none; pointer-events:none; }
-.browser-agent-cursor { position:absolute; left:0; top:0; pointer-events:none; transition:transform 480ms var(--org-ease-out, cubic-bezier(.2,.8,.2,1)); will-change:transform; }
-.browser-agent-cursor svg { position:absolute; left:-1.5px; top:-1.5px; overflow:visible; filter:drop-shadow(0 1px 1.5px #00000055); }
-.browser-agent-cursor path { fill:var(--accent); stroke:#fff; stroke-width:1.4; stroke-linejoin:round; }
-.browser-agent-name { position:absolute; left:14px; top:17px; padding:1px 7px; border-radius:9px; background:var(--accent); color:var(--accent-ink); font-size:11.5px; line-height:17px; white-space:nowrap; box-shadow:0 1px 2px #00000033; }
-.browser-agent-click { position:absolute; left:-11px; top:-11px; width:22px; height:22px; border:2px solid var(--accent); border-radius:50%; opacity:0; animation:browser-agent-click 560ms ease-out; }
-@keyframes browser-agent-click { from { transform:scale(.35); opacity:.9; } to { transform:scale(1.5); opacity:0; } }
-@media (prefers-reduced-motion:reduce) { .browser-agent-cursor { transition:none; } .browser-agent-click { animation:none; } }
+/* The glow while an orglet controls something (COD-261): the accent at its strongest right at the edge, fading smoothly to
+   nothing towards the middle, with no line anywhere. One gradient per edge; --glow-depth and --glow-strength set how far
+   in it reaches and how strong it starts. It breathes very slowly, and holds still under reduced motion. */
+.orglet-glow { --glow-color:color-mix(in srgb, var(--accent) calc(var(--glow-strength) * 100%), transparent);
+  --glow-fade:var(--glow-color) 0%, color-mix(in srgb, var(--glow-color) 55%, transparent) 28%, color-mix(in srgb, var(--glow-color) 22%, transparent) 58%, transparent 100%;
+  background:
+    linear-gradient(to bottom, var(--glow-fade)) top / 100% var(--glow-depth) no-repeat,
+    linear-gradient(to top, var(--glow-fade)) bottom / 100% var(--glow-depth) no-repeat,
+    linear-gradient(to right, var(--glow-fade)) left / var(--glow-depth) 100% no-repeat,
+    linear-gradient(to left, var(--glow-fade)) right / var(--glow-depth) 100% no-repeat;
+  animation:orglet-glow-breathe 4s ease-in-out infinite; }
+@keyframes orglet-glow-breathe { 0%,100% { opacity:.86; } 50% { opacity:1; } }
+
+/* While the orglet acts in the live view, not the person, its edges glow the same way, shallower (COD-261). */
+.browser-live-glow { position:absolute; inset:0; z-index:1; border-radius:inherit; pointer-events:none; --glow-depth:18px; --glow-strength:.45; }
+
+/* The orglet's own cursor (COD-261): the logo bubble turned tip up-left in the orglet's colour, with its eyes. On the
+   live view and on the desktop glow; the system cursor is never changed. */
+.orglet-cursor { position:absolute; left:0; top:0; z-index:2; pointer-events:none; will-change:transform; }
+.orglet-cursor[data-glide] { transition:transform 480ms var(--org-ease-out, cubic-bezier(.2,.8,.2,1)); }
+.orglet-cursor-body { position:absolute; display:block; width:20px; height:20px; }
+.orglet-cursor-body svg { display:block; overflow:visible; filter:drop-shadow(0 1px 1.5px #00000059); }
+.orglet-cursor-shape { fill:currentColor; stroke:var(--bg); stroke-width:5; stroke-linejoin:round; paint-order:stroke; }
+.orglet-cursor-eyes { transition:transform 200ms ease-out; }
+.orglet-cursor[data-action=type] .orglet-cursor-eyes { transform:translate(0, 3.6px); animation:orglet-cursor-write 1.4s ease-in-out infinite; }
+@keyframes orglet-cursor-write { 0%,100% { transform:translate(-2.4px, 3.6px); } 50% { transform:translate(2.4px, 3.6px); } }
+.orglet-cursor-pressed { animation:orglet-cursor-press 260ms var(--org-ease-out, ease-out); }
+@keyframes orglet-cursor-press { 0% { transform:scale(1); } 35% { transform:scale(.8, .86); } 100% { transform:scale(1); } }
+.orglet-cursor-ripple { position:absolute; left:-12px; top:-12px; width:24px; height:24px; border:2px solid currentColor; border-radius:50%; opacity:0; animation:orglet-cursor-ripple 560ms ease-out; }
+@keyframes orglet-cursor-ripple { from { transform:scale(.3); opacity:.9; } to { transform:scale(1.6); opacity:0; } }
+.orglet-cursor-name { position:absolute; left:15px; top:17px; padding:1px 7px; border-radius:9px; background:var(--orglet-cursor-color); font-size:11.5px; line-height:17px; white-space:nowrap; box-shadow:0 1px 2px #00000033;
+  color:oklch(from var(--orglet-cursor-color) calc(0.2 + 0.78 * clamp(0, (0.68 - l) * 1000, 1)) 0 0); }
+@media (prefers-reduced-motion:reduce) {
+  .orglet-cursor[data-glide] { transition:none; }
+  .orglet-cursor-pressed, .orglet-cursor-ripple, .orglet-cursor[data-action=type] .orglet-cursor-eyes, .orglet-glow { animation:none; }
+  .orglet-glow { opacity:1; }
+}
+
+/* The desktop glow's page (COD-261): its own transparent, click-through window over the window an orglet acts on, or
+   the whole display while it borrows the mouse. Only the pill takes the pointer. */
+html[data-overlay], html[data-overlay] body, html[data-overlay] #root { background:transparent; overflow:hidden; }
+.desktop-overlay { position:fixed; inset:0; pointer-events:none; user-select:none; }
+.desktop-overlay-glow { position:absolute; inset:0; --glow-depth:36px; --glow-strength:.55; }
+.desktop-overlay[data-mode=borrow] .desktop-overlay-glow { --glow-depth:56px; --glow-strength:.62; }
+.desktop-overlay-peek { position:absolute; left:50%; display:flex; justify-content:center; max-width:calc(100% - 24px); margin-top:10px; transform:translateX(-50%); }
+.desktop-overlay-pill { position:relative; display:flex; align-items:center; gap:8px; padding:3px 4px 3px 5px; border-radius:999px; background:var(--bg); color:var(--text);
+  box-shadow:0 2px 12px #00000033, 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 30%, transparent);
+  font-size:12.5px; line-height:1.3; white-space:nowrap; pointer-events:auto; }
+/* The orglet's own face, the list-size glyph in its colour, at the pill's start; its eyes read along a line while it works. */
+.desktop-overlay-face { display:flex; flex-shrink:0; align-items:center; }
+.desktop-overlay-face .avatar .mascot-eyes { --gaze-y:1.6px; animation:mascot-read var(--motion-cycle) linear infinite; }
+.desktop-overlay-pill { max-width:100%; }
+.desktop-overlay-label { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.desktop-overlay-pill .desktop-overlay-stop { height:26px; min-height:26px; gap:5px; padding:0 11px; border-radius:999px; font-size:12px; }
+@media (prefers-reduced-motion:reduce) { .desktop-overlay-face .avatar .mascot-eyes { animation:none; } }
 .browser-live-suggestion { display:flex; align-items:center; gap:8px; min-width:0; padding:6px 6px 6px 10px; border-radius:10px; background:var(--surface); font-size:12.5px; line-height:1.45; }
 .browser-live-suggestion>svg { flex-shrink:0; color:var(--muted); }
 .browser-live-suggestion>span { flex:1; min-width:0; }
@@ -2397,4 +2445,9 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .desktop-picker-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13.5px; }
 .desktop-picker-meta { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--muted); }
 .desktop-picker-row>.org-button { flex-shrink:0; }
+/* The steps a borrow of the real mouse and keyboard would take, on its card (COD-261, phase 2b). */
+.desktop-borrow-steps { display:flex; flex-direction:column; gap:6px; margin:0; padding:0; list-style:none; }
+.desktop-borrow-steps>li { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.desktop-borrow-step { display:flex; align-items:center; gap:8px; min-width:0; font-size:13.5px; overflow-wrap:anywhere; }
+.desktop-borrow-step svg { flex-shrink:0; color:var(--muted); }
 .desktop-picker-added { display:inline-flex; flex-shrink:0; align-items:center; gap:4px; padding:0 8px; font-size:12.5px; color:var(--success); }

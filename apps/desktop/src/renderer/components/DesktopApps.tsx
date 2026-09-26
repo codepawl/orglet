@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Camera, Check, ChevronsUpDown, Image, List, ListChecks, MonitorSmartphone, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldAlert, TextCursorInput, ToggleRight, X, type LucideIcon } from 'lucide-react';
+import { Camera, Check, ChevronsUpDown, Image, Keyboard, List, ListChecks, MonitorSmartphone, Mouse, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldAlert, TextCursorInput, ToggleRight, X, type LucideIcon } from 'lucide-react';
 import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
-import { defaultDesktopChoice, type DesktopAction, type DesktopActionKind, type DesktopActKind, type DesktopApprovalView, type DesktopChoice, type DesktopWindowView } from '../../shared/desktop';
+import { defaultDesktopChoice, type DesktopAction, type DesktopActionKind, type DesktopActKind, type DesktopApprovalView, type DesktopBorrowStep, type DesktopChoice, type DesktopWindowView } from '../../shared/desktop';
 import { Button, Drawer } from './ui';
 import { currentLocale, t, tMessage, translated } from '../i18n';
 import { orglet } from '../api';
@@ -86,7 +86,7 @@ export function DesktopChatSettings({ detail }: { detail: TaskDetail }) {
   return <div className="permissions desktop-chat">
     <div className="browser-chat-sites">
       <p className="permission-folder-title"><MonitorSmartphone size={15} aria-hidden="true" />{t('Ứng dụng được cấp')}</p>
-      <p className="permission-folder-description">{t('Tí chỉ thấy cửa sổ của các ứng dụng này và dùng chúng qua UI Automation, không dùng chuột hay bàn phím thật.')}</p>
+      <p className="permission-folder-description">{t('Tí chỉ thấy cửa sổ của các ứng dụng này và dùng chúng qua UI Automation. Chuột và bàn phím thật chỉ được mượn khi bạn cho phép.')}</p>
       {choice.apps.length > 0 && <ul className="browser-site-list" aria-label={t('Ứng dụng được cấp')}>
         {choice.apps.map(app => <li key={app.program} className="browser-site">
           <MonitorSmartphone size={14} aria-hidden="true" />
@@ -110,6 +110,7 @@ export function DesktopChatSettings({ detail }: { detail: TaskDetail }) {
 const stepIcons: Record<DesktopActionKind, LucideIcon> = {
   windows: List, snapshot: MonitorSmartphone, find: ScanSearch, screenshot: Camera,
   invoke: MousePointerClick, set_value: TextCursorInput, toggle: ToggleRight, expand: ChevronsUpDown, collapse: ChevronsUpDown, select: ListChecks, scroll_into_view: MoveVertical,
+  borrow: Mouse,
 };
 
 const ELEMENT_CHARACTERS = 48;
@@ -127,6 +128,11 @@ const actingKinds: readonly DesktopActionKind[] = ['invoke', 'set_value', 'toggl
  */
 function stepLabel(action: DesktopAction): string {
   const element = action.target ? shortText(action.target) : '';
+  if (action.kind === 'borrow') {
+    const ran = action.outcome === 'done' || action.outcome === 'stopped';
+    if (!ran) return element ? t('Định mượn chuột và bàn phím cho “{0}”', [element]) : t('Định mượn chuột và bàn phím');
+    return element ? t('Mượn chuột và bàn phím cho “{0}”', [element]) : t('Mượn chuột và bàn phím');
+  }
   if (actingKinds.includes(action.kind) && action.outcome !== 'done') return element ? t('Định thao tác “{0}”', [element]) : t('Định thao tác');
   if (action.kind === 'windows') return t('Xem các cửa sổ được phép');
   if (action.kind === 'snapshot') return t('Đọc nội dung cửa sổ');
@@ -147,15 +153,17 @@ function stepWindow(action: DesktopAction): string | undefined {
   return action.program ?? undefined;
 }
 
-const outcomeNames: Record<Exclude<DesktopAction['outcome'], 'done'>, string> = translated({ refused: 'bị chặn', failed: 'không thành', unknown: 'chưa rõ kết quả', declined: 'bạn không cho phép' });
+const outcomeNames: Record<Exclude<DesktopAction['outcome'], 'done'>, string> = translated({ refused: 'bị chặn', failed: 'không thành', unknown: 'chưa rõ kết quả', declined: 'bạn không cho phép', stopped: 'bạn đã dừng' });
 
 function stepMeta(action: DesktopAction, askingActionId: string | undefined): string[] {
   if (action.id === askingActionId) return [t('hỏi trước'), t('đang chờ bạn')];
   const meta: string[] = [];
-  const asked = action.risk === 'consequential' && (action.outcome === 'done' || action.outcome === 'declined');
+  // A borrow that ran says how long it held the mouse and keyboard.
+  if (action.durationMs !== null) meta.push(t('{0} giây', [Math.max(1, Math.round(action.durationMs / 1000))]));
+  const asked = action.risk === 'consequential' && ['done', 'declined', 'stopped'].includes(action.outcome);
   if (action.risk === 'input') meta.push(t('nhập liệu'));
   if (asked) meta.push(t('hỏi trước'));
-  if (asked && action.outcome === 'done') meta.push(t('đã cho phép'));
+  if (asked && (action.outcome === 'done' || action.outcome === 'stopped')) meta.push(t('đã cho phép'));
   if (action.outcome !== 'done') meta.push(outcomeNames[action.outcome]);
   return meta;
 }
@@ -201,13 +209,15 @@ export function DesktopSteps({ detail }: { detail: TaskDetail }) {
   </section>;
 }
 
-const kindIcons: Record<DesktopActKind, LucideIcon> = {
+const kindIcons: Record<DesktopActKind | 'borrow', LucideIcon> = {
   invoke: MousePointerClick, set_value: TextCursorInput, toggle: ToggleRight, expand: ChevronsUpDown, collapse: ChevronsUpDown, select: ListChecks, scroll_into_view: MoveVertical,
+  borrow: Mouse,
 };
 
 /** "Researcher wants to press “Save” in “Untitled - Notepad”." */
 function question(approval: DesktopApprovalView): string {
   const { workerName, element, window } = approval;
+  if (approval.kind === 'borrow') return t('{0} muốn mượn chuột và bàn phím của bạn trong “{1}”.', [workerName, window]);
   if (approval.kind === 'set_value') return t('{0} muốn nhập vào “{1}” trong “{2}”.', [workerName, element, window]);
   if (approval.kind === 'toggle') return t('{0} muốn bật/tắt “{1}” trong “{2}”.', [workerName, element, window]);
   if (approval.kind === 'select') return t('{0} muốn chọn “{1}” trong “{2}”.', [workerName, element, window]);
@@ -233,10 +243,42 @@ function useApprovalPicture(taskId: string, screenshotId: string | undefined) {
   return url;
 }
 
+const borrowStepIcons: Record<DesktopBorrowStep['kind'], LucideIcon> = { click: MousePointerClick, type: TextCursorInput, keys: Keyboard, scroll: MoveVertical };
+
+/** One planned step of a borrow in words: what the real mouse or keyboard would do to the element. */
+function borrowStepLine(step: DesktopBorrowStep, element: string): string {
+  if (step.kind === 'click') return t('Bấm vào “{0}”', [element]);
+  if (step.kind === 'type') return t('Gõ vào “{0}”:', [element]);
+  if (step.kind === 'keys') return t('Nhấn {0} trong “{1}”', [(step.keys ?? []).join(' · '), element]);
+  const notches = Math.abs(step.notches ?? 0);
+  return (step.notches ?? 0) > 0 ? t('Cuộn xuống {0} nấc trên “{1}”', [notches, element]) : t('Cuộn lên {0} nấc trên “{1}”', [notches, element]);
+}
+
+/**
+ * What a borrow would do, in order, then how long it may take and how the person gets everything back. Typed text is
+ * shown whole, as the field would receive it.
+ */
+function BorrowPlan({ approval }: { approval: DesktopApprovalView }) {
+  if (!approval.borrow) return null;
+  return <>
+    <ol className="desktop-borrow-steps" aria-label={t('Các bước sẽ làm')}>
+      {approval.borrow.steps.map((step, index) => {
+        const Icon = borrowStepIcons[step.kind];
+        return <li key={index}>
+          <span className="desktop-borrow-step"><Icon size={14} aria-hidden="true" />{borrowStepLine(step, approval.element)}</span>
+          {step.kind === 'type' && <pre className="mcp-arguments" aria-label={t('Nội dung sẽ gõ')}>{step.text}</pre>}
+        </li>;
+      })}
+    </ol>
+    <p className="muted browser-approval-reasons">{t('Tối đa {0} giây. Orglet đưa cửa sổ lên trước, làm đúng các bước này, rồi trả lại cửa sổ và con trỏ cho bạn. Chạm vào chuột hoặc nhấn Esc là dừng ngay.', [approval.borrow.limitSeconds])}</p>
+  </>;
+}
+
 /**
  * The card a solo chat shows when its orglet wants to take a step in a desktop app that could send, delete, save over a
- * file, close the app or confirm a dialog: who wants to do what to which element in which window, why Orglet asks, the
- * window with the element outlined, and two answers. There is no "always".
+ * file, close the app or confirm a dialog, or wants to borrow the real mouse and keyboard for a step the background
+ * cannot do: who wants to do what to which element in which window, why Orglet asks, the window with the element
+ * outlined, and two answers. There is no "always".
  */
 export function DesktopApprovalCard({ taskId, approval, busy, onAnswer }: { taskId: string; approval: DesktopApprovalView; busy: boolean; onAnswer: (answer: 'allow' | 'decline') => void }) {
   const picture = useApprovalPicture(taskId, approval.screenshotId);
@@ -245,6 +287,7 @@ export function DesktopApprovalCard({ taskId, approval, busy, onAnswer }: { task
   return <div className="browser-approval" role="group" aria-label={t('Cho phép bước trong ứng dụng')}>
     <p role="status" className="mcp-approval-question"><Icon size={16} aria-hidden="true" /><span>{question(approval)}</span></p>
     {approval.text !== undefined && <pre className="mcp-arguments" aria-label={t('Nội dung sẽ nhập')}>{approval.text || t('(để trống)')}</pre>}
+    <BorrowPlan approval={approval} />
     {picture && <button type="button" className="browser-approval-shot" aria-label={t('Xem ảnh cửa sổ lớn hơn')} onClick={() => setEnlarged(true)}>
       <img src={picture} alt={t('Cửa sổ {0}, phần tử được hỏi có viền đỏ', [approval.window])} />
     </button>}

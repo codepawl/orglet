@@ -200,7 +200,7 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
       <span className="permission-folder-text">
         <span className="permission-folder-title"><MonitorSmartphone size={15} aria-hidden="true" />{t('Ứng dụng trên máy')}</span>
         <span className="permission-folder-description">{!desktopAvailable ? t('Chỉ có trên Windows.')
-          : state.desktop === 'act' ? t('Dùng ứng dụng bạn cấp; hỏi bạn trước khi gửi, lưu đè hay xóa.')
+          : state.desktop === 'act' ? t('Dùng ứng dụng bạn cấp; hỏi trước khi gửi, xóa hay mượn chuột.')
           : t('Đọc cửa sổ của ứng dụng bạn cấp, không dùng chuột thật.')}</span>
       </span>
       <span className="permission-folder-control">

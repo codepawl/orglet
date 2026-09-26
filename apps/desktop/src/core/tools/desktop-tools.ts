@@ -2,19 +2,25 @@ import { createHash } from 'node:crypto';
 import { ZodError } from 'zod';
 import type { Run, Task } from '../../shared/contracts';
 import {
-  DesktopAction, DesktopElementArgs, DesktopExpandArgs, DesktopFindArgs, DesktopSetValueArgs, DesktopSnapshotArgs, DesktopWindowArgs,
-  DesktopWindowsArgs, MAX_DESKTOP_SCREENSHOTS, defaultDesktopChoice, narrowDesktopChoice, neverDesktopProgram,
-  type DesktopActKind, type DesktopActionKind, type DesktopApprovalView, type DesktopChoice, type DesktopLive, type DesktopOutcome, type DesktopRisk, type DesktopWindowsView,
+  DESKTOP_BORROW_LIMIT_MS, DesktopAction, DesktopBorrowArgs, DesktopElementArgs, DesktopExpandArgs, DesktopFindArgs, DesktopSetValueArgs, DesktopSnapshotArgs, DesktopWindowArgs,
+  DesktopWindowsArgs, MAX_DESKTOP_SCREENSHOTS, defaultDesktopChoice, estimateBorrowMs, narrowDesktopChoice, neverDesktopProgram,
+  type DesktopActKind, type DesktopActionKind, type DesktopApprovalView, type DesktopBorrowStep, type DesktopChoice, type DesktopLive, type DesktopOutcome, type DesktopRisk,
+  type DesktopWindowsView,
 } from '../../shared/desktop';
 import {
-  DesktopActResult, DesktopInspectResult, DesktopScreenshotResult, DesktopSnapshotResult, DesktopWindowsResult,
-  type DesktopHost, type DesktopHostRequest, type DesktopProblem, type DesktopTargetFacts, type HostWindow,
+  DesktopActResult, DesktopBorrowCheckResult, DesktopBorrowResult, DesktopBoundsResult, DesktopInspectResult, DesktopScreenshotResult, DesktopSnapshotResult, DesktopWindowsResult,
+  type BorrowStop, type DesktopHost, type DesktopHostRequest, type DesktopProblem, type DesktopTargetFacts, type HostWindow,
 } from '../../shared/desktop-host';
+import type { DesktopOverlayState, OverlayRect, OverlayWorker } from '../../shared/desktop-overlay';
+import { DEFAULT_ACCENT_COLOR, currentAccentColor } from '../../shared/accent';
+import { DEFAULT_LANGUAGE, translate, type Language } from '../../shared/i18n';
+import { en, enGB } from '../../shared/locales/en';
 import { Store, id, now } from '../storage/database';
 import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import { BrowserPerson } from './browser-person';
 import { findInSnapshot, snapshotPage } from './browser-tools';
-import { classifyDesktopStep, type DesktopVerdict } from './desktop-risk';
+import { classifyDesktopStep, desktopRiskReasons, type DesktopVerdict } from './desktop-risk';
+import { DesktopOverlayDirector, type OverlayTarget } from './desktop-overlay';
 
 /**
  * The core side of desktop apps (COD-261, phase 2a). Every step is decided here before the helper does it: the
@@ -22,14 +28,16 @@ import { classifyDesktopStep, type DesktopVerdict } from './desktop-risk';
  * with), and for an acting step how serious it is. Each step is journaled in `desktop_actions` with the risk the core
  * set, and what a window shows goes back to the worker marked as untrusted, like a web page.
  *
- * Acting only ever goes through UI Automation patterns. When an element has no pattern for a step, or the app runs as
+ * Acting goes through UI Automation patterns. When an element has no pattern for a step, or the app runs as
  * administrator, the answer is "not possible in the background" with a hint; the real mouse and keyboard are never a
- * fallback.
+ * fallback on their own. Phase 2b adds `desktop_borrow_input`: only after such a step, only in a solo chat, and only
+ * when the person allows it on a card, the helper borrows the real mouse and keyboard for the planned steps.
  */
 
 export const DESKTOP_READ_TOOL_NAMES = ['desktop_windows', 'desktop_snapshot', 'desktop_find', 'desktop_screenshot'] as const;
 export const DESKTOP_ACT_TOOL_NAMES = ['desktop_invoke', 'desktop_set_value', 'desktop_toggle', 'desktop_expand', 'desktop_select', 'desktop_scroll_into_view'] as const;
-export const DESKTOP_TOOL_NAMES = [...DESKTOP_READ_TOOL_NAMES, ...DESKTOP_ACT_TOOL_NAMES] as const;
+export const DESKTOP_BORROW_TOOL = 'desktop_borrow_input';
+export const DESKTOP_TOOL_NAMES = [...DESKTOP_READ_TOOL_NAMES, ...DESKTOP_ACT_TOOL_NAMES, DESKTOP_BORROW_TOOL] as const;
 export type DesktopToolName = typeof DESKTOP_TOOL_NAMES[number];
 export type DesktopActToolName = typeof DESKTOP_ACT_TOOL_NAMES[number];
 export type DesktopReadToolName = typeof DESKTOP_READ_TOOL_NAMES[number];
@@ -52,6 +60,14 @@ export const TOO_MANY_DESKTOP_SCREENSHOTS = `Lần chạy này đã chụp đủ
 export const DESKTOP_NOT_ASKED_HERE = 'Bước này cần người dùng cho phép, mà chat nhóm, hội và lịch không hỏi được. Nhờ người dùng tự làm, hoặc làm trong chat riêng với Tí này.';
 export const DESKTOP_PERSON_DECLINED = 'Người dùng không cho phép bước này. Đừng thử lại bước này trong lượt này.';
 export const DESKTOP_PERSON_DID_NOT_ANSWER = 'Người dùng chưa trả lời nên bước này không chạy.';
+export const DESKTOP_BORROW_NOT_ASKED_HERE = 'Mượn chuột và bàn phím thật luôn cần người dùng cho phép, mà chat nhóm, hội và lịch không hỏi được. Nhờ người dùng tự làm bước này.';
+export const DESKTOP_BORROW_NOT_NEEDED = 'Bước này làm được trong nền, nên Orglet không mượn chuột và bàn phím thật cho nó.';
+// Written out, not built from DESKTOP_BORROW_LIMIT_MS, so the English dictionary can match it; a test keeps the two equal.
+export const DESKTOP_BORROW_TOO_LONG = 'Kế hoạch này cần hơn 10 giây chuột và bàn phím thật. Chia nó thành các lần mượn ngắn hơn.';
+export const DESKTOP_BORROW_MINIMIZED = 'Cửa sổ đang thu nhỏ. Orglet không tự mở nó ra để mượn chuột; nhờ người dùng mở lại cửa sổ.';
+export const DESKTOP_BORROW_NOT_AGAIN ='Người dùng đã từ chối hoặc đã dừng một lần mượn chuột trong lượt này, nên Orglet không hỏi mượn lại.';
+/** The notice on screen while a borrow runs; the helper shows it as given, in the app's language. */
+export const DESKTOP_BORROW_INDICATOR = 'Orglet đang dùng chuột và bàn phím của bạn · nhấn Esc để dừng';
 
 /** Why the helper did not read or act, in words, with what the worker can do instead. */
 export const desktopProblems: Record<DesktopProblem, { reason: string; hint: string }> = {
@@ -59,11 +75,55 @@ export const desktopProblems: Record<DesktopProblem, { reason: string; hint: str
   not_granted: { reason: 'Ứng dụng này chưa được cấp cho chat.', hint: 'Only the apps listed in allowedApps can be seen or used. Ask the person to add the app in the chat\'s Details under Desktop apps.' },
   elevated: { reason: 'Ứng dụng này chạy với quyền quản trị; Orglet không đọc hay dùng được nó.', hint: 'Windows keeps apps that run as administrator out of reach of normal apps. Tell the person this part is for them.' },
   minimized: { reason: 'Cửa sổ đang thu nhỏ nên không chụp được. Orglet không tự mở nó ra.', hint: 'desktop_snapshot still reads it. Ask the person to restore the window if a picture is needed.' },
-  not_possible: { reason: 'Không làm được bước này trong nền: phần tử không hỗ trợ thao tác này qua UI Automation.', hint: 'Orglet never uses the real mouse or keyboard. Use an action the snapshot lists for this element (actions=...), try another element, or tell the person which step is left for them.' },
+  not_possible: { reason: 'Không làm được bước này trong nền: phần tử không hỗ trợ thao tác này qua UI Automation.', hint: 'Orglet never uses the real mouse or keyboard on its own. Use an action the snapshot lists for this element (actions=...) or try another element. If this step is still needed and desktop_borrow_input is offered, you may ask to borrow the mouse and keyboard for it; otherwise tell the person which step is left for them.' },
   stale: { reason: 'Mã phần tử này không còn khớp với cửa sổ. Đọc lại cửa sổ bằng desktop_snapshot rồi dùng mã mới.', hint: 'Call desktop_snapshot for this window and use a ref from it.' },
   password: { reason: 'Orglet không bao giờ nhập vào ô mật khẩu. Nhờ người dùng tự nhập trong ứng dụng.', hint: 'Do not try this another way. Ask the person to type it themselves.' },
   disabled: { reason: 'Phần tử này đang bị tắt trong ứng dụng.', hint: 'Read the window again; something else may need to happen first.' },
+  secure_desktop: { reason: 'Windows đang hiện màn hình khóa hoặc hộp thoại quyền quản trị, nên Orglet không mượn chuột và bàn phím.', hint: 'Do not try again now. Tell the person which step is left for them.' },
+  off_screen: { reason: 'Phần tử này không nằm trên màn hình, nên chuột không tới được.', hint: 'Scroll it into view with desktop_scroll_into_view if the snapshot offers it, or ask the person to show the window.' },
+  busy: { reason: 'Một lần mượn chuột khác đang chạy.', hint: 'Wait for it to finish, then try once more.' },
 };
+
+/** Why a borrow ended before its last step, as the chat's line and the model's result say it. */
+export const borrowStopReasons: Record<BorrowStop, string> = {
+  person_mouse: 'bạn đã dùng chuột',
+  person_key: 'bạn đã gõ phím',
+  escape: 'bạn đã nhấn Esc',
+  time_limit: 'hết giới hạn thời gian',
+  foreground_changed: 'một cửa sổ khác đã lên trước',
+  focus_changed: 'phần tử không còn nhận thao tác',
+  no_foreground: 'Windows không cho đưa cửa sổ lên trước',
+  run_stopped: 'lần chạy đã dừng',
+};
+
+/** The person ended the borrow with their own mouse or keyboard. */
+export const stoppedByPerson = (reason: BorrowStop | null) => reason === 'person_mouse' || reason === 'person_key' || reason === 'escape';
+
+/** UI Automation patterns that would do a borrow step in the background, as the snapshot's actions name them. */
+const BACKGROUND_WAYS: Record<DesktopBorrowStep['kind'], { actions: readonly string[]; tool: string }> = {
+  click: { actions: ['invoke', 'toggle', 'select', 'expand'], tool: 'desktop_invoke, desktop_toggle, desktop_select or desktop_expand' },
+  type: { actions: ['set_value'], tool: 'desktop_set_value' },
+  // Keys and the wheel have no background tool at all.
+  keys: { actions: [], tool: '' },
+  scroll: { actions: [], tool: '' },
+};
+
+/**
+ * Whether a borrow may even be offered for these steps on this element: only once a background step on it came back
+ * not possible in this run, or when the element offers no pattern for any of the steps. A step the background tools
+ * can do is never done with the real mouse and keyboard.
+ */
+export function borrowGate(input: { steps: readonly DesktopBorrowStep[]; actions: readonly string[]; triedInBackground: boolean }): { allowed: true } | { allowed: false; tool: string } {
+  if (input.triedInBackground) return { allowed: true };
+  for (const step of input.steps) {
+    const way = BACKGROUND_WAYS[step.kind];
+    if (way.actions.some(action => input.actions.includes(action))) return { allowed: false, tool: way.tool };
+  }
+  return { allowed: true };
+}
+
+/** A borrow's length as the chat's line says it: whole seconds, at least one. */
+export const borrowSeconds = (durationMs: number) => Math.max(1, Math.round(durationMs / 1000));
 
 /** What one desktop step hands back: the tool result the worker reads and the activity line the chat shows. */
 export type DesktopStep = { result: Record<string, unknown>; event: string; readWindow: boolean };
@@ -88,6 +148,10 @@ export const desktopEvents = {
   declined: (element: string, window: string) => `Đã hỏi để thao tác “${element}” trong “${window}” · bị từ chối`,
   refused: (window: string, reason: string) => `Ứng dụng không làm bước này trong “${window}”: ${reason}`,
   failed: (reason: string) => `Không dùng được ứng dụng: ${reason}`,
+  borrowed: (seconds: number, window: string) => `Đã mượn chuột ${seconds} giây trong “${window}” · bạn cho phép`,
+  borrowStopped: (seconds: number, window: string) => `Đã mượn chuột ${seconds} giây trong “${window}” · bạn đã dừng`,
+  borrowCut: (seconds: number, window: string, reason: string) => `Đã mượn chuột ${seconds} giây trong “${window}” · dừng giữa chừng: ${reason}`,
+  borrowDeclined: (window: string) => `Đã hỏi để mượn chuột trong “${window}” · bị từ chối`,
 };
 
 function doneEvent(kind: DesktopActKind, element: string, window: string, asked: boolean): string {
@@ -163,7 +227,10 @@ function isDesktopSnapshot(content: unknown) {
   }
 }
 
-type ActionRow = { id: string; run_id: string; call_id: string; kind: string; program: string | null; window_title: string | null; target: string | null; risk: string; outcome: string; screenshot_id: string | null; at: string };
+type ActionRow = { id: string; run_id: string; call_id: string; kind: string; program: string | null; window_title: string | null; target: string | null; risk: string; outcome: string; screenshot_id: string | null; duration_ms: number | null; at: string };
+
+/** Everything one borrow needs from the run that asks for it: the same as an acting step. */
+export type DesktopBorrowContext = Omit<DesktopActContext, 'name'>;
 
 /** Everything one acting step needs from the run that takes it. */
 export type DesktopActContext = {
@@ -182,6 +249,16 @@ export type DesktopActContext = {
 export class DesktopTools {
   /** Answers to consequential steps, kept while the app runs. */
   readonly person: BrowserPerson<DesktopApprovalView>;
+  /** Elements a background step came back not possible on, per run, as "handle|name|control type". */
+  private impossible = new Map<string, Set<string>>();
+  /** Runs whose person declined or stopped a borrow: they are not asked again. */
+  private borrowRefusedRuns = new Set<string>();
+  /** Borrows run one after another on this computer, never two at once. */
+  private borrowQueue: Promise<unknown> = Promise.resolve();
+  /** The glow on the desktop while an orglet controls a window; see `desktop-overlay.ts`. */
+  readonly overlay: DesktopOverlayDirector;
+  /** Where the glow's states go: main, which draws them and says when they are on screen. Unset where nothing draws it. */
+  private overlaySink?: (state: DesktopOverlayState) => Promise<boolean> | void;
 
   /**
    * `ownPrograms` are Orglet's own file names (Orglet.exe, or electron.exe in development), which no chat may ever
@@ -189,6 +266,32 @@ export class DesktopTools {
    */
   constructor(private store: Store, private host?: DesktopHost, notify: () => void = () => {}, private ownPrograms: readonly string[] = [], personWaitMs?: number) {
     this.person = new BrowserPerson<DesktopApprovalView>(notify, personWaitMs);
+    this.overlay = new DesktopOverlayDirector(state => this.overlaySink?.(state), (handle, allow) => this.readFrame(handle, allow), () => ({
+      accent: currentAccentColor(this.store.setting('accentColor', this.store.setting('mentionColor', DEFAULT_ACCENT_COLOR))),
+      theme: this.store.setting<'system' | 'light' | 'dark'>('theme', 'system'),
+      language: this.store.setting<Language>('language', DEFAULT_LANGUAGE),
+    }));
+  }
+
+  /** Sends the glow's states to whatever draws them; a borrow it shows needs no notice of the helper's own. */
+  showOverlayWith(sink: (state: DesktopOverlayState) => Promise<boolean> | void) {
+    this.overlaySink = sink;
+  }
+
+  private async readFrame(handle: number, allow: string[]): Promise<OverlayRect | undefined> {
+    if (!this.host) return undefined;
+    const answer = DesktopBoundsResult.parse(await this.host.request({ kind: 'bounds', handle, allow }, AbortSignal.timeout(5_000)));
+    return 'problem' in answer ? undefined : answer.bounds;
+  }
+
+  /** The window a step acts on, as the glow frames it. */
+  private overlayTarget(context: { run: Run; currentTask: () => Task }, handle: number, program: string): OverlayTarget {
+    const worker = context.run.snapshot.worker;
+    const overlayWorker: OverlayWorker = {
+      id: worker.id, name: worker.name, ...(worker.description ? { description: worker.description.slice(0, 2000) } : {}),
+      ...(worker.avatar ? { avatar: { ...(worker.avatar.mascot ? { mascot: worker.avatar.mascot } : {}), ...(worker.avatar.color ? { color: worker.avatar.color } : {}) } } : {}),
+    };
+    return { runId: context.run.id, taskId: context.run.taskId, worker: overlayWorker, handle, program, allow: () => this.allowedPrograms(context.run, context.currentTask()) };
   }
 
   /** Whether desktop apps work here at all: a helper exists only on Windows. */
@@ -235,17 +338,18 @@ export class DesktopTools {
   /** A new journal row; an acting step's target is its element, named once the window has been read. */
   private journal(run: Run, callId: string, kind: DesktopActionKind, risk: DesktopRisk = 'read'): string {
     const actionId = id();
-    this.store.db.prepare(`INSERT INTO desktop_actions(id,run_id,call_id,kind,program,window_title,target,risk,outcome,screenshot_id,at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(actionId, run.id, callId, kind, null, null, null, risk, 'unknown', null, now());
+    this.store.db.prepare(`INSERT INTO desktop_actions(id,run_id,call_id,kind,program,window_title,target,risk,outcome,screenshot_id,duration_ms,at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(actionId, run.id, callId, kind, null, null, null, risk, 'unknown', null, null, now());
     return actionId;
   }
 
-  private settle(actionId: string, outcome: DesktopOutcome, detail: { window?: HostWindow; element?: string; screenshotId?: string; risk?: DesktopRisk } = {}) {
-    const row = this.store.db.prepare('SELECT program,window_title,target,risk,screenshot_id FROM desktop_actions WHERE id=?').get(actionId) as Pick<ActionRow, 'program' | 'window_title' | 'target' | 'risk' | 'screenshot_id'> | undefined;
+  private settle(actionId: string, outcome: DesktopOutcome, detail: { window?: HostWindow; element?: string; screenshotId?: string; risk?: DesktopRisk; durationMs?: number } = {}) {
+    const row = this.store.db.prepare('SELECT program,window_title,target,risk,screenshot_id,duration_ms FROM desktop_actions WHERE id=?').get(actionId) as Pick<ActionRow, 'program' | 'window_title' | 'target' | 'risk' | 'screenshot_id' | 'duration_ms'> | undefined;
     if (!row) return;
-    this.store.db.prepare('UPDATE desktop_actions SET outcome=?,program=?,window_title=?,target=?,risk=?,screenshot_id=? WHERE id=?').run(
+    this.store.db.prepare('UPDATE desktop_actions SET outcome=?,program=?,window_title=?,target=?,risk=?,screenshot_id=?,duration_ms=? WHERE id=?').run(
       outcome, detail.window ? detail.window.executable.slice(0, 120) : row.program, detail.window ? detail.window.title.slice(0, 300) : row.window_title,
-      detail.element !== undefined ? detail.element.slice(0, 300) : row.target, detail.risk ?? row.risk, detail.screenshotId ?? row.screenshot_id, actionId);
+      detail.element !== undefined ? detail.element.slice(0, 300) : row.target, detail.risk ?? row.risk, detail.screenshotId ?? row.screenshot_id,
+      detail.durationMs ?? row.duration_ms, actionId);
   }
 
   private refusedStep(actionId: string, problem: DesktopProblem, window: string, extra: Record<string, unknown> = {}): DesktopStep {
@@ -368,7 +472,12 @@ export class DesktopTools {
         event: desktopEvents.refused(title, verdict.refused), readWindow: false,
       };
     }
-    const planned = { windowId, handle, ref, kind, text, expect: { name: target.name, controlType: target.controlType }, label, title, asked: false, risk: verdict.risk, replay: 'idempotent' as const };
+    const box = target.box;
+    const point = box ? { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) } : undefined;
+    const planned = {
+      windowId, handle, ref, kind, text, expect: { name: target.name, controlType: target.controlType }, label, title, asked: false, risk: verdict.risk, replay: 'idempotent' as const,
+      program: inspected.executable, point,
+    };
     if (verdict.risk === 'input') return this.perform(context, actionId, planned, allow, request);
     if (context.asking.kind === 'refuse') {
       this.settle(actionId, 'refused');
@@ -402,17 +511,31 @@ export class DesktopTools {
   /** Acts, through the tool journal, and reads the window again so the worker sees what changed. */
   private async perform(context: DesktopActContext, actionId: string, planned: {
     windowId: string; handle: number; ref: string; kind: DesktopActKind; text?: string; expect: { name: string; controlType: string };
-    label: string; title: string; asked: boolean; risk: DesktopRisk; replay: 'idempotent' | 'never';
+    label: string; title: string; asked: boolean; risk: DesktopRisk; replay: 'idempotent' | 'never'; program: string; point?: { x: number; y: number };
   }, allow: () => string[], request: (hostRequest: DesktopHostRequest) => Promise<unknown>): Promise<DesktopStep> {
     const { run, name, callId, signal } = context;
     return new ToolCalls(this.store).execute({
       runId: run.id, callId, name, arguments: context.argumentsValue, replay: planned.replay, authorize: context.authorize,
       perform: () => this.step(actionId, signal, async () => {
-        const acted = DesktopActResult.parse(await request({
-          kind: 'act', runId: run.id, handle: planned.handle, allow: allow(), ref: planned.ref,
-          step: { kind: planned.kind, ...(planned.text !== undefined ? { text: planned.text } : {}) }, expect: planned.expect,
-        }));
-        if ('problem' in acted) return this.refusedStep(actionId, acted.problem, planned.title, { element: planned.label });
+        // The glow frames the window while the step acts, with the orglet's own cursor on the element; the real cursor
+        // does not move. It is only drawn: the step itself does not wait for it.
+        const action = planned.kind === 'set_value' ? 'type' : planned.kind === 'scroll_into_view' ? 'move' : 'press';
+        void this.overlay.begin(this.overlayTarget(context, planned.handle, planned.program), 'window', planned.point ? { ...planned.point, action } : undefined);
+        let answered: unknown;
+        try {
+          answered = await request({
+            kind: 'act', runId: run.id, handle: planned.handle, allow: allow(), ref: planned.ref,
+            step: { kind: planned.kind, ...(planned.text !== undefined ? { text: planned.text } : {}) }, expect: planned.expect,
+          });
+        } finally {
+          this.overlay.end(run.id);
+        }
+        const acted = DesktopActResult.parse(answered);
+        if ('problem' in acted) {
+          // What the background could not do on this element is what a borrow may later be asked for (phase 2b).
+          if (acted.problem === 'not_possible') this.noteImpossible(run.id, planned.handle, planned.expect);
+          return this.refusedStep(actionId, acted.problem, planned.title, { element: planned.label });
+        }
         this.settle(actionId, 'done', { risk: planned.risk });
         const notes: string[] = [];
         if (acted.pending) notes.push('The app is still busy with this step after five seconds: it may have opened a dialog, which is a separate window. Call desktop_windows to find it.');
@@ -433,6 +556,175 @@ export class DesktopTools {
         return { result, event: doneEvent(planned.kind, planned.label, planned.title, planned.asked), readWindow: typeof result.snapshot === 'string' };
       }),
     });
+  }
+
+  private impossibleKey(handle: number, expect: { name: string; controlType: string }) {
+    return `${handle}|${expect.name}|${expect.controlType}`;
+  }
+
+  private noteImpossible(runId: string, handle: number, expect: { name: string; controlType: string }) {
+    const noted = this.impossible.get(runId) ?? new Set<string>();
+    noted.add(this.impossibleKey(handle, expect));
+    this.impossible.set(runId, noted);
+  }
+
+  /** The notice the helper shows on screen while it borrows, in the app's language. */
+  private indicatorText(): string {
+    const language = this.store.setting<Language>('language', DEFAULT_LANGUAGE);
+    const dictionary = language === 'vi' ? null : language === 'en-GB' ? enGB : en;
+    return translate(dictionary, DESKTOP_BORROW_INDICATOR);
+  }
+
+  /**
+   * Borrows the person's real mouse and keyboard for a few steps on one element (phase 2b). Offered only in a solo
+   * chat, only for an element the background could not do the step on, and only after the person allows the exact
+   * steps on a card. The helper then brings the window forward, does the steps within the time limit, stops at once on
+   * any input of the person's own, and gives back the window they had in front and the cursor. Every borrow asks; a
+   * declined or stopped one is not asked again in the same run.
+   */
+  async borrow(context: DesktopBorrowContext): Promise<DesktopStep> {
+    const host = this.host;
+    if (!host) throw new Error(DESKTOP_NOT_AVAILABLE);
+    const { run, callId, signal } = context;
+    const recorded = this.store.db.prepare('SELECT state,output FROM tool_calls WHERE run_id=? AND call_id=?').get(run.id, callId) as { state: string; output: string | null } | undefined;
+    if (recorded?.state === 'completed' && recorded.output) return JSON.parse(recorded.output) as DesktopStep;
+    if (recorded) throw new UnresolvedAttemptError('Lần mượn chuột trước chưa rõ kết quả. Không tự chạy lại; cần kiểm tra cửa sổ trước.');
+    const input = DesktopBorrowArgs.parse(context.argumentsValue);
+    const actionId = this.journal(run, callId, 'borrow', 'consequential');
+    const refuse = (window: string, reason: string, extra: Record<string, unknown> = {}): DesktopStep => {
+      this.settle(actionId, 'refused');
+      return { result: { refused: true, error: reason, ...extra }, event: desktopEvents.refused(window, reason), readWindow: false };
+    };
+    if (context.asking.kind === 'refuse') return refuse(input.windowId, DESKTOP_BORROW_NOT_ASKED_HERE, { next: 'Tell the person which step is left for them to do.' });
+    if (this.borrowRefusedRuns.has(run.id)) return refuse(input.windowId, DESKTOP_BORROW_NOT_AGAIN, { next: 'Tell the person which step is left for them to do.' });
+    if (estimateBorrowMs(input.steps) > DESKTOP_BORROW_LIMIT_MS) return refuse(input.windowId, DESKTOP_BORROW_TOO_LONG, { next: 'Plan fewer steps or less text per borrow.' });
+
+    const request = (hostRequest: DesktopHostRequest, timeoutMs = REQUEST_TIMEOUT_MS) => host.request(hostRequest, AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]));
+    const allow = () => this.allowedPrograms(run, context.currentTask());
+    const handle = handleOf(input.windowId);
+    let inspected;
+    try {
+      inspected = DesktopInspectResult.parse(await request({ kind: 'inspect', runId: run.id, handle, allow: allow(), ref: input.ref }));
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return this.failed(actionId, error);
+    }
+    if ('problem' in inspected) return this.refusedStep(actionId, inspected.problem, input.windowId, { windowId: input.windowId });
+    const title = shortTitle(inspected.title);
+    if (!inspected.target) {
+      this.settle(actionId, 'refused', { window: inspected });
+      const { reason, hint } = desktopProblems.stale;
+      return { result: { refused: true, problem: 'stale', error: reason, ref: input.ref, hint }, event: desktopEvents.refused(title, reason), readWindow: false };
+    }
+    const target = inspected.target;
+    const label = elementLabel(target);
+    const expect = { name: target.name, controlType: target.controlType };
+    this.settle(actionId, 'unknown', { window: inspected, element: label });
+    // A password field is never borrowed for, whatever the steps are.
+    const secret = classifyDesktopStep({ kind: 'set_value', target }).refused;
+    if (secret) return refuse(title, secret, { element: label, next: 'Do not try this another way. Ask the person to do this part themselves.' });
+    const gate = borrowGate({ steps: input.steps, actions: target.actions, triedInBackground: this.impossible.get(run.id)?.has(this.impossibleKey(handle, expect)) ?? false });
+    if (!gate.allowed) return refuse(title, DESKTOP_BORROW_NOT_NEEDED, { element: label, next: `Do it in the background with ${gate.tool}.` });
+
+    let checked;
+    try {
+      checked = DesktopBorrowCheckResult.parse(await request({ kind: 'borrow_check', runId: run.id, handle, allow: allow(), ref: input.ref, expect }));
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return this.failed(actionId, error);
+    }
+    if ('problem' in checked) {
+      if (checked.problem === 'minimized') return refuse(title, DESKTOP_BORROW_MINIMIZED, { element: label });
+      return this.refusedStep(actionId, checked.problem, title, { element: label });
+    }
+
+    // Why Orglet asks: always the borrow itself, and whatever pressing that element would ask about on its own.
+    const pressing = input.steps.some(step => step.kind === 'click') ? classifyDesktopStep({ kind: 'invoke', target }).reasons : [];
+    const screenshotId = await this.askingPicture(run.id, handle, input.ref, allow(), request);
+    if (screenshotId) this.settle(actionId, 'unknown', { screenshotId });
+    const view: DesktopApprovalView = {
+      id: id(), runId: run.id, actionId, workerName: run.snapshot.worker.name, kind: 'borrow', element: label, program: inspected.executable, window: title,
+      borrow: { steps: input.steps, limitSeconds: DESKTOP_BORROW_LIMIT_MS / 1000 }, reasons: [...new Set([desktopRiskReasons.borrow, ...pressing])],
+      ...(screenshotId ? { screenshotId } : {}), requestedAt: now(),
+    };
+    let answer: Awaited<ReturnType<BrowserPerson['ask']>>;
+    try {
+      answer = await this.person.ask(context.asking.taskId, view, signal);
+    } catch (error) {
+      this.settle(actionId, 'declined');
+      throw error;
+    }
+    if (answer !== 'allow') {
+      this.settle(actionId, 'declined');
+      this.borrowRefusedRuns.add(run.id);
+      const reason = answer === 'decline' ? DESKTOP_PERSON_DECLINED : DESKTOP_PERSON_DID_NOT_ANSWER;
+      return { result: { declined: true, error: reason, element: label, next: 'Do not ask to borrow again in this turn. Tell the person which step is left for them.' }, event: desktopEvents.borrowDeclined(title), readWindow: false };
+    }
+
+    return new ToolCalls(this.store).execute({
+      runId: run.id, callId, name: DESKTOP_BORROW_TOOL, arguments: context.argumentsValue, replay: 'never', authorize: context.authorize,
+      perform: () => this.step(actionId, signal, async () => {
+        const borrowed = await this.oneAtATime(async () => {
+          // The glow frames the display with the pill that says so and carries Stop, on screen before the first input.
+          // When it did not say it is showing, the helper puts up a notice of its own instead.
+          const shown = await this.overlay.begin(this.overlayTarget(context, handle, inspected.executable), 'borrow');
+          const indicator = shown ? '' : this.indicatorText();
+          try {
+            return await this.runBorrow(host, signal, {
+              kind: 'borrow', runId: run.id, handle, allow: allow(), ref: input.ref, expect, steps: input.steps, limitMs: DESKTOP_BORROW_LIMIT_MS, indicator,
+            });
+          } finally {
+            this.overlay.end(run.id);
+          }
+        });
+        if ('problem' in borrowed) {
+          if (borrowed.problem === 'minimized') return refuse(title, DESKTOP_BORROW_MINIMIZED, { element: label });
+          return this.refusedStep(actionId, borrowed.problem, title, { element: label });
+        }
+        const seconds = borrowSeconds(borrowed.durationMs);
+        const finished = borrowed.completedSteps === input.steps.length && borrowed.stoppedBy === null;
+        const byPerson = stoppedByPerson(borrowed.stoppedBy);
+        if (byPerson) this.borrowRefusedRuns.add(run.id);
+        this.settle(actionId, finished ? 'done' : byPerson ? 'stopped' : 'failed', { durationMs: borrowed.durationMs });
+        const result: Record<string, unknown> = {
+          kind: DESKTOP_BORROW_TOOL, surface: 'desktop', windowId: input.windowId, element: label, done: finished,
+          completedSteps: borrowed.completedSteps, totalSteps: input.steps.length, seconds, title: borrowed.title,
+          restored: borrowed.restored, trust: DESKTOP_TRUST,
+          ...(borrowed.stoppedBy ? { stoppedBy: borrowStopReasons[borrowed.stoppedBy] } : {}),
+          // How long Orglet kept sending after the person's own input, as the helper measured it; kept with the step.
+          ...(borrowed.stopLatencyMs !== null ? { stopLatencyMs: borrowed.stopLatencyMs } : {}),
+          ...(byPerson ? { next: 'The person stopped the borrow. Do not borrow again in this turn; tell them what is left for them.' } : {}),
+        };
+        const after = await request({ kind: 'snapshot', runId: run.id, handle, allow: allow() }).then(value => DesktopSnapshotResult.parse(value)).catch(() => undefined);
+        if (after && !('problem' in after)) {
+          const page = snapshotPage(after.snapshot, 0);
+          result.snapshot = page.text;
+          result.nextOffset = page.nextOffset;
+          if (!byPerson) result.next = 'snapshot is the window as it is now, with new refs: check that the steps did what you meant.';
+        }
+        const event = finished ? desktopEvents.borrowed(seconds, title)
+          : byPerson ? desktopEvents.borrowStopped(seconds, title)
+            : desktopEvents.borrowCut(seconds, title, borrowStopReasons[borrowed.stoppedBy ?? 'focus_changed']);
+        return { result, event, readWindow: typeof result.snapshot === 'string' };
+      }),
+    });
+  }
+
+  /** One borrow request; a run stopped in the middle tells the helper to stop at once, rather than when the limit runs out. */
+  private async runBorrow(host: DesktopHost, signal: AbortSignal, hostRequest: DesktopHostRequest) {
+    const stop = () => { void host.request({ kind: 'borrow_stop' }, AbortSignal.timeout(5_000)).catch(() => undefined); };
+    signal.addEventListener('abort', stop, { once: true });
+    try {
+      return DesktopBorrowResult.parse(await host.request(hostRequest, AbortSignal.any([signal, AbortSignal.timeout(DESKTOP_BORROW_LIMIT_MS + 20_000)])));
+    } finally {
+      signal.removeEventListener('abort', stop);
+    }
+  }
+
+  private oneAtATime<Value>(work: () => Promise<Value>): Promise<Value> {
+    const next = this.borrowQueue.then(work, work);
+    this.borrowQueue = next.catch(() => undefined);
+    return next;
   }
 
   /** The picture the card shows: the window with the element outlined, kept like a screenshot while the run has room. */
@@ -485,6 +777,9 @@ export class DesktopTools {
 
   /** Lets the helper drop the element refs a finished run kept. */
   async endRun(runId: string) {
+    this.impossible.delete(runId);
+    this.borrowRefusedRuns.delete(runId);
+    this.overlay.stop(runId);
     if (!this.host) return;
     const used = this.store.db.prepare('SELECT 1 FROM desktop_actions WHERE run_id=? LIMIT 1').get(runId);
     if (!used) return;
@@ -497,7 +792,7 @@ export class DesktopTools {
       WHERE runs.task_id=? ORDER BY actions.at, actions.rowid`).all(taskId) as ActionRow[];
     return rows.map(row => DesktopAction.parse({
       id: row.id, runId: row.run_id, callId: row.call_id, kind: row.kind, program: row.program, window: row.window_title, target: row.target,
-      risk: row.risk, outcome: row.outcome, screenshotId: row.screenshot_id, at: row.at,
+      risk: row.risk, outcome: row.outcome, screenshotId: row.screenshot_id, durationMs: row.duration_ms ?? null, at: row.at,
     }));
   }
 

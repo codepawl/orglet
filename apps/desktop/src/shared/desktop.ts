@@ -4,10 +4,11 @@ import type { ToolCapability } from './tool-policy';
 /**
  * Desktop apps (COD-261, phase 2a): an orglet reads and uses the windows of programs the person granted to the chat,
  * through Windows UI Automation. Every step is simulated input on an element (invoke, set a value, toggle, expand,
- * select, scroll into view): the real mouse and keyboard are never used and no window is brought to the front. A step
- * UI Automation cannot do in the background is reported as not possible, never done another way. The core decides
- * which window and which step, sets each step's risk and journals every call; a helper process only carries it out.
- * docs/desktop.md is the user-facing page.
+ * select, scroll into view): the real mouse and keyboard are not used and no window is brought to the front. A step
+ * UI Automation cannot do in the background is reported as not possible, never done another way on its own. Phase 2b
+ * adds one way, only after that and only when the person allows it on a card: borrowing the real mouse and keyboard
+ * for a few planned steps on one element (`DesktopBorrowStep`). The core decides which window and which step, sets
+ * each step's risk and journals every call; a helper process only carries it out. docs/desktop.md is the user-facing page.
  */
 
 /** Programs one chat may grant. */
@@ -95,8 +96,70 @@ export const DesktopElementArgs = z.object({ windowId: DesktopWindowId, ref: Des
 export const DesktopSetValueArgs = z.object({ windowId: DesktopWindowId, ref: DesktopRef, text: z.string().max(MAX_DESKTOP_TEXT_CHARACTERS) }).strict();
 export const DesktopExpandArgs = z.object({ windowId: DesktopWindowId, ref: DesktopRef, expand: z.boolean() }).strict();
 
-/** Every step a desktop tool can take: the reading ones, then acting on an element (`desktop.act`). */
-export const DesktopActionKind = z.enum(['windows', 'snapshot', 'find', 'screenshot', 'invoke', 'set_value', 'toggle', 'expand', 'collapse', 'select', 'scroll_into_view']);
+/**
+ * Borrowing the person's real mouse and keyboard for one step (COD-261, phase 2b), only where UI Automation cannot do
+ * it in the background and only after the person allows it on a card. The whole borrow is capped in time, every step
+ * acts on the one element the person saw marked, and any input of the person's own stops it.
+ */
+export const DESKTOP_BORROW_LIMIT_MS = 10_000;
+/** Steps one borrow may plan. */
+export const MAX_BORROW_STEPS = 5;
+/** Characters one borrow may type, all steps together; typing one takes up to a timer tick. */
+export const MAX_BORROW_TEXT_CHARACTERS = 400;
+/** Wheel notches one scroll step may turn, either way. */
+export const MAX_BORROW_SCROLL_NOTCHES = 10;
+/**
+ * The keys a borrow may press, one at a time. No Escape, which is how the person stops a borrow, and no shortcut that
+ * could save, close or undo on its own: only the two that move to the start or the end of a document.
+ */
+export const BORROW_KEYS = ['Enter', 'Tab', 'Backspace', 'Delete', 'Space', 'Home', 'End', 'PageUp', 'PageDown', 'Up', 'Down', 'Left', 'Right', 'Ctrl+Home', 'Ctrl+End'] as const;
+export type BorrowKey = typeof BORROW_KEYS[number];
+
+/**
+ * One step of a borrow, always on the element the person approved: click it at its clickable point, type text into it,
+ * press keys in it, or turn the mouse wheel over it. Flat, with the fields another kind does not use set to null, so the
+ * model's strict schema stays one object.
+ */
+export const DesktopBorrowStep = z.object({
+  kind: z.enum(['click', 'type', 'keys', 'scroll']),
+  text: z.string().min(1).max(MAX_BORROW_TEXT_CHARACTERS).nullable(),
+  keys: z.array(z.enum(BORROW_KEYS)).min(1).max(10).nullable(),
+  notches: z.number().int().min(-MAX_BORROW_SCROLL_NOTCHES).max(MAX_BORROW_SCROLL_NOTCHES).nullable(),
+}).strict().superRefine((step, context) => {
+  const fieldsByKind: Record<typeof step.kind, readonly string[]> = { click: [], type: ['text'], keys: ['keys'], scroll: ['notches'] };
+  const needs = fieldsByKind[step.kind];
+  for (const field of ['text', 'keys', 'notches'] as const) {
+    const given = step[field] !== null;
+    if (given !== needs.includes(field)) context.addIssue({ code: 'custom', path: [field], message: given ? `${field} must be null for ${step.kind}` : `${step.kind} needs ${field}` });
+  }
+  if (step.kind === 'scroll' && step.notches === 0) context.addIssue({ code: 'custom', path: ['notches'], message: 'notches must not be 0' });
+});
+export type DesktopBorrowStep = z.infer<typeof DesktopBorrowStep>;
+export const DesktopBorrowArgs = z.object({ windowId: DesktopWindowId, ref: DesktopRef, steps: z.array(DesktopBorrowStep).min(1).max(MAX_BORROW_STEPS) }).strict()
+  .refine(input => input.steps.reduce((total, step) => total + Array.from(step.text ?? '').length, 0) <= MAX_BORROW_TEXT_CHARACTERS, `At most ${MAX_BORROW_TEXT_CHARACTERS} characters in one borrow`);
+
+/** Time the helper needs around the steps: bringing the window forward, showing the notice, giving everything back. */
+const BORROW_SETUP_MS = 1_200;
+/** One input and the re-check before it; Windows' default timer makes a short wait last up to about 16 ms. */
+const BORROW_INPUT_MS = 16;
+const BORROW_STEP_MS = 150;
+
+/**
+ * How long a borrow of these steps should take at most. The core refuses a plan that would not fit well inside the
+ * limit rather than let the limit cut it in the middle of the text.
+ */
+export function estimateBorrowMs(steps: readonly DesktopBorrowStep[]): number {
+  let inputs = 0;
+  for (const step of steps) {
+    if (step.kind === 'type') inputs += Array.from(step.text ?? '').length;
+    else if (step.kind === 'keys') inputs += step.keys?.length ?? 0;
+    else inputs += 2;
+  }
+  return BORROW_SETUP_MS + steps.length * BORROW_STEP_MS + inputs * BORROW_INPUT_MS;
+}
+
+/** Every step a desktop tool can take: the reading ones, acting on an element (`desktop.act`), and borrowing the real mouse. */
+export const DesktopActionKind = z.enum(['windows', 'snapshot', 'find', 'screenshot', 'invoke', 'set_value', 'toggle', 'expand', 'collapse', 'select', 'scroll_into_view', 'borrow']);
 export type DesktopActionKind = z.infer<typeof DesktopActionKind>;
 /** The steps that act on an element, each one UI Automation pattern. */
 export type DesktopActKind = 'invoke' | 'set_value' | 'toggle' | 'expand' | 'collapse' | 'select' | 'scroll_into_view';
@@ -104,8 +167,11 @@ export const DESKTOP_ACT_KINDS: readonly DesktopActKind[] = ['invoke', 'set_valu
 /** How much a step could change, set by the core and never by the model; the same tiers as the browser's. */
 export const DesktopRisk = z.enum(['read', 'input', 'consequential']);
 export type DesktopRisk = z.infer<typeof DesktopRisk>;
-/** `unknown` is a step the app closed in the middle of; `declined` is one the person did not allow. */
-export const DesktopOutcome = z.enum(['done', 'refused', 'failed', 'unknown', 'declined']);
+/**
+ * `unknown` is a step the app closed in the middle of; `declined` is one the person did not allow; `stopped` is a borrow
+ * the person ended with their own mouse or keyboard.
+ */
+export const DesktopOutcome = z.enum(['done', 'refused', 'failed', 'unknown', 'declined', 'stopped']);
 export type DesktopOutcome = z.infer<typeof DesktopOutcome>;
 
 /**
@@ -123,6 +189,8 @@ export const DesktopAction = z.object({
   risk: DesktopRisk,
   outcome: DesktopOutcome,
   screenshotId: z.uuid().nullable(),
+  /** How long a borrow held the real mouse and keyboard; null for every other step. */
+  durationMs: z.number().int().nonnegative().nullable(),
   at: z.iso.datetime(),
 }).strict();
 export type DesktopAction = z.infer<typeof DesktopAction>;
@@ -143,8 +211,10 @@ export type DesktopApprovalView = {
   /** The journal row of the step being asked about, so Details can show it as waiting. */
   actionId: string;
   workerName: string;
-  kind: DesktopActKind;
+  kind: DesktopActKind | 'borrow';
   element: string;
+  /** For a borrow: the steps it would take with the real mouse and keyboard, and the most time it may hold them. */
+  borrow?: { steps: DesktopBorrowStep[]; limitSeconds: number };
   program: string;
   window: string;
   /** What would be entered, for a step that sets a value. */

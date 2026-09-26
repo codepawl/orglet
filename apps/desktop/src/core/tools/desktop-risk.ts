@@ -23,6 +23,7 @@ export const desktopRiskReasons = {
   dialogDefault: 'Nút mặc định của một hộp thoại',
   dialogConfirm: 'Nút xác nhận của một hộp thoại',
   password: 'Ô mật khẩu',
+  borrow: 'Không làm được trong nền, nên cần chuột và bàn phím thật của bạn',
 };
 
 export const REFUSED_PASSWORD_FIELD = 'Orglet không bao giờ nhập vào ô mật khẩu. Nhờ người dùng tự nhập trong ứng dụng.';

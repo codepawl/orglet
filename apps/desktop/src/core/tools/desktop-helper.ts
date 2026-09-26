@@ -37,6 +37,8 @@ const Answer = z.object({ id: z.string().nullable(), ok: z.boolean(), value: z.u
 const HELPER_ERRORS: Record<string, string> = {
   app_not_answering: 'Ứng dụng không phản hồi. Nó có thể đang bận hoặc đang mở một hộp thoại.',
   element_gone: 'Phần tử này không còn trong cửa sổ.',
+  // A borrow sends nothing when the helper could not set up its watch for the person's own input (phase 2b).
+  'InvalidOperationException: borrow_not_watched': 'Trình hỗ trợ không theo dõi được chuột và bàn phím, nên không mượn chúng.',
 };
 
 export function powershellPath(): string {

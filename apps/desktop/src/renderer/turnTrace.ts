@@ -14,7 +14,7 @@ export type TraceKind =
   | 'read' | 'search' | 'list' | 'skill' | 'web_search' | 'web_read' | 'dataset' | 'edit' | 'folder' | 'move' | 'delete' | 'command' | 'mcp'
   | 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll'
   | 'browser_click' | 'browser_type' | 'browser_select' | 'browser_press' | 'browser_wait' | 'browser_asked'
-  | 'desktop_read' | 'desktop_find' | 'desktop_screenshot' | 'desktop_act' | 'desktop_asked'
+  | 'desktop_read' | 'desktop_find' | 'desktop_screenshot' | 'desktop_act' | 'desktop_asked' | 'desktop_borrow'
   | 'handoff' | 'remembered' | 'proposal' | 'failed' | 'other';
 
 export type TraceEntry = {
@@ -46,6 +46,11 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Đã đọc cửa sổ “(.+)”$/, kind: 'desktop_read' },
   { pattern: /^Đã tìm trong cửa sổ (.+)$/, kind: 'desktop_find' },
   { pattern: /^Đã chụp cửa sổ “(.+)”$/, kind: 'desktop_screenshot' },
+  // Borrowing the real mouse and keyboard (phase 2b): one that ran to its end, then one the person stopped or that
+  // stopped early, which did not go through.
+  { pattern: /^Đã mượn chuột \d+ giây trong “.*” · bạn cho phép$/, kind: 'desktop_borrow', note: true },
+  { pattern: /^Đã mượn chuột \d+ giây trong “.*” · (?:bạn đã dừng|dừng giữa chừng: .+)$/, kind: 'failed', note: true },
+  { pattern: /^Đã hỏi để mượn chuột trong “.*” · bị từ chối$/, kind: 'failed', note: true },
   { pattern: /^Đã hỏi để thao tác “.*” trong “.*” · được phép$/, kind: 'desktop_asked', note: true },
   { pattern: /^Đã hỏi để thao tác “.*” trong “.*” · bị từ chối$/, kind: 'failed', note: true },
   { pattern: /^Đã (?:bấm|nhập vào|bật\/tắt|mở rộng|thu gọn|chọn|cuộn tới) “.*” trong “.*”$/, kind: 'desktop_act', note: true },
@@ -175,8 +180,8 @@ export function liveTraceOf(memories: readonly RunMemory[] | undefined, steps: r
  * count apart: one count for both read "Went online 6 times", which did not say what the orglet did (dogfood, 2026-09-26).
  */
 type SummaryKind = Exclude<TraceKind, BrowserKind | DesktopKind> | 'browser' | 'desktop';
-type DesktopKind = 'desktop_read' | 'desktop_find' | 'desktop_screenshot' | 'desktop_act' | 'desktop_asked';
-const desktopKinds: readonly TraceKind[] = ['desktop_read', 'desktop_find', 'desktop_screenshot', 'desktop_act', 'desktop_asked'];
+type DesktopKind = 'desktop_read' | 'desktop_find' | 'desktop_screenshot' | 'desktop_act' | 'desktop_asked' | 'desktop_borrow';
+const desktopKinds: readonly TraceKind[] = ['desktop_read', 'desktop_find', 'desktop_screenshot', 'desktop_act', 'desktop_asked', 'desktop_borrow'];
 type BrowserKind = 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll'
   | 'browser_click' | 'browser_type' | 'browser_select' | 'browser_press' | 'browser_wait' | 'browser_asked';
 const browserKinds: readonly TraceKind[] = ['browser_open', 'browser_read', 'browser_find', 'browser_screenshot', 'browser_scroll',

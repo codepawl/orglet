@@ -1,18 +1,26 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { DesktopHelperProcess, powershellPath } from '../../apps/desktop/src/core/tools/desktop-helper';
-import { DesktopActResult, DesktopInspectResult, DesktopScreenshotResult, DesktopSnapshotResult, DesktopWindowsResult, type HostWindow } from '../../apps/desktop/src/shared/desktop-host';
+import {
+  DesktopActResult, DesktopBorrowCheckResult, DesktopBorrowResult, DesktopInspectResult, DesktopScreenshotResult, DesktopSnapshotResult, DesktopWindowsResult, type HostWindow,
+} from '../../apps/desktop/src/shared/desktop-host';
+import type { DesktopBorrowStep } from '../../apps/desktop/src/shared/desktop';
 
 /**
  * The real desktop helper against a real window (COD-261, phase 2a): a small WinForms window this test starts
  * (`tests/fixtures/desktop/test-window.ps1`, which opens without taking the foreground and closes itself), read and used
  * through UI Automation. It needs a Windows desktop session, so it runs only with ORGLET_DESKTOP_TEST=1; CI's runners
- * have no interactive desktop.
+ * have no interactive desktop. Nothing in that part moves the cursor or changes the window in front.
+ *
+ * Borrowing the real mouse and keyboard (phase 2b) does both, so it runs only with ORGLET_DESKTOP_BORROW_TEST=1 as well,
+ * on a desktop nobody is using for those few seconds; `tests/fixtures/desktop/nudge.ps1` plays the person.
  *
  *   $env:ORGLET_DESKTOP_TEST='1'; node node_modules/vitest/vitest.mjs run tests/integration/desktop-helper.test.ts
  */
 const enabled = process.platform === 'win32' && process.env.ORGLET_DESKTOP_TEST === '1';
+const borrowEnabled = enabled && process.env.ORGLET_DESKTOP_BORROW_TEST === '1';
 const TITLE = `Orglet desktop test ${process.pid}`;
 const signal = () => AbortSignal.timeout(40_000);
 
@@ -115,5 +123,75 @@ describe.runIf(enabled)('the desktop helper on a real window', { timeout: 90_000
     // The picture is the visible frame only: its size in the PNG header matches what the helper reports.
     expect(png.readUInt32BE(16)).toBe(shot.width);
     expect(png.readUInt32BE(20)).toBe(shot.height);
+  });
+
+  it('checks a borrow without sending any input: a custom-drawn control qualifies, a password field and the window never do', async () => {
+    const snapshot = DesktopSnapshotResult.parse(await helper.request({ kind: 'snapshot', runId: 'run-d', handle: window.handle, allow }, signal()));
+    if ('problem' in snapshot) throw new Error(snapshot.problem);
+    // The sketch pad draws itself: UI Automation lists it with no action at all.
+    const sketchLine = snapshot.snapshot.split('\n').find(line => /"Sketch pad"/.test(line)) ?? '';
+    expect(sketchLine).not.toMatch(/actions=/);
+    const sketch = refOf(snapshot.snapshot, /"Sketch pad"/);
+    const facts = DesktopInspectResult.parse(await helper.request({ kind: 'inspect', runId: 'run-d', handle: window.handle, allow, ref: sketch }, signal()));
+    if ('problem' in facts || !facts.target) throw new Error('Cannot inspect the sketch pad');
+    const checked = DesktopBorrowCheckResult.parse(await helper.request({
+      kind: 'borrow_check', runId: 'run-d', handle: window.handle, allow, ref: sketch, expect: { name: facts.target.name, controlType: facts.target.controlType },
+    }, signal()));
+    if ('problem' in checked) throw new Error(checked.problem);
+    expect(checked.point.x).toBeGreaterThan(0);
+    const password = refOf(snapshot.snapshot, /edit "Password"/);
+    expect(await helper.request({ kind: 'borrow_check', runId: 'run-d', handle: window.handle, allow, ref: password, expect: { name: 'Password', controlType: 'edit' } }, signal()))
+      .toEqual({ problem: 'password' });
+    const root = refOf(snapshot.snapshot, /^- window/);
+    expect(await helper.request({ kind: 'borrow_check', runId: 'run-d', handle: window.handle, allow, ref: root, expect: { name: window.title, controlType: 'window' } }, signal()))
+      .toEqual({ problem: 'not_possible' });
+    expect(await helper.request({ kind: 'borrow_check', runId: 'run-d', handle: window.handle, allow: ['notepad.exe'], ref: sketch, expect: { name: facts.target.name, controlType: facts.target.controlType } }, signal()))
+      .toEqual({ problem: 'not_granted' });
+  });
+
+  describe.runIf(borrowEnabled)('borrowing the real mouse and keyboard', () => {
+    const run = promisify(execFile);
+    const nudge = (kind: 'mouse' | 'escape', delayMs: number) => run(powershellPath(), ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(__dirname, '../fixtures/desktop/nudge.ps1'), '-Kind', kind, '-DelayMs', String(delayMs)]);
+    const step = (kind: DesktopBorrowStep['kind'], fields: Partial<DesktopBorrowStep> = {}): DesktopBorrowStep => ({ kind, text: null, keys: null, notches: null, ...fields });
+
+    async function borrow(runId: string, steps: DesktopBorrowStep[]) {
+      const snapshot = DesktopSnapshotResult.parse(await helper.request({ kind: 'snapshot', runId, handle: window.handle, allow }, signal()));
+      if ('problem' in snapshot) throw new Error(snapshot.problem);
+      const ref = refOf(snapshot.snapshot, /"Sketch pad"/);
+      return DesktopBorrowResult.parse(await helper.request({
+        kind: 'borrow', runId, handle: window.handle, allow, ref, expect: { name: 'Sketch pad', controlType: 'pane' }, steps, limitMs: 10_000, indicator: 'Orglet test is using your mouse and keyboard · press Esc to stop',
+      }, signal()));
+    }
+
+    async function sketchState(runId: string) {
+      const snapshot = DesktopSnapshotResult.parse(await helper.request({ kind: 'snapshot', runId, handle: window.handle, allow }, signal()));
+      if ('problem' in snapshot) throw new Error(snapshot.problem);
+      return snapshot.snapshot.split('\n').find(line => /text "Sketch:/.test(line)) ?? '';
+    }
+
+    it('clicks and types into a control UI Automation cannot type into, then gives back the window in front and the cursor', async () => {
+      const done = await borrow('run-e', [step('click'), step('type', { text: 'hi there' })]);
+      if ('problem' in done) throw new Error(done.problem);
+      expect(done).toMatchObject({ completedSteps: 2, stoppedBy: null, stopLatencyMs: null, restored: { foreground: true, cursor: true } });
+      expect(done.durationMs).toBeLessThan(10_000);
+      expect(await sketchState('run-e')).toContain('1 clicks, \'hi there\'');
+    });
+
+    it('stops at once when the person moves the mouse, and keeps Escape from the app', async () => {
+      const long = 'x'.repeat(300);
+      const [moved] = await Promise.all([borrow('run-f', [step('click'), step('type', { text: long })]), nudge('mouse', 900)]);
+      if ('problem' in moved) throw new Error(moved.problem);
+      expect(moved.stoppedBy).toBe('person_mouse');
+      expect(moved.completedSteps).toBeLessThan(2);
+      expect(moved.stopLatencyMs).not.toBeNull();
+      expect(moved.stopLatencyMs!).toBeLessThan(100);
+      // The person's cursor stays where they put it.
+      expect(moved.restored.cursor).toBe(false);
+
+      const [escaped] = await Promise.all([borrow('run-g', [step('type', { text: long })]), nudge('escape', 700)]);
+      if ('problem' in escaped) throw new Error(escaped.problem);
+      expect(escaped).toMatchObject({ stoppedBy: 'escape', restored: { foreground: true, cursor: true } });
+      expect(await sketchState('run-g')).not.toContain('[esc]');
+    });
   });
 });

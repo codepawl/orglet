@@ -37,6 +37,7 @@ import type { ProcessIdentity } from '../core/tools/process-identity';
 import { McpServerDraft, parseMcpImport, splitMcpDraft, type McpServerView } from '../shared/mcp';
 import type { Incoming, SendToState } from '../shared/incoming';
 import { LINK_SCHEME, parseLaunchArguments, resolveLinkChat, type LaunchRequest } from './launch-requests';
+import { DesktopOverlayWindow } from './desktop-overlay';
 import { importSentFiles, isKeptOffSendTo, keepOffSendTo, SendToInstaller, SentFilesHandOff, type PathKind, type ShortcutFiles } from './send-to';
 import { BackgroundNotice } from '../shared/background-notice';
 import { BrowserHostProcess } from './browser-host';
@@ -63,6 +64,8 @@ let webSearchKeys: WebSearchKeys;
 let mcpProcesses: ProcessIdentity[] = [];
 /** Orglet's browser (COD-261): the host process main starts on demand, and the named profiles main keeps. */
 let browserHost: BrowserHostProcess | undefined;
+/** The glow drawn on the desktop while an orglet controls an app (COD-261); Windows only, created with the main window. */
+let desktopOverlay: DesktopOverlayWindow | undefined;
 let browserProfiles: BrowserProfiles;
 /** Set once the browser windows were asked to close at quit, so the second before-quit goes straight through. */
 let browserClosing = false;
@@ -389,6 +392,12 @@ async function start() {
         return;
       }
       if (message.type === 'browser' && typeof message.id === 'string') { void relayBrowser(message.id, message.request); return; }
+      // The glow while an orglet controls a desktop app (COD-261); the overlay checks the state itself.
+      if (message.type === 'desktopOverlay') {
+        const shown = await (desktopOverlay?.update(message.state) ?? Promise.resolve(false));
+        if (shown && typeof message.id === 'string' && ready) core.postMessage({ id: randomUUID(), command: 'overlayShown', args: message.id });
+        return;
+      }
       if (message.type === 'browserCancel' && typeof message.id === 'string') { browserHost?.cancel(message.id); return; }
       if (message.type === 'profileCancel') { cancelProfile(message.id); return; }
       if (message.type === 'profile') {
@@ -426,6 +435,9 @@ async function start() {
   const devServer = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL) : undefined;
   window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // The desktop glow is its own window on Windows (COD-261); it goes with the main window so it never keeps the app open.
+  if (process.platform === 'win32') desktopOverlay = new DesktopOverlayWindow(url, join(__dirname, 'preload.js'), taskId => request('cancel', { id: taskId }));
+  window.on('closed', () => desktopOverlay?.destroy());
   // A mouse's side button over the page reaches the renderer as a mouse event; over the window frame, or from a
   // driver that sends the command itself, it arrives here as an app command instead (COD-202). Windows and Linux only.
   window.on('app-command', (_event, command) => {

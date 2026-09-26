@@ -196,6 +196,9 @@ export class Store {
         CREATE TABLE IF NOT EXISTS desktop_screenshots (
           id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), hash TEXT NOT NULL, mime TEXT NOT NULL, bytes BLOB NOT NULL, created_at TEXT NOT NULL
         );`);
+      // How long a borrow held the real mouse and keyboard (phase 2b). A nullable column, which older builds ignore.
+      const desktopColumns = new Set((this.db.prepare('PRAGMA table_info(desktop_actions)').all() as { name: string }[]).map(column => column.name));
+      if (!desktopColumns.has('duration_ms')) this.db.exec('ALTER TABLE desktop_actions ADD COLUMN duration_ms INTEGER');
       // The orglet form used to force the $0.50 default limit on Claude Code orglets, which stopped real work after a
       // few calls. An orglet on Claude Code now runs on the person's plan unless it has a limit of its own (COD-253),
       // so that forced default is dropped once; any other limit someone picked is kept. A settings row, not a schema

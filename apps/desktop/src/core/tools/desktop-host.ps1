@@ -1,18 +1,23 @@
-# Orglet's desktop helper (COD-261, phase 2a). Windows PowerShell 5.1 runs it; the core sends it on the first line of
-# standard input and then one JSON request per line, and reads one JSON answer per line back.
+# Orglet's desktop helper (COD-261, phase 2a and 2b). Windows PowerShell 5.1 runs it; the core sends it on the first
+# line of standard input and then one JSON request per line, and reads one JSON answer per line back.
 #
-# It reads and acts on windows only through UI Automation patterns (Invoke, Value, Toggle, ExpandCollapse,
-# SelectionItem, ScrollItem). It never moves the real cursor, never sends keys or mouse input (no SendInput, no
-# PostMessage), and never brings a window to the front. A step UI Automation cannot do in the background comes back as
-# "not possible", never as a fallback to real input.
+# Reading and acting go only through UI Automation patterns (Invoke, Value, Toggle, ExpandCollapse, SelectionItem,
+# ScrollItem): they never move the real cursor, never send keys or mouse input and never bring a window to the front. A
+# step UI Automation cannot do in the background comes back as "not possible", never as a fallback to real input.
+#
+# The one exception is a borrow (phase 2b), which the core sends only after the person allowed it on a card: it brings
+# the window forward, sends the planned clicks, text, keys or wheel turns with SendInput, all tagged as Orglet's own,
+# and gives the window and the cursor back. Low-level hooks watch for any input without that tag, which is the
+# person's, and stop the borrow at once; Escape is kept from the app. A notice stays on top while it runs.
 #
 # The C# below is compiled in memory by the .NET Framework on this computer; nothing new is installed.
 
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing, System.Web.Extensions
-Add-Type -ReferencedAssemblies UIAutomationClient, UIAutomationTypes, WindowsBase, System.Drawing, System.Web.Extensions -Language CSharp -TypeDefinition @'
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing, System.Web.Extensions, System.Windows.Forms
+Add-Type -ReferencedAssemblies UIAutomationClient, UIAutomationTypes, WindowsBase, System.Drawing, System.Web.Extensions, System.Windows.Forms -Language CSharp -TypeDefinition @'
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -21,6 +26,7 @@ using System.Text;
 using System.Threading;
 using System.Web.Script.Serialization;
 using System.Windows.Automation;
+using System.Windows.Forms;
 
 namespace OrgletDesktop {
   static class Native {
@@ -48,6 +54,63 @@ namespace OrgletDesktop {
 
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left; public int Top; public int Right; public int Bottom; }
     [StructLayout(LayoutKind.Sequential)] public struct PointStruct { public int X; public int Y; }
+
+    // Borrowing the real mouse and keyboard (phase 2b).
+    [DllImport("user32.dll", SetLastError = true)] public static extern uint SendInput(uint count, Input[] inputs, int size);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr window);
+    [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr window, bool altTab);
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint attach, uint attachTo, bool doAttach);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(PointStruct point);
+    [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(PointStruct point, uint flags);
+    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint threadId, ref GuiThreadInfo info);
+    [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr SetWindowsHookEx(int hook, HookProcedure procedure, IntPtr module, uint threadId);
+    [DllImport("user32.dll")] public static extern bool UnhookWindowsHookEx(IntPtr hook);
+    [DllImport("user32.dll")] public static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr GetModuleHandle(string name);
+    [DllImport("user32.dll", SetLastError = true)] public static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access);
+    [DllImport("user32.dll")] public static extern bool CloseDesktop(IntPtr desktop);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern bool GetUserObjectInformation(IntPtr handle, int index, StringBuilder information, int length, out int needed);
+    [DllImport("user32.dll")] public static extern bool PeekMessage(out MessageStruct message, IntPtr window, uint filterMinimum, uint filterMaximum, uint remove);
+    [DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+
+    public delegate IntPtr HookProcedure(int code, IntPtr wParam, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)] public struct MouseInput { public int X; public int Y; public uint MouseData; public uint Flags; public uint Time; public IntPtr ExtraInfo; }
+    [StructLayout(LayoutKind.Sequential)] public struct KeyboardInput { public ushort VirtualKey; public ushort Scan; public uint Flags; public uint Time; public IntPtr ExtraInfo; }
+    [StructLayout(LayoutKind.Explicit)] public struct InputUnion { [FieldOffset(0)] public MouseInput Mouse; [FieldOffset(0)] public KeyboardInput Keyboard; }
+    [StructLayout(LayoutKind.Sequential)] public struct Input { public uint Type; public InputUnion Data; }
+    [StructLayout(LayoutKind.Sequential)] public struct MouseHookData { public PointStruct Point; public uint MouseData; public uint Flags; public uint Time; public IntPtr ExtraInfo; }
+    [StructLayout(LayoutKind.Sequential)] public struct KeyboardHookData { public uint VirtualKey; public uint Scan; public uint Flags; public uint Time; public IntPtr ExtraInfo; }
+    [StructLayout(LayoutKind.Sequential)] public struct GuiThreadInfo { public int Size; public uint Flags; public IntPtr Active; public IntPtr Focus; public IntPtr Capture; public IntPtr MenuOwner; public IntPtr MoveSize; public IntPtr Caret; public Rect CaretRect; }
+    [StructLayout(LayoutKind.Sequential)] public struct MessageStruct { public IntPtr Window; public uint Message; public IntPtr WParam; public IntPtr LParam; public uint Time; public PointStruct Point; }
+
+    public const uint InputMouse = 0;
+    public const uint InputKeyboard = 1;
+    public const uint MouseMove = 0x0001;
+    public const uint MouseLeftDown = 0x0002;
+    public const uint MouseLeftUp = 0x0004;
+    public const uint MouseWheel = 0x0800;
+    public const uint MouseVirtualDesk = 0x4000;
+    public const uint MouseAbsolute = 0x8000;
+    public const uint KeyExtended = 0x0001;
+    public const uint KeyUp = 0x0002;
+    public const uint KeyUnicode = 0x0004;
+    public const int WheelDelta = 120;
+    public const int KeyboardLowLevel = 13;
+    public const int MouseLowLevel = 14;
+    public const int VirtualScreenLeft = 76;
+    public const int VirtualScreenTop = 77;
+    public const int VirtualScreenWidth = 78;
+    public const int VirtualScreenHeight = 79;
+    public const uint MonitorDefaultToNull = 0;
+    public const uint DesktopReadObjects = 0x0001;
+    public const int UserObjectName = 2;
+    public const int DwmCornerPreference = 33;
+    public const int DwmRound = 2;
 
     public const uint ProcessQueryLimitedInformation = 0x1000;
     public const uint TokenQuery = 0x0008;
@@ -146,6 +209,10 @@ namespace OrgletDesktop {
       if (kind == "inspect") return Inspect(request);
       if (kind == "act") return Act(request);
       if (kind == "screenshot") return Screenshot(request);
+      if (kind == "bounds") return Bounds(request);
+      if (kind == "borrow_check") return Borrowing.Check(request);
+      if (kind == "borrow") return Borrowing.Borrow(request);
+      if (kind == "borrow_stop") return Borrowing.StopCurrent();
       if (kind == "forget") return Forget(request);
       throw new ArgumentException("unknown request " + kind);
     }
@@ -514,10 +581,14 @@ namespace OrgletDesktop {
         var handle = info.NativeWindowHandle;
         var defaultButton = info.ControlType == ControlType.Button && handle != 0
           && (Native.GetWindowLong(new IntPtr(handle), Native.StyleIndex) & 0x0F) == Native.DefaultPushButton;
+        var box = info.BoundingRectangle;
+        var hasBox = !box.IsEmpty && box.Width >= 1 && box.Height >= 1;
         result["target"] = new Dictionary<string, object> {
           { "ref", Convert.ToString(request["ref"]) }, { "name", info.Name ?? "" }, { "controlType", Words(info.ControlType.ProgrammaticName) },
           { "automationId", info.AutomationId ?? "" }, { "className", info.ClassName ?? "" }, { "enabled", info.IsEnabled }, { "password", info.IsPassword },
           { "actions", LiveActions(element) }, { "inDialog", dialog }, { "defaultButton", defaultButton }, { "windowName", windowName },
+          // Where the element is on screen, in physical pixels, for the orglet's cursor on the glow; never used to act.
+          { "box", hasBox ? new Dictionary<string, object> { { "x", (int)Math.Round(box.X) }, { "y", (int)Math.Round(box.Y) }, { "width", (int)Math.Round(box.Width) }, { "height", (int)Math.Round(box.Height) } } : null },
         };
       } catch (ElementNotAvailableException) {
         result["target"] = null;
@@ -631,6 +702,601 @@ namespace OrgletDesktop {
         result["title"] = facts.Title;
       }
       return result;
+    }
+
+    /// <summary>Where a granted window's visible frame is now, in physical pixels, for the glow around it. Reads nothing inside it.</summary>
+    static object Bounds(Dictionary<string, object> request) {
+      WindowFacts facts;
+      string problem;
+      var window = GrantedWindow(request, out facts, out problem);
+      if (window == null) return Problem(problem);
+      if (facts.Minimized) return Problem("minimized");
+      var handle = new IntPtr(facts.Handle);
+      Native.Rect frame;
+      if (Native.DwmGetWindowAttribute(handle, Native.DwmExtendedFrameBounds, out frame, Marshal.SizeOf(typeof(Native.Rect))) != 0 && !Native.GetWindowRect(handle, out frame)) return Problem("window_gone");
+      var width = frame.Right - frame.Left;
+      var height = frame.Bottom - frame.Top;
+      if (width <= 0 || height <= 0) return Problem("minimized");
+      return new Dictionary<string, object> { { "bounds", new Dictionary<string, object> { { "x", frame.Left }, { "y", frame.Top }, { "width", width }, { "height", height } } } };
+    }
+
+    // ----- Borrowing the real mouse and keyboard (phase 2b) -----
+
+    /// <summary>
+    /// A few planned steps with the person's real mouse and keyboard on one element, after they allowed it on a card:
+    /// click it, type into it, press keys in it or turn the wheel over it. Nothing here runs without a "borrow" request,
+    /// and the core sends one only for the steps the person saw.
+    /// </summary>
+    static class Borrowing {
+      static int running;
+      static volatile Session current;
+
+      /// <summary>Whether Windows shows the normal desktop, rather than an administrator prompt or the lock screen.</summary>
+      static bool OnNormalDesktop() {
+        var desktop = Native.OpenInputDesktop(0, false, Native.DesktopReadObjects);
+        if (desktop == IntPtr.Zero) return false;
+        try {
+          var name = new StringBuilder(256);
+          int needed;
+          if (!Native.GetUserObjectInformation(desktop, Native.UserObjectName, name, name.Capacity * 2, out needed)) return false;
+          return string.Equals(name.ToString(), "Default", StringComparison.OrdinalIgnoreCase);
+        } finally {
+          Native.CloseDesktop(desktop);
+        }
+      }
+
+      /// <summary>Where the mouse would click the element: its clickable point, or the middle of its box.</summary>
+      internal static bool PointOf(AutomationElement element, out Native.PointStruct point) {
+        point = new Native.PointStruct();
+        System.Windows.Point clickable;
+        if (element.TryGetClickablePoint(out clickable)) {
+          point.X = (int)Math.Round(clickable.X);
+          point.Y = (int)Math.Round(clickable.Y);
+          return true;
+        }
+        var box = element.Current.BoundingRectangle;
+        if (box.IsEmpty || box.Width < 1 || box.Height < 1) return false;
+        point.X = (int)Math.Round(box.X + box.Width / 2);
+        point.Y = (int)Math.Round(box.Y + box.Height / 2);
+        return true;
+      }
+
+      /// <summary>
+      /// Everything a borrow needs, checked without sending any input: the window is granted, not elevated and not
+      /// minimized, the element is the one judged, enabled, not a password field and not the window itself, it has a
+      /// point on a screen inside its window, and Windows shows the normal desktop.
+      /// </summary>
+      static AutomationElement Ready(Dictionary<string, object> request, out WindowFacts facts, out Native.PointStruct point, out string problem) {
+        point = new Native.PointStruct();
+        var window = GrantedWindow(request, out facts, out problem);
+        if (window == null) return null;
+        if (facts.Minimized) { problem = "minimized"; return null; }
+        var element = RefElement(request);
+        if (element == null) { problem = "stale"; return null; }
+        try {
+          if (!SameElement(element, (Dictionary<string, object>)request["expect"])) { problem = "stale"; return null; }
+          var info = element.Current;
+          if (info.IsPassword) { problem = "password"; return null; }
+          if (!info.IsEnabled) { problem = "disabled"; return null; }
+          if (info.ControlType == ControlType.Window || info.NativeWindowHandle == facts.Handle) { problem = "not_possible"; return null; }
+          if (!PointOf(element, out point)) { problem = "off_screen"; return null; }
+        } catch (ElementNotAvailableException) {
+          problem = "stale";
+          return null;
+        }
+        Native.Rect bounds;
+        if (!Native.GetWindowRect(new IntPtr(facts.Handle), out bounds)) { problem = "window_gone"; return null; }
+        var inside = point.X >= bounds.Left && point.X < bounds.Right && point.Y >= bounds.Top && point.Y < bounds.Bottom;
+        if (!inside || Native.MonitorFromPoint(point, Native.MonitorDefaultToNull) == IntPtr.Zero) { problem = "off_screen"; return null; }
+        if (!OnNormalDesktop()) { problem = "secure_desktop"; return null; }
+        return element;
+      }
+
+      public static object Check(Dictionary<string, object> request) {
+        WindowFacts facts;
+        Native.PointStruct point;
+        string problem;
+        var element = Ready(request, out facts, out point, out problem);
+        if (element == null) return Problem(problem);
+        var result = WindowView(facts);
+        result["point"] = new Dictionary<string, object> { { "x", point.X }, { "y", point.Y } };
+        return result;
+      }
+
+      public static object StopCurrent() {
+        var session = current;
+        if (session != null) session.Stop("run_stopped");
+        return new Dictionary<string, object> { { "stopping", session != null } };
+      }
+
+      public static object Borrow(Dictionary<string, object> request) {
+        if (Interlocked.CompareExchange(ref running, 1, 0) != 0) return Problem("busy");
+        try {
+          WindowFacts facts;
+          Native.PointStruct point;
+          string problem;
+          var element = Ready(request, out facts, out point, out problem);
+          if (element == null) return Problem(problem);
+          var steps = new List<Dictionary<string, object>>();
+          foreach (var step in (object[])request["steps"]) steps.Add((Dictionary<string, object>)step);
+          var session = new Session(new IntPtr(facts.Handle), element, Convert.ToInt32(request["limitMs"]), Convert.ToString(request["indicator"]), point);
+          current = session;
+          try {
+            var result = session.Run(steps);
+            try {
+              result["title"] = AutomationElement.FromHandle(new IntPtr(facts.Handle)).Current.Name ?? "";
+            } catch (Exception) {
+              result["title"] = facts.Title;
+            }
+            return result;
+          } finally {
+            current = null;
+          }
+        } finally {
+          Interlocked.Exchange(ref running, 0);
+        }
+      }
+    }
+
+    /// <summary>
+    /// The notice on top of everything while a borrow runs. It never takes the focus or a click: it is a tool window
+    /// that does not activate and lets the mouse through.
+    /// </summary>
+    sealed class Indicator : Form {
+      const int ExtendedTopMost = 0x00000008;
+      const int ExtendedTransparent = 0x00000020;
+      const int ExtendedToolWindow = 0x00000080;
+      const int ExtendedLayered = 0x00080000;
+      const int ExtendedNoActivate = 0x08000000;
+
+      public Indicator(string text, Rectangle area, Native.PointStruct avoid) {
+        FormBorderStyle = FormBorderStyle.None;
+        ShowInTaskbar = false;
+        // Set before the window exists, so it is created on top rather than moved there, which could activate it.
+        TopMost = true;
+        StartPosition = FormStartPosition.Manual;
+        BackColor = Color.FromArgb(28, 28, 30);
+        ForeColor = Color.White;
+        Opacity = 0.94;
+        var font = new Font("Segoe UI", 10.5f, FontStyle.Regular, GraphicsUnit.Point);
+        var label = new Label { Text = text, Font = font, ForeColor = Color.White, BackColor = Color.Transparent, AutoSize = true, Padding = new Padding(0) };
+        var measured = TextRenderer.MeasureText(text, font);
+        var horizontal = (int)Math.Round(font.Height * 1.1);
+        var vertical = (int)Math.Round(font.Height * 0.6);
+        Size = new Size(measured.Width + horizontal * 2, measured.Height + vertical * 2);
+        label.Location = new Point(horizontal, vertical);
+        Controls.Add(label);
+        var left = area.Left + (area.Width - Width) / 2;
+        var top = area.Top + 16;
+        // Kept away from the point the mouse will use, so it never sits over what is being clicked.
+        if (avoid.Y >= top - 24 && avoid.Y <= top + Height + 24) top = area.Bottom - Height - 16;
+        Location = new Point(left, top);
+      }
+
+      protected override bool ShowWithoutActivation { get { return true; } }
+
+      protected override CreateParams CreateParams {
+        get {
+          var parameters = base.CreateParams;
+          parameters.ExStyle |= ExtendedTopMost | ExtendedTransparent | ExtendedToolWindow | ExtendedLayered | ExtendedNoActivate;
+          return parameters;
+        }
+      }
+
+      protected override void OnHandleCreated(EventArgs arguments) {
+        base.OnHandleCreated(arguments);
+        var round = Native.DwmRound;
+        try {
+          Native.DwmSetWindowAttribute(Handle, Native.DwmCornerPreference, ref round, 4);
+        } catch (DllNotFoundException) {
+          // Square corners on a Windows without that setting.
+        }
+      }
+    }
+
+    /// <summary>One borrow: the hooks and the notice on their own thread, and the steps on the calling one.</summary>
+    sealed class Session {
+      const int KeyDown = 0x0100;
+      const int SystemKeyDown = 0x0104;
+      const int MouseMoveMessage = 0x0200;
+      const int LeftButtonUp = 0x0202;
+      const int RightButtonUp = 0x0205;
+      const int MiddleButtonUp = 0x0208;
+      const int ExtraButtonUp = 0x020C;
+      const uint EscapeKey = 0x1B;
+
+      readonly IntPtr window;
+      readonly AutomationElement element;
+      readonly int limitMs;
+      readonly string indicatorText;
+      readonly Native.PointStruct firstPoint;
+      /// <summary>Carried by every input Orglet sends, so the hooks can tell it from the person's.</summary>
+      readonly IntPtr tag;
+      readonly Stopwatch clock = new Stopwatch();
+      readonly ManualResetEvent overlayReady = new ManualResetEvent(false);
+      string stoppedBy;
+      long stoppedAtTicks = -1;
+      long lastInputTicks = -1;
+      Native.HookProcedure mouseProcedure;
+      Native.HookProcedure keyboardProcedure;
+      Indicator indicator;
+      Control anchor;
+      Exception overlayFailure;
+      Thread overlay;
+      bool hooked;
+
+      public Session(IntPtr window, AutomationElement element, int limitMs, string indicatorText, Native.PointStruct firstPoint) {
+        this.window = window;
+        this.element = element;
+        this.limitMs = limitMs;
+        this.indicatorText = indicatorText;
+        this.firstPoint = firstPoint;
+        var random = new Random();
+        tag = new IntPtr(unchecked((long)0x4F52474C00000000L | (uint)random.Next(1, int.MaxValue)));
+      }
+
+      public void Stop(string reason) {
+        if (Interlocked.CompareExchange<string>(ref stoppedBy, reason, null) == null) Interlocked.Exchange(ref stoppedAtTicks, clock.ElapsedTicks);
+      }
+
+      string Stopped { get { return Volatile.Read(ref stoppedBy); } }
+
+      // The hooks run on the notice's thread, which pumps its messages; each answers at once.
+      IntPtr OnMouse(int code, IntPtr wParam, IntPtr lParam) {
+        if (code >= 0) {
+          var data = (Native.MouseHookData)Marshal.PtrToStructure(lParam, typeof(Native.MouseHookData));
+          if (data.ExtraInfo != tag) {
+            var message = wParam.ToInt32();
+            var release = message == LeftButtonUp || message == RightButtonUp || message == MiddleButtonUp || message == ExtraButtonUp;
+            if (message == MouseMoveMessage) {
+              Native.PointStruct now;
+              Native.GetCursorPos(out now);
+              if (now.X != data.Point.X || now.Y != data.Point.Y) Stop("person_mouse");
+            } else if (!release) {
+              Stop("person_mouse");
+            }
+          }
+        }
+        return Native.CallNextHookEx(IntPtr.Zero, code, wParam, lParam);
+      }
+
+      IntPtr OnKeyboard(int code, IntPtr wParam, IntPtr lParam) {
+        if (code >= 0) {
+          var data = (Native.KeyboardHookData)Marshal.PtrToStructure(lParam, typeof(Native.KeyboardHookData));
+          if (data.ExtraInfo != tag) {
+            var message = wParam.ToInt32();
+            var down = message == KeyDown || message == SystemKeyDown;
+            // Escape is how the person stops a borrow, so the app never gets it; a key released from before is not new input.
+            if (data.VirtualKey == EscapeKey) {
+              if (down) Stop("escape");
+              return new IntPtr(1);
+            }
+            if (down) Stop("person_key");
+          }
+        }
+        return Native.CallNextHookEx(IntPtr.Zero, code, wParam, lParam);
+      }
+
+      void RunOverlay(Rectangle area) {
+        IntPtr mouseHook = IntPtr.Zero;
+        IntPtr keyboardHook = IntPtr.Zero;
+        try {
+          mouseProcedure = OnMouse;
+          keyboardProcedure = OnKeyboard;
+          var module = Native.GetModuleHandle(null);
+          mouseHook = Native.SetWindowsHookEx(Native.MouseLowLevel, mouseProcedure, module, 0);
+          keyboardHook = Native.SetWindowsHookEx(Native.KeyboardLowLevel, keyboardProcedure, module, 0);
+          hooked = mouseHook != IntPtr.Zero && keyboardHook != IntPtr.Zero;
+          if (!hooked) {
+            overlayReady.Set();
+            return;
+          }
+          // A handle on this thread to post the end to. The hooks need this thread's message loop either way; the notice
+          // is shown only when the core asks for it, which it does when Orglet's own glow and pill cannot show.
+          anchor = new Control();
+          anchor.CreateControl();
+          if (indicatorText.Length > 0) {
+            indicator = new Indicator(indicatorText, area, firstPoint);
+            indicator.Show();
+          }
+          overlayReady.Set();
+          Application.Run();
+        } catch (Exception error) {
+          overlayFailure = error;
+          overlayReady.Set();
+        } finally {
+          if (mouseHook != IntPtr.Zero) Native.UnhookWindowsHookEx(mouseHook);
+          if (keyboardHook != IntPtr.Zero) Native.UnhookWindowsHookEx(keyboardHook);
+        }
+      }
+
+      void CloseOverlay() {
+        var posted = anchor;
+        var shown = indicator;
+        try {
+          if (posted != null && posted.IsHandleCreated) posted.BeginInvoke((Action)(() => {
+            if (shown != null) shown.Close();
+            Application.ExitThread();
+          }));
+        } catch (InvalidOperationException) {
+          // The thread has already ended.
+        }
+        if (overlay != null) overlay.Join(2000);
+      }
+
+      /// <summary>Brings a window to the front: the thread joins the front window's input for a moment, as Windows asks.</summary>
+      bool BringForward(IntPtr target) {
+        if (Native.GetForegroundWindow() == target) return true;
+        Native.MessageStruct message;
+        Native.PeekMessage(out message, IntPtr.Zero, 0, 0, 0);
+        // A tagged move of nothing makes this the process that sent the last input, which Windows lets take the front.
+        Send(MouseEvent(0, 0, Native.MouseMove, 0));
+        var front = Native.GetForegroundWindow();
+        uint ignored;
+        var frontThread = front == IntPtr.Zero ? 0 : Native.GetWindowThreadProcessId(front, out ignored);
+        var ownThread = Native.GetCurrentThreadId();
+        var attached = frontThread != 0 && frontThread != ownThread && Native.AttachThreadInput(ownThread, frontThread, true);
+        try {
+          Native.BringWindowToTop(target);
+          Native.SetForegroundWindow(target);
+        } finally {
+          if (attached) Native.AttachThreadInput(ownThread, frontThread, false);
+        }
+        if (WaitForFront(target, 400)) return true;
+        // Some windows in front, such as the shell's own input host, cannot be joined; switching the way Alt+Tab does
+        // still brings the window forward, and sends no key.
+        Native.SwitchToThisWindow(target, true);
+        return WaitForFront(target, 800);
+      }
+
+      static bool WaitForFront(IntPtr target, int milliseconds) {
+        for (var waited = 0; waited < milliseconds; waited += 20) {
+          if (Native.GetForegroundWindow() == target) return true;
+          Thread.Sleep(20);
+        }
+        return Native.GetForegroundWindow() == target;
+      }
+
+      Native.Input MouseEvent(int x, int y, uint flags, int data) {
+        var input = new Native.Input { Type = Native.InputMouse };
+        input.Data.Mouse = new Native.MouseInput { X = x, Y = y, MouseData = unchecked((uint)data), Flags = flags, ExtraInfo = tag };
+        return input;
+      }
+
+      Native.Input KeyEvent(ushort virtualKey, ushort scan, uint flags) {
+        var input = new Native.Input { Type = Native.InputKeyboard };
+        input.Data.Keyboard = new Native.KeyboardInput { VirtualKey = virtualKey, Scan = scan, Flags = flags, ExtraInfo = tag };
+        return input;
+      }
+
+      void Send(params Native.Input[] inputs) {
+        Native.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Native.Input)));
+        Interlocked.Exchange(ref lastInputTicks, clock.ElapsedTicks);
+      }
+
+      /// <summary>Checked before every input: nobody stopped it, time is left, and the approved window is still in front.</summary>
+      bool MayContinue() {
+        if (Stopped != null) return false;
+        if (clock.ElapsedMilliseconds > limitMs) { Stop("time_limit"); return false; }
+        if (Native.GetForegroundWindow() != window) { Stop("foreground_changed"); return false; }
+        return true;
+      }
+
+      /// <summary>Whether the keyboard focus is on the approved element or inside it, and never on a password field.</summary>
+      bool FocusOnElement() {
+        try {
+          var focused = AutomationElement.FocusedElement;
+          if (focused == null || focused.Current.IsPassword) return false;
+          var walker = TreeWalker.RawViewWalker;
+          var candidate = focused;
+          for (var steps = 0; candidate != null && steps < 40; steps++) {
+            if (Automation.Compare(candidate, element)) return true;
+            candidate = walker.GetParent(candidate);
+          }
+        } catch (ElementNotAvailableException) {
+          return false;
+        }
+        return false;
+      }
+
+      IntPtr FocusHandle() {
+        uint ignored;
+        var thread = Native.GetWindowThreadProcessId(window, out ignored);
+        var info = new Native.GuiThreadInfo { Size = Marshal.SizeOf(typeof(Native.GuiThreadInfo)) };
+        return Native.GetGUIThreadInfo(thread, ref info) ? info.Focus : IntPtr.Zero;
+      }
+
+      /// <summary>Puts the keyboard focus on the element for typing, and says whether it is there.</summary>
+      bool FocusForTyping() {
+        if (FocusOnElement()) return true;
+        try {
+          element.SetFocus();
+        } catch (Exception) {
+          return false;
+        }
+        for (var waited = 0; waited < 500; waited += 25) {
+          if (FocusOnElement()) return true;
+          Thread.Sleep(25);
+        }
+        return false;
+      }
+
+      /// <summary>Moves the real cursor onto the element and checks nothing else covers that point.</summary>
+      bool MoveOntoElement() {
+        Native.PointStruct point;
+        try {
+          if (!Borrowing.PointOf(element, out point)) { Stop("focus_changed"); return false; }
+        } catch (ElementNotAvailableException) {
+          Stop("focus_changed");
+          return false;
+        }
+        var left = Native.GetSystemMetrics(Native.VirtualScreenLeft);
+        var top = Native.GetSystemMetrics(Native.VirtualScreenTop);
+        var width = Math.Max(2, Native.GetSystemMetrics(Native.VirtualScreenWidth));
+        var height = Math.Max(2, Native.GetSystemMetrics(Native.VirtualScreenHeight));
+        var normalizedX = (int)Math.Round((point.X - left) * 65535.0 / (width - 1));
+        var normalizedY = (int)Math.Round((point.Y - top) * 65535.0 / (height - 1));
+        if (!MayContinue()) return false;
+        Send(MouseEvent(normalizedX, normalizedY, Native.MouseMove | Native.MouseAbsolute | Native.MouseVirtualDesk, 0));
+        // Windows moves the cursor when it takes the input from its queue, a moment after SendInput returns.
+        var arrived = false;
+        for (var waited = 0; waited < 300 && !arrived; waited += 10) {
+          Native.PointStruct now;
+          Native.GetCursorPos(out now);
+          arrived = Math.Abs(now.X - point.X) <= 2 && Math.Abs(now.Y - point.Y) <= 2;
+          if (!arrived) Thread.Sleep(10);
+        }
+        if (Stopped != null) return false;
+        if (!arrived) { Stop("focus_changed"); return false; }
+        var under = Native.WindowFromPoint(point);
+        if (under == IntPtr.Zero || Native.GetAncestor(under, Native.RootAncestor) != window) { Stop("focus_changed"); return false; }
+        return true;
+      }
+
+      bool Click() {
+        if (!MoveOntoElement()) return false;
+        if (!MayContinue()) return false;
+        Send(MouseEvent(0, 0, Native.MouseLeftDown, 0));
+        Thread.Sleep(15);
+        // The button always comes back up, even when the person moved in between.
+        Send(MouseEvent(0, 0, Native.MouseLeftUp, 0));
+        Thread.Sleep(60);
+        return Stopped == null;
+      }
+
+      bool Scroll(int notches) {
+        if (!MoveOntoElement()) return false;
+        var direction = notches > 0 ? -1 : 1;
+        for (var turned = 0; turned < Math.Abs(notches); turned++) {
+          if (!MayContinue()) return false;
+          Send(MouseEvent(0, 0, Native.MouseWheel, direction * Native.WheelDelta));
+          Thread.Sleep(30);
+        }
+        return true;
+      }
+
+      bool TypeText(string text) {
+        if (!FocusForTyping()) { Stop("focus_changed"); return false; }
+        var focus = FocusHandle();
+        foreach (var character in text) {
+          if (!MayContinue()) return false;
+          if (FocusHandle() != focus) { Stop("focus_changed"); return false; }
+          if (character == '\r') continue;
+          if (character == '\n') {
+            Send(KeyEvent(0x0D, 0, 0), KeyEvent(0x0D, 0, Native.KeyUp));
+          } else if (character == '\t') {
+            Send(KeyEvent(0x09, 0, 0), KeyEvent(0x09, 0, Native.KeyUp));
+          } else {
+            Send(KeyEvent(0, character, Native.KeyUnicode), KeyEvent(0, character, Native.KeyUnicode | Native.KeyUp));
+          }
+          Thread.Sleep(1);
+        }
+        return true;
+      }
+
+      static readonly Dictionary<string, ushort> NamedKeys = new Dictionary<string, ushort> {
+        { "Enter", 0x0D }, { "Tab", 0x09 }, { "Backspace", 0x08 }, { "Delete", 0x2E }, { "Space", 0x20 }, { "Home", 0x24 }, { "End", 0x23 },
+        { "PageUp", 0x21 }, { "PageDown", 0x22 }, { "Up", 0x26 }, { "Down", 0x28 }, { "Left", 0x25 }, { "Right", 0x27 },
+      };
+      static readonly HashSet<ushort> ExtendedKeys = new HashSet<ushort> { 0x2E, 0x24, 0x23, 0x21, 0x22, 0x26, 0x28, 0x25, 0x27 };
+
+      bool PressKeys(object[] names) {
+        if (!FocusForTyping()) { Stop("focus_changed"); return false; }
+        var focus = FocusHandle();
+        foreach (var item in names) {
+          var name = Convert.ToString(item);
+          var control = name.StartsWith("Ctrl+");
+          ushort key;
+          if (!NamedKeys.TryGetValue(control ? name.Substring(5) : name, out key)) throw new ArgumentException("unknown key " + name);
+          if (!MayContinue()) return false;
+          if (FocusHandle() != focus) { Stop("focus_changed"); return false; }
+          var flags = ExtendedKeys.Contains(key) ? Native.KeyExtended : 0;
+          if (control) {
+            Send(KeyEvent(0x11, 0, 0), KeyEvent(key, 0, flags), KeyEvent(key, 0, flags | Native.KeyUp), KeyEvent(0x11, 0, Native.KeyUp));
+          } else {
+            Send(KeyEvent(key, 0, flags), KeyEvent(key, 0, flags | Native.KeyUp));
+          }
+          Thread.Sleep(20);
+        }
+        return true;
+      }
+
+      public Dictionary<string, object> Run(List<Dictionary<string, object>> steps) {
+        Native.PointStruct cursorBefore;
+        Native.GetCursorPos(out cursorBefore);
+        var foregroundBefore = Native.GetForegroundWindow();
+        var area = Screen.FromHandle(window).WorkingArea;
+        clock.Start();
+        overlay = new Thread(() => RunOverlay(area));
+        overlay.IsBackground = true;
+        overlay.SetApartmentState(ApartmentState.STA);
+        // The hooks sit on every input on this desktop, so their thread answers first even in a below-normal process.
+        overlay.Priority = ThreadPriority.Highest;
+        overlay.Start();
+        var completed = 0;
+        Exception failure = null;
+        try {
+          // Without the hooks the person could not stop it, so nothing is sent at all.
+          if (!overlayReady.WaitOne(3000) || overlayFailure != null || !hooked) throw new InvalidOperationException("borrow_not_watched");
+          if (!BringForward(window)) Stop("no_foreground");
+          foreach (var step in steps) {
+            if (Stopped != null) break;
+            var kind = Convert.ToString(step["kind"]);
+            bool finished;
+            if (kind == "click") finished = Click();
+            else if (kind == "type") finished = TypeText(Convert.ToString(step["text"]));
+            else if (kind == "keys") finished = PressKeys((object[])step["keys"]);
+            else if (kind == "scroll") finished = Scroll(Convert.ToInt32(step["notches"]));
+            else throw new ArgumentException("unknown borrow step " + kind);
+            if (!finished) break;
+            completed++;
+          }
+        } catch (ElementNotAvailableException) {
+          Stop("focus_changed");
+        } catch (Exception error) {
+          failure = error;
+          Stop("run_stopped");
+        } finally {
+          CloseOverlay();
+        }
+        if (failure != null && completed == 0 && Interlocked.Read(ref lastInputTicks) < 0) throw failure;
+        var reason = Stopped;
+        // The person took over with the mouse: the cursor stays where they put it. The window they had in front comes
+        // back unless they already brought another one forward themselves; a key they pressed went to the borrowed
+        // window, so giving the front back is what lets them go on typing where they were.
+        var personMoved = reason == "person_mouse";
+        var foregroundRestored = false;
+        var frontNow = Native.GetForegroundWindow();
+        uint frontProcess;
+        uint windowProcess;
+        Native.GetWindowThreadProcessId(frontNow, out frontProcess);
+        Native.GetWindowThreadProcessId(window, out windowProcess);
+        var frontIsOurs = frontNow == IntPtr.Zero || frontNow == window || frontProcess == windowProcess;
+        if (foregroundBefore != IntPtr.Zero && Native.IsWindow(foregroundBefore)) {
+          if (frontIsOurs) foregroundRestored = BringForward(foregroundBefore);
+          else foregroundRestored = frontNow == foregroundBefore;
+        }
+        var cursorRestored = false;
+        if (!personMoved) {
+          Native.SetCursorPos(cursorBefore.X, cursorBefore.Y);
+          Native.PointStruct cursorAfter;
+          Native.GetCursorPos(out cursorAfter);
+          cursorRestored = cursorAfter.X == cursorBefore.X && cursorAfter.Y == cursorBefore.Y;
+        }
+        clock.Stop();
+        long latency = -1;
+        var stoppedAt = Interlocked.Read(ref stoppedAtTicks);
+        var personStopped = reason == "person_mouse" || reason == "person_key" || reason == "escape";
+        if (personStopped && stoppedAt >= 0) {
+          var lastInput = Interlocked.Read(ref lastInputTicks);
+          latency = Math.Max(0, (lastInput - stoppedAt) * 1000 / Stopwatch.Frequency);
+        }
+        return new Dictionary<string, object> {
+          { "completedSteps", completed }, { "stoppedBy", reason }, { "durationMs", clock.ElapsedMilliseconds },
+          { "stopLatencyMs", latency >= 0 ? (object)latency : null },
+          { "restored", new Dictionary<string, object> { { "foreground", foregroundRestored }, { "cursor", cursorRestored } } },
+        };
+      }
     }
 
     // ----- Pictures -----
