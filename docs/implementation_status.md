@@ -267,6 +267,27 @@ Verified on Windows 11 with Chrome (2026-09-26):
 
 Not verified: macOS and Linux, Edge, a named profile, CAPTCHA and payment provider pages on real sites, and the Claude Code, Cursor Agent, Gemini CLI and API paths with a live model (fixture-level only).
 
+## Orglet's browser keeps out of the person's way (COD-261)
+
+The host minimizes a run's window after every new tab, popup, page load and step unless the person chose **Show browser window**, **Take over** or **Open to sign in** ([browser.md](browser.md#how-it-works)); a named profile a run opens is minimized at launch, whatever blank page it starts with. The one `--disable-features` switch the host passes now carries playwright-core's list as well as `msImplicitSignin`, which had replaced it.
+
+Measured on Windows 11 with Chrome 153 and playwright-core 1.63.0 (2026-09-26), by sampling the foreground window every 20 ms while the real `BrowserEngine` ran a headed scenario, before and after the change:
+
+| Step | Foreground held by Chrome, before | After |
+|---|---|---|
+| Clean run, first tab | 190 ms | 139 ms |
+| Clean run, second tab | 1,622 ms (window left up) | 93 ms |
+| Click on a `target=_blank` link | 4,070 ms | 109 ms |
+| Click on a button after that | 1,860 ms (window still up) | 0 ms |
+| Named profile, first tab (launches it) | 2,147 ms | 263 ms |
+| Named profile, second tab | 1,661 ms | 71 ms |
+
+What is left is the moment between Chrome showing a window and the minimize landing. Also measured and rejected, since none shortened it: `Target.createTarget` with `focus: false` (the window still came up, and Playwright never saw the tab), `windowState: 'minimized'` at creation (ignored), an off-screen `--window-position` (the same foreground time, and a window restored from the taskbar would open off screen), and minimizing on `Target.targetCreated` before Playwright attaches (62 ms against 45 ms).
+
+- Tests: `tests/integration/browser-window.test.ts` (the merged switch, checked against the command line Chrome really gets from Playwright; with window commands that behave like Chrome's, on hidden windows: a Clean run's window minimized after a second tab and a popup, left up after **Show browser window** while another run's is minimized, left up after take-over and hand-back, a named profile minimized despite its own blank page, and a profile open to sign in never minimized). A visible-window case runs only with `ORGLET_HEADED_BROWSER_TEST=1`, since it opens windows on the screen of the machine running it.
+
+Known limit: Chrome gives a minimized window's pages few frames, so steps there are slow and sometimes stall. In probes, clicks and typing in a minimized window took 0.3 to 3.4 seconds, and some did not finish within 5 to 8 seconds, depending on which tab was active; keys went through in about 2.5 seconds. The host's step limit is 15 seconds. This was already so before the change, since the first window always opened minimized.
+
 ## COD-98 tools and team coordination: implementation under verification
 
 The worktree now contains a shared tool catalog and permission checks, workspace grants, isolated Windows execution, private copies and Git worktrees, guarded file integration, durable tool/process journals, assignment ownership and dependencies, a bounded mailbox, and lead-controlled reassignment. These extend the existing orchestrator and checkpoints.
