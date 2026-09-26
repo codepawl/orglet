@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import type { Worker } from '../../apps/desktop/src/shared/contracts';
-import { chatUses, crewsWithMember, leaveCrewsMessage, removalBlocker } from '../../apps/desktop/src/shared/removal';
+import { crewsWithMember, leaveCrewsMessage, removalBlocker } from '../../apps/desktop/src/shared/removal';
 import { translateMessage } from '../../apps/desktop/src/shared/i18n';
 import { en } from '../../apps/desktop/src/shared/locales/en';
 
@@ -27,13 +27,6 @@ describe('what stops an orglet or crew from going (COD-286)', () => {
     expect(removalBlocker({ teams: [], routines: [routines[0]] }, 'worker', 'scout')).toBeUndefined();
     // A crew is never blocked by its members' crews, only by its own schedules.
     expect(removalBlocker({ teams: crews, routines: [schedule('crew', 'Crew run', true, { workerId: 'scout', teamId: 'launch' })] }, 'team', 'launch')).toMatchObject({ kind: 'schedule' });
-  });
-
-  it('counts a chat as an orglet\'s when it is theirs alone or they are in its group, never a crew\'s chat', () => {
-    expect(chatUses({ workerId: 'scout' }, 'worker', 'scout')).toBe(true);
-    expect(chatUses({ workerId: 'writer', assignees: ['writer', 'scout'] }, 'worker', 'scout')).toBe(true);
-    expect(chatUses({ workerId: 'scout', teamId: 'launch' }, 'worker', 'scout')).toBe(false);
-    expect(chatUses({ workerId: 'scout', teamId: 'launch' }, 'team', 'launch')).toBe(true);
   });
 
   it('names one crew, a pair of crews, or counts and lists three or more, in both languages', () => {

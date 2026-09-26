@@ -1,4 +1,5 @@
 import type { Routine, Task, Team } from './contracts';
+import { runBy } from './schedule-runs';
 
 /**
  * What stops an orglet or crew from being archived or deleted (COD-286). The core refuses with a sentence built from
@@ -18,14 +19,6 @@ export function crewsWithMember<C extends CrewRow>(crews: readonly C[], workerId
   return crews.filter(crew => crew.memberIds.includes(workerId) || crew.synthesizerId === workerId);
 }
 
-/** Whether a chat, or a schedule's chat, is this crew's or this orglet's own, alone or in a group. */
-export function chatUses(chat: ChatRow, kind: 'worker' | 'team', entityId: string): boolean {
-  if (kind === 'team') return chat.teamId === entityId;
-  if (chat.teamId) return false;
-  if (chat.workerId === entityId) return true;
-  return Array.isArray(chat.assignees) && chat.assignees.includes(entityId);
-}
-
 /** The first thing to change before this orglet or crew can go: the crews it is in, then a schedule that still runs it. */
 export function removalBlocker<C extends CrewRow, S extends ScheduleRow>(
   workspace: { teams: readonly C[]; routines: readonly S[] },
@@ -36,7 +29,7 @@ export function removalBlocker<C extends CrewRow, S extends ScheduleRow>(
     const crews = crewsWithMember(workspace.teams, entityId);
     if (crews.length) return { kind: 'crews', crews };
   }
-  const schedule = workspace.routines.find(item => item.enabled && chatUses(item.task, kind, entityId));
+  const schedule = workspace.routines.find(item => item.enabled && runBy(item.task, kind, entityId));
   if (schedule) return { kind: 'schedule', schedule };
   return undefined;
 }
@@ -54,5 +47,5 @@ export function leaveCrewsMessage(workerName: string, crewNames: readonly string
 
 /** The refusal for an orglet or crew that an enabled schedule still runs. */
 export function stopScheduleMessage(scheduleName: string): string {
-  return `Tắt hoặc đổi lịch chạy ${scheduleName} trước.`;
+  return `Tắt hoặc xóa lịch ${scheduleName} trước.`;
 }

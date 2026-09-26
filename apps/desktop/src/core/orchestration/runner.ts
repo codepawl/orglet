@@ -1,4 +1,4 @@
-import { ownWords } from '../../shared/forward';
+import { chatHeadline, ownWords } from '../../shared/forward';
 import { canContinueRun } from '../../shared/out-of-steps';
 import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { PERMISSIONS_OFF_INSTRUCTION, permissionsOff } from './permission-hints';
@@ -483,17 +483,26 @@ export function harnessPrompt(messages: RunMessage[], files: { sourceId: string;
 }
 
 class Paused extends Error {}
+/**
+ * What a stopped run says. Demo and a local Ollama model never charge, so the warning about requests already sent is
+ * only for connections that can; a custom connection counts as one, since Orglet knows no price for it (COD-287).
+ */
+export function cancelledMessage(provider: string): string {
+  if (provider === 'demo' || isLocalApi(provider)) return 'Đã hủy.';
+  return 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.';
+}
 /** A chat reply stored in the report shape, so history, export and search keep working. */
 const chatReport = (message: string): Report => ({ format: 'chat', title: message.trim().split('\n')[0].replace(/^#+\s*/, '').slice(0, 120) || 'Trả lời', summary: message.trim(), findings: [], limitations: [] });
 /**
  * Name for a task after its first answer: the model's suggestion, else a requested report's own title, else the first
- * line of the message shortened at a word. Returns nothing when that would only repeat the message.
+ * line of the message shortened at a word. Returns nothing when that would only repeat the message. `headline` is the
+ * line a chat goes by (`chatHeadline`): for a chat that began with a forward, what was forwarded (COD-285).
  */
-export function taskTitle(suggested: string | null, report: Report, brief: string) {
+export function taskTitle(suggested: string | null, report: Report, brief: string, headline = brief) {
   const cleaned = suggested?.replace(/^["'“”\s]+|["'“”.\s]+$/g, '').slice(0, 80);
   if (cleaned) return cleaned;
   if (report.format !== 'chat' && report.title !== 'Báo cáo mẫu') return report.title.slice(0, 80);
-  const line = brief.trim().split('\n')[0].replace(/\s+/g, ' ').replace(/[.:;,!?…]+$/, '');
+  const line = headline.trim().split('\n')[0].replace(/\s+/g, ' ').replace(/[.:;,!?…]+$/, '');
   const short = line.length <= 48 ? line : `${line.slice(0, 48).replace(/\s+\S*$/, '')}…`;
   return short && short !== brief.trim() ? short : undefined;
 }
@@ -1542,7 +1551,7 @@ export class Runner {
       throw new Error(run.snapshot.workspaceGrant ? `Đã chạm giới hạn ${maxSteps} bước mà chưa hoàn tất công việc.` : `Đã chạm giới hạn ${maxSteps} bước mà chưa có báo cáo hợp lệ.`);
     } catch (error) {
       if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true, harnessRunTotal));
-      const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error, readCustomConnections(this.store)) : 'Lần chạy gặp lỗi.';
+      const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? cancelledMessage(run.snapshot.worker.provider) : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error, readCustomConnections(this.store)) : 'Lần chạy gặp lỗi.';
       const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
       // A harness account out of plan usage is marked, so the chat can offer an account that still has room (COD-225).
       const handInBlocked = error instanceof HandInBlockedError && !signal.aborted ? error : undefined;
@@ -2111,7 +2120,8 @@ export class Runner {
       new ChatSearch(this.store).indexAnswer(artifact, run);
       if (proposals.length) new KnowledgeBase(this.store).propose(run, artifact.id, proposals);
       if (this.wantsTitle(task, run)) {
-        const title = taskTitle(suggestedTitle, report, this.store.get<Task>('tasks', task.id).brief);
+        const current = this.store.get<Task>('tasks', task.id);
+        const title = taskTitle(suggestedTitle, report, current.brief, chatHeadline(current));
         if (title) this.store.setSetting('taskTitles', { ...this.store.setting<Record<string, string>>('taskTitles', {}), [task.id]: title });
       }
       const missing = report.review?.checks.filter(check => check.status === 'not_assessed').map(check => check.name) ?? [];

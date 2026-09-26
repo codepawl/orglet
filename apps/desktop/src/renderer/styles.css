@@ -46,12 +46,12 @@
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
   /* The prompt bar and the island's shared outline (COD-228): --border read as white on white. */
   --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg));
-  --primary:#171717; --primary-text:#fff; --error:#a82626; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
+  --primary:#171717; --primary-text:#fff; --error:#a82626; --error-ink:#ffffff; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
   --accent-text: var(--accent-text-light, #395a9d);
   --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
 }
-:root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); } }
+:root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --error-ink:#3a0d0d; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --error-ink:#3a0d0d; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); } }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
 button,input,textarea,select { font:inherit; color:inherit; }
@@ -611,6 +611,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .org-drawer-scroll:has(> .floating-form) { display:flex; padding:0; overflow:hidden; }
 .form.floating-form { position:relative; flex:1; min-width:0; min-height:0; gap:0; }
 .floating-form-fields { flex:1; min-height:0; display:flex; flex-direction:column; gap:22px; padding:18px 24px 84px; overflow:auto; overscroll-behavior:contain; }
+/* A scope note reads as the Scope field's own line, not a field of its own. */
+.floating-form-fields > .scope-note { margin-top:-14px; }
 .floating-actions { position:absolute; right:24px; bottom:14px; z-index:2; width:fit-content; max-width:calc(100% - 48px); margin:0; padding:6px; border-radius:14px; background:color-mix(in srgb, var(--bg) 58%, transparent); backdrop-filter:blur(18px) saturate(1.5); box-shadow:0 12px 32px #0000001f; }
 .floating-actions .org-button-outline { background:transparent; color:var(--muted); }
 .floating-actions .org-button-outline:hover:not(:disabled) { background:transparent; color:var(--text); }
@@ -1212,7 +1214,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    centre lines (user, 2026-09-20). */
 .routine-actions { display:flex; align-items:center; gap:6px; }
 /* The same button turns a schedule on and off; muted while it is off, so the card still says which state it is in. */
-.routine-actions .org-button:hover:not(:disabled) { background:var(--bg); }
+.routine-actions .org-button:hover:not(:disabled),.routine-actions .org-button[aria-expanded=true] { background:var(--bg); }
 .routine-meta { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:6px 16px; font-size:13px; }
 .routine-meta li { display:flex; align-items:center; gap:8px; min-width:0; overflow-wrap:anywhere; }
 .routine-meta li > svg,.routine-brief svg { color:var(--muted); flex-shrink:0; }
@@ -1221,8 +1223,10 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-brief { display:flex; gap:8px; font-size:13px; color:var(--muted); }
 .routine-brief svg { margin-top:3px; }
 .routine-brief span { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
-.routine-alert { display:flex; gap:10px; padding:10px 12px; border-radius:10px; background:color-mix(in srgb, var(--error) 9%, var(--bg)); font-size:13px; }
-.routine-alert>svg { color:var(--error); flex-shrink:0; margin-top:2px; }
+/* A missed run or a folder that could not start one (COD-283): news on the card, not an error, so it sits on the page
+   colour with a muted icon and says plainly what happened and what to do. */
+.routine-alert { display:flex; gap:10px; padding:10px 12px; border-radius:10px; background:var(--bg); font-size:13px; }
+.routine-alert>svg { color:var(--muted); flex-shrink:0; margin-top:2px; }
 .routine-alert h4 { margin:0 0 4px; font-size:13px; font-weight:600; }
 .routine-alert .muted { margin:4px 0 0; }
 .routine-alert .actions { margin-top:8px; }
@@ -1283,7 +1287,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
   --org-row-hover:var(--row-hover); --org-row-active:var(--row-active);
   --org-primary:var(--primary); --org-primary-text:var(--primary-text);
   --org-accent:var(--accent); --org-accent-ink:var(--accent-ink);
-  --org-error:var(--error); --org-success:var(--success); --org-working:var(--working); --org-warning:var(--warning); --org-focus:var(--focus);
+  --org-error:var(--error); --org-error-ink:var(--error-ink); --org-success:var(--success); --org-working:var(--working); --org-warning:var(--warning); --org-focus:var(--focus);
   --org-control-height:var(--control-height); --org-icon-size:var(--icon-size); --org-radius:var(--radius); --org-radius-menu:var(--select-menu-radius);
   --org-motion-quick:var(--motion-quick); --org-motion-base:var(--motion-base); --org-motion-gesture:var(--motion-gesture);
   --org-ease-out:var(--ease-out); --org-ease-spring:var(--ease-spring);

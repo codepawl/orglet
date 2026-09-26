@@ -105,6 +105,16 @@ export function forwardBrief(forwarded: ForwardedMessage): string {
 }
 
 /**
+ * The line a chat goes by until it has a title: the first line of its first message. A chat that began with a forward
+ * goes by what was forwarded, never by the prompt text wrapped around it for the model, nor by the note (COD-285).
+ */
+export function chatHeadline(task: { brief: string; inputRevision?: number; currentInput?: { forwarded?: ForwardedMessage } }): string {
+  const forwarded = (task.inputRevision ?? 0) === 0 ? task.currentInput?.forwarded : undefined;
+  const words = forwarded ? forwarded.text : task.brief;
+  return words.trim().split('\n')[0].trim();
+}
+
+/**
  * The words of a turn the person wrote themselves: a forward's note, or the whole brief. `@` tags are read from these
  * only, so a name tagged inside a forwarded message never changes who answers.
  */

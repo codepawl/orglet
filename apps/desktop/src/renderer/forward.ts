@@ -43,7 +43,7 @@ function isBusy(task: Task): boolean {
  * Every place, less the chat the message is in. A chat at work cannot be picked, because a message arriving there
  * would stop that work, and neither can one whose orglets have no working connection.
  */
-export function forwardOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | 'teams'>, originTaskId: string, ready: (workers: readonly Worker[]) => boolean): ForwardOption[] {
+export function forwardOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | 'teams'> & Partial<Pick<Workspace, 'routines'>>, originTaskId: string, ready: (workers: readonly Worker[]) => boolean): ForwardOption[] {
   const options = sendToOptions(workspace, FORWARD_RECENT_COUNT + 1);
   const resolved = options.map((option): ForwardOption & { chat?: Task } => {
     const target = option.target;

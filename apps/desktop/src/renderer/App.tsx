@@ -43,6 +43,7 @@ import { SendToPicker } from './components/SendToPicker';
 import { sendToOptions, type SendToOption } from './sendTo';
 import { ForwardPicker, type ForwardChoice } from './components/ForwardPicker';
 import { forwardOptions, forwardSummary, type ForwardRequest } from './forward';
+import { chatHeadline } from '../shared/forward';
 import { attachIntake, carriedDraft, type Incoming, type IncomingChat, type IncomingFiles } from '../shared/incoming';
 import { dropDraft, emptyChatDraftKey, keepDraft, readDraft } from './drafts';
 import { tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
@@ -282,7 +283,7 @@ export function App() {
   const taskName = (taskId: string) => {
     const task = workspace?.tasks.find(item => item.id === taskId);
     if (!task) return undefined;
-    return task.title || task.brief.split('\n')[0].trim();
+    return task.title || chatHeadline(task);
   };
   const entityName = (kind: 'worker' | 'team', entityId: string) => {
     if (!workspace) return undefined;
@@ -1005,10 +1006,8 @@ export function App() {
       const crew = blocker.crews[0];
       return { label: t('Mở hội {0}', [crew.name]), onSelect: () => { setEditingTeam(crew); setPanel('team'); } };
     }
-    if (blocker?.kind === 'schedule') {
-      const routine = blocker.schedule;
-      return { label: t('Mở lịch'), onSelect: () => openRoutines({ editing: true, routine }) };
-    }
+    // Normally caught before the core is asked (`heldBySchedule`); this covers a schedule switched on since.
+    if (blocker?.kind === 'schedule') return { label: t('Xem lịch chạy'), onSelect: () => openRoutines() };
     return undefined;
   };
   /** After the chat on screen was archived or deleted: a side thread goes back to its orglet's main chat. */
@@ -1095,13 +1094,33 @@ export function App() {
     const share = daysLeft / retention;
     return { daysLeft, tone: share > 0.5 ? 'fresh' : share > 0.2 ? 'aging' : 'expiring' };
   };
-  const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => rowAction(async () => {
+  /**
+   * An orglet or crew with a schedule switched on cannot be archived or deleted; the core refuses. Instead of that dead
+   * end, say which schedule holds it and open Schedules, where it can be turned off or deleted (COD-283). Crews come
+   * first, as in the core's refusal, so an orglet in a crew hears about the crew (COD-286).
+   */
+  const heldBySchedule = (kind: 'worker' | 'team', entityId: string): boolean => {
+    const blocker = removalBlocker(workspace, kind, entityId);
+    if (blocker?.kind !== 'schedule') return false;
+    const name = entityName(kind, entityId) ?? '';
+    toast(t('Lịch {0} đang bật cho {1}. Tắt hoặc xóa lịch đó trước.', [blocker.schedule.name, name]), 'info', name, { action: { label: t('Xem lịch chạy'), onSelect: () => openRoutines() } });
+    return true;
+  };
+  const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => {
+    if (archived && heldBySchedule(kind, entityId)) return;
+    archiveOrRestoreEntity(kind, entityId, archived);
+  };
+  const archiveOrRestoreEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => rowAction(async () => {
     const name = entityName(kind, entityId);
     await orglet.call('archiveEntity', { kind, id: entityId, archived });
     const undo = archived ? { action: { label: t('Hoàn tác'), onSelect: () => archiveEntity(kind, entityId, false) } } : {};
     toast(archived ? t('Đã lưu trữ') : t('Đã khôi phục'), 'success', name, undo);
   }, entityName(kind, entityId), () => removalWayOut(kind, entityId));
-  const deleteEntity = (kind: 'worker' | 'team', entityId: string) => rowAction(async () => {
+  const deleteEntity = (kind: 'worker' | 'team', entityId: string) => {
+    if (heldBySchedule(kind, entityId)) return;
+    deleteEntityNow(kind, entityId);
+  };
+  const deleteEntityNow = (kind: 'worker' | 'team', entityId: string) => rowAction(async () => {
     const name = entityName(kind, entityId);
     await orglet.call('deleteEntity', { kind, id: entityId });
     toast(t('Đã xóa'), 'success', name);
@@ -1242,16 +1261,18 @@ export function App() {
   // A schedule's run is named after its schedule, so it does not read as the orglet's main chat (COD-258).
   const openScheduleRun = selected && detail?.task.routineId ? detail.task : undefined;
   const openSchedule = openScheduleRun ? workspace.routines.find(item => item.id === openScheduleRun.routineId) : undefined;
+  // A deleted schedule's runs keep its name (COD-283), so they still do not read as the orglet's main chat.
+  const openScheduleName = openSchedule?.name ?? openScheduleRun?.routineName;
   const headerName = openSideThread ? taskName(openSideThread.id) ?? openSideThread.brief
-    : openSchedule ? openSchedule.name
+    : openScheduleName ? openScheduleName
     : selected ? (detail && assigneeLabel(detail.task, workspace!, { all: t('Toàn bộ Tí'), many: count => groupChatNames(openTaskWorkers.map(item => item.name)) ?? t('{0} Tí', [count]) })) ?? team?.name ?? t('Công việc') : chatName;
   // An open group chat keeps the faces and names it had before its first message, rather than turning into a count.
   const openGroupFaces = selected && detail && isGroupChat(detail.task) && detail.task.assignees !== 'all' ? openTaskWorkers : undefined;
   /** The line at the top of a schedule's run: which schedule, who ran it, and the way to the schedule. */
-  const scheduleRunOrigin = openScheduleRun && openSchedule ? {
-    name: openSchedule.name,
+  const scheduleRunOrigin = openScheduleRun && openScheduleName ? {
+    name: openScheduleName,
     owner: assigneeLabel(openScheduleRun, workspace, { all: t('Toàn bộ Tí'), many: count => t('{0} Tí', [count]) }) ?? detail?.runs[0]?.snapshot.worker.name ?? 'Orglet',
-    openSchedule: () => openRoutines({ editing: true, routine: openSchedule }),
+    openSchedule: openSchedule ? () => openRoutines({ editing: true, routine: openSchedule }) : undefined,
   } : undefined;
   const headerRename = renameTargetOf();
   /**

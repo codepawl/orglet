@@ -5,6 +5,7 @@ import { runStepLine } from './components/LiveRun';
 import { providerName } from './components/workerModel';
 import { formatMoney } from './components/money';
 import { t } from './i18n';
+import { chatHeadline } from '../shared/forward';
 
 /** The Running view's sections, in the order they are read: working now, waiting in line, waiting for the person. */
 export type RunningGroupId = 'running' | 'queued' | 'paused';
@@ -51,7 +52,7 @@ export function runningChatName(item: RunningItem, tasks: readonly Pick<Task, 'i
     const team = teams.find(candidate => candidate.id === task.teamId);
     return team?.name ?? task.teamSnapshot?.name ?? '';
   }
-  return task.title || task.brief.split('\n')[0].trim();
+  return task.title || chatHeadline(task);
 }
 
 /** The second line of a row: what a working run is doing, why a queued one waits, or why a chat is stopped. */

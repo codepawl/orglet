@@ -72,6 +72,16 @@ describe('confirmAction and Confirmer', () => {
     await expect(answer).resolves.toBe(false);
   });
 
+  it('draws the yes of a question that cannot be undone as a danger button, and a plain question as primary', async () => {
+    render(<Confirmer confirmLabel="OK" cancelLabel="Cancel" />);
+    act(() => { void confirmAction({ title: 'Delete every chat?', confirmLabel: 'Delete', tone: 'danger' }); });
+    await screen.findByRole('alertdialog', { name: 'Delete every chat?' });
+    expect(screen.getByRole('button', { name: 'Delete' }).className).toBe('org-button org-button-danger');
+    act(() => { void confirmAction({ title: 'Leave?' }); });
+    await screen.findByRole('alertdialog', { name: 'Leave?' });
+    expect(screen.getByRole('button', { name: 'OK' }).className).toBe('org-button org-button-primary');
+  });
+
   it('answers an unanswered question with false when a new one is asked', async () => {
     render(<Confirmer confirmLabel="OK" cancelLabel="Cancel" />);
     let first: Promise<boolean> = Promise.resolve(true);

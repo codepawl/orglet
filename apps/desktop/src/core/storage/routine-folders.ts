@@ -74,6 +74,11 @@ export class RoutineFolders {
     return Boolean(row);
   }
 
+  /** Drops what a deleted routine had handled (COD-283); the folder grant stays, like a chat's folder grant. */
+  forgetArrivals(routineId: string) {
+    this.store.db.prepare('DELETE FROM routine_arrivals WHERE routine_id=?').run(routineId);
+  }
+
   markHandled(routineId: string, arrivals: readonly Arrival[]) {
     const insert = this.store.db.prepare(`INSERT OR IGNORE INTO routine_arrivals(routine_id,name,size,modified_ms,handled_at)
       VALUES(?,?,?,?,?)`);
