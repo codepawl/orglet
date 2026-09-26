@@ -235,7 +235,7 @@ export const en: Dictionary = {
   'Thư mục không trống nên được giữ lại.': 'The folder is not empty, so it was kept.',
   '1 lệnh': '1 command',
   '{0} lệnh': '{0} commands',
-  '{0} thoát 0': '{0} passed',
+  '{0} thoát 0': '{0} exited 0',
   '{0} lỗi': '{0} failed',
   '{0} chưa hoàn tất': '{0} unfinished',
   'Đang chặn cuộc trò chuyện: kiểm tra rồi giữ file hiện tại để Tí ghi tiếp.': 'Blocking this chat: review it, then keep the current files so the worker can write again.',
