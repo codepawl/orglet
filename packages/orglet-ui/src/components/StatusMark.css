@@ -1,0 +1,31 @@
+/* One size for every mark in a column, so rows line up; a caller may set --org-status-mark-size. */
+.org-status-mark {
+  --org-status-mark-size: 15px;
+  display: grid;
+  place-items: center;
+  width: var(--org-status-mark-size);
+  height: var(--org-status-mark-size);
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  color: var(--org-muted, #666);
+}
+.org-status-mark svg {
+  width: 100%;
+  height: 100%;
+}
+.org-status-mark-success { color: var(--org-success, #2e7d32); }
+.org-status-mark-error { color: var(--org-error, #c62828); }
+.org-status-mark-working { color: var(--org-working, #4473d3); }
+.org-status-mark-empty { color: color-mix(in srgb, var(--org-muted, #666) 55%, transparent); }
+.org-status-mark-busy {
+  background: color-mix(in srgb, currentColor 13%, transparent);
+  color: var(--org-working, #4473d3);
+}
+.org-status-mark-busy svg { animation: org-status-mark-spin .75s linear infinite; }
+@keyframes org-status-mark-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .org-status-mark-busy svg { animation: none; }
+}
