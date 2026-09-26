@@ -3,6 +3,11 @@ import { z } from 'zod';
 export const TimeZone = z.string().min(1).max(100).refine(value => {
   try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; }
 }, 'Timezone không hợp lệ.');
+/**
+ * Why a clock routine's run was held back as a miss: the app was closed, asleep or late, or a miss was already waiting.
+ * The Schedules card knows this reason and says it in plain words (COD-283); any other reason is a start that failed.
+ */
+export const SKIPPED_WHILE_INACTIVE = 'Đã bỏ qua lịch khi app không hoạt động hoặc còn lần chờ xử lý. Có thể chạy bù một lần.';
 export const ClockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const Weekdays = z.array(z.number().int().min(0).max(6)).min(1).max(7).refine(days => new Set(days).size === days.length);
 export const Schedule = z.object({ timeZone: TimeZone, time: ClockTime, frequency: z.enum(['daily', 'weekly']), weekday: z.number().int().min(0).max(6) }).strict();

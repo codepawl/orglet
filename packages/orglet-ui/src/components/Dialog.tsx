@@ -87,7 +87,8 @@ export function Drawer({ open, onClose, title, description, actions, closeLabel,
   </RadixDialog.Root>;
 }
 
-type ConfirmRequest = { title: string; description?: string; confirmLabel?: string; cancelLabel?: string; resolve: (confirmed: boolean) => void };
+type ConfirmTone = 'default' | 'danger';
+type ConfirmRequest = { title: string; description?: string; confirmLabel?: string; cancelLabel?: string; tone?: ConfirmTone; resolve: (confirmed: boolean) => void };
 
 let currentRequest: ConfirmRequest | null = null;
 const listeners = new Set<() => void>();
@@ -103,12 +104,13 @@ function subscribe(listener: () => void) {
 
 /**
  * Asks one yes-or-no question in a small modal and resolves true only when the person confirms. A second question
- * while one is open answers the first with false. Render one `Confirmer` in the application for it to show.
+ * while one is open answers the first with false. Render one `Confirmer` in the application for it to show. `tone:
+ * 'danger'` draws the confirming button in the error colour, for a question whose yes cannot be undone.
  */
-export function confirmAction({ title, description, confirmLabel, cancelLabel }: { title: string; description?: string; confirmLabel?: string; cancelLabel?: string }) {
+export function confirmAction({ title, description, confirmLabel, cancelLabel, tone }: { title: string; description?: string; confirmLabel?: string; cancelLabel?: string; tone?: ConfirmTone }) {
   currentRequest?.resolve(false);
   return new Promise<boolean>(resolve => {
-    currentRequest = { title, description, confirmLabel, cancelLabel, resolve };
+    currentRequest = { title, description, confirmLabel, cancelLabel, tone, resolve };
     emit();
   });
 }
@@ -140,7 +142,7 @@ export function Confirmer({ confirmLabel, cancelLabel }: { confirmLabel: string;
         {request?.description && <RadixDialog.Description id="org-confirm-description" className="org-confirm-description">{request.description}</RadixDialog.Description>}
         <div className="org-confirm-actions">
           <Button ref={cancel} variant="outline" onClick={() => settle(false)}>{request?.cancelLabel ?? cancelLabel}</Button>
-          <Button variant="primary" onClick={() => settle(true)}>{request?.confirmLabel ?? confirmLabel}</Button>
+          <Button variant={request?.tone === 'danger' ? 'danger' : 'primary'} onClick={() => settle(true)}>{request?.confirmLabel ?? confirmLabel}</Button>
         </div>
       </RadixDialog.Content>
     </RadixDialog.Portal>

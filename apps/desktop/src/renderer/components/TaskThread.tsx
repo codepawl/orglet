@@ -43,7 +43,7 @@ import { confirmAction } from './confirm';
 import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import type { AppProposal } from '../../shared/app-proposals';
 import type { ChatQuote } from '../../shared/side-threads';
-import type { ForwardedMessage } from '../../shared/forward';
+import { chatHeadline, type ForwardedMessage } from '../../shared/forward';
 import type { ForwardRequest } from '../forward';
 import { McpApprovalCard } from './McpApproval';
 import { turnNotices } from './turnNotices';
@@ -141,7 +141,7 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
 export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
   /** Opens another chat: the side thread a quote came from, or the main chat an answer was brought into (COD-247). */ openChat?: (taskId: string) => void;
   /** Opens an orglet's main chat from one of its side threads. */ openMainChat?: (workerId: string) => void;
-  /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule: () => void };
+  /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule?: () => void };
   /** Puts a reply in this chat's composer without sending it: "Nhờ sửa" on a blocked hand-in (COD-270). */ askToFix?: (text: string) => void;
   /** Opens the forward picker for one message of this chat (COD-257). */ forward?: (request: ForwardRequest) => void }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
@@ -187,23 +187,13 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
    * actually worked from (user, 2026-09-20). Nothing new is recorded for this — a run carries the revision of
    * the message it was given, so the highest one a worker has run is exactly how far they have read.
    */
-  const readersByRevision = new Map<number, Run[]>();
-  const furthest = new Map<string, Run>();
-  for (const run of detail.runs) {
-    const revision = run.snapshot.inputRevision ?? 0;
-    const known = furthest.get(run.snapshot.worker.id);
-    if (!known || (known.snapshot.inputRevision ?? 0) < revision) furthest.set(run.snapshot.worker.id, run);
-  }
-  for (const run of furthest.values()) {
-    const revision = run.snapshot.inputRevision ?? 0;
-    readersByRevision.set(revision, [...(readersByRevision.get(revision) ?? []), run]);
-  }
+  const readersByRevision = readersByTurn(detail);
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   // Side threads (COD-247): which answers were already brought into a main chat, and what the threads are called.
   const broughtIn = new Set(workspace.tasks.flatMap(task => (task.quotes ?? []).map(quote => quote.artifactId)));
   const threadName = (taskId: string) => {
     const thread = workspace.tasks.find(task => task.id === taskId && !task.deletedAt);
-    return thread ? thread.title || thread.brief.split('\n')[0].trim() : undefined;
+    return thread ? thread.title || chatHeadline(thread) : undefined;
   };
   const sideThreadOrglet = detail.runs[0]?.snapshot.worker.name ?? workspace.workers.find(worker => worker.id === detail.task.workerId)?.name ?? 'Orglet';
   const liveRuns = useRunProgress(detail.task.id);
@@ -334,7 +324,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     onDiscard: () => {
       if (deciding) return;
       void confirmAction({ title: t('Bỏ các thay đổi này?'), description: t('Thư mục của bạn không bị sửa, và không áp dụng lại được.'),
-        confirmLabel: t('Bỏ thay đổi'), cancelLabel: t('Giữ lại') }).then(confirmed => {
+        confirmLabel: t('Bỏ thay đổi'), cancelLabel: t('Giữ lại'), tone: 'danger' }).then(confirmed => {
         if (!confirmed) return;
         setDeciding(true);
         action(async () => {
@@ -443,12 +433,16 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
     <div className="thread-content">
       {detail.task.sideOf && <p className="side-thread-origin">
-        <span>{t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
+        {/* Once an answer was brought in, the main chat did change; the line then says only what this chat is. */}
+        <span>{detail.artifacts.some(artifact => broughtIn.has(artifact.id)) ? t('Chat phụ với {0}.', [sideThreadOrglet]) : t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
         {openMainChat && <button type="button" onClick={() => openMainChat(detail.task.workerId)}>{t('Mở chat chính')}</button>}
       </p>}
       {scheduleRun && <p className="side-thread-origin">
-        <span>{t('Lần chạy của lịch {0}, do {1} làm.', [scheduleRun.name, scheduleRun.owner])}</span>
-        <button type="button" onClick={scheduleRun.openSchedule}>{t('Mở lịch')}</button>
+        {/* A deleted schedule has nothing to open; its runs say so and keep its name (COD-283). */}
+        <span>{scheduleRun.openSchedule
+          ? t('Lần chạy của lịch {0}, do {1} làm.', [scheduleRun.name, scheduleRun.owner])
+          : t('Lần chạy của lịch {0} đã xóa, do {1} làm.', [scheduleRun.name, scheduleRun.owner])}</span>
+        {scheduleRun.openSchedule && <button type="button" onClick={scheduleRun.openSchedule}>{t('Mở lịch')}</button>}
       </p>}
       {turns.map((turn, index) => {
         const latest = turn.revision === current;
@@ -588,10 +582,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             {unresolvedError?.error && !heldRun && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
               {/* A run refused by the unknown-outcome guard (COD-191) says what to do, not which guard fired: the
                   attempt to review sits in Details, and the button below opens it there. */}
+              {/* A plain stop on a connection that never charges says only what the heading already says. */}
               {blockedCommands
                 ? <div className="run-error-commands">{blockedCommands.map(command => <BlockedCommandLine key={command.processId} command={command}
                   workerName={unresolvedError.stage ? unresolvedError.snapshot.worker.name : undefined} onOpen={() => setOutputCommand(command)} />)}</div>
-                : <p>{unresolvedError.errorCode === 'unresolved_attempt' ? t('Một thay đổi file trước đó chưa rõ kết quả. Kiểm tra trong Chi tiết rồi giữ file hiện tại, sau đó Tí mới ghi tiếp được.')
+                : unresolvedError.error === 'Đã hủy.' ? null : <p>{unresolvedError.errorCode === 'unresolved_attempt' ? t('Một thay đổi file trước đó chưa rõ kết quả. Kiểm tra trong Chi tiết rồi giữ file hiện tại, sau đó Tí mới ghi tiếp được.')
                   : unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p>}
             </div>}
             {latest && <div className="actions">
@@ -676,7 +671,10 @@ function forwardedAuthor(forwarded: ForwardedMessage): string {
 function ForwardedTurn({ forwarded, elementId, badges, openOrigin, mentionPeople, mentionAllNames }: { forwarded: ForwardedMessage; elementId: string; badges: ReactNode; openOrigin?: () => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const author = forwardedAuthor(forwarded);
   const sameName = forwarded.authorKind === 'orglet' && author === forwarded.from;
-  const origin = sameName ? t('Chuyển tiếp từ {0}', [forwarded.from]) : t('Chuyển tiếp từ {0} · {1} viết', [forwarded.from, author]);
+  let origin = t('Chuyển tiếp từ {0} · {1} viết', [forwarded.from, author]);
+  if (sameName) origin = t('Chuyển tiếp từ {0}', [forwarded.from]);
+  // "You" starts a sentence elsewhere; mid-line it reads "written by you".
+  else if (forwarded.authorKind === 'person') origin = t('Chuyển tiếp từ {0} · bạn viết', [forwarded.from]);
   const unshared = forwarded.files.filter(file => !file.sourceId).map(file => file.name);
   return <>
     <div className="user-message forwarded-message" id={elementId} tabIndex={-1}>
@@ -714,6 +712,31 @@ function BringIntoMainChat({ artifactId, brought, about, action, openChat }: { a
     toast(t('Đã đưa vào chat chính'), 'success', about, openChat ? { action: { label: t('Mở'), onSelect: () => openChat(mainTaskId) } } : {});
   });
   return <Button size="icon" aria-label={label} title={label} disabled={brought} onClick={bring}>{brought ? <Check size={15} /> : <MessageSquareQuote size={15} />}</Button>;
+}
+
+/**
+ * The orglets to show as having read each turn, by the turn's revision. A run carries the revision of the message it
+ * was given, so the highest one an orglet has run is how far it has read. An orglet whose answer ends that turn has
+ * shown it read it; its face under its own answer only repeated that (dogfood round 5, COD-287), so faces stay for
+ * readers with no answer there yet: working, stopped or failed. A crew's lead plans in one run and answers in another,
+ * so the check is per orglet and turn, not per run.
+ */
+export function readersByTurn(detail: Pick<TaskDetail, 'runs' | 'artifacts'>): Map<number, Run[]> {
+  const readersByRevision = new Map<number, Run[]>();
+  const furthest = new Map<string, Run>();
+  for (const run of detail.runs) {
+    const revision = run.snapshot.inputRevision ?? 0;
+    const known = furthest.get(run.snapshot.worker.id);
+    if (!known || (known.snapshot.inputRevision ?? 0) < revision) furthest.set(run.snapshot.worker.id, run);
+  }
+  const answeredRuns = new Set(detail.artifacts.map(artifact => artifact.runId));
+  const answered = new Set(detail.runs.filter(run => answeredRuns.has(run.id)).map(run => `${run.snapshot.worker.id}:${run.snapshot.inputRevision ?? 0}`));
+  for (const run of furthest.values()) {
+    const revision = run.snapshot.inputRevision ?? 0;
+    if (answered.has(`${run.snapshot.worker.id}:${revision}`)) continue;
+    readersByRevision.set(revision, [...(readersByRevision.get(revision) ?? []), run]);
+  }
+  return readersByRevision;
 }
 
 /**

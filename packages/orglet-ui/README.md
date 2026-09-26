@@ -44,7 +44,8 @@ loads the switch's styles.
 ## Components
 
 - `Button`: `variant` `ghost` (the default: quiet text, a soft background on hover), `outline` (a soft filled pill for a
-  secondary action) or `primary` (the one filled action of a place); `size="icon"` for a square holding one icon,
+  secondary action), `primary` (the one filled action of a place) or `danger` (filled in `--org-error` with
+  `--org-error-ink` text, for a yes that cannot be undone); `size="icon"` for a square holding one icon,
   named with `aria-label`, which answers hover with the icon's colour instead of a tile. `type` is left to the caller,
   so inside a form it submits unless it says `type="button"`.
 - `Input` and `Textarea`: a text field. Name it with a `<label>` around it or `aria-label`. `invalid` marks it as
@@ -101,9 +102,10 @@ loads the switch's styles.
   reads the kind from the extension; `formatFileSize` gives "1.5 KB" in a locale.
 - `Drawer`: a centred panel with a header (title or breadcrumb, `description`, the panel's `actions`, a close button
   named by `closeLabel` showing `closeIcon`) and a body that scrolls on its own. Focus goes back to what opened it.
-- `confirmAction` and `Confirmer`: `await confirmAction({ title, description?, confirmLabel?, cancelLabel? })` asks one
-  yes-or-no question and resolves true only on confirm; render one `<Confirmer confirmLabel cancelLabel />` for the
-  default labels. Cancel takes focus, and the answer gives focus back to what asked.
+- `confirmAction` and `Confirmer`: `await confirmAction({ title, description?, confirmLabel?, cancelLabel?, tone? })` asks
+  one yes-or-no question and resolves true only on confirm; `tone: 'danger'` draws the yes as a danger button. Render
+  one `<Confirmer confirmLabel cancelLabel />` for the default labels. Cancel takes focus, and the answer gives focus
+  back to what asked.
 - `useReturnFocus(onOpenAutoFocus?)`: for a Radix dialog opened from state rather than a `Dialog.Trigger`. Spread the
   result on `Dialog.Content`: it remembers what had focus when the dialog opened and focuses it again when it closes,
   unless something outside the dialog already took focus (a link in the dialog that closes it and focuses its target).

@@ -20,12 +20,13 @@ try {
   let page = await app.firstWindow(); await useVietnamese(page);
   await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Routine smoke: scheduled demo');
   await page.getByRole('button', { name: 'Lên lịch cho tin này', exact: true }).click();
+  // A new schedule starts at its name, not on the button beside the title (COD-283).
+  await page.getByLabel('Tên lịch', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Tên lịch', { exact: true }).evaluate(input => input === document.activeElement), true);
   await page.getByLabel('Tên lịch', { exact: true }).fill('Morning routine');
-  await page.getByLabel('Timezone', { exact: true }).fill('Invalid/Zone');
-  await page.getByRole('button', { name: 'Lưu lịch', exact: true }).click();
-  await page.getByRole('alert').filter({ hasText: 'Timezone không hợp lệ. Dùng tên như' }).waitFor();
-  assert.equal((await page.evaluate(() => window.orglet.call('workspace', {}))).routines.length, 0);
-  await page.getByLabel('Timezone', { exact: true }).fill('UTC');
+  // The time zone is picked from the list, never typed (COD-283).
+  await page.getByRole('combobox', { name: 'Múi giờ', exact: true }).click();
+  await page.getByRole('option', { name: 'UTC', exact: true }).click();
   const due = new Date(Date.now() + 20_000); due.setUTCMinutes(due.getUTCMinutes() + 1, 0, 0);
   await page.getByLabel('Giờ chạy', { exact: true }).fill(due.toISOString().slice(11, 16));
   await page.getByRole('button', { name: 'Lưu lịch', exact: true }).click();
@@ -65,9 +66,9 @@ try {
   await page.screenshot({ path: join(output, 'routine-reopen-notice.png') });
   await notice.getByRole('button', { name: 'Xem lịch chạy', exact: true }).click();
   const missedCard = page.getByRole('region', { name: 'Lịch Morning routine', exact: true });
-  await missedCard.getByRole('heading', { name: 'Lần chạy bị lỡ', exact: true }).waitFor();
-  await missedCard.getByText(/Nhiều lần lỡ gộp thành một lần chạy bù/).waitFor();
-  await page.getByText(/Đã bỏ qua lịch khi app không hoạt động/).waitFor();
+  await missedCard.getByRole('heading', { name: /^Lỡ lần chạy lúc / }).waitFor();
+  await missedCard.getByText(/Lúc đó Orglet không mở hoặc máy đang ngủ/).waitFor();
+  await missedCard.getByText(/Chạy bù chạy lịch một lần, dù lỡ bao nhiêu lần/).waitFor();
   const missed = (await page.evaluate(() => window.orglet.call('workspace', {}))).routines[0];
   assert.equal(missed.pending.dueAt, overdueAt);
   assert.equal(missed.pending.reason.includes('không hoạt động'), true);
@@ -114,7 +115,18 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await page.screenshot({ path: join(output, 'routine-narrow.png') });
   await page.keyboard.press('Escape');
-  const result = { scheduled: 'passed', missedCatchUp: 'passed', shiftConfiguration: 'passed', handoff: 'passed', directory, tasks: state.tasks.length };
+  // Deleting asks inside the card's menu and keeps the runs as chats that name the schedule (COD-283).
+  const doomed = page.getByRole('region', { name: 'Lịch Morning routine', exact: true });
+  if (!(await doomed.isVisible())) await page.getByRole('button', { name: /Lịch chạy/ }).click();
+  await doomed.getByRole('button', { name: 'Tùy chọn lịch Morning routine', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Xóa lịch', exact: true }).click();
+  await page.getByText(/Các lần chạy trước vẫn là chat/).waitFor();
+  await page.getByRole('menuitem', { name: 'Xóa', exact: true }).click();
+  await doomed.waitFor({ state: 'detached' });
+  const afterDelete = await page.evaluate(() => window.orglet.call('workspace', {}));
+  assert.equal(afterDelete.routines.length, 0);
+  assert.equal(afterDelete.tasks.filter(task => task.routineId === routine.id && task.routineName === 'Morning routine').length, 2);
+  const result = { scheduled: 'passed', missedCatchUp: 'passed', shiftConfiguration: 'passed', handoff: 'passed', deleted: 'passed', directory, tasks: state.tasks.length };
   await writeFile(join(output, 'routine-smoke.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result));
   if (process.argv.includes('--inspect-ui')) {
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1200, 820));

@@ -1,7 +1,7 @@
 import type { Artifact, Routine, RunInput, Task, TaskDetail, Team, Worker } from '../../shared/contracts';
 import { turnMessageId } from '../../shared/message-interactions';
 import { withoutSourceIds } from '../../shared/source-mentions';
-import type { ForwardedMessage, ForwardTarget } from '../../shared/forward';
+import { chatHeadline, type ForwardedMessage, type ForwardTarget } from '../../shared/forward';
 import type { Store } from '../storage/database';
 
 /** A chat's name in "Forwarded from …" never runs past this. */
@@ -45,6 +45,8 @@ export class Forwards {
     if (task.routineId) {
       const routine = this.store.all<Routine>('routines').find(item => item.id === task.routineId);
       if (routine) return clip(routine.name);
+      // A deleted schedule's runs keep its name (COD-283).
+      if (task.routineName) return clip(task.routineName);
     }
     if (task.teamId && !task.sideOf) {
       const team = this.store.all<Team>('teams').find(item => item.id === task.teamId);
@@ -59,8 +61,7 @@ export class Forwards {
       const names = workers.filter(worker => task.assignees === 'all' || task.assignees!.includes(worker.id)).map(worker => worker.name);
       if (names.length) return clip(names.join(', '));
     }
-    const firstLine = task.brief.split('\n')[0]?.trim();
-    return clip(firstLine || 'Orglet');
+    return clip(chatHeadline(task) || 'Orglet');
   }
 
   /** The name of a place a forward goes to, for a result that did not go there. */
