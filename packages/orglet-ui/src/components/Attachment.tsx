@@ -44,14 +44,17 @@ type Removal = { onRemove: () => void; removeLabel: string; removeIcon: ReactNod
  * big. With `onOpen` the whole card is a button that opens the file (a sent message's files). With `onRemove` it has
  * a remove button that keeps its place and only shows on hover or a visible focus, so nothing shifts when the pointer
  * arrives. Every card is the same width, so a row of them reads as a row. It renders a list item; the parent is the
- * list.
+ * list. `inactive` draws a file that can no longer be used (read access revoked, removed) quieter, so it does not read
+ * like the others; `meta` then says why.
  */
-export function Attachment({ name, meta, icon, onOpen, onRemove, removeLabel, removeIcon }: {
+export function Attachment({ name, meta, icon, onOpen, onRemove, removeLabel, removeIcon, inactive = false }: {
   name: string;
   meta: string;
   icon: ReactNode;
   onOpen?: () => void;
+  inactive?: boolean;
 } & Removal) {
+  const className = inactive ? 'org-attachment org-attachment-inactive' : 'org-attachment';
   const body = <>
     <span className="org-attachment-icon" aria-hidden="true">{icon}</span>
     <span className="org-attachment-text">
@@ -59,10 +62,10 @@ export function Attachment({ name, meta, icon, onOpen, onRemove, removeLabel, re
       <span className="org-attachment-meta">{meta}</span>
     </span>
   </>;
-  if (onOpen) return <li className="org-attachment">
+  if (onOpen) return <li className={className}>
     <button type="button" className="org-attachment-open" title={name} onClick={onOpen}>{body}</button>
   </li>;
-  return <li className="org-attachment" title={name}>
+  return <li className={className} title={name}>
     {body}
     {onRemove && <button type="button" className="org-attachment-remove" aria-label={removeLabel} title={removeLabel} onClick={onRemove}>{removeIcon}</button>}
   </li>;

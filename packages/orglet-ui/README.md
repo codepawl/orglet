@@ -98,7 +98,8 @@ loads the switch's styles.
   name; the text stays as typed and converting it is the application's. `invalid` and `flash` work as on `Input`.
 - `Attachment`, `fileKind` and `formatFileSize`: a file as a same-width card (`name`, a `meta` line, the kind's
   `icon`), rendered as a list item. With `onOpen` the whole card opens the file; with `onRemove` (named by
-  `removeLabel`, showing `removeIcon`) a remove button appears on hover or focus without moving anything. `fileKind`
+  `removeLabel`, showing `removeIcon`) a remove button appears on hover or focus without moving anything; `inactive` draws a file that can no longer
+  be used (read access revoked) quieter, with `meta` saying why. `fileKind`
   reads the kind from the extension; `formatFileSize` gives "1.5 KB" in a locale.
 - `Drawer`: a centred panel with a header (title or breadcrumb, `description`, the panel's `actions`, a close button
   named by `closeLabel` showing `closeIcon`) and a body that scrolls on its own. Focus goes back to what opened it.
