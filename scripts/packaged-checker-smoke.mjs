@@ -137,19 +137,36 @@ try {
   // A provider that is not connected is a blocker of its own, so the controls stay disabled until one is: Ollama
   // connects with a local sentinel and no key, which is the only connection a packaged smoke can make offline.
   await page.evaluate(() => window.orglet.connect('ollama'));
-  // Choosing a level opens the native picker straight away; the stubbed picker records the title it was given.
+  // The chat still has the read-only folder picked above, so another level keeps that folder and never opens the
+  // native picker (COD-291); the stubbed picker records the title of every call, so none must be recorded.
   await page.waitForFunction(() => !document.querySelector('.task-tools [role=combobox]')?.disabled);
-  await folderAccess.focus();
-  await folderAccess.press('ArrowDown');
-  await page.keyboard.press('End');
-  await page.keyboard.press('Enter');
+  const readOnlyGrant = await page.evaluate(taskId => window.orglet.call('workspaceAccess', { taskId }), result.id);
+  assert.deepEqual({ revoked: readOnlyGrant.revoked, permissions: readOnlyGrant.permissions }, { revoked: false, permissions: ['read'] });
+  const chooseFolderLevel = async key => {
+    await folderAccess.focus();
+    await folderAccess.press('ArrowDown');
+    await page.keyboard.press(key);
+    await page.keyboard.press('Enter');
+  };
+  await app.evaluate(() => { globalThis.workspaceGrantTitle = undefined; });
+  await chooseFolderLevel('End');
   await page.waitForFunction(async taskId => (await window.orglet.call('workspaceAccess', { taskId }))?.permissions.includes('execute'), result.id);
   await page.waitForFunction(() => document.querySelector('.task-tools [role=combobox]')?.dataset.value === 'execute');
+  assert.equal(await app.evaluate(() => globalThis.workspaceGrantTitle), undefined, 'Another level keeps the folder without the picker');
+  const raisedGrant = await page.evaluate(taskId => window.orglet.call('workspaceAccess', { taskId }), result.id);
+  assert.deepEqual({ id: raisedGrant.id, name: raisedGrant.name }, { id: readOnlyGrant.id, name: 'task-workspace' });
+  // With no folder, choosing a level opens the picker at once, and its title names the level being granted.
+  await chooseFolderLevel('Home');
+  await page.waitForFunction(async taskId => (await window.orglet.call('workspaceAccess', { taskId }))?.revoked === true, result.id);
+  await page.waitForFunction(() => document.querySelector('.task-tools [role=combobox]')?.dataset.value === 'none');
+  await chooseFolderLevel('End');
+  await page.waitForFunction(async taskId => {
+    const grant = await window.orglet.call('workspaceAccess', { taskId });
+    return grant?.revoked === false && grant.permissions.includes('execute');
+  }, result.id);
+  await page.waitForFunction(() => document.querySelector('.task-tools [role=combobox]')?.dataset.value === 'execute');
   assert.equal(await app.evaluate(() => globalThis.workspaceGrantTitle), 'Chọn workspace: đọc, sửa file và chạy lệnh');
-  await folderAccess.focus();
-  await folderAccess.press('ArrowDown');
-  await page.keyboard.press('Home');
-  await page.keyboard.press('Enter');
+  await chooseFolderLevel('Home');
   await page.waitForFunction(async taskId => (await window.orglet.call('workspaceAccess', { taskId }))?.revoked === true, result.id);
   await page.waitForFunction(() => document.querySelector('.task-tools [role=combobox]')?.dataset.value === 'none');
   const webAccess = toolsPanel.getByRole('switch', { name: 'Đọc và tìm kiếm web', exact: true });
