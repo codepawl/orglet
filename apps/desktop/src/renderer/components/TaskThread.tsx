@@ -505,7 +505,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
               of the text, rather than stacking one per line inside it (user, 2026-09-21). */}
           {addedFiles.length > 0 && <ul className="message-files" aria-label={t('Tệp đính kèm')}>
-            {addedFiles.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}
+            {addedFiles.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} revoked={item.revoked} onOpen={() => showSources({ type: 'source', id: item.id })} />)}
           </ul>}
           {turn.forwarded
             ? <ForwardedTurn forwarded={turn.forwarded} elementId={`message-${turnMessageId(detail.task.id, turn.revision)}`} mentionPeople={mentionPeople} mentionAllNames={mentionAllNames}
