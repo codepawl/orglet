@@ -74,16 +74,16 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  const diagStarted = Date.now();
-  await core?.runner.shutdown();
-  console.log(`[diag] runner shutdown ${Date.now() - diagStarted} ms`);
-  await engine.shutdown();
-  console.log(`[diag] engine shutdown ${Date.now() - diagStarted} ms`);
+  // This test's own things, taken before the first wait: a teardown that outlives its hook must never close the store or
+  // servers the next test has made meanwhile.
+  const ending = { core, engine, store, pageServer, secretServer, directory };
   core = undefined;
-  pageServer.close();
-  secretServer.close();
-  store.close();
-  await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  await ending.core?.runner.shutdown();
+  await ending.engine.shutdown();
+  ending.pageServer.close();
+  ending.secretServer.close();
+  ending.store.close();
+  await rm(ending.directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 
 async function until(check: () => boolean, timeoutMs = 60_000) {
@@ -91,6 +91,9 @@ async function until(check: () => boolean, timeoutMs = 60_000) {
   while (!check() && Date.now() - started < timeoutMs) await new Promise(resolve => setTimeout(resolve, 50));
   expect(check()).toBe(true);
 }
+
+/** A run is over once its task says so and the runner has let it go, which is after its tabs closed. */
+const finished = (taskId: string) => ['completed', 'failed', 'cancelled'].includes(store.detail(taskId).task.status) && !core!.runner.isActive(taskId);
 
 const call = (name: string, argumentsValue: unknown): ModelReply => ({ calls: [{ id: id(), name, arguments: JSON.stringify(argumentsValue) }], usage: { input: 100, output: 30 } });
 
@@ -125,7 +128,7 @@ describe.runIf(found !== null)('a real browser in the tool loop', { timeout: REA
       toolCapabilities: ['source.read', 'skill.read', 'browser.read'],
       browser: { profileId: 'clean', sites: [{ site: new URL(base).host, decision: 'allowed', addedAt: now() }] },
     }) as string;
-    await until(() => ['completed', 'failed'].includes(store.detail(taskId).task.status));
+    await until(() => finished(taskId));
     const detail = store.detail(taskId);
     expect(detail.runs[0].error).toBeNull();
     expect(detail.task.status).toBe('completed');
@@ -187,7 +190,7 @@ describe.runIf(found !== null)('a real browser in the tool loop', { timeout: REA
       workerId: worker.id, brief: 'Read the local page', sourceIds: [], consent: true, providerScopes: ['openai'], budgetMicros: 100_000,
       toolCapabilities: ['source.read', 'skill.read', 'browser.read'],
     }) as string;
-    await until(() => ['completed', 'failed'].includes(store.detail(taskId).task.status));
+    await until(() => finished(taskId));
     expect(store.detail(taskId).task.status).toBe('completed');
     const refusal = JSON.parse((replies.at(-1) as { content: string }).content);
     expect(refusal.refused).toBe(true);

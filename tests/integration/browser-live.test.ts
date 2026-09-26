@@ -204,9 +204,12 @@ describe.runIf(found !== null)('the live view of a real headless browser', { tim
   }, REAL_BROWSER_TIMEOUT_MS);
 
   afterEach(async () => {
-    await engine.shutdown();
-    server.close();
-    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    // This test's own engine, server and folder, taken before the first wait, so a slow teardown never closes the next
+    // test's.
+    const ending = { engine, server, directory };
+    await ending.engine.shutdown();
+    ending.server.close();
+    await rm(ending.directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }, REAL_BROWSER_TIMEOUT_MS);
 
   const policy = () => ({ sites: [{ site: new URL(base).host, decision: 'allowed' as const, addedAt: new Date().toISOString() }], restricted: true });
@@ -247,11 +250,8 @@ describe.runIf(found !== null)('the live view of a real headless browser', { tim
 
   it('streams the tab while watched, moves the cursor to what the orglet clicks, and stops when the view closes', async () => {
     const runId = randomUUID();
-    const diagStarted = Date.now();
     await open(runId);
-    console.log(`[diag] open took ${Date.now() - diagStarted} ms`);
     expect((await watch(runId)).tabId).toBe('t1');
-    console.log(`[diag] watch done at ${Date.now() - diagStarted} ms`);
     await until(() => framesOf(runId).length > 0);
     const first = framesOf(runId)[0] as Extract<BrowserHostEvent, { kind: 'frame' }>;
     expect(first).toMatchObject({ tabId: 't1', width: 1280, height: 800 });
@@ -341,14 +341,12 @@ describe.runIf(found !== null)('the live view of a real headless browser', { tim
     expect(inChrome.tabs.map(tab => [tab.tabId, new URL(tab.url).pathname])).toEqual([['t1', '/remember'], ['t2', '/']]);
     expect(await hold(runId, false)).toEqual({ inChrome: false });
     expect((await open(runId, '/cookie', CLEAN_BROWSER_PROFILE, 't1')).title).toBe('Cookie visit=kept');
-    // The person closes the Chrome window: the run goes on headless and the browser counts as handed back.
+    // The person closes the Chrome window: the run goes on headless and the browser counts as handed back. A window
+    // closes all its tabs at once; closing them one after another would be the person closing tabs, and on the macOS
+    // runner one close has taken almost half a second.
     await hold(runId, true, true);
     const closeAll = (engine as unknown as { runs: Map<string, { tabs: Map<string, { close(): Promise<void> }> }> }).runs.get(runId)!.tabs;
-    for (const page of [...closeAll.values()]) {
-      const diagStarted = Date.now();
-      await page.close();
-      console.log(`[diag] ${new Date().toISOString()} page.close took ${Date.now() - diagStarted} ms`);
-    }
+    await Promise.all([...closeAll.values()].map(page => page.close()));
     await until(() => events.some(event => event.kind === 'released' && event.runId === runId));
     expect((await watch(runId)).inChrome).toBe(false);
     expect((await open(runId, '/cookie', CLEAN_BROWSER_PROFILE, 't1')).title).toBe('Cookie visit=kept');
