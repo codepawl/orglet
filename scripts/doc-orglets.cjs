@@ -56,6 +56,8 @@ const pageOrglets = [
   { name: 'browser', accessory: 'monocle', colour: '#4f7fe0', face: 'curious', yaw: 0.32, pitch: 0.08 },
   // Desktop apps use other programs for the person, so the page wears the visor in a colour the audit page lacks.
   { name: 'desktop', accessory: 'visor', colour: '#3f9a68', face: 'happy', yaw: -0.3, pitch: 0.08 },
+  // Editing files and marking them up, so the page holds the pencil in a colour the writing page lacks.
+  { name: 'viewing-and-editing-files', accessory: 'pencil', colour: '#d65c73', face: 'happy', yaw: 0.32, pitch: 0.08 },
 ];
 
 // The README crew: five orglets side by side, the outer ones turned towards the middle.

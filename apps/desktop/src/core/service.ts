@@ -597,6 +597,24 @@ export class CoreService {
         const task = this.store.get<Task>('tasks', input.taskId);
         return this.sources.readPreview(input.id, task.sourceIds);
       }
+      case 'saveSourceVersion': {
+        const input = commands.saveSourceVersion.parse(args);
+        const task = this.liveTask(input.taskId);
+        if (task.sourceIds.length >= 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
+        const content = 'text' in input ? { text: input.text } : { bytes: input.bytes };
+        const source = await this.sources.saveVersion(input.sourceId, task.sourceIds, input.name, content);
+        // The chat keeps the edit beside the original, and it reaches an orglet only in a message that carries it. A
+        // turn that has not written down its own files would read them from the chat's list, which just grew: so, as a
+        // new message does, the latest turn and older runs keep the files they had before the edit joined.
+        const current = this.store.get<Task>('tasks', task.id);
+        const turnFiles = { brief: current.brief, sourceIds: [...current.sourceIds], excludedSources: current.excludedSources };
+        this.store.transaction(() => {
+          for (const run of this.store.detail(current.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: turnFiles } });
+          this.store.patchTask(current.id, { sourceIds: [...current.sourceIds, source.id], currentInput: current.currentInput ?? turnFiles });
+        });
+        this.notify();
+        return source;
+      }
       case 'sourceOrigins': {
         const input = commands.sourceOrigins.parse(args);
         const task = this.store.get<Task>('tasks', input.taskId);
