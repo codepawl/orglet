@@ -60,9 +60,14 @@ type GroupChatRow = { id: string; createdAt: string; teamId?: string; assignees?
  * a group chat had no row, so once another chat was opened it could only be found again through search.
  */
 export function openGroupChats<T extends GroupChatRow>(tasks: readonly T[]): T[] {
-  const groups = tasks.filter(task => !task.teamId && !task.routineId && !task.sideOf && !task.archivedAt && !task.deletedAt
-    && (task.assignees === 'all' || (Array.isArray(task.assignees) && task.assignees.length >= 2)));
+  const groups = tasks.filter(task => isGroupChat(task) && !task.archivedAt && !task.deletedAt);
   return [...groups].sort((first, second) => second.createdAt.localeCompare(first.createdAt));
+}
+
+/** A chat that two or more orglets answer, not a crew's, a schedule's run or a side thread. */
+export function isGroupChat(task: GroupChatRow): boolean {
+  if (task.teamId || task.routineId || task.sideOf) return false;
+  return task.assignees === 'all' || (Array.isArray(task.assignees) && task.assignees.length >= 2);
 }
 
 /** The names for a header when there are few enough to read at a glance; undefined means the caller counts them instead. */
