@@ -1,4 +1,4 @@
-import { WorkspaceRecovery } from './storage/workspace-recovery';
+import { WorkspaceRecovery, restoredChangesKey } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { removalStopsWork, snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { liveTeamTask, liveWorkerTask, newChatKey, newChatKeyNames } from '../shared/live-task';
@@ -1499,6 +1499,7 @@ export class CoreService {
         db.prepare('DELETE FROM workspace_copies WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM workspace_processes WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM settings WHERE id=?').run(`workspace-retired:${run.id}`);
+        db.prepare('DELETE FROM settings WHERE id=?').run(restoredChangesKey(run.id));
         db.prepare('DELETE FROM leases WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM app_proposals WHERE run_id=?').run(run.id);
         this.browser.deleteRun(run.id);

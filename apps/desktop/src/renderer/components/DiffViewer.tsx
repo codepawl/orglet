@@ -5,6 +5,7 @@ import { Checkbox } from './Checkbox';
 import { fileKindIcon } from './Attachment';
 import type { Run } from '../../shared/contracts';
 import type { DiffFile, DiffFolder, DiffHunk, WorkspaceDiff, WorkspaceDiffSummary } from '../../shared/workspace-diff';
+import type { ChangeOutcome } from '../../shared/workspace-recovery';
 import { SourceViewer } from './SourceViewer';
 import type { InfoTipRow } from './InfoTip';
 import { languageOf, tokenizeLines, type Language } from './highlight';
@@ -100,20 +101,12 @@ export function DiffCounts({ counts, hideZero = false }: { counts: Pick<Workspac
 }
 
 /**
- * What became of changes a run held for review (COD-279): waiting, applied (with how many steps the person left
- * out), dropped, or carried on by a later turn that reviews them together with its own.
+ * What became of a run's changes (COD-279, COD-291), described with the schema in `shared/workspace-recovery.ts`:
+ * waiting, being applied, applied (with how many steps the person left out), stopped at a file the person changed
+ * meanwhile (settled in Details), dropped, carried on by a later turn, or kept out of the folder by a failed command
+ * or a refused plan.
  */
-export type ReviewStatus =
-  | { state: 'pending' }
-  /** The person applied them and the broker is working through the steps. */
-  | { state: 'applying' }
-  | { state: 'applied'; skipped: number }
-  /** The apply stopped at a file the person changed meanwhile; what is left is settled in Details. */
-  | { state: 'stopped' }
-  | { state: 'discarded' }
-  | { state: 'carried' }
-  /** Handed in without a review and kept out of the folder: a failed command blocked it, or the plan was refused. */
-  | { state: 'unapplied' };
+export type ReviewStatus = ChangeOutcome;
 
 /** The words after the counts that say where the changes stand. */
 function reviewSuffix(review: ReviewStatus): ReactNode {
@@ -134,17 +127,19 @@ function reviewSuffix(review: ReviewStatus): ReactNode {
  * folded trace above it, and opens the viewer. Nothing is shown when nothing changed, so the line itself is the claim.
  * It ends with where the changes stand (COD-291): applied, held for review (it opens the viewer where they are applied
  * or dropped), discarded, or kept out by a failed command. Changes a later turn carried on have no viewer of their
- * own, so that line is plain text.
+ * own, so that line is plain text. So is a line a restore brought back without its working copy (COD-299): it keeps
+ * its counts and outcome, and says the changes cannot be opened.
  */
-export function ChangedFilesLine({ summary, workerName, review, onOpen }: { summary: WorkspaceDiffSummary; workerName?: string; review?: ReviewStatus; onOpen: () => void }) {
+export function ChangedFilesLine({ summary, workerName, review, restored = false, onOpen }: { summary: WorkspaceDiffSummary; workerName?: string; review?: ReviewStatus; restored?: boolean; onOpen: () => void }) {
   const content = <>
     <FileDiff size={14} aria-hidden="true" />
     <span>
       {changedParts(summary, workerName).join(' · ')}{hasLineCounts(summary) && <> · <DiffCounts counts={summary} hideZero /></>}
       {review && <> · {reviewSuffix(review)}</>}
+      {restored && <> · {t('Khôi phục từ bản sao lưu, không mở lại được thay đổi')}</>}
     </span>
   </>;
-  if (review?.state === 'carried') return <p className="activity-summary changed-files changed-files-carried">{content}</p>;
+  if (restored || review?.state === 'carried') return <p className="activity-summary changed-files changed-files-carried">{content}</p>;
   const pending = review?.state === 'pending';
   return <button type="button" className={pending ? 'activity-summary changed-files changed-files-review' : 'activity-summary changed-files'} aria-haspopup="dialog" onClick={onOpen}>
     {content}

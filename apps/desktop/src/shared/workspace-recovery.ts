@@ -16,6 +16,28 @@ const Change = z.object({
   status: z.enum(['pending', 'applied', 'conflict', 'blocked']), reason: z.string().optional(),
   conflict: WorkspaceConflictReason.optional(), restored: z.boolean().optional(),
 });
+/**
+ * Where a run's changes stand, for its files line (COD-279, COD-291): waiting for review, being applied, applied (with
+ * how many steps the person left out), stopped at a conflict, dropped, carried on by a later turn that reviews them
+ * with its own, or handed in without a review and kept out of the folder by a failed command or a refused plan.
+ */
+export const ChangeOutcome = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('pending') }).strict(),
+  z.object({ state: z.literal('applying') }).strict(),
+  z.object({ state: z.literal('applied'), skipped: z.number().int().nonnegative() }).strict(),
+  z.object({ state: z.literal('stopped') }).strict(),
+  z.object({ state: z.literal('discarded') }).strict(),
+  z.object({ state: z.literal('carried') }).strict(),
+  z.object({ state: z.literal('unapplied') }).strict(),
+]);
+export type ChangeOutcome = z.infer<typeof ChangeOutcome>;
+/**
+ * A turn's files line without the files (COD-299): the counts and where the changes stood. A backup carries one for
+ * each run whose working copy changed something, and a restore keeps it for a run whose working copy is not on this
+ * computer, so the chat still says what the turn changed. No path, no content, no hunk.
+ */
+export const ChangedFilesRecord = z.object({ runId: z.uuid(), diff: WorkspaceDiffSummary, outcome: ChangeOutcome.optional() }).strict();
+export type ChangedFilesRecord = z.infer<typeof ChangedFilesRecord>;
 export const WorkspaceRecoveryView = z.object({
   taskId: z.uuid(),
   attempts: z.array(z.object({ runId: z.uuid(), reviewToken: z.string().regex(/^[a-f0-9]{64}$/), retired: z.boolean() })),
@@ -32,10 +54,27 @@ export const WorkspaceRecoveryView = z.object({
   // `tool`, `summary` and `at` are null for calls journaled before they were recorded (COD-191).
   uncertainCalls: z.array(z.object({ runId: z.uuid(), callId: z.string(), replay: z.enum(['read', 'idempotent', 'never']),
     tool: z.string().max(100).nullable(), summary: z.string().max(TOOL_CALL_SUMMARY_LENGTH).nullable(), at: z.string().nullable() })),
+  /** Files lines a restore brought back for runs whose working copy is not on this computer (COD-299). */
+  restored: z.array(ChangedFilesRecord).optional(),
   truncated: z.boolean(),
 }).strict();
 export type WorkspaceRecoveryView = z.infer<typeof WorkspaceRecoveryView>;
 export type UncertainCall = WorkspaceRecoveryView['uncertainCalls'][number];
+
+/**
+ * Where a working copy's changes stand. A copy still `ready` without a review was kept out of the folder by a failed
+ * command or a refused plan. An applied review is settled before the first step runs, so the copy's own state says
+ * how far the apply got.
+ */
+export function changeOutcomeOf(copy: Pick<WorkspaceRecoveryView['copies'][number], 'state' | 'review' | 'carried'>): ChangeOutcome | undefined {
+  if (copy.carried || copy.review?.state === 'carried') return { state: 'carried' };
+  if (copy.review?.state === 'pending' || copy.review?.state === 'discarded') return { state: copy.review.state };
+  if (copy.state === 'integrating') return { state: 'applying' };
+  if (copy.state === 'conflict' || copy.state === 'uncertain') return { state: 'stopped' };
+  if (copy.state === 'integrated') return { state: 'applied', skipped: copy.review?.skipped ?? 0 };
+  if (copy.state === 'ready') return { state: 'unapplied' };
+  return undefined;
+}
 
 /**
  * The one argument worth showing for a journaled call: the path a write or an integration touched, both paths of a

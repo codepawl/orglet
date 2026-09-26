@@ -61,6 +61,7 @@ These numbers cover requests Orglet makes through an API key. Harness runs use t
 - **After Delete chat history.** Restoring brings the deleted chats back with their answers. A chat you kept talking in after the backup was saved comes back with those later turns shown as deleted. Costs are counted once: the cost records the deletion kept are the same ones the backup holds.
 - **On a new computer.** If you have not used the Researcher that a new install starts with, the backup's orglets take its place instead of sitting beside it. Orglets and crews that were archived or deleted when you saved the backup stay that way. Schedule runs from the backup do not show up as new notifications.
 - **Attached files.** A backup holds no file contents, so a restored file opens with **Choose file**. Pick the same file on this computer and Orglet reads it again; a different file, even with the same name, is refused.
+- **Files an orglet changed.** The line under a turn, such as "Changed 3 files · +42 −7 · Applied", comes back with its counts and whether the changes were applied, discarded or never reached your folder. The backup keeps only those counts, not file names or contents, so where the orglet's private copy is no longer on this computer the line says it came from a backup and cannot be opened.
 - **If restoring fails**, a dialog says why, and nothing in Orglet has changed.
 
 ### Erase
