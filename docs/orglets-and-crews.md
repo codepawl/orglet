@@ -57,7 +57,7 @@ Members' own replies and messages to each other stay under **Details**, with cos
 
 ### Tag who should answer
 
-In a crew or group chat, type `@` to pick an orglet, or **Everyone in this chat**. Tagged names highlight. In a crew, the lead is told who you tagged and may still bring in others; in a group chat, only the tagged orglets answer.
+In a crew or group chat, type `@` to pick an orglet, or **Everyone in this chat**. Tagged names highlight. In a crew, the lead is told who you tagged and may still bring in others; in a group chat, only the tagged orglets answer. Replying to one orglet's answer in a group chat, without tagging anyone, addresses that orglet alone.
 
 ## Group chats
 
