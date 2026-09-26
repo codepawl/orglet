@@ -102,6 +102,23 @@ describe('what is indexed', () => {
     expect((await search('overnight metrics')).chats.map(hit => hit.taskId)).toEqual([scheduledTaskId]);
   });
 
+  it('reads a forwarded answer as the chat shows it: plain text with the note, never the words written for the model', async () => {
+    // Dogfood, 2026-09-26: a forwarded answer's result read "You: …the subtotal. - Negative or missing coupon values…".
+    const dev = await orglet();
+    answers = { coupons: 'Cases not covered in `src/cart.js`:\n\n- **Negative** coupon values\n- Discounts above the subtotal' };
+    const origin = await chat(dev, ['Which coupons break the cart?']);
+    const { id: _id, ...draft } = dev;
+    const reviewer = await core.command('saveWorker', { ...draft, name: 'Reviewer' }) as Worker;
+    const forwarded = await core.command('forwardMessage', { taskId: origin, messageId: answerOf(origin, 'coupon').id, note: 'Which one first?', targets: [{ kind: 'worker', id: reviewer.id }] }) as { sent: { taskId: string }[] };
+    const target = forwarded.sent[0].taskId;
+    await settled(target);
+
+    const found = (await search('cases not covered')).chats.find(hit => hit.taskId === target)!;
+    expect(found.messageId).toBe(turnMessageId(target, 0));
+    expect(text(found.snippet)).toBe('Which one first? Cases not covered in src/cart.js: Negative coupon values Discounts above the subtotal');
+    expect((await search('forwarded from the chat')).chats).toEqual([]);
+  });
+
   it('shows a crew chat once, at its combined answer, and never a member report', async () => {
     const [lead] = store.all<Worker>('workers');
     const helper = await core.command('saveWorker', { name: 'Helper', instructions: 'Help.', skillId: lead.skillId, provider: 'demo' }) as Worker;
@@ -264,6 +281,10 @@ describe('snippets and matching', () => {
     // Decomposed accents fold to fewer characters, so the text is read whole instead of around a guessed place.
     const decomposed = `${filler.repeat(40)}Hợp đồng đã ký. ${filler.repeat(20)}`;
     expect(marked(snippetOf(decomposed, searchTerms('hop dong')))).toEqual(['Hợp', 'đồng']);
+  });
+
+  it('drops markers that stack at the start of a line, such as a list inside a quote', () => {
+    expect(plainSearchText('> - **Quoted** item\n> 1. `first`')).toBe('Quoted item first');
   });
 
   it('reads Markdown answers as plain text, code included, and treats search syntax as words', () => {

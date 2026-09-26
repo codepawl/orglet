@@ -155,7 +155,7 @@ Search finds any message in any chat, not only how a chat started.
 It looks through every message you sent, every answer and report an orglet wrote, side threads, scheduled chats, chat names, and the names of your orglets and crews. With nothing typed, it lists your chats, newest first.
 
 - **Orglets and crews** whose name matches come first. Choosing one opens its chat.
-- **Chats** come next, one row each: the orglet's or crew's face, the chat's name (its title, or the orglet's or crew's name), whose chat it is when the name is a title, when the message was written, and a short piece of that message after **You** or the orglet's name, with your words in bold. Choosing it opens the chat scrolled to that message.
+- **Chats** come next, one row each: the orglet's or crew's face, the chat's name (its title, or the orglet's or crew's name), whose chat it is when the name is a title, when the message was written, and a short piece of that message after **You** or the orglet's name, with your words in bold. Choosing it opens the chat scrolled to that message. The piece is plain text, the way the chat reads, without Markdown marks; a message you forwarded is its note and the forwarded words.
 
 A chat where your words appear together, in the order you typed them, comes before one where they appear apart. Within each of those, the chat with the newest matching message comes first, and each chat shows its best message once.
 
