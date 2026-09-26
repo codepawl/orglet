@@ -273,7 +273,7 @@ function EraseRow({ scope, title, description, caveat, question, busy, onErase }
   const total = scope === 'everything';
   const start = async () => {
     if (total) { setTyped(''); return; }
-    if (await confirmAction({ title: question, description: caveat, confirmLabel: t('Xóa') })) onErase(scope);
+    if (await confirmAction({ title: question, description: caveat, confirmLabel: t('Xóa'), tone: 'danger' })) onErase(scope);
   };
   return <div ref={row}>
     <Row title={title} description={description}>

@@ -483,6 +483,14 @@ export function harnessPrompt(messages: RunMessage[], files: { sourceId: string;
 }
 
 class Paused extends Error {}
+/**
+ * What a stopped run says. Demo and a local Ollama model never charge, so the warning about requests already sent is
+ * only for connections that can; a custom connection counts as one, since Orglet knows no price for it (COD-287).
+ */
+export function cancelledMessage(provider: string): string {
+  if (provider === 'demo' || isLocalApi(provider)) return 'Đã hủy.';
+  return 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.';
+}
 /** A chat reply stored in the report shape, so history, export and search keep working. */
 const chatReport = (message: string): Report => ({ format: 'chat', title: message.trim().split('\n')[0].replace(/^#+\s*/, '').slice(0, 120) || 'Trả lời', summary: message.trim(), findings: [], limitations: [] });
 /**
@@ -1542,7 +1550,7 @@ export class Runner {
       throw new Error(run.snapshot.workspaceGrant ? `Đã chạm giới hạn ${maxSteps} bước mà chưa hoàn tất công việc.` : `Đã chạm giới hạn ${maxSteps} bước mà chưa có báo cáo hợp lệ.`);
     } catch (error) {
       if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true, harnessRunTotal));
-      const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error, readCustomConnections(this.store)) : 'Lần chạy gặp lỗi.';
+      const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? cancelledMessage(run.snapshot.worker.provider) : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error, readCustomConnections(this.store)) : 'Lần chạy gặp lỗi.';
       const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
       // A harness account out of plan usage is marked, so the chat can offer an account that still has room (COD-225).
       const handInBlocked = error instanceof HandInBlockedError && !signal.aborted ? error : undefined;

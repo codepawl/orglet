@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MAX_CREW_CONCURRENT_TASKS, MAX_CREW_MEMBERS, QUIET_PARALLEL_LIMIT, type Team, type Workspace } from '../../shared/contracts';
+import { MAX_CREW_CONCURRENT_TASKS, MAX_CREW_MEMBERS, QUIET_PARALLEL_LIMIT, type Team, type Worker, type Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput } from './ui';
 import { Columns2, ListOrdered, CalendarDays, Clock, Combine, Download, FileUp, Globe, Layers, ScrollText, SlidersHorizontal, Users, Wallet, Workflow } from 'lucide-react';
 import { ProviderMark } from './ProviderMark';
@@ -23,13 +23,22 @@ const tabs = [
   { id: 'limits' as const, label: 'Giới hạn & ca', icon: <Wallet size={16} /> },
 ];
 
+/**
+ * The orglet a new crew starts with as its member and its lead: the first one on a real connection, since a crew of
+ * the Demo orglet does nothing useful when others are connected (dogfood round 5, COD-287).
+ */
+function firstConnectedWorker(workers: readonly Worker[]): Worker | undefined {
+  return workers.find(worker => worker.provider !== 'demo') ?? workers[0];
+}
+
 /** Team create/edit. Remount (via key) to reset the draft. */
 export function TeamDialog({ open, team, workspace, onClose, onCreated }: { open: boolean; team?: Team; workspace: Workspace; onClose: () => void; /** A new crew was saved; the app opens its chat (COD-255). Not called when an existing one is saved. */ onCreated?: (teamId: string) => void }) {
   const [tab, setTab] = useState<Tab>('general');
   const [name, setName] = useState(team?.name ?? '');
-  const [instructions, setInstructions] = useState(team?.instructions ?? 'Combine evidence from each role into one review. Preserve disagreements and explicitly identify missing evidence.');
-  const [members, setMembers] = useState(team?.memberIds ?? (workspace.workers[0] ? [workspace.workers[0].id] : []));
-  const [synthesizer, setSynthesizer] = useState(team?.synthesizerId ?? workspace.workers[0]?.id ?? '');
+  const startingWorker = firstConnectedWorker(workspace.workers);
+  const [instructions, setInstructions] = useState(team?.instructions ?? t('Gộp phần việc của từng Tí thành một câu trả lời. Giữ nguyên chỗ các Tí không đồng ý với nhau và nói rõ còn thiếu bằng chứng nào.'));
+  const [members, setMembers] = useState(team?.memberIds ?? (startingWorker ? [startingWorker.id] : []));
+  const [synthesizer, setSynthesizer] = useState(team?.synthesizerId ?? startingWorker?.id ?? '');
   const [workflow, setWorkflow] = useState(team?.workflow ?? 'parallel');
   const [limit, setLimit] = useState(toAmount(team?.monthlyBudgetMicros ?? 5_000_000));
   const [taskBudget, setTaskBudget] = useState(toAmount(team?.taskBudgetMicros ?? 500_000));
