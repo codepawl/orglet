@@ -210,7 +210,7 @@ export class CoreService {
   }
   /**
    * `orglet run` (COD-245): starts an existing, enabled routine that was approved as it is now, with the files the
-   * command attached. Only main's CLI server calls this; the window has no command for it.
+   * command attached. Only main's CLI server calls this; the window's Run now (`runRoutineNow`) attaches no files.
    */
   async runRoutine(raw: unknown): Promise<string> {
     const input = z.object({ id: Id, sourceIds: z.array(Id).max(20) }).strict().parse(raw);
@@ -445,6 +445,7 @@ export class CoreService {
       case 'saveRoutine': return this.saveRoutine(commands.saveRoutine.parse(args));
       case 'dismissRoutine': this.routines.dismiss((args as { id: string }).id); return;
       case 'catchUpRoutine': return this.routines.catchUp((args as { id: string }).id);
+      case 'runRoutineNow': return this.routines.runCalled((args as { id: string }).id, []);
       case 'cancel': {
         const taskId = (args as { id: string }).id;
         this.teams.cancel(taskId); this.runner.cancel(taskId);
