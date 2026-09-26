@@ -6,6 +6,7 @@ import { Checkbox } from './Checkbox';
 import { StatusMark, type StatusMarkState } from './StatusMark';
 import { selectionPickMode, type SelectionPickMode } from '../sidebarSelection';
 import { dwellHandlers } from '../prefetch';
+import { hidesActive } from '../sidebarChats';
 
 export function statusMarkLabel(status: StatusMarkState): string {
   if (status.variant === 'busy') return t('Đang làm');
@@ -151,8 +152,9 @@ export function SidebarTreeRow({ id, name, avatar, description, active, status, 
 export function GroupChatRow({ name, faces, active, status, onOpen, onDwell, onRename, onArchive, onDelete }: { name: string; faces: ReactNode; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onRename: (title: string) => void; onArchive: () => void; onDelete: () => void }) {
   const [editing, setEditing] = useState(false);
   const dwell = dwellHandlers(onDwell);
+  const row = useScrolledIntoViewWhenActive<HTMLDivElement>(active);
   if (editing) return <div className="tree-item group-chat-row"><div className="worker-row editing"><RenameField name={name} label={t('Tên mới cho nhóm chat {0}', [name])} onSave={onRename} onDone={() => setEditing(false)} /></div></div>;
-  return <div className="tree-item group-chat-row" {...dwell}>
+  return <div ref={row} className="tree-item group-chat-row" {...dwell}>
     <div className="worker-row">
       <StatusMark variant={status.variant} tone={status.tone} label={statusMarkLabel(status)} />
       <span className="row-disclosure" aria-hidden="true">{faces}</span>
@@ -177,10 +179,12 @@ export function GroupChatRow({ name, faces, active, status, onOpen, onDwell, onR
 export function SideThreadRow({ name, active, status, onOpen, onDwell, onRename, onArchive, onDelete }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onRename: (title: string) => void; onArchive: () => void; onDelete: () => void }) {
   const [editing, setEditing] = useState(false);
   const dwell = dwellHandlers(onDwell);
+  const row = useScrolledIntoViewWhenActive<HTMLDivElement>(active);
   if (editing) return <div className="history-item nested editing"><RenameField name={name} label={t('Tên mới cho chat phụ {0}', [name])} onSave={onRename} onDone={() => setEditing(false)} /></div>;
   const label = statusMarkLabel(status);
-  return <div className={`task-row side-thread-row${active ? ' active' : ''}`} {...dwell}>
-    <button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} title={label} onClick={onOpen}>
+  // The row is narrow under its orglet, so two threads can share their first words: the tooltip carries the whole name.
+  return <div ref={row} className={`task-row side-thread-row${active ? ' active' : ''}`} {...dwell}>
+    <button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} title={`${name}\n${label}`} onClick={onOpen}>
       <StatusMark variant={status.variant} tone={status.tone} label={label} decorative />
       <span className="row-name">{name}</span>
     </button>
@@ -201,8 +205,9 @@ export function SideThreadRow({ name, active, status, onOpen, onDwell, onRename,
  */
 export function ScheduleRunRow({ name, active, status, onOpen, onDwell, onOpenSchedule, onArchive, onDelete }: { name: string; active: boolean; status: StatusMarkState; onOpen: () => void; onDwell?: (resting: boolean) => void; onOpenSchedule: () => void; onArchive: () => void; onDelete: () => void }) {
   const dwell = dwellHandlers(onDwell);
+  const row = useScrolledIntoViewWhenActive<HTMLDivElement>(active);
   const label = statusMarkLabel(status);
-  return <div className={`task-row side-thread-row schedule-run-row${active ? ' active' : ''}`} {...dwell}>
+  return <div ref={row} className={`task-row side-thread-row schedule-run-row${active ? ' active' : ''}`} {...dwell}>
     <button type="button" className={`history-item nested${active ? ' active' : ''}`} aria-current={active || undefined} aria-label={t('Lần chạy của lịch {0}', [name])} title={`${name}\n${label}`} onClick={onOpen}>
       <StatusMark variant={status.variant} tone={status.tone} label={label} decorative />
       <span className="row-name">{name}</span>
@@ -237,23 +242,46 @@ function RenameField({ name, label, onSave, onDone }: { name: string; label: str
 
 export type ArchiveState = { daysLeft: number | null; tone: 'fresh' | 'aging' | 'expiring' };
 
-/** An archived worker or team: its mark, name and days left, with Khôi phục and Xóa vĩnh viễn in its menu. */
-export function ArchivedRow({ name, mark, archive, onRestore, onDelete }: { name: string; mark: ReactNode; archive: ArchiveState; onRestore: () => void; onDelete: () => void }) {
-  return <div className="task-row archived-row">
-    <span className="history-item">{mark}<span className="row-name">{name}</span>{archive.daysLeft !== null && <span className={`archive-age ${archive.tone}`} title={t('Tự xóa sau {0} ngày', [archive.daysLeft])}>{t('{0} ngày', [archive.daysLeft])}</span>}</span>
-    <RowMenu label={t('Tùy chọn {0}', [name])} icon={EllipsisVertical} items={[{ label: t('Khôi phục'), icon: ArchiveRestore, onSelect: onRestore }, { label: t('Xóa vĩnh viễn'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
+/**
+ * An archived worker, team or chat: its mark, name and days left, with Khôi phục and Xóa vĩnh viễn in its menu.
+ * `title` is the tooltip (a chat's whole name and whose it is); `deleteQuestion` replaces the worker and team wording,
+ * which promises old chats keep their history and so does not fit a chat.
+ */
+export function ArchivedRow({ name, mark, archive, title, deleteQuestion, onRestore, onDelete }: { name: string; mark: ReactNode; archive: ArchiveState; title?: string; deleteQuestion?: string; onRestore: () => void; onDelete: () => void }) {
+  const deletesIn = archive.daysLeft !== null ? t('Tự xóa sau {0} ngày', [archive.daysLeft]) : undefined;
+  // The pill gives way to the menu on hover, so the row's own tooltip also says when it deletes itself.
+  const tooltip = [title ?? name, deletesIn].filter(Boolean).join('\n');
+  return <div className="task-row archived-row" title={tooltip}>
+    <span className="history-item">{mark}<span className="row-name">{name}</span>{deletesIn && <span className={`archive-age ${archive.tone}`}>{t('{0} ngày', [archive.daysLeft])}</span>}</span>
+    <RowMenu label={t('Tùy chọn {0}', [name])} icon={EllipsisVertical} items={[{ label: t('Khôi phục'), icon: ArchiveRestore, onSelect: onRestore }, { label: t('Xóa vĩnh viễn'), icon: Trash, danger: true, onSelect: onDelete, confirm: { question: deleteQuestion ?? t('Xóa {0}? Cuộc trò chuyện cũ vẫn giữ lịch sử.', [name]), label: t('Xóa') } }]} />
   </div>;
 }
 
-/** Collapsible "Đã lưu trữ (N)" list at the end of a sidebar section. */
-export function ArchivedList({ count, children }: { count: number; children: ReactNode }) {
+/** Collapsible "Đã lưu trữ (N)" list at the end of a sidebar section; `label` names another kind of list, such as archived chats. */
+export function ArchivedList({ count, label, children }: { count: number; label?: string; children: ReactNode }) {
   if (!count) return null;
-  return <details className="archived-tasks"><summary><Archive size={15} aria-hidden="true" />{t('Đã lưu trữ ({0})', [count])}</summary>{children}</details>;
+  return <details className="archived-tasks"><summary><Archive size={15} aria-hidden="true" />{label ?? t('Đã lưu trữ ({0})', [count])}</summary>{children}</details>;
 }
 
-/** Shows the first few children, with a quiet control to reveal the rest. */
-export function ShowMore<T>({ items, limit = 5, render, empty }: { items: T[]; limit?: number; render: (item: T) => ReactNode; empty: string }) {
+/** Scrolls a sidebar row into view once it becomes the chat on screen, such as a chat opened from search. */
+function useScrolledIntoViewWhenActive<E extends HTMLElement>(active: boolean) {
+  const row = useRef<E>(null);
+  useEffect(() => {
+    if (active) row.current?.scrollIntoView({ block: 'nearest' });
+  }, [active]);
+  return row;
+}
+
+/**
+ * Shows the first few children, with a quiet control to reveal the rest. With `isActive`, a hidden child that becomes
+ * the chat on screen opens the list, so the sidebar can mark it (COD-286); the list can still be folded again after.
+ */
+export function ShowMore<T>({ items, limit = 5, render, empty, isActive }: { items: T[]; limit?: number; render: (item: T) => ReactNode; empty: string; isActive?: (item: T) => boolean }) {
   const [all, setAll] = useState(false);
+  const activeHidden = isActive ? hidesActive(items, limit, isActive) : false;
+  useEffect(() => {
+    if (activeHidden) setAll(true);
+  }, [activeHidden]);
   if (!items.length) return <p className="tree-empty">{empty}</p>;
   const shown = all ? items : items.slice(0, limit);
   return <>

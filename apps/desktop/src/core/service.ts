@@ -2,6 +2,7 @@ import { WorkspaceRecovery } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { removalStopsWork, snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { liveTeamTask, liveWorkerTask, newChatKey, newChatKeyNames } from '../shared/live-task';
+import { leaveCrewsMessage, removalBlocker, stopScheduleMessage } from '../shared/removal';
 import { withoutSourceIds } from '../shared/source-mentions';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
 import { GrantWorkspace, type NewChatTarget } from '../shared/workspace-access';
@@ -1179,15 +1180,12 @@ export class CoreService {
     if (!found) throw new Error('Không tìm thấy mục này.');
     const workspace = this.store.workspace();
     const name = found.row.name;
-    if (kind === 'worker') {
-      if (!found.archived && workspace.workers.length <= 1) throw new Error('Cần giữ ít nhất một Tí.');
-      const team = workspace.teams.find(item => [...item.memberIds, item.synthesizerId].includes(entityId));
-      if (team) throw new Error(`Bỏ ${name} khỏi hội ${team.name} trước.`);
-    }
-    const uses = (task: { workerId: string; teamId?: string; assignees?: 'all' | string[] }) => runBy(task, kind, entityId);
-    const routine = workspace.routines.find(item => item.enabled && uses(item.task));
-    if (routine) throw new Error(`Tắt hoặc xóa lịch ${routine.name} trước.`);
-    if (this.store.all<Task>('tasks').some(task => !task.deletedAt && ['queued', 'running', 'pausing'].includes(task.status) && (uses(task) || (kind === 'worker' && task.assignees === 'all')))) throw new Error('Đợi công việc đang chạy xong rồi thử lại.');
+    if (kind === 'worker' && !found.archived && workspace.workers.length <= 1) throw new Error('Cần giữ ít nhất một Tí.');
+    const blocker = removalBlocker(workspace, kind, entityId);
+    if (blocker?.kind === 'crews') throw new Error(leaveCrewsMessage(name, blocker.crews.map(crew => crew.name)));
+    if (blocker?.kind === 'schedule') throw new Error(stopScheduleMessage(blocker.schedule.name));
+    const uses = (task: Task) => runBy(task, kind, entityId) || (kind === 'worker' && task.assignees === 'all');
+    if (this.store.all<Task>('tasks').some(task => !task.deletedAt && ['queued', 'running', 'pausing'].includes(task.status) && uses(task))) throw new Error('Đợi công việc đang chạy xong rồi thử lại.');
   }
   private deleteEntity(kind: 'worker' | 'team', entityId: string) {
     this.assertRemovable(kind, entityId);
