@@ -164,6 +164,8 @@ export class BrowserEngine {
   private userAgents = new Map<string, Promise<string | undefined>>();
   private cursors = new BrowserCursorTrack();
   private suggestions = new SuggestionLog();
+  /** A Clean run's own Chrome on its way out after its tabs came back headless. */
+  private closingBrowsers = new Set<Promise<void>>();
   private idleTimer?: NodeJS.Timeout;
   private leaseTimer?: NodeJS.Timeout;
   private resolve: ResolveAddresses;
@@ -255,6 +257,19 @@ export class BrowserEngine {
     this.cleanProxy = undefined;
     for (const proxy of this.profileProxies.values()) proxy.close();
     this.profileProxies.clear();
+    await Promise.all([...this.closingBrowsers]);
+  }
+
+  /**
+   * Closes a Clean run's own Chrome once its tabs are back in the headless browser, without making the run wait for
+   * Chrome to exit: that takes up to a second or more on a busy Mac, and a teardown waiting on it once ran past 30
+   * seconds on the macOS runner (COD-261). Shutting down still waits for it.
+   */
+  private closeLater(browser: Browser | undefined) {
+    if (!browser) return;
+    const closing = browser.close().catch(() => {});
+    this.closingBrowsers.add(closing);
+    void closing.then(() => this.closingBrowsers.delete(closing));
   }
 
   private emit(event: BrowserHostEvent) {
@@ -268,8 +283,8 @@ export class BrowserEngine {
   }
 
   /**
-   * The user agent this browser sends with a window. The version comes from the install folder on Windows; elsewhere
-   * the browser is started once, headless, to ask it.
+   * The user agent this browser sends with a window. The version comes from the install folder on Windows and the app's
+   * Info.plist on a Mac; when neither says (on Linux), the browser is started once, headless, to ask it.
    */
   private headedUserAgent(found: DetectedBrowser): Promise<string | undefined> {
     const known = headedUserAgent(found.kind, found.version);
@@ -399,7 +414,7 @@ export class BrowserEngine {
       this.windowedProfiles.delete(profileId);
       this.signIn.delete(profileId);
     }
-    for (const session of affected) await this.windowClosed(session);
+    for (const session of affected) await this.windowClosed(session, context);
     this.scheduleIdle();
   }
 
@@ -579,17 +594,22 @@ export class BrowserEngine {
         this.tabGone(session, tabId);
         return;
       }
+      const context = session.context;
       // In Chrome, the last of the run's tabs closing is the person closing the window: the run goes on headless, at
       // every tab's address.
       if (session.inChrome && session.tabs.size === 0) {
-        void this.windowClosed(session);
+        void this.windowClosed(session, context);
         return;
       }
-      // Closing a window closes its tabs one by one, before the window itself, so a tab in a window is forgotten only
-      // once the run is still in that window a moment later; otherwise it opens again with the others.
-      const context = session.context;
+      // Closing a window closes its tabs one by one, and the browser says the window is gone only after its process
+      // exits: over a second later on a busy Mac (measured on the macOS runner for COD-261), or never, since Chrome on
+      // macOS keeps running with no window. So a moment after the tab closes, a context with no page left open is a
+      // closed window, and the run goes on headless with this tab too; a context that still shows pages had only this
+      // tab closed, and the run forgets it.
       setTimeout(() => {
-        if (session.context === context && !session.tabs.has(tabId)) this.tabGone(session, tabId);
+        if (session.context !== context || session.tabs.has(tabId)) return;
+        if (context.pages().length === 0) void this.windowClosed(session, context);
+        else this.tabGone(session, tabId);
       }, WINDOW_CLOSING_MS);
     });
   }
@@ -830,7 +850,7 @@ export class BrowserEngine {
         await this.reopenTabs(session, addresses);
         await headless.close().catch(() => {});
         browser.on('disconnected', () => {
-          if (session.chromeBrowser === browser) void this.windowClosed(session);
+          if (session.chromeBrowser === browser) void this.windowClosed(session, context);
         });
       }
     } finally {
@@ -865,7 +885,7 @@ export class BrowserEngine {
         session.inChrome = false;
         session.savedState = undefined;
         await this.reopenTabs(session, addresses);
-        await browser?.close().catch(() => {});
+        this.closeLater(browser);
       }
     } finally {
       session.switching = false;
@@ -875,10 +895,11 @@ export class BrowserEngine {
 
   /**
    * The person closed the Chrome window the run's tabs were in, or a signed-in window a run shared. The run goes on
-   * headless at the addresses its tabs were at, and a browser the person held counts as handed back.
+   * headless at the addresses its tabs were at, and a browser the person held counts as handed back. Its tabs and the
+   * browser both report the close, in either order; only the first report for the context the run is in moves it.
    */
-  private async windowClosed(session: RunSession) {
-    if (this.runs.get(session.runId) !== session || session.switching) return;
+  private async windowClosed(session: RunSession, closed: BrowserContext) {
+    if (this.runs.get(session.runId) !== session || session.switching || session.context !== closed) return;
     const wasHeld = session.held && session.inChrome;
     const addresses = this.currentAddresses(session);
     session.switching = true;
@@ -889,7 +910,7 @@ export class BrowserEngine {
         session.chromeBrowser = undefined;
         session.inChrome = false;
         session.context = await this.cleanContext(session, state);
-        await chrome?.close().catch(() => {});
+        this.closeLater(chrome);
       } else {
         const closing = session.context;
         const current = await this.profiles.get(session.profileId)?.catch(() => undefined);

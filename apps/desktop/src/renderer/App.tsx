@@ -44,6 +44,7 @@ import { sendToOptions, type SendToOption } from './sendTo';
 import { ForwardPicker, type ForwardChoice } from './components/ForwardPicker';
 import { forwardOptions, forwardSummary, type ForwardRequest } from './forward';
 import { attachIntake, carriedDraft, type Incoming, type IncomingChat, type IncomingFiles } from '../shared/incoming';
+import { dropDraft, emptyChatDraftKey, keepDraft, readDraft } from './drafts';
 import { tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
 import { taskResultSeen } from '../shared/task-seen';
 import { RowMenu } from './components/RowMenu';
@@ -615,6 +616,7 @@ export function App() {
    */
   const adoptLiveChat = (liveId: string) => {
     const carried = busy ? {} : carriedDraft({ text: brief, sources, skipped: skippedSources });
+    if (emptyDraftKey) dropDraft(emptyDraftKey);
     openTask(liveId);
     if (!carried.text && !carried.intake) return;
     setBrief('');
@@ -638,6 +640,25 @@ export function App() {
     const adopted = liveChatToAdopt(workspace.tasks, chat, baseline.liveId);
     if (adopted) adoptLiveChat(adopted);
   }, [workspace, selected, team?.id, worker?.id, group]);
+  /**
+   * The empty chat's message bar keeps what was typed and added, per orglet, crew or group, while the app is open
+   * (COD-257, `drafts.ts`): leaving for another chat and coming back finds it there. Entering an empty chat puts its
+   * draft back, in front of anything a link or Send to put there on the way in; every change after that is kept.
+   */
+  const emptyDraftKey = selected ? undefined : emptyChatDraftKey(team ? { teamId: team.id } : group ? { workerIds: group.workerIds } : { workerId: worker?.id });
+  const shownDraftKey = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (shownDraftKey.current !== emptyDraftKey) {
+      shownDraftKey.current = emptyDraftKey;
+      const saved = emptyDraftKey ? readDraft(emptyDraftKey) : undefined;
+      if (!saved) return;
+      setBrief(current => current.trim() ? withPrefill(saved.text, current) : saved.text);
+      setSources(current => attachIntake(saved.intake.sources, { sources: current, skipped: [] }).sources);
+      setSkippedSources(current => [...saved.intake.skipped, ...current]);
+      return;
+    }
+    if (emptyDraftKey) keepDraft(emptyDraftKey, { text: brief, intake: { sources, skipped: skippedSources } });
+  }, [emptyDraftKey, brief, sources, skippedSources]);
   // An empty chat has no row yet, so its permissions wait under the worker, team or group until the first message
   // (COD-178, COD-215), and so does its working folder (COD-186).
   const newChatTarget: NewChatTarget | undefined = team ? { teamId: team.id } : group ? { workerIds: group.workerIds } : worker ? { workerId: worker.id } : undefined;
@@ -690,6 +711,8 @@ export function App() {
         setGroupChat(undefined);
         setSelected(id);
       }
+      // Sent, so this empty chat's bar holds nothing any more.
+      if (emptyDraftKey) dropDraft(emptyDraftKey);
       setBrief(''); setSources([]);
     } catch (err) { errorAbout.current = t('Gửi tin cho {0}', [team?.name ?? groupName ?? worker?.name ?? '']); setError((err as Error).message); } finally { setBusy(false); }
   };

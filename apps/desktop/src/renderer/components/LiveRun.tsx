@@ -193,19 +193,20 @@ const inChromeDoing: Doing = { state: 'pausing', sentence: () => t('Bạn đang 
 const handBackDoing: Doing = { state: 'waiting', sentence: name => t('{0} đang chờ bạn trả lại trình duyệt…', [name]), line: () => t('Đang chờ bạn trả lại trình duyệt…') };
 
 /**
- * The island of a run that uses Orglet's browser (COD-261): waiting on the card that asks about a step, or, while
- * the person has taken the browser over, saying so with Watch (unless the tabs are in Chrome) and Hand back;
- * otherwise the run's own island with Watch, which opens the live view where Take over is.
+ * The island of a run that uses Orglet's browser (COD-261): while the person has taken the browser over, saying so
+ * with Watch (unless the tabs are in Chrome) and Hand back, even when a card waits on a step, since the card cannot be
+ * answered until the browser is handed back (COD-257); otherwise waiting on that card, or the run's own island with
+ * Watch, which opens the live view where Take over is.
  */
 export function withBrowserControls(view: IslandView, live: BrowserLive | undefined, workers: readonly Worker[], controls: { watch: () => void; handBack: () => void }): IslandView {
   if (!live) return view;
-  if (live.approval) return islandFor(askingDoing, workers);
   const watch = { kind: 'watch' as const, label: t('Theo dõi'), onSelect: controls.watch };
   if (live.takenOver) {
     const handBack = { kind: 'handBack' as const, label: t('Trả lại'), onSelect: controls.handBack };
     const doing = live.waiting ? handBackDoing : live.inChrome ? inChromeDoing : holdingDoing;
     return { ...islandFor(doing, workers), actions: live.inChrome ? [handBack] : [watch, handBack] };
   }
+  if (live.approval) return islandFor(askingDoing, workers);
   if (live.using) return { ...view, actions: [watch] };
   return view;
 }

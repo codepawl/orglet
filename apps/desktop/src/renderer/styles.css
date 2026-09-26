@@ -2135,6 +2135,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .turn-after .blocked-command { margin-left:-4px; }
 .run-error-commands { display:flex; flex-direction:column; align-items:flex-start; gap:2px; margin:6px 0 0 -4px; }
 .run-error .blocked-command:hover { background:none; }
+/* An answer cut short by the step limit (COD-257): a muted line saying so, then Continue on the latest turn, the
+   outline pill the thread's other next steps use. Both sit on one centre line and wrap under each other when narrow. */
+.out-of-steps { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:6px 0 2px; }
+.out-of-steps p { display:flex; align-items:center; gap:6px; margin:0; color:var(--muted); font-size:13px; line-height:20px; }
+.out-of-steps p svg { flex-shrink:0; }
 /* The last lines of a blocking command's output, stdout then stderr, each under its stream's name. */
 .command-output { display:flex; flex-direction:column; gap:20px; }
 .command-output-stream { display:flex; flex-direction:column; gap:8px; }
