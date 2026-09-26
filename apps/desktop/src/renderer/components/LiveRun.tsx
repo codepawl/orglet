@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Run, Worker } from '../../shared/contracts';
 import type { BrowserLive } from '../../shared/browser';
+import type { DesktopLive } from '../../shared/desktop';
 import type { RunMemory } from '../../shared/knowledge';
 import type { ActivityStep, HarnessProgress, RunProgressUpdate } from '../../shared/progress';
 
@@ -207,6 +208,11 @@ export function withBrowserControls(view: IslandView, live: BrowserLive | undefi
   }
   if (live.using) return { ...view, actions: [watch] };
   return view;
+}
+
+/** The island of a run whose desktop step waits on its card (COD-261, phase 2a): it waits for the person's OK, like the browser's. */
+export function withDesktopApproval(view: IslandView, live: DesktopLive | undefined, workers: readonly Worker[]): IslandView {
+  return live?.approval ? islandFor(askingDoing, workers) : view;
 }
 
 /**

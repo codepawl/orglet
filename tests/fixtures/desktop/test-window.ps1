@@ -60,6 +60,12 @@ $delete.SetBounds(252, 176, 110, 30)
 $delete.Add_Click({ $status.Text = 'Status: deleted' })
 
 $form.Controls.AddRange(@($status, $note, $password, $wrap, $priority, $append, $save, $delete))
+# Save is the form's default button, which Windows marks with the default push button style. Only a native button
+# (FlatStyle System) carries that style, and Windows Forms applies it when the form is activated, which this one never
+# is, so it is applied once the window shows.
+$save.FlatStyle = 'System'
+$form.AcceptButton = $save
+$form.Add_Shown({ $save.NotifyDefault($true) })
 
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = [Math]::Max(1, $Seconds) * 1000

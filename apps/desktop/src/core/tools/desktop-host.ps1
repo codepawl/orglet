@@ -35,6 +35,8 @@ namespace OrgletDesktop {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool GetCursorPos(out PointStruct point);
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out int value, int size);
+    [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out Rect value, int size);
+    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr context);
     [DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr OpenProcess(uint access, bool inherit, uint processId);
     [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr handle);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder name, ref uint size);
@@ -51,6 +53,9 @@ namespace OrgletDesktop {
     public const uint TokenQuery = 0x0008;
     public const int TokenIntegrityLevel = 25;
     public const int DwmCloaked = 14;
+    public const int DwmExtendedFrameBounds = 9;
+    /// <summary>DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: window rectangles, DWM bounds and UI Automation all in physical pixels.</summary>
+    public static readonly IntPtr PerMonitorAware = new IntPtr(-4);
     public const uint RootAncestor = 2;
     public const uint RenderFullContent = 2;
     public const int StyleIndex = -16;
@@ -86,6 +91,11 @@ namespace OrgletDesktop {
     public static void Run() {
       Console.InputEncoding = new UTF8Encoding(false);
       Console.OutputEncoding = new UTF8Encoding(false);
+      try {
+        Native.SetProcessDpiAwarenessContext(Native.PerMonitorAware);
+      } catch (EntryPointNotFoundException) {
+        // Older Windows 10 builds: pictures are still taken, possibly with the outline slightly off on scaled screens.
+      }
       ownIntegrity = IntegrityOf(Native.GetCurrentProcess());
       Write(new Dictionary<string, object> { { "ready", true } });
       string line;
@@ -664,15 +674,27 @@ namespace OrgletDesktop {
             }
           }
         }
+        // The window rectangle includes the invisible resize border, which draws black; keep only the visible frame.
+        var visible = VisibleFrame(handle, bounds);
+        using (var cropped = bitmap.Clone(visible, bitmap.PixelFormat))
         using (var stream = new MemoryStream()) {
-          bitmap.Save(stream, ImageFormat.Png);
+          cropped.Save(stream, ImageFormat.Png);
           var result = WindowView(facts);
           result["png"] = Convert.ToBase64String(stream.ToArray());
-          result["width"] = width;
-          result["height"] = height;
+          result["width"] = visible.Width;
+          result["height"] = visible.Height;
           return result;
         }
       }
+    }
+
+    /// <summary>The part of the window rectangle DWM draws, relative to that rectangle; all of it when DWM does not say.</summary>
+    static Rectangle VisibleFrame(IntPtr handle, Native.Rect bounds) {
+      var whole = new Rectangle(0, 0, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top);
+      Native.Rect frame;
+      if (Native.DwmGetWindowAttribute(handle, Native.DwmExtendedFrameBounds, out frame, Marshal.SizeOf(typeof(Native.Rect))) != 0) return whole;
+      var visible = Rectangle.Intersect(whole, new Rectangle(frame.Left - bounds.Left, frame.Top - bounds.Top, frame.Right - frame.Left, frame.Bottom - frame.Top));
+      return visible.Width > 0 && visible.Height > 0 ? visible : whole;
     }
   }
 }

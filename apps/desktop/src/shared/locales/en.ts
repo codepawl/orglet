@@ -2792,7 +2792,7 @@ export const en: Dictionary = {
   'Đọc cửa sổ': 'Read windows',
   'Chỉ có trên Windows.': 'Windows only.',
   'Đọc cửa sổ của ứng dụng bạn cấp, không dùng chuột thật.': 'Reads the windows of apps you grant, without the real mouse.',
-  'Bấm, nhập và chọn trong ứng dụng bạn cấp; hỏi bạn trước khi gửi, lưu đè hay xóa.': 'Presses, types and picks in apps you grant; asks you before sending, saving over or deleting.',
+  'Dùng ứng dụng bạn cấp; hỏi bạn trước khi gửi, lưu đè hay xóa.': 'Uses the apps you grant; asks before sending, saving over or deleting.',
   'Chưa cấp ứng dụng nào': 'No app granted yet',
   '1 ứng dụng': '1 app',
   '{0} ứng dụng': '{0} apps',

@@ -65,7 +65,10 @@ describe.runIf(enabled)('the desktop helper on a real window', { timeout: 90_000
     expect(snapshot.snapshot).toMatch(/^- window "Orglet desktop test/);
     expect(snapshot.snapshot).toMatch(/edit "Note" \[ref=e\d+\] actions=set_value/);
     expect(snapshot.snapshot).toMatch(/edit "Password" \[ref=e\d+\] \[password\]/);
-    expect(snapshot.snapshot).toMatch(/button "Save" \[ref=e\d+\] actions=invoke/);
+    // Save is the form's default button: the style Windows gives it is read, though the form is not a dialog.
+    expect(snapshot.snapshot).toMatch(/button "Save" \[ref=e\d+\] \[default\] actions=invoke/);
+    const saveFacts = DesktopInspectResult.parse(await helper.request({ kind: 'inspect', runId: 'run-a', handle: window.handle, allow, ref: refOf(snapshot.snapshot, /button "Save"/) }, signal()));
+    expect(saveFacts).toMatchObject({ target: { name: 'Save', controlType: 'button', defaultButton: true, inDialog: false, actions: ['invoke'] } });
 
     const typed = await act('run-a', refOf(snapshot.snapshot, /edit "Note"/), { kind: 'set_value', text: 'hello from orglet' });
     expect(typed).toMatchObject({ done: true, pending: false, state: { value: 'hello from orglet' }, cursorMoved: false, foregroundChanged: false });
@@ -107,6 +110,10 @@ describe.runIf(enabled)('the desktop helper on a real window', { timeout: 90_000
     const shot = DesktopScreenshotResult.parse(await helper.request({ kind: 'screenshot', runId: 'run-c', handle: window.handle, allow, highlight: refOf(snapshot.snapshot, /button "Delete"/) }, signal()));
     if ('problem' in shot) throw new Error(shot.problem);
     expect(shot.width).toBeGreaterThan(200);
-    expect(Buffer.from(shot.png, 'base64').subarray(1, 4).toString('ascii')).toBe('PNG');
+    const png = Buffer.from(shot.png, 'base64');
+    expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
+    // The picture is the visible frame only: its size in the PNG header matches what the helper reports.
+    expect(png.readUInt32BE(16)).toBe(shot.width);
+    expect(png.readUInt32BE(20)).toBe(shot.height);
   });
 });

@@ -23,7 +23,7 @@ import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { LiveRun, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, useRunProgress, withBrowserControls, workingWorkers } from './LiveRun';
+import { LiveRun, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, useRunProgress, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
 import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
 import { DesktopApprovalCard } from './DesktopApps';
@@ -214,9 +214,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   // While a run uses Orglet's browser the island carries Watch, and Hand back once taken over, and waits with the card
   // (COD-261). Watch opens the live view, where the person takes the browser over.
   const browserWorkers = dockedRun ? islandWorkers : heldRun ? [heldRun.snapshot.worker] : [];
-  const dockedIsland = runIsland && withBrowserControls(runIsland, detail.browser, browserWorkers, {
+  const browserIsland = runIsland && withBrowserControls(runIsland, detail.browser, browserWorkers, {
     watch: () => openBrowserViewer(detail.task.id), handBack: () => takeOverBrowser(detail.task.id, false),
   });
+  // A desktop step waiting on its card waits the same way (COD-261, phase 2a).
+  const dockedIsland = browserIsland && withDesktopApproval(browserIsland, detail.desktop, browserWorkers);
   const islandWorkerKey = islandWorkers.map(worker => worker.id).join(',');
   // Once no run is on, the island offers this chat's knowledge suggestions instead (COD-208). Dismissing hides the
   // offer for that set only, remembered per chat in localStorage; the notes themselves stay in Thư viện → Knowledge.
