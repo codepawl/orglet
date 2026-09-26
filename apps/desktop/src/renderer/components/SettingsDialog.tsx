@@ -37,6 +37,7 @@ import { CommandBlock, Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import { dwellAbout, modelLists } from '../caches';
 import { dwellHandlers } from '../prefetch';
 import { chatHeadline } from '../../shared/forward';
+import { forgetAllDrafts } from '../drafts';
 
 /** 1 to 8 requests in flight per provider (COD-242). */
 const concurrencyChoices = Array.from({ length: MAX_PROVIDER_CONCURRENCY }, (_, index) => index + 1);
@@ -461,8 +462,12 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
       ? t('Đã xóa {0} nguồn, thu hồi {1} nguồn còn được trò chuyện nhắc tới.', [summary.sources, summary.sourcesForgotten])
       : t('Đã xóa {0} nguồn.', [summary.sources]);
   };
-  const erase = (scope: EraseScope, confirm?: string) => void act(async () =>
-    eraseMessage(await orglet.call('eraseData', { scope, ...(confirm ? { confirm } : {}) })), eraseNames[scope]);
+  const erase = (scope: EraseScope, confirm?: string) => void act(async () => {
+    const summary = await orglet.call('eraseData', { scope, ...(confirm ? { confirm } : {}) });
+    // Unsent words and file cards are kept across restarts (`drafts.ts`); erased chats or files must not come back there.
+    if (scope === 'chats' || scope === 'sources' || scope === 'everything') forgetAllDrafts();
+    return eraseMessage(summary);
+  }, eraseNames[scope]);
   const commitLimit = () => {
     const micros = toMicros(limit);
     if (!Number.isFinite(micros) || micros < 1000 || micros > 1_000_000_000) { setLimitError(t('Nhập từ {0} đến {1}.', [formatMoney(1000), formatMoney(1_000_000_000)])); return; }
