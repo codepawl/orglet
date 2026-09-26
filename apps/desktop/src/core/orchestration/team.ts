@@ -137,7 +137,8 @@ export class TeamRunner {
             break;
           }
           for (const assignment of batch) pending.delete(assignment.workerId);
-          this.setWaits(task.id, crewWaits([...pending.values()], successful, planned.members, planned.synthesis, queuedSince));
+          this.setWaits(task.id, crewWaits([...pending.values()], successful, planned.members, planned.synthesis, queuedSince,
+            team.workflow === 'sequential' ? orderedAssignments.map(assignment => assignment.workerId) : undefined));
           const results = await Promise.allSettled(batch.map(assignment => execute(assignment.workerId, signal)));
           const rejected = results.find(result => result.status === 'rejected');
           if (rejected?.status === 'rejected') throw rejected.reason;
