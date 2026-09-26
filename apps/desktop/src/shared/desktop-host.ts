@@ -20,6 +20,8 @@ export type DesktopHostRequest =
   | { kind: 'borrow_check'; runId: string; handle: number; allow: string[]; ref: string; expect: { name: string; controlType: string } }
   | { kind: 'borrow'; runId: string; handle: number; allow: string[]; ref: string; expect: { name: string; controlType: string }; steps: DesktopBorrowStep[]; limitMs: number; indicator: string }
   | { kind: 'borrow_stop' }
+  /** Replays a synthetic sequence of Orglet's sends and hook events through the borrow's classifier; sends no input (a test only). */
+  | { kind: 'classify'; sends: { x: number; y: number; atMs: number }[]; events: { move: boolean; tagged: boolean; injected: boolean; x: number; y: number; atMs: number }[] }
   | { kind: 'forget'; runId: string };
 
 /** The helper, as the core sees it. `available` is false where there is no helper (macOS, Linux, tests without one). */
@@ -82,6 +84,9 @@ export const DesktopActResult = z.union([ProblemResult, z.object({
 export type DesktopActResult = z.infer<typeof DesktopActResult>;
 
 export const DesktopScreenshotResult = z.union([ProblemResult, HostWindow.extend({ png: z.string(), width: z.number().int(), height: z.number().int() }).strict()]);
+
+/** One boolean per event the classifier judged: true when it counts as the person's own input. */
+export const DesktopClassifyResult = z.object({ person: z.array(z.boolean()) }).strict();
 
 /** Where a granted window's visible frame is now, for the glow around it (COD-261). */
 export const DesktopBoundsResult = z.union([ProblemResult, z.object({ bounds: z.object({ x: z.number().int(), y: z.number().int(), width: z.number().int().positive(), height: z.number().int().positive() }).strict() }).strict()]);

@@ -1,6 +1,7 @@
 # Plays the person during a borrow test (COD-261, phase 2b): after a delay, it sends one input of its own, without
-# Orglet's tag, the way a person's hand on the mouse or keyboard would arrive. `mouse` moves the cursor three pixels
-# right; `escape` presses and releases Escape. It prints the time it sent the input, in milliseconds since 1970.
+# Orglet's tag, the way a person's hand on the mouse or keyboard would arrive. `mouse` moves the cursor well clear of
+# wherever Orglet aimed it (48 px down and right, so it is never mistaken for Orglet's own echo, which lands at the
+# element); `escape` presses and releases Escape. It prints the time it sent the input, in milliseconds since 1970.
 param([int]$DelayMs = 800, [ValidateSet('mouse', 'escape')][string]$Kind = 'mouse')
 
 Add-Type -TypeDefinition @'
@@ -15,7 +16,7 @@ public static class Nudge {
 
   public static void Mouse() {
     var input = new Input { Type = 0 };
-    input.Data.Mouse = new MouseInput { X = 3, Y = 0, Flags = 0x0001 };
+    input.Data.Mouse = new MouseInput { X = 48, Y = 48, Flags = 0x0001 };
     SendInput(1, new[] { input }, Marshal.SizeOf(typeof(Input)));
   }
 

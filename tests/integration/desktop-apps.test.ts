@@ -196,6 +196,7 @@ class FakeNotes implements DesktopHost {
     if (request.kind === 'windows') return { windows: [this.window(NOTES), this.window(BANK), this.window(ADMIN)] };
     if (request.kind === 'forget') return { forgotten: true };
     if (request.kind === 'borrow_stop') return { stopping: true };
+    if (request.kind === 'classify') return { person: request.events.map(() => false) };
     const refused = this.refusal(request);
     if (refused) return refused;
     const window = this.window(request.handle);

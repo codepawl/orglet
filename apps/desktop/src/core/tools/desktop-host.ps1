@@ -99,6 +99,9 @@ namespace OrgletDesktop {
     public const uint KeyExtended = 0x0001;
     public const uint KeyUp = 0x0002;
     public const uint KeyUnicode = 0x0004;
+    /// <summary>Set on a low-level hook event that software injected (our own SendInput, or a Windows echo of it), never on a physical mouse or key.</summary>
+    public const uint MouseInjected = 0x00000001;
+    public const uint KeyboardInjected = 0x00000010;
     public const int WheelDelta = 120;
     public const int KeyboardLowLevel = 13;
     public const int MouseLowLevel = 14;
@@ -213,6 +216,7 @@ namespace OrgletDesktop {
       if (kind == "borrow_check") return Borrowing.Check(request);
       if (kind == "borrow") return Borrowing.Borrow(request);
       if (kind == "borrow_stop") return Borrowing.StopCurrent();
+      if (kind == "classify") return Borrowing.Classify(request);
       if (kind == "forget") return Forget(request);
       throw new ArgumentException("unknown request " + kind);
     }
@@ -809,6 +813,36 @@ namespace OrgletDesktop {
         return new Dictionary<string, object> { { "stopping", session != null } };
       }
 
+      /// <summary>
+      /// Replays a recorded sequence of Orglet's sends and hook events through <see cref="InputJudge"/> and answers, for
+      /// each event, whether it counts as the person. Sends no input; the borrow tests drive it to check the rule.
+      /// </summary>
+      public static object Classify(Dictionary<string, object> request) {
+        var sends = new List<SentPoint>();
+        object rawSends;
+        if (request.TryGetValue("sends", out rawSends) && rawSends is object[]) {
+          foreach (var item in (object[])rawSends) {
+            var send = (Dictionary<string, object>)item;
+            sends.Add(new SentPoint { X = Convert.ToInt32(send["x"]), Y = Convert.ToInt32(send["y"]), AtMs = Convert.ToInt64(send["atMs"]) });
+          }
+        }
+        var verdicts = new List<object>();
+        foreach (var item in (object[])request["events"]) {
+          var e = (Dictionary<string, object>)item;
+          var atMs = Convert.ToInt64(e["atMs"]);
+          long lastSendMs = -1;
+          var recent = new List<SentPoint>();
+          foreach (var send in sends) {
+            if (send.AtMs > atMs) continue;
+            recent.Add(send);
+            if (send.AtMs > lastSendMs) lastSendMs = send.AtMs;
+          }
+          verdicts.Add(InputJudge.IsPerson(Convert.ToBoolean(e["move"]), Convert.ToBoolean(e["tagged"]), Convert.ToBoolean(e["injected"]),
+            Convert.ToInt32(e["x"]), Convert.ToInt32(e["y"]), atMs, lastSendMs, recent));
+        }
+        return new Dictionary<string, object> { { "person", verdicts } };
+      }
+
       public static object Borrow(Dictionary<string, object> request) {
         if (Interlocked.CompareExchange(ref running, 1, 0) != 0) return Problem("busy");
         try {
@@ -894,6 +928,43 @@ namespace OrgletDesktop {
       }
     }
 
+    /// <summary>One point Orglet aimed the cursor at, or the cursor's place when Orglet sent an input, with the moment it did.</summary>
+    struct SentPoint { public int X; public int Y; public long AtMs; }
+
+    /// <summary>
+    /// Whether one low-level hook event is the person's own input or a by-product of Orglet's (phase 2b). Pure, so a test
+    /// can drive it through the helper (the "classify" request) without sending any input.
+    ///
+    /// Orglet's own SendInput carries the borrow's tag, so a tagged event is never the person. The trouble is the events
+    /// Orglet's input spawns that carry no tag: Windows can echo an injected absolute move as an untagged move at the
+    /// point Orglet aimed at, and bringing a window to the front can post a synthetic move at the cursor's current place.
+    /// Both land where Orglet just put or held the cursor, right after Orglet sent input. So an untagged move counts as
+    /// the person only when it goes somewhere Orglet did not send it, and an untagged button or wheel only when it is not
+    /// an injected echo just after Orglet's own input. A physical mouse or key is never injected, so it always counts.
+    /// </summary>
+    static class InputJudge {
+      public const long EchoWindowMs = 150;
+      public const int Tolerance = 2;
+
+      public static bool IsPerson(bool isMove, bool tagged, bool injected, int x, int y, long nowMs, long lastSendMs, List<SentPoint> recent) {
+        if (tagged) return false;
+        var withinWindow = lastSendMs >= 0 && nowMs - lastSendMs <= EchoWindowMs;
+        if (isMove) {
+          if (withinWindow && NearRecent(recent, x, y, nowMs)) return false;
+          return true;
+        }
+        return !(injected && withinWindow);
+      }
+
+      static bool NearRecent(List<SentPoint> recent, int x, int y, long nowMs) {
+        foreach (var point in recent) {
+          if (nowMs - point.AtMs > EchoWindowMs) continue;
+          if (Math.Abs(point.X - x) <= Tolerance && Math.Abs(point.Y - y) <= Tolerance) return true;
+        }
+        return false;
+      }
+    }
+
     /// <summary>One borrow: the hooks and the notice on their own thread, and the steps on the calling one.</summary>
     sealed class Session {
       const int KeyDown = 0x0100;
@@ -914,9 +985,15 @@ namespace OrgletDesktop {
       readonly IntPtr tag;
       readonly Stopwatch clock = new Stopwatch();
       readonly ManualResetEvent overlayReady = new ManualResetEvent(false);
+      /// <summary>The points Orglet aimed the cursor at, or held it at, lately; the hooks read them to spot Orglet's own echoes.</summary>
+      readonly List<SentPoint> recentTargets = new List<SentPoint>();
+      readonly object targetsLock = new object();
       string stoppedBy;
       long stoppedAtTicks = -1;
       long lastInputTicks = -1;
+      long lastSendMs = -1;
+      /// <summary>Set once the steps are done, so a hook event during teardown never turns a finished borrow into a stop.</summary>
+      volatile bool ended;
       Native.HookProcedure mouseProcedure;
       Native.HookProcedure keyboardProcedure;
       Indicator indicator;
@@ -943,36 +1020,36 @@ namespace OrgletDesktop {
 
       // The hooks run on the notice's thread, which pumps its messages; each answers at once.
       IntPtr OnMouse(int code, IntPtr wParam, IntPtr lParam) {
-        if (code >= 0) {
+        if (code >= 0 && !ended) {
           var data = (Native.MouseHookData)Marshal.PtrToStructure(lParam, typeof(Native.MouseHookData));
-          if (data.ExtraInfo != tag) {
-            var message = wParam.ToInt32();
-            var release = message == LeftButtonUp || message == RightButtonUp || message == MiddleButtonUp || message == ExtraButtonUp;
-            if (message == MouseMoveMessage) {
-              Native.PointStruct now;
-              Native.GetCursorPos(out now);
-              if (now.X != data.Point.X || now.Y != data.Point.Y) Stop("person_mouse");
-            } else if (!release) {
-              Stop("person_mouse");
-            }
+          var message = wParam.ToInt32();
+          // A button coming back up from before the borrow is not new input; only presses and moves are judged.
+          var release = message == LeftButtonUp || message == RightButtonUp || message == MiddleButtonUp || message == ExtraButtonUp;
+          if (!release) {
+            var isMove = message == MouseMoveMessage;
+            var tagged = data.ExtraInfo == tag;
+            var injected = (data.Flags & Native.MouseInjected) != 0;
+            List<SentPoint> recent;
+            lock (targetsLock) recent = new List<SentPoint>(recentTargets);
+            if (InputJudge.IsPerson(isMove, tagged, injected, data.Point.X, data.Point.Y, clock.ElapsedMilliseconds, Interlocked.Read(ref lastSendMs), recent)) Stop("person_mouse");
           }
         }
         return Native.CallNextHookEx(IntPtr.Zero, code, wParam, lParam);
       }
 
       IntPtr OnKeyboard(int code, IntPtr wParam, IntPtr lParam) {
-        if (code >= 0) {
+        if (code >= 0 && !ended) {
           var data = (Native.KeyboardHookData)Marshal.PtrToStructure(lParam, typeof(Native.KeyboardHookData));
-          if (data.ExtraInfo != tag) {
-            var message = wParam.ToInt32();
-            var down = message == KeyDown || message == SystemKeyDown;
-            // Escape is how the person stops a borrow, so the app never gets it; a key released from before is not new input.
-            if (data.VirtualKey == EscapeKey) {
-              if (down) Stop("escape");
-              return new IntPtr(1);
-            }
-            if (down) Stop("person_key");
+          var down = wParam.ToInt32() == KeyDown || wParam.ToInt32() == SystemKeyDown;
+          var tagged = data.ExtraInfo == tag;
+          var injected = (data.Flags & Native.KeyboardInjected) != 0;
+          var person = down && InputJudge.IsPerson(false, tagged, injected, 0, 0, clock.ElapsedMilliseconds, Interlocked.Read(ref lastSendMs), null);
+          // Escape is how the person stops a borrow, so the app never gets it; Orglet never sends Escape, so a tagged one cannot occur.
+          if (data.VirtualKey == EscapeKey && !tagged) {
+            if (down) Stop("escape");
+            return new IntPtr(1);
           }
+          if (person) Stop("person_key");
         }
         return Native.CallNextHookEx(IntPtr.Zero, code, wParam, lParam);
       }
@@ -1030,6 +1107,10 @@ namespace OrgletDesktop {
         Native.MessageStruct message;
         Native.PeekMessage(out message, IntPtr.Zero, 0, 0, 0);
         // A tagged move of nothing makes this the process that sent the last input, which Windows lets take the front.
+        // Its echo, and the synthetic move a window activation posts, land at the cursor's current place, so record it.
+        Native.PointStruct here;
+        Native.GetCursorPos(out here);
+        RecordTarget(here.X, here.Y);
         Send(MouseEvent(0, 0, Native.MouseMove, 0));
         var front = Native.GetForegroundWindow();
         uint ignored;
@@ -1057,6 +1138,18 @@ namespace OrgletDesktop {
         return Native.GetForegroundWindow() == target;
       }
 
+      /// <summary>A tagged absolute move of the real cursor to one screen point, used to put it back after the borrow.</summary>
+      void MoveCursorTo(int x, int y) {
+        var left = Native.GetSystemMetrics(Native.VirtualScreenLeft);
+        var top = Native.GetSystemMetrics(Native.VirtualScreenTop);
+        var width = Math.Max(2, Native.GetSystemMetrics(Native.VirtualScreenWidth));
+        var height = Math.Max(2, Native.GetSystemMetrics(Native.VirtualScreenHeight));
+        var normalizedX = (int)Math.Round((x - left) * 65535.0 / (width - 1));
+        var normalizedY = (int)Math.Round((y - top) * 65535.0 / (height - 1));
+        RecordTarget(x, y);
+        Send(MouseEvent(normalizedX, normalizedY, Native.MouseMove | Native.MouseAbsolute | Native.MouseVirtualDesk, 0));
+      }
+
       Native.Input MouseEvent(int x, int y, uint flags, int data) {
         var input = new Native.Input { Type = Native.InputMouse };
         input.Data.Mouse = new Native.MouseInput { X = x, Y = y, MouseData = unchecked((uint)data), Flags = flags, ExtraInfo = tag };
@@ -1070,8 +1163,19 @@ namespace OrgletDesktop {
       }
 
       void Send(params Native.Input[] inputs) {
+        // The moment is set before the input goes out, so a hook event that beats SendInput's return still sees the window open.
+        Interlocked.Exchange(ref lastSendMs, clock.ElapsedMilliseconds);
         Native.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(Native.Input)));
         Interlocked.Exchange(ref lastInputTicks, clock.ElapsedTicks);
+      }
+
+      /// <summary>Where Orglet just put or held the cursor, so the hooks know an untagged echo there is Orglet's, not the person's.</summary>
+      void RecordTarget(int x, int y) {
+        var now = clock.ElapsedMilliseconds;
+        lock (targetsLock) {
+          recentTargets.Add(new SentPoint { X = x, Y = y, AtMs = now });
+          recentTargets.RemoveAll(point => now - point.AtMs > InputJudge.EchoWindowMs * 2);
+        }
       }
 
       /// <summary>Checked before every input: nobody stopped it, time is left, and the approved window is still in front.</summary>
@@ -1137,6 +1241,8 @@ namespace OrgletDesktop {
         var normalizedX = (int)Math.Round((point.X - left) * 65535.0 / (width - 1));
         var normalizedY = (int)Math.Round((point.Y - top) * 65535.0 / (height - 1));
         if (!MayContinue()) return false;
+        // Record where the cursor is about to land, so the untagged echo Windows may post there is known as Orglet's.
+        RecordTarget(point.X, point.Y);
         Send(MouseEvent(normalizedX, normalizedY, Native.MouseMove | Native.MouseAbsolute | Native.MouseVirtualDesk, 0));
         // Windows moves the cursor when it takes the input from its queue, a moment after SendInput returns.
         var arrived = false;
@@ -1257,6 +1363,8 @@ namespace OrgletDesktop {
           failure = error;
           Stop("run_stopped");
         } finally {
+          // The steps are over: a hook event during teardown must not turn a finished borrow into a stop.
+          ended = true;
           CloseOverlay();
         }
         if (failure != null && completed == 0 && Interlocked.Read(ref lastInputTicks) < 0) throw failure;
@@ -1278,10 +1386,15 @@ namespace OrgletDesktop {
         }
         var cursorRestored = false;
         if (!personMoved) {
-          Native.SetCursorPos(cursorBefore.X, cursorBefore.Y);
+          // A tagged absolute SendInput move, not SetCursorPos, so the borrow never makes an untagged move of its own.
+          MoveCursorTo(cursorBefore.X, cursorBefore.Y);
           Native.PointStruct cursorAfter;
-          Native.GetCursorPos(out cursorAfter);
-          cursorRestored = cursorAfter.X == cursorBefore.X && cursorAfter.Y == cursorBefore.Y;
+          for (var waited = 0; waited < 200; waited += 10) {
+            Native.GetCursorPos(out cursorAfter);
+            cursorRestored = Math.Abs(cursorAfter.X - cursorBefore.X) <= 1 && Math.Abs(cursorAfter.Y - cursorBefore.Y) <= 1;
+            if (cursorRestored) break;
+            Thread.Sleep(10);
+          }
         }
         clock.Stop();
         long latency = -1;

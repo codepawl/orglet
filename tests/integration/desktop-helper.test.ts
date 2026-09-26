@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { DesktopHelperProcess, powershellPath } from '../../apps/desktop/src/core/tools/desktop-helper';
 import {
-  DesktopActResult, DesktopBorrowCheckResult, DesktopBorrowResult, DesktopInspectResult, DesktopScreenshotResult, DesktopSnapshotResult, DesktopWindowsResult, type HostWindow,
+  DesktopActResult, DesktopBorrowCheckResult, DesktopBorrowResult, DesktopClassifyResult, DesktopInspectResult, DesktopScreenshotResult, DesktopSnapshotResult, DesktopWindowsResult, type HostWindow,
 } from '../../apps/desktop/src/shared/desktop-host';
 import type { DesktopBorrowStep } from '../../apps/desktop/src/shared/desktop';
 
@@ -28,6 +28,54 @@ let fixture: ChildProcess | undefined;
 let helper: DesktopHelperProcess;
 let window: HostWindow;
 let allow: string[];
+
+/**
+ * The borrow's input classifier through the helper (COD-261, phase 2b): it decides whether one low-level hook event is
+ * the person's own input or a by-product of Orglet's, from a recorded sequence. This sends no input and reads no
+ * window, so it runs on any Windows machine, CI included; it caught the false self-stop where Windows' untagged echo of
+ * Orglet's own move to the element was taken for the person.
+ */
+describe.runIf(process.platform === 'win32')('the borrow input classifier', () => {
+  let judge: DesktopHelperProcess;
+  beforeAll(() => { judge = new DesktopHelperProcess(5_000); });
+  afterAll(() => judge?.stop());
+
+  type Event = { move: boolean; tagged: boolean; injected: boolean; x: number; y: number; atMs: number };
+  const classify = async (sends: { x: number; y: number; atMs: number }[], events: Event[]) =>
+    DesktopClassifyResult.parse(await judge.request({ kind: 'classify', sends, events }, signal())).person;
+
+  it('reads Orglet\'s own move and its untagged echo at the target as not the person', async () => {
+    // Orglet aimed the cursor at the element (798,478) at 100 ms; the tagged move and the untagged echo Windows posts
+    // there are Orglet's, so neither stops the borrow. This is the bug the two live runs hit.
+    expect(await classify([{ x: 798, y: 478, atMs: 100 }], [
+      { move: true, tagged: true, injected: true, x: 798, y: 478, atMs: 110 },
+      { move: true, tagged: false, injected: true, x: 798, y: 478, atMs: 120 },
+      { move: true, tagged: false, injected: true, x: 799, y: 477, atMs: 120 },
+    ])).toEqual([false, false, false]);
+  });
+
+  it('reads a move somewhere Orglet did not send, a physical press and a physical key as the person', async () => {
+    expect(await classify([{ x: 798, y: 478, atMs: 100 }], [
+      // A move well away from the target (a real hand, or the abort helper's nudge), even within the echo window.
+      { move: true, tagged: false, injected: true, x: 860, y: 478, atMs: 120 },
+      // A physical move and a physical button are never injected.
+      { move: true, tagged: false, injected: false, x: 500, y: 400, atMs: 120 },
+      { move: false, tagged: false, injected: false, x: 0, y: 0, atMs: 120 },
+    ])).toEqual([true, true, true]);
+  });
+
+  it('keeps the detection strict: an untagged echo counts once the echo window has passed', async () => {
+    // Same point as the target, but 300 ms later: too late to be Orglet's echo, so it is the person.
+    expect(await classify([{ x: 798, y: 478, atMs: 100 }], [
+      { move: true, tagged: false, injected: true, x: 798, y: 478, atMs: 400 },
+    ])).toEqual([true]);
+    // With nothing sent, any untagged input is the person.
+    expect(await classify([], [
+      { move: true, tagged: false, injected: true, x: 798, y: 478, atMs: 10 },
+      { move: false, tagged: true, injected: true, x: 0, y: 0, atMs: 10 },
+    ])).toEqual([true, false]);
+  });
+});
 
 function refOf(snapshot: string, pattern: RegExp): string {
   const line = snapshot.split('\n').find(candidate => pattern.test(candidate));
