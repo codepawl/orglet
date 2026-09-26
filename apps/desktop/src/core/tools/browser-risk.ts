@@ -40,11 +40,20 @@ export const REFUSED_CAPTCHA = 'Trang có CAPTCHA: Orglet không gõ gì trên t
 /**
  * Words that name a step hard to take back, in English and Vietnamese. A name matches when it holds one of them as
  * whole words; see `sameWord` for how accents count.
+ *
+ * The second line of each language is what a button does on a site that sends it with a script instead of a form:
+ * a reply, a comment or a share goes out to other people, an approval, a merge or a deploy changes shared work, and
+ * accepting or agreeing signs something. Words that are just as often a page's navigation ("Archive", "Register",
+ * "Apply" on a filter) are left out; a form behind them still asks when it sends.
  */
 const CONSEQUENTIAL_WORDS = [
   'send', 'pay', 'buy', 'order', 'checkout', 'check out', 'purchase', 'delete', 'remove', 'post', 'publish', 'confirm',
   'subscribe', 'unsubscribe', 'transfer', 'sign out', 'signout', 'log out', 'logout', 'submit',
+  'reply', 'comment', 'share', 'tweet', 'retweet', 'repost', 'invite', 'approve', 'merge', 'deploy', 'accept', 'agree',
+  'book now', 'reserve', 'donate', 'revoke', 'deactivate', 'uninstall',
   'gửi', 'thanh toán', 'mua', 'đặt hàng', 'xóa', 'đăng', 'xác nhận', 'chuyển tiền',
+  'trả lời', 'bình luận', 'chia sẻ', 'mời', 'phê duyệt', 'đồng ý', 'chấp nhận', 'đặt chỗ', 'đặt phòng', 'đặt vé',
+  'đặt bàn', 'quyên góp', 'nạp tiền', 'rút tiền',
 ];
 
 /** Words in a link's address that mean the link itself does something, since some sites sign out or delete on a plain link. */

@@ -54,6 +54,15 @@ describe('the tier of a step', () => {
     { about: 'typing the user name on a login page', step: { kind: 'type', target: element({ role: 'textbox', name: 'Email', tag: 'input', inputType: 'email', editable: true }), submit: false, page: { ...plainPage, passwordField: true } }, risk: 'consequential', reason: riskReasons.passwordPage },
     { about: 'choosing a country on a checkout page', step: { kind: 'select', target: element({ role: 'combobox', name: 'Country', tag: 'select', editable: false }), page: { ...plainPage, payment: true } }, risk: 'consequential', reason: riskReasons.paymentPage },
     { about: 'a click on a page with a CAPTCHA', step: { kind: 'click', target: element({ name: 'Next' }), page: { ...plainPage, captcha: true } }, risk: 'consequential', reason: riskReasons.captchaPage },
+    // Buttons a site sends with a script rather than a form: only their name says what they do.
+    ...['Reply', 'Comment', 'Share', 'Repost', 'Invite people', 'Approve', 'Merge pull request', 'Deploy', 'Accept all cookies', 'I agree', 'Book now', 'Reserve a table', 'Donate', 'Revoke access',
+      'Trả lời', 'Bình luận', 'Chia sẻ', 'Mời thành viên', 'Phê duyệt', 'Đồng ý', 'Chấp nhận', 'Đặt phòng', 'Đặt vé', 'Nạp tiền', 'DONG Y'].map(name => (
+      { about: `a scripted button named ${name}`, step: { kind: 'click' as const, target: element({ name }), page: plainPage }, risk: 'consequential' as const, reason: riskReasons.wording }
+    )),
+    // Navigation that shares a stem with those words stays input.
+    ...['Comments', 'Shared with me', 'Archive', 'Apply filters', 'Bookmarks', 'Mới nhất'].map(name => (
+      { about: `a link named ${name}`, step: { kind: 'click' as const, target: element({ role: 'link', name, tag: 'a', link: { href: 'https://example.com/list', download: false } }), page: plainPage }, risk: 'input' as const }
+    )),
   ];
 
   for (const row of table) {
