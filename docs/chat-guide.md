@@ -87,7 +87,7 @@ While an orglet works, a tab docks onto the message box: the faces of the orglet
 
 Afterwards the answer keeps a folded line of the steps ("Read 2 files · Searched 1 time"); open it for the targets. Above it, **Memories used: N** opens the memories the orglet was given ([Memory](memory.md)). An orglet's thinking shows only inside the folded control, only when the model shares it, and is not saved.
 
-Commands the orglet ran in the latest turn are summed in **Details**, under the goal it worked from ("Commands: 2 exited 0, 1 failed"), with their full output in the same panel. Exit 0 means that command finished; it does not mean the task passed.
+Commands the orglet ran in the latest turn are summed in **Details**, under the goal it worked from, last command first: "Last command exited 0 · earlier: 1 failed." A turn that ran a failing test, fixed the code and ran it again reads that way instead of "1 exited 0, 1 failed". Their full output is in the same panel. Exit 0 means that command finished; it does not mean the task passed.
 
 ## Diffs
 
