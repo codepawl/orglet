@@ -295,19 +295,21 @@ export class BrowserTools {
     return narrowBrowserChoice(own, main.browser ?? defaultBrowserChoice());
   }
 
+  /** A new journal row; an acting step's target is its element, named once the page has been read. */
   private journal(run: Run, callId: string, kind: BrowserActionKind, tabId: string | null, url: string | null, risk: BrowserRisk = 'read'): string {
     const actionId = id();
+    const target = url && risk === 'read' ? url.slice(0, 300) : null;
     this.store.db.prepare(`INSERT INTO browser_actions(id,run_id,call_id,tab_id,kind,origin,target,risk,outcome,screenshot_id,at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(actionId, run.id, callId, tabId, kind, url ? originOf(url) : null, url ? url.slice(0, 300) : null, risk, 'unknown', null, now());
+      VALUES(?,?,?,?,?,?,?,?,?,?,?)`).run(actionId, run.id, callId, tabId, kind, url ? originOf(url) : null, target, risk, 'unknown', null, now());
     return actionId;
   }
 
-  private settle(actionId: string, outcome: BrowserOutcome, detail: { tabId?: string | null; url?: string | null; screenshotId?: string; risk?: BrowserRisk; element?: string } = {}) {
+  private settle(actionId: string, outcome: BrowserOutcome, detail: { tabId?: string | null; url?: string | null; screenshotId?: string; risk?: BrowserRisk; element?: string | null } = {}) {
     const row = this.store.db.prepare('SELECT tab_id,origin,target,risk,screenshot_id FROM browser_actions WHERE id=?').get(actionId) as Pick<ActionRow, 'tab_id' | 'origin' | 'target' | 'risk' | 'screenshot_id'> | undefined;
     if (!row) return;
     const url = detail.url ?? null;
-    // An acting step keeps the element's name as its target; its page is the origin.
-    const target = detail.element !== undefined ? detail.element.slice(0, 300) : url ? url.slice(0, 300) : row.target;
+    // An acting step keeps the element's name as its target (null when it has none); its page is the origin.
+    const target = detail.element !== undefined ? detail.element?.slice(0, 300) ?? null : url ? url.slice(0, 300) : row.target;
     this.store.db.prepare('UPDATE browser_actions SET outcome=?,tab_id=?,origin=?,target=?,risk=?,screenshot_id=? WHERE id=?').run(
       outcome, detail.tabId ?? row.tab_id, url ? originOf(url) : row.origin, target, detail.risk ?? row.risk, detail.screenshotId ?? row.screenshot_id, actionId);
   }
@@ -505,7 +507,7 @@ export class BrowserTools {
     this.rememberTab(run.id, tabId, inspected.url);
     const site = siteOf(inspected.url);
     if (ref && !inspected.target) {
-      this.settle(actionId, 'refused', { url: inspected.url, element: ref });
+      this.settle(actionId, 'refused', { url: inspected.url, element: null });
       return { result: { refused: true, error: STALE_REF, ref, next: 'Call browser_snapshot and use a ref from it.' }, event: browserEvents.actRefused(site, STALE_REF), readPage: false };
     }
     const label = step.kind === 'press' ? step.key : elementLabel(inspected.target);
@@ -532,7 +534,7 @@ export class BrowserTools {
     const screenshotId = await this.askingPicture(run.id, tabId, expect?.ref, policy(), request);
     if (screenshotId) this.settle(actionId, 'unknown', { screenshotId });
     const view: BrowserApprovalView = {
-      id: id(), runId: run.id, workerName: run.snapshot.worker.name, kind: step.kind, element: elementLabel(inspected.target) || step.kind, site, url: inspected.url.slice(0, 2000),
+      id: id(), runId: run.id, actionId, workerName: run.snapshot.worker.name, kind: step.kind, element: elementLabel(inspected.target) || step.kind, site, url: inspected.url.slice(0, 2000),
       ...(step.kind === 'type' ? { text: step.text } : {}), ...(step.kind === 'press' ? { key: step.key } : {}), ...(step.kind === 'select' ? { values: step.values } : {}),
       reasons: verdict.reasons, ...(screenshotId ? { screenshotId } : {}), requestedAt: now(),
     };

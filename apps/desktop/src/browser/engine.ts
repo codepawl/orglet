@@ -96,6 +96,8 @@ const FRAME_FACTS_TIMEOUT_MS = 1_500;
 const SETTLE_LOAD_MS = 5_000;
 /** The colour the element the person is asked about is outlined in, on the picture the card shows. */
 const ASKING_OUTLINE = '[data-orglet-asking]{outline:3px solid #e5484d !important;outline-offset:2px !important}';
+/** The size of the part of the page a card's picture keeps around the element. */
+const ASKING_PICTURE = { width: 720, height: 405 };
 
 export class BrowserEngine {
   private cleanBrowser?: Promise<Browser>;
@@ -475,7 +477,8 @@ export class BrowserEngine {
 
   /**
    * A PNG of what the tab shows. Password fields are painted over, so a picture never shows what someone typed into
-   * one. `highlight` scrolls one element into view and outlines it, for the card that asks the person about it.
+   * one. `highlight` scrolls one element into view, outlines it and keeps only the part of the page around it, so
+   * the card's small picture still shows the element and its words.
    */
   private async picture(page: Page, highlight?: string): Promise<Buffer> {
     const options = { type: 'png' as const, timeout: STEP_TIMEOUT_MS, animations: 'disabled' as const, caret: 'hide' as const, mask: [page.locator('input[type="password"]')] };
@@ -483,8 +486,11 @@ export class BrowserEngine {
     const element = page.locator(`aria-ref=${highlight}`);
     await element.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => {});
     const marked = await element.evaluate(node => node.setAttribute('data-orglet-asking', ''), undefined, { timeout: 3_000 }).then(() => true, () => false);
+    const box = await element.boundingBox({ timeout: 3_000 }).catch(() => null);
+    const viewport = page.viewportSize() ?? VIEWPORT;
+    const clip = box ? regionAround(box, viewport) : undefined;
     try {
-      return await page.screenshot({ ...options, style: ASKING_OUTLINE });
+      return await page.screenshot({ ...options, style: ASKING_OUTLINE, ...(clip ? { clip } : {}) });
     } finally {
       if (marked) await element.evaluate(node => node.removeAttribute('data-orglet-asking'), undefined, { timeout: 3_000 }).catch(() => {});
     }
@@ -699,6 +705,17 @@ export class BrowserEngine {
       await session.detach().catch(() => {});
     }
   }
+}
+
+/** The part of the page a card's picture shows: 720 by 405 pixels around the element, kept inside the viewport. */
+function regionAround(box: { x: number; y: number; width: number; height: number }, viewport: { width: number; height: number }) {
+  const width = Math.min(ASKING_PICTURE.width, viewport.width);
+  const height = Math.min(ASKING_PICTURE.height, viewport.height);
+  const centreX = box.x + box.width / 2;
+  const centreY = box.y + box.height / 2;
+  const x = Math.round(Math.min(Math.max(centreX - width / 2, 0), viewport.width - width));
+  const y = Math.round(Math.min(Math.max(centreY - height / 2, 0), viewport.height - height));
+  return { x, y, width, height };
 }
 
 /** A new run starts with nothing held and nothing stopped yet. */

@@ -2253,8 +2253,12 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .browser-approval-values { margin:0; font-size:13px; }
 .browser-approval-reasons { margin:0; font-size:12px; }
 .browser-approval-shot { display:block; width:min(100%, 360px); padding:0; border:1px solid var(--border-subtle); border-radius:10px; overflow:hidden; background:var(--surface); cursor:zoom-in; }
-.browser-approval-shot img { display:block; width:100%; height:auto; aspect-ratio:1280 / 800; object-fit:cover; object-position:top; }
+.browser-approval-shot img { display:block; width:100%; height:auto; }
 .browser-step-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+/* A step's risk and outcome ("Asked first · allowed") on a quiet line of their own under its name, so the name wraps
+   alone in the narrow Details column. */
+.browser-step-meta { display:block; }
+.browser-step-meta::first-letter { text-transform:uppercase; }
 .browser-hold-note { margin:0; font-size:12.5px; }
 /* A fieldset for its legend and grouping only: the form's boxed fieldset look does not apply here. */
 .form fieldset.mcp-picker,.mcp-grants { min-width:0; margin:22px 0 0; border:0; padding:0; }

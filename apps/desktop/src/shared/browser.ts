@@ -196,6 +196,8 @@ export type BrowserState = { browser: BrowserInfo | null; profiles: BrowserProfi
 export type BrowserApprovalView = {
   id: string;
   runId: string;
+  /** The journal row of the step being asked about, so Details can show it as waiting. */
+  actionId: string;
   workerName: string;
   kind: BrowserActKind;
   /** The element's name as the page gives it, or its role when it has none. */

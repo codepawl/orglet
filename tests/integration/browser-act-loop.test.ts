@@ -177,6 +177,8 @@ describe.runIf(found !== null)('acting on pages in a real browser', () => {
 
     // Plain input: journaled as input, nothing asked.
     expect(actions(chat.taskId)).toEqual(['open:read:done', 'snapshot:read:done', 'click:input:done', 'click:input:refused', 'type:input:done', 'click:input:done']);
+    // An acting step names its element, never an address; a ref the page no longer has names nothing.
+    expect(core!.browser.actions(chat.taskId).slice(2).map(action => action.target)).toEqual(['Close', null, 'Search', 'Search']);
     const events = detail.events.map(event => event.message);
     expect(events).toContain(`Đã gõ vào “Search” trên ${site}`);
     expect(events).toContain(`Đã bấm “Search” trên ${site}`);
@@ -202,6 +204,7 @@ describe.runIf(found !== null)('acting on pages in a real browser', () => {
     await until(() => core!.browser.live(chat.taskId).approval !== undefined);
     const first = core!.browser.live(chat.taskId).approval!;
     expect(first).toMatchObject({ kind: 'click', element: 'Place order', site, workerName: store.all<Worker>('workers')[0].name });
+    expect(core!.browser.actions(chat.taskId).find(action => action.id === first.actionId)).toMatchObject({ kind: 'click', risk: 'consequential', outcome: 'unknown', target: 'Place order' });
     expect(first.reasons.length).toBeGreaterThan(0);
     expect(first.screenshotId).toBeTruthy();
     expect(orders).toBe(0);
