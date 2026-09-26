@@ -10,7 +10,8 @@ import { detectBrowser } from './detect';
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
 const profilesRoot = z.string().min(1).parse(process.argv[2]);
-const engine = new BrowserEngine({ profilesRoot, browser: () => detectBrowser() });
+// Frames, the cursor, suggestions and a closed Chrome window go to main as they happen, outside any request.
+const engine = new BrowserEngine({ profilesRoot, browser: () => detectBrowser(), emit: event => port.postMessage({ event }) });
 const running = new Map<string, AbortController>();
 
 const Envelope = z.union([

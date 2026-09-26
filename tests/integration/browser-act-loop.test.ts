@@ -185,7 +185,7 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
     const events = detail.events.map(event => event.message);
     expect(events).toContain(`Đã gõ vào “Search” trên ${site}`);
     expect(events).toContain(`Đã bấm “Search” trên ${site}`);
-    expect(core!.browser.live(chat.taskId)).toEqual({ takenOver: false, using: false, waiting: false });
+    expect(core!.browser.live(chat.taskId)).toEqual({ takenOver: false, inChrome: false, using: false, waiting: false });
   }, 120_000);
 
   it('asks before Place order: Allow once places it, Don\'t allow sends nothing, and a password is never typed', async () => {
@@ -289,7 +289,38 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
     await until(() => finished(chat.taskId));
     expect(store.detail(chat.taskId).task.status).toBe('completed');
     expect(actions(chat.taskId)).toEqual(['open:read:done', 'snapshot:read:done']);
-    expect(core!.browser.live(chat.taskId)).toEqual({ takenOver: false, using: false, waiting: false });
+    expect(core!.browser.live(chat.taskId)).toEqual({ takenOver: false, inChrome: false, using: false, waiting: false });
+  }, 120_000);
+
+  it('holds a step while the tabs are in a Chrome window, and closing that window hands the browser back', async () => {
+    let releaseSecondStep = () => {};
+    const secondStep = new Promise<void>(resolve => { releaseSecondStep = resolve; });
+    const script: Script = [
+      () => call('browser_open', { url: `${base}/shop`, tabId: null }),
+      async () => {
+        await secondStep;
+        return call('browser_snapshot', { tabId: 't1', offset: 0 });
+      },
+      () => reply('Read it after the window closed.'),
+    ];
+    const chat = await startChat(script, 'Read the shop');
+    // The page must be open before its tab can move into a window.
+    await until(() => core!.browser.live(chat.taskId).using && actions(chat.taskId).join() === 'open:read:done');
+    const runId = core!.browser.live(chat.taskId).runId!;
+    expect(await core!.command('browserTakeOver', { taskId: chat.taskId, taken: true, inChrome: true })).toBe(true);
+    expect(core!.browser.live(chat.taskId)).toMatchObject({ takenOver: true, inChrome: true, runId });
+    releaseSecondStep();
+    await until(() => core!.browser.live(chat.taskId).waiting);
+    expect(actions(chat.taskId)).toEqual(['open:read:done']);
+    // Back to the live view: still held, no longer in Chrome.
+    expect(await core!.command('browserTakeOver', { taskId: chat.taskId, taken: true, inChrome: false })).toBe(false);
+    expect(core!.browser.live(chat.taskId)).toMatchObject({ takenOver: true, inChrome: false });
+    await core!.command('browserTakeOver', { taskId: chat.taskId, taken: true, inChrome: true });
+    // The person closes the Chrome window; main passes the host's word on as `released`.
+    await core!.browser.released(runId);
+    await until(() => finished(chat.taskId));
+    expect(actions(chat.taskId)).toEqual(['open:read:done', 'snapshot:read:done']);
+    expect(core!.browser.live(chat.taskId)).toEqual({ takenOver: false, inChrome: false, using: false, waiting: false });
   }, 120_000);
 });
 

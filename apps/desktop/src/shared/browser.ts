@@ -218,7 +218,8 @@ export type BrowserApprovalView = {
 
 /**
  * What the chat's window shows about the browser right now, kept in memory by the core: a step waiting for the
- * person's answer, whether the person has taken the browser over, whether a run is using it, and whether a step is
- * waiting for it to be handed back.
+ * person's answer, whether the person has taken the browser over (and whether its tabs are in a Chrome window),
+ * whether a run is using it, and whether a step is waiting for it to be handed back. `runId` is the run the live view
+ * watches: the newest of the chat's runs using the browser.
  */
-export type BrowserLive = { approval?: BrowserApprovalView; takenOver: boolean; using: boolean; waiting: boolean };
+export type BrowserLive = { approval?: BrowserApprovalView; takenOver: boolean; inChrome: boolean; using: boolean; waiting: boolean; runId?: string };

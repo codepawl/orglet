@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppWindow, Ban, Camera, Check, ExternalLink, Hand, Hourglass, Image, Keyboard, ListChecks, LogIn, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldCheck, TextCursorInput, Trash2, Undo2, UserRound, X, type LucideIcon } from 'lucide-react';
+import { AppWindow, Ban, Camera, Check, Hourglass, Image, Keyboard, ListChecks, LogIn, MousePointerClick, MoveVertical, Plus, ScanSearch, ShieldCheck, TextCursorInput, Trash2, UserRound, X, type LucideIcon } from 'lucide-react';
 import { Input } from '@codepawl/orglet-ui';
 import type { TaskDetail } from '../../shared/contracts';
 import { CLEAN_BROWSER_PROFILE, defaultBrowserChoice, normalizeBrowserSite, type BrowserAction, type BrowserActionKind, type BrowserChoice, type BrowserSite, type BrowserSiteDecision, type BrowserState } from '../../shared/browser';
@@ -10,6 +10,7 @@ import { StatusMark } from './StatusMark';
 import { currentLocale, t, tMessage, translated } from '../i18n';
 import { orglet } from '../api';
 import { toast } from './toast';
+import { BrowserLiveExpand, BrowserLivePanel } from './BrowserLiveView';
 
 /*
  * Orglet's browser in the window (COD-261): the profiles in Settings → Browser, and a chat's profile, site list and
@@ -188,7 +189,7 @@ function stepMeta(action: BrowserAction, askingActionId: string | undefined): st
 
 /**
  * The browser steps of this chat in Details, newest first: each with its site and what came of it, and a screenshot
- * where one was kept. The window the orglet uses is real; "Show browser window" brings it forward.
+ * where one was kept. While a run uses the browser, the live view sits above them with Take over and Open in Chrome.
  */
 export function BrowserSteps({ detail }: { detail: TaskDetail }) {
   const [actions, setActions] = useState<BrowserAction[]>();
@@ -203,19 +204,18 @@ export function BrowserSteps({ detail }: { detail: TaskDetail }) {
   }, [detail.task.id, eventCount, askingActionId]);
   useEffect(() => () => { if (shown) URL.revokeObjectURL(shown.url); }, [shown]);
   if (!actions?.length) return null;
-  const latestRun = actions.at(-1)!.runId;
-  const running = detail.runs.some(run => run.id === latestRun && run.status === 'running');
   const live = detail.browser;
-  const showWindow = () => void orglet.showBrowser(running ? latestRun : null).then(opened => {
-    if (!opened) toast(t('Không có cửa sổ trình duyệt nào đang mở.'), 'info', t('Trình duyệt'));
-  }).catch(error => toast(tMessage(String(error)), 'error', t('Trình duyệt')));
   const openShot = (action: BrowserAction) => void orglet.call('browserScreenshot', { taskId: detail.task.id, id: action.screenshotId! }).then(shot => {
     const url = URL.createObjectURL(new Blob([shot.bytes as BlobPart], { type: shot.mimeType }));
     setShown({ url, label: stepLabel(action) });
   }).catch(error => toast(tMessage(String(error)), 'error', t('Ảnh màn hình')));
   const recent = [...actions].reverse().filter(action => action.kind !== 'tabs').slice(0, 12);
   return <section className="details-section browser-steps" aria-labelledby="browser-steps-heading">
-    <h3 id="browser-steps-heading"><AppWindow size={15} aria-hidden="true" />{t('Trình duyệt')}</h3>
+    <div className="browser-steps-heading">
+      <h3 id="browser-steps-heading"><AppWindow size={15} aria-hidden="true" />{t('Trình duyệt')}</h3>
+      <BrowserLiveExpand detail={detail} />
+    </div>
+    <BrowserLivePanel detail={detail} />
     <ol className="browser-step-list">
       {recent.map(action => {
         const Icon = stepIcons[action.kind];
@@ -230,26 +230,10 @@ export function BrowserSteps({ detail }: { detail: TaskDetail }) {
       })}
     </ol>
     {live?.takenOver && <p className="muted browser-hold-note">{t('Bạn đang cầm trình duyệt. Tí chờ tới khi bạn trả lại.')}</p>}
-    <div className="actions browser-step-actions">
-      {live?.takenOver
-        ? <Button variant="primary" onClick={() => takeOverBrowser(detail.task.id, false)}><Undo2 size={15} />{t('Trả lại trình duyệt')}</Button>
-        : live?.using && <Button variant="outline" onClick={() => takeOverBrowser(detail.task.id, true)}><Hand size={15} />{t('Tiếp quản')}</Button>}
-      <Button variant="outline" onClick={showWindow}><ExternalLink size={15} />{t('Hiện cửa sổ trình duyệt')}</Button>
-    </div>
     {shown && <Drawer open onClose={() => setShown(undefined)} title={shown.label}>
       <img className="browser-screenshot" src={shown.url} alt={t('Ảnh màn hình: {0}', [shown.label])} />
     </Drawer>}
   </section>;
-}
-
-/**
- * Takes the chat's browser over (its window comes forward and the orglet's browser steps wait) or hands it back.
- * Details and the island share it.
- */
-export function takeOverBrowser(taskId: string, taken: boolean) {
-  void orglet.call('browserTakeOver', { taskId, taken }).then(shown => {
-    if (taken && !shown) toast(t('Không đưa được cửa sổ trình duyệt lên trước. Tìm nó trên thanh tác vụ.'), 'info', t('Trình duyệt'));
-  }).catch(error => toast(tMessage(String(error)), 'error', t('Trình duyệt')));
 }
 
 type Act = (action: () => Promise<string | void>, about?: string) => Promise<void>;

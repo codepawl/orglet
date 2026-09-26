@@ -7,7 +7,7 @@ import {
   type BrowserActionKind, type BrowserActKind, type BrowserApprovalView, type BrowserChoice, type BrowserLive, type BrowserOutcome, type BrowserRisk,
 } from '../../shared/browser';
 import {
-  BrowserActResult, BrowserInspectResult, BrowserOpenResult, BrowserScreenshotResult, BrowserScrollResult, BrowserSnapshotResult, BrowserTabsResult, browserPolicyOf,
+  BrowserActResult, BrowserHoldResult, BrowserInspectResult, BrowserOpenResult, BrowserScreenshotResult, BrowserScrollResult, BrowserSnapshotResult, BrowserTabsResult, browserPolicyOf,
   type BrowserActStep, type BrowserHost, type BrowserHostRequest, type BrowserPolicy, type BrowserTargetFacts,
 } from '../../shared/browser-host';
 import { Store, id, now } from '../storage/database';
@@ -531,7 +531,8 @@ export class BrowserTools {
         event: browserEvents.actRefused(site, context.asking.reason), readPage: false,
       };
     }
-    const screenshotId = await this.askingPicture(run.id, tabId, expect?.ref, policy(), request);
+    const pointer = step.kind === 'click' || step.kind === 'type' || step.kind === 'select' ? step.kind : undefined;
+    const screenshotId = await this.askingPicture(run.id, tabId, expect?.ref, pointer, policy(), request);
     if (screenshotId) this.settle(actionId, 'unknown', { screenshotId });
     const view: BrowserApprovalView = {
       id: id(), runId: run.id, actionId, workerName: run.snapshot.worker.name, kind: step.kind, element: elementLabel(inspected.target) || step.kind, site, url: inspected.url.slice(0, 2000),
@@ -585,10 +586,10 @@ export class BrowserTools {
   }
 
   /** The picture the card shows: the page with the element outlined, kept like a screenshot while the run has room. */
-  private async askingPicture(runId: string, tabId: string, ref: string | undefined, policy: BrowserPolicy, request: (hostRequest: BrowserHostRequest) => Promise<unknown>): Promise<string | undefined> {
+  private async askingPicture(runId: string, tabId: string, ref: string | undefined, pointer: 'click' | 'type' | 'select' | undefined, policy: BrowserPolicy, request: (hostRequest: BrowserHostRequest) => Promise<unknown>): Promise<string | undefined> {
     if (this.screenshotCount(runId) >= MAX_BROWSER_SCREENSHOTS) return undefined;
     try {
-      const shot = BrowserScreenshotResult.parse(await request({ kind: 'screenshot', runId, policy, tabId, ...(ref ? { highlight: ref } : {}) }));
+      const shot = BrowserScreenshotResult.parse(await request({ kind: 'screenshot', runId, policy, tabId, ...(ref ? { highlight: ref, ...(pointer ? { pointer } : {}) } : {}) }));
       return this.keepScreenshot(runId, shot.png).screenshotId;
     } catch {
       // The card works without a picture.
@@ -628,38 +629,62 @@ export class BrowserTools {
   /** What the chat's window shows about the browser now. */
   live(taskId: string): BrowserLive {
     const approval = this.person.approval(taskId);
+    const runId = [...this.usingRuns.get(taskId) ?? []].at(-1);
     return {
       ...(approval ? { approval } : {}),
       takenOver: this.person.holds(taskId),
-      using: (this.usingRuns.get(taskId)?.size ?? 0) > 0,
+      inChrome: this.person.inChrome(taskId),
+      using: runId !== undefined,
       waiting: this.person.waiting(taskId),
+      ...(runId ? { runId } : {}),
     };
   }
 
   /**
-   * The person takes the chat's browser over: the runs using it bring their window forward, keep popups open for a
-   * sign-in and wait before any further step. Returns whether a window came forward.
+   * The person takes the chat's browser over: the runs using it keep popups open for a sign-in and wait before any
+   * further step. The person uses the page in Orglet's live view, or, with `inChrome`, in a Chrome window the run's
+   * tabs move into; asking again switches between the two. Returns whether the tabs are in Chrome now.
    */
-  async takeOver(taskId: string): Promise<boolean> {
+  async takeOver(taskId: string, inChrome = false): Promise<boolean> {
     const runs = [...this.usingRuns.get(taskId) ?? []];
     if (!runs.length || !this.host) throw new Error('Không có lượt chạy nào đang dùng trình duyệt trong chat này.');
-    this.person.takeOver(taskId);
-    let shown = false;
+    this.person.takeOver(taskId, inChrome);
+    let opened = false;
+    let failure: unknown;
     for (const runId of runs) {
-      const answer = await this.host.request({ kind: 'hold', runId, held: true }, AbortSignal.timeout(10_000)).catch(() => undefined) as { shown?: boolean } | undefined;
-      shown ||= answer?.shown === true;
+      try {
+        const answer = BrowserHoldResult.parse(await this.host.request({ kind: 'hold', runId, held: true, inChrome }, AbortSignal.timeout(60_000)));
+        opened ||= answer.inChrome;
+      } catch (error) {
+        failure ??= error;
+      }
     }
-    return shown;
+    // A Chrome window that could not open leaves the browser held in the live view, and says why.
+    if (inChrome && !opened) {
+      this.person.takeOver(taskId, false);
+      if (failure) throw failure;
+    }
+    return opened;
   }
 
-  /** Hands the browser back: waiting steps go on, and the tabs of runs that ended meanwhile close now. */
-  async handBack(taskId: string) {
-    this.person.handBack(taskId);
-    const host = this.host;
-    if (!host) return;
-    for (const runId of this.usingRuns.get(taskId) ?? []) {
-      await host.request({ kind: 'hold', runId, held: false }, AbortSignal.timeout(10_000)).catch(() => undefined);
+  /** The person closed the Chrome window a run's tabs were in: that hands the chat's browser back. */
+  async released(runId: string) {
+    for (const [taskId, runs] of this.usingRuns) {
+      if (runs.has(runId) && this.person.holds(taskId)) await this.handBack(taskId);
     }
+  }
+
+  /**
+   * Hands the browser back: tabs in a Chrome window come back to the headless browser first, then waiting steps go
+   * on, and the tabs of runs that ended meanwhile close.
+   */
+  async handBack(taskId: string) {
+    const host = this.host;
+    for (const runId of host ? this.usingRuns.get(taskId) ?? [] : []) {
+      await host!.request({ kind: 'hold', runId, held: false, inChrome: false }, AbortSignal.timeout(60_000)).catch(() => undefined);
+    }
+    this.person.handBack(taskId);
+    if (!host) return;
     const ended = [...this.endedWhileHeld.get(taskId) ?? []];
     this.endedWhileHeld.delete(taskId);
     for (const runId of ended) await this.endRun(runId);

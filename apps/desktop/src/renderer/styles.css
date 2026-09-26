@@ -1999,6 +1999,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .live-island .live-island-browser { height:24px; min-height:24px; flex-shrink:0; gap:4px; padding:0 6px; border-radius:12px; font-size:13px; color:var(--muted); }
 .live-island .live-island-browser:hover:not(:disabled) { background:transparent; color:var(--text); }
 .live-island-content:has(.live-island-browser) .live-island-label { max-width:min(40ch, calc(100cqw - 205px - var(--island-faces, 24px))); }
+.live-island-content:has(.live-island-browser + .live-island-browser) .live-island-label { max-width:min(40ch, calc(100cqw - 270px - var(--island-faces, 24px))); }
 /* The state, in the faces (COD-171). Thinking: the head turns from side to side, the eyes leading (the byline's
    Thinking without the hop, since the tab itself has just risen). Reading, listing files and running a step: the
    head leans in and the eyes read a line, jumping back with a blink. Searching: the eyes look about and the head
@@ -2258,5 +2259,47 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .browser-step time { flex-shrink:0; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
 .browser-steps>.org-button,.browser-steps>button { align-self:flex-start; }
 .browser-screenshot { display:block; max-width:100%; height:auto; border-radius:10px; background:var(--surface); }
+/* The live view of a run's browser (COD-261): the tab's frames on a canvas, the orglet's cursor drawn over them by
+   Orglet (never inside the page), and, while the person holds the browser, a surface that takes their pointer and keys.
+   The picture keeps the page's shape; the large view fits it to the window's height. */
+.browser-live-panel, .browser-live-stack { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.browser-steps-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:28px; }
+.browser-steps-heading .org-button { width:28px; height:28px; min-height:28px; color:var(--muted); }
+.browser-steps-heading .org-button:hover:not(:disabled) { background:transparent; color:var(--text); }
+.browser-live { position:relative; width:100%; overflow:hidden; border-radius:10px; background:var(--surface); box-shadow:0 0 0 1px var(--border-subtle); user-select:none; }
+/* The large view fits the page to the window's height, and its suggestion row keeps the picture's width. */
+.browser-live-stack[data-large], .browser-live-away[data-large] { width:min(100%, calc((100dvh - 170px) * var(--browser-live-ratio, 1.6))); margin:0 auto; }
+.browser-live-canvas { display:block; width:100%; height:100%; }
+.browser-live .browser-live-waiting { position:absolute; inset:0; width:100%; height:100%; border-radius:0; }
+.browser-live-controlling { cursor:default; touch-action:none; }
+.browser-live-controlling:focus-within { box-shadow:0 0 0 2px var(--focus); }
+.browser-live-typing { position:absolute; left:0; top:0; width:1px; height:1px; padding:0; border:0; opacity:0; resize:none; pointer-events:none; }
+.browser-agent-cursor { position:absolute; left:0; top:0; pointer-events:none; transition:transform 480ms var(--org-ease-out, cubic-bezier(.2,.8,.2,1)); will-change:transform; }
+.browser-agent-cursor svg { position:absolute; left:-1.5px; top:-1.5px; overflow:visible; filter:drop-shadow(0 1px 1.5px #00000055); }
+.browser-agent-cursor path { fill:var(--accent); stroke:#fff; stroke-width:1.4; stroke-linejoin:round; }
+.browser-agent-name { position:absolute; left:14px; top:17px; padding:1px 7px; border-radius:9px; background:var(--accent); color:var(--accent-ink); font-size:11.5px; line-height:17px; white-space:nowrap; box-shadow:0 1px 2px #00000033; }
+.browser-agent-click { position:absolute; left:-11px; top:-11px; width:22px; height:22px; border:2px solid var(--accent); border-radius:50%; opacity:0; animation:browser-agent-click 560ms ease-out; }
+@keyframes browser-agent-click { from { transform:scale(.35); opacity:.9; } to { transform:scale(1.5); opacity:0; } }
+@media (prefers-reduced-motion:reduce) { .browser-agent-cursor { transition:none; } .browser-agent-click { animation:none; } }
+.browser-live-suggestion { display:flex; align-items:center; gap:8px; min-width:0; padding:6px 6px 6px 10px; border-radius:10px; background:var(--surface); font-size:12.5px; line-height:1.45; }
+.browser-live-suggestion>svg { flex-shrink:0; color:var(--muted); }
+.browser-live-suggestion>span { flex:1; min-width:0; }
+.browser-live-suggestion>.org-button { flex-shrink:0; }
+.browser-live-away { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:16px; text-align:center; }
+.browser-live-away p { display:flex; align-items:center; gap:8px; margin:0; color:var(--muted); font-size:13px; }
+.browser-live-away-actions { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:8px; }
+.browser-live-viewer { width:min(1320px, calc(100vw - 32px)); }
+.browser-live-viewer .org-viewer-actions .org-button { white-space:nowrap; }
+@media (max-width:900px) {
+  .browser-live-viewer .org-viewer-actions .browser-live-action-label { display:none; }
+  .browser-live-viewer .org-viewer-actions .org-button { width:34px; padding:0; justify-content:center; }
+}
+.browser-live-viewer .org-viewer-scroll { padding:16px; }
+.browser-live-viewer-body { display:flex; flex-direction:column; gap:16px; }
+.browser-live-viewer-body>.browser-approval { width:min(100%, 640px); margin:0 auto; }
+/* With a card asking under it, the page gives up height so the question and its answers fit on screen. */
+.browser-live-viewer-body:has(>.browser-approval) :is(.browser-live-stack, .browser-live-away)[data-large] { width:min(100%, 640px); }
+/* The live view above already shows the page with the orglet's cursor on the element, so the card drops its picture. */
+.browser-live-viewer-body .browser-approval-shot { display:none; }
 .routine-browser { display:flex; flex-direction:column; gap:16px; min-width:0; }
 .routine-browser-sites { display:flex; flex-direction:column; gap:8px; min-width:0; }

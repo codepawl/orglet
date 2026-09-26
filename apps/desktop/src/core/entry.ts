@@ -167,6 +167,8 @@ port.on('message', async ({ data }) => {
       : command === 'saveMcpServer' ? await core.saveMcpServer(args)
       : command === 'removeMcpServer' ? await core.removeMcpServer(args)
       : command === 'shutdown' ? await core.mcp.shutdown()
+      // Only main sends this: the person closed the Chrome window a run's tabs were in, which hands the browser back.
+      : command === 'browserReleased' ? await core.browser.released(Id.parse(args))
       : await core.command(command as Command, args);
     port.postMessage({ id, ok: true, value });
   } catch (error) {

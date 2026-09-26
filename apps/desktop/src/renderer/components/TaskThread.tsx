@@ -25,7 +25,7 @@ import { MessageActions, MessageBadges } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
 import { LiveRun, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, useRunProgress, withBrowserControls, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
-import { takeOverBrowser } from './BrowserSettings';
+import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
 import { TurnTrace } from './TurnTrace';
 import { traceOf } from '../turnTrace';
 import { dockIsland } from './islandDock';
@@ -207,9 +207,12 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing,
         site: browsingSiteOf(detail.events.filter(event => event.runId === dockedRun.id).map(event => event.message)) })
     : heldRun ? islandBeforeStreaming({ workers: [heldRun.snapshot.worker], pausing: true }) : undefined;
-  // While a run uses Orglet's browser the island carries Take over or Hand back, and waits with the card (COD-261).
+  // While a run uses Orglet's browser the island carries Watch, and Hand back once taken over, and waits with the card
+  // (COD-261). Watch opens the live view, where the person takes the browser over.
   const browserWorkers = dockedRun ? islandWorkers : heldRun ? [heldRun.snapshot.worker] : [];
-  const dockedIsland = runIsland && withBrowserControls(runIsland, detail.browser, browserWorkers, taken => takeOverBrowser(detail.task.id, taken));
+  const dockedIsland = runIsland && withBrowserControls(runIsland, detail.browser, browserWorkers, {
+    watch: () => openBrowserViewer(detail.task.id), handBack: () => takeOverBrowser(detail.task.id, false),
+  });
   const islandWorkerKey = islandWorkers.map(worker => worker.id).join(',');
   // Once no run is on, the island offers this chat's knowledge suggestions instead (COD-208). Dismissing hides the
   // offer for that set only, remembered per chat in localStorage; the notes themselves stay in Thư viện → Knowledge.
@@ -268,7 +271,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     });
     else if (knowledgeShown) dockIsland({ kind: 'knowledge', key: suggestionKey, count: proposals.length, review: () => knowledgeActions.current.review(), dismiss: () => knowledgeActions.current.dismiss() });
     else dockIsland(undefined);
-  }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, dockedIsland?.action?.kind, islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt]);
+  }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, dockedIsland?.actions?.map(control => control.kind).join(','), islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt]);
   useEffect(() => () => dockIsland(undefined), []);
 
   // A face nods when its answer lands, not when an old chat opens: the runs already finished when this chat was
@@ -524,6 +527,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     {outputCommand && <CommandOutputDialog taskId={detail.task.id} command={outputCommand} onClose={() => setOutputCommand(undefined)} />}
     {savedReport && <ReportDocument artifact={savedReport} author={detail.runs.find(run => run.id === savedReport.runId)} detail={detail} open onClose={() => setSavedReportId(undefined)} busy={busy} action={action} showSources={showSources}
       actions={<ArtifactActions artifactId={savedReport.id} about={tMessage(savedReport.report.title)} action={action} />} />}
+    <BrowserLiveViewer detail={detail} />
   </div>;
 }
 

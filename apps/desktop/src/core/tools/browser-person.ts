@@ -16,7 +16,8 @@ export type BrowserAskOutcome = BrowserAnswer | 'no_answer';
 export const BROWSER_PERSON_WAIT_MS = 15 * 60_000;
 
 type PendingAsk = { taskId: string; view: BrowserApprovalView; settle: (answer: BrowserAnswer) => void };
-type Holding = { since: string; released: Set<() => void> };
+/** `inChrome`: the person moved the tabs into a Chrome window, rather than using the live view in Orglet. */
+type Holding = { since: string; released: Set<() => void>; inChrome: boolean };
 
 export const NOT_ASKING = 'Bước này không còn chờ bạn trả lời.';
 
@@ -56,8 +57,11 @@ export class BrowserPerson {
     return undefined;
   }
 
-  takeOver(taskId: string) {
-    if (!this.holdings.has(taskId)) this.holdings.set(taskId, { since: new Date().toISOString(), released: new Set() });
+  /** The person takes the browser over, or switches between the live view and the Chrome window while they hold it. */
+  takeOver(taskId: string, inChrome = false) {
+    const holding = this.holdings.get(taskId);
+    if (holding) holding.inChrome = inChrome;
+    else this.holdings.set(taskId, { since: new Date().toISOString(), released: new Set(), inChrome });
     this.notify();
   }
 
@@ -71,6 +75,10 @@ export class BrowserPerson {
 
   holds(taskId: string): boolean {
     return this.holdings.has(taskId);
+  }
+
+  inChrome(taskId: string): boolean {
+    return this.holdings.get(taskId)?.inChrome ?? false;
   }
 
   /** Whether a step of this chat is waiting for the browser to be handed back. */

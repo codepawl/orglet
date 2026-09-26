@@ -87,6 +87,12 @@ const bridge: Bridge = {
   closeBrowserProfile: id => invoke('orglet:browser-close', id),
   clearBrowserProfile: id => invoke('orglet:browser-clear', id),
   deleteBrowserProfile: id => invoke('orglet:browser-delete', id),
-  showBrowser: runId => invoke('orglet:browser-show', runId),
+  watchBrowser: (runId, watching, width) => invoke('orglet:browser-watch', { runId, watching, width }),
+  browserInput: (runId, event) => invoke('orglet:browser-input', { runId, event }),
+  onBrowserLive: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, live: import('../shared/browser-live').BrowserLiveEvent) => callback(live);
+    ipcRenderer.on('orglet:browser-live', listener);
+    return () => ipcRenderer.removeListener('orglet:browser-live', listener);
+  },
 };
 contextBridge.exposeInMainWorld('orglet', bridge);
