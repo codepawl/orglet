@@ -94,6 +94,12 @@ While an orglet works, a tab docks onto the message box: the faces of the orglet
 
 Afterwards the answer keeps a folded line of the steps ("Read 2 files · Searched 1 time"); open it for the targets. Above it, **Memories used: N** opens the memories the orglet was given ([Memory](memory.md)). An orglet's thinking shows only inside the folded control, only when the model shares it, and is not saved.
 
+While the orglet waits for you, for example on a card asking to click a button on a page, the line under its name in the chat says so ("Waiting for your OK…") and holds still, instead of the step it stopped on.
+
+The chat stays on its newest message while you are there: new text, a card, a window resize or opening **Details** keep the end in view. Scroll up and it stays where you left it; scroll back to the last lines and it follows again. A card that needs you (an approval, a question, a failure or a blocked hand-in) is brought into view once when it appears if you were less than a screen up. Further up, the tab on the message box tells you instead. Sending a message always goes back to the end.
+
+A message that got no answer keeps what happened to it after newer messages, on one line under the orglet's name: "This turn didn’t finish: …" with the error, "This turn was stopped before it answered.", "This turn stopped while it waited for you." Hover the line for a long error in full.
+
 Commands the orglet ran in the latest turn are summed in **Details**, under the goal it worked from, last command first: "Last command exited 0 · earlier: 1 failed." A turn that ran a failing test, fixed the code and ran it again reads that way instead of "1 exited 0, 1 failed". Their full output is in the same panel. Exit 0 means that command finished; it does not mean the task passed.
 
 ### When the orglet runs out of steps
