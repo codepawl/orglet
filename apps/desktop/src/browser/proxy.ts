@@ -1,5 +1,5 @@
 import { createServer, request as httpRequest, type IncomingMessage, type Server } from 'node:http';
-import { connect, isIP, type Socket } from 'node:net';
+import { connect, isIP, type LookupFunction, type Socket } from 'node:net';
 import type { Duplex } from 'node:stream';
 import type { BrowserPolicy } from '../shared/browser-host';
 import { requestRefusal, type ResolveAddresses } from '../core/tools/browser-policy';
@@ -11,9 +11,30 @@ import { requestRefusal, type ResolveAddresses } from '../core/tools/browser-pol
  * first address of a redirect chain; this sees them all.
  *
  * The proxy resolves each name itself, refuses one that points into a private network unless the chat listed it, and
- * connects to the address it checked, so a name cannot resolve to something else between the check and the
+ * connects only to the addresses it checked, so a name cannot resolve to something else between the check and the
  * connection. It never reads or changes what flows through a tunnel.
  */
+
+type CheckedConnection = { host: string; lookup?: LookupFunction; autoSelectFamily?: boolean };
+
+/**
+ * Where a checked name may connect: its checked addresses in the order they resolved, tried one after another. On
+ * Windows `localhost` resolves to ::1 before 127.0.0.1, so taking only the first answered 502 for every dev server
+ * listening on 127.0.0.1 (dogfood, 2026-09-26). The lookup never resolves again; it hands back what was checked.
+ */
+function checkedConnection(host: string, addresses: string[]): CheckedConnection {
+  if (addresses.length === 1) return { host: addresses[0] };
+  const entries = addresses.map(address => ({ address, family: isIP(address) }));
+  const lookup: LookupFunction = (_hostname, options, callback) => {
+    if (options.all) {
+      callback(null, entries);
+      return;
+    }
+    callback(null, entries[0].address, entries[0].family);
+  };
+  return { host, lookup, autoSelectFamily: true };
+}
+
 export class PolicyProxy {
   private server: Server;
   private sockets = new Set<Socket | Duplex>();
@@ -45,19 +66,19 @@ export class PolicyProxy {
     this.server.close();
   }
 
-  /** The address to connect to for host:port, or the reason it is refused. */
-  private async target(url: string, host: string): Promise<{ address: string } | { refusal: string }> {
+  /** How to connect to host:port (its checked addresses, in order), or the reason it is refused. */
+  private async target(url: string, host: string): Promise<{ connection: CheckedConnection } | { refusal: string }> {
     const refusal = await requestRefusal(url, this.policy(), false, this.resolve);
     if (refusal) return { refusal };
     const bare = host.replace(/^\[|\]$/g, '');
-    if (isIP(bare)) return { address: bare };
+    if (isIP(bare)) return { connection: checkedConnection(bare, [bare]) };
     try {
       const addresses = await this.resolve(bare);
       if (!addresses.length) return { refusal: 'Không tìm thấy trang này (tên miền không tồn tại).' };
-      // The check above looked at every address; connect only to one of those.
+      // The check above looked at every address; connect only to those.
       const second = await requestRefusal(url, this.policy(), false, async () => addresses);
       if (second) return { refusal: second };
-      return { address: addresses[0] };
+      return { connection: checkedConnection(bare, addresses) };
     } catch {
       return { refusal: 'Không tìm thấy trang này (tên miền không tồn tại).' };
     }
@@ -80,7 +101,7 @@ export class PolicyProxy {
       socket.end('HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n');
       return;
     }
-    const upstream = connect(port, decided.address, () => {
+    const upstream = connect({ port, ...decided.connection }, () => {
       socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
       if (head.length) upstream.write(head);
       upstream.pipe(socket);
@@ -116,7 +137,7 @@ export class PolicyProxy {
     delete headers['proxy-connection'];
     delete headers['proxy-authorization'];
     const upstream = httpRequest({
-      host: decided.address, port: url.port || 80, method: request.method, path: `${url.pathname}${url.search}`, headers, setHost: false,
+      ...decided.connection, port: url.port || 80, method: request.method, path: `${url.pathname}${url.search}`, headers, setHost: false,
     }, answer => {
       response.writeHead(answer.statusCode ?? 502, answer.statusMessage, answer.headers);
       answer.pipe(response);
@@ -144,7 +165,7 @@ export class PolicyProxy {
       return;
     }
     const port = Number(url.port || 80);
-    const upstream = connect(port, decided.address, () => {
+    const upstream = connect({ port, ...decided.connection }, () => {
       const lines = [`${request.method} ${url.pathname}${url.search} HTTP/1.1`];
       for (let index = 0; index < request.rawHeaders.length; index += 2) {
         const name = request.rawHeaders[index];
