@@ -492,41 +492,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer-reply strong { flex-shrink:0; color:var(--text); font-weight:600; }
 .composer-reply span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* A thumb that has been pressed keeps the accent, so the mark is visible without a second colour. */
-/* Reactions: the row opens on demand, because six faces under every answer is noise. A picked one stays on the
-   message as the face itself, which is what anyone reading the thread is looking for. */
-.reaction-bar { position:relative; display:flex; align-items:center; }
-/* The row centres itself with a transform, so it cannot borrow menu-in, whose own transform would replace that
-   and drop the row to the right for the length of the animation before it snapped back (user, 2026-09-20). */
-.reaction-row { position:absolute; bottom:calc(100% + 6px); left:50%; z-index:5; display:flex; gap:2px; padding:4px 6px; border-radius:999px; background:var(--bg); box-shadow:0 8px 22px #00000024, 0 0 0 1px #0000000f; animation:reaction-row-in var(--motion-quick) var(--ease-out); transform:translateX(-50%); }
-/* Opacity and a nudge only: scaling a centred box moves its edges while it grows, which is the jump again in
-   miniature — measured at 4px. */
-@keyframes reaction-row-in { from { opacity:0; transform:translateX(-50%) translateY(3px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
 /* Under a sent message the trigger sits at the pane's right edge, so the row opens leftwards from it; centred, it
    ran off the pane and lost its last faces. */
-.user-message + .message-actions .reaction-row { left:auto; right:0; transform:none; animation-name:reaction-row-in-end; }
+.user-message + .message-actions .org-reaction-row { left:auto; right:0; transform:none; animation-name:reaction-row-in-end; }
 @keyframes reaction-row-in-end { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
-/* A face grows a touch under the pointer, on the spring so it overshoots and settles, the way a messenger's
-   picker answers a hover (COD-219). The one already left wears the row-active tint, so the person sees which
-   they picked before choosing again; picking it again takes it off. */
-.reaction-row button { display:grid; place-items:center; width:30px; height:30px; padding:0; border:0; border-radius:50%; background:none; font-size:17px; line-height:1; cursor:pointer; transition:transform var(--motion-base) var(--ease-spring), background var(--motion-quick); }
-.reaction-row button.picked { background:var(--row-active); box-shadow:0 0 0 1px var(--border-subtle); }
-.reaction-row button:hover,.reaction-row button:focus-visible { background:var(--row-hover); transform:scale(1.2); }
-.reaction-row button.picked:hover,.reaction-row button.picked:focus-visible { background:var(--row-active); }
-/* The reactions a message wears sit on its corner and overlap its lower edge by half their height, so they read
-   as attached to that bubble and to no other (COD-219, the owner circled the corner). The pill draws over the
-   edge on a hairline ring and the page colour, which separates it from the wash on either side of the edge.
-   The start corner is for the person's right-aligned bubble, the end corner for an answer or a report card. */
-.reaction-badges { --badge-height:20px; position:absolute; bottom:calc(var(--badge-height) / -2); z-index:2; display:flex; align-items:center; gap:2px; padding:2px; border-radius:999px; background:var(--bg); box-shadow:0 1px 3px #00000024, 0 0 0 1px var(--border-subtle); }
-.reaction-badges-start { left:12px; }
-.reaction-badges-end { right:12px; }
-/* In a plain list with no bubble the pill sits in the flow under the text. */
-.reaction-badges-inline { position:static; width:fit-content; margin-top:6px; }
-.reaction-badge { display:inline-flex; align-items:center; gap:3px; height:calc(var(--badge-height) - 4px); min-width:calc(var(--badge-height) - 4px); padding:0 4px; border:0; border-radius:999px; background:none; color:var(--text); font:inherit; font-size:12px; line-height:1; cursor:pointer; transition:transform var(--motion-base) var(--ease-spring), background var(--motion-quick); animation:reaction-badge-in var(--motion-base) var(--ease-spring); }
-.reaction-badge[aria-pressed=true] { background:var(--row-active); }
-.reaction-badge:hover,.reaction-badge:focus-visible { background:var(--row-hover); transform:scale(1.12); }
-.reaction-badge[aria-pressed=true]:hover,.reaction-badge[aria-pressed=true]:focus-visible { background:var(--row-active); }
-.reaction-badge-count { font-size:11px; font-variant-numeric:tabular-nums; color:var(--muted); }
-@keyframes reaction-badge-in { from { transform:scale(.6); opacity:0; } to { transform:scale(1); opacity:1; } }
 .message-reply-context { display:flex; align-items:center; gap:6px; max-width:100%; padding:0; border:0; background:none; color:var(--muted); font:inherit; font-size:12px; text-align:start; overflow-wrap:anywhere; cursor:pointer; }
 .message-reply-context:hover { color:var(--text); }
 /* The quoted message under a reaction is one clamped line (COD-221), never the whole message. */
@@ -544,7 +513,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .read-receipts { display:flex; justify-content:flex-end; gap:3px; margin:6px 2px 0; line-height:16px; }
 .read-receipts > span { display:flex; }
 .read-receipts .avatar { box-shadow:0 0 0 1.5px var(--bg); }
-@media(prefers-reduced-motion:reduce) { .reaction-row { animation:none; } .reaction-row button,.reaction-badge { transition:none; animation:none; } .reaction-row button:hover,.reaction-row button:focus-visible,.reaction-badge:hover,.reaction-badge:focus-visible { transform:none; } }
+@media(prefers-reduced-motion:reduce) { .user-message + .message-actions .org-reaction-row { animation:none; } }
 /* A size container, so the island's label can be capped from the bar's width (`cqw` in `.live-island-label`)
    rather than from the island's own measured width, which would let a measurement of zero lock it at zero. */
 .thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) 0; container-type:inline-size; }
@@ -1879,7 +1848,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .markdown .markdown-break { height:6px; }
 .markdown-link { text-decoration:underline; text-decoration-color:var(--muted); text-underline-offset:2px; }
 .markdown-link-address { color:var(--muted); font-size:.9em; }
-/* The gap above the row is the half of a reaction pill that hangs below the bubble (`.reaction-badges`), so a
+/* The gap above the row is the half of a reaction pill that hangs below the bubble (`.org-reaction-badges`), so a
    reaction never covers a button and the row does not move when one appears. */
 .message-actions { display:flex; align-items:center; gap:2px; width:100%; margin:10px 0 0; color:var(--muted); }
 .message-actions .org-button { width:28px; height:28px; min-height:28px; color:var(--muted); }

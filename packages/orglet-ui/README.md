@@ -72,6 +72,10 @@ loads the switch's styles.
   `tone` (`muted`, `success`, `error`, `working`) pick a shape and a colour, and every state has its own shape, so
   colour is never the only difference. `label` is what a screen reader hears; `decorative` keeps it out of a named
   control. Which state a thing is in belongs to the application.
+- `ReactionBar`, `ReactionPicker` and `ReactionBadges`: reactions thrown at a message. The bar is a trigger (`label`,
+  `icon`) that opens a floating row of faces (`options` of `{ name, emoji, meaning }`, the `picked` one pressed;
+  picking it again takes it off). The badges sit on a bubble's corner (`align` `start`, `end` or `inline`), one
+  button each with a count above one. Where reactions are stored is the application's.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
