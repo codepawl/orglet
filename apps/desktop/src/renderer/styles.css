@@ -669,8 +669,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .form select:hover:not(:disabled),.form input:not(.org-input):hover:not(:disabled):not(:focus) { border-color:var(--muted); }
 
 .form textarea:not(.org-input) { resize:vertical; min-height:100px; line-height:1.6; }
-.form fieldset { border:1px solid var(--border); border-radius:10px; padding:12px; }
-.form legend { font-size:13px; padding:0 4px; }
+/* A group of choices under one title (a crew's members, a shift's days): the title sits above the box like any field's
+   label, 8px over it, and the choices sit in the box; a legend drawn on the box's edge read as squeezed onto the line
+   (dogfood, 2026-09-26). The legend is a flex box, so no line box of its own adds to those 8px. */
+.form fieldset { border:0; padding:0; margin:0; min-width:0; }
+.form legend { display:flex; font-size:13px; font-weight:500; padding:0 0 8px; }
+.fieldset-options { border:1px solid var(--border); border-radius:10px; padding:12px; }
 
 .form section { display:flex; flex-direction:column; gap:10px; }
 .form section+.form section { padding-top:8px; }
