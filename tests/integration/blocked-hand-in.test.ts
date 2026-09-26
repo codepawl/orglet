@@ -315,3 +315,20 @@ it('keeps only the reason for a group reply, which the person cannot apply on it
   expect(card).not.toContain('A command has not completed successfully');
   expect(html).not.toContain('Apply anyway');
 });
+
+it('says an earlier turn stopped because the app closed, instead of "no reply yet"', () => {
+  // The app closed mid-run: on the next start the run is marked interrupted.
+  store.update('runs', { ...run, status: 'running', snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: [] } } });
+  store.update('tasks', { ...store.get<Task>('tasks', task.id), status: 'running' });
+  store.recover();
+  expect(store.get<Run>('runs', run.id).status).toBe('interrupted');
+  // The person then sends another message, so the interrupted turn is no longer the latest.
+  const brief = 'Try again, please.';
+  store.update('tasks', { ...store.get<Task>('tasks', task.id), inputRevision: 1, brief, currentInput: { brief, sourceIds: [] }, status: 'queued' });
+  store.put('runs', { ...run, id: id(), status: 'queued', startedAt: now(), error: null, snapshot: { ...run.snapshot, inputRevision: 1, input: { brief, sourceIds: [] } } },
+    { column: 'task_id', value: task.id });
+  const html = renderThread();
+  const earlierTurn = html.slice(0, html.indexOf(brief));
+  expect(earlierTurn).toContain('This turn stopped partway because the app closed.');
+  expect(earlierTurn).not.toContain('No reply to this message yet.');
+});

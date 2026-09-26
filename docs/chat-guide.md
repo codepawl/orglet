@@ -104,6 +104,8 @@ The diff exists only when the working folder is a Git repository, because the co
 - **What happened**: the run's activity, the sources it cited, and **Loaded context**, the exact instructions, skill, knowledge and memory the run started with.
 - **Chat decisions**: questions an orglet paused to ask you, with your answers. **Turn goal**: how an orglet understood the request, its assumptions, and the checks it planned (planned is not done).
 - **Files and processes**: every attempt that changed files, with its outcome, its commands and their output. An attempt whose outcome is unknown after a crash or cancel blocks the chat until you check your files and choose **Keep current files**. See [Reviewing an interrupted attempt](agent-tools.md#reviewing-an-interrupted-attempt).
+
+If the app closes while an orglet works, that turn stops where it was and is not sent again on its own. The chat says so on that turn ("This turn stopped partway because the app closed."), also after you have sent newer messages; check the cost and send the message again if you still need the answer.
 - **Messages between workers** and **Reactions** in a crew or group chat, and export of any job's report.
 
 ## Schedules
