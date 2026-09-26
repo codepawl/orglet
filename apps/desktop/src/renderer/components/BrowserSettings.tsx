@@ -137,9 +137,14 @@ function shortElement(name: string): string {
  * One journaled step in words: what the worker did, never which tool it called. An acting step names its element,
  * or only the page when it failed before the page was read.
  */
+/**
+ * The step's name. An acting step that did not go through (waiting for the person, declined, refused, failed or of
+ * unknown outcome) is named as what the orglet was going to do, never as done.
+ */
 function stepLabel(action: BrowserAction): string {
   const site = action.origin ? new URL(action.origin).host : '';
   const element = action.target ? shortElement(action.target) : '';
+  if (isActing(action.kind) && action.outcome !== 'done') return intendedLabel(action.kind, element, site);
   if (action.kind === 'click') return element ? t('Bấm “{0}” trên {1}', [element, site]) : t('Bấm trên trang {0}', [site]);
   if (action.kind === 'type') return element ? t('Gõ vào “{0}” trên {1}', [element, site]) : t('Gõ trên trang {0}', [site]);
   if (action.kind === 'select') return element ? t('Chọn trong “{0}” trên {1}', [element, site]) : t('Chọn trên trang {0}', [site]);
@@ -148,6 +153,20 @@ function stepLabel(action: BrowserAction): string {
   const verb = action.kind === 'open' ? t('Mở trang') : action.kind === 'snapshot' ? t('Đọc nội dung trang') : action.kind === 'find' ? t('Tìm trên trang')
     : action.kind === 'screenshot' ? t('Chụp màn hình') : action.kind === 'scroll' ? t('Cuộn trang') : action.kind === 'tabs' ? t('Xem các tab') : t('Đóng tab');
   return site ? `${verb} ${site}` : verb;
+}
+
+const actingKinds: readonly BrowserAction['kind'][] = ['click', 'type', 'select', 'press'];
+
+function isActing(kind: BrowserAction['kind']): boolean {
+  return actingKinds.includes(kind);
+}
+
+function intendedLabel(kind: BrowserAction['kind'], element: string, site: string): string {
+  if (!element) return t('Định thao tác trên trang {0}', [site]);
+  if (kind === 'click') return t('Định bấm “{0}” trên {1}', [element, site]);
+  if (kind === 'type') return t('Định gõ vào “{0}” trên {1}', [element, site]);
+  if (kind === 'select') return t('Định chọn trong “{0}” trên {1}', [element, site]);
+  return t('Định nhấn {0} trên {1}', [element, site]);
 }
 
 const outcomeNames: Record<Exclude<BrowserAction['outcome'], 'done'>, string> = translated({ refused: 'bị chặn', failed: 'không thành', unknown: 'chưa rõ kết quả', declined: 'bạn không cho phép' });

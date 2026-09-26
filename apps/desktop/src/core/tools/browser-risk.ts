@@ -24,7 +24,7 @@ export type BrowserStepToJudge =
 export const riskReasons = {
   submitsForm: 'Gửi một biểu mẫu',
   maySend: 'Có thể gửi nội dung vừa nhập',
-  wording: 'Tên của nó giống gửi, trả tiền, mua, xóa hoặc đăng',
+  wording: 'Tên của nó giống một việc khó rút lại: gửi, trả tiền, mua, xóa, đăng hoặc đồng ý',
   upload: 'Mở hộp chọn tệp để tải lên',
   download: 'Tải một tệp xuống',
   passwordPage: 'Trang có ô mật khẩu',
