@@ -1,6 +1,6 @@
 # In a chat
 
-What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
+What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, keep typing from the keyboard, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
@@ -27,6 +27,13 @@ Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. A PDF's text 
 Type a colon and at least two letters of an emoji's name, such as `:sk`, and a small menu lists the emoji that fit. Arrow keys move through it, Enter or Tab inserts the one highlighted, Escape closes it. A full name such as `:skull:` becomes 💀 as soon as you type the closing colon.
 
 The names are GitHub's, which Slack and Discord mostly share. The menu only opens at the start of the message or after a space or bracket, and only when an emoji matches, so times like `10:30` and links stay as you typed them.
+
+## Keyboard
+
+- After you send, the message box stays ready, so you can type the next message straight away. If a message cannot be sent, it comes back in the box, in front of anything you typed since.
+- After you pick files or a folder with **+**, the cursor is back in the message box.
+- Opening **Details** moves the keyboard into the panel. Its close button or **Escape** puts you back where you were.
+- Closing Settings, a viewer or any other window with **Escape** puts you back on the button that opened it.
 
 ## Side threads
 

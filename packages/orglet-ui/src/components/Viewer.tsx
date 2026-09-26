@@ -1,7 +1,7 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
 import type { ReactNode } from 'react';
 import { Button } from './Button';
-import { DialogOverlay, keepOpenForPopup } from './Dialog';
+import { DialogOverlay, keepOpenForPopup, useReturnFocus } from './Dialog';
 import { cn } from '../cn';
 import './Viewer.css';
 
@@ -27,11 +27,12 @@ export function Viewer({ open, onClose, title, icon, meta, actions, toolbar, clo
   className?: string;
   children: ReactNode;
 }) {
+  const returnFocus = useReturnFocus();
   const heading = <RadixDialog.Title className="org-viewer-title">{icon}<span>{title}</span></RadixDialog.Title>;
   return <RadixDialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <RadixDialog.Portal>
       <DialogOverlay />
-      <RadixDialog.Content id={id} className={cn('org-viewer', className)} aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup}>
+      <RadixDialog.Content id={id} className={cn('org-viewer', className)} aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup} {...returnFocus}>
         <div className="org-viewer-toolbar">
           <RadixDialog.Close asChild><Button size="icon" aria-label={closeLabel} title={closeLabel}>{closeIcon}</Button></RadixDialog.Close>
           {meta === undefined ? heading : <div className="org-viewer-heading">{heading}<span className="org-viewer-meta">{meta}</span></div>}

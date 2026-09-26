@@ -16,6 +16,32 @@ export function keepOpenForPopup(event: KeyboardEvent) {
 }
 
 /**
+ * Gives focus back to what opened a dialog when it closes. Radix only returns focus to a `Dialog.Trigger`, and the kit's
+ * dialogs open from state with no trigger, so focus used to fall to the page. Spread the result on `Dialog.Content`;
+ * `onOpenAutoFocus` is the caller's own handler, run after the opener is remembered.
+ *
+ * Focus goes back only when it would otherwise be lost: on the page, or still inside the dialog that closed. An action
+ * in the dialog that closes it and deliberately focuses something else, such as a link to one checker in a report,
+ * keeps that focus.
+ */
+export function useReturnFocus(onOpenAutoFocus?: (event: Event) => void) {
+  const opener = useRef<HTMLElement | null>(null);
+  const dialog = useRef<Element | null>(null);
+  const rememberOpener = (event: Event) => {
+    opener.current = document.activeElement as HTMLElement | null;
+    dialog.current = event.target instanceof Element ? event.target : null;
+    onOpenAutoFocus?.(event);
+  };
+  const focusOpener = (event: Event) => {
+    event.preventDefault();
+    const focused = document.activeElement;
+    const focusLost = !focused || focused === document.body || Boolean(dialog.current?.contains(focused));
+    if (focusLost && opener.current?.isConnected) opener.current.focus();
+  };
+  return { onOpenAutoFocus: rememberOpener, onCloseAutoFocus: focusOpener };
+}
+
+/**
  * The frosted backdrop behind every dialog: the page stays visible but out of focus. Use it inside a Radix
  * `Dialog.Portal`, as the kit's own dialogs do.
  */
@@ -39,14 +65,12 @@ export function Drawer({ open, onClose, title, description, actions, closeLabel,
   closeIcon: ReactNode;
   children: ReactNode;
 }) {
-  const returnFocus = useRef<HTMLElement | null>(null);
+  const returnFocus = useReturnFocus();
   const describedBy = description ? {} : { 'aria-describedby': undefined };
   return <RadixDialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <RadixDialog.Portal>
       <DialogOverlay />
-      <RadixDialog.Content className="org-drawer" {...describedBy} onEscapeKeyDown={keepOpenForPopup}
-        onOpenAutoFocus={() => { returnFocus.current = document.activeElement as HTMLElement; }}
-        onCloseAutoFocus={event => { event.preventDefault(); returnFocus.current?.focus(); }}>
+      <RadixDialog.Content className="org-drawer" {...describedBy} onEscapeKeyDown={keepOpenForPopup} {...returnFocus}>
         <div className="org-drawer-header">
           <div className="org-drawer-heading">
             <RadixDialog.Title className="org-drawer-title">{title}</RadixDialog.Title>
@@ -102,14 +126,22 @@ function settle(confirmed: boolean) {
 export function Confirmer({ confirmLabel, cancelLabel }: { confirmLabel: string; cancelLabel: string }) {
   const request = useSyncExternalStore(subscribe, () => currentRequest);
   const describedBy = request?.description ? 'org-confirm-description' : undefined;
+  const cancel = useRef<HTMLButtonElement>(null);
+  // The safe answer takes focus. It is placed here rather than with `autoFocus`, which would move focus before the
+  // dialog could remember the button that asked.
+  const focusCancel = (event: Event) => {
+    event.preventDefault();
+    cancel.current?.focus();
+  };
+  const returnFocus = useReturnFocus(focusCancel);
   return <RadixDialog.Root open={request !== null} onOpenChange={open => { if (!open) settle(false); }}>
     <RadixDialog.Portal>
       <DialogOverlay className="org-confirm-overlay" />
-      <RadixDialog.Content className="org-confirm-dialog" role="alertdialog" aria-describedby={describedBy}>
+      <RadixDialog.Content className="org-confirm-dialog" role="alertdialog" aria-describedby={describedBy} {...returnFocus}>
         <RadixDialog.Title className="org-confirm-title">{request?.title}</RadixDialog.Title>
         {request?.description && <RadixDialog.Description id="org-confirm-description" className="org-confirm-description">{request.description}</RadixDialog.Description>}
         <div className="org-confirm-actions">
-          <Button variant="outline" autoFocus onClick={() => settle(false)}>{request?.cancelLabel ?? cancelLabel}</Button>
+          <Button ref={cancel} variant="outline" onClick={() => settle(false)}>{request?.cancelLabel ?? cancelLabel}</Button>
           <Button variant={request?.tone === 'danger' ? 'danger' : 'primary'} onClick={() => settle(true)}>{request?.confirmLabel ?? confirmLabel}</Button>
         </div>
       </RadixDialog.Content>

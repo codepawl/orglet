@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { ArrowUp, ChevronUp, MessageSquarePlus, Reply, Square, X } from 'lucide-react';
 import type { FolderIntake, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { addToNextMessage } from '../../shared/incoming';
-import { SourcePicker } from './SourcePicker';
+import { MessageBoxFocus, SourcePicker } from './SourcePicker';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
 import { completeShortcodeAt, emojiChoices, insertEmoji, shortcodeQueryAt } from '../../shared/emoji-shortcodes';
 import { Button } from './ui';
@@ -23,6 +23,15 @@ import { keepDraft, readDraft, taskDraftKey } from '../drafts';
 const SINGLE_LINE = 40;
 
 export type MentionRoster = { people: readonly Worker[]; allNames?: readonly string[] };
+
+/**
+ * The bar empties the moment a message is sent, so the next one can be typed while the first is on its way (COD-284).
+ * If sending fails, the message comes back in front of whatever was typed since.
+ */
+export function restoreUnsent(unsent: string, typedSince: string): string {
+  if (!typedSince.trim()) return unsent;
+  return `${unsent}\n\n${typedSince}`;
+}
 
 /** A file attached to the message being written. `bytes` shows as the size on the card. */
 export type ComposerAttachment = { id: string; name: string; bytes?: number };
@@ -141,6 +150,12 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
     return () => observer.disconnect();
   }, [value, grown, textarea]);
   const syncCursor = (element: HTMLTextAreaElement) => setCursor(element.selectionStart ?? 0);
+  const focusMessageBox = () => textarea.current?.focus();
+  /** Sending keeps the message box focused, even when it went with the send button, so the next words land in it. */
+  const submit = () => {
+    onSubmit();
+    focusMessageBox();
+  };
   const placeCursor = (position: number) => {
     requestAnimationFrame(() => {
       const element = textarea.current; if (!element) return;
@@ -191,9 +206,9 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
         return;
       }
     }
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); if (canSend) onSubmit(); }
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); if (canSend) submit(); }
   };
-  return <form className={`composer${expanded ? ' expanded' : ''}${trailing ? ' has-trailing' : ''}${context ? ' has-context' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) onSubmit(); }}>
+  return <form className={`composer${expanded ? ' expanded' : ''}${trailing ? ' has-trailing' : ''}${context ? ' has-context' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) submit(); }}>
     {emojiOpen && <ul id={listId} className="mention-menu emoji-menu" role="listbox" aria-label={t('Chèn emoji')}>
       {emojis.map((choice, index) => {
         const optionId = `${listId}-emoji-${choice.name}`;
@@ -225,7 +240,7 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
     {attachments && hasAttachments && <ul className="composer-attachments" ref={strip} aria-label={t('Tệp đính kèm')}>
       {attachments.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onRemove={onRemoveAttachment ? () => onRemoveAttachment(item.id) : undefined} />)}
     </ul>}
-    <div className="composer-leading">{leading}</div>
+    <div className="composer-leading"><MessageBoxFocus.Provider value={focusMessageBox}>{leading}</MessageBoxFocus.Provider></div>
     {/* The same string, painted above the box, so a tag is coloured while it is typed. The trailing newline gives
         the overlay the extra line a textarea shows for a trailing Enter, so the two never disagree on height. */}
     {mentionable && <div className="composer-highlight" ref={highlight} aria-hidden="true"><MentionText text={value} people={mentions!.people} allNames={mentions!.allNames} />{'\n'}</div>}
@@ -276,7 +291,8 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
   const [added, setAdded] = useState<FolderIntake>(() => readDraft(draftKey)?.intake ?? { sources: [], skipped: [] });
   useEffect(() => { keepDraft(draftKey, { text, intake: added }); }, [draftKey, text, added]);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
+  // Before paint, so a key pressed while this bar replaces the empty chat's lands in it and not on the page (COD-284).
+  useLayoutEffect(() => {
     if (!prefill) return;
     if (prefill.text) {
       const prefillText = prefill.text;
@@ -298,12 +314,34 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
   const blocked = missing.length > 0;
   // An MCP approval card is answered with its buttons; typing sends a new message instead (COD-241).
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt && !request.approval);
+  /**
+   * Empties the bar for the message about to go and hands back a way to put it back if it fails (COD-284). The box
+   * stays enabled while the message is on its way, so nothing typed right after sending is lost; `submitting` only
+   * holds back a second send.
+   */
+  const takeUnsent = () => {
+    const unsent = text;
+    setText('');
+    return () => setText(current => restoreUnsent(unsent, current));
+  };
   const send = () => {
-    const extra = text.trim(); if (!extra || blocked || detail.task.pendingStart || submitting) return;
+    const extra = text.trim();
+    if (!extra || blocked || detail.task.pendingStart || submitting) return;
     setSubmitting(true);
+    const putBack = takeUnsent();
     // A question is answered in words; a message that brings files is a new message instead.
     if (detail.task.status === 'waiting_input' && pendingDecision && added.sources.length === 0) {
-      action(async () => { try { await orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: extra }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
+      action(async () => {
+        try {
+          await orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: extra });
+          clearReplyTarget();
+        } catch (error) {
+          putBack();
+          throw error;
+        } finally {
+          setSubmitting(false);
+        }
+      });
       return;
     }
     // The person's reaction on the previous answer reaches the orglet from the core (`previousAnswerReaction`), not
@@ -313,10 +351,14 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
     action(async () => {
       try {
         await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
-        setText(current => current === text ? '' : current);
         clearSentFiles(sent);
         clearReplyTarget();
-      } finally { setSubmitting(false); }
+      } catch (error) {
+        putBack();
+        throw error;
+      } finally {
+        setSubmitting(false);
+      }
     });
   };
   /** The files the next message carries: the latest turn's, minus any whose access was taken back. */
@@ -347,22 +389,29 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
     const brief = text.trim();
     if (!brief || blocked || submitting) return;
     setSubmitting(true);
+    const putBack = takeUnsent();
+    // Chosen from the send options, focus went back to their button, which the emptied bar is about to disable.
+    textarea.current?.focus();
     const orgletName = workers[0]?.name ?? 'Orglet';
     const sent = added.sources;
     action(async () => {
       try {
         const sideTaskId = await orglet.call('startSideThread', { taskId: detail.task.id, brief, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
-        setText(current => current === text ? '' : current);
         clearSentFiles(sent);
         toast(t('Đã mở chat phụ'), 'success', orgletName, { action: { label: t('Mở'), onSelect: () => openChat(sideTaskId) } });
-      } finally { setSubmitting(false); }
+      } catch (error) {
+        putBack();
+        throw error;
+      } finally {
+        setSubmitting(false);
+      }
     });
   };
   const sendOptions = sideThreads ? <RowMenu className="composer-send-options" label={t('Tùy chọn gửi')} icon={ChevronUp} disabled={!text.trim() || blocked || submitting}
     items={[{ label: t('Gửi trong chat phụ mới'), icon: MessageSquarePlus, shortcut: 'Ctrl+Shift+Enter', onSelect: sendInNewThread }]} /> : undefined;
   return <div className="thread-composer">
     <IslandDock />
-    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} label={t('Tin nhắn')} placeholder={detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(detail.task.pendingStart) || submitting} sendDisabled={blocked}
+    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} label={t('Tin nhắn')} placeholder={detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} sendDisabled={blocked || Boolean(detail.task.pendingStart) || submitting}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
       context={reply && !pendingDecision ? <div className="composer-reply">

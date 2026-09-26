@@ -72,6 +72,21 @@ describe('confirmAction and Confirmer', () => {
     await expect(answer).resolves.toBe(false);
   });
 
+  it('gives focus back to the button that asked once the question is answered', async () => {
+    const user = userEvent.setup();
+    render(<>
+      <button type="button" onClick={() => { void confirmAction({ title: 'Archive this chat?' }); }}>Archive</button>
+      <Confirmer confirmLabel="OK" cancelLabel="Cancel" />
+    </>);
+    const asker = screen.getByRole('button', { name: 'Archive' });
+    asker.focus();
+    await user.keyboard('{Enter}');
+    await screen.findByRole('alertdialog', { name: 'Archive this chat?' });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(document.activeElement).toBe(asker);
+  });
+
   it('draws the yes of a question that cannot be undone as a danger button, and a plain question as primary', async () => {
     render(<Confirmer confirmLabel="OK" cancelLabel="Cancel" />);
     act(() => { void confirmAction({ title: 'Delete every chat?', confirmLabel: 'Delete', tone: 'danger' }); });

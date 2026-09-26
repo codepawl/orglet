@@ -1,7 +1,7 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
 import type { ComponentProps, KeyboardEvent, ReactNode } from 'react';
 import { Button } from './Button';
-import { DialogOverlay, keepOpenForPopup } from './Dialog';
+import { DialogOverlay, keepOpenForPopup, useReturnFocus } from './Dialog';
 import { PanelHeading } from './PanelHeading';
 import { cn } from '../cn';
 import './TabbedDialog.css';
@@ -74,6 +74,7 @@ export function TabbedDialog<T extends string>({
   open, onClose, title, closeLabel, closeIcon, tabsLabel, tabs, tab, onTab, panelId, description, actions, onOpenAutoFocus, onSubmit, footer, children,
 }: TabbedDialogProps<T> & { onSubmit?: () => void; footer?: ReactNode }) {
   const current = tabs.find(item => item.id === tab);
+  const returnFocus = useReturnFocus(onOpenAutoFocus);
   const body = <div className="org-tabbed-dialog-body">
     <DialogTabs label={tabsLabel ?? title} tabs={tabs} value={tab} onChange={onTab} panelId={panelId} />
     <section className="org-tabbed-dialog-panel" id={panelId} role="tabpanel" aria-labelledby={`${panelId}-tab-${tab}`}>
@@ -85,7 +86,7 @@ export function TabbedDialog<T extends string>({
   return <RadixDialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <RadixDialog.Portal>
       <DialogOverlay />
-      <RadixDialog.Content className="org-tabbed-dialog" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup} onOpenAutoFocus={onOpenAutoFocus}>
+      <RadixDialog.Content className="org-tabbed-dialog" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup} {...returnFocus}>
         <div className="org-tabbed-dialog-header">
           <RadixDialog.Title>{title}</RadixDialog.Title>
           <RadixDialog.Close asChild><Button size="icon" aria-label={closeLabel}>{closeIcon}</Button></RadixDialog.Close>
