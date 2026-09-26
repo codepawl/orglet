@@ -23,7 +23,7 @@ import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
+import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, waitingStepLine, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
 import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
 import { DesktopApprovalCard } from './DesktopApps';
@@ -51,6 +51,8 @@ import { withoutSourceIds } from '../../shared/source-mentions';
 import { BlockedCommandLine, CommandOutputDialog, askToFixText } from './BlockedHandIn';
 import type { BlockingCommand } from '../../shared/blocked-hand-in';
 import { canContinueRun } from '../../shared/out-of-steps';
+import { needsPersonKey, useThreadFollow } from '../threadFollow';
+import { unansweredTurnLine } from '../turnOutcome';
 
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
 type TurnNotices = ReturnType<typeof turnNotices>;
@@ -144,7 +146,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule?: () => void };
   /** Puts a reply in this chat's composer without sending it: "Nhờ sửa" on a blocked hand-in (COD-270). */ askToFix?: (text: string) => void;
   /** Opens the forward picker for one message of this chat (COD-257). */ forward?: (request: ForwardRequest) => void }) {
-  const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
+  const viewport = useRef<HTMLDivElement>(null);
+  const threadContent = useRef<HTMLDivElement>(null);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   // A consequential browser step waiting on the person, answered from the card in the latest turn (COD-261).
   const browserApproval = detail.browser?.approval;
@@ -197,13 +200,14 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   };
   const sideThreadOrglet = detail.runs[0]?.snapshot.worker.name ?? workspace.workers.find(worker => worker.id === detail.task.workerId)?.name ?? 'Orglet';
   const liveRuns = useRunProgress(detail.task.id);
-  // Changes whenever streamed text or steps grow, so the view keeps following the newest output.
-  const liveLength = Object.values(liveRuns).reduce((total, update) => total + (update.progress ? update.progress.preamble.length + update.progress.answer.length + update.progress.activity.length : 0), 0);
-  useEffect(() => { if (atBottom.current && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; }, [detail.events.length, detail.artifacts.length, turns.length, liveLength]);
 
   // What the worker is doing now, shown as the island on the prompt bar (COD-167) rather than in the thread: the
   // latest turn's streaming run, or the run the core's own events describe before anything has streamed.
   const latestTurn = turns.find(turn => turn.revision === current);
+  // The thread keeps to its end while the reader is there, and brings what needs the person into view (COD-290).
+  const waitingDecision = detail.task.status === 'waiting_input' ? pendingDecision?.id : undefined;
+  const needKey = needsPersonKey({ status: detail.task.status, turn: current, lastRunId: latestTurn?.runs.at(-1)?.id, waitingIds: [browserApproval?.id, desktopApproval?.id, waitingDecision] });
+  useThreadFollow(viewport, threadContent, { needKey, turnCount: turns.length });
   const latestLive = busy && latestTurn ? liveRunOf(latestTurn.runs, liveRuns) : undefined;
   const latestActiveRun = latestTurn ? latestTurn.runs.find(item => item.status === 'running') ?? latestTurn.runs.find(item => item.status === 'queued') : undefined;
   const dockedRun = busy ? latestLive?.run ?? latestActiveRun : undefined;
@@ -221,9 +225,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing,
         site: browsingSiteOf(detail.events.filter(event => event.runId === dockedRun.id).map(event => event.message)) })
     : heldRun ? islandBeforeStreaming({ workers: [heldRun.snapshot.worker], pausing: true }) : undefined;
-  // The same state as one line in the chat, until the answer's text starts arriving.
+  // The same state as one line in the chat, until the answer's text starts arriving; while a card waits for the
+  // person, or they hold the browser, it says that instead of the step the run stopped on (COD-290).
+  const waitingLine = waitingStepLine(detail.browser, detail.desktop);
   const runStatus = dockedRun && !latestLive?.update.progress?.answer
-    ? runStepLine({ progress: latestLive?.update.progress, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
+    ? waitingLine ?? runStepLine({ progress: latestLive?.update.progress, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
     : undefined;
   // While a run uses Orglet's browser the island carries Watch, and Hand back once taken over, and waits with the card
   // (COD-261). Watch opens the live view, where the person takes the browser over.
@@ -430,8 +436,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     });
   };
 
-  return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
-    <div className="thread-content">
+  return <div className="thread-scroll" ref={viewport}>
+    <div className="thread-content" ref={threadContent}>
       {detail.task.sideOf && <p className="side-thread-origin">
         {/* Once an answer was brought in, the main chat did change; the line then says only what this chat is. */}
         <span>{detail.artifacts.some(artifact => broughtIn.has(artifact.id)) ? t('Chat phụ với {0}.', [sideThreadOrglet]) : t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
@@ -565,12 +571,14 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
                 </details> : <p className="muted" key={run.id}>{status} · {description}</p>;
               })}
             </div>}
-            {latest && busy && runStatus && <RunStatusLine line={runStatus} />}
+            {latest && busy && runStatus && <RunStatusLine line={runStatus} waiting={runStatus === waitingLine} />}
             {latest && busy && liveUpdate && <LiveRun update={liveUpdate} memories={live?.run.snapshot.context?.memories} />}
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
-            {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{turn.runs.some(run => run.status === 'interrupted') ? t('Lượt này dừng giữa chừng vì app đã đóng.') : t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
+            {/* A turn that ended without an answer keeps what became of it, also once newer messages follow (COD-290);
+                the latest turn's pause already says so in its own line. */}
+            {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && !(latest && detail.task.status === 'paused') && <TurnOutcomeLine outcome={unansweredTurnLine(turn.runs, headline)} />}
             {answered
               ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest)
               : heldRun
@@ -610,6 +618,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       actions={<ArtifactActions artifactId={savedReport.id} about={tMessage(savedReport.report.title)} action={action} />} />}
     <BrowserLiveViewer detail={detail} />
   </div>;
+}
+
+/** What became of a turn without an answer, one muted line; a long error is cut and kept whole in the tooltip. */
+function TurnOutcomeLine({ outcome }: { outcome: ReturnType<typeof unansweredTurnLine> }) {
+  return <p className="muted turn-outcome" title={outcome.detail ? outcome.text : undefined}>{outcome.text}</p>;
 }
 
 /**
