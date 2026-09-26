@@ -33,6 +33,9 @@ jobs:
       - run: pnpm audit --prod --audit-level=high
       - run: pnpm typecheck
       - run: pnpm test
+      # The UI kit as someone installing it would get it: publint reads its package.json, attw its types (COD-273).
+      - run: pnpm --filter @codepawl/orglet-ui build
+      - run: pnpm --filter @codepawl/orglet-ui check:package
   packaged:
     name: packaged
     runs-on: windows-latest

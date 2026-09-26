@@ -31,7 +31,8 @@ Run these locally before every pull request:
 | Command | What it does |
 |---|---|
 | `pnpm typecheck` | `tsc --noEmit` over the whole repo |
-| `pnpm test` | The vitest integration suite in `tests/integration` |
+| `pnpm test` | The vitest integration suite in `tests/integration`, and the UI kit's own tests in `packages/orglet-ui/test` |
+| `pnpm --filter @codepawl/orglet-ui build`, then `pnpm --filter @codepawl/orglet-ui check:package` | Builds the UI kit and checks the package someone would install: publint for its `package.json`, Are the Types Wrong for its types. Run it when you touch `packages/orglet-ui`. |
 | `pnpm i18n:keys` | Lists English translations that are missing or unused. Run it whenever you touch UI text. |
 
 The packaged smokes drive a real Electron window and are CI's job after typecheck and test. Run the ones that match your change when you touch packaging, preload, the isolation backend, or a smoke script:
@@ -68,7 +69,7 @@ Pull requests run three workflows. Docs-only changes trigger them too.
 
 | Workflow | File | What it runs | Merge gate |
 |---|---|---|---|
-| Windows desktop | [`desktop.yml`](.github/workflows/desktop.yml) | `pnpm audit --prod --audit-level=high`, `pnpm typecheck`, `pnpm test`; in parallel `pnpm make` and the packaged smokes, including `pnpm test:harness` | **Required**: the check named `test` |
+| Windows desktop | [`desktop.yml`](.github/workflows/desktop.yml) | `pnpm audit --prod --audit-level=high`, `pnpm typecheck`, `pnpm test`, the UI kit's build and package checks; in parallel `pnpm make` and the packaged smokes, including `pnpm test:harness` | **Required**: the check named `test` |
 | macOS desktop | [`macos.yml`](.github/workflows/macos.yml) | `pnpm typecheck`, `pnpm test`, `pnpm make`; signs when Developer ID secrets exist, notarizes on `main` | Runs on PRs; not the required check |
 | Linux desktop | [`linux.yml`](.github/workflows/linux.yml) | `pnpm typecheck`, `pnpm test`, `pnpm make`, a headless packaged smoke | Runs on PRs; not the required check |
 
@@ -94,7 +95,7 @@ Cursor, Copilot, Claude Code, Codex and similar tools are fine to use here. The 
 **What reviewers expect from an AI-assisted pull request:**
 
 - One change per pull request. An agent that "also fixed" something nearby has made a second pull request's worth of work; split it out or drop it.
-- Tests for the behaviour, in `tests/integration`, and the checks above actually run. Say in the pull request which ones you ran and which you did not.
+- Tests for the behaviour, in `tests/integration` (or `packages/orglet-ui/test` for a UI kit component), and the checks above actually run. Say in the pull request which ones you ran and which you did not.
 - Docs in the same pull request, in the register of the page you touch. A feature with no doc change is not finished.
 - UI copy added as Vietnamese source strings with English in `en.ts`, and `pnpm i18n:keys` clean.
 - No secrets, keys, `.env` files or SQLite databases in the diff, and no absolute paths from your machine in docs or tests.
