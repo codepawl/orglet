@@ -109,7 +109,10 @@ function isMissingPathResult(result: unknown): result is ReturnType<typeof missi
   return typeof result === 'object' && result !== null && (result as { missing?: unknown }).missing === true;
 }
 
-/** A folder, move or delete the helper refused before changing anything; the worker can correct it (COD-254). */
+/**
+ * A folder, move, delete or write the helper refused before changing anything; the worker can correct it (COD-254,
+ * COD-289). It completes in the journal, so it never blocks the chat as an unknown outcome.
+ */
 function isRefusedResult(result: unknown): result is { refused: true; error: string } {
   return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
 }
@@ -133,6 +136,7 @@ function copyEvent(request: WorkspaceOperation): string {
 function refusedEvent(request: WorkspaceOperation): string {
   if (request.operation === 'move') return `Không chuyển được: ${request.from} → ${request.to}`;
   if (request.operation === 'delete') return `Không xóa được: ${request.path}`;
+  if (request.operation === 'write') return `Không ghi được tệp: ${request.path}`;
   return `Không tạo được thư mục: ${'path' in request ? request.path : ''}`;
 }
 

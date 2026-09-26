@@ -217,13 +217,18 @@ it('offers no tool that applies a blocked hand-in, so a model cannot trigger it'
   // A model that names the command as a tool in the next turn is refused, and the blocked copy is left alone.
   const nextRun: Run = { ...run, id: id(), status: 'queued', startedAt: now(), error: null, errorCode: undefined, blockedHandIn: undefined };
   store.put('runs', nextRun, { column: 'task_id', value: task.id });
-  const adapter: ModelAdapter = { request: async () => ({
-    calls: [{ id: id(), name: 'applyBlockedHandIn', arguments: JSON.stringify({ taskId: task.id, runId: run.id }) }],
-    usage: { input: 10, output: 10 },
-  }) };
+  const refusals: unknown[] = [];
+  const adapter: ModelAdapter = { request: async messages => {
+    const last = messages.at(-1);
+    if (last?.role === 'tool') refusals.push(JSON.parse(String(last.content)));
+    return { calls: [{ id: id(), name: 'applyBlockedHandIn', arguments: JSON.stringify({ taskId: task.id, runId: run.id }) }], usage: { input: 10, output: 10 } };
+  } };
   const core = new CoreService(store, () => {}, async () => adapter, undefined, undefined, undefined, undefined, undefined, runtime());
   await core.runner.run(store.get<Task>('tasks', task.id), nextRun);
-  expect(store.get<Run>('runs', nextRun.id).error).toBe('Tool không được policy cho phép.');
+  // Each call comes back as "no such tool" (COD-289); a model that keeps calling it stops the run on the third.
+  expect(refusals).toHaveLength(2);
+  expect(refusals[0]).toMatchObject({ toolError: 'unknown', tool: 'applyBlockedHandIn' });
+  expect(store.get<Run>('runs', nextRun.id).error).toBe('Công cụ không có trong chat này: applyBlockedHandIn');
   expect(integrated).toEqual([]);
   expect(copyRecord().state).toBe('ready');
   expect(savedRun().blockedHandIn?.acceptedAt).toBeUndefined();
