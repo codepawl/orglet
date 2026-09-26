@@ -416,6 +416,12 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         const blockedCommands = !heldRun && unresolvedError?.errorCode === 'hand_in_blocked' ? unresolvedError.blockedHandIn?.commands : undefined;
         // Without that card (an earlier turn), the reason still sits under the turn.
         const blockedLines = heldRun || unresolvedError ? [] : blockedLinesOf(turn.runs);
+        // A question waits under the run that asked it: in a crew that is the lead's plan, not the combining step the
+        // turn is otherwise signed by.
+        const askingRun = latest && detail.task.status === 'waiting_input' && pendingDecision
+          ? detail.runs.find(run => run.id === pendingDecision.runId)
+          : undefined;
+        const waitingAuthor = askingRun ?? turn.author;
         return <div className="chat-turn" key={turn.revision}>
           {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
@@ -444,8 +450,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             {byline(reply.run)}
             {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest)}
           </section>)}
-          {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && (detail.task.status === 'waiting_input' || browserApproval || desktopApproval) ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [turn.author?.snapshot.worker.name ?? 'Orglet'])}>
-            {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(turn.author)}
+          {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && (detail.task.status === 'waiting_input' || browserApproval || desktopApproval) ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [waitingAuthor?.snapshot.worker.name ?? 'Orglet'])}>
+            {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(waitingAuthor)}
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && pendingDecision?.approval && <McpApprovalCard approval={pendingDecision.approval} busy={answeringDecision} sideThread={Boolean(detail.task.sideOf)}
               workerName={detail.runs.find(run => run.id === pendingDecision.runId)?.snapshot.worker.name ?? 'Orglet'}

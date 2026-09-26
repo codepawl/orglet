@@ -1967,7 +1967,11 @@ export class Runner {
    */
   private permissionsOffHint(run: Run, task: Task): { permissionsOff?: { names: string[]; where: string }; permissionsOffInstruction?: string } {
     // A run from before capabilities were frozen has no list; guessing it would name switches that are on.
-    if (run.snapshot.worker.provider === 'demo' || run.stage === 'member' || !run.snapshot.toolCapabilities) return {};
+    if (run.snapshot.worker.provider === 'demo' || !run.snapshot.toolCapabilities) return {};
+    // A crew's members hand in to the lead, and the lead's plan uses no tools at all: it only hands out the work. Told
+    // what is off there, a lead stopped the whole crew to ask for "Browser: Read and act" before members that could
+    // already search and read the web had started. The lead's combined answer still names what is off.
+    if (run.stage === 'member' || run.stage === 'plan') return {};
     const off = permissionsOff({
       capabilities: run.snapshot.toolCapabilities,
       workspacePermissions: run.snapshot.workspaceGrant?.permissions,
