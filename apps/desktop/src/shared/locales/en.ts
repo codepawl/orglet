@@ -725,6 +725,8 @@ export const en: Dictionary = {
   'Kiểu': 'Type',
   'Gộp phần việc của từng Tí thành một câu trả lời. Giữ nguyên chỗ các Tí không đồng ý với nhau và nói rõ còn thiếu bằng chứng nào.': 'Combine each orglet’s part into one answer. Keep the places where they disagree, and say which evidence is missing.',
   'Knowledge của Tí này chỉ nạp khi Tí đó chạy.': 'This orglet’s knowledge loads only when it runs.',
+  'Thẻ': 'Tags',
+  'ví dụ: khách hàng, giá': 'e.g. customers, pricing',
   'Knowledge của hội chỉ nạp khi chạy trong hội đó.': 'Crew knowledge loads only when running in that crew.',
   'Knowledge hiện tại thiếu revision tương ứng.': 'The current knowledge is missing its matching revision.',
   'Knowledge mới': 'New knowledge',

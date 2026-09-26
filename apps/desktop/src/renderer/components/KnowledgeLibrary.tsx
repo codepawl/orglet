@@ -95,7 +95,7 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
       {/* Five rows keep the last row, Always load, clear of the floating action bar at the default window size, with a
           scope note showing (COD-250, COD-287: six rows let the bar cover its switch); the box still resizes. */}
       <label><FieldLabel icon={FileText} required>{t('Nội dung')}</FieldLabel><Textarea rows={5} value={content} onChange={event => setContent(event.target.value)} required maxLength={8000} /></label>
-      <label><FieldLabel icon={Tag}>Tags</FieldLabel><Input value={tags} onChange={event => setTags(event.target.value)} placeholder="scoring, dataset" /></label>
+      <label><FieldLabel icon={Tag}>{t('Thẻ')}</FieldLabel><Input value={tags} onChange={event => setTags(event.target.value)} placeholder={t('ví dụ: khách hàng, giá')} /></label>
       <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
       {scope.startsWith('team:') && <p className="muted scope-note">{t('Knowledge của hội chỉ nạp khi chạy trong hội đó.')}</p>}
       {scope.startsWith('worker:') && <p className="muted scope-note">{t('Knowledge của Tí này chỉ nạp khi Tí đó chạy.')}</p>}
