@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
@@ -43,6 +43,36 @@ describe('Viewer', () => {
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(document.activeElement).toBe(opener);
+  });
+
+  it('leaves focus where an action inside it moved focus while closing it', async () => {
+    const user = userEvent.setup();
+    // As the app does: the link closes the viewer, and the panel it opens focuses its target once it has rendered.
+    function LinkHarness() {
+      const [open, setOpen] = useState(false);
+      const [target, setTarget] = useState<string>();
+      useEffect(() => {
+        if (target) document.getElementById(target)?.focus();
+      }, [target]);
+      const goToChecker = () => {
+        setOpen(false);
+        setTarget('checker-1');
+      };
+      return <>
+        <button type="button" onClick={() => setOpen(true)}>Open report</button>
+        <details id="checker-1" tabIndex={-1}><summary>Checker 1</summary></details>
+        <Viewer open={open} onClose={() => setOpen(false)} title="Report" closeLabel="Close document" closeIcon={<span>×</span>}>
+          <button type="button" onClick={goToChecker}>See checker 1</button>
+        </Viewer>
+      </>;
+    }
+    render(<LinkHarness />);
+    await user.click(screen.getByRole('button', { name: 'Open report' }));
+    await user.click(screen.getByRole('button', { name: 'See checker 1' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Radix hands focus back after closing on a timer; give it the chance to run.
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(document.activeElement?.id).toBe('checker-1');
   });
 
   it('shows the meta line under the title when given', async () => {

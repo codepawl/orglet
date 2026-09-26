@@ -19,16 +19,24 @@ export function keepOpenForPopup(event: KeyboardEvent) {
  * Gives focus back to what opened a dialog when it closes. Radix only returns focus to a `Dialog.Trigger`, and the kit's
  * dialogs open from state with no trigger, so focus used to fall to the page. Spread the result on `Dialog.Content`;
  * `onOpenAutoFocus` is the caller's own handler, run after the opener is remembered.
+ *
+ * Focus goes back only when it would otherwise be lost: on the page, or still inside the dialog that closed. An action
+ * in the dialog that closes it and deliberately focuses something else, such as a link to one checker in a report,
+ * keeps that focus.
  */
 export function useReturnFocus(onOpenAutoFocus?: (event: Event) => void) {
   const opener = useRef<HTMLElement | null>(null);
+  const dialog = useRef<Element | null>(null);
   const rememberOpener = (event: Event) => {
     opener.current = document.activeElement as HTMLElement | null;
+    dialog.current = event.target instanceof Element ? event.target : null;
     onOpenAutoFocus?.(event);
   };
   const focusOpener = (event: Event) => {
     event.preventDefault();
-    if (opener.current?.isConnected) opener.current.focus();
+    const focused = document.activeElement;
+    const focusLost = !focused || focused === document.body || Boolean(dialog.current?.contains(focused));
+    if (focusLost && opener.current?.isConnected) opener.current.focus();
   };
   return { onOpenAutoFocus: rememberOpener, onCloseAutoFocus: focusOpener };
 }
