@@ -61,6 +61,8 @@ import type { WebSearchRuntime, WebSearchSettings } from './tools/web-search';
 import { WebTools } from './tools/web-tools';
 import { webNetwork } from './tools/web-network';
 import { WEB_SEARCH_TEST_QUERY, type WebSearchTest } from '../shared/web-tools';
+import { BrowserTools } from './tools/browser-tools';
+import type { BrowserHost } from '../shared/browser-host';
 
 /**
  * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
@@ -111,6 +113,8 @@ export class CoreService {
   readonly sideThreads: SideThreads;
   /** Search across every message, answer and name (COD-267). */
   readonly chatSearch: ChatSearch;
+  /** The core side of Orglet's browser: site rules, the journal and screenshots (COD-261). */
+  readonly browser: BrowserTools;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
   readonly harnessAccounts: HarnessAccounts;
@@ -119,7 +123,7 @@ export class CoreService {
   private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
   private modelListEpoch = new Map<ModelListProviderId, number>();
   private modelListFailed = new Set<ModelListProviderId>();
-  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor, private webSearchRuntime: WebSearchRuntime = {}) {
+  constructor(readonly store: Store, private notify: () => void, adapter: (provider: string, model?: string) => Promise<ModelAdapter>, profiler?: ProfileExecutor, private clock: () => Date = () => new Date(), private harness: HarnessRuntime = localHarnessRuntime(), private fetchRate: RateFetcher = fetchUsdRate, private modelListRuntime: ModelListRuntime = {}, private workspaceRuntime?: WorkspaceRuntime, mcpRuntime: McpRuntime = {}, pdfText?: PdfTextExtractor, private webSearchRuntime: WebSearchRuntime = {}, browserHost?: BrowserHost) {
     this.policy = new WorkPolicy(store, clock);
     this.knowledge = new KnowledgeBase(store);
     this.chatSearch = new ChatSearch(store);
@@ -131,7 +135,8 @@ export class CoreService {
     this.templates = new TeamTemplates(store, this.notify);
     this.appProposals = new AppProposals(store, this.proposalApplier());
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
-    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings());
+    this.browser = new BrowserTools(store, browserHost);
+    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings(), this.browser);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
     this.routineFolders = new RoutineFolders(store);
@@ -339,6 +344,29 @@ export class CoreService {
         if (!input.allowed) this.sideThreads.narrowMcpGrants(updated);
         this.notify();
         return;
+      }
+      case 'setBrowser': {
+        const input = commands.setBrowser.parse(args);
+        const task = this.liveTask(input.taskId);
+        // A side thread always uses its main chat's browser, narrowed to it (COD-247, COD-261).
+        if (task.sideOf) throw new Error('Chat phụ dùng trình duyệt của chat chính. Đổi ở chat chính.');
+        const before = this.browser.choiceFor(task);
+        const updated = this.store.patchTask(task.id, { browser: input.browser });
+        // A run keeps the profile it started with, so switching profile stops the running ones, as a revoke does. A
+        // shorter list needs no stop: every step is checked against the list as it is now.
+        if (before.profileId !== input.browser.profileId) {
+          this.teams.cancel(task.id);
+          this.runner.cancel(task.id);
+          for (const side of this.sideThreads.of(task.id)) this.stopRuns(side.id);
+        }
+        this.sideThreads.narrowBrowser(updated);
+        this.notify();
+        return;
+      }
+      case 'browserActions': return this.browser.actions(this.liveTask(commands.browserActions.parse(args).taskId).id);
+      case 'browserScreenshot': {
+        const input = commands.browserScreenshot.parse(args);
+        return this.browser.screenshot(this.liveTask(input.taskId).id, input.id);
       }
       case 'answerDecision': {
         const input = commands.answerDecision.parse(args);
@@ -1146,6 +1174,7 @@ export class CoreService {
       workerId: main.workerId, brief: input.brief, sourceIds, excludedSources: input.excludedSources,
       consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(main) ?? input.budgetMicros,
       ...(main.toolCapabilities ? { toolCapabilities: [...main.toolCapabilities] } : {}),
+      ...(main.browser ? { browser: structuredClone(main.browser) } : {}),
     });
     task.sideOf = { taskId: main.id, throughRevision: main.inputRevision ?? 0 };
     if (main.mcpGrants?.length) task.mcpGrants = main.mcpGrants.map(grant => ({ ...grant }));
@@ -1214,6 +1243,7 @@ export class CoreService {
         db.prepare('DELETE FROM settings WHERE id=?').run(`workspace-retired:${run.id}`);
         db.prepare('DELETE FROM leases WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM app_proposals WHERE run_id=?').run(run.id);
+        this.browser.deleteRun(run.id);
       }
       db.prepare('DELETE FROM profiles WHERE task_id=?').run(task.id);
       db.prepare('DELETE FROM preflights WHERE task_id=?').run(task.id);

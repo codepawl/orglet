@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Routine, TaskInput, Worker, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
-import { CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
+import { AppWindow, ShieldCheck, CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
 import { TimeZone } from '../../shared/schedule';
@@ -17,6 +17,9 @@ import { triggerOf, type RoutineTrigger, type RoutineTriggerKind } from '../../s
 import { toast } from './toast';
 import { Avatar, RosterAvatars } from './Avatar';
 import { teamRoster } from '../assignees';
+import { BrowserSitesEditor, profileOptions, useBrowserState } from './BrowserSettings';
+import { browserLevelOf, browserLevels, capabilitiesWithBrowserLevel, defaultBrowserChoice, type BrowserLevel, type BrowserProfileId, type BrowserSite } from '../../shared/browser';
+import { snapshotCapabilities } from '../../shared/tool-policy';
 
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
 export const formatRoutineTime = (iso: string, timeZone: string) => new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' });
@@ -129,6 +132,11 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const [triggerKind, setTriggerKind] = useState<RoutineTriggerKind>(initialTrigger?.kind ?? 'schedule');
   const [folder, setFolder] = useState<{ folderId: string; name: string } | undefined>(initialTrigger?.kind === 'folder' ? { folderId: initialTrigger.folderId, name: initialTrigger.folderName } : undefined);
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  // A schedule may read pages with the profile and site list saved here; saving is what approves them (COD-261).
+  const [browserLevel, setBrowserLevel] = useState<BrowserLevel>(browserLevelOf(initial?.toolCapabilities ?? []));
+  const [browserProfile, setBrowserProfile] = useState<BrowserProfileId>((initial?.browser ?? defaultBrowserChoice()).profileId);
+  const [browserSites, setBrowserSites] = useState<BrowserSite[]>(initial?.browser?.sites ?? []);
+  const browser = useBrowserState();
   const zoneInput = useRef<HTMLInputElement>(null);
   const zoneError = error.startsWith('Timezone');
   const team = workspace.teams.find(team => `team:${team.id}` === target);
@@ -143,7 +151,12 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
   const destination = providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo');
   // Leaving asks for confirmation only when something differs from what the editor opened with.
-  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId]);
+  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`)]);
+  // The permissions the saved task carries: what it had, with the browser at the level chosen here.
+  const leadProvider = (workspace.workers.find(worker => worker.id === (team?.synthesizerId ?? target)) ?? workspace.workers[0]).provider;
+  const toolCapabilities = browserLevel === 'read'
+    ? capabilitiesWithBrowserLevel(initial?.toolCapabilities ?? snapshotCapabilities(leadProvider), 'read')
+    : initial?.toolCapabilities && capabilitiesWithBrowserLevel(initial.toolCapabilities, 'none');
   const trigger: RoutineTrigger | undefined = triggerKind === 'folder'
     ? folder && { kind: 'folder', folderId: folder.folderId, folderName: folder.name }
     : { kind: triggerKind };
@@ -169,7 +182,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       // the worker, skill, team or model has changed since, and a restored backup comes back off and unapproved.
       // An event trigger still carries the time fields, valid ones, so switching back to the clock keeps them.
       const zone = TimeZone.safeParse(timeZone).success ? timeZone : Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { frequency, weekday, time, timeZone: zone }, trigger, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers } });
+      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { frequency, weekday, time, timeZone: zone }, trigger, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers,
+        ...(toolCapabilities ? { toolCapabilities } : {}), ...(browserLevel === 'read' ? { browser: { profileId: browserProfile, sites: browserSites } } : {}) } });
       saved();
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }}>
@@ -225,13 +239,23 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
     <section className="routine-group" aria-labelledby="routine-group-limits">
       <h4 id="routine-group-limits">{t('Giới hạn & quyền')}</h4>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} required /></label>
+      <Select label={<FieldLabel icon={AppWindow}>{t('Trình duyệt')}</FieldLabel>} value={browserLevel} onChange={value => setBrowserLevel(value as BrowserLevel)}
+        options={browserLevels.map(level => ({ value: level, label: level === 'read' ? t('Đọc trang') : t('Không dùng trình duyệt') }))} />
+      {browserLevel === 'read' && <div className="routine-browser">
+        <Select label={<FieldLabel icon={UserRound}>{t('Hồ sơ trình duyệt')}</FieldLabel>} value={browserProfile} onChange={value => setBrowserProfile(value as BrowserProfileId)} options={profileOptions(browser.state, browserProfile)} />
+        <div className="routine-browser-sites">
+          <FieldLabel icon={ShieldCheck}>{t('Trang')}</FieldLabel>
+          <BrowserSitesEditor sites={browserSites} disabled={busy} onChange={setBrowserSites} />
+        </div>
+        <p className="muted">{t('Lịch chỉ đọc trang, không bấm hay gửi gì. Trang trên máy này hoặc mạng nội bộ cần có trong danh sách; hồ sơ đã đăng nhập chỉ mở trang được phép.')}</p>
+      </div>}
       <SwitchField checked={enabled} onChange={setEnabled}>{t('Bật lịch')}</SwitchField>
       {/* Where the data goes is worth saying; it just is not worth asking about twice, since saving is the
           permission (user, 2026-09-19). It stays as a plain line rather than a tick. */}
       {enabled && <p className="muted">{sources.length > 0
         ? t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, destination])
         : t('Mỗi lần chạy gửi brief này {0}, trong giới hạn trên.', [destination])}</p>}
-      <p className="muted">{t('Đổi Tí, skill, hội hay model thì cần lưu lịch lại.')}</p>
+      <p className="muted">{browserLevel === 'read' ? t('Đổi Tí, skill, hội, model, hồ sơ hay danh sách trang thì cần lưu lịch lại.') : t('Đổi Tí, skill, hội hay model thì cần lưu lịch lại.')}</p>
     </section>
     <div className="sticky-actions">{error && !zoneError ? <p className="form-error" role="alert">{error}</p> : null}<Button type="button" variant="outline" disabled={busy} onClick={back}><ArrowLeft size={16} />{t('Quay lại')}</Button><Button variant="primary" disabled={busy}>{t('Lưu lịch')}</Button></div>
   </form>;

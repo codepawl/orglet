@@ -3,6 +3,7 @@ import { liveWorkerTask } from '../../shared/live-task';
 import { mcpCallGranted, type McpGrant } from '../../shared/mcp';
 import { canStartSideThread, ChatQuote, MAX_CHAT_QUOTES, quoteText } from '../../shared/side-threads';
 import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
+import { defaultBrowserChoice, narrowBrowserChoice } from '../../shared/browser';
 import { Store, id, now } from '../storage/database';
 import type { WorkspaceGrants } from '../storage/workspace-grants';
 
@@ -83,6 +84,18 @@ export class SideThreads {
       const current = side.mcpGrants ?? [];
       const kept = current.filter(grant => mainChatGives(main.mcpGrants, grant));
       if (kept.length !== current.length) this.store.patchTask(side.id, { mcpGrants: kept });
+    }
+  }
+
+  /**
+   * After the main chat's browser changed (COD-261): each side thread keeps its copy inside the main chat's, the same
+   * narrowing every browser step applies anyway, so what Details shows for a side thread matches what it may use.
+   */
+  narrowBrowser(main: Task) {
+    const mainChoice = main.browser ?? defaultBrowserChoice();
+    for (const side of this.of(main.id)) {
+      const narrowed = narrowBrowserChoice(side.browser ?? defaultBrowserChoice(), mainChoice);
+      if (JSON.stringify(narrowed) !== JSON.stringify(side.browser ?? defaultBrowserChoice())) this.store.patchTask(side.id, { browser: narrowed });
     }
   }
 

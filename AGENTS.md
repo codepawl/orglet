@@ -49,6 +49,7 @@ Renderer talks to core through `preload` → typed `Bridge` / `commands` in `app
 | Orglet and crew chat, side threads, group chats, `@` tags, replies, reactions | [docs/team-chat.md](docs/team-chat.md) | `core/orchestration/team.ts`, `shared/live-task.ts`, `shared/message-interactions.ts` |
 | Permissions, working folder, commands, web tools, app-change proposals | [docs/agent-tools.md](docs/agent-tools.md) | `core/tools/catalog.ts`, `core/orchestration/app-proposals.ts` |
 | MCP servers, per-orglet choice, approving calls, secrets in main | [docs/mcp.md](docs/mcp.md) | `core/tools/mcp.ts`, `shared/mcp.ts`, `main/mcp-secrets.ts` |
+| Orglet's browser: reading pages, profiles, site lists, the journal | [docs/browser.md](docs/browser.md) | `core/tools/browser-tools.ts`, `core/tools/browser-policy.ts`, `browser/` (host process), `main/browser-*.ts` |
 | Memory | [docs/memory.md](docs/memory.md) | `core/context/knowledge.ts` |
 | Self-improvement proposals | [docs/self-improvement.md](docs/self-improvement.md) | `core/orchestration/self-improvement.ts` |
 | The trace in the chat and the diff | [docs/worker-actions.md](docs/worker-actions.md) | `renderer/components/LiveRun.tsx`, `core/tools/workspace-diff.ts` |

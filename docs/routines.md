@@ -40,6 +40,10 @@ Changing the trigger or picking another folder is a new save, so it is approved 
 
 When a batch cannot start (the routine changed and needs saving, the folder was replaced), the routine shows the reason as **The schedule did not run** in **Schedules** until you dismiss it. There is nothing to catch up: the files stay where they are, and the ones that were handed to the failed batch do not run again.
 
+### Reading pages on a routine's run
+
+A routine may read pages in Orglet's browser ([browser.md](browser.md)) when its editor sets **Browser** to **Read pages**. The routine's task then carries `browser.read`, a profile and a site list, and all three are part of `approvedConfig`: a routine whose browser settings differ from the ones it was saved with does not run until it is saved again. A routine without the browser keeps the fingerprint shape it had before, so no existing approval changed. Reading needs no one to answer a card, so it can run unattended; acting on pages, when it exists, will not.
+
 ### No MCP tools on a routine's run
 
 Every run a routine starts, on the clock, on a new file or from `orglet run`, is a task with the routine's id, and such a task is never offered MCP tools, even when its orglet has MCP servers (COD-241). An MCP call asks the person first, and nobody is there to answer for an unattended run. The orglet works with its other tools and the attached files; to use MCP, send the same request in its chat.

@@ -39,6 +39,11 @@ import type { Incoming, SendToState } from '../shared/incoming';
 import { LINK_SCHEME, parseLaunchArguments, resolveLinkChat, type LaunchRequest } from './launch-requests';
 import { importSentFiles, isKeptOffSendTo, keepOffSendTo, SendToInstaller, SentFilesHandOff, type PathKind, type ShortcutFiles } from './send-to';
 import { BackgroundNotice } from '../shared/background-notice';
+import { BrowserHostProcess } from './browser-host';
+import { BrowserProfiles } from './browser-profiles';
+import { detectBrowser } from '../browser/detect';
+import { BrowserHostRequest } from '../shared/browser-host';
+import { CLEAN_BROWSER_PROFILE, type BrowserState } from '../shared/browser';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -55,6 +60,11 @@ let mcpSecrets: McpSecretStore;
 let webSearchKeys: WebSearchKeys;
 /** The MCP server processes the core reports running, so they stop even when the core cannot stop them (COD-241). */
 let mcpProcesses: ProcessIdentity[] = [];
+/** Orglet's browser (COD-261): the host process main starts on demand, and the named profiles main keeps. */
+let browserHost: BrowserHostProcess | undefined;
+let browserProfiles: BrowserProfiles;
+/** Set once the browser windows were asked to close at quit, so the second before-quit goes straight through. */
+let browserClosing = false;
 let ready = false;
 let updater: Updater;
 let changelog: ChangelogFeed;
@@ -281,11 +291,41 @@ function useSpellCheckerLanguage(next: Language) {
   if (!session.defaultSession.availableSpellCheckerLanguages.includes(dictionary)) return;
   session.defaultSession.setSpellCheckerLanguages([dictionary]);
 }
+/** What Settings → Browser shows: the browser found and each named profile, open or not. Never a folder. */
+async function browserState(): Promise<BrowserState> {
+  const found = detectBrowser();
+  const open = await browserHost?.requestIfRunning({ kind: 'openProfiles' }).catch(() => []) as string[] | undefined;
+  const profiles = await browserProfiles.list();
+  return {
+    browser: found ? { kind: found.kind, name: found.name, version: found.version } : null,
+    profiles: profiles.map(profile => ({ ...profile, open: open?.includes(profile.id) ?? false })),
+  };
+}
+/** The kinds of request the core may send the host; Settings' own requests (sign-in windows) come only from main. */
+const CORE_BROWSER_KINDS = new Set(['open', 'snapshot', 'screenshot', 'scroll', 'tabs', 'close', 'endRun', 'show']);
+/** Passes one of the core's browser steps to the host, after checking a named profile still exists. */
+async function relayBrowser(id: string, raw: unknown) {
+  const reply = (args: unknown) => { if (ready) core.postMessage({ id, command: 'browserReply', args }); };
+  try {
+    const request = BrowserHostRequest.parse(raw);
+    if (!CORE_BROWSER_KINDS.has(request.kind)) throw new Error('Yêu cầu trình duyệt không hợp lệ.');
+    if (request.kind === 'open' && request.profileId !== CLEAN_BROWSER_PROFILE) {
+      if (!await browserProfiles.has(request.profileId)) throw new Error('Hồ sơ trình duyệt của chat này không còn nữa. Chọn hồ sơ khác trong Chi tiết.');
+      await browserProfiles.touch(request.profileId).catch(() => {});
+    }
+    if (!browserHost) throw new Error('Trình duyệt chưa sẵn sàng.');
+    reply({ ok: true, value: await browserHost.request(request, id) });
+  } catch (error) {
+    reply({ ok: false, error: error instanceof z.ZodError ? 'Yêu cầu trình duyệt không hợp lệ.' : error instanceof Error ? error.message : 'Trình duyệt gặp lỗi.' });
+  }
+}
 async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
   credentials = new Credentials(directory);
   mcpSecrets = new McpSecretStore(directory, safeStorage);
   webSearchKeys = new WebSearchKeys(directory, safeStorage);
+  browserProfiles = new BrowserProfiles(join(directory, 'browser'));
+  browserHost = new BrowserHostProcess(browserProfiles.profilesRoot);
   const workspaceRuntimePaths = app.isPackaged ? {
     sandboxExecutable: join(process.resourcesPath, 'wxc-exec.exe'),
     helperPath: join(process.resourcesPath, 'workspace-helper.cjs'),
@@ -328,6 +368,8 @@ async function start() {
         mcpProcesses = z.array(ProcessEntry).max(64).catch([]).parse(message.processes);
         return;
       }
+      if (message.type === 'browser' && typeof message.id === 'string') { void relayBrowser(message.id, message.request); return; }
+      if (message.type === 'browserCancel' && typeof message.id === 'string') { browserHost?.cancel(message.id); return; }
       if (message.type === 'profileCancel') { cancelProfile(message.id); return; }
       if (message.type === 'profile') {
         try { core.postMessage({ id: message.id, command: 'profileReply', args: { ok: true, value: await executeProfile(message.id, message.input) } }); }
@@ -412,6 +454,11 @@ async function start() {
     if (!Object.hasOwn(commands, envelope.command)) throw new Error(`Bản Orglet đang chạy không có lệnh "${envelope.command}": giao diện và phần lõi đang khác phiên bản. Tải lại cửa sổ (Ctrl+R) hoặc khởi động lại app.`);
     const command = envelope.command as Command;
     const args = commands[command].parse(envelope.args);
+    // A chat may only name a browser profile main still has (COD-261); the core never sees the list.
+    if (command === 'setBrowser') {
+      const choice = commands.setBrowser.parse(args).browser;
+      if (choice.profileId !== CLEAN_BROWSER_PROFILE && !await browserProfiles.has(choice.profileId)) throw new Error('Không tìm thấy hồ sơ trình duyệt này.');
+    }
     const result = await request(command, args);
     // The core forgot the connection; its key goes with it, so no secret is left behind that nothing points at.
     if (command === 'deleteCustomConnection') {
@@ -426,6 +473,38 @@ async function start() {
     return result;
   });
   handle('orglet:about', async () => aboutInfo());
+  // Settings → Browser (COD-261). The window names profiles by id; their folders stay here and in the host.
+  handle('orglet:browser-state', async () => browserState());
+  handle('orglet:browser-create', async raw => { await browserProfiles.create(raw); return browserState(); });
+  handle('orglet:browser-open', async raw => {
+    const profileId = Id.parse(raw);
+    if (!await browserProfiles.has(profileId)) throw new Error('Không tìm thấy hồ sơ trình duyệt này.');
+    if (!detectBrowser()) throw new Error('Không tìm thấy Chrome hay Edge trên máy này. Cài một trong hai rồi thử lại.');
+    await browserHost!.request({ kind: 'openProfile', profileId });
+    await browserProfiles.touch(profileId);
+    return browserState();
+  });
+  handle('orglet:browser-close', async raw => {
+    await browserHost!.requestIfRunning({ kind: 'closeProfile', profileId: Id.parse(raw) });
+    return browserState();
+  });
+  handle('orglet:browser-clear', async raw => {
+    const profileId = Id.parse(raw);
+    await browserHost!.requestIfRunning({ kind: 'closeProfile', profileId });
+    await browserProfiles.clear(profileId);
+    return browserState();
+  });
+  handle('orglet:browser-delete', async raw => {
+    const profileId = Id.parse(raw);
+    await browserHost!.requestIfRunning({ kind: 'closeProfile', profileId });
+    await browserProfiles.remove(profileId);
+    return browserState();
+  });
+  handle('orglet:browser-show', async raw => {
+    const runId = z.union([Id, z.null()]).parse(raw);
+    const shown = await browserHost!.requestIfRunning({ kind: 'show', runId }) as { shown?: boolean } | undefined;
+    return shown?.shown === true;
+  });
   // The renderer names a link; the address comes from the allowlist, so nothing shown in the window can choose one.
   handle('orglet:open-link', async raw => { await shell.openExternal(ABOUT_LINKS[AboutLink.parse(raw)]); });
   handle('orglet:changelog', async raw => changelog.read(z.boolean().default(false).parse(raw)));
@@ -736,7 +815,14 @@ else {
   });
   app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
   app.on('window-all-closed', () => app.quit());
-  app.on('before-quit', () => {
+  app.on('before-quit', event => {
+    // The browser's windows close first, so no Chrome or Edge window Orglet drove outlives the app (COD-261).
+    if (browserHost?.running && !browserClosing) {
+      event.preventDefault();
+      browserClosing = true;
+      void browserHost.stop().finally(() => app.quit());
+      return;
+    }
     // MCP servers run under the core (COD-241). The core is told first, so it closes the servers it holds while main
     // checks and stops the ones it reported; only a process still the one Orglet started is stopped here.
     if (ready) core?.postMessage({ id: randomUUID(), command: 'shutdown', args: undefined });

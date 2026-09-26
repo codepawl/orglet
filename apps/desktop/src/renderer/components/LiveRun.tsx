@@ -170,17 +170,40 @@ function receiptOf(step: ActivityStep | undefined): string {
  * (planning, handing out, combining, a read it did itself, waiting for a turn). No receipt, because nothing finer
  * than these is observed. Details (versions, paths, costs) stay in Chi tiết. The first of `workers` is the run's own.
  */
-export function islandBeforeStreaming({ workers, stage, message, pausing }: { workers: readonly Worker[]; stage?: Run['stage']; message?: string; pausing: boolean }): IslandView {
-  return islandFor(doingBeforeStreaming({ stage, message, pausing }), workers);
+export function islandBeforeStreaming({ workers, stage, message, pausing, site }: { workers: readonly Worker[]; stage?: Run['stage']; message?: string; pausing: boolean; site?: string }): IslandView {
+  return islandFor(doingBeforeStreaming({ stage, message, pausing, site }), workers);
 }
 
-function doingBeforeStreaming({ stage, message, pausing }: { stage?: Run['stage']; message?: string; pausing: boolean }): Doing {
-  const read = message?.match(/^Đã đọc (.+)$/);
+/** The site a browser event names ("Đã mở trang example.com"), or undefined for any other line (COD-261). */
+function browserSiteOfEvent(message: string): string | undefined {
+  if (message === 'Đã đọc trang web dưới dạng dữ liệu không đáng tin.') return undefined;
+  const step = /^(?:Đã mở trang|Đã đọc trang|Đã chụp màn hình|Đã cuộn trang) (.+)$/.exec(message);
+  if (step) return step[1];
+  return /^Đã tìm trên trang ([^:\s]+):/.exec(message)?.[1];
+}
+
+/**
+ * The site a run's browser is on, from its latest browser step: none before it opened a page or once it closed its
+ * tab. The island keeps naming it while the model thinks between steps (COD-261).
+ */
+export function browsingSiteOf(messages: readonly string[]): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (messages[index] === 'Đã đóng một tab trình duyệt.') return undefined;
+    const site = browserSiteOfEvent(messages[index]);
+    if (site) return site;
+  }
+  return undefined;
+}
+
+function doingBeforeStreaming({ stage, message, pausing, site }: { stage?: Run['stage']; message?: string; pausing: boolean; site?: string }): Doing {
+  const read = message && !browserSiteOfEvent(message) ? message.match(/^Đã đọc (.+)$/) : null;
+  const browsing = (message ? browserSiteOfEvent(message) : undefined) ?? site;
   if (pausing) return pausingDoing;
   if (stage === 'plan' || message === 'Đang phân việc.') return { state: 'thinking', sentence: name => t('{0} đang phân việc…', [name]), line: () => t('Đang phân việc…') };
   if (stage === 'member') return { state: 'thinking', sentence: name => t('Đang giao {0}…', [name]), line: () => t('Đang làm phần việc được giao…') };
   if (stage === 'synthesis' || message?.startsWith('Đang tổng hợp')) return { state: 'writing', sentence: name => t('{0} đang tổng hợp…', [name]), line: () => t('Đang tổng hợp…') };
   if (read) return { state: 'reading', sentence: name => t('{0} đang đọc {1}…', [name, read[1]]), line: () => t('Đang đọc {0}…', [read[1]]) };
+  if (browsing && !message?.startsWith('Đang chờ lượt')) return { state: 'reading', sentence: name => t('{0} đang xem {1}…', [name, browsing]), line: () => t('Đang xem {0}…', [browsing]) };
   if (message?.startsWith('Đang chờ lượt')) return { state: 'waiting', sentence: name => t('{0} đang chờ lượt…', [name]), line: () => t('Đang chờ lượt…') };
   if (message === 'Model đang trả kết quả…') return writingDoing;
   return thinkingDoing;
