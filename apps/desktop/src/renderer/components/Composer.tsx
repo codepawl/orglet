@@ -13,7 +13,7 @@ import { providerLabel, settingsTabFor, type Readiness } from './providers';
 import { t, tMessage } from '../i18n';
 import { taskWorkers } from '../assignees';
 import { orglet } from '../api';
-import { briefWithReaction, clearReplyTarget, useReplyTarget } from './messageMarks';
+import { clearReplyTarget, useReplyTarget } from './messageMarks';
 import { IslandDock } from './islandDock';
 import { RowMenu } from './RowMenu';
 import { toast } from './toast';
@@ -290,9 +290,6 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
   const missing = providers.filter(provider => !ready[provider]);
   const selectedReply = useReplyTarget();
   const reply = selectedReply?.taskId === detail.task.id ? selectedReply : undefined;
-  // Only the newest answer can be marked as the one to keep going from; an older thumb is history, not an instruction.
-  const latestAnswer = detail.artifacts.at(-1)?.id;
-  const reaction = detail.task.messageReactions?.findLast(item => item.messageId === latestAnswer && item.actor === 'user')?.emoji;
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0;
   // An MCP approval card is answered with its buttons; typing sends a new message instead (COD-241).
@@ -305,7 +302,9 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
       action(async () => { try { await orglet.call('answerDecision', { taskId: detail.task.id, requestId: pendingDecision.id, answer: extra }); setText(current => current === text ? '' : current); clearReplyTarget(); } finally { setSubmitting(false); } });
       return;
     }
-    const brief = briefWithReaction(extra, reaction);
+    // The person's reaction on the previous answer reaches the orglet from the core (`previousAnswerReaction`), not
+    // as words added to what they typed.
+    const brief = extra;
     const sent = added.sources;
     action(async () => {
       try {

@@ -1,5 +1,5 @@
 import type { Run, Task } from '../../shared/contracts';
-import { MessageReaction, SetMessageReaction, SetUserReaction, turnMessageId } from '../../shared/message-interactions';
+import { MessageReaction, SetMessageReaction, SetUserReaction, turnMessageId, type Reaction } from '../../shared/message-interactions';
 import { Store, now } from '../storage/database';
 
 /** `workerId` names the worker who wrote an answer or team message, so a worker can be kept off its own messages. */
@@ -45,6 +45,24 @@ export class MessageInteractions {
       return { id: messageId, kind: 'team', author: sender, excerpt: excerpt(message.body), workerId: message.senderId };
     }
     throw new Error('Không tìm thấy tin nhắn trong cuộc trò chuyện này.');
+  }
+
+  /**
+   * The person's reaction on the newest answer before turn `revision`, which that turn's run is told about. Only the
+   * newest answer counts: an older thumb is history, not an instruction. The window used to write this into the
+   * person's message, so it showed in their bubble as words they never typed (dogfood, 2026-09-26).
+   */
+  previousAnswerReaction(taskId: string, revision: number): { messageId: string; reaction: Reaction } | undefined {
+    const detail = this.store.detail(taskId);
+    const earlierAnswers = detail.artifacts.filter(artifact => {
+      const owner = detail.runs.find(run => run.id === artifact.runId);
+      return owner !== undefined && (owner.snapshot.inputRevision ?? 0) < revision;
+    });
+    const newest = earlierAnswers.at(-1);
+    if (!newest) return undefined;
+    const reaction = detail.task.messageReactions?.findLast(item => item.messageId === newest.id && item.actor === 'user');
+    if (!reaction) return undefined;
+    return { messageId: newest.id, reaction: reaction.emoji };
   }
 
   /** Explicit desired state makes duplicate IPC requests harmless. */

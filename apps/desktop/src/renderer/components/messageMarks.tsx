@@ -86,8 +86,3 @@ export function clearReplyTarget() {
 export function useReplyTarget() {
   return useSyncExternalStore(subscribe, () => target, () => undefined);
 }
-
-export function briefWithReaction(text: string, reaction?: Reaction) {
-  if (!reaction) return text;
-  return `${t('Mình vừa thả {0} cho câu trả lời trước. {1}', [reactionEmoji[reaction], reactionMeanings[reaction]])}\n\n${text}`;
-}
