@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, CircleAlert, CircleCheck, Info, Trash } from 'lucide-react';
 import { Button, Drawer } from './ui';
-import { clearNotices, collapseNotices, isUnreadNotice, markNoticesSeen, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, useNotices, type NoticeKind, type NoticeRow } from './notifications';
+import { clearNotices, collapseNotices, isUnreadNotice, markNoticesSeen, newNoticesFirst, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, useNotices, type NoticeKind, type NoticeRow } from './notifications';
 import { clockLabel, dayLabel } from './TimeMark';
 import { t, tMessage } from '../i18n';
 
@@ -34,8 +34,8 @@ export function NoticeCentre({ open, onClose, onOpenChat, chatExists }: { open: 
 
   const rows = useMemo(() => {
     const newestFirst = [...notices].reverse().filter(notice => kind === 'all' || notice.kind === kind);
-    return collapseNotices(newestFirst);
-  }, [notices, kind]);
+    return newNoticesFirst(collapseNotices(newestFirst), newSince);
+  }, [notices, kind, newSince]);
   const groupLabels = useMemo(() => noticeGroupLabels(rows, newSince, t('Mới'), dayLabel), [rows, newSince]);
   const counts = useMemo(() => {
     const total: Record<string, number> = { all: notices.length };

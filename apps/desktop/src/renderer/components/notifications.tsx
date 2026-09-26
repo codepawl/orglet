@@ -142,8 +142,21 @@ export function collapseNotices(newestFirst: Notice[]): NoticeRow[] {
 }
 
 /**
+ * Rows in the order the centre lists them: what arrived since it was last opened first, then the rest, each part
+ * newest first. A confirmation is never new (COD-255), so a newer "Saved" can sit above an older side-thread answer
+ * in time; without this the answer's "new" heading split one day into two (dogfood, 2026-09-26).
+ */
+export function newNoticesFirst(rows: NoticeRow[], newSince: number | null): NoticeRow[] {
+  if (newSince === null) return rows;
+  const unread = rows.filter(row => isUnreadNotice(row.notice, newSince));
+  const read = rows.filter(row => !isUnreadNotice(row.notice, newSince));
+  return [...unread, ...read];
+}
+
+/**
  * The heading each row sits under: "new" for what arrived since the centre was last opened, then the day for the
- * rest, so a new notice never hides among old ones (user, 2026-09-23). Rows are newest first, so new ones lead.
+ * rest, so a new notice never hides among old ones (user, 2026-09-23). Give it rows from `newNoticesFirst`, so the
+ * new ones lead and each heading shows once.
  */
 export function noticeGroupLabels(rows: NoticeRow[], newSince: number | null, newLabel: string, dayOf: (iso: string) => string) {
   return rows.map(row => newSince !== null && isUnreadNotice(row.notice, newSince) ? newLabel : dayOf(row.notice.at));
