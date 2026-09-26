@@ -2,15 +2,19 @@ import { readFile } from 'node:fs/promises';
 import { executeWorkspaceOperation } from './workspace-files';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { StartWorkspaceProcess } from '../../shared/workspace-processes';
 import { PACKAGE_MANAGER_FLAG, isPackageManager, runInCmd, runPackageCommand, toolchainEnvironment, writeShims } from './package-scripts';
+import { DEPENDENCY_HOOKS_FILE, parseDependencyLinks } from './dependency-links';
 
-async function command(raw: unknown) {
+async function command(raw: unknown, dependencies: unknown) {
   const input = StartWorkspaceProcess.parse(raw);
+  const helper = resolve(process.argv[1]);
+  const links = parseDependencyLinks(JSON.stringify(dependencies ?? []));
   // node, npm, pnpm, yarn and npx resolve to shims over the bundled Node, for the command and anything it starts (COD-269).
   const env = toolchainEnvironment(process.env, {
-    runtime: process.execPath, helper: resolve(process.argv[1]), root: process.cwd(), shims: writeShims(join(tmpdir(), 'orglet-bin')),
+    runtime: process.execPath, helper, root: process.cwd(), shims: writeShims(join(tmpdir(), 'orglet-bin')),
+    dependencies: { hooks: join(dirname(helper), DEPENDENCY_HOOKS_FILE), links },
   });
   const child = input.program === 'node'
     ? spawn(process.execPath, input.arguments, { windowsHide: true, stdio: 'inherit', env })
@@ -44,7 +48,7 @@ async function main() {
     if (Buffer.byteLength(input) > 1024 * 1024) throw new Error('Workspace request too large');
     const request = JSON.parse(input);
     if (request.operation === 'command') {
-      await command(request.command);
+      await command(request.command, request.dependencies);
       return;
     }
     const value = await executeWorkspaceOperation(process.cwd(), request);

@@ -94,4 +94,32 @@ describe.runIf(process.env.ORGLET_TEST_SANDBOX === '1')('installed dependencies 
     expect(await readFile(join(source, 'node_modules', 'greet', 'index.js'), 'utf8')).toBe('module.exports = "hello from greet";');
     expect(await readdir(prepared.directory)).not.toContain('node_modules');
   });
+
+  it('resolves the dependencies of a pnpm package through its links with require and import', async () => {
+    const store = join(source, 'node_modules', '.pnpm');
+    const realA = join(store, 'a@1.0.0', 'node_modules', 'a');
+    const realB = join(store, 'b@1.0.0', 'node_modules', 'b');
+    await mkdir(realA, { recursive: true });
+    await mkdir(realB, { recursive: true });
+    await writeFile(join(realA, 'package.json'), JSON.stringify({ name: 'a', exports: { import: './index.mjs', require: './index.cjs' } }));
+    await writeFile(join(realA, 'index.cjs'), "module.exports = `a sees ${require('b')}`;");
+    await writeFile(join(realA, 'index.mjs'), "import b from 'b'; export default `a sees ${b}`;");
+    await writeFile(join(realB, 'package.json'), JSON.stringify({ name: 'b', main: 'index.cjs' }));
+    await writeFile(join(realB, 'index.cjs'), "module.exports = 'b';");
+    await symlink(realB, join(store, 'a@1.0.0', 'node_modules', 'b'), 'junction');
+    await symlink(realA, join(source, 'node_modules', 'a'), 'junction');
+    await writeFile(join(source, 'package.json'), JSON.stringify({ name: 'shop', scripts: { test: 'node main.cjs && node main.mjs' } }));
+    await writeFile(join(source, 'main.cjs'), "console.log(require('a'));");
+    await writeFile(join(source, 'main.mjs'), "import a from 'a'; console.log(a);");
+    const runtimeExecutable = resolve('out/Orglet-win32-x64/Orglet.exe');
+    const sandbox = new WindowsSandbox(process.env.ORGLET_TEST_SANDBOX_EXECUTABLE ?? resolve('out/Orglet-win32-x64/resources/wxc-exec.exe'));
+    const runtime = new WorkspaceFilesRuntime({ sandbox, helperPath: resolve('out/Orglet-win32-x64/resources/workspace-helper.cjs'),
+      runtimeExecutable, stateDirectory: join(directory, 'state') });
+    const signal = new AbortController().signal;
+    const prepared = await runtime.createCopy(source, signal);
+    const links = await dependencyFolders(source, prepared.directory, prepared.manifest);
+    const tested = await runtime.runCommand(prepared.directory, { program: 'shell', arguments: ['npm test'], timeoutMs: 60000 }, signal, undefined, links);
+    expect(tested.exitCode, tested.stdout + tested.stderr).toBe(0);
+    expect(tested.stdout.match(/a sees b/g)).toHaveLength(2);
+  });
 });

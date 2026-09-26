@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, win32 } from 'node:path';
+import { DEPENDENCY_LINKS_VARIABLE, type DependencyLinkPair } from './dependency-links';
 
 /**
  * Package scripts inside the command sandbox (COD-269). The sandbox has only the bundled Node runtime and Windows
@@ -228,8 +229,12 @@ export function writeShims(directory: string): string {
   return directory;
 }
 
-/** Puts the shims first on PATH and tells them where the runtime, the helper and the working copy are. */
-export function toolchainEnvironment(base: NodeJS.ProcessEnv, options: { runtime: string; helper: string; root: string; shims: string }): NodeJS.ProcessEnv {
+/**
+ * Puts the shims first on PATH and tells them where the runtime, the helper and the working copy are. With linked
+ * dependencies, every Node process the command starts also preloads the hooks that follow pnpm's links (COD-271).
+ */
+export function toolchainEnvironment(base: NodeJS.ProcessEnv, options: { runtime: string; helper: string; root: string; shims: string;
+  dependencies?: { hooks: string; links: readonly DependencyLinkPair[] } }): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {};
   let path = '';
   for (const [key, value] of Object.entries(base)) {
@@ -241,6 +246,12 @@ export function toolchainEnvironment(base: NodeJS.ProcessEnv, options: { runtime
   environment[SHIM_RUNTIME_VARIABLE] = options.runtime;
   environment[SHIM_HELPER_VARIABLE] = options.helper;
   environment[SHIM_ROOT_VARIABLE] = options.root;
+  if (options.dependencies && options.dependencies.links.length > 0) {
+    environment[DEPENDENCY_LINKS_VARIABLE] = JSON.stringify(options.dependencies.links);
+    // NODE_OPTIONS reads a backslash as an escape, so the path goes in with forward slashes.
+    const preload = `--require "${options.dependencies.hooks.replaceAll('\\', '/')}"`;
+    environment.NODE_OPTIONS = [environment.NODE_OPTIONS, preload].filter(Boolean).join(' ');
+  }
   return environment;
 }
 
@@ -328,7 +339,8 @@ async function runBinary(manager: PackageManager, name: string, extraArguments: 
     return 1;
   }
   const environment = scriptEnvironment(manager, options.environment, { packageDirectory, root, initialDirectory: options.cwd });
-  return options.run(scriptCommandLine(quoteForCmd(binary), extraArguments), options.cwd, environment);
+  // Always quoted: inside the sandbox cmd refuses an unquoted absolute path to a .cmd ("Access is denied"), measured.
+  return options.run(scriptCommandLine(`"${binary}"`, extraArguments), options.cwd, environment);
 }
 
 function scriptEnvironment(manager: PackageManager, base: NodeJS.ProcessEnv, context: {

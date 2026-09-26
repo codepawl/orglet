@@ -10,6 +10,7 @@ import { prepareGitWorktree } from './workspace-git';
 import { diffWorkspaceCopy } from './workspace-diff';
 import type { WorkspaceDiff } from '../../shared/workspace-diff';
 import { linkDependencies, unlinkDependencies, type DependencyLink } from './workspace-dependencies';
+import { DEPENDENCY_HOOKS_FILE } from './dependency-links';
 
 const HelperReply = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), value: z.unknown() }).strict(),
@@ -81,8 +82,11 @@ export class WorkspaceFilesRuntime {
     const command = StartWorkspaceProcess.parse(raw);
     const linked = await linkDependencies(dependencies);
     try {
-      const readable = linked.map(dependency => dependency.target);
-      return await this.invoke(directory, { operation: 'command', command }, signal, command.timeoutMs, readable, onOutput);
+      // The preload that follows pnpm's links inside them sits beside the helper and is readable only when needed.
+      const hooks = join(dirname(this.options.helperPath), DEPENDENCY_HOOKS_FILE);
+      const readable = linked.length > 0 ? [...linked.map(dependency => dependency.target), hooks] : [];
+      const request = { operation: 'command', command, dependencies: linked };
+      return await this.invoke(directory, request, signal, command.timeoutMs, readable, onOutput);
     } finally {
       await unlinkDependencies(linked);
     }
