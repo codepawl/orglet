@@ -1148,7 +1148,7 @@ button.notice-body { cursor:pointer; }
 .source-viewer { width:min(960px, calc(100vw - 32px)); }
 .source-viewer-heading { display:flex; flex-direction:column; align-items:center; min-width:0; }
 .source-viewer-meta { font-size:11.5px; color:var(--muted); white-space:nowrap; }
-.source-viewer .doc-actions .info-tip-trigger,.source-viewer .doc-actions .source-action { width:32px; height:32px; min-height:32px; padding:6px; }
+.source-viewer .doc-actions .org-info-tip-trigger,.source-viewer .doc-actions .source-action { width:32px; height:32px; min-height:32px; padding:6px; }
 .source-viewer .doc-scroll { padding:20px 24px 40px; }
 .source-stage { display:flex; flex-direction:column; gap:12px; max-width:880px; margin:0 auto; min-width:0; }
 .source-stage>.preview-state { justify-content:center; padding:48px 0; font-size:14px; }
@@ -1214,15 +1214,6 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .pdf-page { display:block; max-width:100%; height:auto; border-radius:4px; background:#fff; box-shadow:0 1px 3px #0000001f; }
 /* InfoTip: an "i" that reveals technical detail (kind, size, origin, id, hash) on hover or focus. The panel is
    fixed and portaled so a scrolling dialog cannot clip it; a copy button sits at the end of a copyable row. */
-.info-tip { display:inline-flex; }
-.info-tip-panel { position:fixed; z-index:30; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px #0000001f; font-size:12.5px; color:var(--text); animation:menu-in var(--motion-quick) var(--ease-out); }
-.info-tip-rows { margin:0; display:flex; flex-direction:column; gap:6px; }
-.info-tip-row { display:grid; grid-template-columns:86px minmax(0,1fr); gap:8px; align-items:start; }
-.info-tip-row dt { color:var(--muted); padding-top:2px; }
-.info-tip-row dd { margin:0; min-width:0; display:flex; align-items:flex-start; gap:4px; overflow-wrap:anywhere; }
-.info-tip-row dd.mono { font-family:var(--font-mono); font-size:11.5px; }
-.info-tip-value { flex:1; min-width:0; padding-top:2px; }
-.info-tip-copy { width:24px; height:24px; min-height:24px; padding:4px; }
 .activity { list-style:none; margin:12px 0 0; padding:0; }
 .activity li { display:flex; align-items:flex-start; gap:12px; margin-bottom:14px; font-size:13px; }
 .activity time { font-size:11px; color:var(--muted); margin-top:2px; flex-shrink:0; }
