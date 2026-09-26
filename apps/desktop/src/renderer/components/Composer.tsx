@@ -273,7 +273,7 @@ export function withPrefill(current: string, prefill: string): string {
  * chat's do (COD-257; an older "Attach files" dialog used to take them). While a run is on, the island saying what the
  * worker is doing sits on the bar's top edge (COD-167, `IslandDock`). `prefill` fills it without sending;
  * `onPrefilled` lets the caller forget it once it is in. What is typed and added but not sent stays with the chat
- * while the app is open (COD-257, `drafts.ts`), so leaving the chat and coming back finds it on the bar.
+ * across restarts (COD-257, `drafts.ts`), so leaving the chat and coming back finds it on the bar.
  */
 export function FollowUpComposer({ detail, workspace, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat }) {
   const draftKey = taskDraftKey(detail.task.id);

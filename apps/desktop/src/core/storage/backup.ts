@@ -4,7 +4,9 @@ import { z } from 'zod';
 import { ToolCapabilities, snapshotCapabilities } from '../../shared/tool-policy';
 import { TeamMessage, TeamReassignment } from '../../shared/team-messages';
 import { createHash } from 'node:crypto';
-import { Store, now, id } from './database';
+import { isDeepStrictEqual } from 'node:util';
+import { Store, now, id, seedSkill, seedWorker } from './database';
+import { deletedRunSnapshot } from './deleted-chat';
 import { Id, WorkerInput, SkillInput, TeamInput, TaskInput, Report, Routine, Handoff, RunInput, TeamPlan, PlanAssignment } from '../../shared/contracts';
 import { DatasetProfile, DataFormat } from '../../shared/profiles';
 import { PreflightRecord } from '../../shared/preflight';
@@ -60,7 +62,11 @@ const ReservationReview = z.object({ reservation_id: Id, reason: z.enum(['missin
 const RevisionRow = z.object({ entity_id: Id, revision: Revision, data: z.union([Worker, Skill, Team]) }).strict();
 const Settings = z.object({ theme: z.enum(['system', 'light', 'dark']), connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000) }).strict();
 const KnowledgeRevision = z.object({ id: Id, revision: Revision, data: Knowledge }).strict();
+const EntityStateEntry = z.object({ archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
+const EntityStates = z.object({ workers: z.record(Id, EntityStateEntry), teams: z.record(Id, EntityStateEntry) }).strict();
 const Payload = z.object({
+  // Which orglets and crews were archived or deleted when the backup was saved (COD-281). Older backups lack it.
+  entityState: EntityStates.optional(),
   routines: z.array(Routine).max(100).optional(),
   // A custom connection's name and address travel with the orglets that use it; its key never does.
   customConnections: z.array(CustomConnection).max(MAX_CUSTOM_CONNECTIONS).optional(),
@@ -129,6 +135,8 @@ function validateRelations(data: Payload) {
     preflightScopes.add(scope);
   }
   for (const run of runs.values()) if (run.snapshot.preflightId && preflights.get(run.snapshot.preflightId)?.taskId !== run.taskId) fail('Run thiếu preflight.');
+  for (const workerId of Object.keys(data.entityState?.workers ?? {})) if (!workers.has(workerId)) fail('Trạng thái lưu trữ tham chiếu Tí không tồn tại.');
+  for (const teamId of Object.keys(data.entityState?.teams ?? {})) if (!teams.has(teamId)) fail('Trạng thái lưu trữ tham chiếu hội không tồn tại.');
   for (const worker of workers.values()) if (!skills.has(worker.skillId)) fail('Tí thiếu skill.');
   for (const team of teams.values()) if ([...team.memberIds, team.synthesizerId].some(id => !workers.has(id))) fail('Hội thiếu Tí.');
   for (const task of tasks.values()) if (!workers.has(task.workerId) || task.sourceIds.some(id => !sources.has(id)) || (task.teamId && (!teams.has(task.teamId) || task.teamSnapshot?.id !== task.teamId))) fail('Task thiếu Tí, hội hoặc nguồn.');
@@ -376,6 +384,7 @@ function snapshot(store: Store): Payload {
   const citedWorkspaceEvidenceIds = new Set(artifacts.flatMap(artifact => artifact.report.findings
     .flatMap(finding => finding.workspaceEvidenceIds ?? [])));
   return Payload.parse({
+    entityState: store.entityState(),
     routines: store.all('routines'),
     customConnections: readCustomConnections(store),
     knowledge: store.all('knowledge'),
@@ -435,6 +444,68 @@ function withoutBrowser(payload: Payload): Payload {
   return { ...payload, tasks, runs, ...(routines ? { routines } : {}) };
 }
 
+const ENDED_STATUSES: readonly Payload['tasks'][number]['status'][] = ['completed', 'partial', 'failed', 'cancelled', 'interrupted'];
+
+/** Chats deleted here that the backup holds in full: restoring brings them back (COD-281). */
+function revivedChats(current: Payload, incoming: Payload): Set<string> {
+  const deleted = new Set(current.tasks.filter(task => task.deletedAt).map(task => task.id));
+  return new Set(incoming.tasks.filter(task => !task.deletedAt && deleted.has(task.id)).map(task => task.id));
+}
+
+/**
+ * A chat brought back keeps the turns asked after the backup was saved as deleted turns: their runs stay for the cost
+ * they carry, so the chat goes on from the latest of them and the next message starts a turn of its own.
+ */
+function withLaterDeletedTurns(restored: Payload['tasks'][number], deleted: Payload['tasks'][number], laterRuns: Payload['runs']): Payload['tasks'][number] {
+  const revision = deleted.inputRevision ?? 0;
+  if (!laterRuns.length || revision <= (restored.inputRevision ?? 0)) return restored;
+  const latestInput = laterRuns.find(run => (run.snapshot.inputRevision ?? 0) === revision && run.snapshot.input)?.snapshot.input;
+  const { currentInput: _olderInput, ...rest } = restored;
+  return {
+    ...rest,
+    sourceIds: [...new Set([...restored.sourceIds, ...deleted.sourceIds])],
+    inputRevision: revision,
+    status: ENDED_STATUSES.includes(deleted.status) ? deleted.status : 'interrupted',
+    ...(latestInput ? { currentInput: latestInput } : {}),
+  };
+}
+
+/** Local state stays; an orglet or crew this restore adds comes back archived or deleted if it was when saved (COD-281). */
+function mergedEntityState(current: Payload, incoming: Payload): z.infer<typeof EntityStates> {
+  const workers = { ...current.entityState?.workers };
+  const teams = { ...current.entityState?.teams };
+  for (const [workerId, entry] of Object.entries(incoming.entityState?.workers ?? {})) {
+    if (!current.workers.some(worker => worker.id === workerId)) workers[workerId] = entry;
+  }
+  for (const [teamId, entry] of Object.entries(incoming.entityState?.teams ?? {})) {
+    if (!current.teams.some(team => team.id === teamId)) teams[teamId] = entry;
+  }
+  return { workers, teams };
+}
+
+/**
+ * A new computer starts with a Researcher and its skill. While nobody has touched them (no chat, crew, schedule,
+ * memory, edit, or setting that names them), restoring a backup that brings its own orglets removes them instead of
+ * leaving a second Researcher beside the backup's (COD-281). Returns the workspace as it stands after that.
+ */
+function replaceUntouchedSeed(store: Store, current: Payload, incoming: Payload): Payload {
+  const [worker] = current.workers;
+  const [skill] = current.skills;
+  if (current.workers.length !== 1 || current.skills.length !== 1) return current;
+  if (current.teams.length || current.tasks.length || current.routines?.length || current.knowledge?.length) return current;
+  if (!isDeepStrictEqual(worker, seedWorker(worker.id, skill.id)) || !isDeepStrictEqual(skill, seedSkill(skill.id))) return current;
+  if (current.revisions.length !== 2) return current;
+  const mentioned = store.db.prepare('SELECT COUNT(*) AS count FROM settings WHERE instr(data, ?) > 0 OR instr(data, ?) > 0').get(worker.id, skill.id)!;
+  if (Number(mentioned.count) > 0) return current;
+  const incomingState = incoming.entityState?.workers ?? {};
+  const bringsLiveOrglet = incoming.workers.some(item => !incomingState[item.id]?.deletedAt && !incomingState[item.id]?.archivedAt);
+  if (!bringsLiveOrglet || incoming.workers.some(item => item.id === worker.id)) return current;
+  store.db.prepare('DELETE FROM workers WHERE id=?').run(worker.id);
+  store.db.prepare('DELETE FROM skills WHERE id=?').run(skill.id);
+  store.db.prepare('DELETE FROM revisions WHERE entity_id IN (?,?)').run(worker.id, skill.id);
+  return { ...current, workers: [], skills: [], revisions: [] };
+}
+
 export class Backups {
   private pending?: { token: string; expires: number; payload: Payload };
   constructor(private store: Store, private busy: () => boolean, private notify: () => void) {}
@@ -462,24 +533,37 @@ export class Backups {
     if (this.busy()) throw new Error('Chờ hoặc hủy các task/checker đang chạy trước khi khôi phục.');
     const incoming = pending.payload;
     this.store.transaction(() => {
-      const current = snapshot(this.store);
+      const current = replaceUntouchedSeed(this.store, snapshot(this.store), incoming);
+      const revived = revivedChats(current, incoming);
       // Older runs derive their original input from their own backup's task.
       // Compare that scope with the later backfill, never with the merged task's source history.
-      const comparableSnapshot = (run: Payload['runs'][number], payload: Payload) => {
+      const normalizedSnapshot = (run: Payload['runs'][number], payload: Payload) => {
         const task = payload.tasks.find(task => task.id === run.taskId)!;
         // The browser profile a run used never travels in a backup (COD-261), so it is not part of what must match.
         const { input, inputRevision, browser: _browser, desktop: _desktop, ...rest } = run.snapshot;
         return { ...rest, inputRevision: inputRevision ?? 0, input: RunInput.parse(input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources }) };
       };
+      // A deleted chat kept its runs without what was asked; the backup's run must be that same run before deleting.
+      const comparableSnapshot = (run: Payload['runs'][number], payload: Payload) => {
+        const normalized = normalizedSnapshot(run, payload);
+        return revived.has(run.taskId) ? deletedRunSnapshot(normalized) : normalized;
+      };
       for (const run of incoming.runs) {
         const existing = current.runs.find(item => item.id === run.id);
         if (existing && (existing.taskId !== run.taskId || digest(comparableSnapshot(existing, current)) !== digest(comparableSnapshot(run, incoming)))) fail('Snapshot của run xung đột.');
       }
-      const merge = <T extends { id: string }>(existing: T[], added: T[], immutable = false): T[] => {
+      // What is already here stays, except a deleted chat's own rows, which give way to the backup's full ones.
+      const merge = <T extends { id: string }>(existing: T[], added: T[], immutable = false, replaced: ReadonlySet<string> = new Set()): T[] => {
         const rows = new Map(added.map(row => [row.id, row]));
-        for (const row of existing) { if (immutable && rows.has(row.id) && digest(row) !== digest(rows.get(row.id))) fail('Dữ liệu bất biến xung đột với workspace.'); rows.set(row.id, row); }
+        for (const row of existing) {
+          if (replaced.has(row.id) && rows.has(row.id)) continue;
+          if (immutable && rows.has(row.id) && digest(row) !== digest(rows.get(row.id))) fail('Dữ liệu bất biến xung đột với workspace.');
+          rows.set(row.id, row);
+        }
         return [...rows.values()];
       };
+      const incomingRunIds = new Set(incoming.runs.map(run => run.id));
+      const revivedRunIds = new Set(incoming.runs.filter(run => revived.has(run.taskId)).map(run => run.id));
       const restoredSources = incoming.sources.map(source => ({ ...source, revoked: true }));
       const restoredRoutines = (incoming.routines ?? []).map(routine => ({ ...routine, enabled: false, approvedConfig: '', pending: null, task: { ...routine.task, toolCapabilities: [], browser: undefined, desktop: undefined, consent: false, providerScopes: [] } }));
       const pendingDecisionRuns = new Set(incoming.tasks.flatMap(task => (task.decisionRequests ?? [])
@@ -489,12 +573,16 @@ export class Backups {
           ? { ...request, interruptedAt: now() } : request);
         const pendingDecision = (task.decisionRequests ?? []).some(request => pendingDecisionRuns.has(request.runId));
         // Like tool permissions, a chat's standing MCP permissions never come back with a backup (COD-241).
-        return { ...task, decisionRequests, toolCapabilities: [], mcpGrants: [], browser: undefined, desktop: undefined, consent: false, providerScopes: [],
+        const restored = { ...task, decisionRequests, toolCapabilities: [], mcpGrants: [], browser: undefined, desktop: undefined, consent: false, providerScopes: [],
           status: pendingDecision || ['running', 'queued', 'pausing', 'paused'].includes(task.status) ? 'interrupted' as const : task.status };
+        if (!revived.has(task.id)) return restored;
+        const deleted = current.tasks.find(item => item.id === task.id)!;
+        const laterRuns = current.runs.filter(run => run.taskId === task.id && !incomingRunIds.has(run.id));
+        return withLaterDeletedTurns(restored, deleted, laterRuns);
       });
-      const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: comparableSnapshot(run, incoming),
+      const restoredRuns = incoming.runs.map(run => ({ ...run, snapshot: normalizedSnapshot(run, incoming),
         status: pendingDecisionRuns.has(run.id) || ['running', 'queued', 'pausing', 'paused'].includes(run.status) ? 'interrupted' as const : run.status }));
-      const mergedTasks = merge(current.tasks, restoredTasks).map(task => {
+      const mergedTasks = merge(current.tasks, restoredTasks, false, revived).map(task => {
         const imported = restoredTasks.find(item => item.id === task.id);
         if (!imported || imported === task) return task;
         const reactions = [...(task.messageReactions ?? [])];
@@ -508,7 +596,7 @@ export class Backups {
       const merged: Payload = { ...current,
         routines: merge(current.routines ?? [], restoredRoutines),
         workers: merge(current.workers, incoming.workers), skills: merge(current.skills, incoming.skills), teams: merge(current.teams, incoming.teams),
-        tasks: mergedTasks, runs: merge(current.runs, restoredRuns), sources: merge(current.sources, restoredSources),
+        tasks: mergedTasks, runs: merge(current.runs, restoredRuns, false, revivedRunIds), sources: merge(current.sources, restoredSources),
         events: merge(current.events, incoming.events, true), artifacts: merge(current.artifacts, incoming.artifacts, true), profiles: merge(current.profiles, incoming.profiles, true),
         processEvidence: merge(current.processEvidence ?? [], incoming.processEvidence ?? [], true),
         workspaceEvidence: merge(current.workspaceEvidence ?? [], incoming.workspaceEvidence ?? [], true),
@@ -542,11 +630,13 @@ export class Backups {
       const knowledgeRevisions = new Map((incoming.knowledgeRevisions ?? []).map(row => [`${row.id}:${row.revision}`, row]));
       for (const row of current.knowledgeRevisions ?? []) { const key = `${row.id}:${row.revision}`; if (knowledgeRevisions.has(key) && digest(knowledgeRevisions.get(key)) !== digest(row)) fail('Revision knowledge xung đột.'); knowledgeRevisions.set(key, row); }
       merged.knowledgeRevisions = [...knowledgeRevisions.values()];
+      merged.entityState = mergedEntityState(current, incoming);
       validateRelations(merged);
       if ((merged.routines?.length ?? 0) > 100) fail('Tổng số lịch sau khôi phục vượt 100.');
       const connections = mergeCustomConnections(readCustomConnections(this.store), incoming.customConnections ?? []);
       if (connections.length > MAX_CUSTOM_CONNECTIONS) fail(`Tổng số kết nối tùy chỉnh sau khôi phục vượt ${MAX_CUSTOM_CONNECTIONS}.`);
       writeCustomConnections(this.store, connections);
+      this.store.setSetting('entityState', merged.entityState);
       for (const routine of merged.routines ?? []) this.store.put('routines', routine);
       for (const table of ['skills', 'workers', 'teams', 'tasks'] as const) for (const row of merged[table]) this.store.put(table, row);
       for (const source of merged.sources) {
