@@ -140,7 +140,7 @@ Orglet checks schedules only while it is open. If the computer was off or asleep
 Each run is its own chat, apart from the orglet's main chat. You find it three ways:
 
 - **In the sidebar**, under the orglet or crew it ran for, next to the side threads: one row per schedule, named after it with a small calendar mark, showing its newest run and that run's status mark. The row's menu opens the schedule, archives the run or deletes it.
-- **In Notifications.** When a run finishes, stops with a problem or waits for you, a message names the schedule ("Daily standup note is ready", "Daily standup note needs you") with **Open**, and stays unread in Notifications until you look.
+- **In Notifications.** When a run finishes, stops with a problem or waits for you, a message names the schedule ("Daily standup note is ready", "Daily standup note needs you") with **Open**, and stays unread in Notifications until you look. Runs that come back with a restored backup are history and send no message.
 - **In Schedules**, where each card has **Open latest run**.
 
 To try a schedule without waiting for its time, click **Run now** (the play button) on its card. It runs the same way a scheduled run does, with the same checks, and opens the run; the next scheduled time does not move. A schedule that is switched off, changed since you saved it, or still busy with its previous run does not start, and Schedules says why. A switched-off schedule's button stays greyed out.

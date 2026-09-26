@@ -1,6 +1,6 @@
 import { Viewer } from '@codepawl/orglet-ui';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ExternalLink, MessageSquarePlus, Pencil, PenLine, ShieldOff, X } from 'lucide-react';
+import { ExternalLink, FolderOpen, MessageSquarePlus, Pencil, PenLine, ShieldOff, X } from 'lucide-react';
 import type { Source, SourceBytes, TaskDetail } from '../../shared/contracts';
 import { INLINE_PREVIEW_LIMIT } from '../../shared/source-kinds';
 import { versionName } from '../../shared/source-versions';
@@ -108,7 +108,8 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
   const previewKey = source && !source.media ? `${taskId}:${sourceId}:${source.hash}` : undefined;
   const keptText = useCached(sourcePreviews, previewKey);
   const [content, setContent] = useState<Content>(() => (keptText !== undefined ? { loading: false, text: keptText } : { loading: true }));
-  const [origin, setOrigin] = useState<string | null>(null);
+  // Where the file was picked from: undefined until the core answers, null for a source restored from a backup.
+  const [origin, setOrigin] = useState<string | null | undefined>(undefined);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   // A version just saved opens as soon as the chat's list of sources has it.
@@ -121,7 +122,7 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
     let active = true;
     void orglet.call('sourceOrigins', { taskId }).then(rows => { if (active) setOrigin(rows.find(row => row.id === sourceId)?.path ?? null); }).catch(() => { /* the popover simply omits the origin */ });
     return () => { active = false; };
-  }, [taskId, sourceId]);
+  }, [taskId, sourceId, source?.revoked]);
   useEffect(() => {
     if (!source || state !== 'ready') { setContent({ loading: false }); return; }
     if (keptText !== undefined) { setContent({ loading: false, text: keptText }); return; }
@@ -146,6 +147,13 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
     try { await orglet.call('revoke', { id: sourceId }); refresh(); }
     catch (err) { setError((err as Error).message); }
   }
+  async function relink() {
+    setError('');
+    try {
+      const relinked = await orglet.relinkSource(taskId, sourceId);
+      if (relinked) refresh();
+    } catch (err) { setError(tMessage((err as Error).message)); }
+  }
   async function openExternally() {
     setError('');
     try { await orglet.openSource(taskId, sourceId); }
@@ -160,7 +168,8 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
   if (origin) info.push({ label: source.editedFrom ? t('Bản lưu') : t('Nguồn gốc'), value: origin, mono: true, onCopy: () => orglet.copyText(origin) });
   info.push({ label: 'ID', value: source.id, mono: true, onCopy: () => orglet.copyText(source.id) });
   info.push({ label: 'SHA-256', value: source.hash, mono: true, onCopy: () => orglet.copyText(source.hash) });
-  info.push({ label: t('Quyền truy cập'), value: source.revoked ? t('Đã thu hồi quyền đọc') : t('Chỉ đọc trong task') });
+  const restoredWithoutFile = source.revoked && origin === null;
+  info.push({ label: t('Quyền truy cập'), value: restoredWithoutFile ? t('Từ bản sao lưu, chưa có tệp trên máy này') : source.revoked ? t('Đã thu hồi quyền đọc') : t('Chỉ đọc trong task') });
   const menu: RowMenuItem[] = source.revoked ? [] : [{
     label: t('Thu hồi quyền đọc'), icon: ShieldOff, danger: true, onSelect: () => void revoke(),
     confirm: { question: t('Tí sẽ không đọc được tệp này nữa. Nội dung đã gửi đến provider không thu hồi được.'), label: t('Thu hồi quyền đọc') },
@@ -202,6 +211,11 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
     {externally}
   </>;
   function body(source: Source) {
+    // A backup carries no file contents, so a restored file waits until the person points it at the same file here.
+    if (state === 'revoked' && restoredWithoutFile) return <div className="preview-state source-restored">
+      <p>{t('Tệp này đến từ bản sao lưu nên chưa có trên máy này. Chọn đúng tệp {0} để mở lại.', [source.name])}</p>
+      <Button variant="outline" onClick={() => void relink()}><FolderOpen size={14} />{t('Chọn tệp trên máy')}</Button>
+    </div>;
     if (state === 'revoked') return <p className="preview-state">{t('Đã thu hồi quyền đọc')}</p>;
     if (state === 'parquet') return <p className="preview-state">{t('Parquet chưa xem được; chạy checker local để xem cột và số dòng.')}</p>;
     if (state === 'too-large') return <p className="preview-state">{t('Tệp quá lớn để xem trong Orglet.')}</p>;

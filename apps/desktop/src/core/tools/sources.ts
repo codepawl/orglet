@@ -309,6 +309,23 @@ export class Sources {
       throw error;
     }
   }
+  /**
+   * Points a source restored from a backup at a file on this computer (COD-281). A backup carries no file contents or
+   * paths, so a restored source has no file and no read access. The person picks the file, and it is taken only when
+   * its bytes are the ones attached before, by SHA-256. A source attached on this computer keeps its path and any
+   * revocation the person made.
+   */
+  async relink(sourceId: string, allowedIds: string[], path: string): Promise<Source> {
+    if (!allowedIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
+    const source = this.store.get<Source>('sources', sourceId);
+    if (this.storedPath(sourceId)) throw new Error('Chỉ chọn lại được tệp của nguồn khôi phục từ bản sao lưu.');
+    const rule = limitFor(source.name);
+    const read = await this.readFile(path, rule, rule.kind === 'media' ? 'hash' : 'buffer');
+    if (read.hash !== source.hash) throw new Error(`Tệp này không khớp với ${source.name} đã đính kèm. Chọn đúng tệp đó.`);
+    const relinked: Source = { ...source, revoked: false };
+    this.store.db.prepare('UPDATE sources SET data=?, path=? WHERE id=?').run(JSON.stringify(relinked), resolve(path), sourceId);
+    return relinked;
+  }
   /** Exact permitted, hash-checked bytes, for handing a snapshot copy to a local harness. Never media. */
   async readVerified(sourceId: string, allowedIds: string[]): Promise<Buffer> {
     const source = this.store.get<Source>('sources', sourceId);
