@@ -6,6 +6,7 @@ import { unansweredTurnLine } from '../../apps/desktop/src/renderer/turnOutcome'
 import { TaskThread } from '../../apps/desktop/src/renderer/components/TaskThread';
 import type { Artifact, Run, Skill, Task, TaskDetail, Worker } from '../../apps/desktop/src/shared/contracts';
 import type { BrowserApprovalView } from '../../apps/desktop/src/shared/browser';
+import type { DesktopApprovalView } from '../../apps/desktop/src/shared/desktop';
 
 /*
  * COD-290, dogfood round 6: with Details open a browser card asking to click appeared while the thread stayed at
@@ -137,5 +138,11 @@ describe('the thread', () => {
     const waiting = renderThread({ task, runs: [run], events, artifacts: [], browser: { approval, takenOver: false, inChrome: false, using: true, waiting: false, runId: run.id } });
     expect(waiting).toContain('<p class="run-status-line waiting" aria-hidden="true">Waiting for your OK…</p>');
     expect(waiting).not.toContain('Writing a reply…');
+    // A desktop card waits the same way, in the same card, so the line lines up with it the same way.
+    const desktopApproval: DesktopApprovalView = { id: 'desktop-card', runId: run.id, actionId: 'action', workerName: worker.name, kind: 'invoke', element: 'Save', program: 'notepad.exe', window: 'Untitled - Notepad', reasons: [], requestedAt: time };
+    const desktop = renderThread({ task, runs: [run], events, artifacts: [], desktop: { approval: desktopApproval } });
+    expect(desktop).toContain('class="browser-approval"');
+    expect(desktop).toContain('<p class="run-status-line waiting" aria-hidden="true">Waiting for your OK…</p>');
+    expect(desktop).not.toContain('Writing a reply…');
   });
 });
