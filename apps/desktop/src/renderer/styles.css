@@ -1082,7 +1082,6 @@ button.notice-body { cursor:pointer; }
 /* The viewer: the document viewer's toolbar with the file's kind and size under its name, its actions on the
    right (open externally, info, options), and the content on the grey backdrop. Preview surfaces switch to the
    page colour there, and their own scroll caps come off so the viewer scrolls as one page. */
-.source-viewer { width:min(960px, calc(100vw - 32px)); }
 .source-viewer .org-viewer-actions .org-info-tip-trigger,.source-viewer .org-viewer-actions .source-action { width:32px; height:32px; min-height:32px; padding:6px; }
 .source-viewer .org-viewer-scroll { padding:20px 24px 40px; }
 .source-stage { display:flex; flex-direction:column; gap:12px; max-width:880px; margin:0 auto; min-width:0; }
