@@ -22,9 +22,15 @@ export async function openThreadByBrief(page, brief) {
   await page.getByRole('option').filter({ hasText: brief }).first().click();
 }
 
-/** Archive the open thread so the next send find-or-creates a fresh live row for that worker or team. */
+/**
+ * Archive the open thread so the next send find-or-creates a fresh live row for that worker or team. Waits until the
+ * thread has actually closed: the archived chat's own composer also has "Thêm nguồn" until the archive lands, and a
+ * file attached there in that gap is dropped with that composer (the desktop smoke's intermittent "dataset.csv" and
+ * "first.txt" timeouts). The "Đang nhắn với …" heading only renders on the fresh chat that replaces it.
+ */
 export async function archiveCurrentChat(page) {
   await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Lưu trữ', exact: true }).click();
+  await page.getByRole('heading', { name: /^Đang nhắn với / }).waitFor();
   await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).waitFor();
 }

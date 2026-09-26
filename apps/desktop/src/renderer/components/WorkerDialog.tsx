@@ -18,7 +18,7 @@ import { ProviderMark } from './ProviderMark';
 import { StatusMark } from './StatusMark';
 import { AvatarPicker } from './Avatar';
 import { isMascot, mascotIds } from './mascots';
-import { autoMascot } from './mascotSuggest';
+import { autoMascot, defaultAvatarColor, distinctAvatar } from './mascotSuggest';
 import { TabbedFormDialog } from './DialogTabs';
 import { readiness, readyFirst, type ProviderChoice, type Readiness } from './providers';
 import { openCodeModelIssue } from './openCodeModel';
@@ -112,6 +112,15 @@ export function workerProviderOptions(ready: Readiness, harnesses: HarnessInfo[]
   return readyFirst(choices, t('Chưa sẵn sàng'));
 }
 
+/**
+ * Where a new worker starts on the Model menu (dogfood, 2026-09-26): the first connection that can run right now, in
+ * the menu's own order, past Demo, which is always ready and always first. Demo only when nothing else is ready.
+ */
+export function defaultWorkerProvider(options: readonly SelectOption[]): Worker['provider'] {
+  const firstReady = options.find(option => option.value !== 'demo' && !option.dimmed);
+  return (firstReady?.value as Worker['provider'] | undefined) ?? 'demo';
+}
+
 /** Worker create/edit. Remount (via key) to reset the draft. */
 export function WorkerDialog({ open, worker, workspace, connections, harnesses, initialTab, initialField, onClose, onOpenChat, onCreated }: { open: boolean; worker?: Worker; workspace: Workspace; connections: Connections; harnesses: HarnessInfo[]; /** The tab to open on; the trace above an answer opens straight onto Memory (COD-220). */ initialTab?: Tab; /** The field to land on; the empty chat's "Đổi model" opens on the Model menu (COD-255). */ initialField?: 'provider'; onClose: () => void; /** Opens the chat a memory came from; the dialog closes first. */ onOpenChat: (taskId: string) => void; /** A new worker was saved; the app opens its chat (COD-255). Not called when an existing one is saved. */ onCreated?: (workerId: string) => void }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'general');
@@ -119,10 +128,16 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const takenMascots = workspace.workers.filter(item => item.id !== worker?.id).map(item => isMascot(item.avatar?.mascot) ? item.avatar.mascot : autoMascot(mascotIds, item.id, { name: item.name, description: item.description }));
   const [name, setName] = useState(worker?.name ?? '');
   const [instructions, setInstructions] = useState(worker?.instructions ?? defaultInstructions);
-  const [provider, setProvider] = useState<Worker['provider']>(worker?.provider ?? 'demo');
+  const ready = readiness(connections, harnesses, workspace.customConnections);
+  const providerOptions = workerProviderOptions(ready, harnesses, workspace.customConnections);
+  const suggestedProvider = defaultWorkerProvider(providerOptions);
+  const [provider, setProvider] = useState<Worker['provider']>(worker?.provider ?? suggestedProvider);
+  // Until the person picks a model for a new worker, the start follows what is ready: harness detection finishes after
+  // the dialog opens, and a harness signed in then should not leave the new worker on Demo.
+  const [providerPicked, setProviderPicked] = useState(false);
   const [modelId, setModelId] = useState(worker?.modelId ?? '');
   const [skillId, setSkill] = useState(worker?.skillId ?? workspace.skills[0].id);
-  const [budget, setBudget] = useState(() => initialBudget(worker));
+  const [budget, setBudget] = useState(() => worker ? initialBudget(worker) : budgetForProvider(DEFAULT_TASK_BUDGET, suggestedProvider));
   const [avatar, setAvatar] = useState(worker?.avatar ?? {});
   const [description, setDescription] = useState(worker?.description ?? '');
   // Saved with the worker, like its other fields; off for every worker until the person turns it on (COD-199).
@@ -136,12 +151,24 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState<InvalidField>();
   const [flash, setFlash] = useState(0);
-  const ready = readiness(connections, harnesses, workspace.customConnections);
+  useEffect(() => {
+    if (worker || providerPicked || suggestedProvider === provider) return;
+    setProvider(suggestedProvider);
+    setModelId('');
+    setBudget(current => budgetForProvider(current, suggestedProvider));
+  }, [worker, providerPicked, suggestedProvider, provider]);
   const customConnection = findCustomConnection(workspace.customConnections, provider);
   const paid = isPaidApi(provider);
   // Claude Code is the one harness that takes a spending cap, so its chat's limit is set here too.
   const capped = paid || provider === 'claude-code';
   const skill = workspace.skills.find(item => item.id === skillId);
+  // A new worker nobody picked a face for starts on one the other workers do not show, face or colour, and keeps it
+  // once saved; picking anything in the avatar picker takes over from there.
+  const otherWorkers = workspace.workers.filter(item => item.id !== worker?.id);
+  const automaticAvatar = !worker && !isMascot(avatar.mascot)
+    ? distinctAvatar({ name, description, skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }, seed, takenMascots, otherWorkers.map(defaultAvatarColor))
+    : undefined;
+  const shownAvatar = automaticAvatar ? { ...automaticAvatar, ...avatar } : avatar;
   const clearError = () => { setError(''); setInvalid(undefined); };
   const fail = (at: Tab, message: string, field?: InvalidField) => {
     setTab(at); setError(message); setInvalid(field); setFlash(n => n + 1);
@@ -165,7 +192,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     const pickedServers = mcpServerIds.filter(serverId => (workspace.mcpServers ?? []).some(server => server.id === serverId));
     setBusy(true); clearError();
     try {
-      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
+      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(shownAvatar).length ? { avatar: shownAvatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
       if (!worker && draftCapabilities) await orglet.call('setToolCapabilities', { workerId: saved.id, capabilities: draftCapabilities });
       toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name);
       if (!worker) onCreated?.(saved.id);
@@ -178,13 +205,13 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
 
   return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói nhập từ thư mục cần review trong Thư viện trước.') : tab === 'permissions' ? t('Cho chat riêng của Tí; chat hội có quyền riêng.') : tab === 'memory' ? t('Điều Tí mang theo giữa các cuộc trò chuyện.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error} focusField={initialField}>
     {tab === 'general' && <>
-      <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
+      <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={shownAvatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} /></label>
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><Input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
       <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>
       {worker && <p className="muted">{t('Lần chạy cũ giữ nguyên hướng dẫn và kỹ năng đã dùng.')}</p>}
-      <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProvider(next); if (next !== provider) { setModelId(''); setBudget(current => budgetForProvider(current, next)); } }}
-        options={workerProviderOptions(ready, harnesses, workspace.customConnections)} />
+      <Select label={<FieldLabel icon={Cpu} required>Model</FieldLabel>} field="provider" value={provider} onChange={value => { const next = value as Worker['provider']; setProviderPicked(true); setProvider(next); if (next !== provider) { setModelId(''); setBudget(current => budgetForProvider(current, next)); } }}
+        options={providerOptions} />
       {provider !== 'demo' && <ModelPicker provider={provider} value={modelId} onChange={value => { setModelId(value); if (invalid === 'modelId') clearError(); }} invalid={invalid === 'modelId'} flash={flash} />}
       {isHarness(provider) && <p className="muted">{t('Chạy bằng {0} trên máy, tính theo gói của nó, không qua ngân sách Orglet.', [harnessNames[provider]])}</p>}
       {provider === 'ollama' && <p className="muted">{t('Chạy Ollama tại 127.0.0.1:11434; không tính vào ngân sách Orglet.')}</p>}

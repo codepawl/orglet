@@ -330,3 +330,15 @@ it('tells a live planner which members the user tagged', async () => {
   expect(store.detail(taskId).task.status).toBe('completed');
   expect(planBodies.some(body => body.includes(`"tagged":["${tagged.id}"]`))).toBe(true);
 });
+
+it('tells only the crew\'s combined answer which permissions are off, never the plan or the members (COD-257)', async () => {
+  const { taskId } = await setup();
+  expect(store.detail(taskId).task.status).toBe('completed');
+  // The fixture chat has the web, the browser and the working folder off, so a turn that is told names them.
+  expect(planBodies.length).toBeGreaterThan(0);
+  expect(planBodies.some(body => body.includes('permissionsOff'))).toBe(false);
+  // Synthesis runs after every member has handed in, so its request is the last one the fixture saw.
+  const told = bodies.filter(body => body.includes('permissionsOff'));
+  expect(told).toHaveLength(1);
+  expect(told[0]).toBe(bodies.at(-1));
+});

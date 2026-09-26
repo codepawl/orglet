@@ -47,9 +47,9 @@ import { taskResultStamp } from '../shared/task-seen';
 import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './models/fetch';
 import { canStoreModelListRow, dropProviderRow, readModelListCache, writeModelListCache } from './models/cache';
 import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
-import { mentionedPeople } from '../shared/mentions';
+import { mentionedPeople, parseMentions } from '../shared/mentions';
 import { assertOpenCodeModel, isOpenCodePlan } from '../shared/opencode';
-import { MessageInteractions } from './orchestration/message-interactions';
+import { MessageInteractions, type MessageTarget } from './orchestration/message-interactions';
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
@@ -1432,13 +1432,37 @@ export class CoreService {
     const workers = this.store.workspace().workers.filter(worker => task.assignees === 'all' || task.assignees!.includes(worker.id));
     return task.assignees === 'all' || workers.length > 1 ? workers : undefined;
   }
-  /** Assignees who should answer this group-chat turn: @tagged workers, or the whole group when nobody was tagged. */
+  /**
+   * Assignees who should answer this group-chat turn: @tagged workers; with no tag at all, the orglet whose answer the
+   * person replied to (COD-257); otherwise the whole group.
+   */
   private groupTurnWorkers(task: Task) {
     const group = this.groupWorkers(task);
     if (!group) return undefined;
     // A name tagged inside a forwarded message is not the person tagging it (COD-257).
     const brief = ownWords(task.currentInput ?? task);
-    return mentionedPeople(brief, group) ?? group;
+    const tagged = mentionedPeople(brief, group);
+    if (tagged) return tagged;
+    // `@all` is a tag too, and keeps everyone even on a reply.
+    const taggedAnyone = parseMentions(brief, group).length > 0;
+    if (!taggedAnyone) {
+      const repliedTo = this.repliedOrglet(task, group);
+      if (repliedTo) return [repliedTo];
+    }
+    return group;
+  }
+  /** The group member who wrote the answer this turn replies to, if the turn replies to one. */
+  private repliedOrglet(task: Task, group: Worker[]): Worker | undefined {
+    const replyTo = task.currentInput?.replyTo;
+    if (!replyTo) return undefined;
+    let target: MessageTarget;
+    try {
+      target = new MessageInteractions(this.store).target(task.id, replyTo);
+    } catch {
+      return undefined;
+    }
+    if (target.kind !== 'answer') return undefined;
+    return group.find(worker => worker.id === target.workerId);
   }
   private prepareTask(input: TaskInput): Task {
     if (input.teamId) this.assertAssignable('team', input.teamId);

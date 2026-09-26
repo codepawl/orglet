@@ -8,7 +8,7 @@ import {
 } from '../shared/browser-host';
 import { BROWSER_OPEN_TIMEOUT_MS, CLEAN_BROWSER_PROFILE, MAX_BROWSER_TABS, type BrowserInfo } from '../shared/browser';
 import {
-  BROWSER_CURSOR_LEAD_MS, BROWSER_WATCH_LEASE_MS, BrowserCursorTrack, cursorPointFor, type BrowserCursorAction, type BrowserInputEvent, type BrowserWatchState,
+  BROWSER_CURSOR_LEAD_MS, BROWSER_WATCH_LEASE_MS, BrowserCursorTrack, askingPointFor, cursorPointFor, type BrowserCursorAction, type BrowserInputEvent, type BrowserWatchState,
 } from '../shared/browser-live';
 import { requestRefusal, type ResolveAddresses } from '../core/tools/browser-policy';
 import type { DetectedBrowser } from './detect';
@@ -667,8 +667,8 @@ export class BrowserEngine {
   /**
    * A PNG of what the tab shows. Password fields are painted over, so a picture never shows what someone typed into
    * one. `highlight` scrolls one element into view, outlines it and keeps only the part of the page around it, so
-   * the card's small picture still shows the element and its words; with `pointer`, the orglet's cursor goes to it
-   * too, so a view shows what the card asks about. The live view holds its frames back meanwhile, since the page
+   * the card's small picture still shows the element and its words; with `pointer`, the orglet's cursor goes to its
+   * lower right corner (`askingPointFor`), so a view shows what the card asks about without covering it. The live view holds its frames back meanwhile, since the page
    * carries the outline and the painted-over fields for that moment.
    */
   private async picture(session: RunSession, tabId: string, page: Page, highlight?: string, pointer?: BrowserCursorAction): Promise<Buffer> {
@@ -683,7 +683,7 @@ export class BrowserEngine {
       const box = await element.boundingBox({ timeout: 3_000 }).catch(() => null);
       const viewport = page.viewportSize() ?? VIEWPORT;
       if (box && pointer) {
-        const cursor = { tabId, ...cursorPointFor(pointer, box, viewport), action: pointer };
+        const cursor = { tabId, ...askingPointFor(box, viewport), action: pointer };
         this.cursors.move(session.runId, cursor);
         this.emit({ kind: 'cursor', runId: session.runId, cursor });
       }

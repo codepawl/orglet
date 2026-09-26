@@ -58,6 +58,20 @@ it('persists idempotent reactions without creating runs and carries them through
   expect(() => interactions.userReaction({ ...add, messageId: id() })).toThrow('Không tìm thấy');
 });
 
+it('tells the next turn about the person\'s reaction on the newest earlier answer only', () => {
+  const { task, artifact } = savedAnswer();
+  const interactions = new MessageInteractions(store);
+  expect(interactions.previousAnswerReaction(task.id, 1)).toBeUndefined();
+  interactions.userReaction({ taskId: task.id, messageId: artifact.id, emoji: 'unsure', active: true });
+  expect(interactions.previousAnswerReaction(task.id, 1)).toEqual({ messageId: artifact.id, reaction: 'unsure' });
+  // The turn that answer belongs to is not told about a reaction on its own answer.
+  expect(interactions.previousAnswerReaction(task.id, 0)).toBeUndefined();
+  // A worker's reaction is not the person's.
+  interactions.userReaction({ taskId: task.id, messageId: artifact.id, emoji: 'unsure', active: false });
+  store.update('tasks', { ...store.get<Task>('tasks', task.id), messageReactions: [{ messageId: artifact.id, emoji: 'agree', actor: 'worker', createdAt: now() }] });
+  expect(interactions.previousAnswerReaction(task.id, 1)).toBeUndefined();
+});
+
 it('lets an assigned worker react only while its run is active in the same turn', () => {
   const { task, artifact, worker, skill } = savedAnswer();
   const current = { ...task, inputRevision: 1, currentInput: { brief: 'Follow up', sourceIds: [], replyTo: artifact.id } };
@@ -115,6 +129,10 @@ it('lets an API worker react through its tool loop and carries a verified reply 
     }
     expect(store.detail(taskId).task.currentInput?.replyTo).toBe(replyTo);
     expect(JSON.stringify(messages.at(-1))).toContain(replyTo);
+    // The 👍 on the first answer reaches the model as a note of its own, and the person's message stays as typed.
+    expect(store.detail(taskId).task.currentInput?.brief).toBe('Explain more');
+    expect(JSON.stringify(messages.at(-1))).toContain('That works for me, keep going this way.');
+    expect(JSON.stringify(messages.at(-1))).toContain('userReaction');
     expect(store.detail(taskId).artifacts[1].replyTo).toBe(turnMessageId(taskId, 1));
   } finally { await core.runner.shutdown(); }
 });

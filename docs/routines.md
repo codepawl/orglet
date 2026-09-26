@@ -40,6 +40,10 @@ Changing the trigger or picking another folder is a new save, so it is approved 
 
 When a batch cannot start (the routine changed and needs saving, the folder was replaced), the routine shows the reason as **The schedule did not run** in **Schedules** until you dismiss it. There is nothing to catch up: the files stay where they are, and the ones that were handed to the failed batch do not run again.
 
+### Web search on a routine's run
+
+A routine's editor has **Read and search the web**, the same switch a chat has. On, the routine's task carries `network.web` and each run is offered `web_search` and `web_read_url` like a chat is; off, it carries neither. A search never asks anyone, so it needs no one there. The switch is saved with the task and applies from the next run; a routine that never had the web or the browser still saves no capability list at all (`scheduleCapabilities` in `RoutinesPanel.tsx`).
+
 ### Reading pages on a routine's run
 
 A routine may read pages in Orglet's browser ([browser.md](browser.md)) when its editor sets **Browser** to **Read pages**. The routine's task then carries `browser.read`, a profile and a site list, and all three are part of `approvedConfig`: a routine whose browser settings differ from the ones it was saved with does not run until it is saved again. A routine without the browser keeps the fingerprint shape it had before, so no existing approval changed. Reading needs no one to answer a card, so it can run unattended. Acting on pages (`browser.act`) never can: saving a routine whose task carries it is refused, a chat started by a routine cannot be given it, and a routine's runs are never offered the acting tools.

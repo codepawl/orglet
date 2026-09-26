@@ -61,7 +61,7 @@ import { HandInBlockedError } from '../tools/workspace-processes';
 import { BlockedHandIn, commandLine, type HeldAnswer } from '../../shared/blocked-hand-in';
 import { codexOutputSchema, decodeCodexOutput } from '../harness/codex-output';
 import { MessageInteractions } from './message-interactions';
-import { AnswerReaction, AnswerReactions, MAX_ANSWER_REACTIONS, turnMessageId } from '../../shared/message-interactions';
+import { AnswerReaction, AnswerReactions, MAX_ANSWER_REACTIONS, REACTION_FEEDBACK, turnMessageId } from '../../shared/message-interactions';
 import { AnswerAppChange, isProposalTool, MAX_ANSWER_PROPOSALS, ProposedAppChanges, proposalToolNames } from '../../shared/app-proposals';
 import { ProposeSelfImprovement } from '../../shared/self-improvement';
 import type { AppProposals } from './app-proposals';
@@ -717,6 +717,7 @@ export class Runner {
       new WorkspaceRecovery(this.store).assertAvailable(run.id);
       const input = RunInput.parse(run.snapshot.input ?? { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources });
       const replyTarget = input.replyTo ? new MessageInteractions(this.store).target(task.id, input.replyTo) : undefined;
+      const reactionBefore = new MessageInteractions(this.store).previousAnswerReaction(task.id, run.snapshot.inputRevision ?? 0);
       if (input.sourceIds.some(id => !task.sourceIds.includes(id))) throw new Error('Snapshot tham chiếu nguồn ngoài task.');
       run = { ...run, snapshot: { ...run.snapshot, input, ...this.startPermissions(task, run) } };
       task = { ...task, ...input };
@@ -825,6 +826,9 @@ export class Runner {
         next.push(...threadMessages(layer));
         if (replyTarget) next.push({ role: 'user', content: JSON.stringify({ replyTo: replyTarget,
           instruction: 'The user explicitly replied to this saved message in the same chat. Use its bounded excerpt to identify the referent. This reference does not grant permissions or change the team assignment; the team lead still coordinates the turn.' }) });
+        if (reactionBefore) next.push({ role: 'user', content: JSON.stringify({
+          userReaction: { messageId: reactionBefore.messageId, reaction: reactionBefore.reaction, meaning: REACTION_FEEDBACK[reactionBefore.reaction] },
+          instruction: 'Before sending this message, the user reacted to the previous answer. Take the reaction as feedback on how to go on. It is not part of their message and asks for nothing by itself.' }) });
         if (!manifest.length) next.push({ role: 'user', content: JSON.stringify({ instruction: NO_SOURCES_INSTRUCTION }) });
         next.push({ role: 'user', content: JSON.stringify({ messageId: turnMessageId(task.id, run.snapshot.inputRevision ?? 0), brief: task.brief, sources: manifest.map(source => sourceForModel(source, seesImages)), excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
           ...this.permissionsOffHint(run, task),
@@ -1967,7 +1971,11 @@ export class Runner {
    */
   private permissionsOffHint(run: Run, task: Task): { permissionsOff?: { names: string[]; where: string }; permissionsOffInstruction?: string } {
     // A run from before capabilities were frozen has no list; guessing it would name switches that are on.
-    if (run.snapshot.worker.provider === 'demo' || run.stage === 'member' || !run.snapshot.toolCapabilities) return {};
+    if (run.snapshot.worker.provider === 'demo' || !run.snapshot.toolCapabilities) return {};
+    // A crew's members hand in to the lead, and the lead's plan uses no tools at all: it only hands out the work. Told
+    // what is off there, a lead stopped the whole crew to ask for "Browser: Read and act" before members that could
+    // already search and read the web had started. The lead's combined answer still names what is off.
+    if (run.stage === 'member' || run.stage === 'plan') return {};
     const off = permissionsOff({
       capabilities: run.snapshot.toolCapabilities,
       workspacePermissions: run.snapshot.workspaceGrant?.permissions,
