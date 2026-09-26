@@ -1213,7 +1213,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .check-result[open] { display:flex; flex-direction:column; gap:12px; padding-bottom:12px; }
 .check-result > section { display:flex; flex-direction:column; gap:8px; }
 .check-result > section > :is(h4, p) { margin:0; }
-.check-result > ul { display:flex; flex-direction:column; gap:4px; margin:0; padding-left:18px; font-size:12.5px; line-height:1.45; }
+.check-result > ul { display:flex; flex-direction:column; gap:4px; margin:0; padding:0; list-style:none; font-size:12.5px; line-height:1.45; }
 .check-result > p.muted { margin:0; font-size:12px; }
 .more-checks[open] { display:flex; flex-direction:column; gap:16px; }
 .profile-table { overflow-x: auto; max-width: 100%; }
