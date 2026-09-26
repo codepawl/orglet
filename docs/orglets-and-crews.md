@@ -33,6 +33,10 @@ You can send a changed request while the orglet is still working. Orglet saves i
 
 Open the row's menu (right-click, or the **⋯** on the row) to edit, archive or delete an orglet. To act on several, click the pencil next to the section title and tick rows, or Ctrl-click (Cmd on macOS) and Shift-click. A bar above the footer then offers **Archive** and **Delete**; delete asks first and names the count.
 
+After you archive something, the toast has **Undo**. An orglet that is still in a crew cannot be archived or deleted: the toast names every crew it is in and has a button that opens the crew, so you can take it out. The same goes for a schedule that still runs it.
+
+Archived orglets and crews are listed at the end of their section under **Archived**. Archived chats are listed just below, under **Archived chats**: side threads and schedule runs with the orglets, a crew's chats with the crews, group chats with the group chats. When archived items delete themselves after a while (**Settings → Chat**), each row shows the days it has left. Its menu has **Restore** and **Delete permanently**.
+
 ## Crews
 
 ### Create one

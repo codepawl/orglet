@@ -47,7 +47,7 @@ Forward a message, yours or an orglet's, to up to five other chats at once, with
 | 📄 **Reports as documents** | Ask for a report and it opens like a file. Copy it as plain text or Markdown, or download it. |
 | 🔁 **Repeat work on a schedule** | Schedules send the same request every day or week while Orglet is open. If the computer was off, missed runs become one catch-up you can run or skip; the next time stays on the calendar. A schedule can instead start when a new file lands in a folder you pick, or only when `orglet run` calls it; those fire only while the app is open and never replay what happened while it was closed ([how](docs/routines.md#what-starts-a-routine)). Each run shows in the sidebar under its orglet or crew, named after the schedule, and Orglet tells you when it is done, with a system notification if you are in another app ([where](docs/routines.md#where-a-run-shows-up)). |
 | 📚 **Reuse what works** | Save skills and notes that workers use in later chats. |
-| 🗂️ **Stay tidy** | Archive a chat to start over. Archive or delete workers and teams. Archived items can clear themselves after 7 or 30 days. |
+| 🗂️ **Stay tidy** | Archive a chat to start over, and undo it from the toast. Archive or delete workers and teams. Archived chats, orglets and crews wait at the end of their sidebar section and can clear themselves after 7 or 30 days. |
 | 🌐 **Your language** | US English by default, with UK English and Vietnamese in Settings. |
 
 <p align="center">
