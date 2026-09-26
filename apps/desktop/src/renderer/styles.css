@@ -996,7 +996,6 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .erase-form div { display:flex; align-items:center; gap:6px; }
 .erase-form input { flex:1; min-width:120px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
 .settings-message { font-size:13px; margin-top:14px; color:var(--muted); }
-/* ChatGPT-style toast: inverted pill at the top centre, above dialogs, never blocking clicks. */
 /* The notice centre: what the app has said, after the toast has gone. Filters are chips rather than a select,
    because there are four and the count on each is half the information. */
 .notice-filters { display:flex; flex-wrap:wrap; gap:6px; }
@@ -1057,13 +1056,6 @@ button.notice-body { cursor:pointer; }
 .badge.running-count { margin-left:auto; min-width:20px; justify-content:center; font-variant-numeric:tabular-nums; }
 /* A count in a footer button fits the button's 20px line, so a button with a count is as tall as one without. */
 .sidebar-footer .badge { line-height:16px; }
-.toaster { position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:60; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; width:max-content; max-width:calc(100vw - 32px); }
-.toast { display:flex; align-items:center; gap:8px; padding:9px 14px; border-radius:12px; background:var(--primary); color:var(--primary-text); font-size:14px; box-shadow:0 8px 24px #00000033; animation:toast-in .18s ease-out; }
-.toast.error svg { color:#ff8a8a; }
-:root[data-theme=dark] .toast.error svg { color:#a82626; }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] .toast.error svg { color:#a82626; } }
-.toast span { overflow-wrap:anywhere; }
-@keyframes toast-in { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
 /* One on/off setting inside a form (components/Switch.tsx): title left, switch right, vertically centred on the
    text block beside it. Its description sits directly under its title, where a loose paragraph used to. */
 .form .org-money-input { width:100%; min-height:var(--control-height); }
@@ -1288,10 +1280,11 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
   --org-motion-quick:var(--motion-quick); --org-motion-base:var(--motion-base); --org-motion-gesture:var(--motion-gesture);
   --org-ease-out:var(--ease-out); --org-ease-spring:var(--ease-spring);
   --org-panel-width:var(--panel-width); --org-panel-height:var(--panel-height); --org-overlay:#0000002e;
+  --org-toast-error:#ff8a8a;
 }
-/* The dialog backdrop is portaled to the page, so it follows the page's theme. */
-:root[data-theme=dark] { --org-overlay:#00000059; }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] { --org-overlay:#00000059; } }
+/* The dialog backdrop and the toasts are portaled to the page, so they follow the page's theme. */
+:root[data-theme=dark] { --org-overlay:#00000059; --org-toast-error:#a82626; }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { --org-overlay:#00000059; --org-toast-error:#a82626; } }
 .field { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
 /* Flex, like the <label> around an input: an inline title box adds a line strut, and a Select then sat 3px lower
    than the input beside it in a two-column grid (COD-245). */
@@ -2236,10 +2229,6 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .composer .composer-send-options { width:28px; height:28px; min-height:28px; padding:0; border-radius:50%; color:var(--muted); background:transparent; }
 .composer .composer-send-options:hover:not(:disabled),.composer .composer-send-options[aria-expanded=true] { background:transparent; color:var(--text); }
 .composer .composer-send-options:disabled { opacity:.35; }
-/* A toast that offers something to do takes the pointer; the rest of the stack still lets clicks through. */
-.toast.has-action { pointer-events:auto; }
-.toast-action { margin-left:6px; padding:2px 4px; border:0; border-radius:6px; background:transparent; color:inherit; font:inherit; font-weight:600; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
-.toast-action:hover { text-decoration-thickness:2px; }
 /* An answer brought in from a side thread: on the person's side like their own messages, on the quiet surface so it
    is not mistaken for something they typed, with where it came from on top. */
 .brought-in { display:flex; flex-direction:column; gap:6px; width:fit-content; max-width:var(--bubble-max); margin:16px 0 0 auto; padding:10px 16px 12px; border-radius:18px; background:var(--surface); animation:turn-in var(--motion-base) var(--ease-out); }

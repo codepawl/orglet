@@ -50,6 +50,8 @@
   --org-panel-width: min(720px, calc(100vw - 32px));
   --org-panel-height: min(640px, calc(100dvh - 32px));
   --org-overlay: #0000002e;
+  /* A fault's icon on a toast, which sits on the inverted primary colour. */
+  --org-toast-error: #ff8a8a;
 
   /* Motion. Everything that appears uses the same short decelerating curve: quick enough never to delay a click,
      long enough that nothing snaps. A gesture that should overshoot uses the spring instead. */
@@ -77,6 +79,7 @@
   --org-warning: #d4a72c;
   --org-focus: #a6c1ff;
   --org-overlay: #00000059;
+  --org-toast-error: #a82626;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -97,6 +100,7 @@
     --org-warning: #d4a72c;
     --org-focus: #a6c1ff;
     --org-overlay: #00000059;
+    --org-toast-error: #a82626;
   }
 }
 

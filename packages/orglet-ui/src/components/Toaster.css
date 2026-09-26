@@ -1,0 +1,58 @@
+.org-toaster {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+/* A toast sits on the primary colour, inverted from the page, so it reads as something passing over it. */
+.org-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: var(--org-primary, #171717);
+  color: var(--org-primary-text, #fff);
+  font-size: 14px;
+  box-shadow: 0 8px 24px #00000033;
+  animation: org-toast-in 180ms ease-out;
+}
+@keyframes org-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.org-toast-error svg { color: var(--org-toast-error, #ff8a8a); }
+.org-toast span { overflow-wrap: anywhere; }
+/* A toast that offers something to do takes the pointer; the rest of the stack still lets clicks through. */
+.org-toast-has-action { pointer-events: auto; }
+.org-toast-action {
+  margin-left: 6px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.org-toast-action:hover { text-decoration-thickness: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .org-toast { animation: none; }
+}
