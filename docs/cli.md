@@ -31,11 +31,17 @@ File Explorer's **Send to** menu and `orglet://` links are other ways in, on [th
 1. Install Orglet with Setup.exe.
 2. Open a new terminal and run `orglet status`.
 
-Setup writes a small `orglet.cmd` into `%LOCALAPPDATA%\Orglet\bin` and adds that folder to your own user PATH (not the system one), the way VS Code's installer does. Each update and every start of the app rewrite that file, so the command keeps working after an update. A terminal that was already open does not see the new PATH; open a new one.
+Setup writes a small `orglet.cmd` into `%LOCALAPPDATA%\Orglet\bin` and adds that folder to your own user PATH (not the system one), the way VS Code's installer does. Each update and every start of that install rewrite the file, so the command keeps working after an update. A terminal that was already open does not see the new PATH; open a new one.
 
-**Settings → About → Remove from PATH** deletes the file and the PATH entry, and later updates leave it off. **Add to PATH** there puts it back. Uninstalling Orglet removes both the file and the PATH entry.
+**Settings → About → Remove from PATH** deletes the file and the PATH entry, and later updates leave it off. **Add to PATH** there puts it back. Uninstalling Orglet removes both the file and the PATH entry, unless the command starts another copy of Orglet by then.
 
 Unpacked the ZIP instead of running Setup? Nothing is added by itself: click **Add to PATH** in **Settings → About**.
+
+### More than one copy of Orglet
+
+There is one `orglet` command per Windows user, and it starts one copy of Orglet: the one you last chose. Running Setup chooses that install; **Add to PATH** or **Use this copy** in **Settings → About** chooses the copy you click it in. Starting or updating any other copy, such as an unpacked ZIP or a test build, leaves the command as it is. A copy started on a different data folder counts as another copy too.
+
+When the command starts another copy, **Settings → About** says so and shows that copy's folder, with **Use this copy** to point the command at the one you have open.
 
 ### macOS
 
@@ -199,6 +205,7 @@ Messages that come from the app are in the app's language.
 - The answers to `list`, `status`, `send` and `read` carry each orglet's colour as `#rrggbb`: the one picked in the app, or the colour of the face the app chose for it by name. The command draws the faces from these fields and falls back to grey when they are missing.
 - If nothing answers, the command starts Orglet on the same data folder and tries again for up to 30 seconds.
 - The command finds the data folder from `ORGLET_USER_DATA`, then `ORGLET_DATA_DIR` (what a source run uses), then the usual place for the app. The Windows shim sets `ORGLET_USER_DATA` for you.
+- On start, a copy of Orglet reads the shim's executable and data folder back and rewrites the shim only when both are its own. A Setup install owns every `app-x.y.z\Orglet.exe` in its folder, so the shim follows an update to a new version folder. An update or uninstall leaves a shim that starts another copy alone; only running Setup or a click in **Settings → About** takes it over.
 - The command itself is the app's own executable running a small script (`resources/orglet-cli.cjs`) as Node, the same way VS Code ships `code`. It needs no separate Node install.
 
 The automatic checks run every command against a packaged build, including a wrong token and a request outside the list, and check that `list` stays plain text when piped. The chat itself is tested with a scripted session against a fake app; the checks do not type into a real terminal window. They do not click **Add to PATH**, because that changes the user PATH of the machine running them.
