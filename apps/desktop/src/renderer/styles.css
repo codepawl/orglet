@@ -557,25 +557,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Attachment (Attachment.tsx): a card for one attached file — the kind's icon, the name, a line with the kind and
    size, and a remove button that keeps its place and only shows on hover or a visible focus, so nothing shifts when
    the pointer arrives. Same width for every card, so a strip of them reads as a row and not as a ragged line of tags. */
-.attachment { position:relative; display:flex; align-items:center; gap:8px; flex:0 0 auto; width:212px; min-height:46px; padding:6px 6px 6px 8px; border-radius:14px; background:var(--surface); scroll-snap-align:start; scroll-snap-stop:always; animation:attachment-in var(--motion-base) var(--ease-out); }
-@keyframes attachment-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
-.attachment-icon { display:grid; place-items:center; flex-shrink:0; width:28px; height:28px; color:var(--text); }
-.attachment-text { display:flex; flex-direction:column; flex:1; min-width:0; }
-.attachment-name { font-size:13px; font-weight:500; line-height:17px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.attachment-meta { font-size:11.5px; line-height:15px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-/* The remove control answers the card's hover with its own detail (muted to text), never a background of its own. */
 /* A sent message's files: a row above the bubble, right-aligned with it and never wider, in the composer's card
    size. Past that width the row scrolls sideways. The bottom padding is the scrollbar's own lane, so the bar runs
    under the cards instead of across them; a vertical wheel is left alone so it still scrolls the thread.
    The whole card is the button, so its inside is the row the card would otherwise be. */
 .message-files { display:flex; gap:8px; width:fit-content; max-width:var(--bubble-max); margin:0 0 6px auto; padding:0 0 4px; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; animation:turn-in var(--motion-base) var(--ease-out); }
-.message-files .attachment { padding:0; }
-.attachment-open { display:flex; align-items:center; gap:10px; width:100%; min-width:0; padding:8px 12px; border:0; border-radius:inherit; background:none; text-align:left; font:inherit; color:inherit; cursor:pointer; }
-.attachment-open:hover { background:color-mix(in srgb, var(--bg) 92%, transparent); }
-.attachment-remove { display:flex; align-items:center; justify-content:center; flex-shrink:0; width:26px; height:26px; padding:0; border:0; border-radius:50%; background:none; color:var(--muted); opacity:0; transition:opacity var(--motion-quick) var(--ease-out), color var(--motion-quick); }
-.attachment:hover .attachment-remove,.attachment:has(:focus-visible) .attachment-remove { opacity:1; }
-.attachment-remove:hover { color:var(--text); }
-@media(prefers-reduced-motion:reduce) { .attachment { animation:none; } .attachment-remove { transition:none; } }
+.message-files .org-attachment { padding:0; }
 .consent { display:flex; flex-direction:column; gap:12px; padding:16px 8px 0; font-size:12px; color:var(--muted); }
 .consent>label { display:flex; gap:8px; align-items:flex-start; }
 .consent input[type=checkbox] { margin-top:3px; accent-color:var(--accent); }
@@ -1271,7 +1258,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 /* The command sits on the section's surface, so its card takes the page colour the inputs beside it take. */
 .routine-called .org-command-block-card { background:var(--bg); }
 .attachment-list { display:flex; flex-wrap:wrap; gap:8px; margin:0; padding:0; list-style:none; }
-.routine-group .attachment { background:var(--bg); }
+.routine-group .org-attachment { background:var(--bg); }
 .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 .routine-editor-actions { justify-content:flex-end; margin-top:0; }
 @media(max-width:560px) { .field-grid { grid-template-columns:minmax(0,1fr); } .form .routine-group { padding:12px; } }
