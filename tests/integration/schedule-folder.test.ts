@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store, id } from '../../apps/desktop/src/core/storage/database';
@@ -222,10 +222,35 @@ describe('a folder that is gone or replaced', () => {
     expect(store.all<Task>('tasks')).toHaveLength(0);
   });
 
-  it('refuses a new folder made at the same path', async () => {
+  it('refuses a new folder made at the same path wherever the file system can tell them apart', async () => {
     const routine = await save(folderOf(await pickFolder()));
+    const before = await stat(project, { bigint: true });
     await rm(project, { recursive: true, force: true });
+    await new Promise(resolve => setTimeout(resolve, 20));
     await mkdir(project);
+    const after = await stat(project, { bigint: true });
+    // NTFS gives a new folder a new file id. Linux (ext4, tmpfs) may hand the freed inode straight back, so the birth
+    // time is what tells them apart there. A file system that does both, reuse the id and report no birth time, cannot
+    // tell them apart, and the run then starts: that is the documented limit, asserted rather than skipped.
+    const sameFileId = before.dev === after.dev && before.ino === after.ino;
+    const birthsKnown = before.birthtimeNs > 0n && after.birthtimeNs > 0n;
+    const distinguishable = !sameFileId || (birthsKnown && before.birthtimeNs !== after.birthtimeNs);
+    if (distinguishable) {
+      await expect(core.command('runRoutineNow', { id: routine.id })).rejects.toThrow('không còn hoặc đã bị thay thế');
+      expect(store.all<Task>('tasks')).toHaveLength(0);
+    } else {
+      await expect(runNow(routine)).resolves.toBeTypeOf('string');
+    }
+  });
+
+  it('refuses a folder at the same path and file id whose birth time is not the picked one', async () => {
+    // The Linux case made deterministic on every platform: the id matches, the birth time does not.
+    const routine = await save(folderOf(await pickFolder()));
+    const row = store.db.prepare('SELECT data FROM routine_folders WHERE id=?').get(routine.workspace!.folderId)!;
+    const stored = JSON.parse(String(row.data));
+    const current = await stat(project, { bigint: true });
+    if (current.birthtimeNs > 0n) expect(stored.birth).toBe(current.birthtimeNs.toString());
+    store.db.prepare('UPDATE routine_folders SET data=? WHERE id=?').run(JSON.stringify({ ...stored, birth: '1' }), routine.workspace!.folderId);
     await expect(core.command('runRoutineNow', { id: routine.id })).rejects.toThrow('không còn hoặc đã bị thay thế');
   });
 

@@ -28,7 +28,7 @@ import { PreflightPolicy, type PreflightRecord } from '../shared/preflight';
 import { TeamTemplates } from './storage/templates';
 import { Routines, SCHEDULE_NEVER_ACTS, SCHEDULE_NO_DESKTOP } from './orchestration/routines';
 import { FolderTriggers } from './orchestration/folder-triggers';
-import { RoutineFolders } from './storage/routine-folders';
+import { RoutineFolders, folderBirth } from './storage/routine-folders';
 import type { WatchFolderView } from '../shared/routine-triggers';
 import { WorkPolicy } from './orchestration/work-policy';
 import { runningView } from './orchestration/running';
@@ -253,7 +253,7 @@ export class CoreService {
   /** Keeps a folder main's picker chose for a routine to work in, at the level the schedule form asked for (COD-294). */
   private async grantRoutineFolder(directory: string, permissions: WorkspacePermission[]): Promise<WatchFolderView> {
     const resolved = await this.workspaceGrants.resolve(directory);
-    return this.routineFolders.add(resolved, permissions);
+    return this.routineFolders.add(resolved, permissions, await folderBirth(resolved.directory, resolved.inode));
   }
   /**
    * `orglet run` (COD-245): starts an existing, enabled routine that was approved as it is now, with the files the

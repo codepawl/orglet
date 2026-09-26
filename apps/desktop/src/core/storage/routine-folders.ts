@@ -14,6 +14,8 @@ import type { ResolvedDirectory } from './workspace-grants';
 const StoredFolder = z.object({
   id: z.uuid(), directory: z.string().min(1), device: z.string(), inode: z.string(), name: z.string().min(1),
   permissions: WorkspacePermissions, createdAt: z.iso.datetime(),
+  /** The folder's birth time in nanoseconds, where the file system reports one (COD-294); absent on older rows. */
+  birth: z.string().regex(/^[1-9][0-9]*$/).optional(),
 }).strict();
 type StoredFolder = z.infer<typeof StoredFolder>;
 
@@ -38,6 +40,30 @@ async function stillTheSame(folder: StoredFolder): Promise<boolean> {
     return false;
   }
 }
+/**
+ * A directory's birth time in nanoseconds, or undefined where the platform does not report one (Node gives 0 then).
+ * Path, volume and file id alone cannot tell a folder from one made again at the same path on Linux, where ext4 and
+ * tmpfs hand a freed inode number straight back; the birth time can. NTFS and APFS report one too, and Node on Linux
+ * reads it through statx. Only a routine's working folder checks it (COD-294): a chat's grant and a watched folder
+ * still compare path, volume and file id, and share that gap on Linux.
+ */
+export async function folderBirth(directory: string, expectedInode: string): Promise<string | undefined> {
+  const identity = await stat(directory, { bigint: true });
+  // A folder swapped between the picker's resolve and this read is not the one the person picked.
+  if (identity.ino.toString() !== expectedInode) throw new Error(WORK_FOLDER_NOT_GRANTED);
+  return identity.birthtimeNs > 0n ? identity.birthtimeNs.toString() : undefined;
+}
+
+/** Whether the folder on disk was born when the picked one was; a row with no birth time has nothing to compare. */
+async function bornTheSame(folder: StoredFolder): Promise<boolean> {
+  if (!folder.birth) return true;
+  try {
+    const identity = await stat(folder.directory, { bigint: true });
+    return identity.birthtimeNs.toString() === folder.birth;
+  } catch {
+    return false;
+  }
+}
 /** Handled files kept per routine; older ones are forgotten, since a file older than these is in no one's baseline. */
 const ARRIVALS_KEPT = 2000;
 
@@ -51,8 +77,8 @@ export class RoutineFolders {
   }
 
   /** Keeps a folder the picker resolved, at the level it was opened at, and returns what the renderer may know about it. */
-  add(resolved: ResolvedDirectory, permissions: WorkspacePermission[] = ['read']): WatchFolderView {
-    const folder: StoredFolder = { id: id(), ...resolved, permissions: WorkspacePermissions.parse(permissions), createdAt: now() };
+  add(resolved: ResolvedDirectory, permissions: WorkspacePermission[] = ['read'], birth?: string): WatchFolderView {
+    const folder: StoredFolder = { id: id(), ...resolved, permissions: WorkspacePermissions.parse(permissions), createdAt: now(), ...(birth ? { birth } : {}) };
     this.store.db.prepare('INSERT INTO routine_folders(id,data) VALUES(?,?)').run(folder.id, JSON.stringify(StoredFolder.parse(folder)));
     return WatchFolderView.parse({ folderId: folder.id, name: folder.name });
   }
@@ -70,12 +96,13 @@ export class RoutineFolders {
 
   /**
    * A routine's working folder resolved for one run (COD-294): still the directory that was picked, not moved away,
-   * deleted or replaced at the same path. Throws the sentence the schedule's card shows.
+   * deleted or replaced at the same path (path, volume, file id and, where known, birth time). Throws the sentence the
+   * schedule's card shows.
    */
   async workFolder(folderId: string): Promise<ResolvedDirectory> {
     const folder = this.find(folderId);
     if (!folder) throw new Error(WORK_FOLDER_NOT_GRANTED);
-    if (!await stillTheSame(folder)) throw new Error(workFolderUnavailable(folder.name));
+    if (!await stillTheSame(folder) || !await bornTheSame(folder)) throw new Error(workFolderUnavailable(folder.name));
     return { directory: folder.directory, device: folder.device, inode: folder.inode, name: folder.name };
   }
 
