@@ -21,6 +21,9 @@ export type PendingWorkspace = z.infer<typeof PendingWorkspace>;
 const PENDING_SETTING = 'newChatWorkspace';
 
 const FOLDER_ERROR = 'Workspace phải là thư mục đã chọn trên máy.';
+const NO_FOLDER_YET = 'Chat này chưa có thư mục làm việc. Chọn thư mục trước.';
+/** A diff of a copy made from a folder the chat no longer has; said plainly because it is shown as the viewer's only line. */
+export const OTHER_FOLDER = 'Thay đổi này làm trên thư mục mà chat không còn dùng (đã gỡ hoặc đổi sang thư mục khác), nên không mở lại được.';
 
 /** A path that is not there any more: deleted, or one of its parents renamed or replaced by a file. */
 function isMissingPath(error: unknown) {
@@ -76,7 +79,9 @@ export class WorkspaceGrants {
   /**
    * Stores a resolved folder as the task's grant. Adding permissions on the folder already granted keeps the
    * grant's id and revision, so runs that froze the old grant stay valid with the permissions they froze and
-   * nothing has to stop; another folder or fewer permissions is a new grant that invalidates old snapshots.
+   * nothing has to stop; fewer permissions on the same folder keep the id but take a new revision, which invalidates
+   * old snapshots; another folder is a new grant with a new id. The id therefore names one folder for as long as the
+   * chat keeps it, which is what lets its old diffs keep opening at any level (COD-291).
    */
   apply(taskId: string, resolved: ResolvedDirectory, permissions: WorkspacePermission[]): WorkspaceGrantView {
     return this.store.transaction(() => this.applyInsideTransaction(taskId, resolved, permissions));
@@ -89,10 +94,13 @@ export class WorkspaceGrants {
     const sameFolder = !!previous && !previous.revoked && previous.directory === resolved.directory
       && previous.device === resolved.device && previous.inode === resolved.inode;
     const widened = sameFolder && previous.permissions.every(permission => permissions.includes(permission));
-    const grant = StoredGrant.parse(widened
-      ? { ...previous, permissions }
-      : { id: id(), taskId, revision: (previous?.revision ?? 0) + 1, permissions, name: resolved.name, revoked: false,
+    let grant: z.infer<typeof StoredGrant>;
+    if (widened) grant = StoredGrant.parse({ ...previous, permissions });
+    else if (sameFolder) grant = StoredGrant.parse({ ...previous, revision: previous.revision + 1, permissions });
+    else {
+      grant = StoredGrant.parse({ id: id(), taskId, revision: (previous?.revision ?? 0) + 1, permissions, name: resolved.name, revoked: false,
         directory: resolved.directory, device: resolved.device, inode: resolved.inode });
+    }
     this.store.db.prepare(`INSERT INTO workspace_grants(task_id,data) VALUES(?,?)
       ON CONFLICT(task_id) DO UPDATE SET data=excluded.data`).run(taskId, JSON.stringify(grant));
     return this.view(taskId)!;
@@ -104,6 +112,18 @@ export class WorkspaceGrants {
     this.assertTask(input.taskId);
     const resolved = await this.resolve(input.directory);
     return this.apply(input.taskId, resolved, input.permissions);
+  }
+
+  /**
+   * Changes only the level on the folder the chat already has, without asking for the folder again (COD-291). The
+   * folder is checked the way a waiting one is before it becomes a grant: still there, and still the same directory.
+   */
+  async changeLevel(taskId: string, permissions: WorkspacePermission[]): Promise<WorkspaceGrantView> {
+    this.assertTask(taskId);
+    const current = this.current(taskId);
+    if (!current || current.revoked) throw new Error(NO_FOLDER_YET);
+    const resolved = await this.confirmSame(current, current.name);
+    return this.apply(taskId, resolved, WorkspacePermissions.parse(permissions));
   }
 
   revoke(taskId: string) {
@@ -135,10 +155,10 @@ export class WorkspaceGrants {
 
   /**
    * Keeps a side thread's folder inside its main chat's (COD-247). Another folder or none on the main chat revokes
-   * the side thread's; fewer permissions on the same folder narrow it to the ones both have. Either is a new revision,
-   * so every run that froze the old grant is refused its next file operation. Widening the main chat changes nothing
-   * here. Archived side threads are narrowed too, so restoring one never brings back more than the main chat has.
-   * Returns true when the side thread's grant changed.
+   * the side thread's; fewer permissions on the same folder narrow it to the ones both have, keeping the grant's id
+   * like `apply` does (COD-291). Either is a new revision, so every run that froze the old grant is refused its next
+   * file operation. Widening the main chat changes nothing here. Archived side threads are narrowed too, so restoring
+   * one never brings back more than the main chat has. Returns true when the side thread's grant changed.
    */
   narrowTo(sideTaskId: string, mainTaskId: string): boolean {
     return this.store.transaction(() => {
@@ -149,7 +169,7 @@ export class WorkspaceGrants {
       const kept = sameFolder ? side.permissions.filter(permission => main.permissions.includes(permission)) : [];
       if (kept.length === side.permissions.length) return false;
       const next = kept.length
-        ? StoredGrant.parse({ ...side, id: id(), revision: side.revision + 1, permissions: kept })
+        ? StoredGrant.parse({ ...side, revision: side.revision + 1, permissions: kept })
         : { ...side, revoked: true, revision: side.revision + 1 };
       this.store.db.prepare('UPDATE workspace_grants SET data=? WHERE task_id=?').run(JSON.stringify(next), sideTaskId);
       return true;
@@ -192,17 +212,47 @@ export class WorkspaceGrants {
    * not one moved away or replaced at the same path since.
    */
   async confirmPending(pending: PendingWorkspace): Promise<ResolvedDirectory> {
+    return this.confirmSame(pending);
+  }
+
+  /** A kept folder resolved again: it must still exist and be the same directory, not one replaced at the same path. */
+  private async confirmSame(kept: Omit<ResolvedDirectory, 'name'>, name?: string): Promise<ResolvedDirectory> {
     let resolved: ResolvedDirectory;
     try {
-      resolved = await this.resolve(pending.directory);
+      resolved = await this.resolve(kept.directory);
     } catch {
       // The filesystem error names the path; the chat only needs to know the folder is not there any more.
+      if (name) throw new Error(`Thư mục làm việc ${name} không còn trên máy. Chọn lại thư mục trong Chi tiết.`);
       throw new Error('Thư mục không còn trên máy.');
     }
-    if (resolved.directory !== pending.directory || resolved.device !== pending.device || resolved.inode !== pending.inode) {
+    if (resolved.directory !== kept.directory || resolved.device !== kept.device || resolved.inode !== kept.inode) {
       throw new Error('Thư mục workspace đã bị thay thế. Chọn lại thư mục trước khi tiếp tục.');
     }
     return resolved;
+  }
+
+  /** Changes the level of the folder waiting for a chat's first message, keeping the folder (COD-291). */
+  setPendingLevel(chat: NewChatTarget, permissions: WorkspacePermission[]): NewChatWorkspaceView {
+    const key = newChatKey(chat);
+    const waiting = this.pending(chat);
+    if (!waiting) throw new Error(NO_FOLDER_YET);
+    const pending = { ...this.pendingAll() };
+    pending[key] = PendingWorkspace.parse({ ...waiting, permissions });
+    this.store.setSetting(PENDING_SETTING, pending);
+    return NewChatWorkspaceView.parse({ name: waiting.name, permissions });
+  }
+
+  /**
+   * Whether a run's copy still belongs to the folder the chat has (COD-291): the grant it was made under, at any level
+   * since, never one revoked or replaced by another folder. A diff is history, so this is all it needs.
+   */
+  assertSameFolder(snapshot: WorkspaceGrantSnapshot) {
+    const frozen = WorkspaceGrantSnapshot.parse(snapshot);
+    this.assertTask(frozen.taskId);
+    const current = this.current(frozen.taskId);
+    if (!current || current.revoked || current.id !== frozen.id || !current.permissions.includes('read')) {
+      throw new Error(OTHER_FOLDER);
+    }
   }
 
   assert(snapshot: WorkspaceGrantSnapshot, permission: WorkspacePermission): string {

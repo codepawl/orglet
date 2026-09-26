@@ -52,10 +52,11 @@ it('requires both frozen and current permissions and does not upgrade old runs',
   expect(grants.assert(before, 'read')).toBe(workspace);
   expect(() => grants.assert(before, 'write')).toThrow('không cho phép');
   expect(await grants.directory(grants.snapshot(task.id)!, 'execute')).toBe(workspace);
-  // Narrowing is a new grant: nothing frozen on the wider one may continue.
+  // Narrowing is a new revision: nothing frozen on the wider one may continue. It keeps the id, which names the same
+  // folder for as long as the chat has it, so the chat's old diffs still open (COD-291).
   const wide = grants.snapshot(task.id)!;
   const narrowed = await grants.grant({ taskId: task.id, directory: workspace, permissions: ['read'] });
-  expect(narrowed.id).not.toBe(wide.id);
+  expect(narrowed).toMatchObject({ id: wide.id, revision: wide.revision + 1 });
   expect(() => grants.assert(wide, 'read')).toThrow('đã thay đổi');
   grants.revoke(task.id);
   expect(grants.snapshot(task.id)).toBeUndefined();

@@ -255,7 +255,8 @@ it('shows the held answer, why it was not applied, the changed files and the thr
   expect(reason).toBeGreaterThan(bubble);
   expect(changes).toBeGreaterThan(reason);
   expect(reply).toContain('View output');
-  expect(reply).toContain('Files changed: 1');
+  // The files line says the changes are not in the folder, and after Apply anyway that they are (COD-291).
+  expect(reply.replace(/<[^>]+>/g, '')).toContain('Changed 1 file · Not in your folder yet');
   // The reason sits under the answer, so the generic error card is not drawn as well.
   expect(html).not.toContain('class="run-error"');
   const actions = html.slice(html.lastIndexOf('class="actions"'));
@@ -271,6 +272,7 @@ it('shows the held answer, why it was not applied, the changed files and the thr
   expect(applied).toContain('The user applied the changes even though npm test failed (exit code 1).');
   expect(applied).not.toContain('held-reply');
   expect(applied).not.toContain('Apply anyway');
+  expect(applied.replace(/<[^>]+>/g, '')).toContain('Changed 1 file · Applied');
 });
 
 it('keeps the held answer and its reason on the turn after the person sends another message', async () => {

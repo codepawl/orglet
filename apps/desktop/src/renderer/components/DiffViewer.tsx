@@ -42,15 +42,21 @@ export function countsLabel(counts: Pick<WorkspaceDiffSummary, 'additions' | 'de
   return `+${counts.additions.toLocaleString(locale)} −${counts.deletions.toLocaleString(locale)}`;
 }
 
-/** "Đã thay đổi 3 tệp", or the folders when only folders changed, with the worker named when asked. */
+/**
+ * "Đã thay đổi 3 tệp", or the folders when only folders changed, with the worker named when asked. One file has its
+ * own words, so English reads "Changed 1 file" and a crew's line "Writer changed 1 file" (COD-291).
+ */
 function changedHead(summary: WorkspaceDiffSummary, workerName?: string): string {
   const locale = currentLocale();
   if (summary.files > 0) {
     const files = summary.files.toLocaleString(locale);
+    if (summary.files === 1) return workerName ? t('{0} đã thay đổi 1 tệp', [workerName]) : t('Đã thay đổi 1 tệp');
     if (workerName) return t('{0} đã thay đổi {1} tệp', [workerName, files]);
     return t('Đã thay đổi {0} tệp', [files]);
   }
-  const folders = (summary.folders ?? 0).toLocaleString(locale);
+  const count = summary.folders ?? 0;
+  const folders = count.toLocaleString(locale);
+  if (count === 1) return workerName ? t('{0} đã thay đổi 1 thư mục', [workerName]) : t('Đã thay đổi 1 thư mục');
   if (workerName) return t('{0} đã thay đổi {1} thư mục', [workerName, folders]);
   return t('Đã thay đổi {0} thư mục', [folders]);
 }
@@ -105,9 +111,11 @@ export type ReviewStatus =
   /** The apply stopped at a file the person changed meanwhile; what is left is settled in Details. */
   | { state: 'stopped' }
   | { state: 'discarded' }
-  | { state: 'carried' };
+  | { state: 'carried' }
+  /** Handed in without a review and kept out of the folder: a failed command blocked it, or the plan was refused. */
+  | { state: 'unapplied' };
 
-/** The words after the counts that say where the changes stand; nothing for a run that handed in at once. */
+/** The words after the counts that say where the changes stand. */
 function reviewSuffix(review: ReviewStatus): ReactNode {
   if (review.state === 'pending') return <>
     <span className="changed-files-pending">{t('Chưa áp dụng vào thư mục')}</span>
@@ -117,20 +125,22 @@ function reviewSuffix(review: ReviewStatus): ReactNode {
   if (review.state === 'applied') return review.skipped > 0 ? t('Đã áp dụng, bỏ qua {0}', [review.skipped.toLocaleString(currentLocale())]) : t('Đã áp dụng');
   if (review.state === 'stopped') return <span className="changed-files-pending">{t('Dừng ở xung đột, xem trong Chi tiết')}</span>;
   if (review.state === 'discarded') return t('Đã bỏ, thư mục không đổi');
+  if (review.state === 'unapplied') return <span className="changed-files-pending">{t('Chưa áp dụng vào thư mục')}</span>;
   return t('Chuyển sang lượt sau');
 }
 
 /**
  * The one quiet line a turn shows when its run changed files or folders: it sits under the answer, shaped like the
  * folded trace above it, and opens the viewer. Nothing is shown when nothing changed, so the line itself is the claim.
- * Changes held for review say so at the end of the line, and it opens the viewer where they are applied or dropped;
- * changes a later turn carried on have no viewer of their own, so that line is plain text.
+ * It ends with where the changes stand (COD-291): applied, held for review (it opens the viewer where they are applied
+ * or dropped), discarded, or kept out by a failed command. Changes a later turn carried on have no viewer of their
+ * own, so that line is plain text.
  */
 export function ChangedFilesLine({ summary, workerName, review, onOpen }: { summary: WorkspaceDiffSummary; workerName?: string; review?: ReviewStatus; onOpen: () => void }) {
   const content = <>
     <FileDiff size={14} aria-hidden="true" />
     <span>
-      {changedParts(summary, workerName).join(' · ')}{hasLineCounts(summary) && <> · <DiffCounts counts={summary} /></>}
+      {changedParts(summary, workerName).join(' · ')}{hasLineCounts(summary) && <> · <DiffCounts counts={summary} hideZero /></>}
       {review && <> · {reviewSuffix(review)}</>}
     </span>
   </>;
@@ -147,6 +157,29 @@ export type DiffReview = { busy: boolean; onApply: (paths?: string[]) => void; o
 /** The paths one row of the list stands for: a moved file by both of its paths, so either end of the plan's move matches. */
 const rowPaths = (file: DiffFile) => file.previousPath ? [file.path, file.previousPath] : [file.path];
 
+const insideFolder = (path: string, folder: string) => path.toLowerCase().startsWith(`${folder.toLowerCase()}/`);
+
+/**
+ * The folders with nothing else of the diff inside them (COD-291): made or removed empty on purpose, so each is a row
+ * the person ticks. Every other folder follows the files in it, in the core too (`selectSteps`).
+ */
+export function standaloneFolders(diff: Pick<WorkspaceDiff, 'files' | 'folders'>): DiffFolder[] {
+  const folders = diff.folders ?? [];
+  const paths = [...diff.files.flatMap(rowPaths), ...folders.map(folder => folder.path)];
+  return folders.filter(folder => !paths.some(path => insideFolder(path, folder.path)));
+}
+
+/**
+ * Whether a folder that follows its files is left as it is with these ticks: a new folder when no ticked row lands
+ * inside it, a removed one when any row inside it stays behind.
+ */
+function folderLeftOut(folder: DiffFolder, diff: Pick<WorkspaceDiff, 'files' | 'folders'>, isTicked: (path: string) => boolean): boolean {
+  const rows = [...diff.files.map(file => ({ key: file.path, paths: rowPaths(file) })), ...standaloneFolders(diff).map(item => ({ key: item.path, paths: [item.path] }))];
+  const inside = rows.filter(row => row.paths.some(path => insideFolder(path, folder.path)));
+  if (folder.status === 'added') return !inside.some(row => isTicked(row.key));
+  return inside.some(row => !isTicked(row.key));
+}
+
 const fileElementId = (index: number) => `diff-file-${index}`;
 
 /**
@@ -159,24 +192,27 @@ export function DiffViewer({ diff, workerName, info, review, onClose }: { diff: 
   // The counts wear the diff's own colours here too, the way the chat's changed-files line does.
   const meta = diff.lines === false ? t('{0} tệp', [files]) : <>{t('{0} tệp', [files])} · <DiffCounts counts={diff} /></>;
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set());
-  const ticked = diff.files.filter(file => !skipped.has(file.path)).length;
-  // Folders follow their files: a new one is made for a kept file, a removed one goes once nothing inside stays.
+  // A row is a file, or a folder with nothing else inside it; every other folder follows its files (COD-291).
+  const alone = standaloneFolders(diff);
+  const rows = diff.files.length + alone.length;
+  const ticked = rows - skipped.size;
   const apply = () => {
     if (!review) return;
     if (skipped.size === 0) { review.onApply(); return; }
-    const kept = [...diff.files.filter(file => !skipped.has(file.path)).flatMap(rowPaths), ...(diff.folders ?? []).map(folder => folder.path)];
-    review.onApply(kept);
+    const keptFiles = diff.files.filter(file => !skipped.has(file.path)).flatMap(rowPaths);
+    const keptFolders = alone.filter(folder => !skipped.has(folder.path)).map(folder => folder.path);
+    review.onApply([...keptFiles, ...keptFolders]);
   };
   const actions = review && <>
     <Button variant="outline" className="diff-discard" disabled={review.busy} onClick={review.onDiscard} aria-label={t('Bỏ thay đổi')} title={t('Bỏ thay đổi')}>
       <Undo2 size={16} aria-hidden="true" /><span className="diff-action-label">{t('Bỏ thay đổi')}</span>
     </Button>
     <Button variant="primary" disabled={review.busy || ticked === 0} onClick={apply}><Check size={16} aria-hidden="true" />
-      {skipped.size === 0 ? t('Áp dụng') : t('Áp dụng {0}/{1}', [ticked, diff.files.length])}
+      {skipped.size === 0 ? t('Áp dụng') : t('Áp dụng {0}/{1}', [ticked, rows])}
     </Button>
   </>;
-  // One file is applied or discarded whole, so it gets no tick.
-  const selection = review && diff.files.length > 1 ? {
+  // One change is applied or discarded whole, so it gets no tick.
+  const selection = review && rows > 1 ? {
     isTicked: (path: string) => !skipped.has(path),
     toggle: (path: string, on: boolean) => setSkipped(previous => {
       const next = new Set(previous);
@@ -240,8 +276,10 @@ export function DiffBody({ diff, selection }: { diff: WorkspaceDiff; selection?:
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
   // One file with its lines needs no list to jump from: its heading already names it (dogfood, 2026-09-26).
   const listed = !withLines || diff.files.length + folders.length > 1;
-  const tick = (file: DiffFile) => selection && <Checkbox className="diff-file-tick" checked={selection.isTicked(file.path)}
-    onChange={event => selection.toggle(file.path, event.currentTarget.checked)}><span className="visually-hidden">{t('Áp dụng {0}', [pathLabel(file)])}</span></Checkbox>;
+  const tickFor = (path: string, label: string) => selection && <Checkbox className="diff-file-tick" checked={selection.isTicked(path)}
+    onChange={event => selection.toggle(path, event.currentTarget.checked)}><span className="visually-hidden">{t('Áp dụng {0}', [label])}</span></Checkbox>;
+  const tick = (file: DiffFile) => tickFor(file.path, pathLabel(file));
+  const alone = new Set(standaloneFolders(diff).map(folder => folder.path));
   const toggleFold = (path: string) => setFolded(previous => {
     const next = new Set(previous);
     if (next.has(path)) next.delete(path); else next.add(path);
@@ -275,15 +313,20 @@ export function DiffBody({ diff, selection }: { diff: WorkspaceDiff; selection?:
             : <span className="diff-file-row static">{content}</span>}
         </li>;
       })}
-      {/* A folder has no tick of its own: it follows the files in it. The empty box keeps its name in line with theirs. */}
-      {folders.map(folder => <li key={`folder:${folder.path}`}>
-        {selection && <span className="diff-file-tick-space" aria-hidden="true" />}
-        <span className="diff-file-row static">
-          {folder.status === 'added' ? <FolderPlus size={15} aria-hidden="true" className="diff-file-kind" /> : <FolderMinus size={15} aria-hidden="true" className="diff-file-kind" />}
-          <span className="diff-path"><span className="diff-path-name">{`${folder.path}/`}</span></span>
-          <span className={`diff-file-status diff-status-${folder.status === 'added' ? 'added' : 'deleted'}`}>{folderLabels[folder.status]}</span>
-        </span>
-      </li>)}
+      {/* A folder that holds changes has no tick: it follows them, and dims when they leave it as it is. The empty box keeps
+          its name in line with theirs. A folder with nothing else inside it has its own tick (COD-291). */}
+      {folders.map(folder => {
+        const standalone = alone.has(folder.path);
+        const leftOut = selection !== undefined && (standalone ? !selection.isTicked(folder.path) : folderLeftOut(folder, diff, selection.isTicked));
+        return <li key={`folder:${folder.path}`} className={leftOut ? 'skipped' : undefined}>
+          {selection && (standalone ? tickFor(folder.path, `${folder.path}/`) : <span className="diff-file-tick-space" aria-hidden="true" />)}
+          <span className="diff-file-row static">
+            {folder.status === 'added' ? <FolderPlus size={15} aria-hidden="true" className="diff-file-kind" /> : <FolderMinus size={15} aria-hidden="true" className="diff-file-kind" />}
+            <span className="diff-path"><span className="diff-path-name">{`${folder.path}/`}</span></span>
+            <span className={`diff-file-status diff-status-${folder.status === 'added' ? 'added' : 'deleted'}`}>{folderLabels[folder.status]}</span>
+          </span>
+        </li>;
+      })}
     </ul>}
     {diff.truncated && <p className="preview-note">{t('Diff quá dài: một số tệp chỉ hiện số dòng thay đổi, không hiện nội dung.')}</p>}
     {withLines && diff.files.map((file, index) => <FileSection key={file.path} file={file} id={fileElementId(index)}

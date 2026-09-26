@@ -18,7 +18,7 @@ import type { Run, TaskDetail, Team, Worker, Workspace } from '../../shared/cont
 import type { NewChatWorkspaceView, WorkspaceGrantView } from '../../shared/workspace-access';
 import type { WorkspaceLevel } from '../../shared/capability-status';
 import type { ToolCapability } from '../../shared/tool-policy';
-import { PermissionControls } from './PermissionControls';
+import { PermissionControls, type FolderChoice } from './PermissionControls';
 import { WorkspaceRecovery, type ReadProcessOutput, type ReadPrivateFile, type RecoveryFocus } from './WorkspaceRecovery';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { MessageActions, MessageBadges } from './MessageActions';
@@ -54,7 +54,12 @@ const stageNames: Record<string, string> = { plan: 'phân việc', synthesis: 'g
  * so a chat open for days reads "5 days 23 h" rather than thousands of minutes.
  */
 export function elapsedLabel(fromIso: string, toIso: string) {
-  const seconds = Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 1000);
+  return durationLabel(new Date(toIso).getTime() - new Date(fromIso).getTime());
+}
+
+/** `elapsedLabel` for a length of time already added up. */
+export function durationLabel(milliseconds: number) {
+  const seconds = Math.round(milliseconds / 1000);
   if (!Number.isFinite(seconds) || seconds < 1) return undefined;
   if (seconds < 60) return t('{0} giây', [seconds]);
   const minutes = Math.floor(seconds / 60);
@@ -71,9 +76,55 @@ export function replyCountLabel(count: number): string {
   return t('{0} lượt', [count]);
 }
 
-/** When a run finished, as far as the panel can tell: the last thing that run reported. */
-const runEndedAt = (runId: string, events: { runId?: string; createdAt: string }[]) =>
-  events.filter(event => event.runId === runId).at(-1)?.createdAt;
+type TimedEvent = { runId?: string; message: string; createdAt: string };
+
+/** The events a run leaves as it saves its answer or report: its work ends there, whatever the person does later. */
+const savedMessages = ['Đã lưu câu trả lời.', 'Đã lưu báo cáo và nguồn tham chiếu.', 'Đã lưu báo cáo blocker; phần việc chưa hoàn tất.'];
+/** A decision the person makes about a finished run: applying or discarding its changes, accepting a failed command. */
+const personDecision = /^Người dùng (đã|chấp nhận) /;
+
+/**
+ * When a run's own work ended (COD-291): at the answer it saved, or before the person's first decision about it,
+ * whichever comes first, or else at the last thing it reported. Applying held changes minutes later leaves events on
+ * the run, and those are the person's time, not the orglet's.
+ */
+export function runWorkEndedAt(events: readonly TimedEvent[]): string | undefined {
+  let end = events.length - 1;
+  const saved = events.findIndex(event => savedMessages.includes(event.message));
+  if (saved >= 0) end = Math.min(end, saved);
+  const decision = events.findIndex(event => personDecision.test(event.message));
+  if (decision >= 0) end = Math.min(end, decision - 1);
+  return events[end]?.createdAt;
+}
+
+/**
+ * How long a chat's runs worked, added up (COD-291): each run from its start to the end of its own work, with runs
+ * that overlapped, a crew's members working side by side, counted once as the time that passed. The time between
+ * turns is never counted, so a chat answered in 30 seconds reads 30 seconds however long ago it began.
+ */
+export function workedMilliseconds(runs: readonly Pick<Run, 'id' | 'startedAt'>[], events: readonly TimedEvent[]): number {
+  const spans: [number, number][] = [];
+  for (const run of runs) {
+    const ended = runWorkEndedAt(events.filter(event => event.runId === run.id));
+    if (!ended) continue;
+    const start = Date.parse(run.startedAt);
+    const end = Date.parse(ended);
+    if (end > start) spans.push([start, end]);
+  }
+  spans.sort((first, second) => first[0] - second[0]);
+  let total = 0;
+  let open: [number, number] | undefined;
+  for (const span of spans) {
+    if (open && span[0] <= open[1]) {
+      open[1] = Math.max(open[1], span[1]);
+      continue;
+    }
+    if (open) total += open[1] - open[0];
+    open = [...span];
+  }
+  if (open) total += open[1] - open[0];
+  return total;
+}
 
 function originalAssignmentOwner(detail: TaskDetail, run: Run): string {
   const originalWorkerId = run.snapshot.reassignment?.assignmentWorkerId;
@@ -160,7 +211,7 @@ const worthKeeping = (message: string) => !routineChatter.some(pattern => patter
 function RunEntry({ run, events }: { run: Run; events: { id: string; message: string; createdAt: string }[] }) {
   const person = run.snapshot.worker;
   const stage = run.stage && stageNames[run.stage] ? t(stageNames[run.stage]) : undefined;
-  const endedAt = events.at(-1)?.createdAt;
+  const endedAt = runWorkEndedAt(events);
   const took = endedAt && elapsedLabel(run.startedAt, endedAt);
   return <li className="details-run">
     <Avatar name={person.name} seed={person.id} mascot={person.avatar?.mascot} defaultMascot hint={person.description} color={person.avatar?.color} size="xs" />
@@ -306,7 +357,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
     pending?: NewChatWorkspaceView;
     busy: boolean;
     onCapability: (capability: ToolCapability, enabled: boolean) => void;
-    onWorkspace: (level: WorkspaceLevel) => void;
+    onWorkspace: (level: WorkspaceLevel, folder: FolderChoice) => void;
   };
 }) {
   const [technical, setTechnical] = useState(false);
@@ -314,12 +365,10 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
   const members = team ? teamRoster(team, workspace.workers) : [...group ?? []];
   const spent = detail ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0;
   const tokens = detail ? detail.usage.inputTokens + detail.usage.outputTokens : 0;
-  const firstRun = detail?.runs[0];
   const lastRun = detail?.runs.at(-1);
   // What the answers actually ran on, which used to be readable only inside the technical block (user, 2026-09-19).
   const model = lastRun?.snapshot.model;
-  const finishedAt = lastRun && detail ? runEndedAt(lastRun.id, detail.events) : undefined;
-  const took = firstRun && finishedAt ? elapsedLabel(firstRun.startedAt, finishedAt) : undefined;
+  const worked = detail ? durationLabel(workedMilliseconds(detail.runs, detail.events)) : undefined;
   const latestOutcome = detail && recovery?.taskId === detail.task.id ? latestTurnOutcome(detail, recovery) : null;
   const pane = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -363,7 +412,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
         <p className="details-status">{detail.task.status === 'waiting_input' && detail.task.decisionRequests?.some(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt) ? t('Chờ quyết định') : statusLabel[detail.task.status]}</p>
         <div className="details-facts">
           <Fact icon={Wallet} title={t('Đã tiêu cho cuộc trò chuyện này')}>{formatMoney(spent)}</Fact>
-          {took && <Fact icon={Clock} title={t('Tổng thời gian chạy')}>{took}</Fact>}
+          {worked && <Fact icon={Clock} title={t('Thời gian các lượt chạy làm việc, cộng lại; không tính lúc giữa các lượt, và các Tí làm cùng lúc chỉ tính một lần')}>{t('{0} làm việc', [worked])}</Fact>}
           {tokens > 0 && <Fact icon={Cpu} title={t('Token đã dùng')}>{t('{0} token', [tokens.toLocaleString(currentLocale())])}</Fact>}
           {model && <Fact icon={Sparkles} title={t('Model đã trả lời')}>{model}</Fact>}
           <Fact icon={MessageSquare} title={t('Số lượt trả lời')}>{replyCountLabel(detail.artifacts.length)}</Fact>

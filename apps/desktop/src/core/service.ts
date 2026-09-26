@@ -4,7 +4,7 @@ import { removalStopsWork, snapshotCapabilities, type ToolCapability } from '../
 import { liveTeamTask, liveWorkerTask, newChatKey, newChatKeyNames } from '../shared/live-task';
 import { withoutSourceIds } from '../shared/source-mentions';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
-import { GrantWorkspace, type NewChatTarget } from '../shared/workspace-access';
+import { GrantWorkspace, type NewChatTarget, type WorkspaceGrantView } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
 import { z } from 'zod';
 import { commands, Id, type CredentialProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
@@ -211,13 +211,34 @@ export class CoreService {
     if (this.store.get<Task>('tasks', input.taskId).sideOf) throw new Error('Chat phụ dùng thư mục của chat chính. Đổi thư mục ở chat chính.');
     const previous = this.workspaceGrants.view(input.taskId);
     const grant = await this.workspaceGrants.grant(input);
+    this.settleGrantChange(previous, grant);
+    return grant;
+  }
+
+  /**
+   * Another level on the folder a chat already has (COD-291), with the same consequences as picking it again: a lower
+   * level stops active work, a higher one stops nothing. A chat that has not started changes its waiting folder's level.
+   */
+  private async setWorkspaceLevel(input: z.infer<typeof commands.setWorkspaceLevel>): Promise<void> {
+    if (!('taskId' in input)) {
+      this.workspaceGrants.setPendingLevel(newChatTargetOf(input), input.permissions);
+      this.notify();
+      return;
+    }
+    if (this.store.get<Task>('tasks', input.taskId).sideOf) throw new Error('Chat phụ dùng thư mục của chat chính. Đổi thư mục ở chat chính.');
+    const previous = this.workspaceGrants.view(input.taskId);
+    const grant = await this.workspaceGrants.changeLevel(input.taskId, input.permissions);
+    this.settleGrantChange(previous, grant);
+  }
+
+  /** Stops what a replaced or narrowed grant leaves running, keeps side threads inside it, and tells every view. */
+  private settleGrantChange(previous: WorkspaceGrantView | null, grant: WorkspaceGrantView) {
     if (replacesGrant(previous, grant)) {
       this.teams.cancel(grant.taskId);
       this.runner.cancel(grant.taskId);
     }
     this.narrowSideThreadFolders(grant.taskId);
     this.notify();
-    return grant;
   }
   /** Keeps a folder main's picker chose for a routine to watch; the renderer gets its id and name, never the path. */
   private async grantWatchFolder(directory: string): Promise<WatchFolderView> {
@@ -573,6 +594,7 @@ export class CoreService {
         this.notify();
         return;
       }
+      case 'setWorkspaceLevel': return this.setWorkspaceLevel(commands.setWorkspaceLevel.parse(args));
       case 'setToolCapabilities': {
         const input = commands.setToolCapabilities.parse(args);
         if (!('taskId' in input)) { this.setNewChatCapabilities(input); return; }
