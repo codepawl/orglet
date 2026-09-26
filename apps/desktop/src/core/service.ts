@@ -2,6 +2,7 @@ import { WorkspaceRecovery } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { removalStopsWork, snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { liveTeamTask, liveWorkerTask, newChatKey, newChatKeyNames } from '../shared/live-task';
+import { leaveCrewsMessage, removalBlocker, stopScheduleMessage } from '../shared/removal';
 import { withoutSourceIds } from '../shared/source-mentions';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
 import { GrantWorkspace, type NewChatTarget, type WorkspaceGrantView } from '../shared/workspace-access';
@@ -1201,15 +1202,12 @@ export class CoreService {
     if (!found) throw new Error('Không tìm thấy mục này.');
     const workspace = this.store.workspace();
     const name = found.row.name;
-    if (kind === 'worker') {
-      if (!found.archived && workspace.workers.length <= 1) throw new Error('Cần giữ ít nhất một Tí.');
-      const team = workspace.teams.find(item => [...item.memberIds, item.synthesizerId].includes(entityId));
-      if (team) throw new Error(`Bỏ ${name} khỏi hội ${team.name} trước.`);
-    }
-    const uses = (task: { workerId: string; teamId?: string; assignees?: 'all' | string[] }) => runBy(task, kind, entityId);
-    const routine = workspace.routines.find(item => item.enabled && uses(item.task));
-    if (routine) throw new Error(`Tắt hoặc xóa lịch ${routine.name} trước.`);
-    if (this.store.all<Task>('tasks').some(task => !task.deletedAt && ['queued', 'running', 'pausing'].includes(task.status) && (uses(task) || (kind === 'worker' && task.assignees === 'all')))) throw new Error('Đợi công việc đang chạy xong rồi thử lại.');
+    if (kind === 'worker' && !found.archived && workspace.workers.length <= 1) throw new Error('Cần giữ ít nhất một Tí.');
+    const blocker = removalBlocker(workspace, kind, entityId);
+    if (blocker?.kind === 'crews') throw new Error(leaveCrewsMessage(name, blocker.crews.map(crew => crew.name)));
+    if (blocker?.kind === 'schedule') throw new Error(stopScheduleMessage(blocker.schedule.name));
+    const uses = (task: Task) => runBy(task, kind, entityId) || (kind === 'worker' && task.assignees === 'all');
+    if (this.store.all<Task>('tasks').some(task => !task.deletedAt && ['queued', 'running', 'pausing'].includes(task.status) && uses(task))) throw new Error('Đợi công việc đang chạy xong rồi thử lại.');
   }
   private deleteEntity(kind: 'worker' | 'team', entityId: string) {
     this.assertRemovable(kind, entityId);
@@ -1278,6 +1276,7 @@ export class CoreService {
    */
   private reviseTask(input: Args<'reviseTask'>, forwarded?: ForwardedMessage) {
     const task = this.store.get<Task>('tasks', input.taskId);
+    this.assertChatOpen(task);
     if (input.replyTo) new MessageInteractions(this.store).target(task.id, input.replyTo);
     if (input.continueFrom) this.assertContinuable(task, input.continueFrom);
     if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
@@ -1435,6 +1434,22 @@ export class CoreService {
   private assertAssignable(kind: 'worker' | 'team', entityId: string) {
     const found = this.entity(kind, entityId);
     if (!found || found.archived) throw new Error(`${found?.row.name ?? (kind === 'worker' ? 'Tí' : 'Hội')} đã được lưu trữ hoặc xóa. Đổi người nhận trong Thiết lập công việc.`);
+  }
+  /**
+   * A chat takes no new message while it is archived, or while the one orglet or crew it belongs to is archived or
+   * deleted; the refusal says which and what brings it back (COD-282). A group chat has no single owner, and
+   * `prepareTask` checks the orglets its turn goes to.
+   */
+  private assertChatOpen(task: Task) {
+    if (task.archivedAt) throw new Error('Cuộc trò chuyện này đã được lưu trữ. Khôi phục để nhắn tiếp.');
+    if (task.assignees) return;
+    const kind = task.teamId ? 'team' : 'worker';
+    const ownerId = task.teamId ?? task.workerId;
+    const state = this.store.entityState()[`${kind}s`][ownerId];
+    if (!state?.archivedAt && !state?.deletedAt) return;
+    const name = this.store.get<Worker | Team>(`${kind}s`, ownerId).name;
+    if (state.deletedAt) throw new Error(`${name} đã bị xóa, nên cuộc trò chuyện này chỉ còn để đọc.`);
+    throw new Error(`${name} đã được lưu trữ. Khôi phục để nhắn tiếp.`);
   }
   private liveTask(taskId: string) {
     const task = this.store.get<Task>('tasks', taskId);

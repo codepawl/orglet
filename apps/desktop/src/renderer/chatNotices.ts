@@ -4,6 +4,7 @@ import { BACKGROUND_NOTICE_CHARS, type BackgroundNotice } from '../shared/backgr
 import { t } from './i18n';
 import { chatHeadline } from '../shared/forward';
 import { toast } from './components/toast';
+import { pendingGroupSize } from './components/notifications';
 import { taskWorkers } from './assignees';
 import { groupChatNames } from './groupChat';
 
@@ -71,16 +72,37 @@ function scheduleName(task: Task, names: ChatNames): string {
   return names.routines.find(routine => routine.id === task.routineId)?.name ?? task.routineName ?? chatName(task);
 }
 
-/** A notice inside the window: the toast, which Notifications keeps, and the chat it opens. */
-export type InAppNotice = { taskId: string; text: string; tone: 'success' | 'error'; about: string };
+/**
+ * A notice inside the window: the toast, which Notifications keeps, and the chat it opens. `group` makes its notice
+ * take the place of the group's unread one, counting `size` answers (COD-287).
+ */
+export type InAppNotice = { taskId: string; text: string; tone: 'success' | 'error'; about: string; group?: { key: string; size: number } };
+
+/** The group one orglet's side-thread answers share in Notifications, so they wait there as one row. */
+export function sideThreadAnswersGroup(task: Pick<Task, 'workerId'>): string {
+  return `side-thread-answers:${task.workerId}`;
+}
+
+/**
+ * Whether the person is in one of the side thread's orglet's chats right now: its main chat, or another of its side
+ * threads (COD-287). Its row sits right there under the orglet with its unread mark, so an answer needs no toast.
+ */
+export function besideSideThread(sideThread: Pick<Task, 'sideOf'>, openTask: Pick<Task, 'id' | 'sideOf'> | undefined): boolean {
+  if (!sideThread.sideOf || !openTask) return false;
+  const mainChatId = sideThread.sideOf.taskId;
+  return openTask.id === mainChatId || openTask.sideOf?.taskId === mainChatId;
+}
 
 /**
  * The toast for a chat that stopped while the person was somewhere else in the app. A side thread says its orglet
  * answered (COD-247); a schedule's run names the schedule, with its orglet or crew as what it was about (COD-258).
  * A main chat says nothing: its row in the sidebar already carries the unread mark, and it is where the person
- * talks, so a toast for every answer there would be noise.
+ * talks, so a toast for every answer there would be noise. One orglet's side-thread answers share one notice
+ * (COD-287): `earlierInGroup` says how many answers the group's unread notice already counts, and the new notice
+ * says the total ("Scout answered in 3 side threads") and opens the newest. A side thread that failed keeps its own
+ * notice, since each one is a problem to look at.
  */
-export function inAppNotice(chat: FinishedChat, names: ChatNames): InAppNotice | undefined {
+export function inAppNotice(chat: FinishedChat, names: ChatNames, earlierInGroup: (group: string) => number = () => 0): InAppNotice | undefined {
   const { task, outcome } = chat;
   const tone = outcome === 'done' ? 'success' : 'error';
   if (task.routineId) {
@@ -92,8 +114,11 @@ export function inAppNotice(chat: FinishedChat, names: ChatNames): InAppNotice |
   }
   if (task.sideOf) {
     const author = names.workers.find(worker => worker.id === task.workerId)?.name ?? 'Orglet';
-    const text = outcome === 'done' ? t('{0} đã trả lời trong chat phụ', [author]) : t('Chat phụ của {0} cần xem lại', [author]);
-    return { taskId: task.id, text, tone, about: chatName(task) };
+    if (outcome !== 'done') return { taskId: task.id, text: t('Chat phụ của {0} cần xem lại', [author]), tone, about: chatName(task) };
+    const group = sideThreadAnswersGroup(task);
+    const size = earlierInGroup(group) + 1;
+    if (size === 1) return { taskId: task.id, text: t('{0} đã trả lời trong chat phụ', [author]), tone, about: chatName(task), group: { key: group, size } };
+    return { taskId: task.id, text: t('{0} đã trả lời trong {1} chat phụ', [author, size]), tone, about: t('Mới nhất: {0}', [chatName(task)]), group: { key: group, size } };
   }
   return undefined;
 }
@@ -145,12 +170,14 @@ export function useChatNotices(workspace: Workspace | undefined, openChat: strin
     const lookedAt = new Date(known.at - LOOK_MARGIN_MS).toISOString();
     const finished = finishedChats(known.statuses, workspace.tasks, lookedAt);
     if (!finished.length) return;
+    const openTask = openChat ? workspace.tasks.find(task => task.id === openChat) : undefined;
     for (const chat of finished) {
       if (chat.task.id === openChat) continue;
-      const notice = inAppNotice(chat, workspace);
+      if (chat.outcome === 'done' && besideSideThread(chat.task, openTask)) continue;
+      const notice = inAppNotice(chat, workspace, pendingGroupSize);
       if (!notice) continue;
       // An answer that landed while the person was elsewhere is news, so it waits in Notifications (COD-255).
-      toast(notice.text, notice.tone, notice.about, { action: { label: t('Mở'), onSelect: () => openRef.current(notice.taskId) }, unread: true, chat: notice.taskId });
+      toast(notice.text, notice.tone, notice.about, { action: { label: t('Mở'), onSelect: () => openRef.current(notice.taskId) }, unread: true, chat: notice.taskId, group: notice.group });
     }
     for (const notice of backgroundNotices(finished, workspace, workspace.backgroundNotifications)) {
       // Main drops it while the window is focused, where the sidebar and the toasts above already say it.
