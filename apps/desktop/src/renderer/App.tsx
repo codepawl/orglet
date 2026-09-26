@@ -372,11 +372,30 @@ export function App() {
     document.documentElement.style.setProperty('--font', fontStack('interface', workspace?.interfaceFont));
     document.documentElement.style.setProperty('--font-mono', fontStack('code', workspace?.codeFont));
   }, [workspace?.interfaceFont, workspace?.codeFont]);
+  // A narrow window folds the sidebar away; widening it again brings back a sidebar the window folded, never one the
+  // person closed themselves (dogfood, 2026-09-26: after 740 px and back, the sidebar stayed hidden).
+  const sidebarFoldedForWidth = useRef(innerWidth <= 780);
   useEffect(() => {
     const media = matchMedia('(max-width: 780px)');
-    const collapse = () => { if (media.matches) setSidebar(false); };
-    media.addEventListener('change', collapse); return () => media.removeEventListener('change', collapse);
+    const followWidth = () => {
+      if (media.matches) {
+        setSidebar(open => {
+          if (open) sidebarFoldedForWidth.current = true;
+          return false;
+        });
+        return;
+      }
+      if (!sidebarFoldedForWidth.current) return;
+      sidebarFoldedForWidth.current = false;
+      setSidebar(true);
+    };
+    media.addEventListener('change', followWidth);
+    return () => media.removeEventListener('change', followWidth);
   }, []);
+  const closeSidebar = () => {
+    sidebarFoldedForWidth.current = false;
+    setSidebar(false);
+  };
   // The copy on screen is the one worth keeping: a handful of recent chats makes switching instant.
   useEffect(() => { if (detail) taskDetails.set(detail.task.id, detail); }, [detail]);
   // A search result opens its chat at the message it found (COD-267), the way a reply's quote jumps to the original.
@@ -1190,7 +1209,7 @@ export function App() {
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {detailsOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
     <aside className={`sidebar${sidebar ? '' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={!sidebar || undefined}>
-      <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong><Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button><Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={() => setSidebar(false)}><PanelLeft size={18} /></Button></div>
+      <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong><Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button><Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={closeSidebar}><PanelLeft size={18} /></Button></div>
       <div className="sidebar-scroll">
       
       <SidebarSection id="teams" title={t('Hội')} action={sectionActions('teams', t('Chọn nhiều hội'), t('Tạo hội'), () => { setEditingTeam(undefined); setPanel('team'); })}>
