@@ -5,7 +5,7 @@ import { liveTeamTask, liveWorkerTask, newChatKey, newChatKeyNames } from '../sh
 import { leaveCrewsMessage, removalBlocker, stopScheduleMessage } from '../shared/removal';
 import { withoutSourceIds } from '../shared/source-mentions';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
-import { GrantWorkspace, type NewChatTarget, type WorkspaceGrantView } from '../shared/workspace-access';
+import { GrantWorkspace, type NewChatTarget, type WorkspaceGrantView, type WorkspacePermission } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
 import { z } from 'zod';
 import { commands, Id, type CredentialProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
@@ -89,7 +89,10 @@ const DEFAULT_TASK_BUDGET_MICROS = 500_000;
 /** Only main sends this, with the path its picker returned; the window never names a path. */
 const relinkSourceInput = z.object({ taskId: Id, sourceId: Id, path: z.string().min(1).max(32768) }).strict();
 
-/** A folder waiting for a chat's first message, checked again at that moment (COD-186). */
+/**
+ * A folder waiting for a chat's first message, checked again at that moment (COD-186), or a schedule's own working
+ * folder, checked as its run starts (COD-294). Either becomes the new chat row's grant at `pending.permissions`.
+ */
 type NewChatFolder = { pending: PendingWorkspace; resolved: ResolvedDirectory; failure?: undefined } | { pending: PendingWorkspace; resolved?: undefined; failure: string };
 
 /** The empty chat a command names: one worker, a team, or the orglets of a group chat that has not started (COD-215). */
@@ -160,7 +163,7 @@ export class CoreService {
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
     this.routineFolders = new RoutineFolders(store);
-    this.routines = new Routines(store, this.sources, this.notify, (input, next) => this.createTask(input, next), clock, this.routineFolders);
+    this.routines = new Routines(store, this.sources, this.notify, (input, next, folder) => this.createTask(input, next, folder && { pending: { ...folder.resolved, permissions: folder.permissions }, resolved: folder.resolved }), clock, this.routineFolders);
     this.folderTriggers = new FolderTriggers(store, this.routineFolders, this.routines, this.sources, clock);
     this.policy.captureHandoffs();
   }
@@ -201,6 +204,7 @@ export class CoreService {
   async grantWorkspace(raw: unknown): Promise<unknown> {
     const input = GrantWorkspace.parse(raw);
     if ('watch' in input) return this.grantWatchFolder(input.directory);
+    if ('routine' in input) return this.grantRoutineFolder(input.directory, input.permissions);
     if (!('taskId' in input)) {
       const chat = newChatTargetOf(input);
       if ('teamId' in chat) this.assertAssignable('team', chat.teamId);
@@ -245,6 +249,11 @@ export class CoreService {
   private async grantWatchFolder(directory: string): Promise<WatchFolderView> {
     const resolved = await this.workspaceGrants.resolve(directory);
     return this.routineFolders.add(resolved);
+  }
+  /** Keeps a folder main's picker chose for a routine to work in, at the level the schedule form asked for (COD-294). */
+  private async grantRoutineFolder(directory: string, permissions: WorkspacePermission[]): Promise<WatchFolderView> {
+    const resolved = await this.workspaceGrants.resolve(directory);
+    return this.routineFolders.add(resolved, permissions);
   }
   /**
    * `orglet run` (COD-245): starts an existing, enabled routine that was approved as it is now, with the files the
@@ -1632,7 +1641,8 @@ export class CoreService {
       if (chosen) this.takeNewChatCapabilities(this.newChatTarget(input));
       if (folder) {
         if (folder.resolved) this.workspaceGrants.applyInsideTransaction(task.id, folder.resolved, folder.pending.permissions);
-        this.workspaceGrants.takePending(this.newChatTarget(input));
+        // A schedule's run brings its own folder (COD-294); the folder waiting for the orglet's empty chat stays there.
+        if (!routine) this.workspaceGrants.takePending(this.newChatTarget(input));
       }
     });
     this.start(task, true);

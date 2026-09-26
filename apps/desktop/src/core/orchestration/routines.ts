@@ -1,8 +1,12 @@
 import { RoutineInput, type FolderIntake, type Routine, type TaskInput, type Team, type Worker, type Skill, type Task } from '../../shared/contracts';
 import { SKIPPED_WHILE_INACTIVE, nextOccurrence } from '../../shared/schedule';
-import { triggerOf, type RoutineTrigger } from '../../shared/routine-triggers';
+import { triggerOf, type RoutineTrigger, type RoutineWorkspace } from '../../shared/routine-triggers';
 import { Store, id, now } from '../storage/database';
 import type { RoutineFolders } from '../storage/routine-folders';
+import type { ResolvedDirectory } from '../storage/workspace-grants';
+import { WorkspacePermissions, type WorkspacePermission } from '../../shared/workspace-access';
+import { permissionsForLevel, workspaceLevelOf } from '../../shared/capability-status';
+import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
 import { Sources, fingerprint } from '../tools/sources';
 import { resolveWorkerModel } from '../models/resolve';
 import { readCustomConnections } from '../storage/custom-connections';
@@ -16,6 +20,14 @@ const PREVIOUS_RUN_BEFORE_CATCH_UP = 'Lần trước chưa kết thúc. Xử lý
 const PREVIOUS_RUN_BEFORE_EVENT = 'Lần trước của lịch này chưa kết thúc. Xử lý công việc đó rồi chạy lại.';
 const ROUTINE_DISABLED = 'Lịch đang tắt. Bật lịch trong app rồi chạy lại.';
 const TOO_MANY_SOURCES = 'Lịch có tối đa 20 nguồn. Bỏ bớt nguồn rồi chọn lại.';
+/** A run's changes still wait in its chat, so the next run would work from a folder without them (COD-294). */
+export const PREVIOUS_CHANGES_WAIT = 'Thay đổi của lần chạy trước vẫn chờ bạn xem. Mở lần chạy đó, áp dụng hoặc bỏ thay đổi rồi chạy lại.';
+
+/** The folder one run of a routine gets as its chat's grant: resolved just now, at the routine's level (COD-294). */
+export type RoutineRunFolder = { resolved: ResolvedDirectory; permissions: WorkspacePermission[] };
+
+/** A routine's working folder is gone or replaced: the run does not start and the card says why until the next save. */
+class WorkFolderUnavailable extends Error {}
 
 /** Files an event brings to one run, on top of the routine's own sources, and the ones it had to leave out. */
 export type RunAdditions = { sourceIds: string[]; excluded: FolderIntake['skipped'] };
@@ -31,13 +43,13 @@ export class Routines {
   private lastTick: number | null = null;
   private ticking = false;
   private dispatching = new Set<string>();
-  constructor(private store: Store, private sources: Sources, private notify: () => void, private dispatch: (input: TaskInput, next: Routine) => string, private clock: () => Date, private folders: RoutineFolders) {}
+  constructor(private store: Store, private sources: Sources, private notify: () => void, private dispatch: (input: TaskInput, next: Routine, folder?: RoutineRunFolder) => string, private clock: () => Date, private folders: RoutineFolders) {}
   isBusy() { return this.dispatching.size > 0; }
   /**
    * The fingerprint saving approves. A clock routine keeps the exact shape it had before triggers existed, so an
    * update does not take away every routine's approval; any other trigger adds itself, and a folder its identity.
    */
-  configuration(input: TaskInput, trigger?: RoutineTrigger) {
+  configuration(input: TaskInput, trigger?: RoutineTrigger, workspace?: RoutineWorkspace) {
     const team = input.teamId ? this.store.get<Team>('teams', input.teamId) : undefined;
     const workers = [...new Set(team ? [...team.memberIds, team.synthesizerId] : [input.workerId])].map(workerId => this.store.get<Worker>('workers', workerId));
     const skills = [...new Set(workers.map(worker => worker.skillId))].map(skillId => this.store.get<Skill>('skills', skillId));
@@ -47,19 +59,37 @@ export class Routines {
       const resolved = resolveWorkerModel(worker, undefined, readCustomConnections(this.store));
       return { provider: worker.provider, modelId: worker.modelId ?? null, model: resolved.id ?? null, pricingVersion: resolved.pricingVersion };
     });
-    // A schedule that reads pages approves its profile and site list too (COD-261); one without the browser keeps the
-    // exact shape it always had, so this change takes no approval away.
+    // A schedule that reads pages approves its profile and site list too (COD-261), and one with a working folder
+    // approves the folder's identity, its level and whether changes wait for review (COD-294). One with neither keeps
+    // the exact shape it always had, so these changes take no approval away.
     const browser = routineBrowserApproval(input);
+    const folder = workspace ? this.workspaceApproval(workspace) : undefined;
     const approved = triggerOf({ trigger });
-    if (approved.kind === 'schedule') return fingerprint(JSON.stringify(browser ? { team, workers, skills, models, browser } : { team, workers, skills, models }));
-    const folder = approved.kind === 'folder' ? this.folders.identity(approved.folderId) : null;
-    const triggered = { team, workers, skills, models, trigger: { kind: approved.kind, folder } };
-    return fingerprint(JSON.stringify(browser ? { ...triggered, browser } : triggered));
+    const base = approved.kind === 'schedule'
+      ? { team, workers, skills, models }
+      : { team, workers, skills, models, trigger: { kind: approved.kind, folder: approved.kind === 'folder' ? this.folders.identity(approved.folderId) : null } };
+    return fingerprint(JSON.stringify({ ...base, ...(browser ? { browser } : {}), ...(folder ? { workspace: folder } : {}) }));
+  }
+  /** What saving approves about a working folder: which folder on disk (path, volume, file id), how far, and review. */
+  private workspaceApproval(workspace: RoutineWorkspace) {
+    return { folder: this.folders.identity(workspace.folderId), level: workspaceLevelOf(workspace.permissions), review: workspace.review };
   }
   /** A folder trigger names a folder the picker granted; its name comes from the grant, not from the renderer. */
   private normalizedTrigger(trigger: RoutineTrigger | undefined): RoutineTrigger | undefined {
     if (trigger?.kind !== 'folder') return trigger;
     return { kind: 'folder', folderId: trigger.folderId, folderName: this.folders.nameOf(trigger.folderId) };
+  }
+  /**
+   * A working folder names a folder the picker granted at this level or wider (COD-294); its name comes from the grant.
+   * A crew hands each member's changes in as it finishes, since the next member works from them, so a crew's schedule
+   * never holds them for review.
+   */
+  private normalizedWorkspace(workspace: RoutineWorkspace | undefined, task: TaskInput): RoutineWorkspace | undefined {
+    if (!workspace) return undefined;
+    const permissions = WorkspacePermissions.parse(permissionsForLevel(workspaceLevelOf(workspace.permissions)));
+    const folderName = this.folders.workFolderName(workspace.folderId, permissions);
+    const review = task.teamId ? false : workspace.review;
+    return { folderId: workspace.folderId, folderName, permissions, review };
   }
   save(raw: unknown) {
     const input = RoutineInput.parse(raw);
@@ -69,7 +99,10 @@ export class Routines {
     if (!previous && this.store.all('routines').length >= 100) throw new Error('Workspace đã có đủ 100 lịch. Xóa hoặc sửa một lịch hiện có.');
     // A save that names no trigger keeps the one the routine has; switching back to the clock names `schedule`.
     const trigger = this.normalizedTrigger(input.trigger ?? previous?.trigger);
-    const routine: Routine = { ...input, ...(trigger ? { trigger } : {}), id: input.id ?? id(), revision: (previous?.revision ?? 0) + 1, approvedConfig: this.configuration(input.task, trigger), nextDueAt: nextOccurrence(input.schedule, this.clock()), pending: null, ...(previous?.lastTaskId ? { lastTaskId: previous.lastTaskId } : {}) };
+    // The same for the working folder (COD-294): left out keeps it, `null` takes it away.
+    const workspace = this.normalizedWorkspace(input.workspace === undefined ? previous?.workspace : input.workspace ?? undefined, input.task);
+    const { workspace: _workspace, ...rest } = input;
+    const routine: Routine = { ...rest, ...(trigger ? { trigger } : {}), ...(workspace ? { workspace } : {}), id: input.id ?? id(), revision: (previous?.revision ?? 0) + 1, approvedConfig: this.configuration(input.task, trigger, workspace), nextDueAt: nextOccurrence(input.schedule, this.clock()), pending: null, ...(previous?.lastTaskId ? { lastTaskId: previous.lastTaskId } : {}) };
     this.store.put('routines', routine); this.notify(); return routine;
   }
   /**
@@ -106,6 +139,38 @@ export class Routines {
     const routine = this.store.get<Routine>('routines', routineId);
     if (!routine.lastTaskId) return false;
     return UNFINISHED_TASK_STATUSES.includes(this.store.get<Task>('tasks', routine.lastTaskId).status);
+  }
+  /** Whether the run this routine started last still holds changes for the person to apply or discard (COD-294). */
+  previousChangesWait(routineId: string): boolean {
+    const routine = this.store.get<Routine>('routines', routineId);
+    if (!routine.lastTaskId) return false;
+    return this.store.heldForReview().includes(routine.lastTaskId);
+  }
+  /**
+   * The routine's working folder for this run, checked on disk now. A folder that is gone or was replaced at the same
+   * path stops the run, and the card says so until the schedule is saved again.
+   */
+  private async runFolder(routine: Routine): Promise<RoutineRunFolder> {
+    const workspace = routine.workspace!;
+    try {
+      const resolved = await this.folders.workFolder(workspace.folderId);
+      return { resolved, permissions: [...workspace.permissions] };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.note(routine.id, reason);
+      throw new WorkFolderUnavailable(reason);
+    }
+  }
+  /**
+   * The permissions a run with a working folder starts with: the routine's own, or its lead's defaults, with
+   * `workspace.apply` exactly when the schedule turned review off, so the run's hand-in follows the schedule (COD-294).
+   */
+  private runCapabilities(routine: Routine, workspace: RoutineWorkspace): ToolCapability[] {
+    const lead = this.store.get<Worker>('workers', routine.task.workerId);
+    const base = routine.task.toolCapabilities ?? snapshotCapabilities(lead.provider);
+    const withoutApply = base.filter(capability => capability !== 'workspace.apply');
+    if (workspace.review) return withoutApply;
+    return [...withoutApply, 'workspace.apply'];
   }
   /** New files in a watched folder start one run with them attached (COD-245). */
   async runArrivals(routineId: string, additions: RunAdditions): Promise<string> {
@@ -145,18 +210,27 @@ export class Routines {
         } else {
           try { await this.runOccurrence(routine, at); }
           catch (error) {
-            if (this.store.get<Routine>('routines', routine.id).revision === routine.revision) this.defer(routine, at, error instanceof Error ? error.message : 'Không thể bắt đầu lịch.');
+            const current = this.store.get<Routine>('routines', routine.id);
+            // A missing folder is not a miss to catch up: running it again fails the same way until the schedule is
+            // saved with a folder that is there. The card already carries the reason; the calendar moves on.
+            if (error instanceof WorkFolderUnavailable) this.advance(current, at);
+            else if (current.revision === routine.revision) this.defer(routine, at, error instanceof Error ? error.message : 'Không thể bắt đầu lịch.');
           }
         }
       }
     } finally { this.ticking = false; }
+  }
+  private advance(routine: Routine, at: Date) {
+    this.store.update('routines', { ...routine, nextDueAt: nextOccurrence(routine.schedule, at) });
+    this.notify();
   }
   private defer(routine: Routine, at: Date, reason: string) {
     this.store.update('routines', { ...routine, nextDueAt: nextOccurrence(routine.schedule, at), pending: { dueAt: routine.pending?.dueAt ?? routine.nextDueAt, reason } });
     this.notify();
   }
   private async runOccurrence(routine: Routine, at: Date): Promise<string> {
-    const advanced = (current: Routine): Routine => ({ ...current, pending: null, nextDueAt: new Date(current.nextDueAt) > at ? current.nextDueAt : nextOccurrence(current.schedule, at) });
+    // A run that starts also clears a note left by one that could not, such as a working folder that is back (COD-294).
+    const advanced = (current: Routine): Routine => ({ ...withoutNotice(current), pending: null, nextDueAt: new Date(current.nextDueAt) > at ? current.nextDueAt : nextOccurrence(current.schedule, at) });
     return this.startRun(routine, advanced, NO_ADDITIONS, PREVIOUS_RUN_BEFORE_CATCH_UP);
   }
   /** The guards every run of a routine passes, on a clock or on an event, before core creates its task. */
@@ -164,18 +238,21 @@ export class Routines {
     if (this.dispatching.has(routine.id)) throw new Error('Lịch đang được xử lý.');
     this.dispatching.add(routine.id);
     try {
-      if (routine.approvedConfig !== this.configuration(routine.task, routine.trigger)) throw new Error('Tí, skill, hội hoặc model đã đổi. Mở lịch, kiểm tra và lưu lại quyền chạy.');
+      if (routine.approvedConfig !== this.configuration(routine.task, routine.trigger, routine.workspace)) throw new Error('Tí, skill, hội hoặc model đã đổi. Mở lịch, kiểm tra và lưu lại quyền chạy.');
       if (this.previousRunActive(routine.id)) throw new Error(previousRunMessage);
+      if (this.previousChangesWait(routine.id)) throw new Error(PREVIOUS_CHANGES_WAIT);
       for (const sourceId of routine.task.sourceIds) await this.sources.verify(sourceId, routine.task.sourceIds);
+      const folder = routine.workspace ? await this.runFolder(routine) : undefined;
       const current = this.store.get<Routine>('routines', routine.id);
-      if (!current.enabled || current.revision !== routine.revision || current.approvedConfig !== this.configuration(current.task, current.trigger)) throw new Error('Lịch hoặc cấu hình đã thay đổi trong lúc kiểm tra.');
+      if (!current.enabled || current.revision !== routine.revision || current.approvedConfig !== this.configuration(current.task, current.trigger, current.workspace)) throw new Error('Lịch hoặc cấu hình đã thay đổi trong lúc kiểm tra.');
       const task: TaskInput = {
         ...current.task,
+        ...(current.workspace ? { toolCapabilities: this.runCapabilities(current, current.workspace) } : {}),
         sourceIds: [...current.task.sourceIds, ...additions.sourceIds],
         excludedSources: [...(current.task.excludedSources ?? []), ...additions.excluded],
       };
-      // Core commits this updated occurrence and the new task in one transaction.
-      return this.dispatch(task, next(current));
+      // Core commits this updated occurrence, the new task and its folder grant in one transaction.
+      return this.dispatch(task, next(current), folder);
     } finally { this.dispatching.delete(routine.id); }
   }
 }
@@ -199,7 +276,7 @@ export function routineBrowserApproval(input: TaskInput) {
   return { level: 'read' as const, profileId: choice.profileId, sites };
 }
 
-/** An event run clears the note left by an earlier event that could not start. */
+/** A run that starts clears the note left by an earlier one that could not. */
 function withoutNotice(routine: Routine): Routine {
   const { notice: _notice, ...rest } = routine;
   return rest;

@@ -1668,13 +1668,15 @@ export class Runner {
 
   /**
    * Whether a finished run's changes wait for the person before they reach the folder (COD-279): a solo chat's run,
-   * main chat or side thread, whose permissions (frozen and current alike) do not include `workspace.apply`. A crew
-   * member or a group reply hands in as it finishes, because the next orglet in the turn works from those files, and a
-   * schedule's run has nobody there to review it.
+   * main chat, side thread or a schedule's run, whose permissions (frozen and current alike) do not include
+   * `workspace.apply`. A crew member or a group reply hands in as it finishes, because the next orglet in the turn works
+   * from those files. A schedule's run holds its changes in its own chat unless the schedule turned review off, which
+   * gives the run `workspace.apply` (COD-294): nobody is there when it finishes, so by default nothing reaches the folder
+   * until the person has looked.
    */
   private holdsForReview(run: Run): boolean {
     const task = this.store.get<Task>('tasks', run.taskId);
-    if (run.stage !== undefined || run.snapshot.team || task.routineId) return false;
+    if (run.stage !== undefined || run.snapshot.team) return false;
     return !hasCapability(run, task, 'workspace.apply');
   }
 
@@ -2123,6 +2125,7 @@ export class Runner {
       workspacePermissions: run.snapshot.workspaceGrant?.permissions,
       language: this.store.setting<Language>('language', DEFAULT_LANGUAGE),
       sideThread: Boolean(current.sideOf),
+      schedule: Boolean(current.routineId),
     });
   }
   private permissionsOffHint(run: Run, task: Task): { permissionsOff?: { names: string[]; where: string }; permissionsOffInstruction?: string } {

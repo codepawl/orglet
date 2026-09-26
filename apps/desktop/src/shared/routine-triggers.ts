@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { WorkspacePermissions } from './workspace-access';
 
 /**
  * What starts a routine (COD-245). A clock (`schedule`, the only kind before this and the default for a routine
@@ -23,6 +24,20 @@ export type RoutineTrigger = z.infer<typeof RoutineTrigger>;
 /** A watched folder as the renderer sees it after the picker: an id and a name, no path. */
 export const WatchFolderView = z.object({ folderId: z.uuid(), name: z.string() }).strict();
 export type WatchFolderView = z.infer<typeof WatchFolderView>;
+
+/**
+ * A routine's own working folder (COD-294): a folder the picker granted, the level the schedule form chose and whether
+ * its runs' changes wait for review. Every run gets this folder at exactly this level as its chat's grant; the level is
+ * never wider than the one the picker was opened at. Like the watched folder, it names the grant, never a path, and
+ * `folderName` is written by the core from the grant on every save.
+ */
+export const RoutineWorkspace = z.object({
+  folderId: z.uuid(),
+  folderName: z.string().max(260),
+  permissions: WorkspacePermissions,
+  review: z.boolean(),
+}).strict();
+export type RoutineWorkspace = z.infer<typeof RoutineWorkspace>;
 
 const SCHEDULE_TRIGGER: RoutineTrigger = { kind: 'schedule' };
 

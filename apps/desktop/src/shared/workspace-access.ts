@@ -38,12 +38,13 @@ export type NewChatTarget = z.infer<typeof NewChatTarget>;
 const ReadOnly = z.tuple([z.literal('read')]);
 
 /**
- * What the renderer may ask the native picker for: a folder for a chat row, for a chat that has no row yet, or for
- * a routine to watch.
+ * What the renderer may ask the native picker for: a folder for a chat row, for a chat that has no row yet, for a
+ * routine to watch, or for a routine to work in at the level its form chose (COD-294).
  */
 export const PickWorkspace = z.union([
   z.object({ taskId: z.uuid(), permissions: WorkspacePermissions }).strict(),
   z.object({ watch: z.literal(true), permissions: ReadOnly }).strict(),
+  z.object({ routine: z.literal(true), permissions: WorkspacePermissions }).strict(),
   z.object({ workerId: z.uuid(), permissions: WorkspacePermissions }).strict(),
   z.object({ teamId: z.uuid(), permissions: WorkspacePermissions }).strict(),
   z.object({ workerIds: GroupChatWorkerIds, permissions: WorkspacePermissions }).strict(),
@@ -55,6 +56,7 @@ const Directory = z.string().min(1).max(32768);
 export const GrantWorkspace = z.union([
   z.object({ taskId: z.uuid(), permissions: WorkspacePermissions, directory: Directory }).strict(),
   z.object({ watch: z.literal(true), permissions: ReadOnly, directory: Directory }).strict(),
+  z.object({ routine: z.literal(true), permissions: WorkspacePermissions, directory: Directory }).strict(),
   z.object({ workerId: z.uuid(), permissions: WorkspacePermissions, directory: Directory }).strict(),
   z.object({ teamId: z.uuid(), permissions: WorkspacePermissions, directory: Directory }).strict(),
   z.object({ workerIds: GroupChatWorkerIds, permissions: WorkspacePermissions, directory: Directory }).strict(),

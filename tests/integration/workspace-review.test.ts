@@ -327,11 +327,20 @@ describe('what hands in at once', () => {
     expect(copyOf(run.id).review).toBeUndefined();
   });
 
-  it("a schedule's run, which nobody is there to review", async () => {
+  it("a schedule's run whose schedule turned review off (COD-294)", async () => {
+    task = { ...task, routineId: id(), toolCapabilities: REVIEW_OFF };
+    store.put('tasks', task);
+    run = newRun({}, { toolCapabilities: REVIEW_OFF });
+    await core().runner.run(task, run);
+    expect(integrated).toEqual(['note.txt']);
+  });
+
+  it("but not a schedule's run with review on, which waits in its own chat (COD-294)", async () => {
     task = { ...task, routineId: id() };
     store.put('tasks', task);
     await core().runner.run(task, run);
-    expect(integrated).toEqual(['note.txt']);
+    expect(integrated).toEqual([]);
+    expect(copyOf(run.id).review.state).toBe('pending');
   });
 
   it('turning review on during a run stops nothing and holds that run\'s hand-in', async () => {

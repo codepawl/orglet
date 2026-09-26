@@ -109,6 +109,21 @@ let cliServer: CliServer | undefined;
  * Brings the window forward for `orglet open`, and with a chat asks the renderer to show it. Windows may only flash
  * the taskbar button instead: it does not let a background process take the foreground.
  */
+/** What the folder picker's title says: what the folder is for, and the level the person is granting. */
+function workspacePickerTitle(input: PickWorkspace): string {
+  if ('watch' in input) return tr('Chọn thư mục để lịch theo dõi: chỉ đọc');
+  const runsCommands = input.permissions.includes('execute');
+  const edits = input.permissions.includes('write');
+  // A routine's own working folder says it is for the schedule (COD-294).
+  if ('routine' in input) {
+    if (runsCommands) return tr('Chọn thư mục làm việc cho lịch: đọc, sửa file và chạy lệnh');
+    if (edits) return tr('Chọn thư mục làm việc cho lịch: đọc và sửa file');
+    return tr('Chọn thư mục làm việc cho lịch: chỉ đọc');
+  }
+  if (runsCommands) return tr('Chọn workspace: đọc, sửa file và chạy lệnh');
+  if (edits) return tr('Chọn workspace: đọc và sửa file');
+  return tr('Chọn workspace: chỉ đọc');
+}
 function showWindow(chat?: CliChat) {
   if (!window || window.isDestroyed()) return;
   if (window.isMinimized()) window.restore();
@@ -567,9 +582,7 @@ async function start() {
     if ('taskId' in input) await request('workspaceAccess', { taskId: input.taskId });
     // A routine's watched folder is read-only and says what it is for (COD-245); the core keeps its path.
     const watching = 'watch' in input;
-    const title = watching ? tr('Chọn thư mục để lịch theo dõi: chỉ đọc')
-      : input.permissions.includes('execute') ? tr('Chọn workspace: đọc, sửa file và chạy lệnh')
-      : input.permissions.includes('write') ? tr('Chọn workspace: đọc và sửa file') : tr('Chọn workspace: chỉ đọc');
+    const title = workspacePickerTitle(input);
     const result = await dialog.showOpenDialog(window, {
       title, properties: ['openDirectory'],
       buttonLabel: watching ? tr('Theo dõi thư mục này') : tr('Cấp quyền workspace'),

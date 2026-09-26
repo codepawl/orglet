@@ -15,7 +15,8 @@ import { desktopLevels, type DesktopLevel } from '../../shared/desktop';
 
 export type PermissionWorker = Pick<Worker, 'id' | 'name' | 'provider'> & { connected: boolean };
 
-const levelNames: Record<WorkspaceLevel, string> = translated({
+/** The folder's four levels as every folder control names them: a chat's and a schedule's (COD-294). */
+export const workspaceLevelNames: Record<WorkspaceLevel, string> = translated({
   none: 'Không dùng thư mục',
   read: 'Chỉ đọc file',
   write: 'Đọc và sửa file',
@@ -103,7 +104,7 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
   desktopAvailable?: boolean;
   /** How many desktop apps the chat granted, shown under the level like a folder's name. */
   desktopApps?: number;
-  /** Whether the review-before-apply switch is shown with an editable folder: a schedule's run applies as it finishes (COD-279). */
+  /** Whether the review-before-apply switch is shown with an editable folder (COD-279); on unless a caller has its own. */
   reviewShown?: boolean;
   /** Why this chat's changes cannot wait for review (a crew or a group chat); the switch shows off and disabled with this line. */
   reviewLocked?: string;
@@ -162,7 +163,7 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
       <span className="permission-folder-control">
         <Select ariaLabel={t('Thư mục làm việc')} size="sm" value={state.workspace} disabled={folderDisabled}
           onChange={value => onWorkspace(value as WorkspaceLevel, state.folder ? 'keep' : 'pick')}
-          options={workspaceLevels.map(level => ({ value: level, label: levelNames[level] }))} />
+          options={workspaceLevels.map(level => ({ value: level, label: workspaceLevelNames[level] }))} />
         {folderLocked !== undefined ? <span className="permission-folder-name permission-folder-pending">{folderLocked}</span>
           : loading ? <span className="permission-folder-name permission-folder-pending"><Skeleton width="12ch" /></span>
           : state.folder && <span className="permission-folder-name">

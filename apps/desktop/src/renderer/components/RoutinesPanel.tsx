@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Routine, TaskInput, Worker, Workspace } from '../../shared/contracts';
+import type { Routine, Task, TaskInput, Worker, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
-import { AppWindow, ShieldCheck, CalendarRange, Sun, Users, ArrowLeft, CalendarX2, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
+import { AppWindow, ShieldCheck, CalendarRange, Sun, Users, ArrowLeft, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
 import { SKIPPED_WHILE_INACTIVE, TimeZone } from '../../shared/schedule';
@@ -14,9 +14,11 @@ import { t } from '../i18n';
 import { currentLanguage, currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Switch, SwitchField } from './Switch';
-import { StatusMark } from './StatusMark';
+import { StatusMark, taskStatusMark, type StatusMarkState } from './StatusMark';
 import { CommandBlock, Input, Textarea } from '@codepawl/orglet-ui';
-import { triggerOf, type RoutineTrigger, type RoutineTriggerKind } from '../../shared/routine-triggers';
+import { triggerOf, type RoutineTrigger, type RoutineTriggerKind, type RoutineWorkspace } from '../../shared/routine-triggers';
+import { permissionsForLevel, workspaceLevelOf, workspaceLevels, type WorkspaceLevel } from '../../shared/capability-status';
+import { workspaceLevelNames } from './PermissionControls';
 import { toast } from './toast';
 import { Avatar, RosterAvatars } from './Avatar';
 import { teamRoster } from '../assignees';
@@ -70,6 +72,25 @@ async function copyCommand(command: string) {
 function WorkerFace({ worker, size }: { worker: Worker; size: 'xxs' | 'xs' }) {
   return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />;
 }
+/** What a schedule's card says about its newest run: its mark and a few words, the words in the mark's colour. */
+export type LastRunOutcome = { label: string; mark: StatusMarkState };
+
+/**
+ * What became of a schedule's newest run, for its card (COD-294). Before this the card only offered "Open latest run",
+ * so a run that failed at night looked the same as one that went well. Changes held for review count as waiting for
+ * the person, since the next run waits for them too.
+ */
+export function lastRunOutcome(task: Pick<Task, 'id' | 'status'>, heldForReview: readonly string[]): LastRunOutcome {
+  const mark = taskStatusMark(task.status, false);
+  if (task.status === 'queued' || task.status === 'running' || task.status === 'pausing') return { label: t('Đang chạy'), mark };
+  if (task.status === 'waiting_input' || task.status === 'waiting_budget') return { label: t('Đang chờ bạn'), mark };
+  if (task.status === 'failed' || task.status === 'interrupted') return { label: t('Cần xem lại'), mark };
+  if (task.status === 'paused') return { label: t('Đã tạm dừng'), mark };
+  if (task.status === 'cancelled') return { label: t('Đã dừng'), mark };
+  if (heldForReview.includes(task.id)) return { label: t('Thay đổi đang chờ bạn xem'), mark: { variant: 'dashed', tone: 'error' } };
+  if (task.status === 'partial') return { label: t('Xong một phần'), mark };
+  return { label: t('Đã xong'), mark };
+}
 /** Which screen of the Routines dialog is showing; the dialog title renders it as a breadcrumb. */
 export type RoutineView = { editing: false } | { editing: true; routine?: Routine };
 export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack, onDirty }: { workspace: Workspace; draft?: TaskInput; openTask: (id: string) => void; view: RoutineView; onView: (view: RoutineView) => void; onBack: () => void; onDirty: (dirty: boolean) => void }) {
@@ -86,6 +107,12 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
     const worker = workspace.workers.find(entry => entry.id === item.task.workerId);
     return worker ? <WorkerFace worker={worker} size="xxs" /> : <UserRound size={14} aria-hidden="true" />;
   };
+  /** The newest run's outcome, when that run is still a chat here. */
+  const lastRun = (item: Routine) => {
+    const task = item.lastTaskId ? workspace.tasks.find(entry => entry.id === item.lastTaskId) : undefined;
+    return task ? lastRunOutcome(task, workspace.heldForReview) : undefined;
+  };
+  const shownOnCard = workspace.routines.some(item => item.notice && tMessage(item.notice.reason) === error);
   const deleteSchedule = async (item: Routine) => {
     await orglet.call('deleteRoutine', { id: item.id });
     toast(t('Đã xóa lịch'), 'success', item.name);
@@ -128,6 +155,7 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
           <li><Wallet size={14} aria-hidden="true" />{t('{0} mỗi lần', [formatMoney(item.task.budgetMicros)])}</li>
           {/* A schedule with no sources says nothing about them, rather than "0 sources" (COD-258). */}
           {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{item.task.sourceIds.length === 1 ? t('1 nguồn') : t('{0} nguồn', [item.task.sourceIds.length])}</li>}
+          {item.workspace && <li title={workspaceLevelNames[workspaceLevelOf(item.workspace.permissions)]}><FolderOpen size={14} aria-hidden="true" /><span className="routine-meta-folder">{item.workspace.folderName}</span></li>}
         </ul>
         <p className="routine-brief"><MessageSquareText size={14} aria-hidden="true" /><span>{item.task.brief}</span></p>
         {/* A miss is news, not an error (COD-283): which run, when, why in plain words, and what catching up does. */}
@@ -144,15 +172,26 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
         {item.notice && <div className="routine-alert" role="status"><FolderX size={16} aria-hidden="true" /><div>
           <h4>{t('Lịch chưa chạy')}</h4>
           <p>{tMessage(item.notice.reason)}</p>
-          <p className="muted">{t('Lúc {0}. Tệp đến khi app tắt không được chạy lại.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])}</p>
+          <p className="muted">{trigger.kind === 'folder'
+            ? t('Lúc {0}. Tệp đến khi app tắt không được chạy lại.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])
+            : t('Lần gần nhất lúc {0}.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])}</p>
           <div className="actions"><Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Ẩn thông báo')}</Button></div>
         </div></div>}
-        {item.lastTaskId && <Button className="routine-last" disabled={busy} onClick={() => openTask(item.lastTaskId!)}><MessageSquare size={15} />{t('Mở lần chạy gần nhất')}</Button>}
+        {lastRun(item) && <LastRunButton outcome={lastRun(item)!} disabled={busy} onOpen={() => openTask(item.lastTaskId!)} />}
       </section>;
       })}
     </div>
-    {error && <p role="alert" className="error">{error}</p>}
+    {/* A run that could not start because its folder is gone says so on its card (COD-294); not twice. */}
+    {error && !shownOnCard && <p role="alert" className="error">{error}</p>}
   </div>;
+}
+/** Opens a schedule's newest run and says what became of it, in the colour of its mark (COD-294). */
+function LastRunButton({ outcome, disabled, onOpen }: { outcome: LastRunOutcome; disabled: boolean; onOpen: () => void }) {
+  return <Button className="routine-last" disabled={disabled} onClick={onOpen}>
+    <StatusMark variant={outcome.mark.variant} tone={outcome.mark.tone} label={outcome.label} decorative />
+    <span>{t('Mở lần chạy gần nhất')}</span>
+    <span className="routine-last-outcome" data-tone={outcome.mark.tone}>{outcome.label}</span>
+  </Button>;
 }
 /**
  * The permissions a schedule's task carries: what it had (or the lead's defaults), with the browser reading or not and
@@ -192,6 +231,13 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   // A weekly "check what changed on the web" needs web search as much as the browser; a search never asks anyone,
   // so an unattended run may use it like a chat can (dogfood, 2026-09-26).
   const [web, setWeb] = useState((initial?.toolCapabilities ?? []).includes('network.web'));
+  // The schedule's own working folder (COD-294): picked here at the level chosen here, and approved by saving.
+  // `workFolder.granted` is the widest level the picker was opened at, so a higher one asks for the folder again.
+  const savedWorkspace = routine?.workspace;
+  const [workFolder, setWorkFolder] = useState<{ folderId: string; name: string; granted: WorkspaceLevel } | undefined>(savedWorkspace
+    ? { folderId: savedWorkspace.folderId, name: savedWorkspace.folderName, granted: workspaceLevelOf(savedWorkspace.permissions) } : undefined);
+  const [workLevel, setWorkLevel] = useState<WorkspaceLevel>(savedWorkspace ? workspaceLevelOf(savedWorkspace.permissions) : 'none');
+  const [review, setReview] = useState(savedWorkspace?.review ?? true);
   const browser = useBrowserState();
   const nameInput = useRef<HTMLInputElement>(null);
   const zoneError = error === INVALID_ZONE();
@@ -207,7 +253,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
   const destination = providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo');
   // Leaving asks for confirmation only when something differs from what the editor opened with.
-  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`), web]);
+  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`), web, workFolder?.folderId, workLevel, review]);
   // The permissions the saved task carries: what it had, with the web and the browser as chosen here. A schedule
   // that never had either keeps carrying none, so saving it again changes nothing.
   const leadProvider = (workspace.workers.find(worker => worker.id === (team?.synthesizerId ?? target)) ?? workspace.workers[0]).provider;
@@ -215,6 +261,27 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const trigger: RoutineTrigger | undefined = triggerKind === 'folder'
     ? folder && { kind: 'folder', folderId: folder.folderId, folderName: folder.name }
     : { kind: triggerKind };
+  const workingFolder: RoutineWorkspace | null = workFolder && workLevel !== 'none'
+    ? { folderId: workFolder.folderId, folderName: workFolder.name, permissions: permissionsForLevel(workLevel), review: team ? false : review }
+    : null;
+  const editsFolder = workLevel === 'write' || workLevel === 'execute';
+  /**
+   * A level for the working folder, the way a chat's folder control works (COD-291): the first folder, or a level wider
+   * than the one it was picked at, opens the native picker at that level; a narrower one keeps the folder. Cancelling
+   * the picker leaves everything as it was.
+   */
+  const chooseWorkLevel = async (level: WorkspaceLevel, pickAgain = false) => {
+    if (level === 'none') { setWorkLevel('none'); return; }
+    const within = workFolder && workspaceLevels.indexOf(level) <= workspaceLevels.indexOf(workFolder.granted);
+    if (within && !pickAgain) { setWorkLevel(level); return; }
+    setBusy(true); setError('');
+    try {
+      const picked = await orglet.pickRoutineWorkspace(permissionsForLevel(level));
+      if (!picked) return;
+      setWorkFolder({ folderId: picked.folderId, name: picked.name, granted: level });
+      setWorkLevel(level);
+    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  };
   const pickFolder = async () => {
     setBusy(true); setError('');
     try {
@@ -244,7 +311,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       // the worker, skill, team or model has changed since, and a restored backup comes back off and unapproved.
       // An event trigger still carries the time fields, valid ones, so switching back to the clock keeps them.
       const zone = TimeZone.safeParse(timeZone).success ? timeZone : Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { frequency, weekday, time, timeZone: zone }, trigger, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers,
+      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { frequency, weekday, time, timeZone: zone }, trigger, workspace: workingFolder, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers,
         ...(toolCapabilities ? { toolCapabilities } : {}), ...(browserLevel === 'read' ? { browser: { profileId: browserProfile, sites: browserSites } } : {}) } });
       saved();
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
@@ -303,6 +370,28 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
     <section className="routine-group" aria-labelledby="routine-group-limits">
       <h4 id="routine-group-limits">{t('Giới hạn & quyền')}</h4>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} required /></label>
+      {/* The schedule's own folder (COD-294): the chat's folder levels and native picker, saved and approved with the
+          schedule. Without it a scheduled run has no folder, whatever the orglet's chat was given. */}
+      <div className="routine-workspace">
+        <Select label={<FieldLabel icon={FolderOpen}>{t('Thư mục làm việc')}</FieldLabel>} value={workLevel} disabled={busy || !providers.length}
+          onChange={value => void chooseWorkLevel(value as WorkspaceLevel)}
+          options={workspaceLevels.map(level => ({ value: level, label: workspaceLevelNames[level] }))} />
+        {workFolder && workLevel !== 'none' && <p className="routine-folder-name"><Folder size={15} aria-hidden="true" /><span title={workFolder.name}>{workFolder.name}</span>
+          <button type="button" className="text-link" disabled={busy} aria-label={t('Đổi thư mục làm việc {0}', [workFolder.name])} onClick={() => void chooseWorkLevel(workLevel, true)}>{t('Đổi')}</button></p>}
+        <p className="muted">{workLevel === 'none'
+          ? t('Không có thư mục, mỗi lần chạy chỉ có brief và nguồn.')
+          : workLevel === 'execute'
+            ? t('Mỗi lần chạy làm trên bản sao riêng của thư mục. Lệnh chạy không có mạng.')
+            : t('Mỗi lần chạy làm trên bản sao riêng của thư mục.')}</p>
+        {editsFolder && <SwitchField checked={team ? false : review} onChange={setReview} disabled={busy || Boolean(team)}
+          description={team
+            ? t('Hội áp dụng thay đổi của từng Tí ngay khi Tí đó xong, vì Tí sau làm tiếp trên các tệp đó.')
+            : review
+              ? t('Thay đổi chờ trong chat của lần chạy đến khi bạn bấm Áp dụng. Lần chạy sau đợi đến lúc đó.')
+              : t('Thay đổi vào thư mục ngay khi lần chạy xong.')}>
+          <FieldLabel icon={FileDiff}>{t('Xem trước khi áp dụng')}</FieldLabel>
+        </SwitchField>}
+      </div>
       <SwitchField checked={web} onChange={setWeb} disabled={!providers.length}
         description={t('Tìm qua {0}, đọc trang web công khai.', [WEB_SEARCH_PROVIDER_NAMES[workspace.webSearchProvider]])}>
         <FieldLabel icon={Globe}>{t('Đọc và tìm kiếm web')}</FieldLabel>
