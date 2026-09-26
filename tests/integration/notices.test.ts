@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { collapseNotices, isUnreadNotice, noticeGroupLabels, useNotices, type Notice } from '../../apps/desktop/src/renderer/components/notifications';
+import { collapseNotices, isUnreadNotice, newNoticesFirst, noticeGroupLabels, useNotices, type Notice } from '../../apps/desktop/src/renderer/components/notifications';
 import { toast } from '../../apps/desktop/src/renderer/components/toast';
 import { calendarDaysAgo, clockLabel, dayLabel } from '../../apps/desktop/src/renderer/components/TimeMark';
 
@@ -138,5 +138,18 @@ describe('what counts as unread', () => {
     expect(noticeGroupLabels(rows, seen.id, 'New', () => 'Today')).toEqual(['New', 'Today', 'Today']);
     expect(isUnreadNotice(confirmation, seen.id)).toBe(false);
     expect(isUnreadNotice(problem, seen.id)).toBe(true);
+  });
+
+  it('lists a new answer before newer confirmations, so "new" and the day each head the list once', () => {
+    const seen = notice('Đã tạo Tí', '2026-09-26T12:30:00.000Z', { confirmation: true });
+    const answer = notice('Dev đã trả lời trong chat phụ', '2026-09-26T12:37:00.000Z');
+    const created = notice('Đã tạo Tí', '2026-09-26T12:38:00.000Z', { confirmation: true });
+    const saved = notice('Đã lưu', '2026-09-26T12:50:00.000Z', { confirmation: true });
+    const rows = newNoticesFirst(collapseNotices([saved, created, answer, seen]), seen.id);
+    expect(rows.map(row => row.notice.text)).toEqual(['Dev đã trả lời trong chat phụ', 'Đã lưu', 'Đã tạo Tí', 'Đã tạo Tí']);
+    expect(noticeGroupLabels(rows, seen.id, 'New', () => 'Today')).toEqual(['New', 'Today', 'Today', 'Today']);
+    // Before the centre knows what was seen, nothing moves.
+    expect(newNoticesFirst(collapseNotices([saved, created, answer, seen]), null).map(row => row.notice.text))
+      .toEqual(['Đã lưu', 'Đã tạo Tí', 'Dev đã trả lời trong chat phụ', 'Đã tạo Tí']);
   });
 });
