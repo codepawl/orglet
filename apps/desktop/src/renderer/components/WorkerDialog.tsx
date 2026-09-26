@@ -18,7 +18,7 @@ import { ProviderMark } from './ProviderMark';
 import { StatusMark } from './StatusMark';
 import { AvatarPicker } from './Avatar';
 import { isMascot, mascotIds } from './mascots';
-import { autoMascot } from './mascotSuggest';
+import { autoMascot, defaultAvatarColor, distinctAvatar } from './mascotSuggest';
 import { TabbedFormDialog } from './DialogTabs';
 import { readiness, readyFirst, type ProviderChoice, type Readiness } from './providers';
 import { openCodeModelIssue } from './openCodeModel';
@@ -142,6 +142,13 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
   // Claude Code is the one harness that takes a spending cap, so its chat's limit is set here too.
   const capped = paid || provider === 'claude-code';
   const skill = workspace.skills.find(item => item.id === skillId);
+  // A new worker nobody picked a face for starts on one the other workers do not show, face or colour, and keeps it
+  // once saved; picking anything in the avatar picker takes over from there.
+  const otherWorkers = workspace.workers.filter(item => item.id !== worker?.id);
+  const automaticAvatar = !worker && !isMascot(avatar.mascot)
+    ? distinctAvatar({ name, description, skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }, seed, takenMascots, otherWorkers.map(defaultAvatarColor))
+    : undefined;
+  const shownAvatar = automaticAvatar ? { ...automaticAvatar, ...avatar } : avatar;
   const clearError = () => { setError(''); setInvalid(undefined); };
   const fail = (at: Tab, message: string, field?: InvalidField) => {
     setTab(at); setError(message); setInvalid(field); setFlash(n => n + 1);
@@ -165,7 +172,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
     const pickedServers = mcpServerIds.filter(serverId => (workspace.mcpServers ?? []).some(server => server.id === serverId));
     setBusy(true); clearError();
     try {
-      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(avatar).length ? { avatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
+      const saved = await orglet.call('saveWorker', { ...(worker ? { id: worker.id } : {}), name, instructions, provider, skillId, taskBudgetMicros, ...(Object.keys(shownAvatar).length ? { avatar: shownAvatar } : {}), ...(description.trim() ? { description: description.trim() } : {}), ...(provider !== 'demo' && trimmedModel ? { modelId: trimmedModel } : {}), ...(autoApplyProposals ? { autoApplyProposals: true } : {}), ...(pickedServers.length ? { mcpServerIds: pickedServers } : {}) });
       if (!worker && draftCapabilities) await orglet.call('setToolCapabilities', { workerId: saved.id, capabilities: draftCapabilities });
       toast(worker ? t('Đã lưu Tí') : t('Đã tạo Tí'), 'success', name);
       if (!worker) onCreated?.(saved.id);
@@ -178,7 +185,7 @@ export function WorkerDialog({ open, worker, workspace, connections, harnesses, 
 
   return <TabbedFormDialog open={open} onClose={onClose} title={worker ? t('Thiết lập Tí') : t('Tí mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="worker-panel" description={tab === 'skill' ? t('Gói nhập từ thư mục cần review trong Thư viện trước.') : tab === 'permissions' ? t('Cho chat riêng của Tí; chat hội có quyền riêng.') : tab === 'memory' ? t('Điều Tí mang theo giữa các cuộc trò chuyện.') : undefined} onSubmit={() => void submit()} submitLabel={t('Lưu Tí')} busy={busy} error={error} focusField={initialField}>
     {tab === 'general' && <>
-      <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={avatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
+      <div className="field"><span className="field-title"><FieldLabel icon={Smile}>{t('Avatar')}</FieldLabel></span><AvatarPicker name={name} seed={seed} hint={description} hints={{ skill: skill?.name, instructions: instructions === defaultInstructions ? undefined : instructions }} taken={takenMascots} savedColors={workspace.avatarColors} onSavedColorsChange={colors => void orglet.call('saveAvatarColors', { colors }).catch(error => toast(error instanceof Error ? error.message : String(error), 'error', t('Màu avatar đã lưu')))} value={shownAvatar} onChange={setAvatar} badge={provider === 'demo' ? undefined : <ProviderMark provider={provider} size="small" decorative />} /></div>
       <label><FieldLabel icon={UserRound} required>{t('Tên Tí')}</FieldLabel><Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={80} placeholder={t('Ví dụ: Data reviewer')} invalid={invalid === 'name'} flash={flash} /></label>
       <label><FieldLabel icon={AlignLeft}>{t('Mô tả ngắn')}</FieldLabel><Input value={description} onChange={event => setDescription(event.target.value)} maxLength={160} placeholder={t('Ví dụ: Đọc log và kiểm tra phần scoring')} /></label>
       <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn')}</FieldLabel><Textarea data-field="instructions" rows={6} value={instructions} onChange={event => { setInstructions(event.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>
