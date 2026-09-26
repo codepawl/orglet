@@ -4,7 +4,7 @@ import { twMerge } from 'tailwind-merge';
 import { X } from 'lucide-react';
 import { displayCurrency, moneySymbol } from './money';
 import { useRef, type ComponentProps, type ReactNode } from 'react';
-import { Button } from '@codepawl/orglet-ui';
+import { Button, MoneyInput as KitMoneyInput } from '@codepawl/orglet-ui';
 import { t } from '../i18n';
 
 export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
@@ -20,9 +20,9 @@ export const OPEN_POPUP_SELECTOR = '[aria-haspopup][aria-expanded="true"], [role
 export function keepOpenForPopup(event: KeyboardEvent) {
   if (document.activeElement?.closest(OPEN_POPUP_SELECTOR)) event.preventDefault();
 }
-/** Money entry in the chosen display currency, or explicit USD for provider bill reconciliation. */
-export function MoneyInput({ value, onChange, invalid, flash, currencyCode, ...props }: Omit<ComponentProps<'input'>, 'value' | 'onChange'> & { value: string; onChange: (value: string) => void; invalid?: boolean; flash?: number; currencyCode?: 'USD' }) {
-  return <span className={cn('money-input', invalid && 'invalid')} data-flash={invalid ? flash : undefined}><span aria-hidden="true">{currencyCode === 'USD' ? '$' : moneySymbol()}</span><input {...props} inputMode="decimal" value={value} aria-invalid={invalid || undefined} onChange={event => onChange(event.target.value)} /><span className="money-currency" aria-hidden="true">{currencyCode ?? displayCurrency().code}</span></span>;
+/** Money entry in the chosen display currency, or explicit USD for provider bill reconciliation (the kit's input, COD-274). */
+export function MoneyInput({ currencyCode, ...props }: Omit<ComponentProps<typeof KitMoneyInput>, 'symbol' | 'code'> & { currencyCode?: 'USD' }) {
+  return <KitMoneyInput {...props} symbol={currencyCode === 'USD' ? '$' : moneySymbol()} code={currencyCode ?? displayCurrency().code} />;
 }
 export function Drawer({ open, onClose, title, actions, description, children }: { open: boolean; onClose: () => void; title: ReactNode; actions?: ReactNode; description?: ReactNode; children: ReactNode }) {
   const returnFocus = useRef<HTMLElement | null>(null);

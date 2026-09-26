@@ -93,6 +93,8 @@ loads the switch's styles.
   `cancelLabel` as the way back, and `asksOnOpen` opens a lone asking item straight on its question. Arrow keys move
   between items, Escape and a pointer outside close it, and `contextMenuOf` opens it at the pointer on a right-click
   in the matching ancestor.
+- `MoneyInput`: an amount with the currency `symbol` before it and its `code` after it, both hidden from the field's
+  name; the text stays as typed and converting it is the application's. `invalid` and `flash` work as on `Input`.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
