@@ -110,6 +110,13 @@ loads the switch's styles.
   `error` or `info`, with at most one `{ label, onSelect }` action. A repeated message replaces its older copy, three
   at most are visible, and a plain success goes after 3 s, anything else after 6 s. Render one
   `<Toaster icons={{ success, error, info }} renderText? />`; it portals to the page, so an open modal does not hide it.
+- `Select`: a single-choice dropdown (the select-only combobox pattern) named by `labelledBy` or `ariaLabel`, with a
+  `placeholder`. Options (`SelectOption`) take `icon`, `detail`, `note`, `group`, `disabled`, `dimmed`, `badge` and
+  `labelStyle`; `size="sm"`, `inlineDetail`, `menuMinWidth`, `invalid` with `flash`, and `field` (the trigger's
+  `data-field`). The list is portaled into the open dialog or the page, flips up when there is more room above, fits
+  the window and only scrolls when it must. Arrows, Page Up and Down, Home and End, typing to jump, Enter or Space to
+  choose, Escape to close without closing the dialog. Sizes come from `--org-select-height`, `--org-select-radius` and
+  `--org-select-option-height`.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
