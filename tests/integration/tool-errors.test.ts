@@ -30,7 +30,6 @@ import { isPlanRequest, memberIdsFromPlanPrompt } from './team-plan';
 
 const HANDS_IN_AT_ONCE: ToolCapability[] = ['source.read', 'skill.read', 'app.propose', 'workspace.apply'];
 const hashOf = (text: string) => createHash('sha256').update(text).digest('hex');
-const signal = () => new AbortController().signal;
 const usage = { input: 10, output: 10 };
 
 let directory: string;
