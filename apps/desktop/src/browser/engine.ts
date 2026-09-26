@@ -43,6 +43,11 @@ type RunSession = {
   /** The person has taken this run's browser over: its popups stay open and a file picker is theirs to use. */
   held: boolean;
   /**
+   * The person asked to see this run's window, with Show browser window or Take over. Until the run ends the window
+   * stays where they put it; before that, Orglet keeps it minimized.
+   */
+  shownToPerson: boolean;
+  /**
    * What the run's pages tried that Orglet stopped, counted so a step can say what happened during it. Dialogs are
    * numbered, since only the last few are kept.
    */
@@ -61,6 +66,44 @@ export type BrowserEngineOptions = {
   resolve?: ResolveAddresses;
   /** How long the browser stays open after the last run and sign-in window are done. */
   idleMs?: number;
+  /** How windows are read and moved. The app uses Chrome's own window commands; tests pass their own. */
+  windows?: BrowserWindows;
+};
+
+export type BrowserWindowState = 'normal' | 'minimized' | 'maximized' | 'fullscreen';
+
+/** Reads and sets the state of the window a tab is in. Nothing here brings a window to the front. */
+export type BrowserWindows = {
+  state(page: Page): Promise<BrowserWindowState | undefined>;
+  set(page: Page, state: 'minimized' | 'normal'): Promise<void>;
+};
+
+/** Chrome's window commands over the tab's own DevTools session. A window that is already gone is left alone. */
+export const chromeWindows: BrowserWindows = {
+  async state(page) {
+    const session = await page.context().newCDPSession(page).catch(() => undefined);
+    if (!session) return undefined;
+    try {
+      const { bounds } = await session.send('Browser.getWindowForTarget');
+      return bounds.windowState;
+    } catch {
+      return undefined;
+    } finally {
+      await session.detach().catch(() => {});
+    }
+  },
+  async set(page, state) {
+    const session = await page.context().newCDPSession(page).catch(() => undefined);
+    if (!session) return;
+    try {
+      const { windowId } = await session.send('Browser.getWindowForTarget');
+      await session.send('Browser.setWindowBounds', { windowId, bounds: { windowState: state } });
+    } catch {
+      // A window the person already closed is left as it is.
+    } finally {
+      await session.detach().catch(() => {});
+    }
+  },
 };
 
 const VIEWPORT = { width: 1280, height: 800 };
@@ -69,11 +112,25 @@ const PUBLIC_ONLY: BrowserPolicy = { sites: [], restricted: false };
 const DNS_CACHE_MS = 60_000;
 const STEP_TIMEOUT_MS = 15_000;
 /**
- * Every window starts from these. Edge would otherwise sign a new profile in to the Windows account on its own
- * (measured for COD-261); Playwright's own defaults already turn off extensions, the first-run page and background
- * networking, and keep the "controlled by automated software" bar that tells the person the window is driven.
+ * The features playwright-core 1.63 turns off with its own `--disable-features`. Chrome keeps only the last
+ * `--disable-features` on its command line, so Orglet's list has to repeat these: with Orglet's alone, HTTPS upgrades,
+ * Translate and paint holding came back on (measured for COD-261: `http://example.com` opened as https). A test checks
+ * this list against the switches Playwright really passes.
  */
-const LAUNCH_ARGS = ['--disable-features=msImplicitSignin', '--disable-sync', '--no-default-browser-check',
+export const PLAYWRIGHT_DISABLED_FEATURES = [
+  'AvoidUnnecessaryBeforeUnloadCheckSync', 'DestroyProfileOnBrowserClose', 'DialMediaRouteProvider', 'GlobalMediaControls',
+  'HttpsUpgrades', 'LensOverlay', 'MediaRouter', 'PaintHolding', 'ThirdPartyStoragePartitioning',
+  'BlockOriginHeaderModificationOnRedirect', 'Translate', 'AutoDeElevate', 'OptimizationHints', 'msForceBrowserSignIn',
+  'msEdgeUpdateLaunchServicesPreferredVersion',
+];
+/** Edge would otherwise sign a new profile in to the Windows account on its own (measured for COD-261). */
+const ORGLET_DISABLED_FEATURES = ['msImplicitSignin'];
+/**
+ * Every window starts from these. Playwright's own defaults already turn off extensions, the first-run page and
+ * background networking, and keep the "controlled by automated software" bar that tells the person the window is driven.
+ */
+export const LAUNCH_ARGS = [`--disable-features=${[...PLAYWRIGHT_DISABLED_FEATURES, ...ORGLET_DISABLED_FEATURES].join(',')}`,
+  '--disable-sync', '--no-default-browser-check',
   // WebRTC may only use the proxy, so a page cannot reach the local network over UDP either.
   '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'];
 
@@ -112,9 +169,12 @@ export class BrowserEngine {
   private dnsCache = new Map<string, { at: number; addresses: string[] }>();
   private idleTimer?: NodeJS.Timeout;
   private resolve: ResolveAddresses;
+  /** Undefined for hidden test windows, which have nothing on screen to move. */
+  private windows?: BrowserWindows;
 
   constructor(private options: BrowserEngineOptions) {
     this.resolve = options.resolve ?? (hostname => this.resolveCached(hostname));
+    this.windows = options.windows ?? (options.headless ? undefined : chromeWindows);
   }
 
   info(): BrowserInfo | null {
@@ -275,6 +335,10 @@ export class BrowserEngine {
     const context = await chromium.launchPersistentContext(join(this.options.profilesRoot, profileId), {
       ...options, viewport: null, acceptDownloads: false, serviceWorkers: 'block', proxy: { server },
     });
+    // A profile opens with one blank window. A run that opened it keeps that window out of the way at once; the
+    // person who chose Open to sign in gets it in front instead.
+    const firstPage = context.pages()[0];
+    if (firstPage && this.windows && !this.signIn.has(profileId)) await this.windows.set(firstPage, 'minimized');
     await this.watchContext(context);
     context.on('close', () => {
       this.profiles.delete(profileId);
@@ -292,15 +356,21 @@ export class BrowserEngine {
   /**
    * Checks every request of a context against the site rules of the run that owns the page making it, before any
    * page of that context loads. A popup a run's page opens is closed, unless the person has taken the browser over:
-   * a sign-in window is theirs to use then. Its requests still follow the run's site rules.
+   * a sign-in window is theirs to use then. Its requests still follow the run's site rules. Chrome brings a
+   * minimized window back up for a new tab, a popup's included, so the run's window is minimized again right after.
    */
   private async watchContext(context: BrowserContext) {
     await context.route('**/*', route => this.onRoute(context, route));
     context.on('page', page => {
-      void this.ownerOfOpener(page).then(owner => {
-        if (!owner || owner.held) return;
-        owner.popupsClosed += 1;
-        void page.close().catch(() => {});
+      void this.ownerOfOpener(page).then(async owner => {
+        let closing: Promise<void> | undefined;
+        if (owner && !owner.held) {
+          owner.popupsClosed += 1;
+          closing = page.close().catch(() => {});
+        }
+        const session = owner ?? [...this.runs.values()].find(candidate => candidate.context === context && candidate.ownsContext);
+        if (session) await this.keepOutOfSight(session);
+        await closing;
       });
     });
   }
@@ -413,8 +483,6 @@ export class BrowserEngine {
       pageTabId = tabId;
     } else {
       if (session.tabs.size >= MAX_BROWSER_TABS) throw new Error(TOO_MANY_TABS);
-      const firstWindow = session.ownsContext && session.tabs.size === 0;
-      const quietWindow = !this.signIn.has(profileId);
       page = await session.context.newPage();
       pageTabId = `t${session.nextTab}`;
       session.nextTab += 1;
@@ -422,9 +490,11 @@ export class BrowserEngine {
       this.pageOwners.set(page, session);
       this.watchTab(session, page);
       page.on('close', () => { if (session.tabs.get(pageTabId) === page) session.tabs.delete(pageTabId); });
+      // The window is real and stays reachable from the taskbar and from Details, but it opens out of the way. Chrome
+      // shows a window, or brings a minimized one back, for every new tab; minimizing it straight away hands the
+      // foreground back to the app the person was using.
+      await this.keepOutOfSight(session, page);
       if (!session.ownsContext) await page.setViewportSize(VIEWPORT).catch(() => {});
-      // The window is real and stays reachable from the taskbar and from Details, but it opens out of the way.
-      if (firstWindow || (!session.ownsContext && quietWindow && session.context.pages().length === 1)) await this.setWindowState(page, 'minimized');
     }
     let status: number | null = null;
     let failure: unknown;
@@ -437,6 +507,7 @@ export class BrowserEngine {
     }
     signal.throwIfAborted();
     if (page.isClosed()) throw new Error(WINDOW_CLOSED);
+    await this.keepOutOfSight(session, page);
     // The page may have ended somewhere else than asked, through a redirect or a script; that address must pass too.
     const landed = page.url();
     const refusal = landed === 'about:blank' ? undefined : await requestRefusal(landed, session.policy, true, this.resolve);
@@ -536,7 +607,7 @@ export class BrowserEngine {
     return { ...view, target: { ref: element.ref, role: element.role.slice(0, 60), name: element.name.slice(0, 300), ...elementFacts }, page: facts };
   }
 
-  /** The person takes a run's browser over, or hands it back. */
+  /** The person takes a run's browser over, or hands it back. Handing it back leaves the window where they put it. */
   private async hold(runId: string, held: boolean) {
     const session = this.runs.get(runId);
     if (!session) return { shown: false };
@@ -575,6 +646,7 @@ export class BrowserEngine {
     await this.settleAfterStep(page, step);
     signal.throwIfAborted();
     if (page.isClosed()) throw new Error(WINDOW_CLOSED);
+    await this.keepOutOfSight(session, page);
     const landed = page.url();
     const refusal = landed === 'about:blank' ? undefined : await requestRefusal(landed, session.policy, true, this.resolve);
     const tried = {
@@ -629,11 +701,14 @@ export class BrowserEngine {
     this.scheduleIdle();
   }
 
+  /** The person asked to see the browser, so this is the one place besides signing in that brings it to the front. */
   private async show(runId: string | null) {
     const session = runId ? this.runs.get(runId) : undefined;
     const page = session ? [...session.tabs.values()].at(-1) : await this.newestPage();
     if (!page) return { shown: false };
-    await this.setWindowState(page, 'normal');
+    const owner = session ?? this.pageOwners.get(page);
+    if (owner) owner.shownToPerson = true;
+    await this.windows?.set(page, 'normal');
     await page.bringToFront().catch(() => {});
     return { shown: true };
   }
@@ -656,7 +731,7 @@ export class BrowserEngine {
     clearTimeout(this.idleTimer);
     const context = await this.profileContext(profileId);
     const page = context.pages()[0] ?? await context.newPage();
-    await this.setWindowState(page, 'normal');
+    await this.windows?.set(page, 'normal');
     await page.bringToFront().catch(() => {});
     return { opened: true };
   }
@@ -681,29 +756,44 @@ export class BrowserEngine {
 
   private async closeIdle() {
     if (this.runs.size || this.signIn.size) return;
-    for (const [profileId, opening] of [...this.profiles]) {
-      this.profiles.delete(profileId);
+    // Everything to close is taken off the engine before the first wait, so a run that starts while it closes gets a
+    // fresh browser instead of one that is on its way out.
+    const profiles = [...this.profiles.values()];
+    this.profiles.clear();
+    const cleanBrowser = this.cleanBrowser;
+    const cleanProxy = this.cleanProxy;
+    this.cleanBrowser = undefined;
+    this.cleanProxy = undefined;
+    for (const opening of profiles) {
       await (await opening.catch(() => undefined))?.close().catch(() => {});
     }
-    const browser = await this.cleanBrowser?.catch(() => undefined);
-    this.cleanBrowser = undefined;
+    const browser = await cleanBrowser?.catch(() => undefined);
     await browser?.close().catch(() => {});
-    this.cleanProxy?.close();
-    this.cleanProxy = undefined;
+    cleanProxy?.close();
   }
 
-  private async setWindowState(page: Page, state: 'minimized' | 'normal') {
-    if (this.options.headless) return;
-    const session = await page.context().newCDPSession(page).catch(() => undefined);
-    if (!session) return;
-    try {
-      const { windowId } = await session.send('Browser.getWindowForTarget');
-      await session.send('Browser.setWindowBounds', { windowId, bounds: { windowState: state } });
-    } catch {
-      // A window the person already closed or moved to another state is left as it is.
-    } finally {
-      await session.detach().catch(() => {});
-    }
+  /**
+   * Whether the person wants this run's window on screen: they chose Show browser window or Take over for it, or, on
+   * a named profile, for another run in the same window, or they have the profile open to sign in.
+   */
+  private personWantsWindow(session: RunSession): boolean {
+    if (session.held || session.shownToPerson) return true;
+    if (session.ownsContext) return false;
+    if (this.signIn.has(session.profileId)) return true;
+    return [...this.runs.values()].some(other => other.context === session.context && (other.held || other.shownToPerson));
+  }
+
+  /**
+   * Minimizes the window a run's tab is in, unless the person wants it on screen. Called after everything that can
+   * bring the window up: a new tab, a popup, a page load and a step. Minimizing gives the foreground back to the app
+   * the person was using.
+   */
+  private async keepOutOfSight(session: RunSession, page?: Page) {
+    if (!this.windows || this.personWantsWindow(session)) return;
+    const tab = page && !page.isClosed() ? page : [...session.tabs.values()].reverse().find(candidate => !candidate.isClosed());
+    if (!tab) return;
+    const state = await this.windows.state(tab);
+    if (state && state !== 'minimized') await this.windows.set(tab, 'minimized');
   }
 }
 
@@ -719,8 +809,8 @@ function regionAround(box: { x: number; y: number; width: number; height: number
 }
 
 /** A new run starts with nothing held and nothing stopped yet. */
-function quietSession(): Pick<RunSession, 'held' | 'dialogs' | 'dialogCount' | 'downloads' | 'fileChoosers' | 'popupsClosed'> {
-  return { held: false, dialogs: [], dialogCount: 0, downloads: 0, fileChoosers: 0, popupsClosed: 0 };
+function quietSession(): Pick<RunSession, 'held' | 'shownToPerson' | 'dialogs' | 'dialogCount' | 'downloads' | 'fileChoosers' | 'popupsClosed'> {
+  return { held: false, shownToPerson: false, dialogs: [], dialogCount: 0, downloads: 0, fileChoosers: 0, popupsClosed: 0 };
 }
 
 /** The same page address, whatever its fragment says: a script moving the #part is not a new page. */
