@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, FileDiff, FileX, FolderMinus, FolderPlus, Info, Undo2 } from 'lucide-react';
 import { Button } from './ui';
 import { Checkbox } from './Checkbox';
@@ -404,15 +404,20 @@ function DiffShape() {
  */
 export function DiffDialog({ taskId, run, review, onClose }: { taskId: string; run: Run; review?: DiffReview; onClose: () => void }) {
   const key = `${taskId}:${run.id}`;
-  const diff = useCached(workspaceDiffs, key);
+  const cached = useCached(workspaceDiffs, key);
+  // Every workspace change drops the kept diffs. The one on screen stays while it is read again, so the viewer, and
+  // the files the person unticked, are not thrown away whenever something else in the app changes (COD-291).
+  const lastDrawn = useRef<{ key: string; diff: WorkspaceDiff }>(undefined);
+  if (cached) lastDrawn.current = { key, diff: cached };
+  const diff = cached ?? (lastDrawn.current?.key === key ? lastDrawn.current.diff : undefined);
   const [error, setError] = useState<string>();
   useEffect(() => {
-    if (diff) return;
+    if (cached) return;
     let active = true;
     setError(undefined);
     workspaceDiffs.read(key).catch(err => { if (active) setError((err as Error).message); });
     return () => { active = false; };
-  }, [key, diff]);
+  }, [key, cached]);
   const loaded = diff ? { loading: false, diff } : error ? { loading: false, error } : { loading: true };
   const workerName = run.snapshot.worker.name;
   const info: InfoTipRow[] = [
