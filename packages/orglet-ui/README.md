@@ -105,7 +105,8 @@ loads the switch's styles.
   yes-or-no question and resolves true only on confirm; render one `<Confirmer confirmLabel cancelLabel />` for the
   default labels. Cancel takes focus, and the answer gives focus back to what asked.
 - `useReturnFocus(onOpenAutoFocus?)`: for a Radix dialog opened from state rather than a `Dialog.Trigger`. Spread the
-  result on `Dialog.Content`: it remembers what had focus when the dialog opened and focuses it again when it closes.
+  result on `Dialog.Content`: it remembers what had focus when the dialog opened and focuses it again when it closes,
+  unless something outside the dialog already took focus (a link in the dialog that closes it and focuses its target).
   The kit's own dialogs use it.
 - `DialogOverlay`, `keepOpenForPopup` and `OPEN_POPUP_SELECTOR`: the frosted backdrop for any Radix dialog, and the
   Escape rule that closes an open menu inside a dialog before the dialog.
