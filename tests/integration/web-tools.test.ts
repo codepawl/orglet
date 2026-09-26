@@ -9,6 +9,7 @@ import { assertToolCall } from '../../apps/desktop/src/core/tools/catalog';
 import { hasCapability } from '../../apps/desktop/src/core/tools/policy';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
+import { RESEARCH_STEP_LIMIT } from '../../apps/desktop/src/core/orchestration/runner';
 import type { Run, Skill, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
 const signal = () => new AbortController().signal;
@@ -334,7 +335,8 @@ describe('web execution permission', () => {
       } }));
       await core.runner.run(task, run);
       expect(store.detail(task.id).task.status).toBe('completed');
-      expect(calls).toBe(15);
+      // Every step until two before the limit reads a page, then the answer: 22 reads and one reply at 24 steps (COD-257).
+      expect(calls).toBe(RESEARCH_STEP_LIMIT - 1);
       expect(wrapUpToolNames.length).toBeGreaterThan(0);
       expect(wrapUpToolNames.every(name => ['reply', 'submit_report', 'submit_plan'].includes(name))).toBe(true);
       expect(store.detail(task.id).events.some(event => event.message.startsWith('Còn 2 bước'))).toBe(true);

@@ -370,4 +370,17 @@ describe('named profiles', () => {
     expect(detectBrowser('win32', env, path => path.endsWith('msedge.exe'), () => [])).toMatchObject({ kind: 'edge', version: null });
     expect(detectBrowser('win32', env, () => false, () => [])).toBeNull();
   });
+
+  it('reads the version of a Mac browser from its Info.plist, so it is not started just to ask', () => {
+    const plist = '<?xml version="1.0"?><plist><dict><key>CFBundleName</key><string>Chrome</string>\n'
+      + '\t<key>CFBundleShortVersionString</key>\n\t<string>153.0.4234.48</string></dict></plist>';
+    const read = (path: string) => {
+      if (!/Google Chrome\.app[\\/]Contents[\\/]Info\.plist$/.test(path)) throw new Error('not there');
+      return plist;
+    };
+    expect(detectBrowser('darwin', {}, path => path.endsWith('Google Chrome'), () => [], read)).toMatchObject({ kind: 'chrome', version: '153.0.4234.48' });
+    // A binary plist, or none, leaves the version to be asked of the browser.
+    expect(detectBrowser('darwin', {}, path => path.endsWith('Google Chrome'), () => [], () => 'bplist00')).toMatchObject({ kind: 'chrome', version: null });
+    expect(detectBrowser('darwin', {}, path => path.endsWith('Microsoft Edge'), () => [], read)).toMatchObject({ kind: 'edge', version: null });
+  });
 });

@@ -12,7 +12,7 @@ An orglet reads only what you attach to **that** chat, or what is inside the wor
 2. Pick **Files**, or **Folder** for up to 20 supported files from one folder (hidden and generated files are skipped, and the chat lists what was left out).
 3. Write what you want done, then send.
 
-Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed under **Details → Sources**. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages.
+Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed under **Details → Sources**. Files and words you have not sent yet stay on that chat's message box when you open another chat and come back, until you send or remove them; each chat, and each orglet's or crew's new chat, keeps its own. They are kept while Orglet is open, not after a restart. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages.
 
 What the orglet gets from each kind:
 
@@ -89,6 +89,10 @@ Afterwards the answer keeps a folded line of the steps ("Read 2 files · Searche
 
 Commands the orglet ran in the latest turn are summed in **Details**, under the goal it worked from, last command first: "Last command exited 0 · earlier: 1 failed." A turn that ran a failing test, fixed the code and ran it again reads that way instead of "1 exited 0, 1 failed". Their full output is in the same panel. Exit 0 means that command finished; it does not mean the task passed.
 
+### When the orglet runs out of steps
+
+Each reply gets a fixed number of steps, where a step is one thing the orglet does, such as a search or a page read: from 6 for a chat with only its files up to 40 for one with a working folder. Web search and MCP tools get 24. Two steps before the end the orglet stops looking things up and writes its best answer from what it has. That answer then reads **Ran out of steps before finishing; this is what it got done.** In a chat with one orglet and no working folder, **Continue** sits next to it while it is the latest message. Continue sends "Continue from where you stopped." as your next message, and the orglet picks up with everything it already searched and read, so it does not read the same pages again. Every step still counts against the chat's spending limit. Crews have no Continue: the crew's answer names the member that ran out of steps instead.
+
 ## Diffs
 
 When a run changed files in its working copy, a line under the answer says **Files changed: 3 · +42 −7**; moves and deletions get their own count, as in **Files changed: 6 · 5 moved or renamed · 1 deleted**. Click it for the diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a folder that is not a Git repository the diff lists what happened to each file (new, changed, moved, renamed, deleted) and the folders created or removed, without lines. In a crew turn each member has its own line, because each works in its own copy.
@@ -152,7 +156,7 @@ Click **Running** in the footer to see every turn that is working or waiting, ac
 The list has up to three parts:
 
 - **Running**: each orglet at work, with its face, its name, the chat or crew it works for, what it is doing now ("Reading invoice.xlsx…"), how long it has run, what it has cost so far, and its provider. A cost Orglet does not know yet says **Cost unknown** (a harness before it reports, or a custom connection with no price), and one with a request of unknown cost says **At least**, rather than showing $0.
-- **Queued**: turns that have not started, with the reason and their place in line: "Waiting for Claude Code · 2 ahead" when the provider already has as many requests as **Settings → requests at once per provider** allows, "Waiting for a crew slot" or "Waiting for results from Lan" inside a crew, "Waiting for its turn to answer" in a group chat, and "Waiting for budget" for a chat that stopped at its **Limit per task**.
+- **Queued**: turns that have not started, with the reason and their place in line: "Waiting for Claude Code · 2 ahead" when the provider already has as many requests as **Settings → requests at once per provider** allows, "Waiting for a crew slot" or "Waiting for results from Lan" inside a crew (in a crew that works one member after another, each member waits for the results of the ones before it), "Waiting for its turn to answer" in a group chat, and "Waiting for budget" for a chat that stopped at its **Limit per task**.
 - **Waiting for you**: chats stopped at a checkpoint, including a crew paused at the end of its work hours, and chats waiting for your answer: an MCP tool the orglet wants to use ("Waiting for you to allow the MCP tool: search · Docs") or a question it asked. Answer in the chat and the same run goes on.
 
 Each row has its controls on the right:
