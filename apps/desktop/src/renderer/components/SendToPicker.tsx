@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { DialogOverlay } from '@codepawl/orglet-ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CornerDownLeft, Search, X } from 'lucide-react';
 import { Button } from './ui';
@@ -62,7 +63,7 @@ export function SendToPicker({ open, count, names, options, onChoose, onClose }:
 
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
-      <Dialog.Overlay className="modal-overlay" />
+      <DialogOverlay />
       <Dialog.Content className="send-to-dialog">
         <div className="send-to-head">
           <div className="send-to-heading">

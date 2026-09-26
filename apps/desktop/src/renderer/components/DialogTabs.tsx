@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { DialogOverlay } from '@codepawl/orglet-ui';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { Button, PanelHeading, keepOpenForPopup } from './ui';
@@ -41,7 +42,7 @@ export function TabbedFormDialog<T extends string>({ open, onClose, title, tabs,
   };
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
-      <Dialog.Overlay className="modal-overlay" />
+      <DialogOverlay />
       <Dialog.Content className="settings-dialog" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup} onOpenAutoFocus={focusNamedField}>
         <div className="settings-header"><Dialog.Title>{title}</Dialog.Title><Dialog.Close asChild><Button size="icon" aria-label={t('Đóng {0}', [title.toLowerCase()])}><X size={18} /></Button></Dialog.Close></div>
         {/* noValidate: fields on hidden tabs are unmounted, so validation happens in onSubmit and switches to the tab at fault. */}

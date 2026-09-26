@@ -46,6 +46,10 @@
   --org-icon-size: 32px;
   --org-radius: 9px;
   --org-radius-menu: 12px;
+  /* A dialog's size, and the backdrop behind it. */
+  --org-panel-width: min(720px, calc(100vw - 32px));
+  --org-panel-height: min(640px, calc(100dvh - 32px));
+  --org-overlay: #0000002e;
 
   /* Motion. Everything that appears uses the same short decelerating curve: quick enough never to delay a click,
      long enough that nothing snaps. A gesture that should overshoot uses the spring instead. */
@@ -72,6 +76,7 @@
   --org-working: #d4b45a;
   --org-warning: #d4a72c;
   --org-focus: #a6c1ff;
+  --org-overlay: #00000059;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -91,6 +96,7 @@
     --org-working: #d4b45a;
     --org-warning: #d4a72c;
     --org-focus: #a6c1ff;
+    --org-overlay: #00000059;
   }
 }
 

@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { DialogOverlay } from '@codepawl/orglet-ui';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow } from 'lucide-react';
 import { avatarPalette } from './Avatar';
@@ -476,7 +477,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
 
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
-      <Dialog.Overlay className="modal-overlay" />
+      <DialogOverlay />
       <Dialog.Content className="settings-dialog" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup}>
         <div className="settings-header"><Dialog.Title>{t('Cài đặt')}</Dialog.Title><Dialog.Close asChild><Button size="icon" aria-label={t('Đóng cài đặt')}><X size={18} /></Button></Dialog.Close></div>
         <div className="settings-body">

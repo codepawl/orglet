@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { DialogOverlay } from '@codepawl/orglet-ui';
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CornerDownLeft, Search, X } from 'lucide-react';
 import type { Task, Team, Worker, Workspace } from '../../shared/contracts';
@@ -171,7 +172,7 @@ export function SearchDialog({ open, onClose, workspace, onOpenChat, onOpenOrgle
 
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
-      <Dialog.Overlay className="modal-overlay" />
+      <DialogOverlay />
       <Dialog.Content className="search-dialog" aria-describedby={undefined} onCloseAutoFocus={event => {
         if (!chosen.current) return;
         chosen.current = false;

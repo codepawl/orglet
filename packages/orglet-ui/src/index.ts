@@ -28,3 +28,4 @@ export type { RowMenuIcon, RowMenuItem } from './components/RowMenu';
 export { MoneyInput } from './components/MoneyInput';
 export { Attachment, fileKind, formatFileSize } from './components/Attachment';
 export type { FileKind } from './components/Attachment';
+export { Confirmer, DialogOverlay, Drawer, OPEN_POPUP_SELECTOR, confirmAction, keepOpenForPopup } from './components/Dialog';

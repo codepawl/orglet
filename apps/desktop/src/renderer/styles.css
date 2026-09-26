@@ -607,7 +607,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
    2026-09-25: blur the background, no border). The fields scroll on their own and end with room for the bar, so at
    the end of the form nothing stays under it; the note's six-row box keeps Scope clear of it when a note opens
    (COD-250). Inside the bar the secondary action is plain text, so there is no box inside the glass. */
-.drawer-scroll:has(> .floating-form) { display:flex; padding:0; overflow:hidden; }
+.org-drawer-scroll:has(> .floating-form) { display:flex; padding:0; overflow:hidden; }
 .form.floating-form { position:relative; flex:1; min-width:0; min-height:0; gap:0; }
 .floating-form-fields { flex:1; min-height:0; display:flex; flex-direction:column; gap:22px; padding:18px 24px 84px; overflow:auto; overscroll-behavior:contain; }
 .floating-actions { position:absolute; right:24px; bottom:14px; z-index:2; width:fit-content; max-width:calc(100% - 48px); margin:0; padding:6px; border-radius:14px; background:color-mix(in srgb, var(--bg) 58%, transparent); backdrop-filter:blur(18px) saturate(1.5); box-shadow:0 12px 32px #0000001f; }
@@ -653,15 +653,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Former side panels open as centred dialogs, matching Settings. */
 /* Dialogs are centred with auto margins, not translate(-50%,-50%): a transform left them on half pixels whenever their height was odd, which blurred hairlines and made outlined and filled buttons look out of line. */
 /* Every panel is the same size, whatever it holds, so switching panels or a panel's tabs never makes it jump (user, 2026-09-23). */
-.drawer { position:fixed; inset:0; margin:auto; height:var(--panel-height); z-index:11; width:var(--panel-width); background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; display:flex; flex-direction:column; outline:none; animation:drawer-in var(--motion-base) var(--ease-out); }
-@keyframes drawer-in { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }
-@keyframes fade-in { from { opacity:0; } to { opacity:1; } }
-.drawer-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px 10px 24px; }
-.drawer-header h2 { font-size:18px; font-weight:600; }
 /* The body clips to the dialog's corners; the child inside it is what scrolls, so the scrollbar is clipped too. */
-.drawer-body { display:flex; flex:1; min-height:0; overflow:hidden; }
-.drawer-scroll { flex:1; min-width:0; padding:18px 24px 24px; overflow:auto; }
-.drawer-scroll { overscroll-behavior:contain; }
 .form { display:flex; flex-direction:column; gap:22px; }
 /* A team's review setup from an older build or a template: one line saying what it does, and the way to drop it. */
 .review-setup-list { display:flex; flex-direction:column; gap:4px; }
@@ -693,10 +685,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .library-title { font-size:14px; font-weight:500; color:var(--text); }
 .library-summary { font-size:12.5px; line-height:1.45; color:var(--muted); font-weight:400; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .library-item .badge { margin-left:auto; }
-/* Frosted backdrop shared by drawers and dialogs: the page stays visible but out of focus. */
-.modal-overlay,.drawer-overlay { position:fixed; inset:0; z-index:10; background:#0000002e; backdrop-filter:blur(6px) saturate(.9); animation:fade-in var(--motion-base) var(--ease-out); }
-:root[data-theme=dark] .modal-overlay,:root[data-theme=dark] .drawer-overlay { background:#00000059; }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] .modal-overlay,:root[data-theme=system] .drawer-overlay { background:#00000059; } }
 .search-dialog { position:fixed; left:50%; top:16vh; transform:translateX(-50%); z-index:11; width:min(800px, calc(100vw - 32px)); max-height:min(620px, calc(100dvh - 16vh - 24px)); display:flex; flex-direction:column; background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000033; outline:none; overflow:hidden; }
 .search-dialog-input { display:flex; align-items:center; gap:12px; padding:14px 14px 14px 22px; color:var(--muted); }
 .search-dialog-input input { flex:1; min-width:0; border:0; outline:none; background:transparent; font-size:17px; color:var(--text); }
@@ -1299,7 +1287,11 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
   --org-control-height:var(--control-height); --org-icon-size:var(--icon-size); --org-radius:var(--radius); --org-radius-menu:var(--select-menu-radius);
   --org-motion-quick:var(--motion-quick); --org-motion-base:var(--motion-base); --org-motion-gesture:var(--motion-gesture);
   --org-ease-out:var(--ease-out); --org-ease-spring:var(--ease-spring);
+  --org-panel-width:var(--panel-width); --org-panel-height:var(--panel-height); --org-overlay:#0000002e;
 }
+/* The dialog backdrop is portaled to the page, so it follows the page's theme. */
+:root[data-theme=dark] { --org-overlay:#00000059; }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { --org-overlay:#00000059; } }
 .field { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
 /* Flex, like the <label> around an input: an inline title box adds a line strut, and a Select then sat 3px lower
    than the input beside it in a two-column grid (COD-245). */
@@ -1347,7 +1339,6 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .currency-flag { display:block; border-radius:50%; }
 .revision-select .select-trigger { width:auto; }
 /* Dialogs no longer clip their children (dropdowns overflow them), so inner scroll areas round their own corners. */
-.drawer-body { border-radius:0 0 16px 16px; }
 .settings-panel { border-bottom-right-radius:16px; }
 .select-menu.inline-detail .select-option-text { flex-direction:row; align-items:baseline; gap:8px; }
 .select-menu.inline-detail .select-option-text>span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1381,15 +1372,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .form .sticky-actions { position:sticky; bottom:-24px; z-index:2; display:flex; align-items:center; justify-content:flex-end; gap:8px; margin:0 -24px -24px; padding:12px 24px 16px; background:var(--bg); box-shadow:0 -10px 16px -14px #00000040; border-radius:0 0 16px 16px; }
 .form .sticky-actions .form-error { order:-1; }
 /* Confirmation */
-.confirm-overlay { z-index:40; }
-.confirm-dialog { position:fixed; inset:0; margin:auto; height:fit-content; z-index:41; width:min(400px, calc(100vw - 32px)); display:flex; flex-direction:column; gap:8px; padding:22px 22px 18px; background:var(--bg); border-radius:16px; box-shadow:0 16px 48px #00000040; outline:none; }
-.confirm-dialog h2 { font-size:17px; }
-.confirm-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
 .text-link { display:inline-flex; align-items:center; gap:3px; padding:0; border:0; background:transparent; color:var(--text); font:inherit; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
 .text-link:hover { color:var(--focus); }
-/* Dialog header actions sit between the title and the close button. */
-.drawer-header>h2 { flex:1; min-width:0; }
-.drawer-actions { display:flex; align-items:center; gap:8px; margin-right:6px; }
 /* Tab row: tabs on the left, the current tab's actions on the right. */
 .tab-row { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 .tab-row-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -1626,12 +1610,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .org-anchored-popover .org-color-picker { width:300px; max-width:none; background:transparent; }
 .avatar-swatch[aria-checked=true] { box-shadow:0 0 0 2px var(--text); }
 @media(max-width:560px) { .avatar-picker-head { align-items:flex-start; flex-direction:column; } }
-/* Title with its description directly beneath; the block shrinks and wraps before any actions beside it. */
-.heading-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
-.heading-description { margin:0; color:var(--muted); font-size:13px; font-weight:400; line-height:1.45; }
-.drawer-header>.heading-text>h2 { font-size:18px; font-weight:600; }
-.drawer-header { gap:12px; }
-.settings-subheading-row .heading-description { font-size:12px; }
 /* Mascot faces fill the avatar tile, sitting slightly low like a character peeking over the edge. */
 .avatar.has-mascot { overflow:visible; }
 .avatar.has-mascot .avatar-face { display:grid; place-items:center; width:100%; height:100%; overflow:hidden; border-radius:inherit; }

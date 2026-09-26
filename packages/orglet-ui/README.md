@@ -99,6 +99,13 @@ loads the switch's styles.
   `icon`), rendered as a list item. With `onOpen` the whole card opens the file; with `onRemove` (named by
   `removeLabel`, showing `removeIcon`) a remove button appears on hover or focus without moving anything. `fileKind`
   reads the kind from the extension; `formatFileSize` gives "1.5 KB" in a locale.
+- `Drawer`: a centred panel with a header (title or breadcrumb, `description`, the panel's `actions`, a close button
+  named by `closeLabel` showing `closeIcon`) and a body that scrolls on its own. Focus goes back to what opened it.
+- `confirmAction` and `Confirmer`: `await confirmAction({ title, description?, confirmLabel?, cancelLabel? })` asks one
+  yes-or-no question and resolves true only on confirm; render one `<Confirmer confirmLabel cancelLabel />` for the
+  default labels.
+- `DialogOverlay`, `keepOpenForPopup` and `OPEN_POPUP_SELECTOR`: the frosted backdrop for any Radix dialog, and the
+  Escape rule that closes an open menu inside a dialog before the dialog.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
@@ -170,7 +177,7 @@ token like `--sidebar`, it is not general yet, and forcing it here only moves th
 ## What is still missing
 
 The kit is deliberately thin today. Before it can be published it needs at least the controls an application cannot
-do without: `Label`, `Card`, `Badge`, `Dialog`, and a real `Tooltip`. After those: `Tabs` outside a dialog,
+do without: `Label`, `Card`, `Badge`, and a real `Tooltip`. After those: `Tabs` outside a dialog,
 `RadioGroup`, `Progress`, `Table`.
 
 Two things it will not grow: a `Separator` and the alert with a coloured left border. Orglet separates with spacing,
