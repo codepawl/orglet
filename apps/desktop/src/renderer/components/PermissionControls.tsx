@@ -172,7 +172,7 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
         <span className="permission-folder-title"><AppWindow size={15} aria-hidden="true" />{t('Trình duyệt')}</span>
         <span className="permission-folder-description">{state.browser === 'act'
           ? t('Bấm, gõ và chọn trên trang; hỏi bạn trước khi gửi, trả tiền hay xóa.')
-          : t('Mở và đọc trang trong cửa sổ riêng của Orglet.')}</span>
+          : t('Đọc trang trong trình duyệt riêng của Orglet, không mở cửa sổ.')}</span>
       </span>
       <span className="permission-folder-control">
         <Select ariaLabel={t('Trình duyệt')} size="sm" value={state.browser} disabled={disabled}
