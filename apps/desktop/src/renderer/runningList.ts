@@ -1,6 +1,6 @@
 import type { Task, Team } from '../shared/contracts';
 import type { RunProgressUpdate } from '../shared/progress';
-import type { RunningItem, RunWaitReason } from '../shared/running';
+import { waitsForPerson, type RunningItem, type RunWaitReason } from '../shared/running';
 import { runStepLine } from './components/LiveRun';
 import { providerName } from './components/workerModel';
 import { formatMoney } from './components/money';
@@ -14,6 +14,22 @@ export type RunningGroup = { id: RunningGroupId; items: RunningItem[] };
 /** Which controls a row offers. Every control acts on the row's chat, since a turn is paused, resumed or stopped whole. */
 export type RunningControls = { pause: boolean; resume: boolean; stop: boolean };
 
+/**
+ * What a screen reader hears for the footer's Running button: how many turns are under way and how many wait for
+ * the person, each only when there are any (COD-287).
+ */
+export function runningButtonLabel(running: number, waiting: number): string {
+  if (running > 0 && waiting > 0) return t('Đang chạy, {0} lượt, {1} chờ bạn', [running, waiting]);
+  if (running > 0) return t('Đang chạy, {0} lượt', [running]);
+  if (waiting > 0) return t('Đang chạy, {0} chờ bạn', [waiting]);
+  return t('Đang chạy');
+}
+
+/** A footer count never grows wider than three characters. */
+export function footerCount(count: number): string {
+  return count > 99 ? '99+' : String(count);
+}
+
 /** Groups the core's list (already in order) into its sections, leaving out the empty ones. */
 export function runningGroups(items: readonly RunningItem[]): RunningGroup[] {
   const order: RunningGroupId[] = ['running', 'queued', 'paused'];
@@ -22,9 +38,10 @@ export function runningGroups(items: readonly RunningItem[]): RunningGroup[] {
     .filter(group => group.items.length > 0);
 }
 
+/** A chat stopped at its budget goes on only after the person raises the limit, so it waits for them, not in line. */
 function groupOf(item: RunningItem): RunningGroupId {
   if (item.state === 'running' || item.state === 'pausing') return 'running';
-  if (item.state === 'paused') return 'paused';
+  if (waitsForPerson(item)) return 'paused';
   return 'queued';
 }
 

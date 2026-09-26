@@ -12,7 +12,8 @@ export function statusMarkLabel(status: StatusMarkState): string {
   if (status.variant === 'filled' && status.tone === 'error') return t('Cần xem lại');
   if (status.variant === 'filled') return t('Có kết quả mới');
   if (status.variant === 'dashed' && status.tone === 'error') return t('Chờ bổ sung bằng chứng');
-  if (status.variant === 'dashed') return t('Đã tạm dừng');
+  if (status.variant === 'paused') return t('Đã tạm dừng');
+  if (status.variant === 'dashed') return t('Đang chờ');
   return t('Không có cập nhật');
 }
 

@@ -8,7 +8,7 @@ export type { StatusMarkState, StatusMarkTone, StatusMarkVariant } from '@codepa
 /** Map a task's run state to the circle. Finished work stays filled until the user opens it (`seen`). */
 export function taskStatusMark(status: TaskStatus, seen: boolean): StatusMarkState {
   if (status === 'queued' || status === 'running' || status === 'pausing') return { variant: 'busy', tone: 'working' };
-  if (status === 'paused' || status === 'waiting_budget') return { variant: 'dashed', tone: 'muted' };
+  if (status === 'paused' || status === 'waiting_budget') return { variant: 'paused', tone: 'muted' };
   if (status === 'waiting_input') return { variant: 'dashed', tone: 'error' };
   if (status === 'failed' || status === 'interrupted') return { variant: 'filled', tone: 'error' };
   if ((status === 'completed' || status === 'partial') && !seen) return { variant: 'filled', tone: 'success' };
@@ -30,6 +30,6 @@ function statusRank(mark: StatusMarkState): number {
   if (mark.variant === 'filled' && mark.tone === 'error') return 50;
   if (mark.variant === 'filled') return 40;
   if (mark.variant === 'dashed' && mark.tone === 'error') return 30;
-  if (mark.variant === 'dashed') return 20;
+  if (mark.variant === 'paused' || mark.variant === 'dashed') return 20;
   return 0;
 }

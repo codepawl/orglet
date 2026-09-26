@@ -97,7 +97,7 @@ A message sent with **Send in a new thread** (the menu beside Send, or Ctrl+Shif
 
 **The empty chat.** When an orglet's empty chat is on screen, the view switches to a chat only when a new main chat appears (`liveChatToAdopt` in `live-task.ts`, the MCP "adopt a live chat" rule); a side-thread row never qualifies, so nothing typed or sent there follows it into a side thread.
 
-**Finishing.** When a side thread stops working while another chat is on screen, the renderer shows a toast with **Open** (`chatNotices.ts`), which the notice centre keeps and opens the thread from. The answer stays in the side thread.
+**Finishing.** When a side thread stops working while another chat is on screen, the renderer shows a toast with **Open** (`chatNotices.ts`), which the notice centre keeps and opens the thread from. The answer stays in the side thread. Two rules keep this quiet (COD-287). An answer that lands while the open chat is the thread's main chat or a sibling side thread (`besideSideThread`) sends no toast, since its row with the unread mark is right there. And one orglet's answers share a notice group (`sideThreadAnswersGroup`, keyed by the orglet): the new notice counts the answers the group's unread one already stood for, says the total and replaces it (`withNotice` in `notifications.tsx`), so fourteen answers from three orglets are three rows, not fourteen. A side thread that failed keeps its own notice.
 
 ## Forwarding
 

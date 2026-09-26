@@ -36,7 +36,7 @@ Each orglet has one main chat. Clicking the orglet always opens it. When you wan
 2. Press **Ctrl+Shift+Enter** (Cmd+Shift+Enter on macOS), or click the small arrow next to Send and choose **Send in a new thread**.
 3. You stay in the main chat. A short message says the side thread started; click **Open** to go there, or open it later.
 
-Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. When a side thread answers while you are somewhere else, a message says so with **Open**, and it is also kept in Notifications.
+Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. When a side thread answers while you are away from that orglet's chats, a message says so with **Open**, and it is also kept in Notifications, where one orglet's answers share one row ([Notifications](#notifications)).
 
 What a side thread knows and can do:
 
@@ -151,13 +151,13 @@ You can also ask an orglet, in its chat, to schedule something ("run this every 
 
 ## What is running
 
-Click **Running** in the footer to see every turn that is working or waiting, across all chats. The button shows a count while anything runs or waits its turn.
+Click **Running** in the footer to see every turn that is working or waiting, across all chats. The button shows a grey count while anything runs or waits its turn, and beside it a count in the accent colour with a pause sign for chats that wait for you: paused, stopped at their limit, or waiting for your answer. Hover a count to see which is which.
 
 The list has up to three parts:
 
 - **Running**: each orglet at work, with its face, its name, the chat or crew it works for, what it is doing now ("Reading invoice.xlsx…"), how long it has run, what it has cost so far, and its provider. A cost Orglet does not know yet says **Cost unknown** (a harness before it reports, or a custom connection with no price), and one with a request of unknown cost says **At least**, rather than showing $0.
-- **Queued**: turns that have not started, with the reason and their place in line: "Waiting for Claude Code · 2 ahead" when the provider already has as many requests as **Settings → requests at once per provider** allows, "Waiting for a crew slot" or "Waiting for results from Lan" inside a crew (in a crew that works one member after another, each member waits for the results of the ones before it), "Waiting for its turn to answer" in a group chat, and "Waiting for budget" for a chat that stopped at its **Limit per task**.
-- **Waiting for you**: chats stopped at a checkpoint, including a crew paused at the end of its work hours, and chats waiting for your answer: an MCP tool the orglet wants to use ("Waiting for you to allow the MCP tool: search · Docs") or a question it asked. Answer in the chat and the same run goes on.
+- **Queued**: turns that have not started, with the reason and their place in line: "Waiting for Claude Code · 2 ahead" when the provider already has as many requests as **Settings → requests at once per provider** allows, "Waiting for a crew slot" or "Waiting for results from Lan" inside a crew (in a crew that works one member after another, each member waits for the results of the ones before it), and "Waiting for its turn to answer" in a group chat.
+- **Waiting for you**: chats stopped at a checkpoint, including a crew paused at the end of its work hours, chats stopped at their **Limit per task** ("Waiting for budget"), and chats waiting for your answer: an MCP tool the orglet wants to use ("Waiting for you to allow the MCP tool: search · Docs") or a question it asked. Answer in the chat and the same run goes on. A paused crew is listed under the member whose step came last, and its chat says so: "Paused after Scout's step, waiting for you to continue."
 
 Each row has its controls on the right:
 
@@ -165,7 +165,7 @@ Each row has its controls on the right:
 2. **Resume** for a paused chat, or for one waiting for budget after you raise its limit.
 3. **Open chat** to go to that conversation. A chat waiting for your answer offers only this, because the answer card is in the chat.
 
-The controls act on the whole turn of that chat. In a crew, stopping one member's row stops the crew's turn, the same as **Stop** in the chat. The list follows the sidebar: a chat whose mark shows it working or waiting is always in it. With nothing running, the view says so in one line. How the queue is kept: [technical guide](technical-guide.md#what-is-running-and-the-queue).
+The controls act on the whole turn of that chat. In a crew, stopping one member's row stops the crew's turn, the same as **Stop** in the chat. The list follows the sidebar: a chat whose mark shows it working (a turning ring) or paused (two bars on a soft tint) is always in it. With nothing running, the view says so in one line. How the queue is kept: [technical guide](technical-guide.md#what-is-running-and-the-queue).
 
 ## Search
 
@@ -187,6 +187,12 @@ Archived chats are found too; deleted chats are not. A crew's chat is found by i
 ## Notifications
 
 Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked. A confirmation of something you just did (saved, created, copied, archived) is listed but does not count, since you saw it as it happened. Problems count, and so does news that arrived on its own: an answer in a side thread, a schedule's run that finished or needs you, a downloaded update, a change an orglet applied by itself.
+
+A few rules keep the list short:
+
+- A side thread that answers while you are in its orglet's main chat, or in another of that orglet's side threads, sends no message. Its row is right there under the orglet, with its unread mark.
+- Answers from one orglet's side threads wait as one row: "Scout answered in 3 side threads", which opens the newest. Once you have opened Notifications, the next answer starts a new row. A side thread that failed keeps a row of its own.
+- A problem that is already waiting unread, with the same words about the same thing, is not listed again. A refresh that keeps failing shows its banner each time but adds one row, not one per try. After you have looked, a new failure is listed again.
 
 What counts as new since you last looked comes first, under **New**; the rest follows newest first, grouped by day. Filter it by **All**, **Problems**, **Done** or **Info**. Each row says what happened and what it was about (the setting, the orglet, the chat, the command); a run of identical notices is one row with a count. A row about a chat, such as a side thread's answer or a schedule's run, opens that chat when you click it, as long as the chat still exists. Every app change an orglet makes through a proposal is announced here too. **Clear all** empties the list.
 

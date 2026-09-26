@@ -173,6 +173,9 @@ export const BookOpen = defineIcon('book-open', <>
 /** A pulse line: work under way, for the Running view (COD-244). Flat ends on the 3..17 box, peaks inside it. */
 export const Activity = defineIcon('activity', <path d="M3 10h3l2.5-5.5 3 11L14 10h3" />);
 
+/** Two bars, the pause sign: what waits for the person, the same shape the paused status mark draws (COD-287). */
+export const Pause = defineIcon('pause', <path d="M7.5 5v10M12.5 5v10" />);
+
 /** An "i" in a ring: a dot for the tittle and a short stem, so it stays an i at 14px. */
 export const Info = defineIcon('info', <>
   <circle cx="10" cy="10" r="7" />

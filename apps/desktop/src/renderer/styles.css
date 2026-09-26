@@ -1064,7 +1064,11 @@ button.notice-body { cursor:pointer; }
 .running-actions { display:flex; align-items:center; justify-content:flex-end; gap:2px; width:88px; }
 .org-button.running-action { width:28px; height:28px; min-height:28px; padding:5px; }
 .running-empty { margin:24px 0 0; padding:0 10px; font-size:13px; }
-.badge.running-count { margin-left:auto; min-width:20px; justify-content:center; font-variant-numeric:tabular-nums; }
+/* The Running button's counts (COD-287): what is under way in the quiet badge, what waits for you in the accent with
+   the pause bars, side by side at the button's end. */
+.running-counts { margin-left:auto; display:inline-flex; align-items:center; gap:4px; }
+.badge.running-count, .badge.running-waiting { min-width:20px; justify-content:center; font-variant-numeric:tabular-nums; }
+.badge.running-waiting { gap:2px; padding-left:3px; background:var(--accent); color:var(--accent-ink); }
 /* A count in a footer button fits the button's 20px line, so a button with a count is as tall as one without. */
 .sidebar-footer .badge { line-height:16px; }
 /* One on/off setting inside a form (components/Switch.tsx): title left, switch right, vertically centred on the

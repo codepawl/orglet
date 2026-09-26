@@ -6,7 +6,7 @@ const meta = {
   component: StatusMark,
   args: { variant: 'filled', tone: 'success', label: 'New answer' },
   argTypes: {
-    variant: { control: 'inline-radio', options: ['empty', 'dashed', 'filled', 'busy'] },
+    variant: { control: 'inline-radio', options: ['empty', 'dashed', 'paused', 'filled', 'busy'] },
     tone: { control: 'inline-radio', options: ['muted', 'success', 'error', 'working'] },
   },
 } satisfies Meta<typeof StatusMark>;
@@ -16,7 +16,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {};
 
-const variants: StatusMarkVariant[] = ['empty', 'dashed', 'filled', 'busy'];
+const variants: StatusMarkVariant[] = ['empty', 'dashed', 'paused', 'filled', 'busy'];
 const tones: StatusMarkTone[] = ['muted', 'success', 'error', 'working'];
 
 /** Every shape in every colour. Each state has its own shape, so colour is never the only difference. */
@@ -36,7 +36,7 @@ export const BesideTitles: Story = {
   render: () => <div className="gallery-stack" style={{ gap: 8 }}>
     <div className="gallery-row"><StatusMark variant="empty" label="Idle" /> Researcher</div>
     <div className="gallery-row"><StatusMark variant="busy" tone="working" label="Working" /> Writer</div>
-    <div className="gallery-row"><StatusMark variant="dashed" tone="working" label="Waiting for you" /> Reviewer</div>
+    <div className="gallery-row"><StatusMark variant="paused" label="Paused" /> Reviewer</div>
     <div className="gallery-row"><StatusMark variant="filled" tone="success" label="New answer" /> Analyst</div>
     <div className="gallery-row"><StatusMark variant="filled" tone="error" label="Needs you" /> Planner</div>
   </div>,
