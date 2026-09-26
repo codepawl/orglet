@@ -141,7 +141,7 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
 export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
   /** Opens another chat: the side thread a quote came from, or the main chat an answer was brought into (COD-247). */ openChat?: (taskId: string) => void;
   /** Opens an orglet's main chat from one of its side threads. */ openMainChat?: (workerId: string) => void;
-  /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule: () => void };
+  /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule?: () => void };
   /** Puts a reply in this chat's composer without sending it: "Nhờ sửa" on a blocked hand-in (COD-270). */ askToFix?: (text: string) => void;
   /** Opens the forward picker for one message of this chat (COD-257). */ forward?: (request: ForwardRequest) => void }) {
   const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
@@ -447,8 +447,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         {openMainChat && <button type="button" onClick={() => openMainChat(detail.task.workerId)}>{t('Mở chat chính')}</button>}
       </p>}
       {scheduleRun && <p className="side-thread-origin">
-        <span>{t('Lần chạy của lịch {0}, do {1} làm.', [scheduleRun.name, scheduleRun.owner])}</span>
-        <button type="button" onClick={scheduleRun.openSchedule}>{t('Mở lịch')}</button>
+        {/* A deleted schedule has nothing to open; its runs say so and keep its name (COD-283). */}
+        <span>{scheduleRun.openSchedule
+          ? t('Lần chạy của lịch {0}, do {1} làm.', [scheduleRun.name, scheduleRun.owner])
+          : t('Lần chạy của lịch {0} đã xóa, do {1} làm.', [scheduleRun.name, scheduleRun.owner])}</span>
+        {scheduleRun.openSchedule && <button type="button" onClick={scheduleRun.openSchedule}>{t('Mở lịch')}</button>}
       </p>}
       {turns.map((turn, index) => {
         const latest = turn.revision === current;

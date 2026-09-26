@@ -36,7 +36,7 @@ import { accentInk, accentText, DEFAULT_ACCENT_COLOR } from '../shared/accent';
 import { fontStack } from '../shared/fonts';
 import { ProviderMark } from './components/ProviderMark';
 import { GroupChatRow, ScheduleRunRow, SideThreadRow, SidebarTreeRow, ShowMore, useReorder } from './components/SidebarTree';
-import { chatsUnder, type ChatOwner } from '../shared/schedule-runs';
+import { chatsUnder, runBy, type ChatOwner } from '../shared/schedule-runs';
 import { useChatNotices } from './chatNotices';
 import { SearchDialog } from './components/SearchDialog';
 import { SendToPicker } from './components/SendToPicker';
@@ -1047,12 +1047,31 @@ export function App() {
     const share = daysLeft / retention;
     return { daysLeft, tone: share > 0.5 ? 'fresh' : share > 0.2 ? 'aging' : 'expiring' };
   };
-  const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => action(async () => {
+  /**
+   * An orglet or crew with a schedule switched on cannot be archived or deleted; the core refuses. Instead of that dead
+   * end, say which schedule holds it and open Schedules, where it can be turned off or deleted (COD-283).
+   */
+  const heldBySchedule = (kind: 'worker' | 'team', entityId: string): boolean => {
+    const schedule = workspace.routines.find(item => item.enabled && runBy(item.task, kind, entityId));
+    if (!schedule) return false;
+    const name = entityName(kind, entityId) ?? '';
+    toast(t('Lịch {0} đang bật cho {1}. Tắt hoặc xóa lịch đó trước.', [schedule.name, name]), 'info', name, { action: { label: t('Xem lịch chạy'), onSelect: () => openRoutines() } });
+    return true;
+  };
+  const archiveEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => {
+    if (archived && heldBySchedule(kind, entityId)) return;
+    archiveOrRestoreEntity(kind, entityId, archived);
+  };
+  const archiveOrRestoreEntity = (kind: 'worker' | 'team', entityId: string, archived: boolean) => action(async () => {
     const name = entityName(kind, entityId);
     await orglet.call('archiveEntity', { kind, id: entityId, archived });
     toast(archived ? t('Đã lưu trữ') : t('Đã khôi phục'), 'success', name);
   }, entityName(kind, entityId));
-  const deleteEntity = (kind: 'worker' | 'team', entityId: string) => action(async () => {
+  const deleteEntity = (kind: 'worker' | 'team', entityId: string) => {
+    if (heldBySchedule(kind, entityId)) return;
+    deleteEntityNow(kind, entityId);
+  };
+  const deleteEntityNow = (kind: 'worker' | 'team', entityId: string) => action(async () => {
     const name = entityName(kind, entityId);
     await orglet.call('deleteEntity', { kind, id: entityId });
     toast(t('Đã xóa'), 'success', name);
@@ -1153,16 +1172,18 @@ export function App() {
   // A schedule's run is named after its schedule, so it does not read as the orglet's main chat (COD-258).
   const openScheduleRun = selected && detail?.task.routineId ? detail.task : undefined;
   const openSchedule = openScheduleRun ? workspace.routines.find(item => item.id === openScheduleRun.routineId) : undefined;
+  // A deleted schedule's runs keep its name (COD-283), so they still do not read as the orglet's main chat.
+  const openScheduleName = openSchedule?.name ?? openScheduleRun?.routineName;
   const headerName = openSideThread ? taskName(openSideThread.id) ?? openSideThread.brief
-    : openSchedule ? openSchedule.name
+    : openScheduleName ? openScheduleName
     : selected ? (detail && assigneeLabel(detail.task, workspace!, { all: t('Toàn bộ Tí'), many: count => groupChatNames(openTaskWorkers.map(item => item.name)) ?? t('{0} Tí', [count]) })) ?? team?.name ?? t('Công việc') : chatName;
   // An open group chat keeps the faces and names it had before its first message, rather than turning into a count.
   const openGroupFaces = selected && detail && isGroupChat(detail.task) && detail.task.assignees !== 'all' ? openTaskWorkers : undefined;
   /** The line at the top of a schedule's run: which schedule, who ran it, and the way to the schedule. */
-  const scheduleRunOrigin = openScheduleRun && openSchedule ? {
-    name: openSchedule.name,
+  const scheduleRunOrigin = openScheduleRun && openScheduleName ? {
+    name: openScheduleName,
     owner: assigneeLabel(openScheduleRun, workspace, { all: t('Toàn bộ Tí'), many: count => t('{0} Tí', [count]) }) ?? detail?.runs[0]?.snapshot.worker.name ?? 'Orglet',
-    openSchedule: () => openRoutines({ editing: true, routine: openSchedule }),
+    openSchedule: openSchedule ? () => openRoutines({ editing: true, routine: openSchedule }) : undefined,
   } : undefined;
   const headerRename = renameTargetOf();
   /**

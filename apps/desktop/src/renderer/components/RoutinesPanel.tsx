@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import type { Routine, TaskInput, Worker, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
-import { AppWindow, ShieldCheck, CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
+import { AppWindow, ShieldCheck, CalendarRange, Sun, Users, ArrowLeft, CalendarX2, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
-import { TimeZone } from '../../shared/schedule';
+import { SKIPPED_WHILE_INACTIVE, TimeZone } from '../../shared/schedule';
+import { timeZoneChoices } from '../timeZones';
+import { RowMenu } from './RowMenu';
+import { EllipsisVertical, Trash } from './icons';
 import { Select } from './Select';
 import { t } from '../i18n';
 import { currentLanguage, currentLocale, translated, tMessage } from '../i18n';
@@ -22,8 +25,21 @@ import { browserLevelOf, capabilitiesWithBrowserLevel, defaultBrowserChoice, rou
 import { snapshotCapabilities, withCapability, type ToolCapability } from '../../shared/tool-policy';
 import { WEB_SEARCH_PROVIDER_NAMES } from '../../shared/web-tools';
 
+/** Read when shown, so it follows the interface language like every other message. */
+const INVALID_ZONE = () => t('Múi giờ không hợp lệ. Chọn một múi giờ trong danh sách.');
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
-export const formatRoutineTime = (iso: string, timeZone: string) => new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' });
+/** Keeps "9:00 AM" on one line: the space before the day period becomes a no-break space, whatever the runtime used. */
+const keepTimeTogether = (text: string) => text.replace(/\s(?=[AP]M\b)/g, '\u00a0');
+export const formatRoutineTime = (iso: string, timeZone: string) => keepTimeTogether(new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' }));
+/**
+ * A schedule's saved "HH:mm" on the interface's clock, the same way `formatRoutineTime` writes the next run beside it:
+ * "01:36" in Vietnamese, "1:36 AM" in US English (COD-283; the card used to mix the two).
+ */
+export function formatClockTime(time: string): string {
+  const [hour, minute] = time.split(':').map(Number);
+  const wallClock = new Date(Date.UTC(2000, 0, 1, hour, minute));
+  return keepTimeTogether(wallClock.toLocaleTimeString(currentLocale(), { timeZone: 'UTC', timeStyle: 'short' }));
+}
 /** The command that starts a routine from a terminal (COD-245); the name is quoted so spaces survive the shell. */
 export const runCommandOf = (name: string) => `orglet run "${name.replace(/"/g, '\\"')}"`;
 const TRIGGER_ICONS: Record<RoutineTriggerKind, typeof CalendarClock> = { schedule: CalendarClock, folder: FolderInput, called: SquareTerminal };
@@ -35,7 +51,12 @@ function triggerSummary(routine: Routine): string {
   // Vietnamese writes the day in lower case mid-sentence ("Mỗi thứ hai"); English keeps "Every Monday".
   const day = currentLanguage() === 'vi' ? weekdays[routine.schedule.weekday].toLowerCase() : weekdays[routine.schedule.weekday];
   const cadence = routine.schedule.frequency === 'daily' ? t('Hằng ngày') : t('Mỗi {0}', [day]);
-  return t('{0} lúc {1}', [cadence, routine.schedule.time]);
+  return t('{0} lúc {1}', [cadence, formatClockTime(routine.schedule.time)]);
+}
+/** Why a run was missed, in plain words when it is the usual reason (the app was closed or asleep). */
+function missedReason(reason: string): string {
+  if (reason === SKIPPED_WHILE_INACTIVE) return t('Lúc đó Orglet không mở hoặc máy đang ngủ, nên lịch chưa chạy.');
+  return tMessage(reason);
 }
 async function copyCommand(command: string) {
   try {
@@ -65,6 +86,10 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
     const worker = workspace.workers.find(entry => entry.id === item.task.workerId);
     return worker ? <WorkerFace worker={worker} size="xxs" /> : <UserRound size={14} aria-hidden="true" />;
   };
+  const deleteSchedule = async (item: Routine) => {
+    await orglet.call('deleteRoutine', { id: item.id });
+    toast(t('Đã xóa lịch'), 'success', item.name);
+  };
   return <div className="form">
           {!workspace.routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p></div>}
     <div className="routine-list">
@@ -89,6 +114,11 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
                 whichever way it is set, because the state is what aria-checked says. */}
             <Switch checked={item.enabled} disabled={busy} label={t('Bật lịch')}
               onChange={enabled => void action(() => orglet.call('saveRoutine', { id: item.id, name: item.name, enabled, schedule: item.schedule, ...(item.trigger ? { trigger: item.trigger } : {}), task: item.task }))} />
+            {/* Deleting asks inside the menu, beside the card, not in a centred dialog (COD-283). The past runs are
+                chats and stay, named after the schedule. */}
+            <RowMenu className="routine-menu" label={t('Tùy chọn lịch {0}', [item.name])} icon={EllipsisVertical} disabled={busy}
+              items={[{ label: t('Xóa lịch'), icon: Trash, danger: true, onSelect: () => void action(() => deleteSchedule(item)),
+                confirm: { question: t('Xóa lịch {0}? Các lần chạy trước vẫn là chat, tìm lại được trong Tìm kiếm.', [item.name]), label: t('Xóa') } }]} />
           </div>
         </div>
         <ul className="routine-meta">
@@ -100,15 +130,18 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
           {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{t('{0} nguồn', [item.task.sourceIds.length])}</li>}
         </ul>
         <p className="routine-brief"><MessageSquareText size={14} aria-hidden="true" /><span>{item.task.brief}</span></p>
-        {item.pending && <div className="routine-alert" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>
-          <h4>{t('Lần chạy bị lỡ')}</h4>
-          <p>{tMessage(item.pending.reason)}</p>
-          <p className="muted">{t('Lần bị lỡ {0}. Nhiều lần lỡ gộp thành một lần chạy bù.', [formatRoutineTime(item.pending.dueAt, item.schedule.timeZone)])}</p>
+        {/* A miss is news, not an error (COD-283): which run, when, why in plain words, and what catching up does. */}
+        {item.pending && <div className="routine-alert" role="status"><CalendarX2 size={16} aria-hidden="true" /><div>
+          <h4>{t('Lỡ lần chạy lúc {0}', [formatRoutineTime(item.pending.dueAt, item.schedule.timeZone)])}</h4>
+          <p>{missedReason(item.pending.reason)}</p>
+          <p className="muted">{item.enabled
+            ? t('Chạy bù chạy lịch một lần, dù lỡ bao nhiêu lần. Lần tới vẫn lúc {0}.', [formatRoutineTime(item.nextDueAt, item.schedule.timeZone)])
+            : t('Bật lịch để chạy bù một lần.')}</p>
           <div className="actions">
           <Button disabled={busy || !item.enabled} variant="primary" onClick={() => void action(async () => openTask(await orglet.call('catchUpRoutine', { id: item.id })))}>{t('Chạy bù một lần')}</Button>
           <Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Bỏ qua lần lỡ')}</Button>
         </div></div></div>}
-        {item.notice && <div className="routine-alert" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>
+        {item.notice && <div className="routine-alert" role="status"><FolderX size={16} aria-hidden="true" /><div>
           <h4>{t('Lịch chưa chạy')}</h4>
           <p>{tMessage(item.notice.reason)}</p>
           <p className="muted">{t('Lúc {0}. Tệp đến khi app tắt không được chạy lại.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])}</p>
@@ -142,7 +175,10 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const [frequency, setFrequency] = useState(routine?.schedule.frequency ?? 'daily');
   const [weekday, setWeekday] = useState(routine?.schedule.weekday ?? 1);
   const [time, setTime] = useState(routine?.schedule.time ?? '09:00');
-  const [timeZone, setTimeZone] = useState(routine?.schedule.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const systemZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [timeZone, setTimeZone] = useState(routine?.schedule.timeZone ?? systemZone);
+  // Built once per editor: about four hundred zones, each with its offset now. The saved zone stays in the list.
+  const [zoneChoices] = useState(() => timeZoneChoices(systemZone, timeZone, new Date()));
   const [enabled, setEnabled] = useState(routine?.enabled ?? true);
   const initialTrigger = routine ? triggerOf(routine) : undefined;
   const [triggerKind, setTriggerKind] = useState<RoutineTriggerKind>(initialTrigger?.kind ?? 'schedule');
@@ -157,8 +193,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   // so an unattended run may use it like a chat can (dogfood, 2026-09-26).
   const [web, setWeb] = useState((initial?.toolCapabilities ?? []).includes('network.web'));
   const browser = useBrowserState();
-  const zoneInput = useRef<HTMLInputElement>(null);
-  const zoneError = error.startsWith('Timezone');
+  const nameInput = useRef<HTMLInputElement>(null);
+  const zoneError = error === INVALID_ZONE();
   const team = workspace.teams.find(team => `team:${team.id}` === target);
   useEffect(() => {
     let cancelled = false;
@@ -187,11 +223,18 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   };
   const initialSnapshot = useRef(snapshot);
+  // A new schedule starts at its name. Without this, focus stayed on the button the Create button turned into,
+  // "Back to schedules" (COD-283).
+  useEffect(() => { if (!routine) nameInput.current?.focus(); }, [routine]);
   useEffect(() => { onDirty(snapshot !== initialSnapshot.current); }, [snapshot, onDirty]);
   useEffect(() => () => onDirty(false), [onDirty]);
   return <form className="form routine-editor" onSubmit={async event => {
     event.preventDefault(); setError('');
-    if (triggerKind === 'schedule' && !TimeZone.safeParse(timeZone).success) { setError(t('Timezone không hợp lệ. Dùng tên như Asia/Ho_Chi_Minh hoặc UTC.')); zoneInput.current?.focus(); return; }
+    if (triggerKind === 'schedule' && !TimeZone.safeParse(timeZone).success) {
+      setError(INVALID_ZONE());
+      event.currentTarget.querySelector<HTMLElement>('[data-field="timeZone"]')?.focus();
+      return;
+    }
     if (!trigger) { setError(t('Chọn thư mục để lịch theo dõi.')); return; }
     setBusy(true);
     try {
@@ -208,8 +251,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   }}>
 
     <section className="routine-group" aria-labelledby="routine-group-job">
-      <h4 id="routine-group-job">{t('Công việc')}</h4>
-      <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><Input value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
+      <h4 id="routine-group-job">{t('Việc cần làm')}</h4>
+      <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><Input ref={nameInput} value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
       <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><Textarea rows={4} value={brief} onChange={event => setBrief(event.target.value)} required maxLength={16000} /></label>
       <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Tí'), icon: <WorkerFace worker={worker} size="xs" /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <RosterAvatars workers={teamRoster(team, workspace.workers)} max={2} /> }))]} />
       <div className="routine-sources">
@@ -237,7 +280,9 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
           <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as typeof frequency); }} options={[{ value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> }, { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> }]} />
           {frequency === 'weekly' && <Select label={<FieldLabel icon={CalendarDays} required>{t('Ngày trong tuần')}</FieldLabel>} value={String(weekday)} onChange={value => { setWeekday(Number(value)); }} options={weekdays.map((day, index) => ({ value: String(index), label: day }))} />}
           <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><Input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>
-          <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><Input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError || undefined} aria-describedby={zoneError ? 'routine-zone-error' : undefined} data-flash={zoneError ? 1 : undefined} /></label>
+          <Select label={<FieldLabel icon={Globe} required>{t('Múi giờ')}</FieldLabel>} value={timeZone} field="timeZone" menuMinWidth={300} invalid={zoneError} describedBy={zoneError ? 'routine-zone-error' : undefined}
+            onChange={value => { setTimeZone(value); if (zoneError) setError(''); }}
+            options={zoneChoices.map(zone => ({ value: zone.value, label: zone.label, detail: zone.offset || undefined, group: zone.system ? t('Máy này') : zone.region || t('Khác') }))} inlineDetail />
         </div>
         {zoneError && <p id="routine-zone-error" role="alert" className="error">{error}</p>}
         <p className="muted">{t('Chỉ chạy khi Orglet đang mở; các lần lỡ gộp thành một lần chạy bù.')}</p>
