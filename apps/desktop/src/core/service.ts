@@ -210,7 +210,7 @@ export class CoreService {
   }
   /**
    * `orglet run` (COD-245): starts an existing, enabled routine that was approved as it is now, with the files the
-   * command attached. Only main's CLI server calls this; the window has no command for it.
+   * command attached. Only main's CLI server calls this; the window's Run now (`runRoutineNow`) attaches no files.
    */
   async runRoutine(raw: unknown): Promise<string> {
     const input = z.object({ id: Id, sourceIds: z.array(Id).max(20) }).strict().parse(raw);
@@ -445,6 +445,7 @@ export class CoreService {
       case 'saveRoutine': return this.saveRoutine(commands.saveRoutine.parse(args));
       case 'dismissRoutine': this.routines.dismiss((args as { id: string }).id); return;
       case 'catchUpRoutine': return this.routines.catchUp((args as { id: string }).id);
+      case 'runRoutineNow': return this.routines.runCalled((args as { id: string }).id, []);
       case 'cancel': {
         const taskId = (args as { id: string }).id;
         this.teams.cancel(taskId); this.runner.cancel(taskId);
@@ -1231,7 +1232,7 @@ export class CoreService {
       // Preserve readable input for older runs before expanding the task's history scope.
       for (const run of this.store.detail(task.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources } } });
       this.store.update('tasks', revised);
-      this.chatSearch.indexTurn(revised.id, revised.inputRevision ?? 0, input.brief, now());
+      this.chatSearch.indexTurn(revised.id, revised.inputRevision ?? 0, revised.currentInput!, now());
     });
     if (active) { this.teams.cancel(task.id); this.runner.cancel(task.id); this.notify(); return; }
     this.start(revised, true);
@@ -1341,7 +1342,7 @@ export class CoreService {
     snapshotCapabilities(this.store.get<Worker>('workers', task.workerId).provider, task.toolCapabilities);
     this.store.transaction(() => {
       this.store.put('tasks', task);
-      this.chatSearch.indexTurn(task.id, 0, task.brief, task.createdAt);
+      this.chatSearch.indexTurn(task.id, 0, task.currentInput ?? task, task.createdAt);
       this.workspaceGrants.copyInsideTransaction(main.id, task.id);
     });
     this.start(task, true);
@@ -1531,7 +1532,7 @@ export class CoreService {
     if (forwarded) task.currentInput = { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, forwarded };
     this.store.transaction(() => {
       this.store.put('tasks', task);
-      this.chatSearch.indexTurn(task.id, 0, task.brief, task.createdAt);
+      this.chatSearch.indexTurn(task.id, 0, task.currentInput ?? task, task.createdAt);
       if (routine) this.store.update('routines', { ...routine, lastTaskId: task.id });
       if (chosen) this.takeNewChatCapabilities(this.newChatTarget(input));
       if (folder) {

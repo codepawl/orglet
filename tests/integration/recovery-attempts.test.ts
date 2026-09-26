@@ -147,7 +147,7 @@ it('renders one row per attempt with the action only where a decision is needed'
   expect(html).toContain('Write lib/http.js');
   expect(html).toContain('outcome unknown');
   expect(html).not.toContain('a92f4612');
-  expect(html).toContain('3 commands · 1 passed, 2 failed');
+  expect(html).toContain('3 commands · 1 exited 0, 2 failed');
   expect(html).toContain('1 change in the working copy');
   expect(html).toContain('Changes not applied: 3 files');
   expect(html).toContain('Show 2 earlier attempts');

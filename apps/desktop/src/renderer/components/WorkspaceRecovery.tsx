@@ -117,7 +117,7 @@ function uncertainCallIcon(call: Pick<UncertainCall, 'tool' | 'summary'>) {
   return Wrench;
 }
 
-/** "6 commands · 2 passed, 4 failed", counting only what finished one way or the other and naming the rest. */
+/** "6 commands · 2 exited 0, 4 failed", counting only what finished one way or the other and naming the rest. */
 function commandsSummary(commands: RecoveryAttempt['commands']): string {
   const parts = [
     commands.passed ? t('{0} thoát 0', [commands.passed]) : '',

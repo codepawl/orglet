@@ -119,6 +119,8 @@ To have changes applied as soon as a run finishes, turn off **Review before appl
 - **What happened**: the run's activity, the sources it cited, and **Loaded context**, the exact instructions, skill, knowledge and memory the run started with.
 - **Chat decisions**: questions an orglet paused to ask you, with your answers. **Turn goal**: how an orglet understood the request, its assumptions, and the checks it planned (planned is not done).
 - **Files and processes**: every attempt that changed files, with its outcome, its commands and their output. An attempt whose outcome is unknown after a crash or cancel blocks the chat until you check your files and choose **Keep current files**. See [Reviewing an interrupted attempt](agent-tools.md#reviewing-an-interrupted-attempt).
+
+If the app closes while an orglet works, that turn stops where it was and is not sent again on its own. The chat says so on that turn ("This turn stopped partway because the app closed."), also after you have sent newer messages; check the cost and send the message again if you still need the answer.
 - **Messages between workers** and **Reactions** in a crew or group chat, and export of any job's report.
 
 ## Schedules
@@ -136,6 +138,8 @@ Each run is its own chat, apart from the orglet's main chat. You find it three w
 - **In the sidebar**, under the orglet or crew it ran for, next to the side threads: one row per schedule, named after it with a small calendar mark, showing its newest run and that run's status mark. The row's menu opens the schedule, archives the run or deletes it.
 - **In Notifications.** When a run finishes, stops with a problem or waits for you, a message names the schedule ("Daily standup note is ready", "Daily standup note needs you") with **Open**, and stays unread in Notifications until you look.
 - **In Schedules**, where each card has **Open latest run**.
+
+To try a schedule without waiting for its time, click **Run now** (the play button) on its card. It runs the same way a scheduled run does, with the same checks, and opens the run; the next scheduled time does not move. A schedule that is switched off, changed since you saved it, or still busy with its previous run does not start, and Schedules says why. A switched-off schedule's button stays greyed out.
 
 The run's header shows the schedule's name with the same calendar mark, and the top of the chat says which schedule it is and who ran it, with **Open schedule**.
 
@@ -170,7 +174,7 @@ Search finds any message in any chat, not only how a chat started.
 It looks through every message you sent, every answer and report an orglet wrote, side threads, scheduled chats, chat names, and the names of your orglets and crews. With nothing typed, it lists your chats, newest first.
 
 - **Orglets and crews** whose name matches come first. Choosing one opens its chat.
-- **Chats** come next, one row each: the orglet's or crew's face, the chat's name (its title, or the orglet's or crew's name), whose chat it is when the name is a title, when the message was written, and a short piece of that message after **You** or the orglet's name, with your words in bold. Choosing it opens the chat scrolled to that message.
+- **Chats** come next, one row each: the orglet's or crew's face, the chat's name (its title, or the orglet's or crew's name), whose chat it is when the name is a title, when the message was written, and a short piece of that message after **You** or the orglet's name, with your words in bold. Choosing it opens the chat scrolled to that message. The piece is plain text, the way the chat reads, without Markdown marks; a message you forwarded is its note and the forwarded words.
 
 A chat where your words appear together, in the order you typed them, comes before one where they appear apart. Within each of those, the chat with the newest matching message comes first, and each chat shows its best message once.
 

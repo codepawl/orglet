@@ -1,6 +1,7 @@
 import type { Source, Task, Worker, Workspace } from '../shared/contracts';
 import type { ForwardTarget } from '../shared/forward';
 import { liveTeamTask, liveWorkerTask } from '../shared/live-task';
+import { plainSearchText } from '../shared/chat-search';
 import { sendToOptions, type SendToOption } from './sendTo';
 import { t, tMessage } from './i18n';
 
@@ -56,9 +57,9 @@ export function forwardOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | 
   return [...recent, ...places.filter(option => option.group !== 'recent')].map(({ chat: _chat, ...option }) => option);
 }
 
-/** One line of the message for the picker's head: who wrote it and the start of what they wrote. */
+/** One line of the message for the picker's head: who wrote it and the start of what they wrote, as plain text. */
 export function forwardPreview(request: Pick<ForwardRequest, 'author' | 'text'>): string {
-  const line = request.text.replace(/\s+/g, ' ').trim();
+  const line = plainSearchText(request.text);
   return t('{0}: {1}', [request.author, line.length > 160 ? `${line.slice(0, 160)}…` : line]);
 }
 
