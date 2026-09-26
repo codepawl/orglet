@@ -164,6 +164,8 @@ export class BrowserEngine {
   private userAgents = new Map<string, Promise<string | undefined>>();
   private cursors = new BrowserCursorTrack();
   private suggestions = new SuggestionLog();
+  /** A Clean run's own Chrome on its way out after its tabs came back headless. */
+  private closingBrowsers = new Set<Promise<void>>();
   private idleTimer?: NodeJS.Timeout;
   private leaseTimer?: NodeJS.Timeout;
   private resolve: ResolveAddresses;
@@ -255,6 +257,19 @@ export class BrowserEngine {
     this.cleanProxy = undefined;
     for (const proxy of this.profileProxies.values()) proxy.close();
     this.profileProxies.clear();
+    await Promise.all([...this.closingBrowsers]);
+  }
+
+  /**
+   * Closes a Clean run's own Chrome once its tabs are back in the headless browser, without making the run wait for
+   * Chrome to exit: that takes up to a second or more on a busy Mac, and a teardown waiting on it once ran past 30
+   * seconds on the macOS runner (COD-261). Shutting down still waits for it.
+   */
+  private closeLater(browser: Browser | undefined) {
+    if (!browser) return;
+    const closing = browser.close().catch(() => {});
+    this.closingBrowsers.add(closing);
+    void closing.then(() => this.closingBrowsers.delete(closing));
   }
 
   private emit(event: BrowserHostEvent) {
@@ -870,7 +885,7 @@ export class BrowserEngine {
         session.inChrome = false;
         session.savedState = undefined;
         await this.reopenTabs(session, addresses);
-        await browser?.close().catch(() => {});
+        this.closeLater(browser);
       }
     } finally {
       session.switching = false;
@@ -895,7 +910,7 @@ export class BrowserEngine {
         session.chromeBrowser = undefined;
         session.inChrome = false;
         session.context = await this.cleanContext(session, state);
-        await chrome?.close().catch(() => {});
+        this.closeLater(chrome);
       } else {
         const closing = session.context;
         const current = await this.profiles.get(session.profileId)?.catch(() => undefined);
