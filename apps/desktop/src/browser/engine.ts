@@ -756,15 +756,20 @@ export class BrowserEngine {
 
   private async closeIdle() {
     if (this.runs.size || this.signIn.size) return;
-    for (const [profileId, opening] of [...this.profiles]) {
-      this.profiles.delete(profileId);
+    // Everything to close is taken off the engine before the first wait, so a run that starts while it closes gets a
+    // fresh browser instead of one that is on its way out.
+    const profiles = [...this.profiles.values()];
+    this.profiles.clear();
+    const cleanBrowser = this.cleanBrowser;
+    const cleanProxy = this.cleanProxy;
+    this.cleanBrowser = undefined;
+    this.cleanProxy = undefined;
+    for (const opening of profiles) {
       await (await opening.catch(() => undefined))?.close().catch(() => {});
     }
-    const browser = await this.cleanBrowser?.catch(() => undefined);
-    this.cleanBrowser = undefined;
+    const browser = await cleanBrowser?.catch(() => undefined);
     await browser?.close().catch(() => {});
-    this.cleanProxy?.close();
-    this.cleanProxy = undefined;
+    cleanProxy?.close();
   }
 
   /**
