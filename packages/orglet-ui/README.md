@@ -124,6 +124,9 @@ loads the switch's styles.
   while saving, and lands on the field named by `focusField`. A tab's `buttonProps` reach its button, such as a
   handler that prefetches on hover. Tabs follow the WAI-ARIA pattern: the arrows move and open, only the open tab is
   in the Tab order.
+- `Viewer`: a large dialog for looking at one thing, in the style of macOS Quick Look: close on the left (`closeLabel`,
+  `closeIcon`), the `icon` and `title` centred with an optional `meta` line under them, `actions` on the right, and the
+  content on a grey backdrop that scrolls on its own. `className` widens or restyles one kind of viewer.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
