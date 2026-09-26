@@ -83,12 +83,15 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await core?.runner.shutdown();
-  await engine.shutdown();
+  // This test's own things, taken before the first wait: a teardown that outlives its hook must never close the store or
+  // server the next test has made meanwhile.
+  const ending = { core, engine, store, server, directory };
   core = undefined;
-  server.close();
-  store.close();
-  await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  await ending.core?.runner.shutdown();
+  await ending.engine.shutdown();
+  ending.server.close();
+  ending.store.close();
+  await rm(ending.directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 
 async function until(check: () => boolean, timeoutMs = 60_000) {

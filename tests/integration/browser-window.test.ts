@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { chromium } from 'playwright-core';
+import { chromium, type BrowserContext } from 'playwright-core';
 import { BrowserEngine, LAUNCH_ARGS, PLAYWRIGHT_DISABLED_FEATURES, PROFILE_RUNNING } from '../../apps/desktop/src/browser/engine';
 import { detectBrowser } from '../../apps/desktop/src/browser/detect';
 import { headedUserAgent, launchArgs } from '../../apps/desktop/src/browser/launch';
@@ -54,6 +54,16 @@ describe('the browser launch arguments', () => {
     expect(withOrglet.headless).toBe(true);
     expect(withOrglet.userAgent).toBe(userAgent);
   }, REAL_BROWSER_TIMEOUT_MS);
+
+  it.runIf(found !== null && process.platform !== 'linux')('know the installed version from the install, as the headed user agent needs it', async () => {
+    const browser = await chromium.launch({ executablePath: found!.executable, headless: true });
+    try {
+      // The user agent carries only the major version.
+      expect(found!.version?.split('.')[0]).toBe(browser.version().split('.')[0]);
+    } finally {
+      await browser.close();
+    }
+  }, REAL_BROWSER_TIMEOUT_MS);
 });
 
 describe.runIf(found !== null)('windows for the person', { timeout: REAL_BROWSER_TIMEOUT_MS }, () => {
@@ -75,9 +85,12 @@ describe.runIf(found !== null)('windows for the person', { timeout: REAL_BROWSER
   }, REAL_BROWSER_TIMEOUT_MS);
 
   afterEach(async () => {
-    await engine.shutdown();
-    server.close();
-    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    // This test's own engine, server and folder, taken before the first wait, so a slow teardown never closes the next
+    // test's.
+    const ending = { engine, server, directory };
+    await ending.engine.shutdown();
+    ending.server.close();
+    await rm(ending.directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }, REAL_BROWSER_TIMEOUT_MS);
 
   const policy = () => ({ sites: [{ site: new URL(base).host, decision: 'allowed' as const, addedAt: new Date().toISOString() }], restricted: true });
@@ -113,5 +126,55 @@ describe.runIf(found !== null)('windows for the person', { timeout: REAL_BROWSER
     expect(tabs.map(tab => tab.url)).toEqual([`${base}/`]);
     const read = await engine.handle({ kind: 'snapshot', runId, policy: policy(), tabId: 't1' }, signal) as { title: string };
     expect(read.title).toBe('Window test');
+  });
+
+  type SessionView = { context: BrowserContext; addresses: Map<string, string> };
+  const sessionOf = (runId: string) => (engine as unknown as { runs: Map<string, SessionView> }).runs.get(runId)!;
+  const until = async (check: () => boolean, timeoutMs = 20_000) => {
+    const started = Date.now();
+    while (!check() && Date.now() - started < timeoutMs) await new Promise(resolve => setTimeout(resolve, 50));
+    expect(check()).toBe(true);
+  };
+  const tabsOf = async (runId: string) => (await engine.handle({ kind: 'tabs', runId }, signal) as { tabs: { url: string }[] }).tabs.map(tab => tab.url);
+  /** The run's tab addresses once they are `expected`, or what they are after 20 seconds. */
+  const settledTabs = async (runId: string, expected: string[]) => {
+    const started = Date.now();
+    let tabs = await tabsOf(runId);
+    while (tabs.join() !== expected.join() && Date.now() - started < 20_000) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      tabs = await tabsOf(runId);
+    }
+    return tabs;
+  };
+
+  it('carries a run on headless when the sign-in window it shares closes and Chrome keeps running, as it does on a Mac', async () => {
+    const profileId = randomUUID();
+    await engine.handle({ kind: 'openProfile', profileId }, signal);
+    const runId = randomUUID();
+    await open(runId, profileId);
+    // Closing the window closes every page in it; Chrome on macOS goes on running with no window, so the browser never
+    // says the profile closed.
+    const windowed = sessionOf(runId).context;
+    await Promise.all(windowed.pages().map(page => page.close()));
+    expect(await settledTabs(runId, [`${base}/`])).toEqual([`${base}/`]);
+    expect(sessionOf(runId).context).not.toBe(windowed);
+    const read = await engine.handle({ kind: 'snapshot', runId, policy: policy(), tabId: 't1' }, signal) as { title: string };
+    expect(read.title).toBe('Window test');
+    // The profile is headless for the run now, not a window for the person.
+    await expect(engine.handle({ kind: 'openProfile', profileId }, signal)).rejects.toThrow(PROFILE_RUNNING);
+  });
+
+  it('forgets only the tab the person closes in a sign-in window a run shares, and leaves the window open', async () => {
+    const profileId = randomUUID();
+    await engine.handle({ kind: 'openProfile', profileId }, signal);
+    const runId = randomUUID();
+    await open(runId, profileId);
+    const windowed = sessionOf(runId).context;
+    const runTab = windowed.pages().find(page => page.url().startsWith(base))!;
+    await runTab.close();
+    await until(() => !sessionOf(runId).addresses.has('t1'));
+    expect(sessionOf(runId).context).toBe(windowed);
+    expect(await tabsOf(runId)).toEqual([]);
+    expect(windowed.pages()).toHaveLength(1);
   });
 });
