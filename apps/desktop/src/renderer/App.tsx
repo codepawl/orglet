@@ -641,7 +641,7 @@ export function App() {
     if (adopted) adoptLiveChat(adopted);
   }, [workspace, selected, team?.id, worker?.id, group]);
   /**
-   * The empty chat's message bar keeps what was typed and added, per orglet, crew or group, while the app is open
+   * The empty chat's message bar keeps what was typed and added, per orglet, crew or group, across restarts
    * (COD-257, `drafts.ts`): leaving for another chat and coming back finds it there. Entering an empty chat puts its
    * draft back, in front of anything a link or Send to put there on the way in; every change after that is kept.
    */
