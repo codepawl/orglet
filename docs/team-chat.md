@@ -166,7 +166,7 @@ While a turn runs, the **Running** view in the footer lists each job: the member
 
 In a **team** or **group** chat, type `@` in the composer to pick a worker or `@all`. Tagged names highlight in the message. The team's own name is not offered, because tagging it means what `@all` means; typed by hand it still works, so older messages keep their meaning.
 
-- **Group chat:** only tagged assignees answer that turn. `@all`, the team name, or no tag keeps everyone.
+- **Group chat:** only tagged assignees answer that turn. `@all`, the team name, or no tag keeps everyone. A reply to one orglet's answer with no tag in it counts as tagging that orglet, so only it answers; any tag in the message (`@all` included) decides instead, so replying to Writer and asking `@Reviewer` gets Reviewer alone (`groupTurnWorkers` in `core/service.ts`, COD-257).
 - **Team chat:** Demo assigns the tagged members. A live planner is told who you tagged and may still assign others. Untagged messages still assign every member.
 
 Unknown `@` text is left as typed and does not change who runs.
