@@ -27,6 +27,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "1.1.23",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.7.0"
   },

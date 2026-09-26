@@ -1,0 +1,124 @@
+/* The page stays visible behind a dialog, but out of focus. */
+.org-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--org-overlay, #0000002e);
+  backdrop-filter: blur(6px) saturate(.9);
+  animation: org-dialog-fade-in var(--org-motion-base, 170ms) var(--org-ease-out, ease-out);
+}
+@keyframes org-dialog-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.org-drawer {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  width: var(--org-panel-width, min(720px, calc(100vw - 32px)));
+  height: var(--org-panel-height, min(640px, calc(100dvh - 32px)));
+  background: var(--org-bg, #fff);
+  border-radius: 16px;
+  box-shadow: 0 16px 48px #00000033;
+  outline: none;
+  animation: org-drawer-in var(--org-motion-base, 170ms) var(--org-ease-out, ease-out);
+}
+@keyframes org-drawer-in {
+  from {
+    opacity: 0;
+    transform: scale(.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.org-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 10px 24px;
+}
+.org-drawer-heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.org-drawer-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.org-drawer-description {
+  margin: 0;
+  color: var(--org-muted, #666);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.org-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 6px;
+}
+.org-drawer-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 0 0 16px 16px;
+}
+.org-drawer-scroll {
+  flex: 1;
+  min-width: 0;
+  padding: 18px 24px 24px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+/* A question sits above everything, dialogs included. */
+.org-dialog-overlay.org-confirm-overlay { z-index: 40; }
+.org-confirm-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  z-index: 41;
+  width: min(400px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 22px 18px;
+  background: var(--org-bg, #fff);
+  border-radius: 16px;
+  box-shadow: 0 16px 48px #00000040;
+  outline: none;
+}
+.org-confirm-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.org-confirm-description {
+  margin: 0;
+  color: var(--org-muted, #666);
+  font-size: 13px;
+}
+.org-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .org-dialog-overlay,
+  .org-drawer { animation: none; }
+}

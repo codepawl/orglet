@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { DialogOverlay } from '@codepawl/orglet-ui';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ExternalLink, ShieldOff, X } from 'lucide-react';
 import type { Source, SourceBytes, TaskDetail } from '../../shared/contracts';
@@ -27,7 +28,7 @@ export function SourceViewer({ open, onClose, name, meta, icon: KindIcon, info, 
 }) {
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
-      <Dialog.Overlay className="modal-overlay" />
+      <DialogOverlay />
       <Dialog.Content id="source-viewer" className="doc-viewer source-viewer" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup}>
         <div className="doc-toolbar">
           <Dialog.Close asChild><Button size="icon" aria-label={t('Đóng tệp')} title={t('Đóng tệp')}><X size={18} /></Button></Dialog.Close>

@@ -83,7 +83,7 @@ try {
   await page.getByText('Kỹ năng · v1 · trùng nội dung đã nạp').first().waitFor();
 
   await page.setViewportSize({ width: 760, height: 700 });
-  const overflow = await page.evaluate(() => { const drawer = document.querySelector('.drawer-scroll'); return drawer ? drawer.scrollWidth - drawer.clientWidth : 0; });
+  const overflow = await page.evaluate(() => { const drawer = document.querySelector('.org-drawer-scroll'); return drawer ? drawer.scrollWidth - drawer.clientWidth : 0; });
   assert.ok(overflow <= 1, `drawer overflow ${overflow}`);
   await app.evaluate(({ dialog }) => { dialog.showSaveDialog = globalThis.originalSave; dialog.showOpenDialog = globalThis.originalOpen; });
   console.log(JSON.stringify({ directory, taskId, knowledge: (await workspace(page)).knowledge.length, result: 'passed' }));

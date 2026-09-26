@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { DialogOverlay } from '@codepawl/orglet-ui';
 import type { ReactNode } from 'react';
 import { FileText, X } from 'lucide-react';
 import { Button, keepOpenForPopup } from './ui';
@@ -19,7 +20,7 @@ export function DocumentCard({ name, meta, onOpen }: { name: string; meta: strin
 export function DocumentViewer({ open, onClose, name, actions, children }: { open: boolean; onClose: () => void; name: string; actions?: ReactNode; children: ReactNode }) {
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}>
     <Dialog.Portal>
-      <Dialog.Overlay className="modal-overlay" />
+      <DialogOverlay />
       <Dialog.Content className="doc-viewer" aria-describedby={undefined} onEscapeKeyDown={keepOpenForPopup}>
         <div className="doc-toolbar">
           <Dialog.Close asChild><Button size="icon" aria-label={t('Đóng tài liệu')} title={t('Đóng tài liệu')}><X size={18} /></Button></Dialog.Close>
