@@ -356,8 +356,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
    right edge, a soft surface with a shadow and no line around it. */
 .section-heading .row-action[aria-pressed=true],.section-heading .row-action[aria-pressed=true]:hover:not(:disabled) { color:var(--text); background:var(--row-active); }
 .worker-row > .row-check { flex:0 0 18px; gap:0; margin:0 3px 0 8px; }
-.worker-row > .row-check .checkbox-input { top:0; }
-.worker-row > .row-check .checkbox-box { margin-top:0; }
+.worker-row > .row-check .org-checkbox-input { top:0; }
+.worker-row > .row-check .org-checkbox-box { margin-top:0; }
 .tree-item.selected .worker-row,.tree-item.selected .worker-row:hover { background:color-mix(in srgb, var(--accent) 14%, transparent); }
 .selection-bar { display:flex; align-items:center; gap:2px; margin:8px 12px 0 0; padding:3px 3px 3px 12px; border-radius:14px; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter:blur(10px) saturate(1.2); box-shadow:0 6px 20px #0000001f; animation:menu-in var(--motion-quick) var(--ease-out); }
 .selection-count { flex:1; min-width:0; font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -859,11 +859,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .form :is(input, textarea, select):not(.org-input)[aria-invalid=true][data-flash],
 .form .select-trigger[aria-invalid=true][data-flash],
 .form .money-input.invalid[data-flash],
-.form .checkbox-input[aria-invalid=true][data-flash] + .checkbox-box,
+.form .org-checkbox-input[aria-invalid=true][data-flash] + .org-checkbox-box,
 .setting-key-form input[aria-invalid=true][data-flash] {
   animation:field-flash .55s ease-in-out 2;
 }
-.form .checkbox-input[aria-invalid=true] + .checkbox-box { border-color:var(--error); }
 /* Title left, the section's create/import/export actions right. */
 .panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:36px; }
 .panel-heading h2,.panel-heading h3 { font-size:15px; font-weight:600; min-width:0; }
@@ -945,8 +944,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 /* The long charge title takes the room; the Reconcile button keeps its label on one line (it wrapped in Vietnamese). */
 .budget-review-heading > .button { flex-shrink:0; white-space:nowrap; }
 .budget-review-form { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin-top:12px; }
-.budget-review-form label:not(.checkbox) { display:flex; flex-direction:column; gap:5px; }
-.budget-review-form .checkbox { width:100%; }
+.budget-review-form label:not(.org-checkbox) { display:flex; flex-direction:column; gap:5px; }
+.budget-review-form .org-checkbox { width:100%; }
 .budget-review-form .error { width:100%; margin:0; }
 .budget-review-form .money-input,.budget-review-form .select { width:210px; }
 .budget-review-history summary { cursor:pointer; font-size:13px; }
@@ -1469,8 +1468,6 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .brand .orglet-mark::after { left:11px; }
 /* Required fields: a small red asterisk after the label. */
 .field-label.required::after { content:"*" / ""; color:var(--error); margin-left:-4px; font-weight:600; }
-/* The same mark on anything else that must be chosen, a checkbox included (user, 2026-09-19). */
-.checkbox-text.required::after { content:"*" / ""; color:var(--error); margin-left:3px; font-weight:600; }
 /* Breadcrumb in a dialog title: back arrow, parent link, current page. */
 .breadcrumb { display:inline-flex; align-items:center; gap:6px; min-width:0; margin-left:-10px; }
 .breadcrumb-link { border:0; background:transparent; padding:2px 4px; border-radius:6px; color:var(--muted); font:inherit; font-weight:500; }
@@ -1500,20 +1497,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .tab-count { margin-left:6px; color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
 
 /* Checkbox: native input kept for keyboard, forms and assistive tech; the box is drawn. */
-.checkbox { position:relative; display:flex; align-items:flex-start; gap:10px; margin:6px 0; font-size:14px; font-weight:400; cursor:pointer; }
-.form label.checkbox { flex-direction:row; gap:10px; font-weight:400; }
-.checkbox.disabled { cursor:default; opacity:.55; }
-.checkbox-input { position:absolute; left:0; top:2px; width:18px; height:18px; margin:0; opacity:0; cursor:inherit; }
-.form .checkbox-input { width:18px; height:18px; min-height:0; padding:0; border:0; }
-.checkbox-box { pointer-events:none; display:grid; place-items:center; flex-shrink:0; width:18px; height:18px; margin-top:2px; border:1.5px solid var(--muted); border-radius:5px; background:var(--bg); color:var(--accent-ink); transition:background .12s, border-color .12s; }
-.checkbox-box svg { opacity:0; transform:scale(.6); transition:opacity .12s, transform .12s; }
-.checkbox:hover:not(.disabled) .checkbox-box { border-color:var(--text); }
-.checkbox-input:checked + .checkbox-box { background:var(--accent); border-color:var(--accent); }
-.checkbox-input:checked + .checkbox-box svg { opacity:1; transform:none; }
-.checkbox-input:focus-visible + .checkbox-box { outline:2px solid var(--focus); outline-offset:2px; }
-.checkbox-input[aria-invalid=true] + .checkbox-box { border-color:var(--error); }
-.checkbox-text { min-width:0; display:flex; flex-direction:column; gap:2px; line-height:22px; }
-.checkbox-description { color:var(--muted); font-size:12px; line-height:1.45; }
+.form label.org-checkbox { flex-direction:row; gap:10px; font-weight:400; }
+.form .org-checkbox-input { width:18px; height:18px; min-height:0; padding:0; border:0; }
 /* Agent or provider mark before a name. */
 .inline-mark { display:inline-flex; align-items:center; gap:8px; }
 
@@ -1735,9 +1720,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .accent-swatch-custom svg { filter:drop-shadow(0 0 1.5px #0000008c); }
 .accent-swatch-custom[data-custom] { background:var(--avatar-color); box-shadow:0 0 0 2px var(--text); }
 /* Orglet popover floating beside its trigger (AnchoredPopover). */
-.anchored-popover { z-index:30; border-radius:14px; background:var(--bg); border:1px solid var(--border); box-shadow:0 12px 32px #00000026; animation:select-in .12s ease-out; }
-.anchored-popover.above { animation-name:select-in-above; }
-.anchored-popover .color-panel { width:300px; max-width:none; background:transparent; }
+.org-anchored-popover .color-panel { width:300px; max-width:none; background:transparent; }
 .avatar-swatch[aria-checked=true] { box-shadow:0 0 0 2px var(--text); }
 @media(max-width:560px) { .avatar-picker-head { align-items:flex-start; flex-direction:column; } }
 /* Title with its description directly beneath; the block shrinks and wraps before any actions beside it. */
@@ -2367,7 +2350,7 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 /* A fieldset for its legend and grouping only: the form's boxed fieldset look does not apply here. */
 .form fieldset.mcp-picker,.mcp-grants { min-width:0; margin:22px 0 0; border:0; padding:0; }
 .form fieldset.mcp-picker legend { padding:0; margin-bottom:6px; font-size:14px; font-weight:400; }
-.mcp-picker .checkbox { margin:0; }
+.mcp-picker .org-checkbox { margin:0; }
 .mcp-grants>.permission-folder-title { margin:0; font-size:14px; }
 
 /* Side threads (COD-247). The send options sit left of send: shorter than it, like the composer's other secondary
