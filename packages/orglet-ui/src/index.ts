@@ -26,3 +26,5 @@ export type { InfoTipRow } from './components/InfoTip';
 export { RowMenu } from './components/RowMenu';
 export type { RowMenuIcon, RowMenuItem } from './components/RowMenu';
 export { MoneyInput } from './components/MoneyInput';
+export { Attachment, fileKind, formatFileSize } from './components/Attachment';
+export type { FileKind } from './components/Attachment';

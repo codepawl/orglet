@@ -59,7 +59,7 @@ try {
   assert.equal(await details.count(), 0);
   await page.waitForFunction(() => document.activeElement?.classList.contains('thread-menu'));
   // The message lists its files as cards; opening one is what the count button used to do.
-  await page.locator('.chat-turn .message-files .attachment-open').first().click();
+  await page.locator('.chat-turn .message-files .org-attachment-open').first().click();
   // A file opens on its own and shows what is in it straight away; the technical detail sits behind the info button.
   const viewer = page.getByRole('dialog', { name: 'evidence.txt' });
   await viewer.locator('.source-preview').filter({ hasText: 'Evidence fixture.' }).waitFor();
