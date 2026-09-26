@@ -454,7 +454,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
                   finally { setAnsweringDecision(false); }
                 });
               }} />}
-            {latest && browserApproval && <BrowserApprovalCard taskId={detail.task.id} approval={browserApproval} busy={answeringBrowser}
+            {latest && browserApproval && <BrowserApprovalCard taskId={detail.task.id} approval={browserApproval} busy={answeringBrowser} held={detail.browser?.takenOver ?? false} onHandBack={() => takeOverBrowser(detail.task.id, false)}
               onAnswer={answer => {
                 if (answeringBrowser) return;
                 setAnsweringBrowser(true);

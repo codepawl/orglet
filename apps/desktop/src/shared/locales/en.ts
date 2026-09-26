@@ -2654,6 +2654,7 @@ export const en: Dictionary = {
   'Người dùng chưa trả lời nên bước này không chạy.': 'The person did not answer, so this step did not run.',
   'Người dùng đang cầm trình duyệt và chưa trả lại.': 'The person has the browser and has not handed it back.',
   'Bước này không còn chờ bạn trả lời.': 'This step is no longer waiting for your answer.',
+  'Bạn đang giữ trình duyệt. Trả lại trình duyệt rồi trả lời.': 'You have the browser. Hand it back, then answer.',
   'Không có lượt chạy nào đang dùng trình duyệt trong chat này.': 'No run is using the browser in this chat.',
   'Orglet không bao giờ gõ vào ô mật khẩu. Nhờ người dùng bấm Tiếp quản và tự nhập.': 'Orglet never types into a password field. Ask the person to press Take over and enter it themselves.',
   'Orglet không bao giờ gõ vào ô thẻ thanh toán. Nhờ người dùng bấm Tiếp quản và tự nhập.': 'Orglet never types into a card field. Ask the person to press Take over and enter it themselves.',

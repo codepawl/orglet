@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Keyboard, ListChecks, MousePointerClick, TextCursorInput, X, type LucideIcon } from 'lucide-react';
+import { Check, Keyboard, ListChecks, MousePointerClick, TextCursorInput, Undo2, X, type LucideIcon } from 'lucide-react';
 import type { BrowserActKind, BrowserApprovalView } from '../../shared/browser';
 import { Button, Drawer } from './ui';
 import { t, tMessage } from '../i18n';
@@ -42,7 +42,14 @@ function useApprovalPicture(taskId: string, screenshotId: string | undefined) {
  * element outlined, and two answers. There is no "always": the next such step asks again. The answer goes to the
  * waiting run through the core; the orglet never answers it.
  */
-export function BrowserApprovalCard({ taskId, approval, busy, onAnswer }: { taskId: string; approval: BrowserApprovalView; busy: boolean; onAnswer: (answer: 'allow' | 'decline') => void }) {
+export function BrowserApprovalCard({ taskId, approval, busy, held = false, onHandBack, onAnswer }: {
+  taskId: string; approval: BrowserApprovalView; busy: boolean;
+  /** The person holds the browser: the card waits for the hand-back, its buttons greyed out with the reason (the core refuses an answer too). */
+  held?: boolean;
+  /** Hands the browser back from the card, where no other Hand back is on screen (the chat, not the large view). */
+  onHandBack?: () => void;
+  onAnswer: (answer: 'allow' | 'decline') => void;
+}) {
   const picture = useApprovalPicture(taskId, approval.screenshotId);
   const [enlarged, setEnlarged] = useState(false);
   const Icon = kindIcons[approval.kind];
@@ -54,9 +61,11 @@ export function BrowserApprovalCard({ taskId, approval, busy, onAnswer }: { task
       <img src={picture} alt={t('Trang {0}, phần tử được hỏi có viền đỏ', [approval.site])} />
     </button>}
     {approval.reasons.length > 0 && <p className="muted browser-approval-reasons">{t('Orglet hỏi vì: {0}', [approval.reasons.map(reason => tMessage(reason)).join(' · ')])}</p>}
+    {held && <p className="muted browser-approval-held" id={`browser-approval-held-${approval.id}`}>{t('Bạn đang giữ trình duyệt. Trả lại trình duyệt rồi trả lời.')}</p>}
     <div className="actions">
-      <Button variant="primary" disabled={busy} onClick={() => onAnswer('allow')}><Check size={16} />{t('Cho phép một lần')}</Button>
-      <Button variant="ghost" disabled={busy} onClick={() => onAnswer('decline')}><X size={16} />{t('Không cho phép')}</Button>
+      {held && onHandBack && <Button variant="outline" onClick={onHandBack}><Undo2 size={16} />{t('Trả lại trình duyệt')}</Button>}
+      <Button variant="primary" disabled={busy || held} aria-describedby={held ? `browser-approval-held-${approval.id}` : undefined} onClick={() => onAnswer('allow')}><Check size={16} />{t('Cho phép một lần')}</Button>
+      <Button variant="ghost" disabled={busy || held} aria-describedby={held ? `browser-approval-held-${approval.id}` : undefined} onClick={() => onAnswer('decline')}><X size={16} />{t('Không cho phép')}</Button>
     </div>
     {enlarged && picture && <Drawer open onClose={() => setEnlarged(false)} title={approval.site}>
       <img className="browser-screenshot" src={picture} alt={t('Trang {0}, phần tử được hỏi có viền đỏ', [approval.site])} />

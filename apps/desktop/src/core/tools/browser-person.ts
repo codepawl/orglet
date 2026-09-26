@@ -21,6 +21,12 @@ type PendingAsk<View> = { taskId: string; view: View; settle: (answer: BrowserAn
 type Holding = { since: string; released: Set<() => void>; inChrome: boolean };
 
 export const NOT_ASKING = 'Bước này không còn chờ bạn trả lời.';
+/**
+ * A card waiting while the person holds the browser is answered after they hand it back (dogfood, 2026-09-26): an
+ * allowed step would otherwise act on the page they are using, and the page they hand back may no longer be the one
+ * the card pictured. The window greys the buttons out with the same reason.
+ */
+export const HOLDING_BROWSER = 'Bạn đang giữ trình duyệt. Trả lại trình duyệt rồi trả lời.';
 
 export class BrowserPerson<View extends { id: string } = BrowserApprovalView> {
   private asks = new Map<string, PendingAsk<View>>();
@@ -48,6 +54,7 @@ export class BrowserPerson<View extends { id: string } = BrowserApprovalView> {
   answer(taskId: string, requestId: string, answer: BrowserAnswer) {
     const pending = this.asks.get(requestId);
     if (!pending || pending.taskId !== taskId) throw new Error(NOT_ASKING);
+    if (this.holds(taskId)) throw new Error(HOLDING_BROWSER);
     this.asks.delete(requestId);
     pending.settle(answer);
   }

@@ -113,7 +113,7 @@ The live view runs only while it is open. Closing it, or the run ending, stops t
 
 **Take over** is in the live view and in **Details → Browser**. It holds the orglet's next browser step until you give the browser back. In the live view you then click, scroll and type on the page yourself: click once in the picture and your keys go to the page, Escape included, until you click elsewhere. Typing goes through your usual input method, and pasting pastes the text. Use it to sign in, answer a question on the page, get past a CAPTCHA, or show the orglet the way. While you hold it, a page may open a new window, such as a sign-in window; it opens as another tab, and the view follows it. The site rules still apply.
 
-When you are done, choose **Hand back**, in the live view, in **Details** or on the bar. The step that was waiting goes on. If the orglet's turn ended while you held the browser, its tabs stay open until you hand it back, then they close.
+When you are done, choose **Hand back**, in the live view, in **Details** or on the bar. The step that was waiting goes on. A card that asks about a step waits for the hand-back too: while you hold the browser its **Allow once** and **Don't allow** are greyed out, with "You have the browser. Hand it back, then answer.", and in the chat the card has its own **Hand back**, since an allowed step would act on the page you are using. If the orglet's turn ended while you held the browser, its tabs stay open until you hand it back, then they close.
 
 Holding the browser pauses only its steps. The orglet can still think and write, and a step that waits for more than 15 minutes comes back to it as "the person still has the browser", so it can answer with what it has.
 
