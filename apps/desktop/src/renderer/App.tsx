@@ -47,6 +47,7 @@ import { forwardOptions, forwardSummary, type ForwardRequest } from './forward';
 import { chatHeadline } from '../shared/forward';
 import { attachIntake, carriedDraft, type Incoming, type IncomingChat, type IncomingFiles } from '../shared/incoming';
 import { dropDraft, emptyChatDraftKey, keepDraft, readDraft } from './drafts';
+import { chatToReopen, rememberedChat, rememberOpenChat } from './lastChat';
 import { tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
 import { taskResultSeen } from '../shared/task-seen';
 import { RowMenu } from './components/RowMenu';
@@ -345,6 +346,7 @@ export function App() {
     });
   }, []);
   useEffect(() => { if (window.orglet) void refresh(); }, [refresh, selected]);
+  useEffect(() => { if (selected) rememberOpenChat(selected); }, [selected]);
   useEffect(() => { setLanguage(workspace?.language); }, [workspace?.language]);
   useEffect(() => {
     if (!workspace) return;
@@ -527,6 +529,8 @@ export function App() {
     if (!workspace || !workerId || bootedLiveThread.current) return;
     bootedLiveThread.current = true;
     if (selected || teamId) return;
+    const lastOpen = chatToReopen(workspace.tasks, rememberedChat());
+    if (lastOpen) { replaceNextView.current = true; openTask(lastOpen.id); return; }
     const live = liveWorkerTask(workspace.tasks, workerId);
     if (live) { replaceNextView.current = true; openTask(live.id); }
   }, [workspace, selected, teamId, workerId]);
