@@ -350,7 +350,7 @@ export const en: Dictionary = {
   'Báo cáo mẫu không chứa phân tích từ model. Kết quả checker local, nếu có, được hiển thị riêng.': 'The sample report contains no model analysis. Local checker results, if any, are shown separately.',
   'Báo cáo này chưa có feedback nháp.': 'This report has no draft feedback yet.',
   'Bước tiếp theo': 'Next steps',
-  'Bản sao lưu chứa {0} Tí, {1} hội, {2} công việc và {3} báo cáo.\nDữ liệu, cài đặt và chi phí hiện tại được giữ lại. Nguồn khôi phục không được cấp quyền đọc; công việc đang chạy trong bản sao lưu sẽ chuyển sang gián đoạn.': 'The backup contains {0} orglets, {1} crews, {2} tasks and {3} reports.\nCurrent data, settings and costs are kept. Restored sources get no read access; tasks that were running in the backup become interrupted.',
+  'Bản sao lưu chứa {0} Tí, {1} hội, {2} công việc và {3} báo cáo.\nDữ liệu, cài đặt và chi phí hiện tại được giữ lại. Tệp đính kèm không nằm trong bản sao lưu: mở tệp và chọn lại đúng tệp đó trên máy này; công việc đang chạy trong bản sao lưu sẽ chuyển sang gián đoạn.': 'The backup contains {0} orglets, {1} crews, {2} tasks and {3} reports.\nCurrent data, settings and costs are kept. Attached files are not in the backup: open one and choose the same file on this computer; tasks that were running in the backup become interrupted.',
   'Bản sao lưu không hợp lệ: {0}': 'Invalid backup: {0}',
   'Bản sao lưu vượt 50 MB.': 'The backup is larger than 50 MB.',
   'Bảng Anh': 'British pound',
@@ -3035,6 +3035,16 @@ export const en: Dictionary = {
   'Bản sửa phải giữ loại tệp gốc.': 'An edited version keeps the original file type.',
   'Chưa sửa được {0} trong Orglet.': '{0} cannot be edited in Orglet yet.',
   'Không lưu được bản sửa khi dữ liệu không nằm trong thư mục.': 'Edits cannot be saved when Orglet’s data is not in a folder.',
+  'Không khôi phục được bản sao lưu này': 'This backup could not be restored',
+  'Chưa có gì trong Orglet bị thay đổi.\n\nLý do: {0}': 'Nothing in Orglet was changed.\n\nReason: {0}',
+  'Trạng thái lưu trữ tham chiếu Tí không tồn tại.': 'An archived or deleted orglet is missing from the backup.',
+  'Trạng thái lưu trữ tham chiếu hội không tồn tại.': 'An archived or deleted crew is missing from the backup.',
+  'Chọn lại tệp đã đính kèm': 'Choose the attached file again',
+  'Chỉ chọn lại được tệp của nguồn khôi phục từ bản sao lưu.': 'Only a file restored from a backup can be chosen again.',
+  'Tệp này không khớp với {0} đã đính kèm. Chọn đúng tệp đó.': 'This file is not the {0} that was attached. Choose that same file.',
+  'Tệp này đến từ bản sao lưu nên chưa có trên máy này. Chọn đúng tệp {0} để mở lại.': 'This file came from a backup, so it is not on this computer yet. Choose the same {0} to open it again.',
+  'Chọn tệp trên máy': 'Choose file',
+  'Từ bản sao lưu, chưa có tệp trên máy này': 'From a backup, not on this computer yet',
 };
 
 // British English differs from the US text only in these spellings, so it is derived instead of duplicated.

@@ -417,6 +417,8 @@ export interface Bridge {
   pickFolder(): Promise<FolderIntake>;
   /** Open an attached file in the system's default app. The path is looked up by id in the core, never sent from here. */
   openSource(taskId: string, id: string): Promise<void>;
+  /** Picks the file again for a source a backup restored without it (COD-281); null when the person cancels. */
+  relinkSource(taskId: string, id: string): Promise<Source | null>;
   pickWorkspace(taskId: string, permissions: WorkspacePermission[]): Promise<WorkspaceGrantView | null>;
   /** The same native picker for a chat with no row yet; the core keeps the folder until the first message (COD-186). */
   pickNewChatWorkspace(chat: NewChatTarget, permissions: WorkspacePermission[]): Promise<NewChatWorkspaceView | null>;

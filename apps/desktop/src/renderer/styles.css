@@ -1117,6 +1117,8 @@ button.notice-body { cursor:pointer; }
 .source-viewer .org-viewer-scroll { padding:20px 24px 40px; }
 .source-stage { display:flex; flex-direction:column; gap:12px; max-width:880px; margin:0 auto; min-width:0; }
 .source-stage>.preview-state { justify-content:center; padding:48px 0; font-size:14px; }
+.source-stage>.source-restored { flex-direction:column; gap:14px; text-align:center; }
+.source-restored>p { margin:0; max-width:420px; text-wrap:pretty; }
 /* The shape of a source or a diff on its way, at the width the content will take. */
 .source-stage>.source-shape,.source-stage>.diff-shape { width:100%; max-width:720px; padding:24px 0; font-size:14px; }
 .source-shape-media { height:240px; }
