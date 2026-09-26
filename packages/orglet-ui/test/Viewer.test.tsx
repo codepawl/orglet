@@ -39,6 +39,22 @@ describe('Viewer', () => {
     expect(document.querySelector('.org-viewer-heading .org-viewer-meta')?.textContent).toBe('Markdown · 2 KB');
   });
 
+  it('puts an editing toolbar in its own row between the toolbar and the content', async () => {
+    render(<Viewer open onClose={() => {}} title="photo.png" closeLabel="Close" closeIcon={<span>×</span>}
+      toolbar={<div role="toolbar" aria-label="Markup"><button type="button">Pen</button></div>}>
+      <p>Picture</p>
+    </Viewer>);
+    const tools = document.querySelector('.org-viewer-tools');
+    expect(tools?.previousElementSibling?.className).toBe('org-viewer-toolbar');
+    expect(tools?.nextElementSibling?.className).toBe('org-viewer-scroll');
+    expect(screen.getByRole('toolbar', { name: 'Markup' })).toBeTruthy();
+  });
+
+  it('draws no tools row without a toolbar', async () => {
+    render(<Viewer open onClose={() => {}} title="photo.png" closeLabel="Close" closeIcon={<span>×</span>}><p>Picture</p></Viewer>);
+    expect(document.querySelector('.org-viewer-tools')).toBeNull();
+  });
+
   it('closes on Escape and has no accessibility violations', async () => {
     const user = userEvent.setup();
     render(<Harness meta="Markdown · 2 KB" />);

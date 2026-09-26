@@ -126,7 +126,13 @@ loads the switch's styles.
   in the Tab order.
 - `Viewer`: a large dialog for looking at one thing, in the style of macOS Quick Look: close on the left (`closeLabel`,
   `closeIcon`), the `icon` and `title` centred with an optional `meta` line under them, `actions` on the right, and the
-  content on a grey backdrop that scrolls on its own. `className` widens or restyles one kind of viewer.
+  content on a grey backdrop that scrolls on its own. `className` widens or restyles one kind of viewer. `toolbar` adds
+  a second row of tools under the first, for an editing mode such as marking up a picture; it stays put while the
+  content scrolls.
+- `ToolbarToggleGroup`: one choice out of a few small icon buttons, such as the tool, colour or stroke width of a
+  drawing bar. A radio group named by `label`: one Tab stop, the arrow keys, Home and End move the choice and the focus
+  together, and the picked item sits on a pale tint. Each item has a `label`, an `icon` and an optional `shortcut`,
+  shown in its tooltip and announced as `aria-keyshortcuts`; handling that key elsewhere is the caller's job.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming

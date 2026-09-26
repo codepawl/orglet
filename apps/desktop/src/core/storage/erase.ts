@@ -1,8 +1,10 @@
+import { rmSync } from 'node:fs';
 import type { Source, Task } from '../../shared/contracts';
 import { isMemory, type Knowledge } from '../../shared/knowledge';
 import { KnowledgeBase } from '../context/knowledge';
 import type { Store } from './database';
 import { readCustomConnections, writeCustomConnections } from './custom-connections';
+import { editedSourcesDirectory } from '../tools/sources';
 
 /**
  * Every table a full erase empties, children before parents so the foreign keys hold. `migrations` is left alone —
@@ -41,8 +43,17 @@ function eraseKnowledgeRows(store: Store, matches: (item: Knowledge) => boolean)
 }
 
 /**
- * Imported sources are rows pointing at the person's own files; Orglet keeps no copy, so nothing of theirs is
- * touched here. A source no chat refers to is removed. One a chat still cites cannot be, because opening that chat
+ * Edited versions (COD-280) are the one kind of source Orglet keeps a copy of, under `edited-sources/` beside the
+ * database; erasing sources or everything deletes that folder, since nothing of the person's own is in it.
+ */
+function eraseEditedCopies(store: Store) {
+  const directory = editedSourcesDirectory(store);
+  if (directory) rmSync(directory, { recursive: true, force: true });
+}
+
+/**
+ * Imported sources are rows pointing at the person's own files; Orglet keeps no copy of those, so nothing of theirs
+ * is touched here. Edited versions are Orglet's own copies and are deleted with their folder. A source no chat refers to is removed. One a chat still cites cannot be, because opening that chat
  * reads its sources — it is revoked and its path and hash are dropped instead, which is what a revoked source
  * already looks like and leaves the app unable to read the file.
  */
@@ -59,6 +70,7 @@ export function eraseSources(store: Store): { sources: number; sourcesForgotten:
       store.update('sources', { ...rest, revoked: true });
     }
   });
+  eraseEditedCopies(store);
   return { sources: all.length - forgotten.length, sourcesForgotten: forgotten.length };
 }
 
@@ -76,6 +88,7 @@ export function eraseEverything(store: Store): { entities: number } {
     if (connections.length) writeCustomConnections(store, connections);
     for (const server of mcpServers) store.db.prepare('INSERT INTO mcp_servers(id,data) VALUES(?,?)').run(server.id, server.data);
   });
+  eraseEditedCopies(store);
   // Seeding writes a revision of its own, in its own transaction, so it waits until the tables are empty.
   store.seedDefaults();
   return { entities };

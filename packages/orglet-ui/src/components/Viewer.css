@@ -59,6 +59,16 @@
   align-items: center;
   gap: 6px;
 }
+/* An editing mode's tools: a second row on the toolbar's own colour, so the two read as one bar over the backdrop. */
+.org-viewer-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 14px;
+  padding: 0 10px 8px;
+  background: var(--org-bg, #fff);
+}
 .org-viewer-scroll {
   flex: 1;
   overflow: auto;

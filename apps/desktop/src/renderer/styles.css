@@ -2076,6 +2076,44 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   .source-viewer .diff-discard .diff-action-label { display:none; }
   .source-viewer .diff-discard { width:34px; padding:0; justify-content:center; }
 }
+/* Viewing and editing a file (COD-280). The source viewer is wider than a document, so its name keeps room between
+   the close button and the actions. Opening in the default app is always an icon; in a narrow window Ask, Edit and
+   Save keep only their icons too (each button carries its name as its label). */
+.source-viewer.source-file { width:min(1040px, calc(100vw - 32px)); }
+.source-viewer .source-open-external .source-action-label { display:none; }
+.source-viewer .source-open-external { width:34px; padding:0; justify-content:center; }
+@media (max-width: 900px) {
+  .source-viewer .source-action-label,.source-viewer .edit-action-label { display:none; }
+  .source-viewer .source-ask,.source-viewer .source-edit,.source-viewer .edit-save,.source-viewer .edit-ask { width:34px; padding:0; justify-content:center; }
+}
+/* An edit mode fills the viewer's height: the editor and the picture scroll inside themselves, not the page. */
+.source-viewer.source-editing .org-viewer-scroll { display:flex; flex-direction:column; overflow:hidden; padding:14px 20px 20px; }
+.source-viewer.source-editing .source-stage { flex:1; min-height:0; width:100%; }
+.source-viewer.source-markup .source-stage { max-width:none; }
+.text-editor { flex:1; min-height:0; display:flex; flex-direction:column; border-radius:10px; background:var(--bg); overflow:hidden; }
+.text-editor .cm-editor { flex:1; min-height:0; }
+/* Find and replace, on the editor's own card above the text: fields, toggles, the count, then the replacement. */
+.find-bar { display:flex; flex-direction:column; gap:6px; padding:10px 12px 6px; }
+.find-bar-row { display:flex; align-items:center; flex-wrap:wrap; gap:4px 6px; }
+.find-bar .find-bar-field { flex:1 1 180px; max-width:340px; min-height:30px; padding:4px 10px; font-size:12.5px; background:var(--surface); border-color:transparent; }
+.find-bar-toggles { display:inline-flex; align-items:center; gap:2px; }
+.find-bar .org-button.org-button-icon { width:30px; height:30px; min-height:30px; }
+.find-bar .org-button.org-button-icon.find-bar-toggle[aria-pressed='true'] { background:var(--row-active); color:var(--text); }
+.find-bar-count { min-width:52px; font-size:12px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.find-bar .find-bar-action { min-height:30px; padding:4px 10px; font-size:12.5px; white-space:nowrap; }
+.find-bar-close { margin-left:auto; }
+/* Marking up a picture: the tools in the viewer's second row, the picture fitted on the backdrop with a soft lift. */
+.markup-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 16px; }
+.markup-swatch { display:block; width:16px; height:16px; border-radius:50%; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent); }
+.markup-level { display:block; border-radius:50%; background:currentColor; }
+.markup-history { display:inline-flex; align-items:center; gap:2px; }
+.markup-history .org-button.org-button-icon { width:30px; height:30px; min-height:30px; }
+.markup-stage { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
+.markup-frame { position:relative; flex-shrink:0; border-radius:4px; box-shadow:0 1px 2px #0000001a, 0 8px 28px #0000000f; }
+/* The picture only takes focus back from a closed label; it is not a control, so it draws no ring. */
+.markup-frame:focus-visible { outline:none; }
+.markup-canvas { display:block; border-radius:4px; touch-action:none; }
+.markup-entry.org-input { position:absolute; width:auto; min-width:140px; min-height:0; padding:0 4px; margin:-2px 0 0 -5px; border-color:var(--accent); background:color-mix(in srgb, var(--bg) 80%, transparent); line-height:1.25; }
 /* Lines added and removed wear the diff's own colours and a heavier weight, so they read apart from the file count. */
 .diff-counts { font-variant-numeric:tabular-nums; font-weight:600; }
 .diff-count-added { color:var(--success); }
