@@ -190,7 +190,7 @@ const fileElementId = (index: number) => `diff-file-${index}`;
 export function DiffViewer({ diff, workerName, info, review, onClose }: { diff: WorkspaceDiff; workerName: string; info: InfoTipRow[]; review?: DiffReview; onClose: () => void }) {
   const files = diff.files.length.toLocaleString(currentLocale());
   // The counts wear the diff's own colours here too, the way the chat's changed-files line does.
-  const meta = diff.lines === false ? t('{0} tệp', [files]) : <>{t('{0} tệp', [files])} · <DiffCounts counts={diff} /></>;
+  const meta = diff.lines === false ? t('{0} tệp', [files]) : <>{t('{0} tệp', [files])} · <DiffCounts counts={diff} hideZero /></>;
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set());
   // A row is a file, or a folder with nothing else inside it; every other folder follows its files (COD-291).
   const alone = standaloneFolders(diff);
