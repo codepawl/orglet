@@ -61,6 +61,8 @@ Any server that speaks the OpenAI chat/completions API can be a connection of it
 
 The model list comes from the server's own `GET /models`, cached for 24 hours like the other lists. If the server does not answer, type the model ID yourself.
 
+To check a connection, open its **⋮** menu and choose **Test connection**. Orglet asks the server for its model list again and says how many models it offers, or why it did not answer.
+
 **Which addresses are allowed.** `https://` works for any host. Plain `http://` is allowed only for this computer (`localhost`, `127.0.0.1`, `::1`) and private-network addresses (`10.x`, `172.16–31.x`, `192.168.x`, `169.254.x`, `100.64–127.x`, `fc00::/7`, `fe80::/10`, and `.local` names). For any other host Orglet refuses `http://` instead of warning about it, because the key and every prompt would cross the internet unencrypted. An address may not carry a user name, a password, a `?query` or a `#fragment`; the key goes in its own field, where it is encrypted.
 
 **The key.** It is kept like any other API key: encrypted with your system's secure storage, one file per connection, never shown again and never in a backup. The row only says whether a key is saved. **Remove API key** in the row's menu drops it; **Delete connection** drops the connection and its key, and is refused while an orglet still uses it.

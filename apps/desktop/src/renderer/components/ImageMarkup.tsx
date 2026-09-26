@@ -217,7 +217,7 @@ export function MarkupCanvas({ picture, size, markup, tool, color, width, fontSi
       <canvas ref={canvas} className="markup-canvas" role="img" aria-label={label} style={{ width: size.width * scale, height: size.height * scale, cursor }}
         onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={() => { setDraft(undefined); setCropDraft(undefined); }} />
       {entry && <Input ref={entryField} className="markup-entry" data-popup-open="" aria-label={t('Chữ trên ảnh')} placeholder={t('Nhập chữ…')} value={entry.value}
-        style={{ left: entry.at.x * scale, top: entry.at.y * scale, color, font: labelFont(fontSize * scale) }}
+        style={{ left: entry.at.x * scale, top: entry.at.y * scale, maxWidth: Math.max(size.width * scale - entry.at.x * scale, 48), color, font: labelFont(fontSize * scale) }}
         onChange={event => setEntry({ ...entry, value: event.target.value })}
         onKeyDown={event => {
           if (event.key === 'Enter') { event.preventDefault(); commitEntry(); }

@@ -4,6 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { ProfileInput, DatasetProfile } from '../shared/profiles';
+import { OutputTail, checkerStoppedMessage } from './output-tail';
 
 const active = new Map<string, Electron.UtilityProcess>();
 export function cancelProfile(id: string) { active.get(id)?.kill(); }
@@ -16,6 +17,10 @@ export async function executeProfile(id: string, raw: unknown): Promise<DatasetP
     // Parser process receives no API credentials or inherited secret environment variables.
     const child = utilityProcess.fork(join(__dirname, 'profiler.js'), [scratch], { serviceName: 'Orglet Dataset Checker', stdio: 'pipe', env: { SystemRoot: process.env.SystemRoot ?? 'C:\\Windows', TEMP: process.env.TEMP ?? '', TMP: process.env.TMP ?? '' } });
     active.set(id, child);
+    // What the checker prints to stderr is kept (its tail only), so a crash says why instead of reading like a cancel.
+    const errors = new OutputTail();
+    child.stderr?.on('data', chunk => errors.add(chunk));
+    child.stdout?.resume();
     let settled = false;
     const finish = (error?: Error, value?: DatasetProfile) => {
       if (settled) return; settled = true; clearTimeout(timer); active.delete(id); child.kill();
@@ -32,7 +37,7 @@ export async function executeProfile(id: string, raw: unknown): Promise<DatasetP
     child.on('exit', () => {
       // Also clean selected-source copies after timeout/cancel/native crash.
       void rm(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }).catch(() => {});
-      finish(new Error('Checker đã dừng hoặc bị hủy. Không có kết quả được xác nhận.'));
+      finish(new Error(checkerStoppedMessage(errors.lastLines([scratch]))));
     });
   });
 }

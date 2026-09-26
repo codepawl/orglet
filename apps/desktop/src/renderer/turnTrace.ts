@@ -15,7 +15,7 @@ export type TraceKind =
   | 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll'
   | 'browser_click' | 'browser_type' | 'browser_select' | 'browser_press' | 'browser_wait' | 'browser_asked'
   | 'desktop_read' | 'desktop_find' | 'desktop_screenshot' | 'desktop_act' | 'desktop_asked'
-  | 'handoff' | 'remembered' | 'proposal' | 'failed' | 'other';
+  | 'handoff' | 'remembered' | 'proposal' | 'withheld' | 'failed' | 'other';
 
 export type TraceEntry = {
   id: string;
@@ -88,6 +88,9 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Tiến trình đã dừng: /, kind: 'command', note: true },
   { pattern: /^(?:Đã ghi nhớ một điều|Đã gộp vào một ghi nhớ|Đã ghi một ghi nhớ)/, kind: 'remembered', note: true },
   { pattern: /^Không ghi nhớ được/, kind: 'failed', note: true },
+  // An image the connection was not shown (COD-292): the chat says so, or an answer that claims to have read it goes
+  // unchallenged next to a trace that counts one file fewer.
+  { pattern: /^Tí không xem được ảnh /, kind: 'withheld', note: true },
   { pattern: /^Câu trả lời kèm /, kind: 'failed', note: true },
   { pattern: /^Cảm xúc thứ \d+ bị từ chối/, kind: 'failed', note: true },
   { pattern: /^Đề xuất (?:thay đổi trong app|sửa hướng dẫn của Tí) bị từ chối/, kind: 'failed', note: true },
@@ -185,7 +188,7 @@ const browserKinds: readonly TraceKind[] = ['browser_open', 'browser_read', 'bro
   'browser_click', 'browser_type', 'browser_select', 'browser_press', 'browser_wait', 'browser_asked'];
 
 /** The order the counts read in: what was loaded, then a crew's handoffs, then the steps, then what the run left behind. */
-const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web_search', 'web_read', 'browser', 'desktop', 'mcp', 'dataset', 'edit', 'folder', 'move', 'delete', 'command', 'remembered', 'proposal', 'failed', 'other'];
+const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'withheld', 'search', 'list', 'skill', 'web_search', 'web_read', 'browser', 'desktop', 'mcp', 'dataset', 'edit', 'folder', 'move', 'delete', 'command', 'remembered', 'proposal', 'failed', 'other'];
 
 function summaryKindOf(kind: TraceKind): SummaryKind {
   if (browserKinds.includes(kind)) return 'browser';
@@ -216,6 +219,7 @@ function countPhrase(kind: SummaryKind, count: number): string {
     case 'handoff': return count === 1 ? t('Giao 1 việc') : t('Giao {0} việc', [count]);
     case 'remembered': return count === 1 ? t('Ghi nhớ thêm 1 điều') : t('Ghi nhớ thêm {0} điều', [count]);
     case 'proposal': return count === 1 ? t('Đề xuất 1 thay đổi') : t('Đề xuất {0} thay đổi', [count]);
+    case 'withheld': return count === 1 ? t('1 ảnh không gửi cho Tí') : t('{0} ảnh không gửi cho Tí', [count]);
     case 'failed': return count === 1 ? t('1 bước không thành') : t('{0} bước không thành', [count]);
     case 'other': return count === 1 ? t('1 bước khác') : t('{0} bước khác', [count]);
   }

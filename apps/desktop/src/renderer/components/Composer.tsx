@@ -37,19 +37,26 @@ export function restoreUnsent(unsent: string, typedSince: string): string {
 export type ComposerAttachment = { id: string; name: string; bytes?: number };
 
 /**
- * Where the strip should come to rest: as far along as it can go while a card still starts exactly at its left
- * edge (user, 2026-09-20). Scrolling to the very end lands mid-card, and the part left showing is a card's tail,
- * which is blank past the meta line — it reads as an empty tile rather than as "there is more this way". Stopping
- * on a whole number of cards puts the clipping on the right instead, where a card's icon and name are what peek.
+ * Where the strip comes to rest after a file is added: its very end, so the card just added shows whole (COD-292).
+ * It used to stop on a whole card (user, 2026-09-20), because a card cut at the left edge shows its blank tail and read
+ * as an empty tile; but that left the newest card cut on the right and the first file gone with no sign. The strip's
+ * left end now fades out while cards are scrolled past it, so the cut card reads as "there is more this way".
  */
 function restingScrollLeft(strip: HTMLUListElement) {
-  const furthest = strip.scrollWidth - strip.clientWidth;
-  const [first, second] = strip.children;
-  if (!(first instanceof HTMLElement) || furthest <= 0) return Math.max(furthest, 0);
-  const pitch = second instanceof HTMLElement ? second.offsetLeft - first.offsetLeft : first.offsetWidth;
-  if (pitch <= 0) return furthest;
-  return Math.floor(furthest / pitch) * pitch;
+  return Math.max(strip.scrollWidth - strip.clientWidth, 0);
 }
+
+type StripOverflow = { start: boolean; end: boolean };
+
+/** Whether cards are scrolled past the strip's left end and past its right end. A pixel of slack absorbs rounding. */
+export function stripOverflow(strip: Pick<HTMLElement, 'scrollLeft' | 'clientWidth' | 'scrollWidth'>): StripOverflow {
+  return {
+    start: strip.scrollLeft > 1,
+    end: strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1,
+  };
+}
+
+const sameOverflow = (first: StripOverflow, second: StripOverflow) => first.start === second.start && first.end === second.end;
 
 /**
  * ChatGPT-style prompt bar: a one-line pill with the add button, input and send button on one row.
@@ -118,6 +125,25 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
     element.addEventListener('wheel', onWheel, { passive: false });
     return () => element.removeEventListener('wheel', onWheel);
   }, [hasAttachments]);
+  // Which ends of the strip have cards scrolled past them. Each such end fades out, so a card hidden off the left
+  // after a new one scrolled into view is announced instead of silently gone (COD-292).
+  const [stripMore, setStripMore] = useState<StripOverflow>({ start: false, end: false });
+  useEffect(() => {
+    const element = strip.current;
+    if (!element) return;
+    const measure = () => {
+      const next = stripOverflow(element);
+      setStripMore(current => sameOverflow(current, next) ? current : next);
+    };
+    measure();
+    element.addEventListener('scroll', measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      element.removeEventListener('scroll', measure);
+      observer.disconnect();
+    };
+  }, [hasAttachments, attachmentCount]);
   const mentionable = Boolean(mentions && (mentions.people.length > 1 || mentions.allNames?.length));
   const query = mentionable && !disabled ? mentionQueryAt(value, cursor) : undefined;
   const options = query && query.start !== dismissed ? mentionOptions(query.query, mentions!.people) : [];
@@ -237,7 +263,8 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
       })}
     </ul>}
     {context && <div className="composer-context">{context}</div>}
-    {attachments && hasAttachments && <ul className="composer-attachments" ref={strip} aria-label={t('Tệp đính kèm')}>
+    {attachments && hasAttachments && <ul className="composer-attachments" ref={strip} aria-label={t('Tệp đính kèm')}
+      data-more-start={stripMore.start ? '' : undefined} data-more-end={stripMore.end ? '' : undefined}>
       {attachments.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onRemove={onRemoveAttachment ? () => onRemoveAttachment(item.id) : undefined} />)}
     </ul>}
     <div className="composer-leading"><MessageBoxFocus.Provider value={focusMessageBox}>{leading}</MessageBoxFocus.Provider></div>
