@@ -136,7 +136,11 @@ try {
   await page.getByRole('button', { name: 'Research Review', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Research Review', exact: true }).click();
   await page.getByRole('heading', { name: 'Đang nhắn với Research Review' }).waitFor();
-  await page.getByRole('button', { name: 'Thiết lập hội', exact: true }).click();
+  // A crew on Demo offers the way to a real model under its message box (COD-293); its own settings lead the
+  // header's menu.
+  await page.locator('.demo-note').getByRole('button', { name: 'Kết nối model', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Thiết lập hội', exact: true }).click();
   await page.getByRole('dialog', { name: 'Thiết lập hội' }).waitFor();
   assert.equal(await page.getByLabel('Tên hội', { exact: true }).inputValue(), 'Research Review');
   await page.keyboard.press('Escape');
