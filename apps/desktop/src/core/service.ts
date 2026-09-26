@@ -54,6 +54,7 @@ import { AppProposals, type CurrentSettings, type ProposalApplier } from './orch
 import { SideThreads } from './orchestration/side-threads';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
 import { ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
+import { canContinueRun } from '../shared/out-of-steps';
 import type { Args } from '../shared/contracts';
 import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
 import { deleteCustomConnection, readCustomConnections, requireCustomConnection, saveCustomConnection } from './storage/custom-connections';
@@ -1217,6 +1218,7 @@ export class CoreService {
   private reviseTask(input: Args<'reviseTask'>, forwarded?: ForwardedMessage) {
     const task = this.store.get<Task>('tasks', input.taskId);
     if (input.replyTo) new MessageInteractions(this.store).target(task.id, input.replyTo);
+    if (input.continueFrom) this.assertContinuable(task, input.continueFrom);
     if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
     if (this.sources.isChecking()) throw new Error('Đợi checker kết thúc trước khi tạo revision.');
     const active = this.runner.isActive(task.id) || this.teams.isActive(task.id);
@@ -1225,7 +1227,7 @@ export class CoreService {
     const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
     if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
     this.policy.assertStart(task.teamId, task.id);
-    const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}) }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
+    const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}), ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}) }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
       decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
         ? { ...request, interruptedAt: now() } : request) };
     this.store.transaction(() => {
@@ -1236,6 +1238,14 @@ export class CoreService {
     });
     if (active) { this.teams.cancel(task.id); this.runner.cancel(task.id); this.notify(); return; }
     this.start(revised, true);
+  }
+  /**
+   * Continue is offered only under the latest turn's answer, when its run ran out of steps (COD-257); anything else
+   * would start the new run from calls and results that are not the chat's latest.
+   */
+  private assertContinuable(task: Task, runId: string) {
+    const run = this.store.detail(task.id).runs.find(candidate => candidate.id === runId);
+    if (!run || (run.snapshot.inputRevision ?? 0) !== (task.inputRevision ?? 0) || !canContinueRun(run)) throw new Error('Lượt này không tiếp tục được nữa. Nhắn tiếp để hỏi lại.');
   }
   /**
    * Sends one message to up to five other chats as the person's own message (COD-257). Each place is its own turn,

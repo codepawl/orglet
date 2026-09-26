@@ -1,4 +1,5 @@
 import { ownWords } from '../../shared/forward';
+import { canContinueRun } from '../../shared/out-of-steps';
 import { WorkspaceRuntime } from '../tools/workspace-runtime';
 import { PERMISSIONS_OFF_INSTRUCTION, permissionsOff } from './permission-hints';
 import { DEFAULT_LANGUAGE, type Language } from '../../shared/i18n';
@@ -191,13 +192,18 @@ function memoryEventLine(result: RememberResult, workerName: string) {
   return 'Đã ghi nhớ một điều cho các cuộc trò chuyện sau.';
 }
 
-/** Search, read a few pages and write the report does not fit in the six steps a sources-only run gets. */
+/**
+ * Search, read a few pages and write the report does not fit in the six steps a sources-only run gets. Research gets
+ * 24 (COD-257): in the dogfood crew, looking up three competitors' prices took one search and thirteen page reads (two
+ * of them failed) and was still reading when 16 steps told it to hand in.
+ */
+export const RESEARCH_STEP_LIMIT = 24;
 function stepLimit(run: Run) {
   // Coding is many small tool calls: every file read, write and command is a step (COD-187).
   if (run.snapshot.workspaceGrant) return 40;
-  if (run.snapshot.toolCapabilities?.includes('network.web')) return 16;
+  if (run.snapshot.toolCapabilities?.includes('network.web')) return RESEARCH_STEP_LIMIT;
   // An MCP server is another service to look things up in, so it gets the same room as the web (COD-241).
-  if (run.snapshot.mcpTools?.length) return 16;
+  if (run.snapshot.mcpTools?.length) return RESEARCH_STEP_LIMIT;
   // Acting on a page is a read, a step and a read again each time, so it gets the room coding does not need (COD-261).
   // Using a desktop app works the same way (COD-261, phase 2a).
   if (run.snapshot.browser && run.snapshot.toolCapabilities?.includes('browser.act')) return 24;
@@ -286,6 +292,8 @@ const WRAP_UP_INSTRUCTION = 'You are almost out of steps. Stop using tools and h
 const MEMBER_WRAP_UP_INSTRUCTION = 'What you found so far is your result for this assignment: hand it in with submit_report, set assignmentOutcome to completed and list what is not finished in limitations. Use blocked only when you have nothing to hand in or a file change the assignment requires is missing.';
 /** The limitation on a member's report when it handed in because its steps ran out (COD-256). */
 export const OUT_OF_STEPS_LIMITATION = 'Hết số bước trước khi xong phần việc; đây là phần đã làm được.';
+/** What a Continue turn is told before the calls and results of the turn that ran out of steps (COD-257). */
+const CONTINUE_INSTRUCTION = 'Your previous answer in this chat was cut short: you ran out of steps before finishing, and the person asked you to continue. The tool calls you made in that turn follow, with their results as they were then (older web pages shortened). Do not repeat them. Carry on with what was not finished, then answer with the whole result, including what you had found before.';
 const FINISHING_TOOL_NAMES = ['reply', 'submit_report', 'submit_plan'];
 
 /** The tools that end a run, so a worker told to hand in cannot keep working instead. */
@@ -675,7 +683,24 @@ export class Runner {
     const main = this.store.detail(task.sideOf.taskId);
     return { mainChat: mainChatTurns(main, task.sideOf.throughRevision, run.snapshot.worker.id) };
   }
-  private startPermissions(task: Task, run: Run): Pick<Run['snapshot'], 'toolCapabilities' | 'workspaceGrant' | 'browser' | 'desktop'> {
+  /**
+   * What a Continue turn starts from (COD-257): the calls and results of the run it continues, when that run belongs
+   * to this chat and still kept them. Whatever an older turn kept is dropped here, since only the latest can continue.
+   */
+  private carriedSteps(task: Task, run: Run, input: RunInput): ReturnType<Checkpoints['carried']> {
+    this.checkpoints.dropFinished(task.id, input.continueFrom);
+    if (!input.continueFrom || run.stage !== undefined) return undefined;
+    const row = this.store.db.prepare('SELECT task_id FROM runs WHERE id=?').get(input.continueFrom);
+    const carried = row?.task_id === task.id ? this.checkpoints.carried(input.continueFrom) : undefined;
+    if (!carried) {
+      this.event(run.id, 'Không còn các bước của lượt trước; tiếp tục từ câu trả lời đã lưu.');
+      return undefined;
+    }
+    const results = carried.messages.filter(message => message.role === 'tool').length;
+    this.event(run.id, `Tiếp tục từ ${results} bước của lượt trước.`);
+    return carried;
+  }
+  private startPermissions(task: Task, run: Run):Pick<Run['snapshot'], 'toolCapabilities' | 'workspaceGrant' | 'browser' | 'desktop'> {
     const fresh = !run.snapshot.context && !run.snapshot.reassignment;
     if (!fresh) {
       return { toolCapabilities: run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider, task.toolCapabilities), workspaceGrant: run.snapshot.workspaceGrant, browser: run.snapshot.browser, desktop: run.snapshot.desktop };
@@ -928,9 +953,14 @@ export class Runner {
         return next;
       };
       let messages: RunMessage[];
+      let carried: ReturnType<Checkpoints['carried']>;
       if (!resume?.messages.length) {
         const compacted = fitThread(this.store.detail(task.id), run, input.brief, assemble, tools, undefined, extras);
         messages = assemble(compacted);
+        // Continue after a turn ran out of steps (COD-257): that run's calls and results come after this turn's own
+        // messages, so the orglet carries on without reading the same pages again.
+        carried = this.carriedSteps(task, run, input);
+        if (carried) messages.push({ role: 'user', content: JSON.stringify({ continuing: true, instruction: CONTINUE_INSTRUCTION }) }, ...carried.messages);
         run = { ...run, snapshot: { ...run.snapshot, context: applyThreadManifest(compiled.context, compacted) } };
         this.store.update('runs', run);
       } else {
@@ -940,7 +970,9 @@ export class Runner {
         await this.runHarness(run.snapshot.worker.provider, task, run, messages, { manifest, preflight, preflightLimits, checkedSourceIds: checkedProfiles.flatMap(profile => Object.keys(profile.sourceHashes)) }, options, control, signal);
         return;
       }
-      let checkpoint: Checkpoint = this.checkpoints.get(run.id) ?? { id: run.id, step: 0, phase: 'ready', messages, readIds: [...new Set(checkedProfiles.flatMap(profile => Object.keys(profile.sourceHashes)))] };
+      let checkpoint: Checkpoint = this.checkpoints.get(run.id) ?? { id: run.id, step: 0, phase: 'ready', messages,
+        readIds: [...new Set([...checkedProfiles.flatMap(profile => Object.keys(profile.sourceHashes)), ...(carried?.readIds ?? [])])],
+        ...(carried?.untrustedInputs.length ? { untrustedInputs: carried.untrustedInputs } : {}) };
       let harnessRemainingUsd: number | undefined = 0;
       let model: ModelAdapter;
       if (isHarness(run.snapshot.worker.provider)) {
@@ -1426,7 +1458,8 @@ export class Runner {
           const answer: HeldAnswer = { report: { ...chatReport(message), limitations: this.crewLimitations(run, options) },
             knowledgeProposals, title, untrustedInputs: [...untrustedInputs] };
           const workspaceLimitations = await this.finishWorkspace(run, answer);
-          this.commit(task, run, { ...answer.report, limitations: [...answer.report.limitations, ...workspaceLimitations] }, options.keepTaskOpen, knowledgeProposals, title, false, answer.untrustedInputs); return;
+          if (checkpoint.wrappingUp) run = { ...run, outOfSteps: true };
+          this.commit(task, run,{ ...answer.report, limitations: [...answer.report.limitations, ...workspaceLimitations] }, options.keepTaskOpen, knowledgeProposals, title, false, answer.untrustedInputs); return;
         }
         if (call.name === 'submit_plan') {
           if (run.stage !== 'plan') throw new Error('Tool không được policy cho phép.');
@@ -1750,7 +1783,8 @@ export class Runner {
     const blockedByWorker = assignmentOutcome === 'blocked' && !handedInWhatItFound;
     const blockedByFiles = expectedFileChanges && (assignmentOutcome !== 'completed' || missingFileChanges);
     const memberBlocked = run.stage === 'member' && (blockedByWorker || blockedByFiles);
-    this.commit(task, run, report, options.keepTaskOpen, knowledgeProposals, null, memberBlocked, options.untrustedInputs ?? []);
+    if (options.ranOutOfSteps) run = { ...run, outOfSteps: true };
+    this.commit(task, run,report, options.keepTaskOpen, knowledgeProposals, null, memberBlocked, options.untrustedInputs ?? []);
   }
   /**
    * Runs a locally installed agent CLI as one opaque step over a throwaway copy of the selected sources.
@@ -2091,9 +2125,12 @@ export class Runner {
         lastArtifactId: artifact.id,
         ...(!keepTaskOpen ? { status: (missing.length ? 'waiting_input' : 'completed') as Task['status'] } : {}),
       });
-      this.store.put('runs', { ...run, status: memberBlocked ? 'failed' : 'completed', error: memberBlocked ? 'Phần việc bị chặn; xem báo cáo đã lưu.' : null }, { column: 'task_id', value: task.id });
+      const saved: Run = { ...run, status: memberBlocked ? 'failed' : 'completed', error: memberBlocked ? 'Phần việc bị chặn; xem báo cáo đã lưu.' : null };
+      this.store.put('runs', saved, { column: 'task_id', value: task.id });
       this.store.event(run.id, memberBlocked ? 'Đã lưu báo cáo blocker; phần việc chưa hoàn tất.' : report.format === 'chat' ? 'Đã lưu câu trả lời.' : 'Đã lưu báo cáo và nguồn tham chiếu.');
-      this.store.db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);
+      // A run cut short by its step limit keeps its conversation, so Continue picks up from it (COD-257).
+      if (canContinueRun(saved)) this.checkpoints.keepFinished(run.id);
+      else this.store.db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);
       this.store.db.prepare("UPDATE step_attempts SET state='committed' WHERE run_id=? AND state='received'").run(run.id);
     });
     // The run is over, so its app-change proposals settle now: held if the run read unvetted content, applied at

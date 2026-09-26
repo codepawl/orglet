@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward } from 'lucide-react';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -50,6 +50,7 @@ import { turnNotices } from './turnNotices';
 import { withoutSourceIds } from '../../shared/source-mentions';
 import { BlockedCommandLine, CommandOutputDialog, askToFixText } from './BlockedHandIn';
 import type { BlockingCommand } from '../../shared/blocked-hand-in';
+import { canContinueRun } from '../../shared/out-of-steps';
 
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
 type TurnNotices = ReturnType<typeof turnNotices>;
@@ -158,6 +159,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   // A command that blocked a hand-in, its output open in the viewer, and whether "Vẫn áp dụng" is on its way (COD-270).
   const [outputCommand, setOutputCommand] = useState<BlockingCommand>();
   const [applyingHandIn, setApplyingHandIn] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   // A member's saved report open in the document viewer from the card that says to see it (COD-256).
   const [savedReportId, setSavedReportId] = useState<string>();
   const savedReport = savedReportId ? detail.artifacts.find(artifact => artifact.id === savedReportId) : undefined;
@@ -367,8 +369,12 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     const replyText = withoutSourceIds(tMessage(artifact.report.summary), detail.sources);
     const trace = traceOf({ memories: artifact.usedMemories, context: author?.snapshot.context, runId: artifact.runId, events: detail.events, crew: author?.stage === 'synthesis' ? runs : [] });
     const workerId = author?.snapshot.worker.id;
+    const canContinue = latest && !busy && !detail.task.pendingStart && author !== undefined && canContinueRun(author);
     const notices = turnNotices({
       trace: trace.length > 0 ? <TurnTrace key="trace" entries={trace} onOpenMemories={openMemories && workerId ? () => openMemories(workerId) : undefined} /> : undefined,
+      outOfSteps: author?.outOfSteps && author.stage === undefined
+        ? <OutOfStepsLine key="out-of-steps" busy={continuing} onContinue={canContinue ? () => continueRun(author) : undefined} />
+        : undefined,
       // A crew's answer names each member whose changes a failed command kept out of the folder (COD-270).
       handIn: author?.stage === 'synthesis' ? blockedLinesOf(runs) : undefined,
       changes: changedFilesLines(runs, run => run.id !== artifact.runId),
@@ -407,6 +413,23 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       proposals: proposalCards(proposals),
     });
     return <HeldReply runId={run.id} title={held.report.format === 'report' ? tMessage(held.report.title) : undefined} text={text} limitations={held.report.limitations} notices={notices} />;
+  };
+  /**
+   * Continue under an answer cut short by the step limit (COD-257): the next message, carrying the chat's files, whose
+   * run starts from this run's calls and results. The core checks again that this is still the latest turn.
+   */
+  const continueRun = (run: Run) => {
+    if (continuing) return;
+    setContinuing(true);
+    const input = detail.task.currentInput ?? detail.task;
+    const sourceIds = input.sourceIds.filter(sourceId => !detail.sources.find(source => source.id === sourceId)?.revoked);
+    const provider = workspace.workers.find(worker => worker.id === detail.task.workerId)?.provider ?? run.snapshot.worker.provider;
+    action(async () => {
+      try {
+        await orglet.call('reviseTask', { taskId: detail.task.id, brief: t('Tiếp tục từ chỗ đã dừng.'), continueFrom: run.id, sourceIds, excludedSources: input.excludedSources,
+          consent: true, providerScopes: provider === 'demo' ? [] : [provider], budgetMicros: detail.task.budgetMicros });
+      } finally { setContinuing(false); }
+    });
   };
   const applyHandIn = (run: Run) => {
     if (applyingHandIn) return;
@@ -591,6 +614,17 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     {savedReport && <ReportDocument artifact={savedReport} author={detail.runs.find(run => run.id === savedReport.runId)} detail={detail} open onClose={() => setSavedReportId(undefined)} busy={busy} action={action} showSources={showSources}
       actions={<ArtifactActions artifactId={savedReport.id} about={tMessage(savedReport.report.title)} action={action} />} />}
     <BrowserLiveViewer detail={detail} />
+  </div>;
+}
+
+/**
+ * Under an answer the orglet handed in because its steps ran out (COD-257): says so, and on the latest turn offers
+ * Continue, which sends the next message and starts its run from this run's calls and results.
+ */
+function OutOfStepsLine({ busy, onContinue }: { busy: boolean; onContinue?: () => void }) {
+  return <div className="out-of-steps">
+    <p><Hourglass size={14} aria-hidden="true" />{t('Hết số bước trước khi xong; đây là phần đã làm được.')}</p>
+    {onContinue && <Button type="button" variant="outline" disabled={busy} onClick={onContinue}><StepForward size={16} />{t('Tiếp tục')}</Button>}
   </div>;
 }
 
