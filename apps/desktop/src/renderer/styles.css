@@ -291,7 +291,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .section-items[hidden] { display:none; }
 .history .section-items { gap:4px; }
 .worker-row { display:flex; align-items:center; gap:1px; border-radius:10px; }
-.worker-row > .status-mark { margin-left:10px; margin-right:4px; }
+.worker-row > .org-status-mark { margin-left:10px; margin-right:4px; }
 /* One pill per row: the settings action lives inside it and appears on hover or focus. */
 /* Sidebar rows: hover is a lighter tint than the selected row, so the current choice stays readable. */
 .worker-row:hover { background:var(--row-hover); }
@@ -319,7 +319,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .row-menu-popover button:hover,.row-menu-popover button:focus-visible { background:var(--surface); }
 .worker { display:flex; align-items:center; gap:8px; padding:7px 10px; background:transparent; border:0; border-radius:var(--radius); text-align:left; min-width:0; flex:1; font-size:13px; }
 .worker span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.worker .status-mark svg { color:inherit; }
+.worker .org-status-mark svg { color:inherit; }
 .worker-avatar { width:25px; height:25px; border-radius:8px; background:var(--bg); border:1px solid var(--border); display:grid; place-items:center; font-size:12px; flex-shrink:0; }
 .worker:hover,.history-item:hover { background:var(--row-hover); }
 .worker.active,.history-item.active { background:var(--row-active); }
@@ -327,19 +327,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .history-item { width:100%; display:flex; align-items:center; gap:8px; text-align:left; padding:9px 10px; font-size:13px; border:0; background:transparent; border-radius:var(--radius); }
 .history-item .row-name { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .history-item svg { color:var(--muted); }
-.history-item .status-mark svg { color:inherit; }
+.history-item .org-status-mark svg { color:inherit; }
 /* Status mark: a glyph, not a coloured dot, so a row says what its state is (user, 2026-09-19).
    A mark is a glyph and a colour; only the busy spinner keeps a disc, to spin against (user, 2026-09-20). */
-.status-mark { --status-mark-size:15px; display:grid; place-items:center; width:var(--status-mark-size); height:var(--status-mark-size); border-radius:50%; flex-shrink:0; box-sizing:border-box; color:var(--muted); }
-.status-mark svg { width:100%; height:100%; }
-.status-mark.success { color:var(--success); }
-.status-mark.error { color:var(--error); }
-.status-mark.working { color:var(--working); }
-.status-mark.empty { color:color-mix(in srgb, var(--muted) 55%, transparent); }
-.status-mark.busy { background:color-mix(in srgb, currentColor 13%, transparent); color:var(--working); }
-.status-mark.busy svg { animation:status-mark-spin .75s linear infinite; }
-@keyframes status-mark-spin { to { transform:rotate(360deg); } }
-@media (prefers-reduced-motion:reduce) { .status-mark.busy svg { animation:none; } }
 .empty-history { padding:12px; color:var(--muted); opacity:.7; font-size:13px; text-align:center; }
 /* The footer sits a clear step below the list, and ends where the list's rows end: the list keeps a 12px gutter for
    its scrollbar (COD-200), so the footer leaves the same space on the right (user, 2026-09-23). */
@@ -348,7 +338,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .sidebar-scroll .history { min-height:100px; overflow:visible; }
 .sidebar-scroll .history:has(>.section-items[hidden]) { min-height:0; }
 .sidebar-footer>.button { justify-content:flex-start; }
-.sidebar-footer .status-mark { margin-left:auto; }
+.sidebar-footer .org-status-mark { margin-left:auto; }
 /* Selecting several rows (COD-214). A section's edit button holds its Done state while the section is in select
    mode. A picked row, or every row while picking, carries a checkbox in the status mark's slot, the same 29px it
    took, so nothing shifts sideways; a picked row is tinted from the accent, so it is told from the open chat's
@@ -1001,7 +991,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .web-search-key { flex-wrap:wrap; }
 .web-search-key > .setting-key-form { flex:1 0 100%; order:1; margin-top:8px; }
 .web-search-outcome { display:flex; align-items:flex-start; gap:6px; }
-.web-search-outcome .status-mark { margin-top:2px; }
+.web-search-outcome .org-status-mark { margin-top:2px; }
 .web-search-outcome.success { color:var(--success); }
 .web-search-outcome.error { color:var(--error); }
 .custom-connection-prices .money-input input { flex:1; width:auto; min-width:0; }
@@ -1169,7 +1159,7 @@ button.notice-body { cursor:pointer; }
 .money-input.invalid { border-color:var(--error); }
 /* Status label and mark share one colour: green when ready, red when blocked, grey otherwise. */
 .status-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:500; color:var(--muted); white-space:nowrap; }
-.status-pill .status-mark { margin-left:0; }
+.status-pill .org-status-mark { margin-left:0; }
 .status-pill.logged_in { color:var(--success); }
 .status-pill.logged_out,.status-pill.auth_error { color:var(--error); }
 @media(max-width:640px) {
@@ -1368,7 +1358,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 /* Row icons are muted, but an avatar keeps its own colour. */
 .tree-leaf svg:not(.mascot) { color:var(--muted); }
 .tree-leaf svg { flex-shrink:0; }
-.tree-leaf .status-mark svg { color:inherit; }
+.tree-leaf .org-status-mark svg { color:inherit; }
 .tree-leaf .row-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .tree-leaf small { margin-left:auto; color:var(--muted); font-size:11px; white-space:nowrap; }
 .tree-leaf:hover { background:var(--row-hover); }
@@ -1764,7 +1754,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* Sidebar hierarchy: section headings sit furthest left, their rows one step in, and nested rows further in (user feedback 2026-09-17). */
 .section-heading { padding-left:4px; }
 .worker-row .row-disclosure { margin-left:0; }
-.worker-row:not(:has(> .status-mark, > .row-check)) .row-disclosure { margin-left:10px; }
+.worker-row:not(:has(> .org-status-mark, > .row-check)) .row-disclosure { margin-left:10px; }
 /* Avatar picker: category and Random on one row above the mascots. */
 .avatar-picker-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .avatar-action { min-height:32px; padding:4px 10px; flex-shrink:0; gap:6px; font-size:13px; }

@@ -10,3 +10,5 @@ export { CommandBlock } from './components/CommandBlock';
 export { EditableText } from './components/EditableText';
 export { Checkbox } from './components/Checkbox';
 export { AnchoredPopover } from './components/AnchoredPopover';
+export { StatusMark } from './components/StatusMark';
+export type { StatusMarkState, StatusMarkTone, StatusMarkVariant } from './components/StatusMark';

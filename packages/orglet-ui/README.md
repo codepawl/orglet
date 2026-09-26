@@ -64,6 +64,10 @@ loads the switch's styles.
 - `AnchoredPopover`: a panel attached to a trigger (`anchor` ref). It floats below it, flips above when there is no
   room, stays inside the window, closes on Escape or a pointer outside and gives focus back to the anchor. Inside an
   open dialog it portals into that dialog and sets `data-popup-open`, so Escape closes the popover, not the dialog.
+- `StatusMark`: a small status glyph for the left of a title. `variant` (`empty`, `dashed`, `filled`, `busy`) and
+  `tone` (`muted`, `success`, `error`, `working`) pick a shape and a colour, and every state has its own shape, so
+  colour is never the only difference. `label` is what a screen reader hears; `decorative` keeps it out of a named
+  control. Which state a thing is in belongs to the application.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming
