@@ -54,7 +54,7 @@ import { MessageInteractions, type MessageTarget } from './orchestration/message
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
-import { ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
+import { chatHeadline, ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
 import { canContinueRun } from '../shared/out-of-steps';
 import type { Args } from '../shared/contracts';
 import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
@@ -1265,11 +1265,23 @@ export class CoreService {
     this.store.transaction(() => {
       // Preserve readable input for older runs before expanding the task's history scope.
       for (const run of this.store.detail(task.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources } } });
+      this.keepForwardHeadline(task);
       this.store.update('tasks', revised);
       this.chatSearch.indexTurn(revised.id, revised.inputRevision ?? 0, revised.currentInput!, now());
     });
     if (active) { this.teams.cancel(task.id); this.runner.cancel(task.id); this.notify(); return; }
     this.start(revised, true);
+  }
+  /**
+   * A chat that began with a forward and has no title yet (titles off, or its first run named nothing) goes by what was
+   * forwarded only while that forward is its current turn. Before a later message replaces it, the headline is kept as
+   * the title, so the chat never falls back to the prompt text wrapped around the forward (COD-285).
+   */
+  private keepForwardHeadline(task: Task) {
+    if ((task.inputRevision ?? 0) !== 0 || !task.currentInput?.forwarded) return;
+    const titles = this.store.setting<Record<string, string>>('taskTitles', {});
+    if (titles[task.id]) return;
+    this.store.setSetting('taskTitles', { ...titles, [task.id]: chatHeadline(task).slice(0, 80) });
   }
   /**
    * Continue is offered only under the latest turn's answer, when its run ran out of steps (COD-257); anything else

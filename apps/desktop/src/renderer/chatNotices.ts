@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { Task, TaskStatus, Workspace } from '../shared/contracts';
 import { BACKGROUND_NOTICE_CHARS, type BackgroundNotice } from '../shared/background-notice';
 import { t } from './i18n';
+import { chatHeadline } from '../shared/forward';
 import { toast } from './components/toast';
 import { taskWorkers } from './assignees';
 import { groupChatNames } from './groupChat';
@@ -54,7 +55,7 @@ export function finishedChats(previous: ReadonlyMap<string, TaskStatus>, tasks: 
 
 /** How the sidebar names a chat: its title, or the first line of what was asked. */
 function chatName(task: Task): string {
-  return task.title || task.brief.split('\n')[0].trim();
+  return task.title || chatHeadline(task);
 }
 
 /** The orglet, crew or group a chat belongs to, the way its header names it. */

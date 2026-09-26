@@ -2474,6 +2474,7 @@ export const en: Dictionary = {
   'Liên kết không ghi rõ Tí hay hội nào.': 'The link does not name an orglet or crew.',
   // Side threads (COD-247).
   'chat phụ · {0}': 'side thread · {0}',
+  'lịch · {0}': 'schedule · {0}',
   'chat phụ': 'side thread',
   'Chat chính': 'Main chat',
   'Chat chính đã có quá nhiều tin đưa vào.': 'The main chat already has too many answers brought in.',
@@ -2820,6 +2821,7 @@ export const en: Dictionary = {
   'Chuyển tiếp tin nhắn': 'Forward message',
   'Chuyển tiếp từ {0}': 'Forwarded from {0}',
   'Chuyển tiếp từ {0} · {1} viết': 'Forwarded from {0} · written by {1}',
+  'Chuyển tiếp từ {0} · bạn viết': 'Forwarded from {0} · written by you',
   'Không gửi kèm: {0}': 'Not sent along: {0}',
   'Tệp trong tin này': 'Files in this message',
   'Gửi kèm {0}': 'Send {0} along',

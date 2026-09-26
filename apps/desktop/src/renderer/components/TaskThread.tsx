@@ -43,7 +43,7 @@ import { confirmAction } from './confirm';
 import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import type { AppProposal } from '../../shared/app-proposals';
 import type { ChatQuote } from '../../shared/side-threads';
-import type { ForwardedMessage } from '../../shared/forward';
+import { chatHeadline, type ForwardedMessage } from '../../shared/forward';
 import type { ForwardRequest } from '../forward';
 import { McpApprovalCard } from './McpApproval';
 import { turnNotices } from './turnNotices';
@@ -203,7 +203,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   const broughtIn = new Set(workspace.tasks.flatMap(task => (task.quotes ?? []).map(quote => quote.artifactId)));
   const threadName = (taskId: string) => {
     const thread = workspace.tasks.find(task => task.id === taskId && !task.deletedAt);
-    return thread ? thread.title || thread.brief.split('\n')[0].trim() : undefined;
+    return thread ? thread.title || chatHeadline(thread) : undefined;
   };
   const sideThreadOrglet = detail.runs[0]?.snapshot.worker.name ?? workspace.workers.find(worker => worker.id === detail.task.workerId)?.name ?? 'Orglet';
   const liveRuns = useRunProgress(detail.task.id);
@@ -676,7 +676,10 @@ function forwardedAuthor(forwarded: ForwardedMessage): string {
 function ForwardedTurn({ forwarded, elementId, badges, openOrigin, mentionPeople, mentionAllNames }: { forwarded: ForwardedMessage; elementId: string; badges: ReactNode; openOrigin?: () => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const author = forwardedAuthor(forwarded);
   const sameName = forwarded.authorKind === 'orglet' && author === forwarded.from;
-  const origin = sameName ? t('Chuyển tiếp từ {0}', [forwarded.from]) : t('Chuyển tiếp từ {0} · {1} viết', [forwarded.from, author]);
+  let origin = t('Chuyển tiếp từ {0} · {1} viết', [forwarded.from, author]);
+  if (sameName) origin = t('Chuyển tiếp từ {0}', [forwarded.from]);
+  // "You" starts a sentence elsewhere; mid-line it reads "written by you".
+  else if (forwarded.authorKind === 'person') origin = t('Chuyển tiếp từ {0} · bạn viết', [forwarded.from]);
   const unshared = forwarded.files.filter(file => !file.sourceId).map(file => file.name);
   return <>
     <div className="user-message forwarded-message" id={elementId} tabIndex={-1}>
