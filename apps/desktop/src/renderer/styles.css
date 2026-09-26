@@ -975,6 +975,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    command sits under it, as close to the description as a card inside the row would be. */
 .about-command-line { padding-bottom:13px; }
 .about-command-line > .setting-row { padding-bottom:10px; }
+/* COD-296: the folder of the copy the command or Send to starts instead; a path has no spaces to wrap at. */
+.about-copy-path { font-family:var(--font-mono); font-size:12px; overflow-wrap:anywhere; }
 /* COD-237: five chips on one row in the 720px Settings dialog (460px of text column). Compact rather than the
    settings buttons' 34px, so the row stays one line down to about a 750px window; narrower than that the row
    becomes three columns, three chips over two, instead of one chip left alone on a second line. */

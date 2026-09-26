@@ -4,11 +4,13 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { writeAtomicText } from './files';
+import { belongsToCopy, copyFolder, sameFolder, type EntryOwner, type InstallCopy } from './install-copy';
 
 /**
  * Putting `orglet` on the Windows PATH (COD-234). A shim in a folder that does not change between updates points at
- * the current Orglet.exe and the CLI script inside the current `app-x.y.z` folder; main rewrites it on every start,
- * so it follows Squirrel updates. Only the user's own Path (HKCU) is edited, never the system one.
+ * the current Orglet.exe and the CLI script inside the current `app-x.y.z` folder. The copy it points at rewrites it
+ * on every start, so it follows Squirrel updates, and no other copy touches it unless the person chooses that copy
+ * (COD-296). Only the user's own Path (HKCU) is edited, never the system one.
  */
 
 const run = promisify(execFile);
@@ -69,7 +71,7 @@ export function batchPath(path: string, environment: NodeJS.ProcessEnv): string 
 export function shimContent(target: ShimTarget, environment: NodeJS.ProcessEnv = process.env): string {
   return [
     '@echo off',
-    'rem Written by Orglet. The app rewrites this file on every start, so it follows updates.',
+    'rem Written by Orglet. The copy of Orglet it points at rewrites this file on every start, so it follows updates.',
     'setlocal',
     `set "ORGLET_USER_DATA=${batchPath(target.userData, environment)}"`,
     'set "ELECTRON_RUN_AS_NODE=1"',
@@ -77,6 +79,36 @@ export function shimContent(target: ShimTarget, environment: NodeJS.ProcessEnv =
     'endlocal & exit /b %ERRORLEVEL%',
     '',
   ].join('\r\n');
+}
+
+/** A path from a batch file with `%LOCALAPPDATA%` and friends filled in and `%%` read as one `%`. */
+function expandBatchPath(value: string, environment: NodeJS.ProcessEnv): string {
+  return value.replace(/%%|%([A-Za-z_]+)%/g, (match, name: string | undefined) => {
+    if (!name) return '%';
+    const folder = environment[name]?.replace(/[\\/]+$/, '');
+    return folder ?? match;
+  });
+}
+
+/** Which Orglet.exe and data folder a shim starts, or undefined for a file Orglet did not write this way. */
+export function shimTargetOf(content: string, environment: NodeJS.ProcessEnv = process.env): { executable: string; userData: string } | undefined {
+  const userData = /^set "ORGLET_USER_DATA=(.*)"\r?$/m.exec(content)?.[1];
+  const executable = /^"([^"]+)" "[^"]+" %\*\r?$/m.exec(content)?.[1];
+  if (userData === undefined || executable === undefined) return undefined;
+  return { executable: expandBatchPath(executable, environment), userData: expandBatchPath(userData, environment) };
+}
+
+/**
+ * Whose shim it is. It is this copy's only when it starts this copy on this data folder; the same install started on
+ * other data, as a test run does, is another copy, named by that data folder.
+ */
+export function shimOwner(content: string | undefined, copy: InstallCopy, userData: string, environment: NodeJS.ProcessEnv = process.env): EntryOwner {
+  if (content === undefined) return { kind: 'none' };
+  const target = shimTargetOf(content, environment);
+  if (!target) return { kind: 'none' };
+  if (!belongsToCopy(target.executable, copy)) return { kind: 'other', copy: copyFolder(target.executable) };
+  if (!sameFolder(target.userData, userData)) return { kind: 'other', copy: target.userData };
+  return { kind: 'this' };
 }
 
 /** The same folder written two ways (case, a trailing backslash) is one entry. */
@@ -141,7 +173,7 @@ function announceEnvironmentChange(): void {
 }
 
 export class CliPathInstaller {
-  constructor(private readonly binDirectory: string, private readonly target: ShimTarget) {}
+  constructor(private readonly binDirectory: string, private readonly target: ShimTarget, private readonly copy: InstallCopy) {}
 
   get shimPath(): string {
     return join(this.binDirectory, SHIM_NAME);
@@ -151,15 +183,28 @@ export class CliPathInstaller {
     return existsSync(this.shimPath);
   }
 
+  async owner(): Promise<EntryOwner> {
+    const content = await this.readShim();
+    return shimOwner(content, this.copy, this.target.userData);
+  }
+
   async isOnPath(): Promise<boolean> {
     return pathHasEntry(await readUserPath(), this.binDirectory);
   }
 
+  /** The person chose this copy, in Settings or by running its Setup: the command points here from now on. */
   async install(): Promise<void> {
     await this.writeShim();
     const current = await readUserPath();
     const next = pathWithEntry(current, this.binDirectory);
     if (next !== current) await writeUserPath(next);
+  }
+
+  /** An update's step: puts the command back, unless the person chose another copy for it. */
+  async installUnlessTaken(): Promise<void> {
+    const owner = await this.owner();
+    if (owner.kind === 'other') return;
+    await this.install();
   }
 
   async remove(): Promise<void> {
@@ -169,11 +214,23 @@ export class CliPathInstaller {
     if (next !== current) await writeUserPath(next);
   }
 
-  /** Called on every start: an installed shim is pointed at this build's executable and script. */
+  /** Uninstall's step: takes the command away, unless it points at another copy, which keeps it. */
+  async removeUnlessTaken(): Promise<void> {
+    const owner = await this.owner();
+    if (owner.kind === 'other') return;
+    await this.remove();
+  }
+
+  /** Called on every start: a shim that points at this copy is brought up to date, and anyone else's is left alone. */
   async refresh(): Promise<void> {
-    if (!this.isInstalled()) return;
-    const current = await readFile(this.shimPath, 'utf8').catch(() => '');
-    if (current !== shimContent(this.target)) await this.writeShim();
+    const content = await this.readShim();
+    const owner = shimOwner(content, this.copy, this.target.userData);
+    if (owner.kind !== 'this') return;
+    if (content !== shimContent(this.target)) await this.writeShim();
+  }
+
+  private async readShim(): Promise<string | undefined> {
+    return readFile(this.shimPath, 'utf8').catch(() => undefined);
   }
 
   private async writeShim(): Promise<void> {

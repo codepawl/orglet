@@ -6,6 +6,7 @@ import type { FolderIntake, Source } from '../shared/contracts';
 import { ATTACHMENT_LIMIT, type IncomingFiles } from '../shared/incoming';
 import { MEDIA_SOURCE_EXTENSIONS, TEXT_SOURCE_EXTENSIONS } from '../shared/source-kinds';
 import { writeAtomicText } from './files';
+import { belongsToCopy, copyFolder, type EntryOwner, type InstallCopy } from './install-copy';
 import { SEND_TO_FLAG } from './launch-requests';
 
 /**
@@ -57,8 +58,12 @@ function sameShortcut(first: ShortcutSpec, second: ShortcutSpec): boolean {
   return sameTarget && first.args === second.args;
 }
 
+/**
+ * Installs the shortcut for one copy of Orglet. `target` is what the shortcut starts: the Setup launcher, or a ZIP
+ * copy's own Orglet.exe. Only the copy the shortcut starts rewrites or removes it on its own (COD-296).
+ */
 export class SendToInstaller {
-  constructor(private readonly sendToFolder: string, private readonly target: string, private readonly files: ShortcutFiles) {}
+  constructor(private readonly sendToFolder: string, private readonly target: string, private readonly files: ShortcutFiles, private readonly copy: InstallCopy) {}
 
   get shortcutPath(): string {
     return join(this.sendToFolder, SEND_TO_SHORTCUT_NAME);
@@ -68,18 +73,39 @@ export class SendToInstaller {
     return this.files.read(this.shortcutPath) !== undefined;
   }
 
+  owner(): EntryOwner {
+    const current = this.files.read(this.shortcutPath);
+    if (!current) return { kind: 'none' };
+    if (belongsToCopy(current.target, this.copy)) return { kind: 'this' };
+    return { kind: 'other', copy: copyFolder(current.target) };
+  }
+
+  /** The person chose this copy, in Settings or by running its Setup. */
   async install(): Promise<void> {
     await this.files.write(this.shortcutPath, sendToShortcut(this.target));
+  }
+
+  /** An update's step: puts the shortcut back, unless the person chose another copy for it. */
+  async installUnlessTaken(): Promise<void> {
+    if (this.owner().kind === 'other') return;
+    await this.install();
   }
 
   async remove(): Promise<void> {
     await this.files.remove(this.shortcutPath);
   }
 
-  /** Called on every start: a shortcut that is there is pointed at this build's launcher, and an absent one stays absent. */
+  /** Uninstall's step: takes the shortcut away, unless it starts another copy, which keeps it. */
+  async removeUnlessTaken(): Promise<void> {
+    if (this.owner().kind === 'other') return;
+    await this.remove();
+  }
+
+  /** Called on every start: a shortcut that starts this copy is brought up to date, and anyone else's is left alone. */
   async refresh(): Promise<void> {
     const current = this.files.read(this.shortcutPath);
     if (!current) return;
+    if (!belongsToCopy(current.target, this.copy)) return;
     if (sameShortcut(current, sendToShortcut(this.target))) return;
     await this.install();
   }

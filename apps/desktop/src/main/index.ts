@@ -29,6 +29,7 @@ import { cliEndpoint, type CliChat } from '../cli/protocol';
 import { CliServer, createCliToken, writeCliToken } from './cli-server';
 import { chatsOf, CliOperations } from './cli-operations';
 import { CliPathInstaller, isKeptOffPath, keepOffPath } from './cli-path';
+import type { InstallCopy } from './install-copy';
 import { runSquirrelEvent, runUpdateExecutable, squirrelEventOf, type SquirrelEvent } from './squirrel-events';
 import { McpSecretStore, stopProcessTrees } from './mcp-secrets';
 import { WebSearchKeys } from './web-search-keys';
@@ -157,21 +158,32 @@ async function startCliServer(directory: string) {
   });
   await cliServer.start();
 }
+/**
+ * This copy of Orglet, so the shared `orglet` command and Send to entry are rewritten only by the copy they start
+ * (COD-296). A Setup install is its folder above `app-x.y.z`, which updates keep; a ZIP copy is its own Orglet.exe.
+ */
+function thisCopy(): InstallCopy {
+  if (!updateEnvironment.squirrelUpdater) return { executable: process.execPath };
+  return { executable: process.execPath, setupFolder: resolve(process.execPath, '..', '..') };
+}
 /** Only a packaged Windows build edits PATH; the shim sits in a folder that survives updates. */
 function cliInstaller(): CliPathInstaller | undefined {
   if (!app.isPackaged || process.platform !== 'win32') return undefined;
   const localAppData = process.env.LOCALAPPDATA ?? join(app.getPath('home'), 'AppData', 'Local');
-  return new CliPathInstaller(join(localAppData, 'Orglet', 'bin'), {
+  const target = {
     executable: process.execPath,
     cliScript: join(process.resourcesPath, 'orglet-cli.cjs'),
     userData: app.getPath('userData'),
-  });
+  };
+  return new CliPathInstaller(join(localAppData, 'Orglet', 'bin'), target, thisCopy());
 }
-function cliState(): CliInstallState {
+async function cliState(): Promise<CliInstallState> {
   if (!app.isPackaged) return { mode: 'dev' };
   const installer = cliInstaller();
-  if (installer) return { mode: 'windows', installed: installer.isInstalled() };
-  return { mode: 'manual', command: `export PATH="$PATH:${join(process.resourcesPath, 'bin')}"` };
+  if (!installer) return { mode: 'manual', command: `export PATH="$PATH:${join(process.resourcesPath, 'bin')}"` };
+  const owner = await installer.owner();
+  if (owner.kind === 'other') return { mode: 'windows', installed: false, otherCopy: owner.copy };
+  return { mode: 'windows', installed: owner.kind === 'this' };
 }
 /**
  * What Explorer's Send to menu and `orglet://` links start (COD-246). A Setup install has the Squirrel stub one folder
@@ -205,12 +217,14 @@ const electronShortcuts: ShortcutFiles = {
 function sendToInstaller(): SendToInstaller | undefined {
   if (!app.isPackaged || process.platform !== 'win32') return undefined;
   const sendToFolder = join(app.getPath('appData'), 'Microsoft', 'Windows', 'SendTo');
-  return new SendToInstaller(sendToFolder, launcherPath(), electronShortcuts);
+  return new SendToInstaller(sendToFolder, launcherPath(), electronShortcuts, thisCopy());
 }
 function sendToState(): SendToState {
   const installer = sendToInstaller();
   if (!installer) return { mode: 'unavailable' };
-  return { mode: 'windows', installed: installer.isInstalled() };
+  const owner = installer.owner();
+  if (owner.kind === 'other') return { mode: 'windows', installed: false, otherCopy: owner.copy };
+  return { mode: 'windows', installed: owner.kind === 'this' };
 }
 /**
  * The command Windows runs for a link is `"<stub>" -- "%1"`. The `--` ends Chromium's switches, so nothing in a link
@@ -829,21 +843,29 @@ async function start() {
 /**
  * Setup's install, update and uninstall steps (COD-235): the Start menu shortcuts, as before, the `orglet` command on
  * the user PATH and Orglet in Explorer's Send to menu, unless the person took either off in Settings, and the
- * `orglet://` links (COD-246). No window opens for these.
+ * `orglet://` links (COD-246). No window opens for these. Running Setup chooses this install for the command and Send
+ * to; an update or an uninstall leaves them alone while they start another copy the person chose (COD-296).
  */
 function handleSquirrelEvent(event: SquirrelEvent) {
   const shortcutTarget = basename(process.execPath);
   const installer = cliInstaller();
   const sendTo = sendToInstaller();
   const userData = app.getPath('userData');
+  const freshInstall = event === 'install';
   const work = runSquirrelEvent(event, {
     createShortcuts: () => runUpdateExecutable(process.execPath, [`--createShortcut=${shortcutTarget}`]),
     removeShortcuts: () => runUpdateExecutable(process.execPath, [`--removeShortcut=${shortcutTarget}`]),
-    putOnPath: async () => { await installer?.install(); },
-    takeOffPath: async () => { await installer?.remove(); },
+    putOnPath: async () => {
+      if (freshInstall) await installer?.install();
+      else await installer?.installUnlessTaken();
+    },
+    takeOffPath: async () => { await installer?.removeUnlessTaken(); },
     keptOffPath: () => isKeptOffPath(userData),
-    addSendTo: async () => { await sendTo?.install(); },
-    removeSendTo: async () => { await sendTo?.remove(); },
+    addSendTo: async () => {
+      if (freshInstall) await sendTo?.install();
+      else await sendTo?.installUnlessTaken();
+    },
+    removeSendTo: async () => { await sendTo?.removeUnlessTaken(); },
     keptOffSendTo: () => isKeptOffSendTo(userData),
     registerLinks,
     unregisterLinks,
