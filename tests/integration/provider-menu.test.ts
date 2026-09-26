@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { emptyConnections } from '../../apps/desktop/src/shared/contracts';
 import type { HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import { readiness, readyFirst } from '../../apps/desktop/src/renderer/components/providers';
-import { workerProviderOptions } from '../../apps/desktop/src/renderer/components/WorkerDialog';
+import { defaultWorkerProvider, workerProviderOptions } from '../../apps/desktop/src/renderer/components/WorkerDialog';
 import { t } from '../../apps/desktop/src/renderer/i18n';
 
 /** A detected harness, signed in or not; only the fields the menu reads matter here. */
@@ -45,6 +45,19 @@ describe('the Model menu', () => {
     const options = workerProviderOptions(readiness(emptyConnections(), harnesses), harnesses, []);
     expect(options.find(option => option.value === 'claude-code')?.badge).toBeTruthy();
     expect(options.find(option => option.value === 'openai')?.badge).toBeUndefined();
+  });
+
+  it('starts a new orglet on the first connection that can run, in the menu\'s order, and on Demo only when none can', () => {
+    // Dogfood, 2026-09-26: Codex was signed in and ready, and a new orglet still started on Demo.
+    const codexReady = [harness('claude-code', false), harness('codex', true)];
+    expect(defaultWorkerProvider(workerProviderOptions(readiness(emptyConnections(), codexReady), codexReady, []))).toBe('codex');
+    // A saved API key sits before the harnesses on the menu, so it comes first here too.
+    const withKey = { ...emptyConnections(), anthropic: true };
+    expect(defaultWorkerProvider(workerProviderOptions(readiness(withKey, codexReady), codexReady, []))).toBe('anthropic');
+    const nothingReady = [harness('codex', false)];
+    expect(defaultWorkerProvider(workerProviderOptions(readiness(emptyConnections(), nothingReady), nothingReady, []))).toBe('demo');
+    // Before detection has answered, the dialog is given no harnesses, and a harness then is not ready.
+    expect(defaultWorkerProvider(workerProviderOptions(readiness(emptyConnections(), []), [], []))).toBe('demo');
   });
 
   it('keeps the order it was given inside each part', () => {
