@@ -105,12 +105,16 @@ function textColumnFacts(column: string, type: string, row: Record<string, unkno
 /**
  * Rows that share a key, found in two passes so memory stays bounded: first the keys that occur more than once,
  * then, for rows with one of those keys only, the first few row numbers of each group. `rowOffset` turns a position
- * in the data into the row number a person sees (1 for a CSV, whose row 1 holds the column names).
+ * in the data into the row number a person sees (1 for a CSV, whose row 1 holds the column names). With
+ * `onlyWhereRowsDiffer` (a whole-row key), a key whose rows are all identical is left out, because those rows are
+ * already reported as identical rows.
  */
-export async function repeatedRows(query: Query, table: string, key: string, rowOffset: number): Promise<RowRepeats> {
+export async function repeatedRows(query: Query, table: string, key: string, rowOffset: number, onlyWhereRowsDiffer?: string): Promise<RowRepeats> {
+  const rowVersion = onlyWhereRowsDiffer ?? 'NULL';
+  const rowsDiffer = onlyWhereRowsDiffer ? 'AND count(DISTINCT row_version) > 1' : '';
   const rows = await query(`
-    WITH numbered AS (SELECT row_number() OVER () AS position, ${key} AS row_key FROM ${table}),
-    repeated AS MATERIALIZED (SELECT row_key FROM numbered WHERE row_key IS NOT NULL GROUP BY row_key HAVING count(*) > 1)
+    WITH numbered AS (SELECT row_number() OVER () AS position, ${key} AS row_key, ${rowVersion} AS row_version FROM ${table}),
+    repeated AS MATERIALIZED (SELECT row_key FROM numbered WHERE row_key IS NOT NULL GROUP BY row_key HAVING count(*) > 1 ${rowsDiffer})
     SELECT min(position, ${listedRowsPerGroup}) AS positions, count(*) AS size,
       count(*) OVER () AS group_count, sum(count(*) - 1) OVER () AS repeated_rows
     FROM numbered

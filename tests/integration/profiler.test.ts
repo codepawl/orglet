@@ -109,7 +109,8 @@ it('checks a file near the 32 MB limit within the time the checker has', async (
   const [dataset] = result.datasets;
   expect(dataset.rows).toBe(600_001);
   expect(dataset.duplicateRows).toMatchObject({ repeatedRows: 1, groups: [{ rows: [2, 600_002], size: 2 }] });
-  expect(dataset.firstColumn).toMatchObject({ column: 'id', repeatedRows: 1 });
+  // The repeated id belongs to an identical row, which is already reported above; the first-column note skips it.
+  expect(dataset.firstColumn).toEqual({ column: 'id', repeatedRows: 0, groupCount: 0, groups: [] });
   expect(dataset.columns.find(column => column.name === 'amount')).toMatchObject({ kind: 'number', range: { minimum: -20, maximum: 976 } });
   expect(dataset.columns.find(column => column.name === 'day')).toMatchObject({ kind: 'date', misfits: 0 });
   await expect(analyze({ files: [file(Buffer.alloc(32 * 1024 * 1024 + 1, 'a'))], idColumn: null })).rejects.toThrow('32 MB');

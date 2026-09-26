@@ -24,10 +24,11 @@ async function checkDataset(query: Query, table: string, format: DataFormat, idC
   const id = idColumn ? columns.find(column => column.name === idColumn) : undefined;
   const idDuplicates = id ? rows - id.nulls - id.distinctNonNull : 0;
   const idRepeats = id && idDuplicates > 0 ? await repeatedRows(query, table, identifier(id.name), rowOffset) : undefined;
-  const duplicateRows = await repeatedRows(query, table, wholeRowKey(columns.map(column => column.name)), rowOffset);
+  const rowKey = wholeRowKey(columns.map(column => column.name));
+  const duplicateRows = await repeatedRows(query, table, rowKey, rowOffset);
   const first = columns[0];
   const checkFirstColumn = !idColumn && columns.length > 1 && firstColumnLooksLikeRowName(first, rows);
-  const firstRepeats = checkFirstColumn ? await repeatedRows(query, table, identifier(first.name), rowOffset) : undefined;
+  const firstRepeats = checkFirstColumn ? await repeatedRows(query, table, identifier(first.name), rowOffset, rowKey) : undefined;
   return {
     rows,
     columns,

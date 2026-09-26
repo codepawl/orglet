@@ -1226,11 +1226,11 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .profile-table { overflow-x: auto; max-width: 100%; }
 .profile-table table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .profile-table th, .profile-table td { text-align: left; padding: 6px; overflow-wrap: anywhere; }
-.profile-table tbody tr:nth-child(even) td { background: var(--surface); }
+.profile-table tbody tr:nth-child(even) :is(td, th) { background: var(--surface); }
 /* A number range reads as one value, so "-5 – 175" never breaks across lines. */
 .profile-table td.profile-range { white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* What a data check found worth a second look (COD-297): one plain sentence per line under the table. */
-.check-notes { display:flex; flex-direction:column; gap:4px; margin:0; padding-left:20px; overflow-wrap:anywhere; }
+.check-notes { display:flex; flex-direction:column; gap:4px; margin:0; padding:0; list-style:none; overflow-wrap:anywhere; }
 /* Routines: one soft card per schedule, icon-led facts, and a grouped editor. */
 .routine-list { display:flex; flex-direction:column; gap:12px; }
 .form .routine-card { display:flex; flex-direction:column; gap:12px; padding:14px 16px; border-radius:14px; background:var(--surface); }
