@@ -1,4 +1,4 @@
-import { Reply } from 'lucide-react';
+import { Reply, SmilePlus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { MessageReaction, Reaction } from '../../shared/message-interactions';
 import type { Run } from '../../shared/contracts';
@@ -43,7 +43,7 @@ export function MessageActions({ taskId, messageId, author, text, reactions, act
   return <div className="message-actions">
     {leading}
     <Button size="icon" aria-label={t('Trả lời tin này')} title={t('Trả lời tin này')} onClick={() => replyToAnswer(taskId, messageId, author, text)}><Reply size={15} /></Button>
-    <ReactionBar options={reactionOptions()} picked={current} onPick={pick} />
+    <ReactionBar options={reactionOptions()} picked={current} onPick={pick} label={t('Thả react')} icon={<SmilePlus size={15} />} />
   </div>;
 }
 

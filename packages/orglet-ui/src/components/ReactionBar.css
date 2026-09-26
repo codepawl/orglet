@@ -1,0 +1,132 @@
+.org-reaction-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+/* The row centres itself with a transform, so its entrance animation carries that transform in every frame; one
+   that replaced it would drop the row to the right until it snapped back. */
+.org-reaction-row {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  background: var(--org-bg, #fff);
+  box-shadow: 0 8px 22px #00000024, 0 0 0 1px #0000000f;
+  animation: org-reaction-row-in var(--org-motion-quick, 110ms) var(--org-ease-out, ease-out);
+  transform: translateX(-50%);
+}
+/* Opacity and a nudge only: scaling a centred box moves its edges while it grows. */
+@keyframes org-reaction-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+/* A face grows a touch under the pointer, on the spring so it overshoots and settles. The one already left wears the
+   active tint, so the person sees which they picked before choosing again. */
+.org-reaction-row button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--org-motion-base, 170ms) var(--org-ease-spring, ease), background var(--org-motion-quick, 110ms);
+}
+.org-reaction-row button.org-reaction-picked {
+  background: var(--org-row-active, #e8e8ea);
+  box-shadow: 0 0 0 1px var(--org-border-subtle, #eee);
+}
+.org-reaction-row button:hover,
+.org-reaction-row button:focus-visible {
+  background: var(--org-row-hover, #f1f1f2);
+  transform: scale(1.2);
+}
+.org-reaction-row button.org-reaction-picked:hover,
+.org-reaction-row button.org-reaction-picked:focus-visible { background: var(--org-row-active, #e8e8ea); }
+/* The reactions a message wears overlap its lower edge by half their height, on a hairline ring and the page colour,
+   so they read as attached to that bubble and to no other. */
+.org-reaction-badges {
+  --org-reaction-badge-height: 20px;
+  position: absolute;
+  bottom: calc(var(--org-reaction-badge-height) / -2);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--org-bg, #fff);
+  box-shadow: 0 1px 3px #00000024, 0 0 0 1px var(--org-border-subtle, #eee);
+}
+.org-reaction-badges-start { left: 12px; }
+.org-reaction-badges-end { right: 12px; }
+/* In a plain list with no bubble the pill sits in the flow under the text. */
+.org-reaction-badges-inline {
+  position: static;
+  width: fit-content;
+  margin-top: 6px;
+}
+.org-reaction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: calc(var(--org-reaction-badge-height) - 4px);
+  min-width: calc(var(--org-reaction-badge-height) - 4px);
+  padding: 0 4px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--org-text, #111);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--org-motion-base, 170ms) var(--org-ease-spring, ease), background var(--org-motion-quick, 110ms);
+  animation: org-reaction-badge-in var(--org-motion-base, 170ms) var(--org-ease-spring, ease);
+}
+.org-reaction-badge[aria-pressed=true] { background: var(--org-row-active, #e8e8ea); }
+.org-reaction-badge:hover,
+.org-reaction-badge:focus-visible {
+  background: var(--org-row-hover, #f1f1f2);
+  transform: scale(1.12);
+}
+.org-reaction-badge[aria-pressed=true]:hover,
+.org-reaction-badge[aria-pressed=true]:focus-visible { background: var(--org-row-active, #e8e8ea); }
+.org-reaction-badge-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--org-muted, #666);
+}
+@keyframes org-reaction-badge-in {
+  from {
+    transform: scale(.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .org-reaction-row { animation: none; }
+  /* The motion tokens are already 0ms here, so transitions are instant; only the entrance animations are dropped. */
+  .org-reaction-badge { animation: none; }
+  .org-reaction-row button:hover,
+  .org-reaction-row button:focus-visible,
+  .org-reaction-badge:hover,
+  .org-reaction-badge:focus-visible { transform: none; }
+}

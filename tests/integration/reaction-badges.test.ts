@@ -63,17 +63,17 @@ describe('the badges on the bubble', () => {
     const html = renderThread(task.id, [researcher], [skill]);
 
     const userBubble = bubbleMarkup(html, `message-${userTurn}`);
-    expect(userBubble.bubble).toContain('class="reaction-badges reaction-badges-start"');
+    expect(userBubble.bubble).toContain('class="org-reaction-badges org-reaction-badges-start"');
     expect(userBubble.bubble).toContain('🎉');
     expect(userBubble.bubble).toContain('1 reacted 🎉: Researcher');
     expect(userBubble.bubble).toContain('aria-pressed="false"');
     expect(userBubble.actions).not.toContain('reaction-badge');
 
     const answer = bubbleMarkup(html, `message-${artifact.id}`);
-    expect(answer.bubble).toContain('class="reaction-badges reaction-badges-end"');
+    expect(answer.bubble).toContain('class="org-reaction-badges org-reaction-badges-end"');
     expect(answer.bubble).toContain('2 reacted 😂: You, Researcher');
     expect(answer.bubble).toContain('aria-pressed="true"');
-    expect(answer.bubble).toContain('class="reaction-badge-count" aria-hidden="true">2<');
+    expect(answer.bubble).toContain('class="org-reaction-badge-count" aria-hidden="true">2<');
     expect(answer.actions).not.toContain('reaction-badge');
     expect(answer.actions).not.toContain('😂');
     // The answer's actions still carry the react trigger, which opens the picker rather than clearing the mark.
@@ -87,7 +87,7 @@ describe('the badges on the bubble', () => {
     store.update('tasks', { ...task, messageReactions: [{ messageId: artifact.id, emoji: 'agree', actor: 'user', createdAt: now() }] });
     const html = renderThread(task.id, [researcher], [skill]);
     const card = html.indexOf('class="report-card"');
-    const badges = html.indexOf('class="reaction-badges reaction-badges-end"');
+    const badges = html.indexOf('class="org-reaction-badges org-reaction-badges-end"');
     expect(card).toBeGreaterThan(-1);
     expect(badges).toBeGreaterThan(card);
     expect(html.indexOf('class="message-actions"', card)).toBeGreaterThan(badges);
@@ -114,7 +114,7 @@ describe('the react button and the picker', () => {
     const html = renderToStaticMarkup(createElement(ReactionPicker, { options, picked: 'delighted', label: 'React', onPick: () => {} }));
     const pressed = html.match(/aria-pressed="true"/g) ?? [];
     expect(pressed).toHaveLength(1);
-    expect(html).toContain(`class="picked" aria-pressed="true" aria-label="${reactionMeanings.delighted}"`);
+    expect(html).toContain(`class="org-reaction-picked" aria-pressed="true" aria-label="${reactionMeanings.delighted}"`);
     expect(html.match(/aria-pressed="false"/g)).toHaveLength(reactionOrder.length - 1);
   });
 

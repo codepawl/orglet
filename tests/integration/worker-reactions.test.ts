@@ -212,7 +212,7 @@ describe('the mark on the person\'s bubble', () => {
       }));
       // The worker's mark sits on the user bubble itself (COD-219), before the action row and the worker's own answer.
       const bubble = html.indexOf(`id="message-${turnMessageId(task.id, 0)}"`);
-      const mark = html.indexOf('class="reaction-badge"');
+      const mark = html.indexOf('class="org-reaction-badge"');
       const actions = html.indexOf('class="message-actions"');
       const answer = html.indexOf('class="assistant-message"');
       expect(bubble).toBeGreaterThan(-1);
