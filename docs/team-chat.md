@@ -46,7 +46,17 @@ Ctrl+N focuses the current worker or team chat (it does not create a new session
 
 Each section's header has an edit (pencil) button beside **+**. It turns that section's select mode on: every row shows a checkbox where its status mark was, clicking a row picks it instead of opening its chat, and the pencil becomes a check (Done). Outside select mode, Ctrl-click (Cmd on macOS) picks or unpicks a row and Shift-click selects exactly the rows from the last Ctrl-picked one to it, replacing what was picked before; a plain click still opens the chat, and drops the selection. A selection belongs to one section: picking an orglet drops any crews picked. Right-clicking an orglet or a crew opens its menu at the pointer.
 
-While anything is picked, a bar between the list and the footer shows the count with **Archive**, **Delete** (which asks first, naming the count) and a clear button. Archive and delete run the same commands as a row's menu, one row at a time, and end in one toast: the count that went through, or the names of the rows that did not. Esc clears the selection and leaves select mode. Nothing is stored: the selection is forgotten when the app restarts, and a row that leaves the list (archived, deleted, another workspace) leaves the selection.
+While anything is picked, a bar between the list and the footer shows the count with **Archive**, **Delete** (which asks first, naming the count) and a clear button. Archive and delete run the same commands as a row's menu, one row at a time, and end in one toast: the count that went through, or the names of the rows that did not; an archive toast carries **Undo**, which restores every row it archived. Esc clears the selection and leaves select mode. Nothing is stored: the selection is forgotten when the app restarts, and a row that leaves the list (archived, deleted, another workspace) leaves the selection.
+
+### Archiving from the sidebar
+
+A row menu's archive, restore and delete answer in a toast, never in the banner of the chat that happens to be open (COD-286). Archiving a chat, an orglet or a crew ends in a toast with **Undo**; Undo of a chat that was on screen brings it back on screen. Restoring a chat ends in a toast with **Open**.
+
+An orglet or crew that something still depends on is refused, and the toast says what to change first (`removalBlocker` in `apps/desktop/src/shared/removal.ts`, which the core's refusal and the renderer both read): every crew an orglet is in ("Remove Scout from the crews Launch crew and Quick crew first", three or more counted and listed), with **Open** for the first of those crews; otherwise the enabled schedule that still runs it, which the window catches before asking the core and names in a note with **View schedules** (COD-283); otherwise the last orglet, or work still running, with no action.
+
+Archived chats wait at the end of the section their row came from, in a collapsed **Archived chats (N)** list under the section's **Archived (N)** orglets or crews (`archivedChatsIn` in `apps/desktop/src/renderer/sidebarChats.ts`): a crew's main chat and schedule runs under Crews; an orglet's main chat, side threads and schedule runs under Orglets; group chats under Group chats, which then shows even with no open group chat. Most recently archived first. Each row has the face of whose chat it was, its name (a schedule run's is the schedule's), a tooltip with the whole name and what it was ("Side thread with Scout"), the same days-left pill as an archived orglet, and **Restore** and **Delete permanently**, which asks with that kind of chat's own question. One list per section rather than one under every orglet keeps the tree short, and it sits where archived orglets and crews already are. The rows do not open the chat; restore it first.
+
+A chat opened from search that sits past a list's **Show N more** opens that list and is marked as the chat on screen, and the sidebar scrolls to it. Side thread and schedule run rows carry their whole name in a tooltip.
 
 ### Group chat from a selection
 
@@ -77,6 +87,18 @@ There is no separate `threads` table.
 
 Find-or-create lives in `apps/desktop/src/shared/live-task.ts` (`liveWorkerTask`, `liveTeamTask`, `nextWorkerMessage`, `nextTeamMessage`). Every one of them skips a row with `sideOf`, so everything built on them (the worker row, the empty-chat composer, the worker dialog's Permissions tab, the `orglet` terminal command) keeps meaning the main chat. The renderer uses it when you click a worker or team and when you send from the empty composer. `createTask` itself is unchanged, so routines and explicit extra rows can still insert their own records. Group chats (`assignees`) stay reachable from search; they are not the primary sidebar, and are started from a selection as described above.
 
+### When the open chat closes
+
+A refresh reads the workspace and the connections, and beside them the open chat's own detail, folder grant and working-copy recovery. The chat's reads are settled one by one and never fail the refresh (COD-282): a chat archived, deleted or erased since refuses some of them, and the sidebar still has to follow. `openChatRefresh` in `apps/desktop/src/renderer/openChat.ts` sorts them against the fresh workspace:
+
+| The workspace says | The view |
+|---|---|
+| The chat is not listed (deleted, or erased with the chat history) | It closes to its crew's or orglet's main chat while that one is listed, otherwise the first orglet, then the first crew (`closedChatDestination`). The history entry is rewritten, not added to. No error is shown. |
+| The chat is archived | It stays open to read. Its grant counts as no folder, since `workspaceAccess` refuses a closed chat and that refusal is expected. |
+| Anything else | A read that failed is shown in the banner; the copy on screen stays. |
+
+A chat that is open but takes no new message is **read-only** (`chatClosure`): the chat itself is archived, or the one orglet or crew it belongs to was archived or deleted. The follow-up composer is turned off, the add-files button with it, and a line under it says why with **Restore** (the chat, or the orglet or crew) where restoring is possible; chat Details locks the permissions with the same sentence. The header keeps the orglet's or crew's name: an archived one from `archivedWorkers` / `archivedTeams`, a deleted one from the chat's own record (the crew it froze, the orglet its latest run used). A group chat has no single owner and is left to the core. The core refuses the same cases in `reviseTask` (`assertChatOpen`) with the same sentences, so a message from anywhere else (a forward, the `orglet` command) meets the same answer.
+
 ## Side threads
 
 A message sent with **Send in a new thread** (the menu beside Send, or Ctrl+Shift+Enter) from a worker's main chat becomes a side thread ([COD-247](https://linear.app/codepawl/issue/COD-247)). Only a worker's own open main chat can start one: `startSideThread` refuses a crew chat, a group chat, a scheduled run's row, an archived chat and a side thread. The option is not shown in those chats.
@@ -97,7 +119,7 @@ A message sent with **Send in a new thread** (the menu beside Send, or Ctrl+Shif
 
 **The empty chat.** When an orglet's empty chat is on screen, the view switches to a chat only when a new main chat appears (`liveChatToAdopt` in `live-task.ts`, the MCP "adopt a live chat" rule); a side-thread row never qualifies, so nothing typed or sent there follows it into a side thread.
 
-**Finishing.** When a side thread stops working while another chat is on screen, the renderer shows a toast with **Open** (`chatNotices.ts`), which the notice centre keeps and opens the thread from. The answer stays in the side thread.
+**Finishing.** When a side thread stops working while another chat is on screen, the renderer shows a toast with **Open** (`chatNotices.ts`), which the notice centre keeps and opens the thread from. The answer stays in the side thread. Two rules keep this quiet (COD-287). An answer that lands while the open chat is the thread's main chat or a sibling side thread (`besideSideThread`) sends no toast, since its row with the unread mark is right there. And one orglet's answers share a notice group (`sideThreadAnswersGroup`, keyed by the orglet): the new notice counts the answers the group's unread one already stood for, says the total and replaces it (`withNotice` in `notifications.tsx`), so fourteen answers from three orglets are three rows, not fourteen. A side thread that failed keeps its own notice.
 
 ## Forwarding
 
