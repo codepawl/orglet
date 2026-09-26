@@ -9,6 +9,12 @@
  * Dark mode is opt-in twice on purpose: `[data-theme=dark]` for an app that owns a theme switch, and the media
  * query for one that follows the system. An app that does both sets `data-theme="system"` and gets the media query.
  */
+/* Every kit element sizes its box by its border, as the components are drawn to. Zero specificity, so a host page's
+   own rules still win. */
+:where([class^="org-"], [class*=" org-"]),
+:where([class^="org-"], [class*=" org-"])::before,
+:where([class^="org-"], [class*=" org-"])::after { box-sizing: border-box; }
+
 :root {
   --org-font: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --org-font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
