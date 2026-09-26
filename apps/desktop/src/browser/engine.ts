@@ -241,6 +241,16 @@ export class BrowserEngine {
 
   /** Closes every browser this engine opened. */
   async shutdown() {
+    const diagStarted = Date.now();
+    const diagTimer = setInterval(() => console.error(`[diag] ${new Date().toISOString()} shutdown still running after ${Date.now() - diagStarted} ms: runs=${this.runs.size} profiles=${this.profiles.size} clean=${this.cleanBrowser !== undefined}`), 5_000);
+    try {
+      await this.shutdownInner();
+    } finally {
+      clearInterval(diagTimer);
+    }
+  }
+
+  private async shutdownInner() {
     clearTimeout(this.idleTimer);
     clearInterval(this.leaseTimer);
     this.leaseTimer = undefined;
@@ -588,7 +598,9 @@ export class BrowserEngine {
       // Closing a window closes its tabs one by one, before the window itself, so a tab in a window is forgotten only
       // once the run is still in that window a moment later; otherwise it opens again with the others.
       const context = session.context;
+      console.error(`[diag] ${new Date().toISOString()} tab ${tabId} closed in window, ${session.tabs.size} left`);
       setTimeout(() => {
+        console.error(`[diag] ${new Date().toISOString()} tab ${tabId} timer: same context ${session.context === context}, has ${session.tabs.has(tabId)}`);
         if (session.context === context && !session.tabs.has(tabId)) this.tabGone(session, tabId);
       }, WINDOW_CLOSING_MS);
     });
@@ -878,6 +890,7 @@ export class BrowserEngine {
    * headless at the addresses its tabs were at, and a browser the person held counts as handed back.
    */
   private async windowClosed(session: RunSession) {
+    console.error(`[diag] ${new Date().toISOString()} windowClosed switching=${session.switching} addresses=${[...this.currentAddresses(session).keys()]}`);
     if (this.runs.get(session.runId) !== session || session.switching) return;
     const wasHeld = session.held && session.inChrome;
     const addresses = this.currentAddresses(session);

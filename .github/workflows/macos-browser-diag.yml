@@ -1,0 +1,49 @@
+name: macOS browser diagnostics
+# Temporary (COD-261): runs the whole test suite several times on macOS with Playwright's browser log, to see why the
+# real-Chrome tests fail there now and then. Removed before the pull request merges.
+on:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  diagnose:
+    if: github.head_ref == 'nxan2911/cod-261-macos-browser-tests'
+    name: suite ${{ matrix.slot }}
+    runs-on: macos-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6
+        with:
+          version: '11.19.0'
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24.19.0'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: whole suite, three times
+        env:
+          DEBUG: pw:browser
+        run: |
+          failures=0
+          for round in 1 2 3; do
+            echo "::group::round $round"
+            if ! pnpm test > "round-$round.log" 2>&1; then failures=$((failures + 1)); echo "round $round failed"; fi
+            grep -E 'Test Files|Tests  |FAIL|×' "round-$round.log" | sed 's/\x1b\[[0-9;]*m//g' || true
+            echo "::endgroup::"
+          done
+          echo "failed rounds: $failures"
+          test "$failures" -eq 0
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag-${{ matrix.slot }}
+          path: round-*.log
+          retention-days: 3

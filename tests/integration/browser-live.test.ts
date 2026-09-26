@@ -247,8 +247,11 @@ describe.runIf(found !== null)('the live view of a real headless browser', { tim
 
   it('streams the tab while watched, moves the cursor to what the orglet clicks, and stops when the view closes', async () => {
     const runId = randomUUID();
+    const diagStarted = Date.now();
     await open(runId);
+    console.log(`[diag] open took ${Date.now() - diagStarted} ms`);
     expect((await watch(runId)).tabId).toBe('t1');
+    console.log(`[diag] watch done at ${Date.now() - diagStarted} ms`);
     await until(() => framesOf(runId).length > 0);
     const first = framesOf(runId)[0] as Extract<BrowserHostEvent, { kind: 'frame' }>;
     expect(first).toMatchObject({ tabId: 't1', width: 1280, height: 800 });
@@ -341,7 +344,11 @@ describe.runIf(found !== null)('the live view of a real headless browser', { tim
     // The person closes the Chrome window: the run goes on headless and the browser counts as handed back.
     await hold(runId, true, true);
     const closeAll = (engine as unknown as { runs: Map<string, { tabs: Map<string, { close(): Promise<void> }> }> }).runs.get(runId)!.tabs;
-    for (const page of [...closeAll.values()]) await page.close();
+    for (const page of [...closeAll.values()]) {
+      const diagStarted = Date.now();
+      await page.close();
+      console.log(`[diag] ${new Date().toISOString()} page.close took ${Date.now() - diagStarted} ms`);
+    }
     await until(() => events.some(event => event.kind === 'released' && event.runId === runId));
     expect((await watch(runId)).inChrome).toBe(false);
     expect((await open(runId, '/cookie', CLEAN_BROWSER_PROFILE, 't1')).title).toBe('Cookie visit=kept');

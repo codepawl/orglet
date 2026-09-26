@@ -74,8 +74,11 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  const diagStarted = Date.now();
   await core?.runner.shutdown();
+  console.log(`[diag] runner shutdown ${Date.now() - diagStarted} ms`);
   await engine.shutdown();
+  console.log(`[diag] engine shutdown ${Date.now() - diagStarted} ms`);
   core = undefined;
   pageServer.close();
   secretServer.close();

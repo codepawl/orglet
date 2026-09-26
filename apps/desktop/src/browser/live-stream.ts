@@ -31,11 +31,14 @@ export class FrameStream {
   constructor(private page: Page, private width: number, private onFrame: (data: string, size: FrameSize) => void) {}
 
   async start() {
+    const diagStarted = Date.now();
     const session = await this.page.context().newCDPSession(this.page);
+    console.error(`[diag] ${new Date().toISOString()} stream CDP session after ${Date.now() - diagStarted} ms`);
     this.session = session;
     session.on('Page.screencastFrame', frame => {
       setTimeout(() => void session.send('Page.screencastFrameAck', { sessionId: frame.sessionId }).catch(() => {}), BROWSER_FRAME_INTERVAL_MS);
       if (this.stopped || this.paused > 0) return;
+      console.error(`[diag] ${new Date().toISOString()} screencast frame`);
       this.size = { width: Math.round(frame.metadata.deviceWidth), height: Math.round(frame.metadata.deviceHeight) };
       this.onFrame(frame.data, this.size);
       this.settleSoon();
@@ -45,6 +48,7 @@ export class FrameStream {
     const maxHeight = Math.round(maxWidth * viewport.height / Math.max(viewport.width, 1));
     if (this.stopped) return this.detach();
     await session.send('Page.startScreencast', { format: 'jpeg', quality: BROWSER_FRAME_QUALITY, maxWidth, maxHeight, everyNthFrame: 1 });
+    console.error(`[diag] ${new Date().toISOString()} screencast started after ${Date.now() - diagStarted} ms`);
   }
 
   /** Holds frames back while Orglet changes the page for a screenshot of its own. */
