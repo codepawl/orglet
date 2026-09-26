@@ -1244,8 +1244,10 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 /* Sidebar tree: teams open to their workers, workers open to their tasks. */
 .row-disclosure:hover { color:var(--text); }
 .worker-row .row-disclosure+.worker { padding-left:6px; }
-/* Children sit a clear step below their parent and a small step apart from each other. */
-.tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 10px 21px; padding-left:25px; }
+/* Children sit a clear step below their parent and a small step apart from each other. The group has the same 8px of
+   air under it as over it: the list's own 4px gap follows it, so its bottom margin is the other 4px. A 10px margin
+   there put the next orglet 48px below the last side thread where rows otherwise step 38px (dogfood, 2026-09-26). */
+.tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 4px 21px; padding-left:25px; }
 .tree-children[hidden] { display:none; }
 .tree-leaf { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; padding:6px 10px; border:0; border-radius:10px; background:transparent; font-size:13px; text-align:left; }
 /* Row icons are muted, but an avatar keeps its own colour. */
