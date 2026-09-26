@@ -26,10 +26,14 @@ it('rejects traversal, Windows aliases and internal paths', () => {
 it('reads, searches and edits a private file only against its expected hash', async () => {
   const original = await executeWorkspaceOperation(source, { operation: 'read', path: 'note.txt', offset: 0 }) as { hash: string };
   expect(await executeWorkspaceOperation(source, { operation: 'search', path: '', text: 'second' })).toMatchObject({ matches: [{ path: 'note.txt', line: 2 }] });
-  await executeWorkspaceOperation(source, { operation: 'write', path: 'note.txt', content: 'updated', expectedHash: original.hash });
-  await expect(executeWorkspaceOperation(source, { operation: 'write', path: 'note.txt', content: 'stale', expectedHash: original.hash })).rejects.toThrow('đã thay đổi');
+  const updated = await executeWorkspaceOperation(source, { operation: 'write', path: 'note.txt', content: 'updated', expectedHash: original.hash }) as { hash: string };
+  // A stale hash and a create over an existing file are refused before anything is written, with the hash to use (COD-289).
+  expect(await executeWorkspaceOperation(source, { operation: 'write', path: 'note.txt', content: 'stale', expectedHash: original.hash }))
+    .toMatchObject({ refused: true, path: 'note.txt', currentHash: updated.hash });
   expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('updated');
-  await expect(executeWorkspaceOperation(source, { operation: 'write', path: 'note.txt', content: 'overwrite', expectedHash: null })).rejects.toThrow();
+  expect(await executeWorkspaceOperation(source, { operation: 'write', path: 'note.txt', content: 'overwrite', expectedHash: null }))
+    .toMatchObject({ refused: true, path: 'note.txt', currentHash: updated.hash });
+  expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('updated');
 });
 
 it('records an explicit snapshot manifest and leaves original files unchanged', async () => {
