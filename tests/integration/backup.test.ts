@@ -30,6 +30,21 @@ const resign = (text: string, mutate: (payload: any) => void) => {
 };
 
 describe('workspace backup and additive restore', () => {
+  it('exports and restores a run whose hand-in a failed command blocked', () => {
+    const original = create();
+    const fixtureData = fixture(original);
+    const blockedHandIn = {
+      commands: [{ processId: crypto.randomUUID(), program: 'shell' as const, arguments: ['npm test'], state: 'exited' as const, exitCode: 1 }],
+      copyFingerprint: 'c'.repeat(64),
+    };
+    original.update('runs', { ...fixtureData.run, status: 'failed', error: 'npm test exited with 1.', errorCode: 'hand_in_blocked', blockedHandIn });
+    const text = backups(original).export();
+    const restored = create();
+    const manager = backups(restored);
+    manager.restore(manager.preview(text).token);
+    expect(restored.get<Run>('runs', fixtureData.run.id)).toMatchObject({ errorCode: 'hand_in_blocked', blockedHandIn });
+  });
+
   it('keeps cited workspace read metadata without local paths or contents, and marks restored grants unavailable', () => {
     const original = create();
     const fixtureData = fixture(original);
