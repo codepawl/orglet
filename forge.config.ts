@@ -45,6 +45,7 @@ const config: ForgeConfig = {
         join(__dirname, 'node_modules/@microsoft/mxc-sdk/bin/x64/wxc-exec.exe'),
         join(__dirname, 'node_modules/@microsoft/mxc-sdk/LICENSE.md'),
         join(__dirname, '.vite/build/workspace-helper.cjs'),
+        join(__dirname, '.vite/build/workspace-dependency-hooks.cjs'),
         join(__dirname, 'out/native-tools/WorkspaceIntegrate.exe'),
       ] : []),
       // The `orglet` terminal command (COD-234): the script, and resources/bin with its cmd and sh launchers.
@@ -82,6 +83,7 @@ const config: ForgeConfig = {
       { entry: 'apps/desktop/src/core/tools/pdf-text-worker.ts', config: 'vite.pdf-text.config.ts' },
       { entry: 'apps/desktop/src/profiler/entry.ts', config: 'vite.profiler.config.ts' },
       { entry: 'apps/desktop/src/core/tools/workspace-helper.ts', config: 'vite.workspace.config.ts' },
+      { entry: 'apps/desktop/src/core/tools/dependency-hooks.ts', config: 'vite.dependency-hooks.config.ts' },
       { entry: 'apps/desktop/src/cli/main.ts', config: 'vite.cli.config.ts' },
     ],
     renderer: [{ name: 'main_window', config: 'vite.renderer.config.ts' }],

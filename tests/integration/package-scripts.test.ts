@@ -119,8 +119,8 @@ describe('running package scripts', () => {
     await writeFile(join(directory, 'node_modules', '.bin', 'tsc.cmd'), '@echo tsc\r\n');
     const { calls, output, options } = fakeRun();
     expect(await runPackageCommand('npx', ['tsc', '--noEmit'], options)).toBe(0);
-    expect(calls[0].commandLine).toContain('tsc.cmd');
-    expect(calls[0].commandLine.endsWith(' --noEmit')).toBe(true);
+    // Quoted even without spaces: the sandbox's cmd refuses an unquoted absolute path to a .cmd.
+    expect(calls[0].commandLine).toBe(`"${join(directory, 'node_modules', '.bin', 'tsc.cmd')}" --noEmit`);
     expect(await runPackageCommand('npx', ['vitest'], options)).toBe(1);
     expect(output.join('')).toContain('cannot be downloaded');
   });
