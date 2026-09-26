@@ -34,15 +34,19 @@ const diff: WorkspaceDiff = {
 it('lists every changed file with its counts and draws the hunks with both line numbers and the tinted lines', () => {
   const html = renderToStaticMarkup(createElement(DiffBody, { diff }));
   expect(html.match(/class="diff-file-row"/g)).toHaveLength(3);
-  expect(html).toContain('src/app.ts');
-  expect(html).toContain('+2 −1');
+  // A path reads as its folder, quiet, then its name in full weight.
+  expect(html).toContain('<span class="diff-path-folder">src/</span><span class="diff-path-name">app.ts</span>');
+  // The counts wear the diff's colours in the list and in each file's header (owner, 2026-09-26: they were grey).
+  expect(html.match(/<span class="diff-count-added">\+2<\/span> <span class="diff-count-removed">−1<\/span>/g)).toHaveLength(2);
   expect(html).toContain('Binary');
-  expect(html).toContain('New file');
-  expect(html).toContain('Renamed');
-  expect(html).toContain('docs/old-name.md → docs/new-name.md');
-  expect(html).toContain('@@ -1,3 +1,4 @@ function main()');
-  expect(html).toMatch(/class="line-removed"[^>]*data-old-line="2"[^>]*><span class="line-number">2<\/span><span class="line-number"><\/span>/);
-  expect(html).toMatch(/class="line-added"[^>]*data-new-line="3"[^>]*><span class="line-number"><\/span><span class="line-number">3<\/span>/);
+  expect(html).toContain('<span class="diff-file-status diff-status-added">New file</span>');
+  expect(html).toContain('<span class="diff-file-status diff-status-renamed">Renamed</span>');
+  expect(html).toContain('<span class="diff-path-from">docs/old-name.md</span>');
+  expect(html).toContain('<span class="diff-hunk-lines">@@ -1,3 +1,4 @@</span><span class="diff-hunk-heading">function main()</span>');
+  expect(html).toMatch(/class="diff-line line-removed"[^>]*data-old-line="2"[^>]*><span class="line-number">2<\/span><span class="line-number"><\/span>/);
+  expect(html).toMatch(/class="diff-line line-added"[^>]*data-new-line="3"[^>]*><span class="line-number"><\/span><span class="line-number">3<\/span>/);
+  // Every file folds from its header, which stays in view while its lines scroll by.
+  expect(html.match(/class="diff-file-fold" aria-expanded="true"/g)).toHaveLength(3);
   expect(html).toContain('tok-string');
   expect(html).toContain('The content was left out because the diff is too long.');
   expect(html).toContain('Binary file; its content is not shown.');
@@ -54,7 +58,7 @@ it('names a single changed file once, in its heading, without a list above it (d
   const single: WorkspaceDiff = { ...diff, additions: 2, deletions: 1, files: [diff.files[0]] };
   const html = renderToStaticMarkup(createElement(DiffBody, { diff: single }));
   expect(html).not.toContain('class="diff-files"');
-  expect(html.match(/src\/app\.ts/g)).toHaveLength(2); // the heading's text and its section's name for assistive technology
+  expect(html.match(/class="diff-path-name">app\.ts</g)).toHaveLength(1); // named once, in the heading
   expect(html).toContain('class="diff-file-heading"');
   // A file and a folder, or a plain copy with no lines, still get the list.
   expect(renderToStaticMarkup(createElement(DiffBody, { diff: { ...single, folders: [{ path: 'assets', status: 'added' }] } }))).toContain('class="diff-files"');
@@ -94,11 +98,12 @@ it('tells a move from a rename, lists new and removed folders, and shows a plain
   };
   const html = renderToStaticMarkup(createElement(DiffBody, { diff: plain }));
   expect(html).toContain('This folder is not a Git repository, so only the files that changed are listed, not their lines.');
-  expect(html).toContain('receipt 3.pdf → receipts/march.pdf</span><span class="diff-file-status">Moved');
-  expect(html).toContain('receipts/Scan 12.pdf → receipts/april.pdf</span><span class="diff-file-status">Renamed');
-  expect(html).toContain('contract-old.pdf</span><span class="diff-file-status">Deleted');
-  expect(html).toContain('receipts/</span><span class="diff-file-status">New folder');
-  expect(html).toContain('old/</span><span class="diff-file-status">Folder deleted');
+  const text = html.replace(/<[^>]+>/g, '');
+  expect(text).toContain('receipt 3.pdf→ → receipts/march.pdfMoved');
+  expect(text).toContain('receipts/Scan 12.pdf→ → receipts/april.pdfRenamed');
+  expect(html).toContain('<span class="diff-path-name">contract-old.pdf</span></span><span class="diff-file-status diff-status-deleted">Deleted</span>');
+  expect(html).toContain('<span class="diff-path-name">receipts/</span></span><span class="diff-file-status diff-status-added">New folder</span>');
+  expect(html).toContain('<span class="diff-path-name">old/</span></span><span class="diff-file-status diff-status-deleted">Folder deleted</span>');
   // Nothing to scroll to and no counts: the rows are plain, and no file section follows the list.
   expect(html).not.toContain('<button');
   expect(html).not.toContain('diff-file-counts');

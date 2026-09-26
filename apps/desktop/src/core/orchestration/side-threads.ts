@@ -2,7 +2,7 @@ import type { Artifact, Run, Task, Worker } from '../../shared/contracts';
 import { liveWorkerTask } from '../../shared/live-task';
 import { mcpCallGranted, type McpGrant } from '../../shared/mcp';
 import { canStartSideThread, ChatQuote, MAX_CHAT_QUOTES, quoteText } from '../../shared/side-threads';
-import { snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
+import { removalStopsWork, snapshotCapabilities, type ToolCapability } from '../../shared/tool-policy';
 import { defaultBrowserChoice, narrowBrowserChoice } from '../../shared/browser';
 import { defaultDesktopChoice, narrowDesktopChoice } from '../../shared/desktop';
 import { Store, id, now } from '../storage/database';
@@ -65,7 +65,8 @@ export class SideThreads {
       const kept = current.filter(capability => allowed.includes(capability));
       if (kept.length === current.length) continue;
       this.store.patchTask(side.id, { toolCapabilities: kept });
-      reduced.push(side.id);
+      // Turning review on stops nothing; the side thread's next hand-in simply waits (COD-279).
+      if (current.some(capability => !kept.includes(capability) && removalStopsWork(capability))) reduced.push(side.id);
     }
     return reduced;
   }

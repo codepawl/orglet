@@ -85,6 +85,9 @@ export function attemptStateLabel(state: AttemptState, pendingChanges: number): 
     case 'uncertain': return t('Bản làm việc chưa rõ kết quả');
     case 'preparing': return t('Đang chuẩn bị bản làm việc');
     case 'integrating': return t('Đang tích hợp file');
+    case 'review': return t('Đang chờ bạn xem');
+    case 'discarded': return t('Đã bỏ thay đổi');
+    case 'carried': return t('Chuyển sang lượt sau');
   }
 }
 

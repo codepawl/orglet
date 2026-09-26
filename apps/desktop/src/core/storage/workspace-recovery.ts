@@ -37,7 +37,10 @@ export class WorkspaceRecovery {
       if (this.store.setting(`workspace-retired:${run.id}`, null)) return;
       const processes = this.store.db.prepare('SELECT data FROM workspace_processes WHERE run_id=?').all(run.id)
         .map(row => WorkspaceProcess.parse(JSON.parse(String(row.data))));
-      if (run.status === 'completed' || processes.some(process => process.state === 'running')) {
+      // A completed run's copy is only unsettled when the person applied it after review and the apply stopped (COD-279).
+      const copyRow = this.store.db.prepare('SELECT data FROM workspace_copies WHERE run_id=?').get(run.id);
+      const reviewed = copyRow ? JSON.parse(String(copyRow.data)).review?.state === 'applied' : false;
+      if ((run.status === 'completed' && !reviewed) || processes.some(process => process.state === 'running')) {
         throw new Error('Dừng công việc trước khi xử lý bản làm việc.');
       }
       this.store.setSetting(`workspace-retired:${run.id}`, { taskId: task.id, runId: run.id, reviewedAt: now(), reviewToken: input.reviewToken });
@@ -64,8 +67,11 @@ export class WorkspaceRecovery {
       attempts: [...runIds].map(runId => ({ runId, reviewToken: this.token(runId), retired: !!this.store.setting(`workspace-retired:${runId}`, null) })),
       copies: copies.slice(0, 100).map(row => {
         const copy = JSON.parse(String(row.data));
+        const review = copy.review ? { state: copy.review.state, heldAt: copy.review.heldAt, decidedAt: copy.review.decidedAt,
+          applied: copy.review.applied, skipped: copy.review.skipped } : undefined;
         return { runId: copy.runId, state: copy.state, kind: copy.kind ?? 'copy',
-          changes: copy.changes.slice(0, 100), changeCount: copy.changes.length, ...(copy.diff ? { diff: copy.diff } : {}) };
+          changes: copy.changes.slice(0, 100), changeCount: copy.changes.length, ...(copy.diff ? { diff: copy.diff } : {}),
+          ...(review ? { review } : {}), ...(copy.carriedTo ? { carried: true } : {}) };
       }),
       processes: processes.slice(0, 100).map(row => {
         const process = WorkspaceProcess.parse(JSON.parse(String(row.data)));

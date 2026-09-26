@@ -22,7 +22,7 @@ import type { Icon } from './icons';
  * came from, id, hash, access) lives behind the info button; revoking is a quiet menu item with its own question.
  */
 export function SourceViewer({ open, onClose, name, meta, icon: KindIcon, info, infoLabel, menu, menuLabel, actions, children }: {
-  open: boolean; onClose: () => void; name: string; meta: string; icon: Icon; info: InfoTipRow[]; infoLabel: string;
+  open: boolean; onClose: () => void; name: string; meta: ReactNode; icon: Icon; info: InfoTipRow[]; infoLabel: string;
   menu?: RowMenuItem[]; menuLabel: string; actions?: ReactNode; children: ReactNode;
 }) {
   return <Viewer open={open} onClose={onClose} id="source-viewer" className="source-viewer" title={name} icon={<KindIcon size={16} aria-hidden="true" />} meta={meta}

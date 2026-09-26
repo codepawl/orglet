@@ -370,6 +370,10 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
           browserChoices={detail?.task.routineId ? routineBrowserLevels : undefined}
           // A schedule never uses desktop apps (COD-261, phase 2a).
           desktopShown={!detail?.task.routineId} desktopAvailable={desktopAppsAvailable()} desktopApps={detail ? (detail.task.desktop?.apps.length ?? 0) : undefined}
+          // Review before apply (COD-279): a schedule's run applies as it finishes, and a crew or a group chat applies
+          // each orglet's changes as it finishes, since the next one in the turn works from those files.
+          reviewShown={!detail?.task.routineId}
+          reviewLocked={team || group ? t('Hội và chat nhóm áp dụng thay đổi của từng Tí ngay khi Tí đó xong, vì Tí sau làm tiếp trên các tệp đó.') : undefined}
           // A side thread takes its permissions from its main chat and can never be wider (COD-247).
           locked={detail?.task.sideOf ? t('Chat phụ dùng quyền của chat chính. Đổi quyền ở chat chính.') : undefined}
           onCapability={tools.onCapability} onWorkspace={tools.onWorkspace} onConfigure={tools.onConfigure} />

@@ -38,7 +38,8 @@ import { teamProgress } from '../../shared/team-progress';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { groupRecoveryAttempts } from '../../shared/recovery-attempts';
 import { AppProposalCards, type ProposalActions } from './AppProposals';
-import { ChangedFilesLine, DiffDialog } from './DiffViewer';
+import { ChangedFilesLine, DiffDialog, type DiffReview, type ReviewStatus } from './DiffViewer';
+import { confirmAction } from './confirm';
 import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import type { AppProposal } from '../../shared/app-proposals';
 import type { ChatQuote } from '../../shared/side-threads';
@@ -53,13 +54,29 @@ import type { BlockingCommand } from '../../shared/blocked-hand-in';
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
 type TurnNotices = ReturnType<typeof turnNotices>;
 
-/** The runs of a turn that changed files or folders in their working copy, with the counts the core kept (COD-163). */
-export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecoveryView | undefined): { run: Run; summary: WorkspaceDiffSummary }[] {
+/**
+ * The runs of a turn that changed files or folders in their working copy, with the counts the core kept (COD-163)
+ * and, for changes held for review, where they stand (COD-279).
+ */
+export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecoveryView | undefined): { run: Run; summary: WorkspaceDiffSummary; review?: ReviewStatus }[] {
   if (!recovery) return [];
   return runs.flatMap(run => {
-    const summary = recovery.copies.find(copy => copy.runId === run.id)?.diff;
-    return summary && (summary.files > 0 || (summary.folders ?? 0) > 0) ? [{ run, summary }] : [];
+    const copy = recovery.copies.find(item => item.runId === run.id);
+    const summary = copy?.diff;
+    if (!copy || !summary || (summary.files === 0 && (summary.folders ?? 0) === 0)) return [];
+    const review = reviewStatusOf(copy);
+    return [review ? { run, summary, review } : { run, summary }];
   });
+}
+
+function reviewStatusOf(copy: WorkspaceRecoveryView['copies'][number]): ReviewStatus | undefined {
+  if (copy.carried || copy.review?.state === 'carried') return { state: 'carried' };
+  // The review is settled before the first step runs, so the copy says how far the apply got.
+  if (copy.review?.state === 'applied' && copy.state === 'integrating') return { state: 'applying' };
+  if (copy.review?.state === 'applied' && (copy.state === 'conflict' || copy.state === 'uncertain')) return { state: 'stopped' };
+  if (copy.review?.state === 'applied') return { state: 'applied', skipped: copy.review.skipped ?? 0 };
+  if (copy.review?.state === 'pending' || copy.review?.state === 'discarded') return { state: copy.review.state };
+  return undefined;
 }
 
 /**
@@ -136,6 +153,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   const [answeringDesktop, setAnsweringDesktop] = useState(false);
   // The run whose working-copy changes are open in the diff viewer (COD-163).
   const [diffRun, setDiffRun] = useState<Run>();
+  // Whether an Apply or Discard on held changes is on its way (COD-279).
+  const [deciding, setDeciding] = useState(false);
   // A command that blocked a hand-in, its output open in the viewer, and whether "Vẫn áp dụng" is on its way (COD-270).
   const [outputCommand, setOutputCommand] = useState<BlockingCommand>();
   const [applyingHandIn, setApplyingHandIn] = useState(false);
@@ -293,8 +312,39 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
 
   // One line per run of the turn that changed files in its working copy (COD-163); `named` says whose line carries
   // the worker's name. Each opens the diff viewer.
-  const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary }) =>
-    <ChangedFilesLine key={run.id} summary={summary} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => setDiffRun(run)} />);
+  const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary, review }) =>
+    <ChangedFilesLine key={run.id} summary={summary} review={review} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => setDiffRun(run)} />);
+  // Apply and Discard in the viewer, while the open run's changes still wait for review (COD-279).
+  const diffWaiting = diffRun ? changedFilesOf([diffRun], recovery)[0]?.review?.state === 'pending' : false;
+  const diffReview: DiffReview | undefined = diffRun && diffWaiting ? {
+    busy: deciding || busy,
+    onApply: paths => {
+      if (deciding) return;
+      setDeciding(true);
+      action(async () => {
+        try {
+          await orglet.call('applyWorkspaceReview', { taskId: detail.task.id, runId: diffRun.id, ...(paths ? { paths } : {}) });
+          setDiffRun(undefined);
+          toast(t('Đã áp dụng thay đổi vào thư mục.'), 'success');
+        } finally { setDeciding(false); }
+      });
+    },
+    onDiscard: () => {
+      if (deciding) return;
+      void confirmAction({ title: t('Bỏ các thay đổi này?'), description: t('Thư mục của bạn không bị sửa, và không áp dụng lại được.'),
+        confirmLabel: t('Bỏ thay đổi'), cancelLabel: t('Giữ lại') }).then(confirmed => {
+        if (!confirmed) return;
+        setDeciding(true);
+        action(async () => {
+          try {
+            await orglet.call('discardWorkspaceReview', { taskId: detail.task.id, runId: diffRun.id });
+            setDiffRun(undefined);
+            toast(t('Đã bỏ thay đổi. Thư mục của bạn không đổi.'), 'success');
+          } finally { setDeciding(false); }
+        });
+      });
+    },
+  } : undefined;
   // One line per command that kept a failed run's changes out of the folder (COD-270); a crew member's line is named.
   const blockedLinesOf = (runs: readonly Run[]) => runs.flatMap(run => run.status === 'failed' && run.errorCode === 'hand_in_blocked'
     ? (run.blockedHandIn?.commands ?? []).map(command => <BlockedCommandLine key={command.processId} command={command}
@@ -536,7 +586,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         </div>;
       })}
     </div>
-    {diffRun && <DiffDialog taskId={detail.task.id} run={diffRun} onClose={() => setDiffRun(undefined)} />}
+    {diffRun && <DiffDialog taskId={detail.task.id} run={diffRun} review={diffReview} onClose={() => setDiffRun(undefined)} />}
     {outputCommand && <CommandOutputDialog taskId={detail.task.id} command={outputCommand} onClose={() => setOutputCommand(undefined)} />}
     {savedReport && <ReportDocument artifact={savedReport} author={detail.runs.find(run => run.id === savedReport.runId)} detail={detail} open onClose={() => setSavedReportId(undefined)} busy={busy} action={action} showSources={showSources}
       actions={<ArtifactActions artifactId={savedReport.id} about={tMessage(savedReport.report.title)} action={action} />} />}

@@ -8,7 +8,9 @@ import type { UncertainCall, WorkspaceRecoveryView } from './workspace-recovery'
  * and which one is blocking the chat. Core keeps the flat lists; this module only groups them.
  */
 
-export type AttemptState = 'kept' | 'integrated' | 'not_applied' | 'no_changes' | 'conflict' | 'uncertain' | 'preparing' | 'integrating';
+export type AttemptState = 'kept' | 'integrated' | 'not_applied' | 'no_changes' | 'conflict' | 'uncertain' | 'preparing' | 'integrating'
+  /** COD-279: changes held for review, dropped by the person, or carried on by a later run of the chat. */
+  | 'review' | 'discarded' | 'carried';
 
 export type RecoveryAttempt = {
   runId: string;
@@ -60,6 +62,9 @@ export function uncertainCallLabel(call: Pick<UncertainCall, 'tool' | 'summary'>
 function attemptState(retired: boolean, copy: RecoveryAttempt['copy']): AttemptState {
   if (retired) return 'kept';
   if (!copy) return 'no_changes';
+  if (copy.carried) return 'carried';
+  if (copy.state === 'ready' && copy.review?.state === 'pending') return 'review';
+  if (copy.state === 'ready' && copy.review?.state === 'discarded') return 'discarded';
   if (copy.state === 'ready') return copy.changeCount > 0 ? 'not_applied' : 'no_changes';
   return copy.state;
 }
@@ -86,7 +91,9 @@ export function groupRecoveryAttempts(view: WorkspaceRecoveryView | undefined, r
     const blocking = !attempt.retired && (uncertainCalls.some(call => call.replay === 'never')
       || processes.some(process => process.state === 'uncertain')
       || copy?.state === 'uncertain' || copy?.state === 'conflict');
-    const needsDecision = !attempt.retired && !completed && (blocking || pendingChanges > 0 || unresolvedChanges);
+    // A completed run needs a decision here only when an apply after review stopped part-way (COD-279); its held
+    // changes themselves are decided in the chat, not here.
+    const needsDecision = !attempt.retired && (blocking || (!completed && (pendingChanges > 0 || unresolvedChanges)));
     return {
       runId: attempt.runId, reviewToken: attempt.reviewToken, workerName: run?.snapshot.worker.name ?? attempt.runId,
       startedAt: run?.startedAt ?? null, retired: attempt.retired, completed, state: attemptState(attempt.retired, copy),

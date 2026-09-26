@@ -15,10 +15,14 @@ import { WorkspaceManifest } from '../../apps/desktop/src/shared/workspace-tools
 import { CoreService } from '../../apps/desktop/src/core/service';
 import type { ModelAdapter } from '../../apps/desktop/src/core/adapters/openai';
 import type { Run, Skill, Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
+import type { ToolCapability } from '../../apps/desktop/src/shared/tool-policy';
 import { isPlanRequest, memberIdsFromPlanPrompt } from './team-plan';
 import { toolsFor } from '../../apps/desktop/src/core/tools/catalog';
 import { HarnessTerminationError } from '../../apps/desktop/src/core/harness/exec';
 import { missingHarness } from '../../apps/desktop/src/shared/harness';
+
+/** These cover the hand-in itself, so the chat applies without review; workspace-review.test.ts covers the wait (COD-279). */
+const HANDS_IN_AT_ONCE: ToolCapability[] = ['source.read', 'skill.read', 'app.propose', 'workspace.apply'];
 
 let directory: string;
 let source: string;
@@ -37,11 +41,11 @@ beforeEach(async () => {
   const worker = { ...store.all<Worker>('workers')[0], provider: 'openai' as const };
   const skill = store.all<Skill>('skills')[0];
   task = { id: id(), workerId: worker.id, brief: 'Update note.txt', consent: true, providerScopes: ['openai'],
-    sourceIds: [], budgetMicros: 5_000_000, accepted: false, status: 'queued', createdAt: now() };
+    sourceIds: [], budgetMicros: 5_000_000, accepted: false, status: 'queued', createdAt: now(), toolCapabilities: HANDS_IN_AT_ONCE };
   store.put('tasks', task);
   await grants.grant({ taskId: task.id, directory: source, permissions: ['read', 'write'] });
   run = { id: id(), taskId: task.id, status: 'queued', startedAt: now(), error: null,
-    snapshot: { worker, skill, workspaceGrant: grants.snapshot(task.id) } };
+    snapshot: { worker, skill, workspaceGrant: grants.snapshot(task.id), toolCapabilities: HANDS_IN_AT_ONCE } };
   store.put('runs', run, { column: 'task_id', value: task.id });
 });
 afterEach(async () => { store.close(); await rm(directory, { recursive: true, force: true }); });

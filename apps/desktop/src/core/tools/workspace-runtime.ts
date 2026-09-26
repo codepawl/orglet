@@ -5,13 +5,14 @@ import type { Run, Task } from '../../shared/contracts';
 import { WorkspaceGrantSnapshot, type WorkspacePermission } from '../../shared/workspace-access';
 import { WorkspaceBlob, WorkspaceChangeKind, WorkspaceHash, WorkspaceManifest, WorkspaceOperation, WorkspacePath } from '../../shared/workspace-tools';
 import { WorkspaceReadEvidence } from '../../shared/workspace-evidence';
-import { Store } from '../storage/database';
+import { Store, now } from '../storage/database';
 import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import { WorkspaceGrants } from '../storage/workspace-grants';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { ReadRecoveryFile, RecoveryFile, RestoreWorkspaceFile, WorkspaceConflictReason } from '../../shared/workspace-recovery';
 import { WorkspaceDiffRequest, WorkspaceDiffSummary, summarize, type WorkspaceDiff } from '../../shared/workspace-diff';
-import { planIntegration, plainCopyDiff, type IntegrationStep } from './workspace-plan';
+import { planIntegration, plainCopyDiff, selectSteps, type IntegrationStep } from './workspace-plan';
+import { WorkspaceReview } from '../../shared/workspace-review';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
 import type { IntegrationStepInput, WorkspaceIntegration } from './workspace-integration';
 import { HandInBlockedError, WorkspaceProcesses, unappliedFailureLine } from './workspace-processes';
@@ -20,6 +21,15 @@ import { StartWorkspaceProcess, WorkspaceProcessId, WorkspaceProcessOutput, Work
 
 /** What the person accepted when applying a blocked hand-in (COD-270); see `WorkspaceRuntime.finish`. */
 export type AcceptedFailures = { processIds: readonly string[]; copyFingerprint: string };
+
+const STOP_FIRST = 'Dừng công việc trước khi xử lý bản làm việc.';
+const CARRIED_AWAY = 'Thay đổi của bản làm việc này đã chuyển sang lượt sau.';
+export const NOTHING_TO_REVIEW = 'Lần chạy này không có thay đổi đang chờ bạn xem.';
+export const REVIEW_GRANT_CHANGED = 'Quyền sửa thư mục đã bị thu hồi hoặc thay đổi nên không áp dụng được. Bỏ thay đổi này, hoặc nhắn Tí làm lại với thư mục hiện tại.';
+export const REVIEW_COPY_CHANGED = 'Bản làm việc đã thay đổi so với lúc chờ bạn xem; không áp dụng.';
+const NOTHING_PICKED = 'Chưa chọn thay đổi nào để áp dụng.';
+/** Statuses of a run that may still go on in its own copy, so no later run takes that copy over. */
+const LIVE_RUN_STATUSES: readonly Run['status'][] = ['queued', 'running', 'pausing'];
 
 /**
  * One hash for the files a copy holds, whatever order the walk listed them in: paths with their hashes, and folders.
@@ -68,6 +78,12 @@ const Copy = z.object({
   /** What the copy changed since its snapshot, counted when the run finished (COD-163, COD-254). */
   diff: WorkspaceDiffSummary.optional(),
   changes: z.array(Change),
+  /** Changes held for the person to review before they reach the folder (COD-279). */
+  review: WorkspaceReview.optional(),
+  /** The run whose held copy this run went on working in (COD-279). */
+  carriedFrom: z.uuid().optional(),
+  /** The later run that went on working in this copy; this run can no longer change or hand it in (COD-279). */
+  carriedTo: z.uuid().optional(),
 }).strict();
 type Copy = z.infer<typeof Copy>;
 const ReadResult = z.object({ path: z.string(), hash: z.string(), content: z.string() }).passthrough();
@@ -204,6 +220,8 @@ export class WorkspaceRuntime {
       if (run.taskId !== input.taskId) throw new Error('Lần chạy không thuộc cuộc trò chuyện này.');
       const copy = this.saved(run.id);
       if (!copy?.directory) throw new Error('Lần chạy này không có bản làm việc để so sánh.');
+      // The copy now belongs to a later turn, whose diff shows these changes together with its own (COD-279).
+      if (copy.carriedTo) throw new Error(CARRIED_AWAY);
       this.grants.assert(copy.grant, 'read');
       if (copy.kind !== 'git-worktree') {
         // A plain folder copy kept only the snapshot's hashes: what happened to each file, without lines (COD-254).
@@ -283,6 +301,39 @@ export class WorkspaceRuntime {
     this.owns(run, step.path, step.kind === 'folder');
   }
 
+  /**
+   * A new run in a chat whose changes still wait for review goes on in that same copy (COD-279), so the orglet sees
+   * what it did last turn and one review then covers both turns. Only a solo run takes a copy over, and only under the
+   * folder grant the copy was made with; the earlier record then says where its changes went and can no longer be
+   * applied. A run that took a copy over and stopped without finishing passes it on the same way, so a retry or the
+   * next message picks the changes up again instead of starting from the folder.
+   */
+  private carryHeldCopy(run: Run): Copy | undefined {
+    if (run.snapshot.team || run.stage !== undefined) return undefined;
+    const grant = run.snapshot.workspaceGrant!;
+    return this.store.transaction(() => {
+      const rows = this.store.db.prepare(`SELECT copies.data FROM workspace_copies copies JOIN runs ON runs.id=copies.run_id
+        WHERE runs.task_id=? AND copies.run_id<>? ORDER BY copies.rowid DESC LIMIT 20`).all(run.taskId, run.id);
+      const held = rows.map(row => Copy.parse(JSON.parse(String(row.data)))).find(copy => {
+        if (!copy.directory || copy.carriedTo || copy.state !== 'ready') return false;
+        if (copy.grant.id !== grant.id || copy.grant.revision !== grant.revision) return false;
+        if (this.store.setting(`workspace-retired:${copy.runId}`, null)) return false;
+        if (copy.review?.state === 'pending') return true;
+        const owner = this.store.get<Run>('runs', copy.runId);
+        return Boolean(copy.carriedFrom) && !copy.review && owner.status !== 'completed' && !LIVE_RUN_STATUSES.includes(owner.status);
+      });
+      if (!held) return undefined;
+      const earlier: Copy = { ...held, carriedTo: run.id,
+        ...(held.review ? { review: { ...held.review, state: 'carried' as const, decidedAt: now() } } : {}) };
+      this.save(earlier);
+      const carried: Copy = { ...held, runId: run.id, grant, changes: [], diff: undefined, review: undefined, carriedFrom: held.runId, carriedTo: undefined };
+      this.save(carried);
+      this.store.event(held.runId, 'Lượt sau làm tiếp trên bản làm việc này; xem và áp dụng thay đổi ở lượt đó.');
+      this.store.event(run.id, 'Làm tiếp trên bản làm việc còn chờ bạn xem từ lượt trước.');
+      return carried;
+    });
+  }
+
   private async prepare(run: Run, signal: AbortSignal): Promise<Copy> {
     this.authorize(run, 'read', signal);
     const retained = this.saved(run.id);
@@ -293,8 +344,12 @@ export class WorkspaceRuntime {
       if (!retained.directory || ['preparing', 'uncertain'].includes(retained.state)) {
         throw new Error('Bản làm việc bị gián đoạn; cần kiểm tra trước khi tiếp tục.');
       }
+      // A later run went on in this copy, so it is no longer this run's to change (COD-279).
+      if (retained.carriedTo) throw new Error(CARRIED_AWAY);
       return retained;
     }
+    const carried = this.carryHeldCopy(run);
+    if (carried) return carried;
     const source = await this.grants.directory(run.snapshot.workspaceGrant!, 'read');
     const preparing: Copy = { runId: run.id, grant: run.snapshot.workspaceGrant!, directory: null,
       state: 'preparing', baseline: { files: [], omitted: [] }, edits: 0, changes: [] };
@@ -522,7 +577,7 @@ export class WorkspaceRuntime {
    * the person accepted, and failures in a copy with nothing to hand in, which never block (COD-270). `accepted` comes
    * only from the person's own apply-anyway: the commands that blocked this run, and the copy as they were shown it.
    */
-  async finish(run: Run, signal: AbortSignal, accepted?: AcceptedFailures): Promise<string[]> {
+  async finish(run: Run, signal: AbortSignal, accepted?: AcceptedFailures, options: { hold?: boolean } = {}): Promise<string[]> {
     signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
     new ToolCalls(this.store).assertEffectsResolved(run.id);
     this.assertCopiesResolved(run);
@@ -530,6 +585,7 @@ export class WorkspaceRuntime {
     return this.serial(run.id, async () => {
       this.authorize(run, 'read', signal);
       const copy = this.saved(run.id)!;
+      if (copy.carriedTo) throw new Error(CARRIED_AWAY);
       let limitations: string[] = [];
       let blocked: HandInBlockedError | undefined;
       try {
@@ -575,34 +631,99 @@ export class WorkspaceRuntime {
       }
       copy.changes = steps.map(changeOf);
       if (!copy.changes.length) { this.save({ ...copy, state: 'integrated' }); return limitations; }
+      if (options.hold) {
+        // The chat reviews before anything reaches the folder (COD-279): the copy stays `ready` with its plan listed
+        // as pending steps, and the fingerprint pins what the person will be shown.
+        this.save({ ...copy, review: { state: 'pending', heldAt: now(), fingerprint: manifestFingerprint(manifest) } });
+        this.store.event(run.id, 'Thay đổi đang chờ bạn xem trước khi vào thư mục.');
+        return limitations;
+      }
       this.authorize(run, 'write', signal);
-      // ponytail: one integration queue per core; use per-root queues if more than two concurrent workers are supported.
-      await this.serial('integration', async () => {
-        this.save({ ...copy, state: 'integrating' });
-        try {
-          for (const [index, step] of steps.entries()) {
-            const change = copy.changes[index];
-            const root = await this.grants.directory(run.snapshot.workspaceGrant!, 'write');
-            const result = await this.integration.apply({ runId: run.id, callId: integrationCallId(step), root, signal,
-              ...await this.stepInput(copy.directory!, step, signal),
-              authorize: () => { this.authorize(run, 'write', signal); this.ownsStep(run, step); },
-            });
-            if (result.status === 'uncertain') throw new Error('Tích hợp bị gián đoạn; cần kiểm tra file và bản gốc đã lưu.');
-            change.status = result.status;
-            if (result.backupPath) change.backupPath = result.backupPath;
-            if (result.status === 'blocked') change.reason = result.reason;
-            if (result.status === 'conflict') change.conflict = result.reason ?? 'changed';
-            this.save({ ...copy, state: result.status === 'applied' ? 'integrating' : 'conflict' });
-            if (result.status !== 'applied') throw new Error('Workspace có xung đột; các tệp đã tích hợp được giữ lại.');
-            this.store.event(run.id, integratedEvent(step));
-          }
-          this.save({ ...copy, state: 'integrated' });
-        } catch (error) {
-          if (this.saved(run.id)?.state === 'integrating') this.save({ ...copy, state: 'uncertain' });
-          throw error;
-        }
-      });
+      await this.integrate(run, copy, steps, signal, step => { this.authorize(run, 'write', signal); this.ownsStep(run, step); });
       return limitations;
+    });
+  }
+
+  /**
+   * Runs the hand-in steps through the broker in order, each its own journaled call, and records what became of each.
+   * The first conflict or block stops the rest; the copy then reads `conflict` and every step taken stays recorded.
+   */
+  private async integrate(run: Run, copy: Copy, steps: readonly IntegrationStep[], signal: AbortSignal, authorize: (step: IntegrationStep) => void) {
+    // ponytail: one integration queue per core; use per-root queues if more than two concurrent workers are supported.
+    await this.serial('integration', async () => {
+      this.save({ ...copy, state: 'integrating' });
+      try {
+        for (const [index, step] of steps.entries()) {
+          const change = copy.changes[index];
+          const root = await this.grants.directory(copy.grant, 'write');
+          const result = await this.integration.apply({ runId: run.id, callId: integrationCallId(step), root, signal,
+            ...await this.stepInput(copy.directory!, step, signal),
+            authorize: () => authorize(step),
+          });
+          if (result.status === 'uncertain') throw new Error('Tích hợp bị gián đoạn; cần kiểm tra file và bản gốc đã lưu.');
+          change.status = result.status;
+          if (result.backupPath) change.backupPath = result.backupPath;
+          if (result.status === 'blocked') change.reason = result.reason;
+          if (result.status === 'conflict') change.conflict = result.reason ?? 'changed';
+          this.save({ ...copy, state: result.status === 'applied' ? 'integrating' : 'conflict' });
+          if (result.status !== 'applied') throw new Error('Workspace có xung đột; các tệp đã tích hợp được giữ lại.');
+          this.store.event(run.id, integratedEvent(step));
+        }
+        this.save({ ...copy, state: 'integrated' });
+      } catch (error) {
+        if (this.saved(run.id)?.state === 'integrating') this.save({ ...copy, state: 'uncertain' });
+        throw error;
+      }
+    });
+  }
+
+  /** A held copy the person may still decide on, or the reason it cannot be. */
+  private heldCopy(run: Run, isActive: (taskId: string) => boolean): Copy & { directory: string; review: WorkspaceReview } {
+    if (isActive(run.taskId)) throw new Error(STOP_FIRST);
+    new WorkspaceRecovery(this.store).assertAvailable(run.id);
+    const copy = this.saved(run.id);
+    if (!copy?.directory || copy.review?.state !== 'pending') throw new Error(NOTHING_TO_REVIEW);
+    if (copy.state !== 'ready') throw new Error('Bản làm việc bị gián đoạn; cần kiểm tra trước khi tiếp tục.');
+    return copy as Copy & { directory: string; review: WorkspaceReview };
+  }
+
+  /**
+   * Applies a held copy (COD-279), all of it or the files and folders the person left ticked, through the same
+   * hash-checked broker, backups and journal as any hand-in. It refuses a copy that changed since it was held and a
+   * folder grant that was revoked, replaced or narrowed below editing (widening keeps the grant and is fine). A conflict
+   * stops it the way it stops a hand-in, and the attempt is then settled in Details.
+   */
+  async applyReview(run: Run, paths: readonly string[] | undefined, signal: AbortSignal, isActive: (taskId: string) => boolean): Promise<{ applied: number; skipped: number }> {
+    signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
+    return this.serial(run.id, async () => {
+      const held = this.heldCopy(run, isActive);
+      const authorize = () => {
+        signal.throwIfAborted();
+        new WorkspaceRecovery(this.store).assertAvailable(run.id);
+        const current = this.grants.snapshot(run.taskId);
+        if (!current || current.id !== held.grant.id || current.revision !== held.grant.revision || !current.permissions.includes('write')) {
+          throw new Error(REVIEW_GRANT_CHANGED);
+        }
+      };
+      authorize();
+      const manifest = WorkspaceManifest.parse(await this.files.execute(held.directory, { operation: 'manifest' }, signal));
+      if (manifestFingerprint(manifest) !== held.review.fingerprint) throw new Error(REVIEW_COPY_CHANGED);
+      const steps = planIntegration(held.baseline, manifest);
+      const { kept, skipped } = paths ? selectSteps(steps, paths) : { kept: steps, skipped: [] };
+      if (!kept.length) throw new Error(NOTHING_PICKED);
+      // Decided before the first step, so a conflict part-way leaves a settled review and a copy to settle in Details.
+      const copy: Copy = { ...held, changes: kept.map(changeOf),
+        review: { ...held.review, state: 'applied', decidedAt: now(), applied: kept.length, skipped: skipped.length } };
+      await this.integrate(run, copy, kept, signal, authorize);
+      return { applied: kept.length, skipped: skipped.length };
+    });
+  }
+
+  /** Drops a held copy's changes (COD-279). Nothing touches the folder; the copy stays on disk so the diff still opens. */
+  async discardReview(run: Run, isActive: (taskId: string) => boolean): Promise<void> {
+    await this.serial(run.id, async () => {
+      const held = this.heldCopy(run, isActive);
+      this.save({ ...held, review: { ...held.review, state: 'discarded', decidedAt: now() } });
     });
   }
 }

@@ -2051,6 +2051,31 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    a rule; a hunk reuses the source-preview surface with the snapshot's and the copy's numbers side by side, a sign
    column, and CodePreview's removed/added tints. */
 .changed-files svg { flex-shrink:0; }
+/* Changes held for review (COD-279): the line says they are not in the folder yet in the text colour, and ends on the
+   word that opens the viewer, underlined on hover like a link. Carried on by a later turn, it is plain text. */
+.changed-files-pending { color:var(--text); }
+.changed-files-open { color:var(--text); font-weight:600; }
+.changed-files-review:hover .changed-files-open { text-decoration:underline; text-underline-offset:2px; }
+.activity-summary.changed-files-carried { margin:0; cursor:default; }
+.activity-summary.changed-files-carried:hover { background:none; color:var(--muted); }
+/* In the viewer, a tick before each changed file or folder picks what Apply takes; the box sits on the row's centre. */
+.diff-file-tick.org-checkbox { flex-shrink:0; align-items:center; gap:0; margin:0; padding:8px 2px 8px 10px; }
+.diff-file-tick .org-checkbox-box { margin-top:0; }
+.diff-file-tick .org-checkbox-input { top:8px; left:10px; }
+/* An unticked file will not be applied: its row and its lines dim, its tick and header stay at full strength. */
+.diff-files li.skipped .diff-file-row,.diff-file.skipped .diff-file-body { opacity:.5; }
+/* A folder row has no tick; the space keeps its icon under the files' icons. */
+.diff-file-tick-space { flex-shrink:0; width:30px; }
+.diff-file-heading .diff-file-tick.org-checkbox { padding:5px 4px 5px 2px; }
+.diff-file-heading .diff-file-tick .org-checkbox-input { top:5px; left:2px; }
+.diff-review-note { margin:0; padding:0 4px; }
+/* The toolbar's decision keeps to one line: Apply never wraps, and in a narrow window Discard keeps only its icon
+   (its name stays as the accessible label). */
+.source-viewer .org-viewer-actions .org-button { white-space:nowrap; }
+@media (max-width: 900px) {
+  .source-viewer .diff-discard .diff-action-label { display:none; }
+  .source-viewer .diff-discard { width:34px; padding:0; justify-content:center; }
+}
 /* Lines added and removed wear the diff's own colours and a heavier weight, so they read apart from the file count. */
 .diff-counts { font-variant-numeric:tabular-nums; font-weight:600; }
 .diff-count-added { color:var(--success); }
@@ -2075,24 +2100,61 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* The last lines of a blocking command's output, stdout then stderr, each under its stream's name. */
 .command-output { display:flex; flex-direction:column; gap:20px; }
 .command-output-stream { display:flex; flex-direction:column; gap:8px; }
-.diff-view { display:flex; flex-direction:column; gap:20px; }
-.diff-files { display:flex; flex-direction:column; gap:2px; margin:0; padding:0; list-style:none; }
-.diff-file-row { display:flex; align-items:center; gap:10px; width:100%; min-height:30px; padding:4px 10px; border:0; border-radius:8px; background:none; color:var(--text); font:inherit; text-align:left; cursor:pointer; }
+/* The diff viewer (COD-163), redrawn in COD-279 after the owner called it ugly: a code review surface in the app's
+   quiet style. On the viewer's grey stage sit one card listing the files and one card per file; cards and a tinted
+   band per hunk tell things apart, never a rule. A path keeps the file's name in full weight and lets its folder
+   shorten first. Counts wear the diff's colours everywhere, as the chat's changed-files line does. */
+.diff-view { display:flex; flex-direction:column; gap:14px; }
+.diff-files { display:flex; flex-direction:column; gap:1px; margin:0; padding:6px; list-style:none; border-radius:12px; background:var(--bg); }
+.diff-files li { display:flex; align-items:center; min-width:0; }
+.diff-file-row { display:flex; align-items:center; gap:10px; flex:1; min-width:0; min-height:34px; padding:6px 10px; border:0; border-radius:8px; background:none; color:var(--text); font:inherit; font-size:13px; text-align:left; cursor:pointer; }
 .diff-file-row:hover { background:var(--row-hover); }
 /* A row with nothing to scroll to: a plain folder copy's file, or a folder (COD-254). */
 .diff-file-row.static { cursor:default; }
 .diff-file-row.static:hover { background:none; }
-.diff-file-path { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono); font-size:12.5px; font-weight:400; }
-.diff-file-status { flex-shrink:0; font-size:12px; font-weight:400; color:var(--muted); }
-.diff-file-counts { flex-shrink:0; margin-left:auto; font-family:var(--font-mono); font-size:12px; font-weight:400; color:var(--muted); font-variant-numeric:tabular-nums; }
-.diff-file { display:flex; flex-direction:column; gap:8px; scroll-margin-top:12px; }
-.diff-file-heading { display:flex; align-items:center; gap:10px; margin:0; padding:0 10px; font-size:13px; }
-.diff-file-heading .diff-file-path { font-weight:600; }
-.diff-hunk-range { color:var(--muted); }
-.diff-sign { display:inline-block; width:2ch; text-indent:0; color:var(--muted); user-select:none; }
+.diff-file-kind { flex-shrink:0; color:var(--muted); }
+.diff-path { display:flex; min-width:0; font-family:var(--font-mono); font-size:12.5px; line-height:20px; white-space:nowrap; }
+.diff-path-folder { min-width:2ch; flex-shrink:1000; overflow:hidden; text-overflow:ellipsis; color:var(--muted); }
+.diff-path-name { min-width:0; overflow:hidden; text-overflow:ellipsis; font-weight:600; color:var(--text); }
+.diff-path-move { display:flex; align-items:center; gap:6px; min-width:0; }
+.diff-path-from { min-width:2ch; flex-shrink:1000; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono); font-size:12.5px; color:var(--muted); }
+.diff-path-arrow { flex-shrink:0; color:var(--muted); }
+/* What happened to a file, as a small tinted word: new in the success colour, deleted in the error colour, moved or
+   renamed plain. The text is mixed toward the text colour so it keeps its contrast on its own tint in both themes. */
+.diff-file-status { flex-shrink:0; padding:1px 7px; border-radius:999px; background:color-mix(in srgb, var(--muted) 13%, transparent); color:var(--muted); font-size:11.5px; line-height:16px; font-weight:500; white-space:nowrap; }
+.diff-status-added { background:color-mix(in srgb, var(--success) 14%, transparent); color:color-mix(in srgb, var(--success) 72%, var(--text)); }
+.diff-status-deleted { background:color-mix(in srgb, var(--error) 13%, transparent); color:color-mix(in srgb, var(--error) 72%, var(--text)); }
+.diff-file-counts { flex-shrink:0; margin-left:auto; padding-left:8px; font-family:var(--font-mono); font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* One card per file. Its header stays at the top of the viewer while the file's lines scroll under it (the scroll area
+   has 20px of padding above, hence the negative offset), and it folds the file away. */
+.diff-file { border-radius:12px; background:var(--bg); scroll-margin-top:0; }
+.diff-file-heading { position:sticky; top:-20px; z-index:1; display:flex; align-items:center; gap:8px; min-width:0; min-height:46px; margin:0; padding:6px 14px 6px 8px; border-radius:12px 12px 0 0; background:var(--bg); font-size:13px; font-weight:400; }
+.diff-file.folded .diff-file-heading { border-radius:12px; }
+.diff-file-fold { display:grid; place-items:center; flex-shrink:0; width:28px; height:28px; padding:0; border:0; border-radius:7px; background:none; color:var(--muted); cursor:pointer; }
+.diff-file-fold:hover { color:var(--text); }
+.diff-fold-chevron { transition:transform .15s var(--ease-out, ease); }
+.diff-file.folded .diff-fold-chevron { transform:rotate(-90deg); }
+.diff-file-body { display:flex; flex-direction:column; gap:10px; padding:0 0 10px; }
+.diff-file-note { display:flex; align-items:center; gap:8px; margin:0; padding:8px 16px 6px 44px; color:var(--muted); font-size:12.5px; }
+.diff-file-note svg { flex-shrink:0; }
+/* A hunk: its range as a quiet band aligned with the code column, then one grid row per line: the snapshot's number,
+   the copy's number, the sign and the code, which wraps inside its column so a long line never widens the viewer.
+   Changed lines take a light tint of the diff's colours and their numbers a slightly stronger one. */
+.diff-hunk { --diff-number-column:calc(var(--line-number-width, 4ch) + 16px); font-family:var(--font-mono); font-size:12px; line-height:20px; tab-size:4; }
+.diff-hunk-range { display:flex; align-items:baseline; gap:10px; min-width:0; margin:0; padding:3px 14px 3px calc(2 * var(--diff-number-column) + 2ch); background:color-mix(in srgb, var(--accent) 6%, var(--bg)); color:var(--muted); font-size:11.5px; white-space:nowrap; }
+.diff-hunk-lines { flex-shrink:0; }
+.diff-hunk-heading { min-width:0; overflow:hidden; text-overflow:ellipsis; color:var(--text); opacity:.72; }
+.diff-lines { display:flex; flex-direction:column; }
+.diff-line { display:grid; grid-template-columns:var(--diff-number-column) var(--diff-number-column) 2ch minmax(0, 1fr); }
+.diff-line .line-number { width:auto; margin:0; padding:0 10px 0 6px; text-align:right; color:color-mix(in srgb, var(--muted) 78%, var(--bg)); }
+.diff-sign { text-align:center; color:var(--muted); user-select:none; }
+.diff-code { min-width:0; padding:0 14px 0 4px; background:none; font:inherit; color:var(--text); white-space:pre-wrap; overflow-wrap:anywhere; }
+.diff-line.line-added { background:color-mix(in srgb, var(--success) 11%, transparent); }
+.diff-line.line-removed { background:color-mix(in srgb, var(--error) 10%, transparent); }
+.diff-line.line-added .line-number { background:color-mix(in srgb, var(--success) 10%, transparent); color:color-mix(in srgb, var(--success) 70%, var(--text)); }
+.diff-line.line-removed .line-number { background:color-mix(in srgb, var(--error) 9%, transparent); color:color-mix(in srgb, var(--error) 70%, var(--text)); }
 .line-added .diff-sign { color:var(--success); }
 .line-removed .diff-sign { color:var(--error); }
-pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px + 2ch); padding-left:var(--diff-gutter); text-indent:calc(-1 * var(--diff-gutter)); }
 /* The folded line above an answer, shared by the trace and the changed-files line: one quiet control with an icon
    left of its words, a row tint on hover and nothing else. */
 .activity-summary { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:2px 8px 2px 4px; border:0; border-radius:8px; background:none; color:var(--muted); font-size:13px; }
