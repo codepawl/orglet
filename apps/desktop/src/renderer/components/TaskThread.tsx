@@ -187,17 +187,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
    * actually worked from (user, 2026-09-20). Nothing new is recorded for this — a run carries the revision of
    * the message it was given, so the highest one a worker has run is exactly how far they have read.
    */
-  const readersByRevision = new Map<number, Run[]>();
-  const furthest = new Map<string, Run>();
-  for (const run of detail.runs) {
-    const revision = run.snapshot.inputRevision ?? 0;
-    const known = furthest.get(run.snapshot.worker.id);
-    if (!known || (known.snapshot.inputRevision ?? 0) < revision) furthest.set(run.snapshot.worker.id, run);
-  }
-  for (const run of furthest.values()) {
-    const revision = run.snapshot.inputRevision ?? 0;
-    readersByRevision.set(revision, [...(readersByRevision.get(revision) ?? []), run]);
-  }
+  const readersByRevision = readersByTurn(detail);
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   // Side threads (COD-247): which answers were already brought into a main chat, and what the threads are called.
   const broughtIn = new Set(workspace.tasks.flatMap(task => (task.quotes ?? []).map(quote => quote.artifactId)));
@@ -334,7 +324,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     onDiscard: () => {
       if (deciding) return;
       void confirmAction({ title: t('Bỏ các thay đổi này?'), description: t('Thư mục của bạn không bị sửa, và không áp dụng lại được.'),
-        confirmLabel: t('Bỏ thay đổi'), cancelLabel: t('Giữ lại') }).then(confirmed => {
+        confirmLabel: t('Bỏ thay đổi'), cancelLabel: t('Giữ lại'), tone: 'danger' }).then(confirmed => {
         if (!confirmed) return;
         setDeciding(true);
         action(async () => {
@@ -443,7 +433,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
     <div className="thread-content">
       {detail.task.sideOf && <p className="side-thread-origin">
-        <span>{t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
+        {/* Once an answer was brought in, the main chat did change; the line then says only what this chat is. */}
+        <span>{detail.artifacts.some(artifact => broughtIn.has(artifact.id)) ? t('Chat phụ với {0}.', [sideThreadOrglet]) : t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
         {openMainChat && <button type="button" onClick={() => openMainChat(detail.task.workerId)}>{t('Mở chat chính')}</button>}
       </p>}
       {scheduleRun && <p className="side-thread-origin">
@@ -588,10 +579,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             {unresolvedError?.error && !heldRun && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
               {/* A run refused by the unknown-outcome guard (COD-191) says what to do, not which guard fired: the
                   attempt to review sits in Details, and the button below opens it there. */}
+              {/* A plain stop on a connection that never charges says only what the heading already says. */}
               {blockedCommands
                 ? <div className="run-error-commands">{blockedCommands.map(command => <BlockedCommandLine key={command.processId} command={command}
                   workerName={unresolvedError.stage ? unresolvedError.snapshot.worker.name : undefined} onOpen={() => setOutputCommand(command)} />)}</div>
-                : <p>{unresolvedError.errorCode === 'unresolved_attempt' ? t('Một thay đổi file trước đó chưa rõ kết quả. Kiểm tra trong Chi tiết rồi giữ file hiện tại, sau đó Tí mới ghi tiếp được.')
+                : unresolvedError.error === 'Đã hủy.' ? null : <p>{unresolvedError.errorCode === 'unresolved_attempt' ? t('Một thay đổi file trước đó chưa rõ kết quả. Kiểm tra trong Chi tiết rồi giữ file hiện tại, sau đó Tí mới ghi tiếp được.')
                   : unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p>}
             </div>}
             {latest && <div className="actions">
@@ -717,6 +709,31 @@ function BringIntoMainChat({ artifactId, brought, about, action, openChat }: { a
     toast(t('Đã đưa vào chat chính'), 'success', about, openChat ? { action: { label: t('Mở'), onSelect: () => openChat(mainTaskId) } } : {});
   });
   return <Button size="icon" aria-label={label} title={label} disabled={brought} onClick={bring}>{brought ? <Check size={15} /> : <MessageSquareQuote size={15} />}</Button>;
+}
+
+/**
+ * The orglets to show as having read each turn, by the turn's revision. A run carries the revision of the message it
+ * was given, so the highest one an orglet has run is how far it has read. An orglet whose answer ends that turn has
+ * shown it read it; its face under its own answer only repeated that (dogfood round 5, COD-287), so faces stay for
+ * readers with no answer there yet: working, stopped or failed. A crew's lead plans in one run and answers in another,
+ * so the check is per orglet and turn, not per run.
+ */
+export function readersByTurn(detail: Pick<TaskDetail, 'runs' | 'artifacts'>): Map<number, Run[]> {
+  const readersByRevision = new Map<number, Run[]>();
+  const furthest = new Map<string, Run>();
+  for (const run of detail.runs) {
+    const revision = run.snapshot.inputRevision ?? 0;
+    const known = furthest.get(run.snapshot.worker.id);
+    if (!known || (known.snapshot.inputRevision ?? 0) < revision) furthest.set(run.snapshot.worker.id, run);
+  }
+  const answeredRuns = new Set(detail.artifacts.map(artifact => artifact.runId));
+  const answered = new Set(detail.runs.filter(run => answeredRuns.has(run.id)).map(run => `${run.snapshot.worker.id}:${run.snapshot.inputRevision ?? 0}`));
+  for (const run of furthest.values()) {
+    const revision = run.snapshot.inputRevision ?? 0;
+    if (answered.has(`${run.snapshot.worker.id}:${revision}`)) continue;
+    readersByRevision.set(revision, [...(readersByRevision.get(revision) ?? []), run]);
+  }
+  return readersByRevision;
 }
 
 /**
