@@ -896,7 +896,6 @@ export const en: Dictionary = {
   'Quyết định trong chat': 'Chat decisions',
   'Đang chờ trả lời': 'Waiting for an answer',
   'Không thể tiếp tục từ bản sao lưu': 'Cannot resume from a backup',
-  'Mục tiêu Tí hiểu: {0}': 'Goal as understood: {0}',
   'Lệnh: {0} thoát 0, {1} lỗi, {2} chưa hoàn tất.': 'Commands: {0} exited 0, {1} failed, {2} unfinished.',
   '{0} bản file xung đột hoặc chưa rõ.': '{0} file copies conflicted or have an unknown outcome.',
   '{0} thao tác chưa rõ kết quả.': '{0} operations have an unknown outcome.',

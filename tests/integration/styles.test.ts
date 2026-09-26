@@ -39,3 +39,12 @@ it('gives a long orglet name in the Running view at most 60% so the chat name st
   expect(css).toMatch(/\.running-name \{[^}]*max-width:60%;[^}]*text-overflow:ellipsis;/);
   expect(css).toMatch(/\.running-chat \{[^}]*flex:1 1 0;/);
 });
+
+it('sweeps a light across the working line, and stops it under reduced motion', () => {
+  expect(css).toMatch(/\.run-status-line \{[^}]*background-clip:text;[^}]*animation:status-sweep/);
+  expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.run-status-line \{ animation:none; background:none; color:var\(--muted\); \} \}/);
+});
+
+it('centres the chat header name and its provider chip on one line', () => {
+  expect(css).toContain('.topbar-title { display:inline-flex; align-items:center;');
+});

@@ -251,6 +251,15 @@ export function runStepLine({ progress, stage, message, pausing }: { progress?: 
   return doingBeforeStreaming({ stage, message, pausing }).line();
 }
 
+/**
+ * What the run is doing, as one line under the orglet's name in the chat while no answer text has arrived: the same
+ * words as the island, with a light sweeping across them so the chat itself shows the work is alive (owner,
+ * 2026-09-26). The island already announces the state, so this line is not announced again.
+ */
+export function RunStatusLine({ line }: { line: string }) {
+  return <p className="run-status-line" aria-hidden="true">{line}</p>;
+}
+
 /** The live timer; `plain` is the line standing on its own above the text, in the folded control's place and colour. */
 function ElapsedLine({ since, plain }: { since: number; plain?: boolean }) {
   const seconds = useElapsedSeconds(since);

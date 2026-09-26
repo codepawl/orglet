@@ -23,7 +23,7 @@ import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { LiveRun, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, useRunProgress, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
+import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
 import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
 import { DesktopApprovalCard } from './DesktopApps';
@@ -36,7 +36,6 @@ import { MentionText } from './mentions';
 import type { MentionPerson } from '../../shared/mentions';
 import { teamProgress } from '../../shared/team-progress';
 import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
-import { workOutcomes } from '../../shared/work-outcomes';
 import { groupRecoveryAttempts } from '../../shared/recovery-attempts';
 import { AppProposalCards, type ProposalActions } from './AppProposals';
 import { ChangedFilesLine, DiffDialog } from './DiffViewer';
@@ -211,6 +210,10 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing,
         site: browsingSiteOf(detail.events.filter(event => event.runId === dockedRun.id).map(event => event.message)) })
     : heldRun ? islandBeforeStreaming({ workers: [heldRun.snapshot.worker], pausing: true }) : undefined;
+  // The same state as one line in the chat, until the answer's text starts arriving.
+  const runStatus = dockedRun && !latestLive?.update.progress?.answer
+    ? runStepLine({ progress: latestLive?.update.progress, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
+    : undefined;
   // While a run uses Orglet's browser the island carries Watch, and Hand back once taken over, and waits with the card
   // (COD-261). Watch opens the live view, where the person takes the browser over.
   const browserWorkers = dockedRun ? islandWorkers : heldRun ? [heldRun.snapshot.worker] : [];
@@ -376,16 +379,6 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       </p>}
       {turns.map((turn, index) => {
         const latest = turn.revision === current;
-        const workFrame = turn.runs.find(run => run.stage === 'plan' && run.snapshot.workFrame)?.snapshot.workFrame
-          ?? turn.runs.find(run => run.snapshot.workFrame)?.snapshot.workFrame;
-        const outcomes = workOutcomes(recovery, new Set(turn.runs.map(run => run.id)));
-        const outcomeText = outcomes ? [
-          outcomes.passedCommands + outcomes.failedCommands + outcomes.unfinishedCommands > 0
-            ? t('Lệnh: {0} thoát 0, {1} lỗi, {2} chưa hoàn tất.', [outcomes.passedCommands, outcomes.failedCommands, outcomes.unfinishedCommands]) : '',
-          outcomes.fileConflicts ? t('{0} bản file xung đột hoặc chưa rõ.', [outcomes.fileConflicts]) : '',
-          outcomes.uncertainCalls ? t('{0} thao tác chưa rõ kết quả.', [outcomes.uncertainCalls]) : '',
-          outcomes.truncated ? t('Chỉ tính bản ghi gần đây.') : '',
-        ].filter(Boolean).join(' ') : '';
         const activeRun = turn.runs.find(item => item.status === 'running') ?? turn.runs.find(item => item.status === 'queued');
         const live = latest ? latestLive : undefined;
         const liveUpdate = live?.update;
@@ -438,8 +431,6 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
           {/* Under the bubble, as a worker's answer carries them, so both sides of the chat act the same way. */}
           <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.forwarded ? turn.forwarded.note ?? turn.forwarded.text : turn.brief} reactions={detail.task.messageReactions ?? []} action={action}
             onForward={forward ? () => forward({ taskId: detail.task.id, messageId: turnMessageId(detail.task.id, turn.revision), author: turn.forwarded ? forwardedAuthor(turn.forwarded) : t('Bạn'), text: turn.forwarded ? turn.forwarded.text : turn.brief, files: addedFiles }) : undefined} />
-          {latest && workFrame && <p className="muted" role="status">{t('Mục tiêu Tí hiểu: {0}', [workFrame.goal])}</p>}
-          {latest && outcomeText && <p className="muted" role="status">{outcomeText}</p>}
           {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
             {byline(reply.run)}
             {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest)}
@@ -501,6 +492,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
                 </details> : <p className="muted" key={run.id}>{status} · {description}</p>;
               })}
             </div>}
+            {latest && busy && runStatus && <RunStatusLine line={runStatus} />}
             {latest && busy && liveUpdate && <LiveRun update={liveUpdate} memories={live?.run.snapshot.context?.memories} />}
             {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
