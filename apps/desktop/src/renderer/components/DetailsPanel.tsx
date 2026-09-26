@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Clock, Copy, Cpu, FileText, ListOrdered, MessageSquare, ShieldCheck, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
-import { t, currentLocale, tMessage } from '../i18n';
+import { t, currentLocale, tMessage, withNodes, NODE_MARKERS } from '../i18n';
 import { Avatar, RosterAvatars } from './Avatar';
 import { ProviderMark } from './ProviderMark';
 import { ShowMore } from './SidebarTree';
@@ -224,18 +224,30 @@ async function copyRunId(id: string) {
  * any file conflict or step of unknown outcome. It lives in Details, beside the goal the turn worked from, rather than
  * under the person's message (owner, 2026-09-26).
  */
-function latestTurnOutcome(detail: TaskDetail, recovery: WorkspaceRecoveryView | undefined): string {
+function latestTurnOutcome(detail: TaskDetail, recovery: WorkspaceRecoveryView | undefined): ReactNode {
   const latestRevision = detail.task.inputRevision ?? 0;
   const runIds = new Set(detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === latestRevision).map(run => run.id));
   const outcomes = workOutcomes(recovery, runIds);
-  if (!outcomes) return '';
+  if (!outcomes) return null;
   const commandCount = outcomes.passedCommands + outcomes.failedCommands + outcomes.unfinishedCommands;
-  return [
-    commandCount > 0 ? t('Lệnh: {0} thoát 0, {1} lỗi, {2} chưa hoàn tất.', [outcomes.passedCommands, outcomes.failedCommands, outcomes.unfinishedCommands]) : '',
+  const notes = [
     outcomes.fileConflicts ? t('{0} bản file xung đột hoặc chưa rõ.', [outcomes.fileConflicts]) : '',
     outcomes.uncertainCalls ? t('{0} thao tác chưa rõ kết quả.', [outcomes.uncertainCalls]) : '',
     outcomes.truncated ? t('Chỉ tính bản ghi gần đây.') : '',
   ].filter(Boolean).join(' ');
+  if (!commandCount && !notes) return null;
+  // Each count wears its meaning when it is not zero: finished in the success colour, failed in the error colour,
+  // unfinished in the warning colour, in whichever theme is on.
+  const tally = commandCount > 0 && withNodes(t('Lệnh: {0} thoát 0, {1} lỗi, {2} chưa hoàn tất.', NODE_MARKERS), [
+    <OutcomeCount key="passed" value={outcomes.passedCommands} tone="success" />,
+    <OutcomeCount key="failed" value={outcomes.failedCommands} tone="error" />,
+    <OutcomeCount key="unfinished" value={outcomes.unfinishedCommands} tone="warning" />,
+  ]);
+  return <>{tally}{tally && notes ? ' ' : ''}{notes}</>;
+}
+
+function OutcomeCount({ value, tone }: { value: number; tone: 'success' | 'error' | 'warning' }) {
+  return <span className={value > 0 ? `outcome-count outcome-count-${tone}` : 'outcome-count'}>{value.toLocaleString(currentLocale())}</span>;
 }
 
 export function DetailsPanel({ workspace, team, worker, group, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, onRestoreFile, readProcessOutput, readPrivateFile }: {
@@ -284,7 +296,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
   const model = lastRun?.snapshot.model;
   const finishedAt = lastRun && detail ? runEndedAt(lastRun.id, detail.events) : undefined;
   const took = firstRun && finishedAt ? elapsedLabel(firstRun.startedAt, finishedAt) : undefined;
-  const latestOutcome = detail && recovery?.taskId === detail.task.id ? latestTurnOutcome(detail, recovery) : '';
+  const latestOutcome = detail && recovery?.taskId === detail.task.id ? latestTurnOutcome(detail, recovery) : null;
 
   return <aside className="details-pane" aria-label={t('Chi tiết')}>
     <div className="details-head">

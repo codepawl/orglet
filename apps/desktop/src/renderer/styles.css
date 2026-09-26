@@ -2044,6 +2044,15 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    a rule; a hunk reuses the source-preview surface with the snapshot's and the copy's numbers side by side, a sign
    column, and CodePreview's removed/added tints. */
 .changed-files svg { flex-shrink:0; }
+/* Lines added and removed wear the diff's own colours and a heavier weight, so they read apart from the file count. */
+.diff-counts { font-variant-numeric:tabular-nums; font-weight:600; }
+.diff-count-added { color:var(--success); }
+.diff-count-removed { color:var(--error); }
+/* A command tally in Details: a non-zero count wears what it means. */
+.outcome-count { font-variant-numeric:tabular-nums; }
+.outcome-count-success { color:var(--success); font-weight:600; }
+.outcome-count-error { color:var(--error); font-weight:600; }
+.outcome-count-warning { color:var(--warning); font-weight:600; }
 /* A hand-in a failed command refused (COD-270): one line per command under the held answer, shaped like the
    changed-files line under it and opening the command's output. The sentence may wrap in a narrow chat, so the icon
    sits on the first line's centre; the command is set in the code face without a chip, since the row already tints on

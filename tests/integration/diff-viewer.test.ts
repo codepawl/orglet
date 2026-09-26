@@ -57,7 +57,10 @@ it('words the turn line from the counts the core kept, naming the worker only wh
   const html = renderToStaticMarkup(createElement(ChangedFilesLine, { summary, onOpen: () => {} }));
   expect(html).toContain('class="activity-summary changed-files"');
   expect(html).toContain('aria-haspopup="dialog"');
-  expect(html).toContain('Files changed: 3 · +42 −7');
+  expect(html.replace(/<[^>]+>/g, '')).toContain('Files changed: 3 · +42 −7');
+  // The line counts wear the diff's colours, apart from the file count.
+  expect(html).toContain('<span class="diff-count-added">+42</span>');
+  expect(html).toContain('<span class="diff-count-removed">−7</span>');
 });
 
 it('shows a line only for runs whose copy changed something', () => {

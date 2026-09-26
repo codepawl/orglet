@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { Fragment, createElement, useSyncExternalStore, type ReactNode } from 'react';
 import { DEFAULT_LANGUAGE, localeOf, translate, translateMessage, type Dictionary, type Language } from '../shared/i18n';
 import { en, enGB } from '../shared/locales/en';
 
@@ -41,3 +41,17 @@ export const translated = <T extends object>(value: T): T => new Proxy(value, {
 });
 /** Re-renders the caller when the language or its dictionary changes. */
 export const useLanguage = () => useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => version);
+
+/** Stand-ins passed to `t` for the parts `withNodes` fills with elements; invisible separators nothing else uses. */
+export const NODE_MARKERS = ['⁣' + '0' + '⁣', '⁣' + '1' + '⁣', '⁣' + '2' + '⁣', '⁣' + '3' + '⁣'];
+
+/**
+ * A translated sentence with some of its values drawn as elements (a coloured count, say), keeping the language's own
+ * word order: translate with `NODE_MARKERS` as the params, then hand the result and the elements here.
+ */
+export function withNodes(translatedText: string, nodes: readonly ReactNode[]): ReactNode[] {
+  return translatedText.split(/⁣(\d)⁣/).map((part, index) => {
+    const content = index % 2 === 1 ? nodes[Number(part)] : part;
+    return createElement(Fragment, { key: index }, content);
+  });
+}
