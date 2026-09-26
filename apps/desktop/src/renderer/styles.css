@@ -68,23 +68,6 @@ h1 { font-size:1.7rem; font-weight:600; letter-spacing:-.6px; }
 h2 { font-size:1.15rem; font-weight:600; line-height:1.4; }
 h3 { font-size:14px; font-weight:600; }
 svg { flex-shrink:0; stroke-width:1.7; }
-.button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:var(--control-height); padding:6px 11px; border-radius:var(--radius); border:1px solid transparent; font-size:13px; font-weight:500; background:transparent; transition:background .12s; white-space:normal; }
-.button:hover:not(:disabled) { background:var(--surface); }
-.button-primary { background:var(--accent); color:var(--accent-ink); }
-.button-primary:hover:not(:disabled) { background:var(--accent); opacity:.85; }
-/* A secondary button is a soft filled pill, not a ring: no border anywhere in the app (user, 2026-09-23). */
-.button-outline { background:var(--surface); }
-.button-outline:hover:not(:disabled) { background:color-mix(in srgb, var(--text) 10%, var(--bg)); }
-.button-icon { width:var(--icon-size); height:var(--icon-size); min-height:var(--icon-size); padding:6px; flex-shrink:0; }
-/* An icon-only button answers the pointer with its icon and nothing else (user, 2026-09-20). A tile lighting up
-   behind a 20px glyph reads as a second surface arriving; the glyph going from muted to full text colour says the
-   same thing and adds nothing to the screen. This needs one resting colour to work: half of these buttons sat at
-   --text, where a hover has nowhere to go. A button carrying a label keeps its background, which is part of what
-   makes a label look pressable, and the filled primary keeps its own treatment. Naming .button twice is deliberate:
-   the sidebar and the routine actions tint their buttons on hover with exactly the weight this rule would otherwise
-   carry, and source order would hand the argument to them. */
-.button.button-icon:not(.button-primary) { color:var(--muted); }
-.button.button-icon:not(.button-primary):hover:not(:disabled) { background:transparent; color:var(--text); }
 /* A quiet wash across the window behind everything, so the ground is not a flat grey once the side panels stop
    covering it. Three wide radial tints at low strength, and a grain laid over them: a gradient this soft bands
    into visible steps on an 8-bit display, and the grain is what breaks the steps up rather than decoration.
@@ -167,7 +150,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .permissions .org-switch-field-title svg,.permission-folder-title svg,.permission-folder-name svg { flex-shrink:0; color:var(--muted); }
 .permissions .org-switch-field-description,.permission-folder-description { display:flex; flex-direction:column; gap:2px; line-height:1.45; }
 .permissions-reason { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; font-size:13px; line-height:1.45; color:var(--muted); }
-.permissions-reason .button { min-height:28px; padding:3px 10px; font-size:12px; border-radius:14px; }
+.permissions-reason .org-button { min-height:28px; padding:3px 10px; font-size:12px; border-radius:14px; }
 .permission-folder { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .permission-folder-disabled .permission-folder-text { opacity:.55; }
 .permission-folder-text { display:flex; flex-direction:column; gap:3px; min-width:0; }
@@ -222,7 +205,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The id is something you carry to a log, so it reads as a value with a copy button, not as a filled box. */
 .technical-run-id { display:flex; align-items:center; gap:4px; }
 .technical-run-id code { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:11px; }
-.technical-run-id .button-icon { width:26px; height:26px; min-height:26px; padding:0; }
+.technical-run-id .org-button-icon { width:26px; height:26px; min-height:26px; padding:0; }
 .technical-run-plan { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; font-size:12px; }
 .technical-run-plan strong { margin-right:6px; font-weight:600; }
 /* The context manifest keeps the browser's disclosure behaviour and drops its default triangle for the app's own. */
@@ -246,11 +229,11 @@ svg { flex-shrink:0; stroke-width:1.7; }
    showed nothing). The sidebar gets its own pair, tinted from the text colour rather than named as a flat value,
    so it reads over the wash whichever blob is behind it, and in dark mode too. */
 .sidebar { --row-hover:color-mix(in srgb, var(--text) 7%, transparent); --row-active:color-mix(in srgb, var(--text) 12%, transparent); }
-.sidebar .button:hover:not(:disabled) { background:var(--row-hover); }
+.sidebar .org-button:hover:not(:disabled) { background:var(--row-hover); }
 .brand { display:flex; align-items:center; gap:8px; padding:0 6px 14px; }
 .brand strong { font-size:18px; font-weight:600; letter-spacing:-.5px; }
 .brand strong { margin-right:auto; }
-.brand .button { margin-left:-4px; }
+.brand .org-button { margin-left:-4px; }
 /* The brand mark is an orglet (COD-154): the same drawing as apps/desktop/assets/icon.svg, in the text colour so
    it follows the theme. The element is the bubble (31% corners, a 15% corner at the bottom left) with one soft
    matte shade, and the two pseudo-elements are the eyes: upright capsules in the page colour, 2/14 of the side
@@ -277,9 +260,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .orglet-mark.large { width:42px; height:42px; margin-bottom:24px; }
 .orglet-mark.small { width:25px; height:25px; }
 .section-heading { font-size:13px; font-weight:500; color:var(--muted); min-height:34px; display:flex; align-items:center; justify-content:space-between; padding:0 0 0 12px; }
-.section-heading .button:hover:not(:disabled),.section-heading .button:focus-visible { background:transparent; color:var(--text); }
+.section-heading .org-button:hover:not(:disabled),.section-heading .org-button:focus-visible { background:transparent; color:var(--text); }
 /* Section add buttons and row settings buttons share one class, so their icons always sit in one column. */
-.button.row-action { width:30px; height:30px; min-height:30px; padding:5px; margin-right:4px; }
+.org-button.row-action { width:30px; height:30px; min-height:30px; padding:5px; margin-right:4px; }
 .sidebar-section { display:flex; flex-direction:column; gap:4px; }
 .sidebar-section+.sidebar-section { margin-top:12px; }
 /* The whole heading row toggles; the add button stays a separate target on the right. */
@@ -337,7 +320,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .sidebar-scroll { flex:1; min-height:0; overflow:auto; padding-top:12px; }
 .sidebar-scroll .history { min-height:100px; overflow:visible; }
 .sidebar-scroll .history:has(>.section-items[hidden]) { min-height:0; }
-.sidebar-footer>.button { justify-content:flex-start; }
+.sidebar-footer>.org-button { justify-content:flex-start; }
 .sidebar-footer .org-status-mark { margin-left:auto; }
 /* Selecting several rows (COD-214). A section's edit button holds its Done state while the section is in select
    mode. A picked row, or every row while picking, carries a checkbox in the status mark's slot, the same 29px it
@@ -436,7 +419,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer.expanded>textarea,.composer.expanded>.composer-highlight { padding:4px 8px; }
 .composer>textarea::placeholder { color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* Buttons sit inside the bar with a little padding so the pill stays concentric. */
-.composer .button-icon { width:36px; height:36px; min-height:36px; }
+.composer .org-button-icon { width:36px; height:36px; min-height:36px; }
 .composer-add { border-radius:50%; color:var(--text); }
 .composer-add:hover:not(:disabled) { background:var(--surface); }
 .send { grid-area:send; border-radius:50%; }
@@ -666,7 +649,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
    below read as two different groupings, when the three are one message. */
 .message-byline { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:13px; }
 .source-links { display:flex; flex-wrap:wrap; margin-top:4px; }
-.source-links .button { font-size:12px; padding:4px 8px; min-height:30px; max-width:100%; overflow-wrap:anywhere; }
+.source-links .org-button { font-size:12px; padding:4px 8px; min-height:30px; max-width:100%; overflow-wrap:anywhere; }
 .actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:16px; }
 .actions .form-error { flex:1 1 100%; margin:0; order:-1; }
 /* A long skill or note never pushes its Save or Approve out of reach: the bar floats in the panel's bottom-right
@@ -678,8 +661,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .form.floating-form { position:relative; flex:1; min-width:0; min-height:0; gap:0; }
 .floating-form-fields { flex:1; min-height:0; display:flex; flex-direction:column; gap:22px; padding:18px 24px 84px; overflow:auto; overscroll-behavior:contain; }
 .floating-actions { position:absolute; right:24px; bottom:14px; z-index:2; width:fit-content; max-width:calc(100% - 48px); margin:0; padding:6px; border-radius:14px; background:color-mix(in srgb, var(--bg) 58%, transparent); backdrop-filter:blur(18px) saturate(1.5); box-shadow:0 12px 32px #0000001f; }
-.floating-actions .button-outline { background:transparent; color:var(--muted); }
-.floating-actions .button-outline:hover:not(:disabled) { background:transparent; color:var(--text); }
+.floating-actions .org-button-outline { background:transparent; color:var(--muted); }
+.floating-actions .org-button-outline:hover:not(:disabled) { background:transparent; color:var(--text); }
 @media (min-width: 420px) {
   .actions .form-error { flex:1 1 auto; order:0; margin-right:auto; }
 }
@@ -707,7 +690,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .startup-copy { display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:22px; text-align:center; animation:turn-in var(--motion-base) var(--ease-out); }
 .startup-copy .welcome { margin-bottom:0; }
 .startup-copy p { margin:0; max-width:40ch; color:var(--muted); text-wrap:balance; }
-.startup-copy .button { margin-top:6px; }
+.startup-copy .org-button { margin-top:6px; }
 .row-shape { display:flex; align-items:center; gap:8px; padding:7px 10px 7px 12px; font-size:13px; }
 .row-shape-face { width:22px; height:22px; border-radius:6px; flex-shrink:0; }
 /* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */
@@ -733,7 +716,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* A team's review setup from an older build or a template: one line saying what it does, and the way to drop it. */
 .review-setup-list { display:flex; flex-direction:column; gap:4px; }
 .review-setup { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.review-setup .button { flex-shrink:0; white-space:nowrap; }
+.review-setup .org-button { flex-shrink:0; white-space:nowrap; }
 .form label { display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:500; }
 /* Fields the kit draws (`.org-input`) bring their own box; these rules are for the ones still left in the app,
    and they go when the last of those moves. */
@@ -748,7 +731,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 
 .form section { display:flex; flex-direction:column; gap:10px; }
 .form section+.form section { padding-top:8px; }
-.form>.button { align-self:flex-start; }
+.form>.org-button { align-self:flex-start; }
 .usage { margin:0; }
 .usage>div { display:flex; align-items:center; justify-content:space-between; font-size:13px; padding:4px 0; }
 .usage dd { margin:0; font-variant-numeric:tabular-nums; }
@@ -863,8 +846,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Subheading with a small inline action: the margin sits on the row so the action shares the title line. */
 .settings-subheading-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:24px 0 2px; }
 .settings-subheading-row .settings-subheading { margin:0; }
-.settings-subheading-row .button { font-size:12px; font-weight:500; min-height:26px; padding:2px 8px; gap:5px; border-radius:8px; color:var(--muted); }
-.settings-subheading-row .button:hover:not(:disabled) { color:var(--text); }
+.settings-subheading-row .org-button { font-size:12px; font-weight:500; min-height:26px; padding:2px 8px; gap:5px; border-radius:8px; color:var(--muted); }
+.settings-subheading-row .org-button:hover:not(:disabled) { color:var(--text); }
 .setting-row { display:flex; align-items:center; gap:12px; padding:13px 0; }
 .setting-connection { align-items:center; }
 .setting-connection .setting-text { gap:8px; }
@@ -886,7 +869,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
   border:1px solid var(--border); border-radius:18px; background:var(--surface); color:var(--text);
 }
 .setting-key-form input[type='password']:focus { border-color:var(--muted); outline:none; }
-.setting-key-form > .button:not(.setting-key-file) { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; flex-shrink:0; }
+.setting-key-form > .org-button:not(.setting-key-file) { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; flex-shrink:0; }
 .setting-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
 .setting-title { font-size:14px; }
 .setting-description { font-size:13px; color:var(--muted); line-height:1.45; }
@@ -901,7 +884,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .release-shape { margin-top:4px; }
 .skill-review-shape { height:8em; margin-top:10px; }
 .setting-control { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-.setting-control .button { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; }
+.setting-control .org-button { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; }
 /* Every select and number field in a settings row shares one width, so the right edge reads as one column. */
 .setting-control .setting-select,.setting-control .money-input { width:210px; }
 .setting-control .money-input input { flex:1; width:auto; min-width:0; }
@@ -932,7 +915,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .budget-review-heading strong,.budget-review-history strong { font-size:13px; font-weight:600; }
 .budget-review-heading p { margin:4px 0 0; font-size:12px; }
 /* The long charge title takes the room; the Reconcile button keeps its label on one line (it wrapped in Vietnamese). */
-.budget-review-heading > .button { flex-shrink:0; white-space:nowrap; }
+.budget-review-heading > .org-button { flex-shrink:0; white-space:nowrap; }
 .budget-review-form { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin-top:12px; }
 .budget-review-form label:not(.org-checkbox) { display:flex; flex-direction:column; gap:5px; }
 .budget-review-form .org-checkbox { width:100%; }
@@ -1036,12 +1019,12 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    becomes three columns, three chips over two, instead of one chip left alone on a second line. */
 .about-links-row .setting-text { container-type:inline-size; }
 .about-links { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
-.about-links .button { min-height:30px; gap:6px; padding:4px 10px; font-size:13px; border-radius:16px; }
+.about-links .org-button { min-height:30px; gap:6px; padding:4px 10px; font-size:13px; border-radius:16px; }
 @container (width < 448px) {
   .about-links { display:grid; grid-template-columns:repeat(3, max-content); }
 }
-.about-links .button svg { color:var(--muted); }
-.about-links .button:hover:not(:disabled) svg { color:var(--text); }
+.about-links .org-button svg { color:var(--muted); }
+.about-links .org-button:hover:not(:disabled) svg { color:var(--text); }
 /* What is new (COD-237): each release reads as one quiet entry. The head is the version in medium weight with the
    date small and muted beside it; the notes are only what changed (`releaseHighlights`), at the Settings body size,
    with section headings a step up in weight rather than in size, and releases kept apart by space alone. Links
@@ -1069,8 +1052,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .setting-path { font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* Deleting what the app has kept: an outline button that says what it is by its colour alone, and, for the one
    erase that cannot be undone, the typed confirmation beside its own row rather than in a centred dialog. */
-.button.danger,.button.danger svg { color:var(--error); }
-.button.danger:hover:not(:disabled) { border-color:color-mix(in srgb, var(--error) 45%, var(--border)); background:color-mix(in srgb, var(--error) 7%, var(--bg)); }
+.org-button.danger,.org-button.danger svg { color:var(--error); }
+.org-button.danger:hover:not(:disabled) { border-color:color-mix(in srgb, var(--error) 45%, var(--border)); background:color-mix(in srgb, var(--error) 7%, var(--bg)); }
 .erase-form { display:flex; flex-direction:column; gap:8px; padding:12px; max-width:320px; }
 .erase-form label { font-size:12.5px; color:var(--muted); }
 /* What the full erase keeps, read where the decision is made rather than in the row (COD-221). */
@@ -1136,7 +1119,7 @@ button.notice-body { cursor:pointer; }
 .running-elapsed { min-height:19px; }
 /* Room for all three controls on every row, so the facts column ends at the same x whatever a row offers. */
 .running-actions { display:flex; align-items:center; justify-content:flex-end; gap:2px; width:88px; }
-.button.running-action { width:28px; height:28px; min-height:28px; padding:5px; }
+.org-button.running-action { width:28px; height:28px; min-height:28px; padding:5px; }
 .running-empty { margin:24px 0 0; padding:0 10px; font-size:13px; }
 .badge.running-count { margin-left:auto; min-width:20px; justify-content:center; font-variant-numeric:tabular-nums; }
 /* A count in a footer button fits the button's 20px line, so a button with a count is as tall as one without. */
@@ -1181,9 +1164,9 @@ button.notice-body { cursor:pointer; }
 .thread-content>[role=status] { color:var(--muted); font-size:13px; text-align:right; margin-bottom:12px; }
 /* Segmented control: a soft track with the selected tab raised on it. */
 .tabs { display:inline-flex; align-self:flex-start; gap:2px; padding:3px; border-radius:12px; background:var(--surface); }
-.tabs .button { min-height:32px; padding:5px 14px; border-radius:9px; font-size:13px; color:var(--muted); }
-.tabs .button:hover:not(:disabled) { background:transparent; color:var(--text); }
-.tabs .button[aria-selected=true] { background:var(--bg); color:var(--text); box-shadow:0 1px 3px #0000001f; }
+.tabs .org-button { min-height:32px; padding:5px 14px; border-radius:9px; font-size:13px; color:var(--muted); }
+.tabs .org-button:hover:not(:disabled) { background:transparent; color:var(--text); }
+.tabs .org-button[aria-selected=true] { background:var(--bg); color:var(--text); box-shadow:0 1px 3px #0000001f; }
 /* Chat sources (user, 2026-09-21): the panel lists the chat's files as rows, and a row opens that one file in its
    own viewer; a file's content is never poured into the list. */
 .source-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
@@ -1219,7 +1202,7 @@ button.notice-body { cursor:pointer; }
 .preview-state,.preview-note { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; font-size:12.5px; color:var(--muted); }
 .preview-state { font-size:13px; }
 .preview-toolbar { display:flex; align-items:center; gap:8px; }
-.preview-toolbar .button { font-size:12.5px; min-height:30px; padding:4px 10px; }
+.preview-toolbar .org-button { font-size:12.5px; min-height:30px; padding:4px 10px; }
 .code-preview,.table-preview,.json-preview,.markdown-preview,.pdf-preview { display:flex; flex-direction:column; gap:8px; min-width:0; }
 /* Text and code: a number on every line, a hanging indent so a wrapped line starts under its text, and the
    tokenizer's colours. A cited line keeps its old outline so citation navigation still lands on it. */
@@ -1287,7 +1270,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 /* Under 780px the sidebar floats over the chat, so it needs the window's own colour: docked it is transparent over
    the window, and floating that way the chat showed through it. */
 @media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:0; width:232px; background:var(--window); box-shadow:8px 0 30px #0002; } .app,.app.sidebar-hidden,.app.sidebar-hidden.with-details,.app.with-details { grid-template-columns:minmax(0,1fr); } .new-task-content { padding:18px; } }
-@media(max-width:460px) { .topbar { padding:10px; } .topbar .button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .user-message { max-width:100%; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 0; } .finding-heading { flex-wrap:wrap; } .main-footer { padding:8px 12px; } }
+@media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .user-message { max-width:100%; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 0; } .finding-heading { flex-wrap:wrap; } .main-footer { padding:8px 12px; } }
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
@@ -1312,7 +1295,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    centre lines (user, 2026-09-20). */
 .routine-actions { display:flex; align-items:center; gap:6px; }
 /* The same button turns a schedule on and off; muted while it is off, so the card still says which state it is in. */
-.routine-actions .button:hover:not(:disabled) { background:var(--bg); }
+.routine-actions .org-button:hover:not(:disabled) { background:var(--bg); }
 .routine-meta { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:6px 16px; font-size:13px; }
 .routine-meta li { display:flex; align-items:center; gap:8px; min-width:0; overflow-wrap:anywhere; }
 .routine-meta li > svg,.routine-brief svg { color:var(--muted); flex-shrink:0; }
@@ -1864,7 +1847,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .recovery-change-note { margin:2px 0 0; }
 .recovery-change .workspace-process-output { margin-top:6px; }
 .workspace-recovery-action { display:flex; align-items:center; }
-.workspace-recovery-action .button { white-space:normal; }
+.workspace-recovery-action .org-button { white-space:normal; }
 .workspace-process-output { margin-top:12px; display:flex; flex-direction:column; align-items:stretch; gap:8px; }
 .workspace-process-output pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:320px; overflow:auto; }
 /* Markdown in worker replies. Spacing and soft backgrounds separate blocks; no rules or side borders. */
@@ -1899,8 +1882,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 /* The gap above the row is the half of a reaction pill that hangs below the bubble (`.reaction-badges`), so a
    reaction never covers a button and the row does not move when one appears. */
 .message-actions { display:flex; align-items:center; gap:2px; width:100%; margin:10px 0 0; color:var(--muted); }
-.message-actions .button { width:28px; height:28px; min-height:28px; color:var(--muted); }
-.message-actions .button:hover:not(:disabled) { color:var(--text); }
+.message-actions .org-button { width:28px; height:28px; min-height:28px; color:var(--muted); }
+.message-actions .org-button:hover:not(:disabled) { color:var(--text); }
 .message-usage { margin-left:auto; font-size:12px; font-variant-numeric:tabular-nums; color:var(--muted); white-space:nowrap; }
 .thread-usage { display:block; margin:6px 0 0 35px; }
 /* A note's author: the orglet's face, its name, how the note got here and whether it waits for review (user, 2026-09-23). */
@@ -1928,10 +1911,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .app-proposal-error { margin-top:10px; font-size:13px; color:var(--error); }
 .app-proposal-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; }
 .app-proposal-actions:empty { display:none; }
-.app-proposal-actions .button { min-height:32px; padding:5px 12px; font-size:13px; }
+.app-proposal-actions .org-button { min-height:32px; padding:5px 12px; font-size:13px; }
 .app-proposals-all { margin-top:0; }
 /* A secondary button on the card's own surface needs a shade of its own, or it vanishes into the card. */
-.app-proposal .button-outline { background:color-mix(in srgb, var(--text) 8%, transparent); }
+.app-proposal .org-button-outline { background:color-mix(in srgb, var(--text) 8%, transparent); }
 /* Why a self-improvement was proposed (COD-162): the signal as a chip, then the chats it came from, each a link. */
 .app-proposal-because { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:10px 0 0; font-size:13px; color:var(--muted); }
 .app-proposal-chat { padding:0; border:0; background:none; color:var(--text); font:inherit; text-decoration:underline; text-decoration-color:color-mix(in srgb, var(--text) 35%, transparent); text-underline-offset:2px; cursor:pointer; }
@@ -1950,7 +1933,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .proposal-orglet-state { flex-shrink:0; padding:0 6px; font-size:12px; white-space:nowrap; }
 .proposal-orglet-state.success { color:var(--success); }
 .proposal-orglet-state.muted { color:var(--muted); }
-.button.proposal-row-action { width:28px; height:28px; min-height:28px; padding:5px; }
+.org-button.proposal-row-action { width:28px; height:28px; min-height:28px; padding:5px; }
 .proposal-orglet-error { flex-basis:100%; margin:0 0 4px 8px; }
 /* The dialog behind a row: the face large over its model line, then the full fields. */
 .proposal-dialog-face { display:flex; align-items:center; gap:14px; margin-bottom:6px; }
@@ -2174,8 +2157,8 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    old line's muted "Review in Library" did, darkening under the pointer). Dismiss only hides the offer. */
 .live-island-knowledge .live-island-content > svg { flex-shrink:0; color:var(--working); }
 .live-island-knowledge .live-island-label { margin-right:4px; }
-.live-island-knowledge .button { height:24px; min-height:24px; flex-shrink:0; border-radius:12px; color:var(--muted); }
-.live-island-knowledge .button:hover:not(:disabled) { background:transparent; color:var(--text); }
+.live-island-knowledge .org-button { height:24px; min-height:24px; flex-shrink:0; border-radius:12px; color:var(--muted); }
+.live-island-knowledge .org-button:hover:not(:disabled) { background:transparent; color:var(--text); }
 .live-island-knowledge .live-island-action { padding:0 6px; font-size:13px; }
 .live-island-knowledge .live-island-dismiss { width:24px; padding:0; }
 /* A harness account that ran out (COD-225) wears the suggestions' tab: the gauge where the bulb sits, the switch as its
@@ -2428,7 +2411,7 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .browser-step-muted .browser-step-text { color:var(--muted); }
 .browser-step-text { flex:1; min-width:0; overflow-wrap:anywhere; }
 .browser-step time { flex-shrink:0; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
-.browser-steps>.button,.browser-steps>button { align-self:flex-start; }
+.browser-steps>.org-button,.browser-steps>button { align-self:flex-start; }
 .browser-screenshot { display:block; max-width:100%; height:auto; border-radius:10px; background:var(--surface); }
 .routine-browser { display:flex; flex-direction:column; gap:16px; min-width:0; }
 .routine-browser-sites { display:flex; flex-direction:column; gap:8px; min-width:0; }

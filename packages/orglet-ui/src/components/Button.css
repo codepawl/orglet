@@ -1,0 +1,44 @@
+.org-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: var(--org-control-height, 34px);
+  padding: 6px 11px;
+  border-radius: var(--org-radius, 9px);
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  transition: background var(--org-motion-quick, 110ms) var(--org-ease-out, ease);
+  white-space: normal;
+}
+.org-button:hover:not(:disabled) { background: var(--org-surface, #f4f4f5); }
+.org-button-primary {
+  background: var(--org-accent, #4473d3);
+  color: var(--org-accent-ink, #fff);
+}
+.org-button-primary:hover:not(:disabled) {
+  background: var(--org-accent, #4473d3);
+  opacity: .85;
+}
+/* A secondary button is a soft filled pill, not a ring: the kit draws no borders. */
+.org-button-outline { background: var(--org-surface, #f4f4f5); }
+.org-button-outline:hover:not(:disabled) { background: color-mix(in srgb, var(--org-text, #111) 10%, var(--org-bg, #fff)); }
+.org-button-icon {
+  width: var(--org-icon-size, 32px);
+  height: var(--org-icon-size, 32px);
+  min-height: var(--org-icon-size, 32px);
+  padding: 6px;
+  flex-shrink: 0;
+}
+/* An icon-only button answers the pointer with its icon and nothing else: a tile lighting up behind a small glyph
+   reads as a second surface arriving. It needs one resting colour to work, so it rests muted and goes to full text
+   colour. A labelled button keeps its background, which is part of what makes a label look pressable, and the filled
+   primary keeps its own treatment. The class is named twice on purpose, so an application's own hover tints of the
+   same weight do not win on source order. */
+.org-button.org-button-icon:not(.org-button-primary) { color: var(--org-muted, #666); }
+.org-button.org-button-icon:not(.org-button-primary):hover:not(:disabled) {
+  background: transparent;
+  color: var(--org-text, #111);
+}

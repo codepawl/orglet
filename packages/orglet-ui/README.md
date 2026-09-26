@@ -43,6 +43,10 @@ loads the switch's styles.
 
 ## Components
 
+- `Button`: `variant` `ghost` (the default: quiet text, a soft background on hover), `outline` (a soft filled pill for a
+  secondary action) or `primary` (the one filled action of a place); `size="icon"` for a square holding one icon,
+  named with `aria-label`, which answers hover with the icon's colour instead of a tile. `type` is left to the caller,
+  so inside a form it submits unless it says `type="button"`.
 - `Input` and `Textarea`: a text field. Name it with a `<label>` around it or `aria-label`. `invalid` marks it as
   failing validation, and `flash` replays the shake: pass a counter the form increments on every failed submit.
 - `Switch` and `SwitchField`: an on/off setting. `Switch` is the bare control, named by `label` or `labelledBy`;
