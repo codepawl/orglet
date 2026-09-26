@@ -24,7 +24,7 @@ try {
   await page.getByRole('button', { name: 'Tạo knowledge', exact: true }).click();
   await page.getByRole('textbox', { name: 'Tiêu đề', exact: true }).fill('Evidence limits');
   await page.getByRole('textbox', { name: 'Nội dung', exact: true }).fill('State which claims lack a cited source before summarizing.');
-  await page.getByRole('textbox', { name: 'Tags', exact: true }).fill('evidence, review');
+  await page.getByRole('textbox', { name: 'Thẻ', exact: true }).fill('evidence, review');
   await page.getByRole('combobox', { name: 'Phạm vi', exact: true }).click(); await page.getByRole('option', { name: team.name, exact: true }).click();
   await page.getByRole('switch', { name: /Luôn nạp/ }).click();
   await page.getByRole('button', { name: 'Lưu knowledge', exact: true }).click();

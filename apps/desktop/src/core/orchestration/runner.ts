@@ -1191,7 +1191,10 @@ export class Runner {
                 else ledger.unknown(reservation, 'missing_usage');
                 this.checkpoints.received(checkpoint, reply);
               } catch (error) {
-                ledger.unknown(reservation, 'request_failed');
+                // A known price of zero costs nothing whatever became of the request (stopped, refused, cut off), so a
+                // free local connection leaves no charge to reconcile (dogfood round 7, COD-295).
+                if (resolved.rates && hold === 0) ledger.settle(reservation, 0, 0, resolved.rates);
+                else ledger.unknown(reservation, 'request_failed');
                 // A custom connection words its own refusal (a wrong key, a stopped local server); keep that and, when
                 // money is held, still say the unknown cost stays held. A free connection holds nothing to say it about.
                 if (error instanceof ProviderRequestError && hold === 0) throw error;

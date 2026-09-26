@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import type { Artifact, Run } from '../../apps/desktop/src/shared/contracts';
 import { readersByTurn } from '../../apps/desktop/src/renderer/components/TaskThread';
 import { cancelledMessage } from '../../apps/desktop/src/core/orchestration/runner';
+import { nextLead } from '../../apps/desktop/src/renderer/components/TeamEditor';
 
 /*
  * COD-287: small things dogfood round 5 found in everyday use.
@@ -48,4 +49,11 @@ it('warns about charges on a stopped run only where requests can cost money', ()
   expect(cancelledMessage('openai')).toBe('Đã hủy. Request đã gửi có thể vẫn bị tính phí.');
   // A custom connection has no known price, so it is never treated as free.
   expect(cancelledMessage('custom:a2adfa11-435c-44e2-a106-9d6cc4463f7f')).toBe('Đã hủy. Request đã gửi có thể vẫn bị tính phí.');
+});
+
+it('lets a new crew lead follow the members until the person picks one (COD-295)', () => {
+  // Dogfood round 7: unticking the orglet ticked by default left it leading a crew it was not in.
+  expect(nextLead('researcher', ['dev', 'reviewer'])).toBe('dev');
+  expect(nextLead('dev', ['dev', 'reviewer'])).toBe('dev');
+  expect(nextLead('dev', [])).toBe('');
 });

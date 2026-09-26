@@ -45,6 +45,7 @@ import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import type { AppProposal } from '../../shared/app-proposals';
 import type { ChatQuote } from '../../shared/side-threads';
 import { chatHeadline, type ForwardedMessage } from '../../shared/forward';
+import { overflowAttributes, useStripOverflow } from '../stripOverflow';
 import type { ForwardRequest } from '../forward';
 import { McpApprovalCard } from './McpApproval';
 import { turnNotices } from './turnNotices';
@@ -504,9 +505,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
           {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
               of the text, rather than stacking one per line inside it (user, 2026-09-21). */}
-          {addedFiles.length > 0 && <ul className="message-files" aria-label={t('Tệp đính kèm')}>
-            {addedFiles.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} revoked={item.revoked} onOpen={() => showSources({ type: 'source', id: item.id })} />)}
-          </ul>}
+          {addedFiles.length > 0 && <MessageFiles files={addedFiles} onOpen={sourceId => showSources({ type: 'source', id: sourceId })} />}
           {turn.forwarded
             ? <ForwardedTurn forwarded={turn.forwarded} elementId={`message-${turnMessageId(detail.task.id, turn.revision)}`} mentionPeople={mentionPeople} mentionAllNames={mentionAllNames}
               openOrigin={openChat && workspace.tasks.some(task => task.id === turn.forwarded!.fromTaskId) ? () => openChat(turn.forwarded!.fromTaskId) : undefined}
@@ -764,6 +763,18 @@ export function readersByTurn(detail: Pick<TaskDetail, 'runs' | 'artifacts'>): M
     readersByRevision.set(revision, [...(readersByRevision.get(revision) ?? []), run]);
   }
   return readersByRevision;
+}
+
+/**
+ * A sent message's files, as the same sideways strip the composer uses: an end with cards scrolled past it fades out, so
+ * a card cut at the edge reads as "there is more this way" (dogfood round 7, COD-295).
+ */
+function MessageFiles({ files, onOpen }: { files: TaskDetail['sources']; onOpen: (sourceId: string) => void }) {
+  const strip = useRef<HTMLUListElement>(null);
+  const overflow = useStripOverflow(strip, files.length);
+  return <ul className="message-files" ref={strip} aria-label={t('Tệp đính kèm')} {...overflowAttributes(overflow)}>
+    {files.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} revoked={item.revoked} onOpen={() => onOpen(item.id)} />)}
+  </ul>;
 }
 
 /**

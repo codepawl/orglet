@@ -571,7 +571,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
    size. Past that width the row scrolls sideways. The bottom padding is the scrollbar's own lane, so the bar runs
    under the cards instead of across them; a vertical wheel is left alone so it still scrolls the thread.
    The whole card is the button, so its inside is the row the card would otherwise be. */
-.message-files { display:flex; gap:8px; width:fit-content; max-width:var(--bubble-max); margin:0 0 6px auto; padding:0 0 4px; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; animation:turn-in var(--motion-base) var(--ease-out); }
+.message-files { --strip-fade-start:0px; --strip-fade-end:0px; display:flex; gap:8px; width:fit-content; max-width:var(--bubble-max); margin:0 0 6px auto; padding:0 0 4px; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; animation:turn-in var(--motion-base) var(--ease-out);
+  mask-image:linear-gradient(to right, transparent 0, #000 var(--strip-fade-start), #000 calc(100% - var(--strip-fade-end)), transparent 100%);
+  /* The scrollbar lane stays, but its thumb only shows while the row is pointed at or focused: at rest a thin bar under
+     the cards read as a divider line (dogfood round 7, COD-295). */
+  scrollbar-width:thin; scrollbar-color:transparent transparent; }
+.message-files:hover, .message-files:focus-within { scrollbar-color:color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
+.message-files[data-more-start] { --strip-fade-start:40px; }
+.message-files[data-more-end] { --strip-fade-end:40px; }
 .message-files .org-attachment { padding:0; }
 .consent { display:flex; flex-direction:column; gap:12px; padding:16px 8px 0; font-size:12px; color:var(--muted); }
 .consent>label { display:flex; gap:8px; align-items:flex-start; }
