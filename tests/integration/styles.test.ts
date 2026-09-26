@@ -21,6 +21,10 @@ it('lets a quiet sidebar row give its name the width the hidden menu used to res
   expect(css).toContain('.archived-row > .org-row-menu { position:absolute;');
 });
 
+it('gives an orglet\'s side threads the same air under them as over them (dogfood, 2026-09-26)', () => {
+  expect(css).toContain('.tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 4px 21px; padding-left:25px; }');
+});
+
 it('gives the sidebar a background when it floats over the chat at the minimum window', () => {
   expect(css).toMatch(/@media\(max-width:780px\) \{ \.sidebar \{[^}]*background:var\(--window\);/);
 });
