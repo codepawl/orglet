@@ -43,6 +43,8 @@ export const en: Dictionary = {
   'Quyền': 'Permissions',
   'Không dùng thư mục': 'No folder',
   'Thư mục làm việc': 'Working folder',
+  'Đổi thư mục làm việc {0}': 'Change working folder {0}',
+  'Đổi': 'Change',
   'Làm trên bản sao riêng của thư mục.': 'Work in a private copy of a folder.',
   'Chat chưa có nguồn nào để đọc.': 'This chat has no sources to read yet.',
   'Tí Demo không dùng công cụ, nên chưa bật được quyền.': 'A Demo worker uses no tools, so access cannot be turned on.',

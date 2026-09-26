@@ -118,7 +118,12 @@ export function PermissionControls({ workers, capabilities, grant, pending, task
           options={workspaceLevels.map(level => ({ value: level, label: levelNames[level] }))} />
         {folderLocked !== undefined ? <span className="permission-folder-name permission-folder-pending">{folderLocked}</span>
           : loading ? <span className="permission-folder-name permission-folder-pending"><Skeleton width="12ch" /></span>
-          : state.folder && <span className="permission-folder-name"><FolderOpen size={13} aria-hidden="true" />{state.folder}</span>}
+          : state.folder && <span className="permission-folder-name">
+            <FolderOpen size={13} aria-hidden="true" />{state.folder}
+            {/* Picking again at the same level swaps the folder in one step; cancelling the picker keeps the old one. */}
+            {!folderDisabled && <> · <button type="button" className="text-link" aria-label={t('Đổi thư mục làm việc {0}', [state.folder])}
+              onClick={() => onWorkspace(state.workspace)}>{t('Đổi')}</button></>}
+          </span>}
       </span>
     </div>
     <SwitchField checked={state.web} disabled={disabled} onChange={enabled => onCapability('network.web', enabled)}
