@@ -50,6 +50,17 @@ it('lists every changed file with its counts and draws the hunks with both line 
   expect(html).not.toMatch(/Apply|Revert|Keep current files/);
 });
 
+it('names a single changed file once, in its heading, without a list above it (dogfood, 2026-09-26)', () => {
+  const single: WorkspaceDiff = { ...diff, additions: 2, deletions: 1, files: [diff.files[0]] };
+  const html = renderToStaticMarkup(createElement(DiffBody, { diff: single }));
+  expect(html).not.toContain('class="diff-files"');
+  expect(html.match(/src\/app\.ts/g)).toHaveLength(2); // the heading's text and its section's name for assistive technology
+  expect(html).toContain('class="diff-file-heading"');
+  // A file and a folder, or a plain copy with no lines, still get the list.
+  expect(renderToStaticMarkup(createElement(DiffBody, { diff: { ...single, folders: [{ path: 'assets', status: 'added' }] } }))).toContain('class="diff-files"');
+  expect(renderToStaticMarkup(createElement(DiffBody, { diff: { ...single, lines: false } }))).toContain('class="diff-files"');
+});
+
 it('words the turn line from the counts the core kept, naming the worker only when asked', () => {
   const summary = { files: 3, additions: 42, deletions: 7 };
   expect(changedFilesLabel(summary)).toBe('Files changed: 3 · +42 −7');
@@ -57,7 +68,10 @@ it('words the turn line from the counts the core kept, naming the worker only wh
   const html = renderToStaticMarkup(createElement(ChangedFilesLine, { summary, onOpen: () => {} }));
   expect(html).toContain('class="activity-summary changed-files"');
   expect(html).toContain('aria-haspopup="dialog"');
-  expect(html).toContain('Files changed: 3 · +42 −7');
+  expect(html.replace(/<[^>]+>/g, '')).toContain('Files changed: 3 · +42 −7');
+  // The line counts wear the diff's colours, apart from the file count.
+  expect(html).toContain('<span class="diff-count-added">+42</span>');
+  expect(html).toContain('<span class="diff-count-removed">−7</span>');
 });
 
 it('shows a line only for runs whose copy changed something', () => {

@@ -9,6 +9,7 @@ import { ROUTINE_MISS_MS, SKIPPED_WHILE_INACTIVE, shouldDeferRoutine } from '../
 import type { Routine, Task, Team } from '../../apps/desktop/src/shared/contracts';
 import { modelCatalog } from '../../apps/desktop/src/core/adapters/catalog';
 import { isPlanRequest, planReply } from './team-plan';
+import { scheduleCapabilities } from '../../apps/desktop/src/renderer/components/RoutinesPanel';
 
 let store: Store; let core: CoreService; let current: Date; let directory: string;
 const schedule: Schedule = { timeZone: 'Asia/Ho_Chi_Minh', time: '09:00', frequency: 'daily', weekday: 1 };
@@ -252,4 +253,28 @@ it('enforces live team concurrency and shift boundaries with a deterministic res
   } }), undefined, () => current);
   await core.command('resume', { id: taskId }); await idle();
   expect(store.detail(taskId).task.status).toBe('completed'); expect(calls).toBe(3); expect(store.detail(taskId).task.handoff).toBeUndefined();
+});
+it('gives a schedule\'s run web search when the schedule has it on, and only then (dogfood, 2026-09-26)', async () => {
+  const offered: string[][] = [];
+  core = new CoreService(store, () => {}, async () => ({ async request(_messages, tools) {
+    offered.push(tools.flatMap(tool => tool.type === 'function' ? [tool.function.name] : []));
+    return { calls: [{ id: 'answer', name: 'reply', arguments: JSON.stringify({ message: 'Nothing changed this week.', title: null, knowledgeProposals: [] }) }], usage: { input: 10, output: 5 } };
+  } }), undefined, () => current);
+  const worker = store.workspace().workers[0];
+  await core.command('saveWorker', { ...worker, provider: 'openai' });
+  const task = { workerId: worker.id, sourceIds: [], brief: 'Check the pricing pages for changes', consent: true, providerScopes: ['openai'], budgetMicros: 100_000 };
+  const searching = await save({ name: 'Weekly check', trigger: { kind: 'called' }, task: { ...task, toolCapabilities: ['source.read', 'skill.read', 'network.web'] } });
+  const quiet = await save({ name: 'Weekly note', trigger: { kind: 'called' }, task });
+  await core.routines.runCalled(searching.id, []);
+  await idle();
+  await core.routines.runCalled(quiet.id, []);
+  await idle();
+  expect(offered[0]).toEqual(expect.arrayContaining(['web_search', 'web_read_url']));
+  expect(offered[1]).not.toContain('web_search');
+});
+it('saves web search and the browser on a schedule as the editor sets them, and nothing new on one that had neither', () => {
+  expect(scheduleCapabilities(undefined, 'openai', false, false)).toBeUndefined();
+  expect(scheduleCapabilities(undefined, 'codex', false, true)).toEqual(['source.read', 'skill.read', 'app.propose', 'network.web']);
+  expect(scheduleCapabilities(['source.read', 'network.web', 'browser.read'], 'openai', false, false)).toEqual(['source.read']);
+  expect(scheduleCapabilities(['source.read'], 'openai', true, true)).toEqual(['source.read', 'browser.read', 'network.web']);
 });

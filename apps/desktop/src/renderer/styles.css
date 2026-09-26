@@ -326,9 +326,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .worker-row > .row-check .org-checkbox-input { top:0; }
 .worker-row > .row-check .org-checkbox-box { margin-top:0; }
 .tree-item.selected .worker-row,.tree-item.selected .worker-row:hover { background:color-mix(in srgb, var(--accent) 14%, transparent); }
-.selection-bar { display:flex; align-items:center; gap:2px; margin:8px 12px 0 0; padding:3px 3px 3px 12px; border-radius:14px; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter:blur(10px) saturate(1.2); box-shadow:0 6px 20px #0000001f; animation:menu-in var(--motion-quick) var(--ease-out); }
+/* Four actions and "12 selected" have to fit the default sidebar: the actions are a size smaller than a row's, with no gap. */
+.selection-bar { display:flex; align-items:center; gap:0; margin:8px 12px 0 0; padding:3px 3px 3px 10px; border-radius:14px; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter:blur(10px) saturate(1.2); box-shadow:0 6px 20px #0000001f; animation:menu-in var(--motion-quick) var(--ease-out); }
 .selection-count { flex:1; min-width:0; font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.selection-bar .row-action { margin-right:0; color:var(--muted); }
+.selection-bar .row-action { width:28px; height:28px; min-height:28px; padding:6px; margin-right:0; color:var(--muted); }
 .selection-bar .row-action:hover:not(:disabled),.selection-bar .row-action:focus-visible,.selection-bar .row-action[aria-expanded=true] { color:var(--text); border-color:transparent; }
 .selection-bar .row-action.danger,.selection-bar .row-action.danger:hover:not(:disabled) { color:var(--error); }
 .selection-bar .row-action.danger:hover:not(:disabled) { background:var(--row-hover); border-color:transparent; }
@@ -345,7 +346,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The chat's name; the faces of an empty group chat sit before it (COD-215), so the name is named rather than counted. */
 /* The name and the model beside it sit on one baseline: centred boxes of 14px and 12px text left the smaller one
    visibly off the line (owner, 2026-09-25). */
-.topbar-title { display:inline-flex; align-items:baseline; gap:10px; min-width:0; }
+.topbar-title { display:inline-flex; align-items:center; gap:10px; min-width:0; }
 .topbar-name { font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; min-width:0; }
 .topbar-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; margin-left:auto; }
 .task-cost {
@@ -668,8 +669,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .form select:hover:not(:disabled),.form input:not(.org-input):hover:not(:disabled):not(:focus) { border-color:var(--muted); }
 
 .form textarea:not(.org-input) { resize:vertical; min-height:100px; line-height:1.6; }
-.form fieldset { border:1px solid var(--border); border-radius:10px; padding:12px; }
-.form legend { font-size:13px; padding:0 4px; }
+/* A group of choices under one title (a crew's members, a shift's days): the title sits above the box like any field's
+   label, 8px over it, and the choices sit in the box; a legend drawn on the box's edge read as squeezed onto the line
+   (dogfood, 2026-09-26). The legend is a flex box, so no line box of its own adds to those 8px. */
+.form fieldset { border:0; padding:0; margin:0; min-width:0; }
+.form legend { display:flex; font-size:13px; font-weight:500; padding:0 0 8px; }
+.fieldset-options { border:1px solid var(--border); border-radius:10px; padding:12px; }
 
 .form section { display:flex; flex-direction:column; gap:10px; }
 .form section+.form section { padding-top:8px; }
@@ -1244,8 +1249,10 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 /* Sidebar tree: teams open to their workers, workers open to their tasks. */
 .row-disclosure:hover { color:var(--text); }
 .worker-row .row-disclosure+.worker { padding-left:6px; }
-/* Children sit a clear step below their parent and a small step apart from each other. */
-.tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 10px 21px; padding-left:25px; }
+/* Children sit a clear step below their parent and a small step apart from each other. The group has the same 8px of
+   air under it as over it: the list's own 4px gap follows it, so its bottom margin is the other 4px. A 10px margin
+   there put the next orglet 48px below the last side thread where rows otherwise step 38px (dogfood, 2026-09-26). */
+.tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 4px 21px; padding-left:25px; }
 .tree-children[hidden] { display:none; }
 .tree-leaf { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; padding:6px 10px; border:0; border-radius:10px; background:transparent; font-size:13px; text-align:left; }
 /* Row icons are muted, but an avatar keeps its own colour. */
@@ -2044,6 +2051,15 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    a rule; a hunk reuses the source-preview surface with the snapshot's and the copy's numbers side by side, a sign
    column, and CodePreview's removed/added tints. */
 .changed-files svg { flex-shrink:0; }
+/* Lines added and removed wear the diff's own colours and a heavier weight, so they read apart from the file count. */
+.diff-counts { font-variant-numeric:tabular-nums; font-weight:600; }
+.diff-count-added { color:var(--success); }
+.diff-count-removed { color:var(--error); }
+/* A command tally in Details: a non-zero count wears what it means. */
+.outcome-count { font-variant-numeric:tabular-nums; }
+.outcome-count-success { color:var(--success); font-weight:600; }
+.outcome-count-error { color:var(--error); font-weight:600; }
+.outcome-count-warning { color:var(--warning); font-weight:600; }
 /* A hand-in a failed command refused (COD-270): one line per command under the held answer, shaped like the
    changed-files line under it and opening the command's output. The sentence may wrap in a narrow chat, so the icon
    sits on the first line's centre; the command is set in the code face without a chip, since the row already tints on
@@ -2107,7 +2123,11 @@ pre.diff-hunk>span { --diff-gutter:calc(2 * var(--line-number-width, 4ch) + 24px
 .trace-link { padding:0; border:0; background:none; font:inherit; font-size:12px; color:var(--muted); text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
 .trace-link:hover { color:var(--text); }
 @keyframes thinking-pulse { 50% { opacity:.45; } }
-@media(max-width:1000px) { .live-run { padding-left:0; } }
+/* The working line under an orglet's name: muted words with a brighter band sweeping across them, left to right. */
+.run-status-line { margin:0; padding-left:39px; min-height:28px; line-height:28px; font-size:14px; color:transparent; background:linear-gradient(90deg, var(--muted) 0%, var(--muted) 38%, var(--text) 50%, var(--muted) 62%, var(--muted) 100%) 0 0 / 250% 100%; -webkit-background-clip:text; background-clip:text; animation:status-sweep 2.2s linear infinite; }
+@keyframes status-sweep { from { background-position:100% 0; } to { background-position:0% 0; } }
+@media (prefers-reduced-motion: reduce) { .run-status-line { animation:none; background:none; color:var(--muted); } }
+@media(max-width:1000px) { .live-run { padding-left:0; } .run-status-line { padding-left:4px; } }
 @media (prefers-reduced-motion: reduce) { .trace-row.running .trace-verb { animation:none; } .activity-chevron { transition:none; } }
 
 /* Memory (COD-161): what a worker remembered from its chats, one quiet row each, corrected in place. Rows are told

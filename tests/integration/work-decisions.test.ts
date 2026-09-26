@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,6 +8,7 @@ import { Store, id } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import type { ModelReply } from '../../apps/desktop/src/core/adapters/openai';
 import type { Team, Worker } from '../../apps/desktop/src/shared/contracts';
+import { TaskThread } from '../../apps/desktop/src/renderer/components/TaskThread';
 
 let directory: string;
 let store: Store;
@@ -103,6 +106,16 @@ it('waits at the team plan boundary without starting members, then uses the save
   }) as string;
   await until(() => store.detail(taskId).task.status === 'waiting_input' && !core.teams.isActive(taskId));
   expect(memberCalls).toBe(0);
+  // The question is the lead's plan asking, so it waits under "routing", not under the combining step that has not run.
+  const workspace = store.workspace();
+  const waitingHtml = renderToStaticMarkup(createElement(TaskThread, {
+    detail: store.detail(taskId), workspace: { workers: workspace.workers, skills: workspace.skills, tasks: workspace.tasks }, action: () => {}, showSources: () => {}, openMessage: () => {},
+    proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {},
+    proposalActions: { busy: false, onApply: () => {}, onApplyAll: () => {}, onDismiss: () => {}, onDismissAll: () => {}, onUndo: () => {}, onOpen: () => {}, onOpenChat: () => {} },
+  }));
+  expect(waitingHtml).toContain('Làm trang giá hay đổi giá billing?');
+  expect(waitingHtml).toContain('<span class="byline-role">routing</span>');
+  expect(waitingHtml).not.toContain('<span class="byline-role">combining</span>');
   const request = store.detail(taskId).task.decisionRequests![0];
   await core.command('answerDecision', { taskId, requestId: request.id, answer: 'Trang giá' });
   await until(() => store.detail(taskId).task.status === 'completed' && !core.teams.isActive(taskId));

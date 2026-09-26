@@ -155,6 +155,17 @@ describe('the network gate', () => {
     expect(await tunnel(`127.0.0.1:${targetPort}`)).toMatch(/200/);
     expect(hits).toBe(1);
   });
+
+  it('reaches a listed localhost server on 127.0.0.1 when localhost resolves to ::1 first, as it does on Windows', async () => {
+    proxy.close();
+    // The dogfood page listened on 127.0.0.1 only; taking the first address sent every request to ::1 and got a 502.
+    proxy = new PolicyProxy(() => rules, async () => ['::1', '127.0.0.1']);
+    proxyUrl = new URL(await proxy.start());
+    rules = policy([site(`localhost:${targetPort}`)]);
+    expect(await viaProxy(`http://localhost:${targetPort}/`)).toBe(200);
+    expect(await tunnel(`localhost:${targetPort}`)).toMatch(/200/);
+    expect(hits).toBe(1);
+  });
 });
 
 describe('the capability and the tools it offers', () => {

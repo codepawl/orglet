@@ -19,7 +19,8 @@ import { Avatar, RosterAvatars } from './Avatar';
 import { teamRoster } from '../assignees';
 import { BrowserSitesEditor, profileOptions, useBrowserState } from './BrowserSettings';
 import { browserLevelOf, capabilitiesWithBrowserLevel, defaultBrowserChoice, routineBrowserLevels, type BrowserLevel, type BrowserProfileId, type BrowserSite } from '../../shared/browser';
-import { snapshotCapabilities } from '../../shared/tool-policy';
+import { snapshotCapabilities, withCapability, type ToolCapability } from '../../shared/tool-policy';
+import { WEB_SEARCH_PROVIDER_NAMES } from '../../shared/web-tools';
 
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
 export const formatRoutineTime = (iso: string, timeZone: string) => new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' });
@@ -120,6 +121,17 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
     {error && <p role="alert" className="error">{error}</p>}
   </div>;
 }
+/**
+ * The permissions a schedule's task carries: what it had (or the lead's defaults), with the browser reading or not and
+ * web search on or off as the editor says. A schedule that never had either keeps carrying none.
+ */
+export function scheduleCapabilities(saved: ToolCapability[] | undefined, leadProvider: Worker['provider'], readsPages: boolean, searchesWeb: boolean): ToolCapability[] | undefined {
+  const base = saved ?? (readsPages || searchesWeb ? snapshotCapabilities(leadProvider) : undefined);
+  if (!base) return undefined;
+  const withBrowser = capabilitiesWithBrowserLevel(base, readsPages ? 'read' : 'none');
+  return withCapability(withBrowser, 'network.web', searchesWeb);
+}
+
 function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { routine?: Routine; draft?: TaskInput; workspace: Workspace; saved: () => void; back: () => void; onDirty: (dirty: boolean) => void }) {
   const initial = routine?.task ?? draft;
   const [name, setName] = useState(routine?.name ?? '');
@@ -141,6 +153,9 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const [browserLevel, setBrowserLevel] = useState<BrowserLevel>(browserLevelOf(initial?.toolCapabilities ?? []) === 'none' ? 'none' : 'read');
   const [browserProfile, setBrowserProfile] = useState<BrowserProfileId>((initial?.browser ?? defaultBrowserChoice()).profileId);
   const [browserSites, setBrowserSites] = useState<BrowserSite[]>(initial?.browser?.sites ?? []);
+  // A weekly "check what changed on the web" needs web search as much as the browser; a search never asks anyone,
+  // so an unattended run may use it like a chat can (dogfood, 2026-09-26).
+  const [web, setWeb] = useState((initial?.toolCapabilities ?? []).includes('network.web'));
   const browser = useBrowserState();
   const zoneInput = useRef<HTMLInputElement>(null);
   const zoneError = error.startsWith('Timezone');
@@ -156,12 +171,11 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
   const destination = providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo');
   // Leaving asks for confirmation only when something differs from what the editor opened with.
-  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`)]);
-  // The permissions the saved task carries: what it had, with the browser at the level chosen here.
+  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`), web]);
+  // The permissions the saved task carries: what it had, with the web and the browser as chosen here. A schedule
+  // that never had either keeps carrying none, so saving it again changes nothing.
   const leadProvider = (workspace.workers.find(worker => worker.id === (team?.synthesizerId ?? target)) ?? workspace.workers[0]).provider;
-  const toolCapabilities = browserLevel === 'read'
-    ? capabilitiesWithBrowserLevel(initial?.toolCapabilities ?? snapshotCapabilities(leadProvider), 'read')
-    : initial?.toolCapabilities && capabilitiesWithBrowserLevel(initial.toolCapabilities, 'none');
+  const toolCapabilities = scheduleCapabilities(initial?.toolCapabilities, leadProvider, browserLevel === 'read', web);
   const trigger: RoutineTrigger | undefined = triggerKind === 'folder'
     ? folder && { kind: 'folder', folderId: folder.folderId, folderName: folder.name }
     : { kind: triggerKind };
@@ -244,6 +258,10 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
     <section className="routine-group" aria-labelledby="routine-group-limits">
       <h4 id="routine-group-limits">{t('Giới hạn & quyền')}</h4>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} required /></label>
+      <SwitchField checked={web} onChange={setWeb} disabled={!providers.length}
+        description={t('Tìm qua {0}, đọc trang web công khai.', [WEB_SEARCH_PROVIDER_NAMES[workspace.webSearchProvider]])}>
+        <FieldLabel icon={Globe}>{t('Đọc và tìm kiếm web')}</FieldLabel>
+      </SwitchField>
       <Select label={<FieldLabel icon={AppWindow}>{t('Trình duyệt')}</FieldLabel>} value={browserLevel} onChange={value => setBrowserLevel(value as BrowserLevel)}
         options={routineBrowserLevels.map(level => ({ value: level, label: level === 'read' ? t('Đọc trang') : t('Không dùng trình duyệt') }))} />
       {browserLevel === 'read' && <div className="routine-browser">

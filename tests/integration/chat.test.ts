@@ -8,6 +8,7 @@ import { taskTitle } from '../../apps/desktop/src/core/orchestration/runner';
 import { markdownToPlain } from '../../apps/desktop/src/shared/plainText';
 import type { ModelReply } from '../../apps/desktop/src/core/adapters/openai';
 import type { Worker } from '../../apps/desktop/src/shared/contracts';
+import { turnMessageId } from '../../apps/desktop/src/shared/message-interactions';
 
 let directory: string; let store: Store; let core: CoreService;
 let replies: ModelReply[]; let sent: { messages: unknown[]; tools: string[] }[];
@@ -153,6 +154,41 @@ it('lets @tags in a group chat limit who answers that turn', async () => {
   const tagged = store.detail(taskId).runs.filter(run => run.stage === 'group' && run.snapshot.inputRevision === 1);
   expect(tagged.map(run => run.snapshot.worker.id)).toEqual([second.id]);
   expect(tagged).toHaveLength(1);
+});
+
+it('lets a reply to one orglet’s answer in a group chat address that orglet, unless the message tags someone', async () => {
+  const workerId = await chatWorker('openai');
+  const skillId = store.all<Worker>('workers')[0].skillId;
+  const second = await core.command('saveWorker', { name: 'Kế toán', instructions: 'Help with accounting.', provider: 'openai', skillId, taskBudgetMicros: 100_000 }) as Worker;
+  replies.push(answer('Chào từ Researcher.'));
+  const taskId = await core.command('createTask', { workerId, brief: 'Chào cả hội', ...scope }) as string;
+  await until(() => store.detail(taskId).task.status === 'completed');
+  await core.command('updateTask', { id: taskId, title: '', assignee: { kind: 'workers', workerIds: [workerId, second.id] }, budgetMicros: 100_000 });
+  replies.push(answer('Researcher đây.'), answer('Kế toán đây.'));
+  await core.command('reviseTask', { taskId, brief: 'Mọi người điểm danh', ...scope });
+  const answeredBy = (revision: number) => store.detail(taskId).runs.filter(run => run.stage === 'group' && run.snapshot.inputRevision === revision).map(run => run.snapshot.worker.id);
+  await until(() => store.detail(taskId).task.status === 'completed' && answeredBy(1).length === 2);
+  const accountantAnswer = store.detail(taskId).artifacts.find(artifact => artifact.report.summary === 'Kế toán đây.')!;
+
+  // Replying to Kế toán's answer is talking to Kế toán.
+  replies.push(answer('Kế toán trả lời.'));
+  await core.command('reviseTask', { taskId, brief: 'Nói rõ hơn được không?', replyTo: accountantAnswer.id, ...scope });
+  await until(() => store.detail(taskId).task.status === 'completed' && answeredBy(2).length === 1);
+  expect(answeredBy(2)).toEqual([second.id]);
+
+  // A tag in the same message decides instead: the person asks someone else about that answer.
+  replies.push(answer('Researcher nhận xét.'));
+  await core.command('reviseTask', { taskId, brief: '@Researcher bạn thấy sao?', replyTo: accountantAnswer.id, ...scope });
+  await until(() => store.detail(taskId).task.status === 'completed' && answeredBy(3).length === 1);
+  expect(answeredBy(3)).toEqual([workerId]);
+
+  // @all still means everyone, and a reply to the person's own message leaves the whole group.
+  replies.push(answer('1'), answer('2'));
+  await core.command('reviseTask', { taskId, brief: '@all cùng xem', replyTo: accountantAnswer.id, ...scope });
+  await until(() => store.detail(taskId).task.status === 'completed' && answeredBy(4).length === 2);
+  replies.push(answer('3'), answer('4'));
+  await core.command('reviseTask', { taskId, brief: 'Nhắc lại câu này', replyTo: turnMessageId(taskId, 1), ...scope });
+  await until(() => store.detail(taskId).task.status === 'completed' && answeredBy(5).length === 2);
 });
 
 const unsourcedReport = (): ModelReply => ({

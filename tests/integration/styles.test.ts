@@ -21,8 +21,20 @@ it('lets a quiet sidebar row give its name the width the hidden menu used to res
   expect(css).toContain('.archived-row > .org-row-menu { position:absolute;');
 });
 
+it('gives an orglet\'s side threads the same air under them as over them (dogfood, 2026-09-26)', () => {
+  expect(css).toContain('.tree-children { display:flex; flex-direction:column; gap:4px; margin:8px 0 4px 21px; padding-left:25px; }');
+});
+
 it('gives the sidebar a background when it floats over the chat at the minimum window', () => {
   expect(css).toMatch(/@media\(max-width:780px\) \{ \.sidebar \{[^}]*background:var\(--window\);/);
+});
+
+it('puts a group of choices\' title above its box, never on the box\'s edge (dogfood, 2026-09-26)', () => {
+  expect(css).toContain('.form fieldset { border:0; padding:0; margin:0; min-width:0; }');
+  expect(css).toContain('.form legend { display:flex; font-size:13px; font-weight:500; padding:0 0 8px; }');
+  expect(css).toContain('.fieldset-options { border:1px solid var(--border); border-radius:10px; padding:12px; }');
+  const crewEditor = readFileSync(join(__dirname, '../../apps/desktop/src/renderer/components/TeamEditor.tsx'), 'utf8');
+  expect(crewEditor.match(/<\/legend><div className="fieldset-options">/g)).toHaveLength(2);
 });
 
 it('keeps a select option detail to one line instead of breaking a model id', () => {
@@ -38,4 +50,13 @@ it('never fades working controls or small counts with opacity', () => {
 it('gives a long orglet name in the Running view at most 60% so the chat name still shows', () => {
   expect(css).toMatch(/\.running-name \{[^}]*max-width:60%;[^}]*text-overflow:ellipsis;/);
   expect(css).toMatch(/\.running-chat \{[^}]*flex:1 1 0;/);
+});
+
+it('sweeps a light across the working line, and stops it under reduced motion', () => {
+  expect(css).toMatch(/\.run-status-line \{[^}]*background-clip:text;[^}]*animation:status-sweep/);
+  expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.run-status-line \{ animation:none; background:none; color:var\(--muted\); \} \}/);
+});
+
+it('centres the chat header name and its provider chip on one line', () => {
+  expect(css).toContain('.topbar-title { display:inline-flex; align-items:center;');
 });

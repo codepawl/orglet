@@ -56,12 +56,35 @@ function changedHead(summary: WorkspaceDiffSummary, workerName?: string): string
  * Moves and deletions get their own counts (COD-254); a plain folder copy has no line counts, so it shows none.
  */
 export function changedFilesLabel(summary: WorkspaceDiffSummary, workerName?: string): string {
+  const parts = changedParts(summary, workerName);
+  if (hasLineCounts(summary)) parts.push(countsLabel(summary));
+  return parts.join(' · ');
+}
+
+/** The words of the changed-files line, without the line counts. */
+function changedParts(summary: WorkspaceDiffSummary, workerName?: string): string[] {
   const locale = currentLocale();
   const parts = [changedHead(summary, workerName)];
   if (summary.moved) parts.push(t('{0} chuyển hoặc đổi tên', [summary.moved.toLocaleString(locale)]));
   if (summary.removed) parts.push(t('{0} đã xóa', [summary.removed.toLocaleString(locale)]));
-  if (summary.lines !== false && summary.files > 0) parts.push(countsLabel(summary));
-  return parts.join(' · ');
+  return parts;
+}
+
+function hasLineCounts(summary: WorkspaceDiffSummary): boolean {
+  return summary.lines !== false && summary.files > 0;
+}
+
+/**
+ * Lines added and removed, in the colours the diff itself uses (the theme's success and error), so they read apart
+ * from the file count beside them.
+ */
+export function DiffCounts({ counts }: { counts: Pick<WorkspaceDiffSummary, 'additions' | 'deletions'> }) {
+  const locale = currentLocale();
+  return <span className="diff-counts">
+    <span className="diff-count-added">+{counts.additions.toLocaleString(locale)}</span>
+    {' '}
+    <span className="diff-count-removed">−{counts.deletions.toLocaleString(locale)}</span>
+  </span>;
 }
 
 /**
@@ -71,7 +94,7 @@ export function changedFilesLabel(summary: WorkspaceDiffSummary, workerName?: st
 export function ChangedFilesLine({ summary, workerName, onOpen }: { summary: WorkspaceDiffSummary; workerName?: string; onOpen: () => void }) {
   return <button type="button" className="activity-summary changed-files" aria-haspopup="dialog" onClick={onOpen}>
     <FileDiff size={14} aria-hidden="true" />
-    <span>{changedFilesLabel(summary, workerName)}</span>
+    <span>{changedParts(summary, workerName).join(' · ')}{hasLineCounts(summary) && <> · <DiffCounts counts={summary} /></>}</span>
   </button>;
 }
 
@@ -96,9 +119,11 @@ export function DiffViewer({ diff, workerName, info, onClose }: { diff: Workspac
 export function DiffBody({ diff }: { diff: WorkspaceDiff }) {
   const withLines = diff.lines !== false;
   const folders = diff.folders ?? [];
+  // One file with its lines needs no list to jump from: its heading already names it (dogfood, 2026-09-26).
+  const listed = !withLines || diff.files.length + folders.length > 1;
   return <div className="diff-view">
     {!withLines && <p className="preview-note">{t('Thư mục này không phải Git repository nên chỉ hiện tệp nào đã thay đổi, không hiện từng dòng.')}</p>}
-    <ul className="diff-files" aria-label={t('Tệp đã thay đổi')}>
+    {listed && <ul className="diff-files" aria-label={t('Tệp đã thay đổi')}>
       {diff.files.map((file, index) => <li key={file.path}>
         {withLines
           ? <button type="button" className="diff-file-row" onClick={() => document.getElementById(fileElementId(index))?.scrollIntoView({ block: 'start' })}>
@@ -112,7 +137,7 @@ export function DiffBody({ diff }: { diff: WorkspaceDiff }) {
           <span className="diff-file-status">{folderLabels[folder.status]}</span>
         </span>
       </li>)}
-    </ul>
+    </ul>}
     {diff.truncated && <p className="preview-note">{t('Diff quá dài: một số tệp chỉ hiện số dòng thay đổi, không hiện nội dung.')}</p>}
     {withLines && diff.files.map((file, index) => <FileSection key={file.path} file={file} id={fileElementId(index)} />)}
   </div>;

@@ -9,14 +9,14 @@ Part of the [user guide](user-guide.md). How a crew turn runs under the hood: [t
 ### Create one
 
 1. Click **+** next to **Orglets** in the sidebar.
-2. On **General**, give it a name and a short description, write its instructions, and pick its **Model**: a connection (Demo, a local harness, or an API provider) and, for everything but Demo, a model ID from that provider's list or one you type. The **Model** menu lists Demo first, then every connection that can run now (a signed-in harness, an API with a saved key, a custom connection), then the rest greyed under **Unavailable**. Set its **Limit per task** if you want a cap on what one chat may spend through an API connection. On Claude Code the limit is optional: leave it empty to run on your plan with no cap, or set one to stop Claude Code when its own estimate for a turn reaches it.
+2. On **General**, give it a name and a short description, write its instructions, and pick its **Model**: a connection (Demo, a local harness, or an API provider) and, for everything but Demo, a model ID from that provider's list or one you type. The **Model** menu lists Demo first, then every connection that can run now (a signed-in harness, an API with a saved key, a custom connection), then the rest greyed under **Unavailable**. A new orglet starts on the first connection that can run now, in that order, and on Demo only when nothing else can. Set its **Limit per task** if you want a cap on what one chat may spend through an API connection. On Claude Code the limit is optional: leave it empty to run on your plan with no cap, or set one to stop Claude Code when its own estimate for a turn reaches it.
 3. Choose **Save orglet**. Orglet picks a face and a colour for it from its name and description; the colour can be changed in the same dialog. The new orglet's chat opens, ready for a first message.
 
 The dialog has four tabs:
 
 | Tab | What is there |
 |---|---|
-| **General** | Name, description, instructions, model, limit per task |
+| **General** | Avatar, name, description, instructions, model, limit per task. The avatar Orglet picks is a face and colour your other orglets do not already show, when one fits, and it stays once saved. |
 | **Skill** | A reusable set of instructions the orglet works from. Skill packages imported from a folder must be reviewed in the Library before you can pick them. |
 | **Permissions** | What the orglet's own chat may do: attached sources, data checks, the web, a working folder, and proposing app changes. See [Permissions](permissions-and-learning.md#permissions). |
 | **Memory** | What the orglet remembered from its chats. Edit, pin or delete lines here. See [Memory](memory.md). |
@@ -57,7 +57,7 @@ Members' own replies and messages to each other stay under **Details**, with cos
 
 ### Tag who should answer
 
-In a crew or group chat, type `@` to pick an orglet, or **Everyone in this chat**. Tagged names highlight. In a crew, the lead is told who you tagged and may still bring in others; in a group chat, only the tagged orglets answer.
+In a crew or group chat, type `@` to pick an orglet, or **Everyone in this chat**. Tagged names highlight. In a crew, the lead is told who you tagged and may still bring in others; in a group chat, only the tagged orglets answer. Replying to one orglet's answer in a group chat, without tagging anyone, addresses that orglet alone.
 
 ## Group chats
 

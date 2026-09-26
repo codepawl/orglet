@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { Clock, Copy, Cpu, FileText, ListOrdered, MessageSquare, ShieldCheck, Shuffle, Sparkles, Users, Wallet, Wrench, X } from 'lucide-react';
-import { t, currentLocale, tMessage } from '../i18n';
+import { t, currentLocale, tMessage, withNodes, NODE_MARKERS } from '../i18n';
 import { Avatar, RosterAvatars } from './Avatar';
 import { ProviderMark } from './ProviderMark';
 import { ShowMore } from './SidebarTree';
@@ -29,6 +29,7 @@ import { McpApprovalChoice } from '../../shared/mcp';
 import { BrowserChatSettings, BrowserSteps, browserProfileName, useBrowserState } from './BrowserSettings';
 import { DesktopChatSettings, DesktopSteps, desktopAppsAvailable } from './DesktopApps';
 import { defaultBrowserChoice, routineBrowserLevels } from '../../shared/browser';
+import { commandTally, workOutcomes, type CommandOutcome, type CommandTally } from '../../shared/work-outcomes';
 
 /*
  * The panel beside a chat: who you are talking to, what this conversation has cost, and what happened in it.
@@ -218,6 +219,61 @@ async function copyRunId(id: string) {
   }
 }
 
+/**
+ * What the commands of the chat's latest turn came to, in one line: how the last command ended, then how many of the
+ * earlier ones exited 0, failed or never finished, and any file conflict or step of unknown outcome. It lives in
+ * Details, beside the goal the turn worked from, rather than under the person's message (owner, 2026-09-26).
+ */
+function latestTurnOutcome(detail: TaskDetail, recovery: WorkspaceRecoveryView | undefined): ReactNode {
+  const latestRevision = detail.task.inputRevision ?? 0;
+  const runIds = new Set(detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === latestRevision).map(run => run.id));
+  const outcomes = workOutcomes(recovery, runIds);
+  if (!outcomes) return null;
+  const notes = [
+    outcomes.fileConflicts ? t('{0} bản file xung đột hoặc chưa rõ.', [outcomes.fileConflicts]) : '',
+    outcomes.uncertainCalls ? t('{0} thao tác chưa rõ kết quả.', [outcomes.uncertainCalls]) : '',
+    outcomes.truncated ? t('Chỉ tính bản ghi gần đây.') : '',
+  ].filter(Boolean).join(' ');
+  const tally = commandTally(recovery, runIds);
+  if (!tally && !notes) return null;
+  return <>{tally && <CommandTallyLine tally={tally} />}{tally && notes ? ' ' : ''}{notes}</>;
+}
+
+const outcomeTones: Record<CommandOutcome, 'success' | 'error' | 'warning'> = { passed: 'success', failed: 'error', unfinished: 'warning' };
+
+/** How the last command ended, in words; the exit code only when it is not 0. */
+function lastCommandLabel(last: CommandTally['last']): string {
+  if (last.outcome === 'passed') return t('Lệnh cuối thoát 0');
+  if (last.state === 'timeout') return t('Lệnh cuối quá thời gian');
+  if (last.state === 'output_limit') return t('Lệnh cuối vượt giới hạn đầu ra');
+  if (last.outcome === 'failed') return t('Lệnh cuối lỗi, mã thoát {0}', [last.exitCode ?? '?']);
+  if (last.state === 'running') return t('Lệnh cuối đang chạy');
+  return t('Lệnh cuối chưa hoàn tất');
+}
+
+/**
+ * "Lệnh cuối thoát 0 · trước đó: 1 lần lỗi." The last command's words and each earlier count wear their meaning, success,
+ * error or warning colour in whichever theme is on; an earlier kind that did not happen is left out.
+ */
+function CommandTallyLine({ tally }: { tally: CommandTally }) {
+  const earlierLabels: Record<CommandOutcome, string> = {
+    passed: t('{0} lần thoát 0', NODE_MARKERS),
+    failed: t('{0} lần lỗi', NODE_MARKERS),
+    unfinished: t('{0} lần chưa hoàn tất', NODE_MARKERS),
+  };
+  const kinds = (['passed', 'failed', 'unfinished'] as const).filter(kind => tally.earlier[kind] > 0);
+  const earlier = kinds.map((kind, index) => <Fragment key={kind}>
+    {index > 0 && ', '}
+    {withNodes(earlierLabels[kind], [<OutcomeCount key={kind} value={tally.earlier[kind]} tone={outcomeTones[kind]} />])}
+  </Fragment>);
+  const last = <span className={`outcome-count-${outcomeTones[tally.last.outcome]}`}>{lastCommandLabel(tally.last)}</span>;
+  return <>{last}{kinds.length > 0 && <> · {withNodes(t('trước đó: {0}', NODE_MARKERS), [<Fragment key="earlier">{earlier}</Fragment>])}</>}.</>;
+}
+
+function OutcomeCount({ value, tone }: { value: number; tone: 'success' | 'error' | 'warning' }) {
+  return <span className={value > 0 ? `outcome-count outcome-count-${tone}` : 'outcome-count'}>{value.toLocaleString(currentLocale())}</span>;
+}
+
 export function DetailsPanel({ workspace, team, worker, group, detail, workerStatus, onClose, onOpenSources, onExport, tools, recovery, recoveryFocus, onRetireWorkspace, onRestoreFile, readProcessOutput, readPrivateFile }: {
   workspace: Workspace;
   team?: Team;
@@ -264,6 +320,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
   const model = lastRun?.snapshot.model;
   const finishedAt = lastRun && detail ? runEndedAt(lastRun.id, detail.events) : undefined;
   const took = firstRun && finishedAt ? elapsedLabel(firstRun.startedAt, finishedAt) : undefined;
+  const latestOutcome = detail && recovery?.taskId === detail.task.id ? latestTurnOutcome(detail, recovery) : null;
 
   return <aside className="details-pane" aria-label={t('Chi tiết')}>
     <div className="details-head">
@@ -326,7 +383,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
         busy={!!tools?.busy || ['running', 'queued', 'pausing'].includes(detail.task.status)} onRetire={onRetireWorkspace} onRestore={onRestoreFile}
         readOutput={readProcessOutput} readFile={readPrivateFile} />}
 
-      {detail && detail.runs.some(run => run.snapshot.workFrame) && <Section icon={MessageSquare} title={t('Mục tiêu của lượt')}>
+      {detail && (detail.runs.some(run => run.snapshot.workFrame) || latestOutcome) && <Section icon={MessageSquare} title={t('Mục tiêu của lượt')}>
         {detail.runs.filter(run => run.snapshot.workFrame).map(run => {
           const frame = run.snapshot.workFrame!;
           return <div key={run.id} className="details-run">
@@ -338,6 +395,7 @@ export function DetailsPanel({ workspace, team, worker, group, detail, workerSta
             </div>
           </div>;
         })}
+        {latestOutcome && <p className="muted details-outcome">{latestOutcome}</p>}
       </Section>}
 
       {detail && Boolean(detail.task.decisionRequests?.length) && <Section icon={MessageSquare} title={t('Quyết định trong chat')}>
