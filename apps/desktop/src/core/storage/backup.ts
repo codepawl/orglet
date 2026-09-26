@@ -29,6 +29,8 @@ import { ChatQuote, MAX_CHAT_QUOTES, SideOf } from '../../shared/side-threads';
 import { BrowserProfileId } from '../../shared/browser';
 import { MAX_DESKTOP_APPS } from '../../shared/desktop';
 import { BlockedHandIn } from '../../shared/blocked-hand-in';
+import { ChangedFilesRecord } from '../../shared/workspace-recovery';
+import { changedFilesRecords, restoredChangesKey } from './workspace-recovery';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -71,6 +73,8 @@ const Payload = z.object({
   // A custom connection's name and address travel with the orglets that use it; its key never does.
   customConnections: z.array(CustomConnection).max(MAX_CUSTOM_CONNECTIONS).optional(),
   knowledge: z.array(Knowledge).max(10_000).optional(), knowledgeRevisions: z.array(KnowledgeRevision).max(100_000).optional(),
+  // Each turn's files line: counts and where the changes stood, never the files (COD-299). Older backups lack it.
+  changedFiles: z.array(ChangedFilesRecord).max(100_000).optional(),
   workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), workspaceEvidence: z.array(WorkspaceReadEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), reservationReviews: z.array(ReservationReview).optional(), settings: Settings,
 }).strict();
 type Payload = z.infer<typeof Payload>;
@@ -120,6 +124,11 @@ function validateRelations(data: Payload) {
   }
   map(data.events); map(data.profiles); const processEvidence = map(data.processEvidence ?? []); const workspaceEvidence = map(data.workspaceEvidence ?? []); const reservations = map(data.reservations); map(data.ledger);
   for (const process of processEvidence.values()) if (!runs.has(process.runId)) fail('Bằng chứng tiến trình tham chiếu run không tồn tại.');
+  const changedFileRuns = new Set<string>();
+  for (const record of data.changedFiles ?? []) {
+    if (!runs.has(record.runId) || changedFileRuns.has(record.runId)) fail('Dòng tệp đã sửa tham chiếu run không tồn tại hoặc bị trùng.');
+    changedFileRuns.add(record.runId);
+  }
   const readCalls = new Set<string>();
   for (const evidence of workspaceEvidence.values()) {
     const grant = runs.get(evidence.runId)?.snapshot.workspaceGrant;
@@ -384,13 +393,16 @@ function snapshot(store: Store): Payload {
   const artifacts = store.all<z.infer<typeof Artifact>>('artifacts');
   const citedWorkspaceEvidenceIds = new Set(artifacts.flatMap(artifact => artifact.report.findings
     .flatMap(finding => finding.workspaceEvidenceIds ?? [])));
+  const runs = store.all<z.infer<typeof Run>>('runs');
+  const runIds = new Set(runs.map(run => run.id));
   return Payload.parse({
     entityState: store.entityState(),
     routines: store.all('routines'),
     customConnections: readCustomConnections(store),
     knowledge: store.all('knowledge'),
     knowledgeRevisions: store.db.prepare('SELECT * FROM knowledge_revisions ORDER BY rowid').all().map(row => ({ id: row.id, revision: row.revision, data: JSON.parse(String(row.data)) })),
-    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs: store.all('runs'), events: store.all('events'), artifacts, sources: store.all('sources'), profiles: store.all('profiles'),
+    changedFiles: changedFilesRecords(store).filter(record => runIds.has(record.runId)),
+    workers: store.all('workers'), skills: store.all('skills'), teams: store.all('teams'), tasks: store.all('tasks'), runs, events: store.all('events'), artifacts, sources: store.all('sources'), profiles: store.all('profiles'),
     processEvidence: store.db.prepare('SELECT id,run_id AS runId,exit_code AS exitCode FROM process_evidence').all(),
     workspaceEvidence: store.db.prepare('SELECT data FROM workspace_read_evidence').all()
       .map(row => WorkspaceReadEvidence.parse(JSON.parse(String(row.data))))
@@ -661,6 +673,12 @@ export class Backups {
         verified_source=excluded.verified_source,resolved_at=excluded.resolved_at`)
         .run(row.reservation_id, row.reason, row.noted_at, row.actual_amount, row.verified_source, row.resolved_at);
       for (const row of merged.knowledgeRevisions ?? []) this.store.db.prepare('INSERT OR IGNORE INTO knowledge_revisions VALUES(?,?,?)').run(row.id, row.revision, JSON.stringify(row.data));
+      // A turn's files line comes back for a run whose working copy is not on this computer; one kept here stays (COD-299).
+      for (const record of incoming.changedFiles ?? []) {
+        const hasCopy = this.store.db.prepare('SELECT 1 FROM workspace_copies WHERE run_id=?').get(record.runId);
+        if (hasCopy) continue;
+        this.store.db.prepare('INSERT OR IGNORE INTO settings VALUES(?,?)').run(restoredChangesKey(record.runId), JSON.stringify(record));
+      }
       const knowledge = new KnowledgeBase(this.store);
       for (const item of merged.knowledge ?? []) { this.store.put('knowledge', item); knowledge.index(item); }
       new ChatSearch(this.store).rebuild();

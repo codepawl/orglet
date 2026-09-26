@@ -36,7 +36,7 @@ import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
 import type { MentionPerson } from '../../shared/mentions';
 import { teamProgress } from '../../shared/team-progress';
-import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
+import { changeOutcomeOf, type WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { groupRecoveryAttempts } from '../../shared/recovery-attempts';
 import { AppProposalCards, type ProposalActions } from './AppProposals';
 import { ChangedFilesLine, DiffDialog, type DiffReview, type ReviewStatus } from './DiffViewer';
@@ -58,35 +58,42 @@ import { unansweredTurnLine } from '../turnOutcome';
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
 type TurnNotices = ReturnType<typeof turnNotices>;
 
+type ChangedFilesLineOf = { run: Run; summary: WorkspaceDiffSummary; review?: ReviewStatus; restored?: true };
+
 /**
  * The runs of a turn that changed files or folders in their working copy, with the counts the core kept (COD-163)
- * and, for changes held for review, where they stand (COD-279).
+ * and where the changes stand (COD-279, COD-291): every line says it, whether the changes waited for review or were
+ * handed in at once. A run whose working copy is not on this computer after a restore gets the line the backup kept
+ * (COD-299), marked `restored`.
  */
-export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecoveryView | undefined): { run: Run; summary: WorkspaceDiffSummary; review?: ReviewStatus }[] {
+export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecoveryView | undefined): ChangedFilesLineOf[] {
   if (!recovery) return [];
   return runs.flatMap(run => {
     const copy = recovery.copies.find(item => item.runId === run.id);
-    const summary = copy?.diff;
-    if (!copy || !summary || (summary.files === 0 && (summary.folders ?? 0) === 0)) return [];
-    const review = reviewStatusOf(copy);
-    return [review ? { run, summary, review } : { run, summary }];
+    if (copy) return lineOf(run, copy.diff, changeOutcomeOf(copy));
+    const kept = recovery.restored?.find(item => item.runId === run.id);
+    if (kept) return lineOf(run, kept.diff, restoredOutcome(kept.outcome), true);
+    return [];
   });
 }
 
+function lineOf(run: Run, summary: WorkspaceDiffSummary | undefined, review: ReviewStatus | undefined, restored = false): ChangedFilesLineOf[] {
+  if (!summary || (summary.files === 0 && (summary.folders ?? 0) === 0)) return [];
+  const line: ChangedFilesLineOf = { run, summary };
+  if (review) line.review = review;
+  if (restored) line.restored = true;
+  return [line];
+}
+
 /**
- * Where a turn's changes stand, for its files line (COD-291): every line says it, whether the changes waited for review
- * or handed in at once (review off, Apply anyway, a crew member). A copy still `ready` without a review was kept out of
- * the folder by a failed command or a refused plan.
+ * Where restored changes stand once their working copy is gone: changes that waited for review can no longer be
+ * applied, so they read as never applied, and an apply that was under way or stopped midway says nothing it cannot
+ * show.
  */
-function reviewStatusOf(copy: WorkspaceRecoveryView['copies'][number]): ReviewStatus | undefined {
-  if (copy.carried || copy.review?.state === 'carried') return { state: 'carried' };
-  if (copy.review?.state === 'pending' || copy.review?.state === 'discarded') return { state: copy.review.state };
-  // An applied review is settled before the first step runs, so the copy says how far the apply got.
-  if (copy.state === 'integrating') return { state: 'applying' };
-  if (copy.state === 'conflict' || copy.state === 'uncertain') return { state: 'stopped' };
-  if (copy.state === 'integrated') return { state: 'applied', skipped: copy.review?.skipped ?? 0 };
-  if (copy.state === 'ready') return { state: 'unapplied' };
-  return undefined;
+function restoredOutcome(outcome: ReviewStatus | undefined): ReviewStatus | undefined {
+  if (outcome?.state === 'pending') return { state: 'unapplied' };
+  if (outcome?.state === 'applying' || outcome?.state === 'stopped') return undefined;
+  return outcome;
 }
 
 /**
@@ -317,8 +324,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
 
   // One line per run of the turn that changed files in its working copy (COD-163); `named` says whose line carries
   // the worker's name. Each opens the diff viewer.
-  const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary, review }) =>
-    <ChangedFilesLine key={run.id} summary={summary} review={review} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => setDiffRun(run)} />);
+  const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary, review, restored }) =>
+    <ChangedFilesLine key={run.id} summary={summary} review={review} restored={restored} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => setDiffRun(run)} />);
   // Apply and Discard in the viewer, while the open run's changes still wait for review (COD-279).
   const diffWaiting = diffRun ? changedFilesOf([diffRun], recovery)[0]?.review?.state === 'pending' : false;
   const diffReview: DiffReview | undefined = diffRun && diffWaiting ? {

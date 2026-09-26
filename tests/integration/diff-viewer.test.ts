@@ -90,6 +90,28 @@ it('shows a line only for runs whose copy changed something', () => {
   expect(changedFilesOf(runs, undefined)).toEqual([]);
 });
 
+it('keeps a restored turn’s line with its counts and outcome, and says it cannot be opened (COD-299)', () => {
+  const runs = [run(runIds[0], 'Scout'), run(runIds[1], 'Writer'), run(runIds[2], 'Lead')];
+  const recovery: WorkspaceRecoveryView = { taskId, attempts: [], processes: [], uncertainCalls: [], truncated: false,
+    copies: [copy(runIds[0], { files: 2, additions: 5, deletions: 1 })],
+    restored: [
+      // A working copy on this computer wins over what a backup kept for the same run.
+      { runId: runIds[0], diff: { files: 9, additions: 9, deletions: 9 }, outcome: { state: 'discarded' } },
+      { runId: runIds[1], diff: { files: 3, additions: 42, deletions: 7 }, outcome: { state: 'applied', skipped: 0 } },
+      { runId: runIds[2], diff: { files: 1, additions: 1, deletions: 0 }, outcome: { state: 'pending' } },
+    ] };
+  const lines = changedFilesOf(runs, recovery);
+  expect(lines.map(line => [line.run.snapshot.worker.name, line.summary.files, line.review, line.restored])).toEqual([
+    ['Scout', 2, { state: 'applied', skipped: 0 }, undefined],
+    ['Writer', 3, { state: 'applied', skipped: 0 }, true],
+    // Changes that waited for review cannot be applied without their working copy.
+    ['Lead', 1, { state: 'unapplied' }, true],
+  ]);
+  const html = renderToStaticMarkup(createElement(ChangedFilesLine, { summary: lines[1].summary, review: lines[1].review, restored: true, onOpen: () => {} }));
+  expect(html).not.toContain('<button');
+  expect(html.replace(/<[^>]+>/g, '')).toBe('Changed 3 files · +42 −7 · Applied · Restored from a backup, the changes can’t be opened');
+});
+
 it('tells a move from a rename, lists new and removed folders, and shows a plain copy without counts (COD-254)', () => {
   const plain: WorkspaceDiff = {
     runId: runIds[0], additions: 0, deletions: 0, truncated: false, lines: false,

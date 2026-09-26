@@ -9,6 +9,8 @@ import { ChatSearch } from '../../apps/desktop/src/core/storage/chat-search';
 import { BudgetLedger } from '../../apps/desktop/src/core/budgets/ledger';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { Report, type Run, type Task, type Worker, type Skill, type Source } from '../../apps/desktop/src/shared/contracts';
+import { WorkspaceRecovery } from '../../apps/desktop/src/core/storage/workspace-recovery';
+import { changeOutcomeOf } from '../../apps/desktop/src/shared/workspace-recovery';
 
 const stores: Store[] = [];
 const create = () => { const store = new Store(':memory:'); stores.push(store); return store; };
@@ -295,6 +297,65 @@ describe('restoring after deleting chats, and onto a new computer (COD-281)', ()
     expect(detail.runs.map(run => run.snapshot.input?.brief)).toEqual(['Restore history', '(đã xóa)']);
     expect(store.usage()).toEqual(usage);
     expect(() => backups(store).preview(backups(store).export())).not.toThrow();
+  });
+
+  /** A working copy as the runtime stores it, with a private folder, a path and a hash the backup must not carry. */
+  function storeCopy(store: Store, runId: string, fields: Record<string, unknown>) {
+    const data = { runId, directory: 'C:\\private\\copies\\never-export', kind: 'git-worktree', edits: 1, baseline: { files: [] },
+      changes: [{ path: 'src/secret-name.ts', status: 'applied', hash: 'd'.repeat(64) }], ...fields };
+    store.db.prepare('INSERT INTO workspace_copies(run_id,data) VALUES(?,?)').run(runId, JSON.stringify(data));
+  }
+
+  it('brings a turn’s files line back after Delete chat history, with its counts and outcome but no files (COD-299)', async () => {
+    const store = create(); const core = coreFor(store);
+    const { paid } = paidAndFreeChats(store);
+    const diff = { files: 3, additions: 42, deletions: 7, moved: 1 };
+    storeCopy(store, paid.run.id, { state: 'integrated', diff, review: { state: 'applied', heldAt: now(), decidedAt: now(), skipped: 1 } });
+    const lineBefore = new WorkspaceRecovery(store).view(paid.task.id).copies[0];
+    expect(changeOutcomeOf(lineBefore)).toEqual({ state: 'applied', skipped: 1 });
+
+    const text = backups(store).export();
+    const saved = JSON.parse(text).payload.changedFiles;
+    expect(saved).toEqual([{ runId: paid.run.id, diff, outcome: { state: 'applied', skipped: 1 } }]);
+    expect(text).not.toContain('never-export');
+    expect(text).not.toContain('secret-name');
+    expect(text).not.toContain('d'.repeat(64));
+
+    await core.command('eraseData', { scope: 'chats' });
+    expect(countOf(store, 'workspace_copies')).toBe(0);
+    restoreInto(store, text);
+    const view = new WorkspaceRecovery(store).view(paid.task.id);
+    expect(view.copies).toEqual([]);
+    expect(view.restored).toEqual([{ runId: paid.run.id, diff, outcome: { state: 'applied', skipped: 1 } }]);
+
+    // A backup of the restored chat keeps the line, and deleting the chat again takes it away.
+    expect(JSON.parse(backups(store).export()).payload.changedFiles).toEqual(saved);
+    await core.command('eraseData', { scope: 'chats' });
+    expect(store.db.prepare(`SELECT COUNT(*) AS count FROM settings WHERE id LIKE 'workspace-restored:%'`).get()!.count).toBe(0);
+  });
+
+  it('keeps the working copy here over a restored line, and skips runs that changed nothing (COD-299)', () => {
+    const store = create();
+    const { paid, free } = paidAndFreeChats(store);
+    const emptyRun: Run = { id: id(), taskId: free.id, status: 'completed', snapshot: paid.run.snapshot, startedAt: now(), error: null };
+    store.put('runs', emptyRun, { column: 'task_id', value: free.id });
+    storeCopy(store, paid.run.id, { state: 'ready', diff: { files: 1, additions: 2, deletions: 0 }, review: { state: 'pending', heldAt: now() } });
+    storeCopy(store, emptyRun.id, { state: 'integrated', diff: { files: 0, additions: 0, deletions: 0 } });
+    const text = backups(store).export();
+    expect(JSON.parse(text).payload.changedFiles).toEqual([{ runId: paid.run.id, diff: { files: 1, additions: 2, deletions: 0 }, outcome: { state: 'pending' } }]);
+    restoreInto(store, text);
+    const view = new WorkspaceRecovery(store).view(paid.task.id);
+    expect(view.restored).toBeUndefined();
+    expect(view.copies[0].review?.state).toBe('pending');
+  });
+
+  it('refuses a files line for a run the backup does not have (COD-299)', () => {
+    const store = create();
+    paidAndFreeChats(store);
+    const text = resign(backups(store).export(), payload => {
+      payload.changedFiles = [{ runId: id(), diff: { files: 1, additions: 1, deletions: 0 } }];
+    });
+    expect(() => backups(store).preview(text)).toThrow('Dòng tệp đã sửa');
   });
 
   it('refuses a backup whose run differs from the deleted one, even for a deleted chat', async () => {

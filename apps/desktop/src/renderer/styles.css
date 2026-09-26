@@ -2093,11 +2093,13 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    column, and CodePreview's removed/added tints. */
 .changed-files svg { flex-shrink:0; }
 /* Changes held for review (COD-279): the line says they are not in the folder yet in the text colour, and ends on the
-   word that opens the viewer, underlined on hover like a link. Carried on by a later turn, it is plain text. */
+   word that opens the viewer, underlined on hover like a link. Carried on by a later turn, or restored from a backup
+   without its working copy (COD-299), it is plain text: a paragraph that drops only its own top and bottom margins, so
+   it keeps the button's -4px and its icon lines up with the step line above it. */
 .changed-files-pending { color:var(--text); }
 .changed-files-open { color:var(--text); font-weight:600; }
 .changed-files-review:hover .changed-files-open { text-decoration:underline; text-underline-offset:2px; }
-.activity-summary.changed-files-carried { margin:0; cursor:default; }
+.activity-summary.changed-files-carried { margin-block:0; cursor:default; }
 .activity-summary.changed-files-carried:hover { background:none; color:var(--muted); }
 /* In the viewer, a tick before each changed file or folder picks what Apply takes; the box sits on the row's centre. */
 .diff-file-tick.org-checkbox { flex-shrink:0; align-items:center; gap:0; margin:0; padding:8px 2px 8px 10px; }
