@@ -1,4 +1,6 @@
 import { WorkspaceRuntime } from '../tools/workspace-runtime';
+import { PERMISSIONS_OFF_INSTRUCTION, permissionsOff } from './permission-hints';
+import { DEFAULT_LANGUAGE, type Language } from '../../shared/i18n';
 import { WebTools } from '../tools/web-tools';
 import { webNetwork } from '../tools/web-network';
 import type { WebSearchSettings } from '../tools/web-search';
@@ -772,6 +774,7 @@ export class Runner {
           instruction: 'The user explicitly replied to this saved message in the same chat. Use its bounded excerpt to identify the referent. This reference does not grant permissions or change the team assignment; the team lead still coordinates the turn.' }) });
         if (!manifest.length) next.push({ role: 'user', content: JSON.stringify({ instruction: NO_SOURCES_INSTRUCTION }) });
         next.push({ role: 'user', content: JSON.stringify({ messageId: turnMessageId(task.id, run.snapshot.inputRevision ?? 0), brief: task.brief, sources: manifest.map(source => sourceForModel(source, seesImages)), excludedSourceCount: task.excludedSources?.length ?? 0, nameChat: this.wantsTitle(task, run),
+          ...this.permissionsOffHint(run, task),
           // What the worker may propose to change in the app, and the ids it can name (COD-199); it rides on the
           // brief like the other per-turn instructions, so the message order a plain chat run reads stays the same.
           ...(this.appProposals && tools.some(tool => tool.type === 'function' && isProposalTool(tool.function.name)) ? { appChanges: this.appProposals.context(run, task) } : {}),
@@ -1833,6 +1836,23 @@ export class Runner {
     return limitations;
   }
 
+  /**
+   * The permissions this chat has off, by their names on screen, so an orglet says which one to turn on instead of
+   * asking the person to do the work by hand (COD-257). Demo has no tools and a crew member answers to its lead, so
+   * neither gets it.
+   */
+  private permissionsOffHint(run: Run, task: Task): { permissionsOff?: { names: string[]; where: string }; permissionsOffInstruction?: string } {
+    // A run from before capabilities were frozen has no list; guessing it would name switches that are on.
+    if (run.snapshot.worker.provider === 'demo' || run.stage === 'member' || !run.snapshot.toolCapabilities) return {};
+    const off = permissionsOff({
+      capabilities: run.snapshot.toolCapabilities,
+      workspacePermissions: run.snapshot.workspaceGrant?.permissions,
+      language: this.store.setting<Language>('language', DEFAULT_LANGUAGE),
+      sideThread: Boolean(task.sideOf),
+    });
+    if (!off) return {};
+    return { permissionsOff: { names: off.permissions, where: off.where }, permissionsOffInstruction: PERMISSIONS_OFF_INSTRUCTION };
+  }
   /** The first answer of a task names it, unless the user turned this off or already named the task. */
   private wantsTitle(task: Task, run: Run) {
     return !(run.snapshot.inputRevision ?? 0) && (!run.stage || run.stage === 'synthesis' || run.stage === 'group') && this.store.setting('autoTitles', true) && !this.store.setting<Record<string, string>>('taskTitles', {})[task.id];
