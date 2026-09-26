@@ -7,7 +7,7 @@ const meta = {
   component: Button,
   args: { children: 'Save changes', type: 'button' },
   argTypes: {
-    variant: { control: 'inline-radio', options: ['ghost', 'outline', 'primary'] },
+    variant: { control: 'inline-radio', options: ['ghost', 'outline', 'primary', 'danger'] },
     size: { control: 'inline-radio', options: ['default', 'icon'] },
   },
 } satisfies Meta<typeof Button>;
@@ -20,6 +20,8 @@ export const Ghost: Story = { args: { variant: 'ghost', children: 'Show details'
 export const Outline: Story = { args: { variant: 'outline', children: 'Cancel' } };
 
 export const Primary: Story = { args: { variant: 'primary' } };
+
+export const Danger: Story = { args: { variant: 'danger', children: 'Delete' } };
 
 export const Disabled: Story = { args: { variant: 'primary', disabled: true } };
 

@@ -36,6 +36,7 @@ import { orglet } from '../api';
 import { CommandBlock, Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import { dwellAbout, modelLists } from '../caches';
 import { dwellHandlers } from '../prefetch';
+import { chatHeadline } from '../../shared/forward';
 import { forgetAllDrafts } from '../drafts';
 
 /** 1 to 8 requests in flight per provider (COD-242). */
@@ -274,7 +275,7 @@ function EraseRow({ scope, title, description, caveat, question, busy, onErase }
   const total = scope === 'everything';
   const start = async () => {
     if (total) { setTyped(''); return; }
-    if (await confirmAction({ title: question, description: caveat, confirmLabel: t('Xóa') })) onErase(scope);
+    if (await confirmAction({ title: question, description: caveat, confirmLabel: t('Xóa'), tone: 'danger' })) onErase(scope);
   };
   return <div ref={row}>
     <Row title={title} description={description}>
@@ -438,7 +439,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const reservationName = (reservationId: string) => {
     const reservation = workspace.budgetReservations.find(item => item.id === reservationId);
     const task = workspace.tasks.find(item => item.id === reservation?.taskId);
-    return task?.title || task?.brief.split('\n')[0] || reservation?.taskId;
+    return task?.title || (task ? chatHeadline(task) : undefined) || reservation?.taskId;
   };
   /** Runs one change and toasts its outcome; `about` names the setting or provider it concerned, for the notice centre. */
   const act = async (action: () => Promise<string | void>, about?: string) => {

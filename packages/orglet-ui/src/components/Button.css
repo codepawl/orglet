@@ -22,6 +22,15 @@
   background: var(--org-accent, #4473d3);
   opacity: .85;
 }
+/* The confirming button of something that cannot be undone, such as deleting: filled like primary, in the error colour. */
+.org-button-danger {
+  background: var(--org-error, #a82626);
+  color: var(--org-error-ink, #fff);
+}
+.org-button-danger:hover:not(:disabled) {
+  background: var(--org-error, #a82626);
+  opacity: .85;
+}
 /* A secondary button is a soft filled pill, not a ring: the kit draws no borders. */
 .org-button-outline { background: var(--org-surface, #f4f4f5); }
 .org-button-outline:hover:not(:disabled) { background: color-mix(in srgb, var(--org-text, #111) 10%, var(--org-bg, #fff)); }

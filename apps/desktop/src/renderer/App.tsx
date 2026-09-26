@@ -43,6 +43,7 @@ import { SendToPicker } from './components/SendToPicker';
 import { sendToOptions, type SendToOption } from './sendTo';
 import { ForwardPicker, type ForwardChoice } from './components/ForwardPicker';
 import { forwardOptions, forwardSummary, type ForwardRequest } from './forward';
+import { chatHeadline } from '../shared/forward';
 import { attachIntake, carriedDraft, type Incoming, type IncomingChat, type IncomingFiles } from '../shared/incoming';
 import { dropDraft, emptyChatDraftKey, keepDraft, readDraft } from './drafts';
 import { tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
@@ -92,7 +93,7 @@ function writeSeenStorage(value: Record<string, SeenInfo>) {
 function taskNameOf(workspace: Pick<Workspace, 'tasks'>, taskId: string): string | undefined {
   const task = workspace.tasks.find(item => item.id === taskId);
   if (!task) return undefined;
-  return task.title || task.brief.split('\n')[0].trim();
+  return task.title || chatHeadline(task);
 }
 
 const SIDEBAR_WIDTH = { min: 190, max: 420, default: 228, step: 16 };
