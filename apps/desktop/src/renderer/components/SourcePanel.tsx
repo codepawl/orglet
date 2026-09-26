@@ -13,6 +13,7 @@ import { Checkbox } from './Checkbox';
 import { ChevronRight } from './icons';
 import { fileKindIcon, fileKindLabel, fileSize } from './Attachment';
 import { tableSizeLabel } from './TablePreview';
+import { columnKindLabel, columnRangeLabel, datasetHasNotesCheck, datasetNotes, formatNumber } from './checkNotes';
 import { Input } from '@codepawl/orglet-ui';
 
 export type SourceTarget = { type: 'source' | 'checker'; id: string; lines?: [number, number] };
@@ -37,16 +38,28 @@ function ComparisonLine({ comparison }: { comparison: Comparison }) {
   return <p>{parts.join(' ')}</p>;
 }
 
-/** One checked file: its size, then a row per column with how many cells are empty and how many values differ. */
+/**
+ * One checked file: its size, a row per column (what it holds, empty cells, different values, lowest to highest
+ * number), then one plain sentence for each thing worth a second look (COD-297).
+ */
 function DatasetResult({ dataset, name }: { dataset: Dataset; name?: string }) {
+  const notes = datasetNotes(dataset);
   return <section>
     <h4>{name}</h4>
     <p>{tableSizeLabel(dataset.rows, dataset.columns.length)}</p>
     <div className="profile-table"><table>
-      <thead><tr><th>{t('Cột')}</th><th>{t('Kiểu')}</th><th>{t('Ô trống')}</th><th>{t('Giá trị khác nhau')}</th></tr></thead>
-      <tbody>{dataset.columns.map(column => <tr key={column.name}><th>{column.name}</th><td>{column.type}</td><td>{column.nulls}</td><td>{column.distinctNonNull}</td></tr>)}</tbody>
+      <thead><tr><th>{t('Cột')}</th><th>{t('Kiểu')}</th><th>{t('Ô trống')}</th><th>{t('Giá trị khác nhau')}</th><th>{t('Khoảng giá trị')}</th></tr></thead>
+      <tbody>{dataset.columns.map(column => <tr key={column.name}>
+        <th>{column.name}</th>
+        <td>{columnKindLabel(column)}</td>
+        <td>{formatNumber(column.nulls)}</td>
+        <td>{formatNumber(column.distinctNonNull)}</td>
+        <td className="profile-range">{columnRangeLabel(column)}</td>
+      </tr>)}</tbody>
     </table></div>
     {dataset.id && <p>{t('Cột mã {0}: ô trống {1} · dòng trùng mã {2}.', [dataset.id.column, dataset.id.nulls, dataset.id.duplicateNonNull])}</p>}
+    {notes.length > 0 && <ul className="check-notes">{notes.map((note, index) => <li key={index}>{note}</li>)}</ul>}
+    {notes.length === 0 && datasetHasNotesCheck(dataset) && <p>{t('Không thấy dòng trùng, số âm hay ô lạc kiểu.')}</p>}
   </section>;
 }
 
@@ -147,7 +160,7 @@ export function SourcePanel({ detail, refresh, target, openSource }: { detail: T
     </section>)}
     {dataSources.length > 0 && <section className="form">
       <h3>{t('Kiểm tra dữ liệu trên máy')}</h3>
-      <p className="muted">{t('Chọn một hoặc hai tệp dữ liệu. Orglet đếm dòng, cột và ô trống ngay trên máy này, không gửi đi đâu.')}</p>
+      <p className="muted">{t('Chọn một hoặc hai tệp dữ liệu. Ngay trên máy này, Orglet đếm dòng, cột và ô trống, tìm dòng trùng, số âm và ô lạc kiểu, không gửi đi đâu.')}</p>
       {dataSources.map(source => <Checkbox key={source.id} checked={selected.includes(source.id)} disabled={source.revoked || busy || (!selected.includes(source.id) && selected.length >= 2)} onChange={event => setSelected(event.target.checked ? [...selected, source.id] : selected.filter(id => id !== source.id))}>{source.name}</Checkbox>)}
       <label>{t('Cột ID (không bắt buộc)')}<Input value={idColumn} onChange={event => setIdColumn(event.target.value)} maxLength={256} placeholder={t('Ví dụ: id')} /></label>
       <p className="muted">{t('Có cột mã thì Orglet đếm mã trùng hoặc trống, và so mã giữa hai tệp.')}</p>
