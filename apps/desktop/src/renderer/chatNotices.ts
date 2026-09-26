@@ -68,7 +68,7 @@ function ownerName(task: Task, names: ChatNames): string {
 }
 
 function scheduleName(task: Task, names: ChatNames): string {
-  return names.routines.find(routine => routine.id === task.routineId)?.name ?? chatName(task);
+  return names.routines.find(routine => routine.id === task.routineId)?.name ?? task.routineName ?? chatName(task);
 }
 
 /** A notice inside the window: the toast, which Notifications keeps, and the chat it opens. */

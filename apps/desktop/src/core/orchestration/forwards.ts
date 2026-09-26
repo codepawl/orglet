@@ -45,6 +45,8 @@ export class Forwards {
     if (task.routineId) {
       const routine = this.store.all<Routine>('routines').find(item => item.id === task.routineId);
       if (routine) return clip(routine.name);
+      // A deleted schedule's runs keep its name (COD-283).
+      if (task.routineName) return clip(task.routineName);
     }
     if (task.teamId && !task.sideOf) {
       const team = this.store.all<Team>('teams').find(item => item.id === task.teamId);

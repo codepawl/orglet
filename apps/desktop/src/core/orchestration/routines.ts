@@ -1,5 +1,5 @@
 import { RoutineInput, type FolderIntake, type Routine, type TaskInput, type Team, type Worker, type Skill, type Task } from '../../shared/contracts';
-import { nextOccurrence } from '../../shared/schedule';
+import { SKIPPED_WHILE_INACTIVE, nextOccurrence } from '../../shared/schedule';
 import { triggerOf, type RoutineTrigger } from '../../shared/routine-triggers';
 import { Store, id, now } from '../storage/database';
 import type { RoutineFolders } from '../storage/routine-folders';
@@ -10,7 +10,7 @@ import { defaultBrowserChoice } from '../../shared/browser';
 
 /** First tick after startup, a gap, or overdue delay above this is a miss — never auto-replayed. See docs/routines.md. */
 export const ROUTINE_MISS_MS = 30_000;
-export const SKIPPED_WHILE_INACTIVE = 'Đã bỏ qua lịch khi app không hoạt động hoặc còn lần chờ xử lý. Có thể chạy bù một lần.';
+export { SKIPPED_WHILE_INACTIVE };
 const UNFINISHED_TASK_STATUSES: readonly Task['status'][] = ['queued', 'running', 'pausing', 'paused', 'interrupted', 'waiting_budget', 'waiting_input'];
 const PREVIOUS_RUN_BEFORE_CATCH_UP = 'Lần trước chưa kết thúc. Xử lý công việc đó trước khi chạy bù.';
 const PREVIOUS_RUN_BEFORE_EVENT = 'Lần trước của lịch này chưa kết thúc. Xử lý công việc đó rồi chạy lại.';
@@ -66,11 +66,28 @@ export class Routines {
     if (input.task.toolCapabilities?.includes('browser.act')) throw new Error(SCHEDULE_NEVER_ACTS);
     if (input.task.toolCapabilities?.includes('desktop.read') || input.task.desktop?.apps.length) throw new Error(SCHEDULE_NO_DESKTOP);
     const previous = input.id ? this.store.get<Routine>('routines', input.id) : undefined;
-    if (!previous && this.store.all('routines').length >= 100) throw new Error('Workspace đã có đủ 100 lịch. Sửa một lịch hiện có.');
+    if (!previous && this.store.all('routines').length >= 100) throw new Error('Workspace đã có đủ 100 lịch. Xóa hoặc sửa một lịch hiện có.');
     // A save that names no trigger keeps the one the routine has; switching back to the clock names `schedule`.
     const trigger = this.normalizedTrigger(input.trigger ?? previous?.trigger);
     const routine: Routine = { ...input, ...(trigger ? { trigger } : {}), id: input.id ?? id(), revision: (previous?.revision ?? 0) + 1, approvedConfig: this.configuration(input.task, trigger), nextDueAt: nextOccurrence(input.schedule, this.clock()), pending: null, ...(previous?.lastTaskId ? { lastTaskId: previous.lastTaskId } : {}) };
     this.store.put('routines', routine); this.notify(); return routine;
+  }
+  /**
+   * Deletes a routine (COD-283). Its past runs are chats and stay: each keeps `routineId`, so it is still a schedule's
+   * run with a schedule's limits, and takes the routine's name as `routineName`, so it still says where it came from.
+   * The files a folder trigger already handled go with the routine.
+   */
+  remove(routineId: string) {
+    if (this.dispatching.has(routineId)) throw new Error('Lịch đang được xử lý.');
+    const routine = this.store.get<Routine>('routines', routineId);
+    this.store.transaction(() => {
+      for (const task of this.store.all<Task>('tasks')) {
+        if (task.routineId === routineId) this.store.patchTask(task.id, { routineName: routine.name });
+      }
+      this.folders.forgetArrivals(routineId);
+      this.store.db.prepare('DELETE FROM routines WHERE id=?').run(routineId);
+    });
+    this.notify();
   }
   dismiss(routineId: string) {
     const routine = this.store.get<Routine>('routines', routineId);
@@ -118,8 +135,10 @@ export class Routines {
     const previousTick = this.lastTick;
     this.lastTick = timestamp;
     try {
-      for (const routine of this.store.all<Routine>('routines')) {
-        if (triggerOf(routine).kind !== 'schedule') continue;
+      for (const listed of this.store.all<Routine>('routines')) {
+        // A run awaited above may have given the person time to delete a later routine in the list.
+        const routine = this.store.all<Routine>('routines').find(item => item.id === listed.id);
+        if (!routine || triggerOf(routine).kind !== 'schedule') continue;
         if (!routine.enabled || new Date(routine.nextDueAt).getTime() > timestamp || this.dispatching.has(routine.id)) continue;
         if (shouldDeferRoutine(timestamp, new Date(routine.nextDueAt).getTime(), previousTick, Boolean(routine.pending))) {
           this.defer(routine, at, SKIPPED_WHILE_INACTIVE);

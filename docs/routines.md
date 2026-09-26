@@ -67,11 +67,21 @@ Every run is its own chat row with `routineId`, apart from the orglet's or crew'
 
 The **Open latest run** button on the routine's card in **Schedules** stays.
 
+## Deleting a routine
+
+The card's **⋮** menu has **Delete schedule** (`deleteRoutine`), which asks inside the same menu before it deletes (COD-283). Until then only **Erase everything** removed a routine, so dead ones piled up: the 100-routine cap and the rule below kept pointing at routines nobody could remove.
+
+- **What goes.** The routine row, and for a folder trigger the files it already handled (`routine_arrivals`); the watcher stops at once. The folder's grant row in `routine_folders` stays, like any grant the picker made.
+- **What stays.** Every run is a chat and stays. Each keeps `routineId`, so it is still a routine's run with a routine's limits (no MCP, no memory writes, no proposals, no acting on pages), and takes the routine's name as `routineName`. The chat's header keeps that name, the line at the top reads "A run of the deleted schedule *name*, by *orglet*" with no **Open schedule**, and notices keep the name. The sidebar row goes with the routine, since it stood for the routine; the runs are still in Search and Notifications. A backup accepts a run whose routine is gone only when it carries that name.
+- **When it is refused.** While the routine is starting a run (the same `dispatching` lock catch-up uses). A run already going keeps going; it no longer needs the routine.
+
+An orglet or crew with an enabled routine still cannot be archived or deleted ("Turn off or delete the schedule *name* first"). The window checks first and says which schedule, with **View schedules**, instead of leaving the refusal as a dead end.
+
 ## What runs, and when
 
 The rest of this page is the clock trigger. Orglet checks schedules only while the app is open. The core process polls every five seconds (`apps/desktop/src/core/entry.ts`). Closing the app, sleeping, or shutting the machine down creates no tasks.
 
-Each enabled routine stores one next due instant in UTC (`nextDueAt`) in the schedule's IANA timezone. There is no `lastRun` / `nextRun` field and no queue of missed dates.
+Each enabled routine stores one next due instant in UTC (`nextDueAt`) in the schedule's IANA timezone. The editor picks the zone from a list (`timeZoneChoices` in `renderer/timeZones.ts`): this computer's zone first, then every zone the runtime lists by region with its current offset, then UTC, which the runtime's list leaves out. A saved zone the list lacks, such as `Asia/Ho_Chi_Minh` where the runtime says `Asia/Saigon`, is kept as saved, so opening and saving an old routine never moves it. The card writes the daily time and the next run on the interface language's clock (`01:36` in Vietnamese, `1:36 AM` in US English). There is no `lastRun` / `nextRun` field and no queue of missed dates.
 
 ## Missed window
 
@@ -106,7 +116,7 @@ Example: a daily 09:00 schedule, machine off for 30 days, app opened again.
 
 1. No tasks were created while the machine was off.
 2. The first tick sees `lastTick === null` and an overdue `nextDueAt`, so it defers.
-3. The UI shows one missed-run prompt with that first missed `dueAt`, the skip reason, and the already-advanced next due time.
+3. The card shows one calm note, not an error: "Missed the run at *first missed `dueAt`*", why in plain words (Orglet was closed or the computer was asleep; any other reason is the start that failed), and that catching up runs it once however many times it missed while the next run stays at the already-advanced time.
 4. The user runs catch-up once, dismisses, or leaves the prompt. The next scheduled time remains on the calendar either way.
 
 Guards that still apply to catch-up: recurring approval fingerprint, a non-terminal prior task, source byte verification, and a revision check. Occurrence advancement and task insert share one database transaction.
