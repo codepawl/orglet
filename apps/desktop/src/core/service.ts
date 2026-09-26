@@ -19,6 +19,7 @@ import { TeamRunner } from './orchestration/team';
 import templates from '../../../../templates/catalog.json';
 import type { ProfileExecutor, ProfileRecord } from '../shared/profiles';
 import { Backups } from './storage/backup';
+import { DELETED_CHAT_TEXT, deletedRunSnapshot } from './storage/deleted-chat';
 import { ChatSearch } from './storage/chat-search';
 import { ReviewPolicy } from '../shared/review';
 import { Preflight } from './orchestration/preflight';
@@ -83,6 +84,8 @@ export const localHarnessRuntime = (accountRoot?: string): HarnessRuntime => ({
 
 /** The Limit per task of a chat whose orglet or crew never set one, as the composer and the terminal command use. */
 const DEFAULT_TASK_BUDGET_MICROS = 500_000;
+/** Only main sends this, with the path its picker returned; the window never names a path. */
+const relinkSourceInput = z.object({ taskId: Id, sourceId: Id, path: z.string().min(1).max(32768) }).strict();
 
 /** A folder waiting for a chat's first message, checked again at that moment (COD-186). */
 type NewChatFolder = { pending: PendingWorkspace; resolved: ResolvedDirectory; failure?: undefined } | { pending: PendingWorkspace; resolved?: undefined; failure: string };
@@ -174,6 +177,17 @@ export class CoreService {
     const input = commands.sourceBytes.parse(raw);
     const task = this.store.get<Task>('tasks', input.taskId);
     return this.sources.pathOf(input.id, task.sourceIds);
+  }
+  /**
+   * The file main's picker chose for a source a backup restored without its contents (COD-281). Only a chat that holds
+   * the source can point it at a file, and only at the same bytes.
+   */
+  async relinkSource(raw: unknown): Promise<Source> {
+    const input = relinkSourceInput.parse(raw);
+    const task = this.liveTask(input.taskId);
+    const source = await this.sources.relink(input.sourceId, task.sourceIds, input.path);
+    this.notify();
+    return source;
   }
   /**
    * Keeps a folder main's picker chose. For a chat that has not started it waits under the worker or team until
@@ -1420,7 +1434,6 @@ export class CoreService {
     const keepArtifacts = new Set(origins.flatMap(origin => origin.kind === 'run' ? [origin.artifactId] : []));
     const memoriesToDelete = this.knowledge.memoriesOnlyFrom(task.id);
     const tombstone = charged || keepArtifacts.size > 0;
-    const removed = '(đã xóa)';
     this.store.transaction(() => {
       for (const run of runs) {
         db.prepare('DELETE FROM events WHERE run_id=?').run(run.id);
@@ -1442,11 +1455,9 @@ export class CoreService {
       for (const item of proposed) this.knowledge.deleteRows(item.id);
       for (const item of memoriesToDelete) this.knowledge.deleteRows(item.id);
       if (tombstone) {
-        for (const run of runs) this.store.update('runs', { ...run, snapshot: { ...run.snapshot,
-          ...(run.snapshot.input ? { input: { ...run.snapshot.input, brief: removed, replyTo: undefined } } : {}),
-          context: undefined, preflightId: undefined, upstreamArtifactIds: undefined } });
+        for (const run of runs) this.store.update('runs', { ...run, snapshot: deletedRunSnapshot(run.snapshot) });
         const { currentInput: _input, messageReactions: _reactions, handoff: _handoff, evidenceRequests: _requests, archivedAt: _archived, ...rest } = task;
-        this.store.update('tasks', { ...rest, brief: removed, deletedAt: this.clock().toISOString() });
+        this.store.update('tasks', { ...rest, brief: DELETED_CHAT_TEXT, deletedAt: this.clock().toISOString() });
       } else {
         for (const run of runs) db.prepare('DELETE FROM step_attempts WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM runs WHERE task_id=?').run(task.id);

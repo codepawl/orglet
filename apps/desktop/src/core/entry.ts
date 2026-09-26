@@ -161,6 +161,7 @@ port.on('message', async ({ data }) => {
       ? await core.sources.import(z.array(z.string().min(1).max(32768)).max(20).parse(args))
       : command === 'importFolder' ? await core.sources.importFolder(z.string().min(1).max(32768).parse(args))
       : command === 'sourcePath' ? core.sourcePath(args)
+      : command === 'relinkSource' ? await core.relinkSource(args)
       : command === 'grantWorkspace' ? await core.grantWorkspace(args)
       : command === 'runRoutine' ? await core.runRoutine(args)
       : command === 'exportArtifact' ? typeof args === 'string' ? core.exportMarkdown(Id.parse(args))

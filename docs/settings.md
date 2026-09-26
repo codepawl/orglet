@@ -56,7 +56,12 @@ These numbers cover requests Orglet makes through an API key. Harness runs use t
 
 **Save backup** writes one JSON file with orglets, crews, revisions, schedules, chat history, answers and reports, checker results, memories and knowledge, reactions and costs. It does **not** include API keys, source file contents, the working-folder grants, checkpoint context, or the proposal cards in chats; reports can contain excerpts of your sources, so keep the file private. The limit is 50 MB.
 
-**Restore from file** validates the backup and adds the records that are missing; what is already there stays. Restored schedules come back disabled, restored sources have no file access until you attach the files again, and a restored backup grants no folder or web access. Interrupted requests are not resent.
+**Restore from file** validates the backup and adds the records that are missing; what is already there stays. Restored schedules come back disabled, and a restored backup grants no folder or web access. Interrupted requests are not resent.
+
+- **After Delete chat history.** Restoring brings the deleted chats back with their answers. A chat you kept talking in after the backup was saved comes back with those later turns shown as deleted. Costs are counted once: the cost records the deletion kept are the same ones the backup holds.
+- **On a new computer.** If you have not used the Researcher that a new install starts with, the backup's orglets take its place instead of sitting beside it. Orglets and crews that were archived or deleted when you saved the backup stay that way. Schedule runs from the backup do not show up as new notifications.
+- **Attached files.** A backup holds no file contents, so a restored file opens with **Choose file**. Pick the same file on this computer and Orglet reads it again; a different file, even with the same name, is refused.
+- **If restoring fails**, a dialog says why, and nothing in Orglet has changed.
 
 ### Erase
 
