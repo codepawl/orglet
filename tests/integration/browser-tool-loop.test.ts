@@ -91,7 +91,10 @@ async function until(check: () => boolean, timeoutMs = 60_000) {
 
 const call = (name: string, argumentsValue: unknown): ModelReply => ({ calls: [{ id: id(), name, arguments: JSON.stringify(argumentsValue) }], usage: { input: 100, output: 30 } });
 
-describe.runIf(found !== null)('a real browser in the tool loop', () => {
+// A real Chrome run is several model steps against a live page; a busy CI runner has taken over 30 seconds for one.
+const REAL_BROWSER_TIMEOUT_MS = 120_000;
+
+describe.runIf(found !== null)('a real browser in the tool loop', { timeout: REAL_BROWSER_TIMEOUT_MS }, () => {
   it('opens, reads, finds and keeps a screenshot of a listed local page, and refuses everything else', async () => {
     const seen: unknown[][] = [];
     const script = [

@@ -146,7 +146,10 @@ function actions(taskId: string) {
 
 const finished = (taskId: string) => ['completed', 'failed', 'cancelled'].includes(store.detail(taskId).task.status) && !core!.runner.isActive(taskId);
 
-describe.runIf(found !== null)('acting on pages in a real browser', () => {
+// A real Chrome run is several model steps against a live page; a busy CI runner has taken over 30 seconds for one.
+const REAL_BROWSER_TIMEOUT_MS = 120_000;
+
+describe.runIf(found !== null)('acting on pages in a real browser', { timeout: REAL_BROWSER_TIMEOUT_MS }, () => {
   it('types into a search box and clicks Search without asking, and refuses a ref the page no longer has', async () => {
     const script: Script = [
       () => call('browser_open', { url: `${base}/shop`, tabId: null }),
