@@ -77,6 +77,8 @@ import { runBy } from '../shared/schedule-runs';
 import { Decisions } from './decisions/service';
 import { decisionsDirectory } from './decisions/manifest';
 import { QuietRunReview } from './orchestration/quiet-runs';
+import { PermissionSuggestions } from './orchestration/permission-suggestions';
+import { TurnRouting } from './orchestration/turn-routing';
 
 /**
  * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
@@ -148,6 +150,10 @@ export class CoreService {
   decisions: Decisions;
   /** Asks Tacet whether a quiet schedule run's answer is news worth announcing (COD-303). */
   readonly quietRuns: QuietRunReview;
+  /** Asks Tacet which permissions a message being typed needs (COD-305). */
+  readonly permissionSuggestions: PermissionSuggestions;
+  /** Asks Tacet who in a group chat answers a message that tags nobody (COD-305). */
+  readonly turnRouting: TurnRouting;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
   /** Set while a read started by a Claude Code run is on, so a run of many steps starts one read, not one per step. */
@@ -184,6 +190,8 @@ export class CoreService {
     const dataDirectory = store.databasePath && store.databasePath !== ':memory:' ? dirname(resolve(store.databasePath)) : undefined;
     this.decisions = new Decisions({ directory: dataDirectory && decisionsDirectory(dataDirectory) });
     this.quietRuns = new QuietRunReview(store, () => this.decisions, this.notify, clock);
+    this.permissionSuggestions = new PermissionSuggestions(() => this.decisions);
+    this.turnRouting = new TurnRouting(store, () => this.decisions, clock);
     this.policy.captureHandoffs();
   }
   /**
@@ -518,6 +526,7 @@ export class CoreService {
       case 'installDecisionModel': return this.decisions.install();
       case 'cancelDecisionModel': return this.decisions.cancel();
       case 'removeDecisionModel': return this.decisions.remove();
+      case 'suggestPermissions': return this.permissionSuggestions.suggest(commands.suggestPermissions.parse(args).text);
       case 'cancel': {
         const taskId = (args as { id: string }).id;
         this.teams.cancel(taskId); this.runner.cancel(taskId);
@@ -1627,7 +1636,8 @@ export class CoreService {
       const repliedTo = this.repliedOrglet(task, group);
       if (repliedTo) return [repliedTo];
     }
-    return group;
+    // Tacet's pick for this turn (COD-305), so a resumed or retried turn keeps the orglet it picked.
+    return this.turnRouting.recorded(task, group) ?? group;
   }
   /** The group member who wrote the answer this turn replies to, if the turn replies to one. */
   private repliedOrglet(task: Task, group: Worker[]): Worker | undefined {
@@ -1772,7 +1782,7 @@ export class CoreService {
     this.store.update('tasks', task);
     if (task.teamSnapshot) { void this.teams.run(task, task.teamSnapshot); return; }
     const group = this.groupTurnWorkers(task);
-    if (group) { void this.teams.chat(task, group); return; }
+    if (group) { void this.teams.chat(task, group, false, this.turnRouting.router(task, group)); return; }
     const worker = this.store.get<Worker>('workers', task.workerId);
     const skill = this.store.get<Skill>('skills', worker.skillId);
     const run: Run = { id: id(), taskId: task.id, status: 'queued', snapshot: { workspaceGrant: this.workspaceGrants.snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, inputRevision: task.inputRevision ?? 0, input: task.currentInput ?? { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };
