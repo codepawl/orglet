@@ -62,7 +62,7 @@ export function TacetSetupView({ state, busy = false, onDownload, onCancel, onRe
     <div className="setting-row">
       <div className="setting-text">
         <span id={titleId} className="setting-title">{t('Tacet trên máy')}</span>
-        <span className="setting-description">{t('Báo khi lịch chạy hằng giờ có điều mới, gợi ý quyền một tin nhắn cần, chọn Tí trả lời trong trò chuyện nhóm, nạp ghi chú hợp với tin nhắn và hỏi bạn trước một bước trông dễ gây hậu quả trên trang hay ứng dụng. Chạy trên máy này, không gửi gì ra ngoài.')}</span>
+        <span className="setting-description">{t('Báo khi lịch chạy hằng giờ có điều mới, gợi ý quyền, chọn Tí trả lời trong nhóm, nạp ghi chú hợp với tin nhắn và hỏi trước những bước trông dễ gây hậu quả. Chạy trên máy này, không gửi gì ra ngoài.')}</span>
         {state ? statusLine(state) : <Skeleton width="30%" />}
         {moving && <span className="tacet-setup-bar" role="progressbar" aria-labelledby={titleId} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={state ? progressLabel(state) : undefined}>
           <span style={{ width: `${percent}%` }} />

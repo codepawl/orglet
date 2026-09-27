@@ -3289,7 +3289,7 @@ export const en: Dictionary = {
   '{0} đã chạm giới hạn chi phí hôm nay': '{0} reached today\'s cost cap',
   // Tacet on this computer (COD-303).
   'Tacet trên máy': 'Tacet on this computer',
-  'Báo khi lịch chạy hằng giờ có điều mới, gợi ý quyền một tin nhắn cần, chọn Tí trả lời trong trò chuyện nhóm, nạp ghi chú hợp với tin nhắn và hỏi bạn trước một bước trông dễ gây hậu quả trên trang hay ứng dụng. Chạy trên máy này, không gửi gì ra ngoài.': 'Tells you when an hourly schedule finds something new, suggests the permissions a message needs, picks who answers in a group chat, loads notes that fit your message, and asks you before a step on a page or in an app that looks risky. Runs on this computer; nothing is sent out.',
+  'Báo khi lịch chạy hằng giờ có điều mới, gợi ý quyền, chọn Tí trả lời trong nhóm, nạp ghi chú hợp với tin nhắn và hỏi trước những bước trông dễ gây hậu quả. Chạy trên máy này, không gửi gì ra ngoài.': 'Tells you when an hourly schedule finds something new, suggests permissions, picks who answers in a group chat, loads notes that fit your message, and asks before steps that look risky. Runs on this computer; nothing is sent out.',
   '{0}, tải một lần': '{0}, downloaded once',
   '{0} trên {1}': '{0} of {1}',
   'Đang tải {0}': 'Downloading {0}',
