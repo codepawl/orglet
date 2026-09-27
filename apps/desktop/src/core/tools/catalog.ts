@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FontFamily } from '../../shared/fonts';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { Finding, FindingCategory, Id, MAX_CREW_MEMBERS, Report, SourceLocation, TeamPlan, PlanAssignment, type Run, type Task } from '../../shared/contracts';
 import { ProfileArgs } from '../../shared/profiles';
@@ -104,7 +105,10 @@ function defineTool(name: string, description: string, schema: z.ZodType, modelS
   capability: ToolCapability | undefined, timeoutMs: number, cancellation: ToolDefinition['cancellation']): ToolDefinition {
   return { schema, capability, timeoutMs, cancellation,
     model: { type: 'function', function: { name, description, strict: true,
-      parameters: z.toJSONSchema(modelSchema, { target: 'draft-7' }) } },
+      parameters: z.toJSONSchema(modelSchema, { target: 'draft-7', override: ({ zodSchema, jsonSchema }) => {
+        // xAI rejects Unicode property escapes in tool schemas; the runtime schema still validates font names.
+        if (zodSchema === FontFamily) delete jsonSchema.pattern;
+      } }) } },
   };
 }
 
