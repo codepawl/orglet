@@ -73,7 +73,7 @@ Decision 2026-09-21 (COD-148): Windows builds are signed with a Certum Open Sour
 
 A new certificate has no SmartScreen reputation, so **Windows protected your PC** can still appear for a while, now naming the publisher. Put this in the GitHub Release notes, in plain language:
 
-> Setup is signed. Windows may still show a SmartScreen warning while the certificate builds up its reputation; check that it names Nguyen Xuan An as the publisher, then choose More info → Run anyway.
+> Setup is signed. Windows may still show a SmartScreen warning while the certificate builds up its reputation; check that it names Open Source Developer Xuan An Nguyen as the publisher, then choose More info → Run anyway.
 
 ## Installer smoke (optional human validation)
 
