@@ -15,16 +15,18 @@ Orglet is early. Expect rough edges, and check answers against your own sources 
 
 ## 1. Get the app
 
-You need **Windows** or **macOS**. Linux is later. You do not need an Orglet login.
+Use **Windows** or **macOS** (Apple silicon). An experimental Linux x64 ZIP is also available. You do not need an Orglet login.
 
 ### From a GitHub Release
 
-The [latest release](https://github.com/codepawl/orglet/releases/latest) carries a Windows **Setup.exe** (installs per user and updates itself) and a **ZIP** (unzip and run; does not update itself).
+The [latest release](https://github.com/codepawl/orglet/releases/latest) carries a Windows **Setup.exe** (installs per user and updates itself) and a **ZIP** (unzip and run; does not update itself). Release 0.7.2 also includes a signed, notarized Apple silicon macOS ZIP and an experimental Linux x64 ZIP.
 
 | If you use | Do this |
 |---|---|
-| Windows | Run Setup. SmartScreen may show **Windows protected your PC** while the signing certificate is new: check that it names **Nguyen Xuan An** as the publisher, then **More info** → **Run anyway**. Details: [user guide → Install](user-guide.md#install). |
-| macOS | Unzip `Orglet.app`. It is not a GitHub Release asset yet; use a CI ZIP or a local make. Gatekeeper may warn on an unsigned build: right-click → **Open**. Details: [macos-packaging.md](macos-packaging.md). |
+| Windows | Run Setup. SmartScreen may show **Windows protected your PC** while the signing certificate is new: check that it names **Open Source Developer Xuan An Nguyen** as the publisher, then **More info** → **Run anyway**. Details: [user guide → Install](user-guide.md#install). |
+| macOS | Download the Apple silicon ZIP from the release, unzip `Orglet.app` and move it to Applications. The 0.7.2 release is signed, notarized and stapled. There is no Intel Mac download yet. Details: [macos-packaging.md](macos-packaging.md). |
+
+| Linux x64 | Download the experimental ZIP, unzip it and run the `Orglet` binary. CI passed a desktop smoke on Ubuntu; daily desktop use is not verified. There are no automatic updates. See [linux-packaging.md](linux-packaging.md). |
 
 ### From source
 
