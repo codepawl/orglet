@@ -216,6 +216,15 @@ export class Decisions {
     return answer;
   }
 
+  /**
+   * Starts loading the model without a question, when a question is likely soon (COD-306: a run that has begun using
+   * the browser or a desktop app). Does nothing when Tacet is not installed or is already loaded.
+   */
+  warm(): void {
+    if (!this.isInstalled() || this.download || !this.options.runtime) return;
+    this.loadRuntime().then(() => this.keepLoadedForAWhile(), () => undefined);
+  }
+
   /** Quitting: the worker thread goes with the process anyway, but a clean close releases the session first. */
   async shutdown() {
     this.download?.controller.abort(new Error('Đã hủy tải.'));

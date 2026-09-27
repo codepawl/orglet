@@ -13,8 +13,9 @@ import {
 import { Store, id, now } from '../storage/database';
 import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import { checkBrowserUrl } from './browser-policy';
-import { classifyBrowserStep, type BrowserVerdict } from './browser-risk';
+import { classifyBrowserStep, riskReasons, type BrowserVerdict } from './browser-risk';
 import { BrowserPerson } from './browser-person';
+import type { ActionToJudge, SecondOpinion } from '../decisions/action-risk';
 
 /**
  * The core side of Orglet's browser (COD-261). Every step is decided here before the host does it: the capability,
@@ -239,6 +240,21 @@ function judge(step: BrowserActStep, inspected: BrowserInspectResult): BrowserVe
   return { risk: 'input', reasons: [] };
 }
 
+/**
+ * A step that carries something out, as Tacet reads it: a click, Enter, or typing that ends with Enter. Typing alone,
+ * choosing in a list and the other keys only fill in or move around, so they are not asked about.
+ */
+function browserActionToJudge(step: BrowserActStep, inspected: BrowserInspectResult, site: string): ActionToJudge | undefined {
+  const target = inspected.target;
+  const element = elementLabel(target);
+  const role = target?.role || target?.tag || 'element';
+  const where = { element, role, site, page: inspected.title };
+  if (step.kind === 'click') return { surface: 'browser', kind: 'click', ...where };
+  if (step.kind === 'press' && step.key === 'Enter') return { surface: 'browser', kind: 'press', key: step.key, ...where };
+  if (step.kind === 'type' && step.submit) return { surface: 'browser', kind: 'type', text: step.text, ...where };
+  return undefined;
+}
+
 /** What the page tried during a step that Orglet stopped, in words for the worker. */
 function stoppedNotes(acted: BrowserActResult): string[] {
   const notes: string[] = [];
@@ -275,6 +291,8 @@ export class BrowserTools {
   private endedWhileHeld = new Map<string, Set<string>>();
   /** Answers to consequential steps and the take-over, kept while the app runs. */
   readonly person: BrowserPerson;
+  /** Tacet's second opinion on steps the rules let through (COD-306); unset in tests and where Tacet cannot run. */
+  secondOpinion?: SecondOpinion;
 
   constructor(private store: Store, private host?: BrowserHost, notify: () => void = () => {}, personWaitMs?: number) {
     this.person = new BrowserPerson(notify, personWaitMs);
@@ -334,6 +352,8 @@ export class BrowserTools {
       this.usingRuns.set(run.taskId, runs);
     }
     runs.add(run.id);
+    // A run using the browser will likely act soon: the model starts loading now, so the first step does not wait for it.
+    this.secondOpinion?.warm();
   }
 
   /**
@@ -512,7 +532,7 @@ export class BrowserTools {
     }
     const label = step.kind === 'press' ? step.key : elementLabel(inspected.target);
     const element = step.kind === 'press' && inspected.target ? `${step.key} · ${elementLabel(inspected.target)}` : label;
-    const verdict = judge(step, inspected);
+    const verdict = await this.withSecondOpinion(judge(step, inspected), step, inspected, site, context.asking);
     this.settle(actionId, 'unknown', { url: inspected.url, element, risk: verdict.risk });
     if (verdict.refused) {
       this.settle(actionId, 'refused');
@@ -553,6 +573,21 @@ export class BrowserTools {
       return { result: { declined: true, error: reason, element: label }, event: declinedEvent(step.kind, label, site), readPage: false };
     }
     return this.perform(context, actionId, { ...planned, asked: true, replay: 'never' }, policy, request);
+  }
+
+  /**
+   * Tacet's second opinion (COD-306) on a step the rules let through, in a chat where the person can answer: a step
+   * Tacet reads as sending, paying, deleting or publishing asks the person too. The rules' verdict is returned as it is
+   * whenever they already ask or refuse, the step only fills in or moves around (typing without Enter, choosing in a
+   * list), nobody could answer a card, or Tacet is absent, unsure or late.
+   */
+  private async withSecondOpinion(verdict: BrowserVerdict, step: BrowserActStep, inspected: BrowserInspectResult, site: string, asking: BrowserAsking): Promise<BrowserVerdict> {
+    if (verdict.risk !== 'input' || asking.kind !== 'ask' || !this.secondOpinion) return verdict;
+    const action = browserActionToJudge(step, inspected, site);
+    if (!action) return verdict;
+    const opinion = await this.secondOpinion.judge(action);
+    if (!opinion?.risky) return verdict;
+    return { risk: 'consequential', reasons: [riskReasons.secondOpinion] };
   }
 
   /** Acts, through the tool journal, and says what changed. */

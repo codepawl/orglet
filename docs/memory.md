@@ -42,6 +42,22 @@ Before its first request, a run freezes the active memories of its worker, its t
 
 Above the answer, since the memories are loaded before the worker writes ([COD-217](https://linear.app/codepawl/issue/COD-217)), they are the first rows of the turn's trace ([COD-220](https://linear.app/codepawl/issue/COD-220), [worker-actions.md](worker-actions.md#the-trace-above-an-answer)): one folded line counts them with everything else the run did ("Used 1 memory · Read 2 files"), and opening it lists each memory's text in the order it was given, before the notes loaded and the steps taken, with a link to the worker's **Memory** tab under the rows. They show there as soon as the run has frozen its context, while the answer is still streaming. The list is frozen on the answer (`usedMemories` on the artifact), so it still shows what the worker knew after a memory is edited or deleted. A later edit only reaches the next run.
 
+## Which notes load, and why
+
+Notes are not memories, but they are frozen at the same moment. A pinned note loads whenever there is room. An unpinned note loads when the message shares a word of three letters or more with its title, text or tags. That misses a note worded differently from the message: "bill Acme for May" never loads **Invoice format**, and "ổ cứng hư thì tính thế nào?" never loads **Sao lưu dữ liệu**.
+
+When [Tacet](decisions.md) is on this computer, it gets one look at the notes that would not load (COD-306):
+
+1. Only unpinned notes that share no word with the message are asked about, up to 30, in scope for the run like any other note.
+2. Tacet reads the message and answers one question, **What is this message about?**, the way it routes a ticket to a team: each note is an option named by its title and described by its tags, beside **other**. The same options go in twice, in opposite orders, in one request, and each note's two probabilities are averaged, since on the measured cases where a note sat in the list moved its probability a lot.
+3. A note loads when its averaged probability is at least 4.2 times an even share (0.20 with twenty notes, 0.60 with six, never more than 0.75) and beats **other**.
+4. Tacet can only add. Pinned and matching notes load first, and Tacet's picks fill the room left under the same limit of 12 notes and 16 KB, so one never pushes a matching note out.
+5. The run waits at most 1.5 seconds. When Tacet is not downloaded, fails or is late, the run loads what the words matched, as before Tacet. A model that has been quiet for two minutes takes a few seconds to load, so the first message after a pause usually goes without it and the next one gets it.
+
+**Details → Context loaded** says why each note loaded: *always loaded*, *matched keywords*, or *picked by Tacet* with the probability it gave. In the chat, a note Tacet picked carries *picked by Tacet* in the answer's trace. Both are frozen with the run (`because` and `fit` on the manifest's knowledge rows).
+
+The threshold is deliberately strict. On 48 pairs of a short message and a note that share no word (`scripts/tacet/knowledge_cases.json`, English and Vietnamese, half of them the right note), measured with `scripts/tacet/eval_uses.ts`, Tacet loaded 6 of the 24 right notes and none of the 24 wrong ones in a workspace of twenty notes, the same on the tune half and the held-out half; in workspaces of six notes it loaded 4 right notes and 1 wrong one ("which hex codes go on our banner?" took **Social media**). It found more of the English messages (4 of 11) than the Vietnamese ones (2 of 13). Asking about each note on its own (yes/no, a score, or a two-way choice) did no better than chance, which is why the notes are options of one question. On a busy six-core desktop the question over twenty notes took 0.4 seconds at the median and 0.7 at the 95th percentile once the model was loaded.
+
 ## Where you see and edit memory
 
 Open a worker from the sidebar menu (**Edit**) and choose the **Memory** tab. Memories are listed newest first, each with its text, the chat it came from (click to open that chat) and its date. From the row's menu you can edit the text in place, pin or unpin it, or delete it. A memory still waiting for review carries a *Waiting for review* badge. With nothing remembered, the tab shows one line.

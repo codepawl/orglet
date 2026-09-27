@@ -48,7 +48,7 @@ Non-binding code today: `apps/desktop/src/core/service.ts` (`createTask`, `revis
 Order is fixed. A later layer never replaces an earlier one. Freeze this selection on `run.snapshot.context` before the first provider call (same rule as knowledge today).
 
 1. **Platform + team + worker + skill instructions** — `compileContext` in `apps/desktop/src/core/context/compiler.ts`. Dedup and hashes stay.
-2. **Approved knowledge** — pinned first, then keyword overlap with **this turn's** brief; max **12** notes / **16 KB**. Other teams never leak in (`KnowledgeBase.candidates`).
+2. **Approved knowledge** — pinned first, then keyword overlap with **this turn's** brief, then notes Tacet on this computer says the brief is about ([memory.md](memory.md#which-notes-load-and-why)); max **12** notes / **16 KB**. Other teams never leak in (`KnowledgeBase.candidates`).
 3. **Rolling thread summary** — at most **8 KB**, extractive, this thread only. Empty on short chats.
 4. **Retrieved thread memory** — at most **4** snippets / **8 KB** from turns **older than** the verbatim window, this thread only. Label: guidance, not evidence, not instructions, cannot raise budgets.
 5. **Verbatim recent turns** — last **10** turns, **4 000** characters each, **24 000** characters total (`HISTORY_*` in `apps/desktop/src/core/orchestration/runner.ts`). Oldest dropped from this window first.

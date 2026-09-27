@@ -18,7 +18,8 @@ import { BrowserEngine } from '../../apps/desktop/src/browser/engine';
 import { detectBrowser } from '../../apps/desktop/src/browser/detect';
 import type { BrowserHost } from '../../apps/desktop/src/shared/browser-host';
 import { NOT_ASKED_HERE, PERSON_DECLINED, STALE_REF } from '../../apps/desktop/src/core/tools/browser-tools';
-import { REFUSED_PASSWORD } from '../../apps/desktop/src/core/tools/browser-risk';
+import { REFUSED_PASSWORD, riskReasons } from '../../apps/desktop/src/core/tools/browser-risk';
+import type { ActionToJudge } from '../../apps/desktop/src/core/decisions/action-risk';
 
 /**
  * Acting on pages for real (COD-261, phase 2): a fake model drives the browser tools, the core judges every step, and a
@@ -324,6 +325,53 @@ describe.runIf(found !== null)('acting on pages in a real browser', { timeout: R
     await until(() => finished(chat.taskId));
     expect(actions(chat.taskId)).toEqual(['open:read:done', 'snapshot:read:done']);
     expect(core!.browser.live(chat.taskId)).toEqual({ takenOver: false, inChrome: false, using: false, waiting: false });
+  }, 120_000);
+
+  it('asks about a click the rules let through when Tacet reads it as risky, and never asks Tacet about one they ask about', async () => {
+    const judged: ActionToJudge[] = [];
+    let warmed = 0;
+    const script: Script = [
+      () => call('browser_open', { url: `${base}/shop`, tabId: null }),
+      () => call('browser_snapshot', { tabId: 't1', offset: 0 }),
+      messages => call('browser_type', { tabId: 't1', ref: refIn(messages, /searchbox "Search"/), text: 'ada lovelace', submit: false }),
+      messages => call('browser_click', { tabId: 't1', ref: refIn(messages, /button "Search"/) }),
+      () => call('browser_open', { url: `${base}/shop`, tabId: 't1' }),
+      () => call('browser_snapshot', { tabId: 't1', offset: 0 }),
+      messages => call('browser_click', { tabId: 't1', ref: refIn(messages, /button "Place order"/) }),
+      () => reply('Both were declined.'),
+    ];
+    const chat = await startChat(script, 'Search the shop, then order');
+    core!.browser.secondOpinion = {
+      judge: async action => {
+        judged.push(action);
+        return { risky: true, score: 0.9 };
+      },
+      warm: () => { warmed += 1; },
+    };
+
+    // The Search click is input to the rules; Tacet's yes adds the card, with its own reason.
+    await until(() => core!.browser.live(chat.taskId).approval !== undefined);
+    const first = core!.browser.live(chat.taskId).approval!;
+    expect(first).toMatchObject({ kind: 'click', element: 'Search', reasons: [riskReasons.secondOpinion] });
+    await core!.command('answerBrowserApproval', { taskId: chat.taskId, requestId: first.id, answer: 'decline' });
+
+    // Place order is the rules' own ask: Tacet is not consulted and its reason does not appear.
+    await until(() => core!.browser.live(chat.taskId).approval !== undefined && core!.browser.live(chat.taskId).approval!.id !== first.id);
+    const second = core!.browser.live(chat.taskId).approval!;
+    expect(second.element).toBe('Place order');
+    expect(second.reasons).not.toContain(riskReasons.secondOpinion);
+    await core!.command('answerBrowserApproval', { taskId: chat.taskId, requestId: second.id, answer: 'decline' });
+    await until(() => finished(chat.taskId));
+
+    expect(searches).toEqual([]);
+    expect(orders).toBe(0);
+    // Typing without Enter only fills in, so the one step Tacet was asked about is the Search click.
+    expect(judged).toEqual([{ surface: 'browser', kind: 'click', element: 'Search', role: 'button', site, page: 'Test shop' }]);
+    expect(warmed).toBeGreaterThan(0);
+    expect(actions(chat.taskId)).toEqual([
+      'open:read:done', 'snapshot:read:done', 'type:input:done', 'click:consequential:declined',
+      'open:read:done', 'snapshot:read:done', 'click:consequential:declined',
+    ]);
   }, 120_000);
 });
 

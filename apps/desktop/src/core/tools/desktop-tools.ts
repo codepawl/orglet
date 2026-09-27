@@ -14,7 +14,8 @@ import { Store, id, now } from '../storage/database';
 import { ToolCalls, UnresolvedAttemptError } from '../storage/tool-calls';
 import { BrowserPerson } from './browser-person';
 import { findInSnapshot, snapshotPage } from './browser-tools';
-import { classifyDesktopStep, type DesktopVerdict } from './desktop-risk';
+import { classifyDesktopStep, desktopRiskReasons, type DesktopVerdict } from './desktop-risk';
+import type { SecondOpinion } from '../decisions/action-risk';
 
 /**
  * The core side of desktop apps (COD-261, phase 2a). Every step is decided here before the helper does it: the
@@ -182,6 +183,8 @@ export type DesktopActContext = {
 export class DesktopTools {
   /** Answers to consequential steps, kept while the app runs. */
   readonly person: BrowserPerson<DesktopApprovalView>;
+  /** Tacet's second opinion on steps the rules let through (COD-306); unset in tests and where Tacet cannot run. */
+  secondOpinion?: SecondOpinion;
 
   /**
    * `ownPrograms` are Orglet's own file names (Orglet.exe, or electron.exe in development), which no chat may ever
@@ -261,6 +264,8 @@ export class DesktopTools {
     const allow = () => this.allowedPrograms(run, currentTask());
     const ask = (request: DesktopHostRequest) => host.request(request, signal);
     const kind: DesktopActionKind = name === 'desktop_windows' ? 'windows' : name === 'desktop_snapshot' ? 'snapshot' : name === 'desktop_find' ? 'find' : 'screenshot';
+    // A run reading an app will likely act in it soon: the model starts loading now, so the first step does not wait.
+    this.secondOpinion?.warm();
     const actionId = this.journal(run, callId, kind);
 
     if (name === 'desktop_windows') {
@@ -359,7 +364,7 @@ export class DesktopTools {
     }
     const target = inspected.target;
     const label = elementLabel(target);
-    const verdict: DesktopVerdict = classifyDesktopStep({ kind, target });
+    const verdict = await this.withSecondOpinion(classifyDesktopStep({ kind, target }), kind, target, inspected.executable, context.asking);
     this.settle(actionId, 'unknown', { window: inspected, element: label, risk: verdict.risk });
     if (verdict.refused) {
       this.settle(actionId, 'refused');
@@ -397,6 +402,22 @@ export class DesktopTools {
       return { result: { declined: true, error: reason, element: label }, event: desktopEvents.declined(label, title), readWindow: false };
     }
     return this.perform(context, actionId, { ...planned, asked: true, replay: 'never' }, allow, request);
+  }
+
+  /**
+   * Tacet's second opinion (COD-306) on pressing or toggling something the rules let through, in a chat where the
+   * person can answer: a step Tacet reads as sending, paying, deleting or publishing asks the person too. The rules'
+   * verdict is returned as it is whenever they already ask or refuse, the step enters text, nobody could answer a
+   * card, or Tacet is absent, unsure or late.
+   */
+  private async withSecondOpinion(verdict: DesktopVerdict, kind: DesktopActKind, target: DesktopTargetFacts, program: string, asking: DesktopAsking): Promise<DesktopVerdict> {
+    if (verdict.risk !== 'input' || asking.kind !== 'ask' || !this.secondOpinion) return verdict;
+    if (kind !== 'invoke' && kind !== 'toggle') return verdict;
+    const opinion = await this.secondOpinion.judge({
+      surface: 'desktop', kind, element: elementLabel(target), controlType: target.controlType, program, window: target.windowName, inDialog: target.inDialog,
+    });
+    if (!opinion?.risky) return verdict;
+    return { risk: 'consequential', reasons: [desktopRiskReasons.secondOpinion] };
   }
 
   /** Acts, through the tool journal, and reads the window again so the worker sees what changed. */

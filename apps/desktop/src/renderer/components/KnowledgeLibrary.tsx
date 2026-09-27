@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Brain, Check, Clock3, Globe, UserRound, Users, FileText, Pin, Search, Tag, Target, Type, type LucideIcon } from 'lucide-react';
 import type { Worker, Workspace } from '../../shared/contracts';
-import { isMemory, type Knowledge, type KnowledgeScope, type RunContext } from '../../shared/knowledge';
+import { isMemory, type ContextManifest, type Knowledge, type KnowledgeScope, type RunContext } from '../../shared/knowledge';
 import { MemoryList } from './Memories';
 import { Button, FieldLabel } from './ui';
 import { Avatar } from './Avatar';
@@ -99,7 +99,7 @@ export function KnowledgeEditor({ item, workspace, done }: { item?: Knowledge; w
       <Select label={<FieldLabel icon={Target} required>{t('Phạm vi')}</FieldLabel>} value={scope} onChange={setScope} options={[{ value: 'workspace', label: t('Toàn workspace'), icon: <Globe size={16} /> }, ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <Users size={16} /> })), ...workspace.workers.map(worker => ({ value: `worker:${worker.id}`, label: worker.name, group: t('Tí'), icon: <UserRound size={16} /> }))]} />
       {scope.startsWith('team:') && <p className="muted scope-note">{t('Knowledge của hội chỉ nạp khi chạy trong hội đó.')}</p>}
       {scope.startsWith('worker:') && <p className="muted scope-note">{t('Knowledge của Tí này chỉ nạp khi Tí đó chạy.')}</p>}
-      <SwitchField checked={pinned} onChange={setPinned} description={t('Không ghim thì chỉ nạp khi yêu cầu khớp từ khóa.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
+      <SwitchField checked={pinned} onChange={setPinned} description={t('Không ghim thì chỉ nạp khi yêu cầu khớp với nó.')}>{t('Luôn nạp khi còn chỗ trong context')}</SwitchField>
     </div>
     <div className="actions floating-actions">
       {error ? <p className="form-error" role="alert">{error}</p> : null}
@@ -118,10 +118,17 @@ export function ContextManifestView({ run, workspace }: { run: { snapshot: { con
   const knowledgeTitle = (id?: string) => context.knowledge.find(entry => entry.id === id)?.title ?? workspace.knowledge.find(entry => entry.id === id)?.title;
   const memoryText = (id?: string) => { const text = context.memories?.find(entry => entry.id === id)?.text ?? workspace.knowledge.find(entry => entry.id === id)?.content; return text && text.length > 80 ? `${text.slice(0, 80)}…` : text; };
   const detail = (entry: { kind: string; id?: string }) => entry.kind === 'knowledge' ? `: ${knowledgeTitle(entry.id) ?? entry.id}` : entry.kind === 'remembered' ? `: ${memoryText(entry.id) ?? entry.id}` : '';
+  // Why a note loaded (COD-306); runs frozen before it carry no reason.
+  const because = (entry: ContextManifest['loaded'][number]) => {
+    if (entry.because === 'pinned') return ` · ${t('luôn nạp')}`;
+    if (entry.because === 'keywords') return ` · ${t('khớp từ khóa')}`;
+    if (entry.because === 'tacet') return ` · ${t('Tacet chọn, độ khớp {0}', [(entry.fit ?? 0).toFixed(2)])}`;
+    return '';
+  };
   return <details><summary>{context.manifest.loaded.length === 1 ? t('Context đã nạp · 1 phần') : t('Context đã nạp · {0} phần', [context.manifest.loaded.length])}</summary>
     {context.manifest.mainChatTurns != null && <p className="muted">{context.manifest.mainChatTurns === 1 ? t('Đọc tin gần nhất của chat chính') : t('Đọc {0} tin gần nhất của chat chính', [context.manifest.mainChatTurns])}</p>}
     {context.manifest.verbatimTurns != null && <p className="muted">{t('Lượt gần: {0} · tóm tắt {1} ký tự · {2} ghi chú cũ', [context.manifest.verbatimTurns, context.manifest.summaryChars ?? 0, context.manifest.retrievedSnippets ?? 0])}</p>}
-    <ul>{context.manifest.loaded.map((entry, index) => <li key={index}>{names[entry.kind]}{detail(entry)}{entry.revision ? ` · v${entry.revision}` : ''} · {entry.bytes} bytes</li>)}</ul>
+    <ul>{context.manifest.loaded.map((entry, index) => <li key={index}>{names[entry.kind]}{detail(entry)}{because(entry)}{entry.revision ? ` · v${entry.revision}` : ''} · {entry.bytes} bytes</li>)}</ul>
     {context.manifest.omitted.length > 0 && <><h4>{t('Không nạp')}</h4><ul>{context.manifest.omitted.map((entry, index) => <li key={index}>{names[entry.kind]}{entry.kind === 'knowledge' || entry.kind === 'remembered' ? detail(entry) : entry.revision ? ` · v${entry.revision}` : ''} · {reasons[entry.reason]}</li>)}</ul></>}
   </details>;
 }

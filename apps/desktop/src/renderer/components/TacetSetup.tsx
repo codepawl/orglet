@@ -62,7 +62,7 @@ export function TacetSetupView({ state, busy = false, onDownload, onCancel, onRe
     <div className="setting-row">
       <div className="setting-text">
         <span id={titleId} className="setting-title">{t('Tacet trên máy')}</span>
-        <span className="setting-description">{t('Đọc câu trả lời của lịch chạy hằng giờ và chỉ báo khi có điều mới. Chạy trên máy này, không gửi gì ra ngoài.')}</span>
+        <span className="setting-description">{t('Báo khi lịch chạy hằng giờ có điều mới, nạp ghi chú hợp với tin nhắn, và hỏi bạn trước một bước trên trang hay ứng dụng trông dễ gây hậu quả. Chạy trên máy này, không gửi gì ra ngoài.')}</span>
         {state ? statusLine(state) : <Skeleton width="30%" />}
         {moving && <span className="tacet-setup-bar" role="progressbar" aria-labelledby={titleId} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={state ? progressLabel(state) : undefined}>
           <span style={{ width: `${percent}%` }} />
@@ -100,7 +100,7 @@ export function TacetSetup() {
   const remove = async () => {
     const confirmed = await confirmAction({
       title: t('Gỡ Tacet khỏi máy?'),
-      description: t('Tệp của mô hình bị xóa. Lịch chạy hằng giờ lại im lặng khi xong, như trước. Bạn có thể tải lại bất cứ lúc nào.'),
+      description: t('Tệp của mô hình bị xóa. Orglet làm như trước khi có Tacet: lịch chạy hằng giờ im lặng khi xong, ghi chú chỉ nạp khi khớp từ khóa. Bạn có thể tải lại bất cứ lúc nào.'),
       confirmLabel: t('Gỡ'),
       tone: 'danger',
     });

@@ -17,6 +17,7 @@ import { SCHEDULE_NO_DESKTOP } from '../../apps/desktop/src/core/orchestration/r
 import { permissionsOff } from '../../apps/desktop/src/core/orchestration/permission-hints';
 import { classifyDesktopStep, desktopRiskReasons, REFUSED_PASSWORD_FIELD } from '../../apps/desktop/src/core/tools/desktop-risk';
 import { DESKTOP_NOT_ASKED_HERE, DESKTOP_PERSON_DECLINED, desktopProblems, trimOlderDesktopSnapshots } from '../../apps/desktop/src/core/tools/desktop-tools';
+import type { ActionToJudge } from '../../apps/desktop/src/core/decisions/action-risk';
 
 /**
  * Desktop apps (COD-261, phase 2a) without a real app: the risk rules, the grants, the capability rules, and a fake
@@ -400,5 +401,54 @@ describe('desktop apps through the core', () => {
     const results = toolResults(seen.messages);
     expect(results[0].kind).toBe('desktop_snapshot');
     expect(results[1]).toMatchObject({ refused: true, problem: 'not_granted' });
+  });
+});
+
+describe('Tacet\'s second opinion on desktop steps (COD-306)', () => {
+  it('adds a card for a toggle Tacet reads as risky, never replaces the rules\' ask, and lets a step go when Tacet has no answer', async () => {
+    const seen = { messages: [] as RunMessage[] };
+    const judged: ActionToJudge[] = [];
+    const script: Script = [
+      () => call('desktop_toggle', { windowId: `w${NOTES}`, ref: 'e4' }),
+      () => call('desktop_set_value', { windowId: `w${NOTES}`, ref: 'e2', text: 'Buy milk' }),
+      () => call('desktop_invoke', { windowId: `w${NOTES}`, ref: 'e5' }),
+      () => call('desktop_toggle', { windowId: `w${NOTES}`, ref: 'e4' }),
+      () => reply('Done.'),
+    ];
+    newCore(script, seen);
+    core!.desktop.secondOpinion = {
+      // Risky the first time, then no answer (not installed, failed or late).
+      judge: async action => {
+        judged.push(action);
+        return judged.length === 1 ? { risky: true, score: 0.6 } : undefined;
+      },
+      warm: () => {},
+    };
+    const worker = await core!.command('saveWorker', { ...store.all<Worker>('workers')[0], provider: 'openai' }) as Worker;
+    const taskId = await core!.command('createTask', {
+      workerId: worker.id, brief: 'Tidy my notes', sourceIds: [], consent: true, providerScopes: ['openai'], budgetMicros: 100_000,
+      toolCapabilities: ['source.read', 'skill.read', 'desktop.read', 'desktop.act'], desktop: notesGrant(),
+    }) as string;
+
+    await until(() => core!.desktop.live(taskId).approval !== undefined);
+    const tacetCard = core!.desktop.live(taskId).approval!;
+    expect(tacetCard).toMatchObject({ kind: 'toggle', element: 'Wrap lines', reasons: [desktopRiskReasons.secondOpinion] });
+    expect(notes.wrap).toBe(false);
+    await core!.command('answerDesktopApproval', { taskId, requestId: tacetCard.id, answer: 'allow' });
+
+    // Save is the rules' own ask; its card carries their reason and Tacet is not consulted.
+    await until(() => core!.desktop.live(taskId).approval !== undefined && core!.desktop.live(taskId).approval!.id !== tacetCard.id);
+    const rulesCard = core!.desktop.live(taskId).approval!;
+    expect(rulesCard).toMatchObject({ element: 'Save', reasons: [desktopRiskReasons.wording] });
+    await core!.command('answerDesktopApproval', { taskId, requestId: rulesCard.id, answer: 'allow' });
+    await until(() => finished(taskId));
+
+    expect(notes.saves).toBe(1);
+    // The second toggle ran without a card: Tacet gave no answer, so the rules' "input" stood.
+    expect(notes.wrap).toBe(false);
+    expect(steps(taskId)).toEqual(['toggle:consequential:done', 'set_value:input:done', 'invoke:consequential:done', 'toggle:input:done']);
+    // Entering text and the rules' own ask are never sent to Tacet.
+    const wrapToggle: ActionToJudge = { surface: 'desktop', kind: 'toggle', element: 'Wrap lines', controlType: 'check box', program: 'notes.exe', window: 'Notes', inDialog: false };
+    expect(judged).toEqual([wrapToggle, wrapToggle]);
   });
 });

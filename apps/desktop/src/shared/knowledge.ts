@@ -70,11 +70,22 @@ export const RememberArgs = z.object({ text: z.string().trim().min(1).max(MEMORY
 export type RememberArgs = z.infer<typeof RememberArgs>;
 export const AnswerMemories = z.array(RememberModelArgs).max(MAX_ANSWER_MEMORIES);
 
+/**
+ * Why a note reached a run (COD-306): pinned, its words matched the request, or Tacet on this computer said it fits
+ * the request, with the probability it gave. Runs frozen before COD-306 carry no reason.
+ */
+export const KnowledgeLoadReason = z.enum(['pinned', 'keywords', 'tacet']);
+export type KnowledgeLoadReason = z.infer<typeof KnowledgeLoadReason>;
+
 export const ContextManifest = z.object({
   bytes: z.number().int().nonnegative(),
   // `memory` is a snippet retrieved from this chat's older turns; `remembered` is a memory row from the knowledge store;
   // `main_chat` is the main chat's latest turns a side thread's first turn read (COD-247).
-  loaded: z.array(z.object({ kind: z.enum(['platform', 'identity', 'team', 'worker', 'skill', 'knowledge', 'summary', 'memory', 'remembered', 'main_chat']), id: Uuid.optional(), revision: z.number().int().positive().optional(), hash: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int().nonnegative() }).strict()).max(80),
+  loaded: z.array(z.object({
+    kind: z.enum(['platform', 'identity', 'team', 'worker', 'skill', 'knowledge', 'summary', 'memory', 'remembered', 'main_chat']), id: Uuid.optional(), revision: z.number().int().positive().optional(), hash: z.string().regex(/^[a-f0-9]{64}$/), bytes: z.number().int().nonnegative(),
+    because: KnowledgeLoadReason.optional(),
+    fit: z.number().min(0).max(1).optional(),
+  }).strict()).max(80),
   omitted: z.array(z.object({ kind: z.enum(['team', 'worker', 'skill', 'knowledge', 'turn', 'remembered']), id: Uuid.optional(), revision: z.number().int().positive(), reason: z.enum(['duplicate', 'context_limit', 'not_relevant', 'summarized', 'truncated']) }).strict()).max(600),
   verbatimTurns: z.number().int().nonnegative().optional(),
   summaryChars: z.number().int().nonnegative().optional(),

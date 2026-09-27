@@ -11,7 +11,15 @@ Orglet can run it on this computer, with no GPU and no account. It is not part o
 
 ## What it does today
 
-One job: deciding whether a quiet schedule run is worth telling the person about.
+Three jobs. Each only adds to what Orglet did without Tacet, and each falls back to exactly that when Tacet is absent, fails or is late:
+
+- Deciding whether a quiet schedule run is worth telling the person about (COD-303, below).
+- Loading an approved note whose words do not match the message, when Tacet says the message is about it (COD-306): [memory.md](memory.md#which-notes-load-and-why). `core/decisions/knowledge-fit.ts`.
+- A second opinion on a browser or desktop step the rules let through: when Tacet reads it as sending, paying, deleting or publishing, the step asks the person (COD-306). The rules stay the authority, and Tacet can never remove or skip an ask they require: [browser.md](browser.md#a-second-opinion-from-tacet), [desktop.md](desktop.md#when-the-orglet-asks-you). `core/decisions/action-risk.ts`.
+
+The two COD-306 uses ask within a time budget (`decideWithin` in `core/decisions/budget.ts`): 1.5 seconds for the notes, one second for a step. A request that runs out of time keeps going in the worker, so a model that was still loading is ready for the next question. `Decisions.warm()` starts loading the model without a question, which a run does when it first uses the browser or a desktop app.
+
+### Quiet schedule runs
 
 An hourly schedule's run that simply finishes says nothing, since a toast every hour would be noise ([routines.md → Where a run shows up](routines.md#where-a-run-shows-up)). That also kept quiet the run that found something: the backup that failed, the price that changed. With Tacet on this computer, every such run gets a second look a few seconds after it finishes (`QuietRunReview` in `core/orchestration/quiet-runs.ts`, on the core's five-second tick):
 
@@ -61,9 +69,11 @@ The installer carries ONNX Runtime's native files for its own platform and archi
 
 - Pick or change the model a chat or schedule runs on.
 - Silence a run that would be announced anyway: a failure, a question for the person, changes waiting for review.
+- Skip, remove or answer an ask the browser or desktop rules require, or let a step they refuse go ahead.
+- Keep a note out that is pinned or matches the message's words.
 - Download anything the person did not ask for, or from anywhere but the pinned addresses.
 - Send what it reads anywhere.
 
 ## Later uses
 
-The service (`Decisions` in `core/decisions/service.ts`) takes any choice, score or noul question and returns probabilities and a confidence. Later uses can ask it before a message is sent which capabilities a request needs, who in a crew should take a turn, or which knowledge is relevant. Low confidence always leaves the app doing what it did without Tacet.
+The service (`Decisions` in `core/decisions/service.ts`) takes any choice, score or noul question and returns probabilities and a confidence. Later uses can ask it before a message is sent which capabilities a request needs, or who in a crew should take a turn. Low confidence always leaves the app doing what it did without Tacet.
