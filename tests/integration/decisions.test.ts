@@ -14,6 +14,7 @@ import { downloadFile } from '../../apps/desktop/src/core/decisions/download';
 import { NOTEWORTHY_QUESTION, quietRunState } from '../../apps/desktop/src/core/orchestration/quiet-runs';
 import { attendedRuns, noteworthyBackgroundNotice, noteworthyNotice, noteworthyRuns, type ChatNames } from '../../apps/desktop/src/renderer/chatNotices';
 import { setLanguage } from '../../apps/desktop/src/renderer/i18n';
+import { flaggedWhen } from '../../apps/desktop/src/renderer/components/RoutinesPanel';
 import type { DecisionModelState, DecisionQuestions, DecisionState } from '../../apps/desktop/src/shared/decisions';
 import type { Routine, Task } from '../../apps/desktop/src/shared/contracts';
 import { ERASE_CONFIRMATION } from '../../apps/desktop/src/shared/erase';
@@ -329,5 +330,14 @@ describe('announcing a run Tacet flagged (COD-303)', () => {
     expect(noteworthyRuns(attendedRuns([flagged]), [flagged], '2026-09-27T07:59:00.000Z')).toEqual([]);
     expect(noteworthyNotice(flagged, names)).toEqual({ taskId: 'flagged', text: 'Backup check has something new', tone: 'success', about: 'Researcher' });
     expect(noteworthyBackgroundNotice(flagged, names)).toEqual({ taskId: 'flagged', title: 'Backup check', body: 'Something new' });
+  });
+
+  it('dates the card\'s line only when the flag is from another day in the schedule\'s zone', () => {
+    setLanguage('en');
+    const now = new Date('2026-09-27T09:30:00Z');
+    expect(flaggedWhen('2026-09-27T09:12:00Z', 'UTC', now)).toMatch(/^9:12\sAM$/);
+    expect(flaggedWhen('2026-09-26T09:12:00Z', 'UTC', now)).toMatch(/^9\/26\/26, 9:12\sAM$/);
+    // 23:30 in Ho Chi Minh City on the 26th is not today there, though it is in UTC.
+    expect(flaggedWhen('2026-09-26T16:30:00Z', 'Asia/Ho_Chi_Minh', new Date('2026-09-26T17:30:00Z'))).toMatch(/^9\/26\/26/);
   });
 });
