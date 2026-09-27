@@ -11,6 +11,9 @@ import { missingHarness } from '../../apps/desktop/src/shared/harness';
 import type { HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import type { ModelReply } from '../../apps/desktop/src/core/adapters/openai';
 import type { Routine, Run, Skill, Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
+import { translateMessage } from '../../apps/desktop/src/shared/i18n';
+import { en, enGB } from '../../apps/desktop/src/shared/locales/en';
+import { hasVietnamese } from './vietnamese';
 
 let directory: string; let store: Store; let core: CoreService;
 let replies: ModelReply[]; let sent: { messages: { role: string; content?: unknown }[]; tools: string[] }[];
@@ -403,6 +406,17 @@ describe('one-shot harness answers', () => {
       'Đề xuất thay đổi trong app thứ 5 (propose_crew) bị từ chối: Không có Tí nào được đề xuất với ref "nobody" trong lượt này.',
       'Đề xuất thay đổi trong app thứ 6 (?) bị từ chối: Mỗi đề xuất thay đổi trong app cần tool và arguments.',
     ]);
+    // The chat shows each note and trace line through tMessage; the error inside reads in English too (COD-252).
+    const refusedLines = detail.events.map(event => event.message).filter(message => message.startsWith('Đề xuất thay đổi trong app bị từ chối: '));
+    const rejections = [...detail.artifacts[0].report.limitations, ...refusedLines];
+    expect(rejections.map(text => translateMessage(en, text))).toEqual(expect.arrayContaining([
+      'App-change proposal 3 (propose_budget) refused: No proposal tool is named propose_budget.',
+      'App-change proposal 5 (propose_crew) refused: No orglet was proposed with ref "nobody" in this reply.',
+      'App-change proposal refused: No orglet was proposed with ref "nobody" in this reply.',
+    ]));
+    for (const dictionary of [en, enGB]) {
+      expect(rejections.map(text => translateMessage(dictionary, text)).filter(hasVietnamese)).toEqual([]);
+    }
     expect(harnessStore.get<Worker>('workers', worker.id)).not.toHaveProperty('autoApplyProposals');
   });
 

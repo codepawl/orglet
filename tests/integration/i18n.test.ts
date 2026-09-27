@@ -27,6 +27,31 @@ it('translates finished core messages, including ones with values already filled
   expect(translateMessage(en, 'Something the core never says.')).toBe('Something the core never says.');
   // A message with its own key is not answered by the general "{0}: {1}" one (COD-246).
   expect(translateMessage(en, 'Không có Tí hay hội nào tên "Nobody". Có: Researcher.')).toBe('No orglet or crew is named "Nobody". Available: Researcher.');
+  // The error that stopped a crew role is a message of its own inside the limitation, translated like one (COD-252).
+  expect(translateMessage(en, 'Role chưa hoàn tất: Researcher: Chưa thể khuyến nghị sẵn sàng khi còn check thiếu/lỗi, bất đồng hoặc finding nghiêm trọng.'))
+    .toBe('Unfinished roles: Researcher: Cannot recommend ready while checks are missing or failed, disagreements remain, or critical findings exist.');
+  // Other values are not: a model's Vietnamese answer that merely has a label after a colon stays as written.
+  expect(translateMessage(en, 'Bước 1: Mở terminal và chạy lệnh cài đặt.')).toBe('Bước 1: Mở terminal và chạy lệnh cài đặt.');
+});
+
+it('translates the core error inside each note that holds one, values and all (COD-252)', () => {
+  // Any core error with a value of its own; the notes below only ever hold core errors.
+  const error = 'Không có đề xuất nào với ref "draft".';
+  expect([
+    `Role chưa hoàn tất: Researcher: ${error}`,
+    `Ghi nhớ thứ 2 bị từ chối: ${error}`,
+    `Không ghi nhớ được: ${error}`,
+    `Đề xuất thay đổi trong app thứ 1 (propose_orglet) bị từ chối: ${error}`,
+    `Đề xuất thay đổi trong app bị từ chối: ${error}`,
+    `Đề xuất sửa hướng dẫn của Tí bị từ chối: ${error}`,
+  ].map(note => translateMessage(en, note))).toEqual([
+    'Unfinished roles: Researcher: No proposal has ref "draft".',
+    'Memory 2 was rejected: No proposal has ref "draft".',
+    'Could not remember that: No proposal has ref "draft".',
+    'App-change proposal 1 (propose_orglet) refused: No proposal has ref "draft".',
+    'App-change proposal refused: No proposal has ref "draft".',
+    'The proposed change to the orglet’s instructions was refused: No proposal has ref "draft".',
+  ]);
 });
 
 it('derives British English spellings from the US text', () => {
