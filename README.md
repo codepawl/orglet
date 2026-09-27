@@ -130,8 +130,8 @@ Windows releases are signed with Certum. A new certificate can still trigger a S
 | Platform | Status |
 |---|---|
 | Windows | Public release target. Signed Squirrel Setup and a ZIP containing the signed app are on the [latest release](https://github.com/codepawl/orglet/releases/latest). SmartScreen may still warn while the certificate builds its reputation. See [windows-release-gates.md](docs/windows-release-gates.md). |
-| macOS | ZIP of `Orglet.app` from `pnpm make` on a Mac, or a signed/unsigned ZIP from macOS CI depending on available credentials. A signed build needs notarization credentials too before Gatekeeper approval is verified. Not a GitHub Release asset yet. See [macos-packaging.md](docs/macos-packaging.md). |
-| Linux | ZIP from `pnpm make` on Linux, or the `orglet-linux-zip` CI artifact. CI builds it and starts it headless on every pull request, but nobody has used it on a real Linux desktop yet, so treat it as untested. See [linux-packaging.md](docs/linux-packaging.md). |
+| macOS | ZIP of `Orglet.app` from `pnpm make` on a Mac, or a signed/unsigned ZIP from macOS CI depending on available credentials. A signed build needs notarization credentials too before Gatekeeper approval is verified. Release 0.7.2 includes an Apple silicon (arm64) ZIP verified as signed, notarized and stapled. No Intel Mac download is available. See [macos-packaging.md](docs/macos-packaging.md). |
+| Linux | ZIP from `pnpm make` on Linux, or the `orglet-linux-zip` CI artifact. Release 0.7.2 includes an x64 ZIP. CI builds it and starts it headless, but daily use on a real Linux desktop has not been verified; treat it as experimental. See [linux-packaging.md](docs/linux-packaging.md). |
 | iOS and Android | Not started. The shape under discussion is a companion to a desktop workspace, not a port: a phone cannot run a worker. See [mobile.md](docs/mobile.md). |
 
 ### Updates
