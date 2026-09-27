@@ -59,7 +59,14 @@ The side buttons on a mouse, or Alt+Left and Alt+Right, go back and forward thro
 2. Type a short message in the box at the bottom.
 3. Send it.
 
-You get a labelled sample reply. Demo does not call a model and does not read files. That is enough to see the layout. The line under the message box says the chat is on Demo; its **Change model** link opens the orglet's settings on the **Model** field.
+You get a labelled sample reply. Demo does not call a model and does not read files. That is enough to see the layout. The line under the message box says the chat is on Demo, with a **Connect a model** button:
+
+- If nothing is connected yet, it opens **Settings** → **API connections**. Add a key or a custom connection there, then close Settings. The orglet's settings open next, with that connection already chosen.
+- If something is already connected (a signed-in harness, a saved key, a custom connection), it opens the orglet's settings straight away, with the first one that can run chosen.
+
+Check the **Model** and **Model ID** fields and choose **Save orglet**. The chat header shows the new connection at once.
+
+The orglet's settings are also in the chat's **⋯** menu, as **Orglet settings** (**Crew settings** in a crew's chat). **Chat settings** in the same menu renames the chat, changes who answers it and sets its cost limit.
 
 To start a new conversation later, open **⋯** next to **Details** and choose **Archive**. The next message on that worker starts a fresh chat. Search still finds the old one.
 
@@ -73,7 +80,7 @@ When you want real answers, pick one path. Do not paste keys into chat.
 2. Open **Settings** → **Local harnesses**.
 3. Check the row: **not installed**, **found on disk**, **signed in (ready)**, or **sign-in error**. **Found on disk is not ready.**
 4. If it is not signed in, copy the login command from that row and run it, then choose **Rescan**. Orglet does not switch to Demo when sign-in fails.
-5. Open Researcher (or create a worker with **+** next to **Workers**). In **Worker settings**, set **Model** to that harness. Choose **Save worker**.
+5. In Researcher's chat, choose **Connect a model** (or **⋯** → **Orglet settings**). Set **Model** to that harness if it is not the one already chosen. Choose **Save orglet**.
 
 Cost follows that tool's plan, not an Orglet API bill.
 
@@ -81,7 +88,7 @@ Cost follows that tool's plan, not an Orglet API bill.
 
 1. Open **Settings** → **API connections**.
 2. Turn on the provider. Paste the key and choose **Save key**, or choose **From file**.
-3. Open the worker. Set **Model** to that provider. Pick a model from the list or type an ID. Choose **Save worker**.
+3. Close Settings. If you started from **Connect a model**, the orglet's settings open with that provider chosen; otherwise open them from the chat's **⋯** → **Orglet settings** and set **Model** to that provider. Pick a model from the list or type an ID. Choose **Save orglet**.
 
 Keys are encrypted on this computer. The app's interface never reads a saved key back. Backups do not include keys.
 

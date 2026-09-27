@@ -40,9 +40,9 @@ try {
   await box.fill('Một brief rất dài về việc review dataset'); await box.press('Enter');
   await page.locator('.chat-reply, .report').first().waitFor();
   await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Chỉnh sửa' }).click();
-  await page.getByLabel('Tên công việc').fill('Review dataset');
-  await page.getByRole('button', { name: 'Lưu công việc', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Thiết lập chat', exact: true }).click();
+  await page.getByLabel('Tên chat').fill('Review dataset');
+  await page.getByRole('button', { name: 'Lưu chat', exact: true }).click();
   await waitFor(async () => (await workspace(page)).tasks[0].title === 'Review dataset', 'thread rename');
   assert.equal(await page.getByRole('navigation', { name: 'Tất cả công việc' }).count(), 0);
 

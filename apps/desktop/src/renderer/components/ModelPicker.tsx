@@ -4,7 +4,7 @@ import { Check, ChevronDown, Hash, RefreshCw } from 'lucide-react';
 import type { Worker } from '../../shared/contracts';
 import { CATALOG_HINT_IDS, type ModelEntry, type ModelListResult } from '../../shared/models';
 import { deprecationNotice, formatSunsetDay, pickerListedModel } from '../../shared/modelDeprecation';
-import { currentLocale, t } from '../i18n';
+import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Button, FieldLabel } from './ui';
 import { ProviderMark } from './ProviderMark';
@@ -12,6 +12,7 @@ import { modelRunnable, openCodeModelIssue } from './openCodeModel';
 import { isOpenCodePlan } from '../../shared/opencode';
 import { Input, Skeleton } from '@codepawl/orglet-ui';
 import { modelLists } from '../caches';
+import { startingModelId } from './workerModel';
 import { useCached } from '../prefetch';
 
 function deprecationChipLabel(sunsetAt?: string) {
@@ -35,13 +36,18 @@ function filterModels(models: ModelEntry[], query: string) {
     || entry.aliases?.some(alias => alias.toLowerCase().includes(q)));
 }
 
-/** Searchable list plus an always-on typed ID. Catalog rows are suggestions, never a lock. */
-export function ModelPicker({ provider, value, onChange, invalid, flash }: {
+/**
+ * Searchable list plus an always-on typed ID. Catalog rows are suggestions, never a lock. An empty field is filled
+ * once per connection from the fetched list (`startingModelId`, COD-293); emptied again by the person, it stays empty.
+ */
+export function ModelPicker({ provider, value, onChange, invalid, flash, required }: {
   provider: Exclude<Worker['provider'], 'demo'>;
   value: string;
   onChange: (value: string) => void;
   invalid?: boolean;
   flash?: number;
+  /** The worker cannot be saved without an ID on this connection: the label carries the red asterisk. */
+  required?: boolean;
 }) {
   const id = useId();
   // The list is kept for the session (COD-218): a worker row resting under the pointer fetches it, and switching
@@ -83,6 +89,17 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   }, [provider, kept, failed, failOpen]);
   /** Nothing kept for this provider yet and no failure to report: the list is on its way. */
   const pending = !list && failed?.provider !== provider;
+
+  // The connection whose list already had its one chance to fill the empty field. A list that failed or came back
+  // empty is no chance: the refresh button may still bring one.
+  const filledFor = useRef<string>(undefined);
+  useEffect(() => {
+    if (!list?.models.length || filledFor.current === provider) return;
+    filledFor.current = provider;
+    if (value.trim()) return;
+    const start = startingModelId(provider, list.models, modelId => modelRunnable(provider, modelId));
+    if (start) onChange(start);
+  }, [provider, list, value]);
 
   const close = () => { setOpen(false); setPlacement(undefined); };
   const openList = () => { setActive(Math.max(0, options.findIndex(entry => entry.id === value))); setOpen(true); };
@@ -145,7 +162,8 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
     ? t('Chọn model trong gói hoặc gõ ID; mục Chưa hỗ trợ thì Orglet chưa gọi được.')
     : t('Gõ ID model hoặc chọn từ danh sách. Tên mặc định chỉ là gợi ý.');
   const note = pending ? <Skeleton width="60%" />
-    : modelIssue || list?.error || (!models.length && !busy ? failOpen : undefined)
+    // The core's reason comes as a Vietnamese source string, like every core message.
+    : modelIssue || (list?.error ? tMessage(list.error) : undefined) || (!models.length && !busy ? failOpen : undefined)
     || (list?.stale ? t('Danh sách model từ lần tải trước.') : defaultNote);
   const selected = pickerListedModel(models, value, hint);
   const notice = deprecationNotice(selected);
@@ -158,7 +176,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash }: {
   const describedBy = notice || replacementId ? `${deprecationId} ${noteId}` : noteId;
 
   return <div className="field">
-    <span className="field-title" id={labelId}><FieldLabel icon={Hash}>{t('ID model')}</FieldLabel></span>
+    <span className="field-title" id={labelId}><FieldLabel icon={Hash} required={required}>{t('ID model')}</FieldLabel></span>
     <div className="model-picker">
       <div className="model-picker-field">
       <Input ref={input} data-field="modelId" value={value} maxLength={200} autoComplete="off" autoCorrect="off" spellCheck={false}
