@@ -5,7 +5,11 @@
   <img src="images/orglets/cli-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-`orglet` lets you talk to your orglets and crews from a terminal. It is a companion to the running app, like VS Code's `code` command, not a separate agent. Keys, chats, files and the sandbox stay in the app. The command only sends requests to it.
+`orglet` lets you talk to your orglets and crews from a terminal. It uses the same local backend as the desktop. Keys, chats, files and the sandbox stay in the app. The command only sends requests to it.
+
+If Orglet is not running, a terminal command starts its backend in the background without opening a desktop window. Use `/open` in the terminal chat, `orglet open`, or the normal Orglet shortcut to open the desktop. If the desktop is already open, terminal commands use it as it is.
+
+Leaving the terminal chat keeps the backend and any work running. To quit the backend, open the desktop and close its window. Settings, connections and permission approvals still need the desktop; use `/open` when a chat needs your approval.
 
 ## What it can do
 
@@ -28,7 +32,7 @@ File Explorer's **Send to** menu and `orglet://` links are other ways in, on [th
 
 ### Windows
 
-1. Install Orglet with Setup.exe.
+1. Download Setup.exe from the [latest release](https://github.com/codepawl/orglet/releases/latest) and install it.
 2. Open a new terminal and run `orglet status`.
 
 Setup writes a small `orglet.cmd` into `%LOCALAPPDATA%\Orglet\bin` and adds that folder to your own user PATH (not the system one), the way VS Code's installer does. Each update and every start of that install rewrite the file, so the command keeps working after an update. A terminal that was already open does not see the new PATH; open a new one.
@@ -175,7 +179,7 @@ Any schedule can be started this way. A schedule set to **Only when called** run
 | `--file <path>` | Attach a file to this run. Repeat it for more; the schedule's own sources and these together stay within 20. The same size and type limits as the file picker apply. |
 | `--json` | Print the schedule and the new chat's id as JSON |
 
-Like every command, `run` works only while the app is open; it starts the app first when it is not. Nothing is queued while the app is closed, and nothing is replayed later.
+Like every command, `run` needs the local backend; it starts that backend in the background when it is not running. Nothing is queued while the backend is stopped, and nothing is replayed later.
 
 ### Names
 
@@ -203,7 +207,7 @@ Messages that come from the app are in the app's language.
 - `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window's **Run now** (`runRoutineNow`) starts a schedule through the same checks too, but it names the schedule and nothing else, so no file reaches a schedule from the window; only `run` attaches files by path.
 - Chat in the terminal makes only the requests `list`, `send`, `read` and `open` make; the pipe has no operation of its own for it. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
 - The answers to `list`, `status`, `send` and `read` carry each orglet's colour as `#rrggbb`: the one picked in the app, or the colour of the face the app chose for it by name. The command draws the faces from these fields and falls back to grey when they are missing.
-- If nothing answers, the command starts Orglet on the same data folder and tries again for up to 30 seconds.
+- If nothing answers, the command starts Orglet's backend on the same data folder without creating a desktop window and tries again for up to 30 seconds. `open` creates the window and waits for its page to load before confirming. A normal app launch also opens the window of an existing background instance.
 - The command finds the data folder from `ORGLET_USER_DATA`, then `ORGLET_DATA_DIR` (what a source run uses), then the usual place for the app. The Windows shim sets `ORGLET_USER_DATA` for you.
 - On start, a copy of Orglet reads the shim's executable and data folder back and rewrites the shim only when both are its own. A Setup install owns every `app-x.y.z\Orglet.exe` in its folder, so the shim follows an update to a new version folder. An update or uninstall leaves a shim that starts another copy alone; only running Setup or a click in **Settings → About** takes it over.
 - The command itself is the app's own executable running a small script (`resources/orglet-cli.cjs`) as Node, the same way VS Code ships `code`. It needs no separate Node install.

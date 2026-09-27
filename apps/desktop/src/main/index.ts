@@ -24,8 +24,8 @@ import { ChangelogFeed } from './changelog';
 import { ABOUT_LINKS, AboutLink, installKind, updateFeedUrl, type AboutInfo, type UpdateEnvironment } from '../shared/updates';
 import type { BackupSummary } from '../core/storage/backup';
 import { translateMessage } from '../shared/i18n';
-import type { CliInstallState, OpenChatTarget } from '../shared/cli';
-import { cliEndpoint, type CliChat } from '../cli/protocol';
+import type { CliInstallState } from '../shared/cli';
+import { CLI_BACKGROUND_FLAG, cliEndpoint, type CliChat } from '../cli/protocol';
 import { CliServer, createCliToken, writeCliToken } from './cli-server';
 import { chatsOf, CliOperations } from './cli-operations';
 import { CliPathInstaller, isKeptOffPath, keepOffPath } from './cli-path';
@@ -65,6 +65,12 @@ if (process.env.ORGLET_DATA_DIR && !app.isPackaged) app.setPath('userData', proc
 if (process.env.ORGLET_USERPROFILE && !app.isPackaged) { process.env.USERPROFILE = process.env.ORGLET_USERPROFILE; delete process.env.ORGLET_USERPROFILE; }
 const pending = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
 let window: BrowserWindow;
+/** Concurrent `open` requests share the first renderer load. Closing the desktop still quits the app. */
+let desktopReady: Promise<void> | undefined;
+const rendererRoot = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
+const url = MAIN_WINDOW_VITE_DEV_SERVER_URL ? preferLoopbackIpv4(MAIN_WINDOW_VITE_DEV_SERVER_URL) : pathToFileURL(join(rendererRoot, 'index.html')).href;
+const expected = new URL(url);
+const devServer = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL) : undefined;
 let core: Electron.UtilityProcess;
 let credentials: Credentials;
 let mcpSecrets: McpSecretStore;
@@ -139,14 +145,18 @@ function workspacePickerTitle(input: PickWorkspace): string {
   if (edits) return tr('Chọn workspace: đọc và sửa file');
   return tr('Chọn workspace: chỉ đọc');
 }
-function showWindow(chat?: CliChat) {
+async function showWindow(chat?: CliChat) {
+  // The page takes this queue after mounting, including the first open from a terminal-only start.
+  if (chat) queueIncoming({ kind: 'chat', chat: { kind: chat.kind, id: chat.id } });
+  desktopReady ??= createDesktopWindow();
+  await desktopReady;
   if (!window || window.isDestroyed()) return;
   if (window.isMinimized()) window.restore();
   window.show();
   window.moveTop();
   window.focus();
-  if (chat) window.webContents.send('orglet:open-chat', { kind: chat.kind, id: chat.id } satisfies OpenChatTarget);
 }
+
 /**
  * System notifications still on screen or in the notification centre. Electron drops the click handler of one
  * that is garbage collected, so each is held until it is clicked; only the newest few are kept.
@@ -165,7 +175,7 @@ function notifyInBackground(notice: BackgroundNotice): boolean {
   const forget = () => { shownNotifications = shownNotifications.filter(item => item !== notification); };
   notification.on('click', () => {
     forget();
-    showWindow();
+    void showWindow();
     if (window && !window.isDestroyed()) window.webContents.send('orglet:open-task', notice.taskId);
   });
   notification.on('failed', forget);
@@ -295,7 +305,7 @@ async function incomingFor(launch: LaunchRequest): Promise<Incoming> {
 /** Files from Send to or a link, from a cold start or a second instance. */
 async function receiveLaunch(argv: readonly string[], bringForward: boolean) {
   const launch = parseLaunchArguments(argv);
-  if (bringForward) showWindow();
+  if (bringForward && !argv.includes(CLI_BACKGROUND_FLAG)) await showWindow();
   if (!launch) return;
   try {
     queueIncoming(await incomingFor(launch));
@@ -381,6 +391,37 @@ function relayBrowserEvent(raw: unknown) {
     ? { kind: 'frame', runId: event.runId, tabId: event.tabId, bytes: Buffer.from(event.data, 'base64'), width: event.width, height: event.height }
     : event;
   window.webContents.send('orglet:browser-live', live);
+}
+async function createDesktopWindow() {
+  window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // A mouse's side button over the page reaches the renderer as a mouse event; over the window frame, or from a
+  // driver that sends the command itself, it arrives here as an app command instead (COD-202). Windows and Linux only.
+  window.on('app-command', (_event, command) => {
+    if (command !== 'browser-backward' && command !== 'browser-forward') return;
+    if (window && !window.isDestroyed()) window.webContents.send('orglet:navigate', command === 'browser-backward' ? 'back' : 'forward');
+  });
+  window.webContents.on('will-navigate', event => {
+    try {
+      const target = new URL(event.url);
+      if (expected.protocol === 'file:') { if (target.href === expected.href) return; }
+      else if (devServer ? isViteDevRequest(target, devServer) : target.origin === expected.origin) return;
+    } catch { /* deny */ }
+    event.preventDefault();
+  });
+  if (devServer) {
+    // Forge can start Electron before Vite finishes the first renderer build, which leaves a blank window.
+    for (let attempt = 0; attempt < 60; attempt++) {
+      try { if ((await fetch(url)).ok) break; } catch { /* dev server not listening yet */ }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    window.webContents.on('did-fail-load', (_event, _code, _description, _url, isMainFrame) => { if (isMainFrame) setTimeout(() => { if (!window.isDestroyed()) void window.loadURL(url); }, 500); });
+  }
+  try { await window.loadURL(url); }
+  catch (error) {
+    // Chromium reports ERR_ABORTED when a loopback alias is cancelled; did-fail-load retries the same URL.
+    if (!devServer || !/ERR_ABORTED|-3/.test(error instanceof Error ? error.message : '')) throw error;
+  }
 }
 async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
@@ -468,26 +509,6 @@ async function start() {
     log: updaterLogWriter(join(directory, 'updater.log')),
   });
   changelog = new ChangelogFeed({ cacheFile: join(directory, 'changelog-cache.json') });
-  const rendererRoot = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
-  const url = MAIN_WINDOW_VITE_DEV_SERVER_URL ? preferLoopbackIpv4(MAIN_WINDOW_VITE_DEV_SERVER_URL) : pathToFileURL(join(rendererRoot, 'index.html')).href;
-  const expected = new URL(url);
-  const devServer = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL) : undefined;
-  window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  // A mouse's side button over the page reaches the renderer as a mouse event; over the window frame, or from a
-  // driver that sends the command itself, it arrives here as an app command instead (COD-202). Windows and Linux only.
-  window.on('app-command', (_event, command) => {
-    if (command !== 'browser-backward' && command !== 'browser-forward') return;
-    if (window && !window.isDestroyed()) window.webContents.send('orglet:navigate', command === 'browser-backward' ? 'back' : 'forward');
-  });
-  window.webContents.on('will-navigate', event => {
-    try {
-      const target = new URL(event.url);
-      if (expected.protocol === 'file:') { if (target.href === expected.href) return; }
-      else if (devServer ? isViteDevRequest(target, devServer) : target.origin === expected.origin) return;
-    } catch { /* deny */ }
-    event.preventDefault();
-  });
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     try {
@@ -501,6 +522,7 @@ async function start() {
     } catch { callback({ cancel: true }); }
   });
   const authorized = (event: Electron.IpcMainInvokeEvent) => {
+    if (!window || window.isDestroyed()) throw new Error('IPC sender không được phép.');
     // The dev server URL has no trailing slash while the loaded page does, so compare origins; file: pages
     // share the opaque "null" origin, so the packaged build also pins the exact renderer file path.
     const frame = event.senderFrame ? new URL(event.senderFrame.url) : undefined;
@@ -848,28 +870,16 @@ async function start() {
     else await installer.remove();
     return sendToState();
   });
+  if (!process.argv.includes(CLI_BACKGROUND_FLAG)) await showWindow();
   // The app works without its command line, so a pipe that cannot open does not stop the start.
   await startCliServer(directory).catch(error => console.warn('orglet CLI server did not start:', error instanceof Error ? error.message : error));
   void cliInstaller()?.refresh().catch(() => undefined);
   void sendToInstaller()?.refresh().catch(() => undefined);
   void registerLinks().catch(() => undefined);
-  // Queued before the page loads: the window takes the queue as soon as it mounts.
+  // Cold-start and second-instance requests use the same queue, even before the desktop exists.
   started = true;
   await receiveLaunch(process.argv, false);
   for (const argv of launchesBeforeStart.splice(0)) await receiveLaunch(argv, true);
-  if (devServer) {
-    // Forge can start Electron before Vite finishes the first renderer build, which leaves a blank window.
-    for (let attempt = 0; attempt < 60; attempt++) {
-      try { if ((await fetch(url)).ok) break; } catch { /* dev server not listening yet */ }
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    window.webContents.on('did-fail-load', (_event, _code, _description, _url, isMainFrame) => { if (isMainFrame) setTimeout(() => { if (!window.isDestroyed()) void window.loadURL(url); }, 500); });
-  }
-  try { await window.loadURL(url); }
-  catch (error) {
-    // Chromium reports ERR_ABORTED when a loopback alias is cancelled; did-fail-load retries the same URL.
-    if (!devServer || !/ERR_ABORTED|-3/.test(error instanceof Error ? error.message : '')) throw error;
-  }
   updater.start();
 }
 /**
@@ -920,6 +930,7 @@ else {
     void receiveLaunch(forwarded, true);
   });
   app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
+  app.on('activate', () => { if (started) void showWindow(); });
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', event => {
     // The browser's windows close first, so no Chrome or Edge window Orglet drove outlives the app (COD-261).

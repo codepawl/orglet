@@ -23,7 +23,7 @@ export type CliDependencies = {
   request: CoreRequest;
   version: () => string;
   /** Brings the window forward and, with a chat, opens it. */
-  open: (chat?: CliChat) => void;
+  open: (chat?: CliChat) => void | Promise<void>;
   /** Puts a run's Vietnamese error into the app's language. */
   translate: (message: string) => string;
   /** How often `send` reads the chat while it waits. */
@@ -268,12 +268,12 @@ export class CliOperations {
 
   async open(to: string | undefined): Promise<OpenValue> {
     if (!to) {
-      this.dependencies.open();
+      await this.dependencies.open();
       return {};
     }
     const workspace = await this.workspace();
     const chat = matchChat(to, chatsOf(workspace));
-    this.dependencies.open(chat);
+    await this.dependencies.open(chat);
     return { chat };
   }
 }

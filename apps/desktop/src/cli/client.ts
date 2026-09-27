@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { CLI_TOKEN_FILE, cliEndpoint, MAX_LINE_BYTES, type CliRequestBody, type CliResponse } from './protocol';
+import { CLI_BACKGROUND_FLAG, CLI_TOKEN_FILE, cliEndpoint, MAX_LINE_BYTES, type CliRequestBody, type CliResponse } from './protocol';
 
 /** Finding the app's data folder, reaching its pipe, and starting the app when nothing answers (COD-234). */
 
@@ -107,12 +107,12 @@ export function appExecutable(environment: NodeJS.ProcessEnv = process.env): str
   return undefined;
 }
 
-/** Starts the app detached, as a normal app and not as Node, on the same data folder. */
+/** Starts the backend detached, without a desktop window and not as Node, on the same data folder. */
 export function launchApp(executable: string, userData: string, environment: NodeJS.ProcessEnv = process.env): void {
   const appEnvironment = { ...environment };
   delete appEnvironment.ELECTRON_RUN_AS_NODE;
-  const argumentList = environment.ORGLET_USER_DATA ? [`--user-data-dir=${userData}`] : [];
-  const child = spawn(executable, argumentList, { detached: true, stdio: 'ignore', env: appEnvironment, windowsHide: false });
+  const argumentList = [CLI_BACKGROUND_FLAG, ...(environment.ORGLET_USER_DATA ? [`--user-data-dir=${userData}`] : [])];
+  const child = spawn(executable, argumentList, { detached: true, stdio: 'ignore', env: appEnvironment, windowsHide: true });
   child.unref();
 }
 
