@@ -8,7 +8,7 @@ import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, MAX_PROVIDER_CONCURRENCY, QUIET_PARALLEL_LIMIT, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
 import { CustomConnectionsSection } from './CustomConnections';
 import { harnessCatalog, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
-import { PlanUsage } from './PlanUsage';
+import { PlanUsage, usageReadingTime } from './PlanUsage';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, INTERFACE_PREFERRED_FONTS, type FontRole } from '../../shared/fonts';
 import { Button } from './ui';
 import { Select } from './Select';
@@ -90,20 +90,32 @@ const sectionLabels: Partial<Record<SettingsTab, string>> = {
 /** Who is signed in and on which plan, as one line: "an@example.com · ChatGPT Plus". */
 const accountLine = (usage: HarnessAccountUsage) => [usage.email, usage.plan].filter(Boolean).join(' · ');
 
-/** An account in the picker: its address and how much of the allowance closest to its limit is used. */
+/**
+ * An account in the picker: its address and how much of the allowance closest to its limit is used, with the time
+ * when the numbers are an earlier reading.
+ */
 function accountSummary(usage: HarnessAccountUsage | undefined): string | undefined {
   if (!usage) return undefined;
   if (usage.unavailable === 'signed_out') return t('Chưa đăng nhập');
   const tightest = tightestWindow(usage);
   if (!tightest) return usage.email;
-  const used = t('đã dùng {0}%', [Math.round(tightest.usedPercent)]);
+  const percent = Math.round(tightest.usedPercent);
+  const used = usage.asOf ? t('{0}% lúc {1}', [percent, usageReadingTime(usage.asOf)]) : t('đã dùng {0}%', [percent]);
   return usage.email ? `${usage.email} · ${used}` : used;
 }
 
-/** Why a signed-in account shows no allowance. Signed out says nothing here: the login command below already does. */
+/**
+ * Why a signed-in account shows no fresh allowance. Signed out says nothing here: the login command below already
+ * does. An expired saved sign-in is not a sign-in problem: Claude Code renews it when it next runs, Orglet's own runs
+ * included, and Orglet reads again after such a run (COD-301). Until then the last numbers show with their time.
+ */
 function usageGapText(item: HarnessInfo, usage: HarnessAccountUsage): string | undefined {
   if (usage.unavailable === 'unsupported') return unreportedUsageText(item);
-  if (usage.unavailable === 'expired') return t('Phiên đăng nhập đã hết hạn. Mở {0} một lần rồi bấm Dò lại.', [item.name]);
+  if (usage.unavailable === 'expired' && usage.asOf) {
+    return t('Số liệu lúc {0}. {1} tự làm mới phiên đăng nhập ở lần chạy tới, rồi Orglet đọc lại.', [usageReadingTime(usage.asOf), item.name]);
+  }
+  if (usage.unavailable === 'expired') return t('Chưa có số liệu mới: {0} tự làm mới phiên đăng nhập ở lần chạy tới, rồi Orglet đọc lại.', [item.name]);
+  if (usage.unavailable === 'failed' && usage.asOf) return t('Chưa đọc được hạn mức lúc này. Số liệu lúc {0}.', [usageReadingTime(usage.asOf)]);
   if (usage.unavailable === 'failed') return t('Chưa đọc được hạn mức lúc này.');
   return undefined;
 }
@@ -144,7 +156,7 @@ function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove }:
   };
   return <div className="harness-account" ref={row}>
     <Select size="sm" className="harness-account-select" ariaLabel={t('Tài khoản {0}', [item.name])} value={item.accountId} disabled={busy}
-      menuMinWidth={320} showDetail={false}
+      menuMinWidth={360} showDetail={false}
       onChange={onSelect}
       options={[
         { value: SYSTEM_ACCOUNT_ID, label: t('Tài khoản mặc định'), detail: summaryOf(SYSTEM_ACCOUNT_ID) ?? t('Đã đăng nhập sẵn'), icon: <Laptop size={16} /> },

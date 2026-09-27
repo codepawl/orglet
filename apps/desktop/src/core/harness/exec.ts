@@ -122,7 +122,11 @@ const authHint = (harness: HarnessId) => {
   const name = harnessNames[harness];
   return `${name} chưa đăng nhập hoặc phiên đã hết hạn. Mở Cài đặt → Harness trên máy, sao chép lệnh đăng nhập, rồi thử lại. Orglet không chuyển sang Demo.`;
 };
-const looksLikeAuth = (text: string) => /not logged in|not authenticated|please run \/login|please run.*login|token_expired|401 unauthorized|invalid api key|authentication|unauthenticated/i.test(text);
+/**
+ * A sign-in the CLI says is missing or refused. Claude Code 2.1 also prints "Authentication error · This may be a
+ * temporary network issue, please try again" for a dropped connection; that one is not about the sign-in (COD-301).
+ */
+const looksLikeAuth = (text: string) => !/temporary network issue/i.test(text) && /not logged in|not authenticated|please run \/login|please run.*login|token_expired|401 unauthorized|invalid api key|authentication|unauthenticated/i.test(text);
 
 export function parseCursorOutput(stdout: string): HarnessResult {
   let data: unknown;
@@ -189,24 +193,45 @@ export function parseClaudeOutput(stdout: string, rateLimit: ClaudeRateLimitInfo
   }
 }
 
-export function parseCodexOutput(jsonl: string, lastMessage: string | null): HarnessResult {
+/**
+ * What `codex exec --json` said about how its turn ended. `turn.failed` carries the error that ended it. An `error` line
+ * alone can be a retry Codex went on from: the app server marks those `willRetry`, but exec drops the flag and prints
+ * them as plain `error` lines ("Reconnecting... 2/5 (stream disconnected before completion…)", codex-cli 0.157.0), so
+ * one counts only when the turn never completed. `diagnostics` is what an auth check may read: lines that are not JSON
+ * (the CLI's own log) and the error messages, never the model's text.
+ */
+function codexOutcome(jsonl: string): { failure: string | null; diagnostics: string } {
+  let lastError: string | null = null;
+  let completed = false;
+  const diagnostics: string[] = [];
   for (const line of jsonl.split(/\r?\n/)) {
     let event: { type?: string; message?: string; error?: { message?: string } };
     try {
       event = JSON.parse(line);
     } catch {
+      if (line.trim()) diagnostics.push(line);
       continue;
     }
+    if (event.type === 'turn.completed') completed = true;
     if (event.type !== 'turn.failed' && event.type !== 'error') continue;
-
     const message = event.error?.message ?? event.message ?? '';
-    if (looksLikeAuth(jsonl)) throw new HarnessError(authHint('codex'));
-    const limit = detectUsageLimit(message);
+    diagnostics.push(message);
+    if (event.type === 'turn.failed') return { failure: message || lastError || '', diagnostics: diagnostics.join('\n') };
+    lastError = message;
+  }
+  return { failure: completed ? null : lastError, diagnostics: diagnostics.join('\n') };
+}
+
+export function parseCodexOutput(jsonl: string, lastMessage: string | null): HarnessResult {
+  const outcome = codexOutcome(jsonl);
+  if (outcome.failure !== null) {
+    if (looksLikeAuth(outcome.diagnostics)) throw new HarnessError(authHint('codex'));
+    const limit = detectUsageLimit(outcome.failure);
     if (limit) throw new HarnessLimitError('Codex', limit);
-    throw new HarnessError(`Codex báo lỗi: ${message.slice(0, 500)}`);
+    throw new HarnessError(`Codex báo lỗi: ${outcome.failure.slice(0, 500)}`);
   }
 
-  if (!lastMessage) throw new HarnessError(looksLikeAuth(jsonl) ? authHint('codex') : 'Codex kết thúc mà không có báo cáo.');
+  if (!lastMessage) throw new HarnessError(looksLikeAuth(outcome.diagnostics) ? authHint('codex') : 'Codex kết thúc mà không có báo cáo.');
   try {
     return { output: JSON.parse(lastMessage), costUsd: null };
   } catch {

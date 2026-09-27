@@ -9,7 +9,12 @@ import {
   claudePlanLabel, claudeUsageWindows, codexPlanLabel, codexUsageWindows, cursorAbout, readHarnessUsage,
   type AccountUsageRead, type UsageRuntime,
 } from '../../apps/desktop/src/core/harness/usage';
-import { missingHarness, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessCatalogId, type HarnessInfo, type HarnessUsage } from '../../apps/desktop/src/shared/harness';
+import { UsageReadings } from '../../apps/desktop/src/core/harness/usage-readings';
+import { missingHarness, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessUsage } from '../../apps/desktop/src/shared/harness';
+import { accountSwitchFor } from '../../apps/desktop/src/shared/account-switch';
+import type { Task, Worker } from '../../apps/desktop/src/shared/contracts';
+import { usageReadingTime, usageResetLabel } from '../../apps/desktop/src/renderer/components/PlanUsage';
+import { currentLocale } from '../../apps/desktop/src/renderer/i18n';
 
 // Shapes copied from the real CLIs and endpoint on 2026-09-24 (Claude Code 2.1, codex-cli 0.155, Cursor Agent 2026.09).
 const claudeAnswer = {
@@ -63,6 +68,29 @@ describe('reading what each vendor reports', () => {
       .toEqual([{ kind: 'session', usedPercent: 40 }, { kind: 'weekly', usedPercent: 12 }]);
     expect(codexUsageWindows({ rateLimits: { limitId: 'codex', planType: 'free', primary: { usedPercent: 7 } } })).toEqual([{ kind: 'monthly', usedPercent: 7 }]);
     expect(codexUsageWindows({ rateLimits: { limitId: 'codex_spark', primary: { usedPercent: 90 } } })).toEqual([]);
+  });
+
+  it('reads the Codex session window when the service reports one, and only the weekly one when it does not (COD-301)', () => {
+    // codex-cli 0.157.0 `account/rateLimits/read` for a ChatGPT Pro 5x account on 2026-09-27: the service sends one
+    // window, a week long, in the first position. Codex passes the service's primary_window and secondary_window
+    // through as they come (codex-rs/backend-client), so a plan without a five-hour window shows none.
+    const proLite = {
+      ordinaryUsageAllowed: true,
+      rateLimits: {
+        limitId: 'codex', limitName: null, normalModelSlug: null,
+        primary: { usedPercent: 0, windowDurationMins: 10080, resetsAt: 1791078865 }, secondary: null,
+        credits: { hasCredits: false, unlimited: false, balance: '0' }, individualLimit: null, spendControlReached: false,
+        planType: 'prolite', rateLimitReachedType: null,
+      },
+      rateLimitResetCredits: { availableCount: 0, credits: [] },
+      rateLimitUpsell: null,
+    };
+    expect(codexUsageWindows(proLite)).toEqual([{ kind: 'weekly', usedPercent: 0, resetsAt: new Date(1791078865 * 1000).toISOString() }]);
+    const withSession = { rateLimits: { ...proLite.rateLimits, primary: { usedPercent: 35, windowDurationMins: 300, resetsAt: 1790560000 }, secondary: { usedPercent: 8, windowDurationMins: 10080, resetsAt: 1791078865 } } };
+    expect(codexUsageWindows(withSession)).toEqual([
+      { kind: 'session', usedPercent: 35, resetsAt: new Date(1790560000 * 1000).toISOString() },
+      { kind: 'weekly', usedPercent: 8, resetsAt: new Date(1791078865 * 1000).toISOString() },
+    ]);
   });
 
   it('reads the Cursor account without inventing an allowance', () => {
@@ -293,5 +321,145 @@ describe('usage in Settings', () => {
       detect: async () => [], execute: async () => { throw new Error('unused'); },
     });
     expect(await core.command('harnessUsage', { refresh: true })).toEqual({});
+  });
+});
+
+describe('the last good reading (COD-301)', () => {
+  let directory: string;
+  let store: Store;
+  beforeEach(async () => {
+    directory = await mkdtemp(join(tmpdir(), 'orglet-usage-readings-'));
+    store = new Store(':memory:');
+  });
+  afterEach(async () => {
+    store.close();
+    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  });
+
+  const fresh: HarnessAccountUsage = {
+    accountId: SYSTEM_ACCOUNT_ID, email: 'an@example.com', plan: 'Max 20x', checkedAt: '2026-09-27T00:05:00.000Z',
+    windows: [
+      { kind: 'session', usedPercent: 12, resetsAt: '2026-09-27T02:00:00.000Z' },
+      { kind: 'weekly', usedPercent: 40, resetsAt: '2026-10-01T04:00:00.000Z' },
+    ],
+  };
+  const expired = (checkedAt: string, email = 'an@example.com'): HarnessAccountUsage =>
+    ({ accountId: SYSTEM_ACCOUNT_ID, email, plan: 'Max 20x', windows: [], unavailable: 'expired', checkedAt });
+
+  it('shows the last good numbers with their time when the saved sign-in has expired, and never keeps a token', () => {
+    const readings = new UsageReadings(store);
+    expect(readings.settle('claude-code', fresh, new Date('2026-09-27T00:05:00Z'))).toEqual(fresh);
+    const later = readings.settle('claude-code', expired('2026-09-27T01:30:00.000Z'), new Date('2026-09-27T01:30:00Z'));
+    expect(later).toEqual({ ...expired('2026-09-27T01:30:00.000Z'), windows: fresh.windows, asOf: '2026-09-27T00:05:00.000Z' });
+    // A failed request shows them the same way; the reason stays on the row.
+    expect(readings.settle('claude-code', { ...expired('2026-09-27T01:31:00.000Z'), unavailable: 'failed' }, new Date('2026-09-27T01:31:00Z')))
+      .toEqual(expect.objectContaining({ unavailable: 'failed', asOf: '2026-09-27T00:05:00.000Z' }));
+    expect(JSON.stringify(store.setting('harnessUsageReadings', {}))).not.toMatch(/token|Bearer/i);
+  });
+
+  it('drops a window whose reset has passed, and the whole reading once none is left', () => {
+    const readings = new UsageReadings(store);
+    readings.settle('claude-code', fresh, new Date('2026-09-27T00:05:00Z'));
+    const afterSession = readings.settle('claude-code', expired('2026-09-27T03:00:00.000Z'), new Date('2026-09-27T03:00:00Z'));
+    expect(afterSession.windows).toEqual([fresh.windows[1]]);
+    const afterWeek = readings.settle('claude-code', expired('2026-10-02T00:00:00.000Z'), new Date('2026-10-02T00:00:00Z'));
+    expect(afterWeek).toEqual(expired('2026-10-02T00:00:00.000Z'));
+  });
+
+  it('keeps one account’s numbers off another: a new address, a sign-out or a removed account clears them', () => {
+    const readings = new UsageReadings(store);
+    readings.settle('claude-code', fresh, new Date('2026-09-27T00:05:00Z'));
+    const now = new Date('2026-09-27T01:00:00Z');
+    expect(readings.settle('claude-code', expired(now.toISOString(), 'someone@example.com'), now).asOf).toBeUndefined();
+    expect(readings.settle('codex', expired(now.toISOString()), now).asOf).toBeUndefined();
+    readings.settle('claude-code', { ...expired(now.toISOString()), unavailable: 'signed_out' }, now);
+    expect(readings.settle('claude-code', expired(now.toISOString()), now).asOf).toBeUndefined();
+    readings.settle('claude-code', fresh, now);
+    readings.forget('claude-code', SYSTEM_ACCOUNT_ID);
+    expect(readings.settle('claude-code', expired(now.toISOString()), now).asOf).toBeUndefined();
+  });
+
+  it('is never offered as an account with room: its numbers are not fresh', () => {
+    const readings = new UsageReadings(store);
+    readings.settle('claude-code', { ...fresh, accountId: 'work' }, new Date('2026-09-27T00:05:00Z'));
+    const stale = readings.settle('claude-code', { ...expired('2026-09-27T01:00:00.000Z'), accountId: 'work' }, new Date('2026-09-27T01:00:00Z'));
+    expect(stale.asOf).toBeDefined();
+    const offer = accountSwitchFor({ accountId: SYSTEM_ACCOUNT_ID, accounts: [{ id: 'work', label: 'Work' }] }, [stale]);
+    expect(offer).toEqual({ kind: 'wait' });
+  });
+
+  it('reads Claude Code usage again after an Orglet run renewed an expired sign-in, and not after other runs', async () => {
+    let clock = new Date('2026-09-27T00:05:00Z');
+    let answer: AccountUsageRead = { email: 'an@example.com', plan: 'Max 20x', windows: [{ kind: 'weekly', usedPercent: 40 }] };
+    const reads: HarnessCatalogId[] = [];
+    let notified = 0;
+    const core = new CoreService(store, () => { notified += 1; }, async () => { throw new Error('Native adapter must not be used'); }, undefined, () => clock, {
+      detect: async () => [
+        { ...missingHarness('claude-code', 'win32'), executable: 'claude.exe', auth: 'logged_in', status: 'signed_in' },
+        { ...missingHarness('codex', 'win32'), executable: 'codex.exe', auth: 'logged_in', status: 'signed_in' },
+      ],
+      usage: async harness => {
+        reads.push(harness);
+        return harness === 'claude-code' ? answer : { windows: [{ kind: 'weekly', usedPercent: 0 }] };
+      },
+      execute: async () => { throw new Error('The run itself does not matter here'); },
+    });
+    const note = join(directory, 'note.txt');
+    await writeFile(note, 'the answer is 42');
+    const sources = await core.sources.import([note]);
+    const runWith = async (provider: 'claude-code' | 'codex') => {
+      const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider }) as Worker;
+      await core.command('createTask', { workerId: worker.id, brief: 'Find the answer', sourceIds: sources.map(source => source.id), consent: true, providerScopes: [provider], budgetMicros: 500_000 });
+      for (let tries = 0; tries < 300 && store.all<Task>('tasks').some(task => core.runner.isActive(task.id)); tries += 1) await new Promise(resolve => setTimeout(resolve, 10));
+    };
+
+    // The first read is good and is kept; the next finds the saved sign-in expired and shows it with its time.
+    await core.command('harnessUsage', { refresh: true });
+    clock = new Date('2026-09-27T01:30:00Z');
+    answer = { email: 'an@example.com', plan: 'Max 20x', windows: [], unavailable: 'expired' };
+    const stale = await core.command('harnessUsage', { refresh: true }) as HarnessUsage;
+    expect(stale['claude-code']?.[0]).toEqual(expect.objectContaining({ unavailable: 'expired', asOf: '2026-09-27T00:05:00.000Z', windows: [{ kind: 'weekly', usedPercent: 40 }] }));
+
+    // A Codex run renews nothing of Claude Code's.
+    const before = reads.length;
+    await runWith('codex');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(reads.length).toBe(before);
+
+    // A Claude Code run renews its sign-in, so the numbers are read again and the window is told.
+    answer = { email: 'an@example.com', plan: 'Max 20x', windows: [{ kind: 'weekly', usedPercent: 41 }] };
+    const notifiedBefore = notified;
+    await runWith('claude-code');
+    for (let tries = 0; tries < 100 && reads.length === before; tries += 1) await new Promise(resolve => setTimeout(resolve, 10));
+    expect(reads.length).toBeGreaterThan(before);
+    for (let tries = 0; tries < 100 && notified === notifiedBefore; tries += 1) await new Promise(resolve => setTimeout(resolve, 10));
+    const renewed = await core.command('harnessUsage', { refresh: false }) as HarnessUsage;
+    expect(renewed['claude-code']?.[0]).toEqual(expect.objectContaining({ windows: [{ kind: 'weekly', usedPercent: 41 }] }));
+    expect(renewed['claude-code']?.[0].asOf).toBeUndefined();
+  });
+
+  it('words reset and reading times without a sixty-minute remainder', () => {
+    const now = new Date('2026-09-27T02:08:35Z');
+    expect(usageResetLabel(new Date(now.getTime() + 119.7 * 60_000).toISOString(), now)).toBe('Resets in 2 h');
+    expect(usageResetLabel(new Date(now.getTime() + 90 * 60_000).toISOString(), now)).toBe('Resets in 1 h 30 min');
+    const earlierToday = new Date(now.getTime() - 95 * 60_000);
+    expect(usageReadingTime(earlierToday.toISOString(), now)).toBe(earlierToday.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }));
+  });
+
+  it('forgets a removed account’s reading', async () => {
+    const accountRoot = join(directory, 'harness-accounts');
+    let core: CoreService | undefined;
+    core = new CoreService(store, () => {}, async () => { throw new Error('unused'); }, undefined, () => new Date('2026-09-27T00:05:00Z'), {
+      detect: async () => [{ ...missingHarness('claude-code', 'win32', core?.harnessAccounts.selection('claude-code')), executable: 'claude.exe', auth: 'logged_in', status: 'signed_in' }],
+      usage: async () => ({ email: 'an@example.com', windows: [{ kind: 'weekly', usedPercent: 5 }] }),
+      accountRoot,
+      execute: async () => { throw new Error('unused'); },
+    });
+    await core.command('saveHarnessAccount', { harness: 'claude-code', label: 'Work' });
+    const [work] = core.harnessAccounts.selection('claude-code').accounts;
+    await core.command('harnessUsage', { refresh: true });
+    expect(Object.keys(store.setting('harnessUsageReadings', {}))).toContain(`claude-code:${work.id}`);
+    await core.command('removeHarnessAccount', { harness: 'claude-code', id: work.id });
+    expect(Object.keys(store.setting('harnessUsageReadings', {}))).not.toContain(`claude-code:${work.id}`);
   });
 });

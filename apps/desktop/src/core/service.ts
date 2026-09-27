@@ -39,7 +39,8 @@ import { harnessCatalog, SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type Harne
 import { detectHarnesses, probe } from './harness/detect';
 import { readHarnessUsage } from './harness/usage';
 import { HarnessAccounts } from './harness/accounts';
-import { executeHarness } from './harness/exec';
+import { UsageReadings } from './harness/usage-readings';
+import { executeHarness, type HarnessRequest, type HarnessResult } from './harness/exec';
 import { eraseEverything, eraseKnowledge, eraseMemory, eraseSources } from './storage/erase';
 import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../shared/erase';
 import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
@@ -138,7 +139,10 @@ export class CoreService {
   readonly desktop: DesktopTools;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
+  /** Set while a read started by a Claude Code run is on, so a run of many steps starts one read, not one per step. */
+  private usageReadAfterRun = false;
   readonly harnessAccounts: HarnessAccounts;
+  private usageReadings: UsageReadings;
   private modelListMemory = emptyModelListCache();
   private modelListLoaded = false;
   private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
@@ -149,6 +153,7 @@ export class CoreService {
     this.knowledge = new KnowledgeBase(store);
     this.chatSearch = new ChatSearch(store);
     this.harnessAccounts = new HarnessAccounts(store, harness.accountRoot);
+    this.usageReadings = new UsageReadings(store);
     this.notify = () => { if (!this.store.db.isOpen) return; this.policy.captureHandoffs(); notify(); };
     this.sources = new Sources(store, profiler, pdfText);
     this.workspaceGrants = new WorkspaceGrants(store);
@@ -159,7 +164,7 @@ export class CoreService {
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
     this.browser = new BrowserTools(store, browserHost, () => this.notify());
     this.desktop = new DesktopTools(store, desktopHost, () => this.notify(), ownPrograms);
-    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings(), this.browser, this.desktop);
+    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: request => this.executeHarness(request) }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings(), this.browser, this.desktop);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
     this.routineFolders = new RoutineFolders(store);
@@ -740,7 +745,10 @@ export class CoreService {
         const input = commands.removeHarnessAccount.parse(args);
         // Removing the account in use hands the harness back to the default account; any other is a list change.
         const active = this.harnessAccounts.selection(input.harness).accountId === input.id;
-        return this.harnessAccount(input.harness, active ? 'sign-in' : 'label', () => this.harnessAccounts.remove(input.harness, input.id));
+        return this.harnessAccount(input.harness, active ? 'sign-in' : 'label', async () => {
+          await this.harnessAccounts.remove(input.harness, input.id);
+          this.usageReadings.forget(input.harness, input.id);
+        });
       }
       case 'selectHarnessAccount': {
         const input = commands.selectHarnessAccount.parse(args);
@@ -1058,11 +1066,42 @@ export class CoreService {
       // One account at a time: every Codex read starts its own app server.
       for (const accountId of accountIds) {
         const found = await read(item.id, item.executable, this.harnessAccounts.configDir(item.id, accountId));
-        rows.push({ ...found, accountId, checkedAt: this.clock().toISOString() });
+        // An expired saved sign-in or a failed request shows the last good numbers with when, not nothing (COD-301).
+        rows.push(this.usageReadings.settle(item.id, { ...found, accountId, checkedAt: this.clock().toISOString() }, this.clock()));
       }
       return [item.id, rows] as const;
     }));
     return Object.fromEntries(perHarness);
+  }
+
+  /** Runs one harness call for the runner; a Claude Code call may have renewed that account's saved sign-in. */
+  private async executeHarness(request: HarnessRequest): Promise<HarnessResult> {
+    try {
+      return await this.harness.execute(request);
+    } finally {
+      if (request.harness === 'claude-code') this.claudeCodeRan(request.configDir);
+    }
+  }
+
+  /**
+   * Claude Code renews its own saved sign-in when it runs, and Orglet never does (COD-301). When the usage on hand found
+   * that account's token expired, the call that just ended has renewed it, so the numbers are read again now and the
+   * window is told. Any other state reads nothing: a run of many steps must not start a read per step.
+   */
+  private claudeCodeRan(configDir: string | undefined) {
+    const cached = this.harnessUsageCache;
+    if (!cached || this.usageReadAfterRun) return;
+    void cached.value.then(usage => {
+      if (this.harnessUsageCache !== cached || this.usageReadAfterRun) return;
+      const rows = usage['claude-code'] ?? [];
+      const ranAccount = rows.find(row => this.harnessAccounts.configDir('claude-code', row.accountId) === configDir);
+      if (ranAccount?.unavailable !== 'expired') return;
+      this.usageReadAfterRun = true;
+      void this.harnessUsage(true).finally(() => {
+        this.usageReadAfterRun = false;
+        this.notify();
+      });
+    });
   }
 
   /**
