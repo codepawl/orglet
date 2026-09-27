@@ -1,7 +1,8 @@
 /**
  * The model behind marking up a picture in the viewer (COD-280): the marks drawn on it, the crop, undo and redo, and
  * how both are painted. Every coordinate is in the picture's own pixels, so the same marks paint the screen at any
- * zoom and the saved PNG at full size. Nothing here touches the DOM beyond a canvas context handed in.
+ * zoom and the saved PNG at full size. Nothing here touches the DOM beyond a canvas context handed in. A PDF page uses
+ * the same marks in page units (COD-302, `pdfMarkup.ts`).
  */
 
 export type MarkupTool = 'pen' | 'highlighter' | 'arrow' | 'rectangle' | 'ellipse' | 'text' | 'crop';
@@ -12,12 +13,27 @@ export type Size = { width: number; height: number };
 
 export type StrokeMark = { kind: 'pen' | 'highlighter'; points: Point[]; color: string; width: number };
 export type ShapeMark = { kind: 'arrow' | 'rectangle' | 'ellipse'; from: Point; to: Point; color: string; width: number };
-export type TextMark = { kind: 'text'; at: Point; text: string; color: string; size: number };
+/**
+ * A label. `at` is its top-left corner. A `plain` label is a note typed on a PDF page (COD-302): no halo, and its first
+ * line sits on the baseline the saved PDF's text uses, `NOTE_ASCENT` of the size below `at`, so the page on screen and
+ * the saved page agree.
+ */
+export type TextMark = { kind: 'text'; at: Point; text: string; color: string; size: number; plain?: boolean };
 export type Mark = StrokeMark | ShapeMark | TextMark;
 
 /** Everything drawn on one picture. `crop` is kept apart from the marks, so a crop never cuts a mark. */
 export type Markup = { marks: Mark[]; crop?: Rect };
-export type MarkupHistory = { past: Markup[]; present: Markup; future: Markup[] };
+/** Undo and redo over any kind of markup: one picture's, or a whole PDF's pages. */
+export type History<Value> = { past: Value[]; present: Value; future: Value[] };
+export type MarkupHistory = History<Markup>;
+
+/**
+ * How far a note's baseline sits below its top, as a share of its size: the ascender of Inter, the face the canvas
+ * draws notes in and the PDF embeds (2048 units per em, ascender 1984).
+ */
+export const NOTE_ASCENT = 1984 / 2048;
+/** Lines of a label sit this many sizes apart. */
+const LINE_HEIGHT = 1.25;
 
 /** How many steps undo reaches back. */
 const HISTORY_DEPTH = 200;
@@ -31,20 +47,20 @@ export const emptyMarkup: Markup = { marks: [] };
 export const startHistory = (): MarkupHistory => ({ past: [], present: emptyMarkup, future: [] });
 
 /** Makes `next` the current markup; what was current can be undone back to, and what was undone is dropped. */
-export function commit(history: MarkupHistory, next: Markup): MarkupHistory {
+export function commit<Value>(history: History<Value>, next: Value): History<Value> {
   const past = [...history.past, history.present].slice(-HISTORY_DEPTH);
   return { past, present: next, future: [] };
 }
 
-export function undo(history: MarkupHistory): MarkupHistory {
+export function undo<Value>(history: History<Value>): History<Value> {
   const previous = history.past.at(-1);
-  if (!previous) return history;
+  if (previous === undefined) return history;
   return { past: history.past.slice(0, -1), present: previous, future: [history.present, ...history.future] };
 }
 
-export function redo(history: MarkupHistory): MarkupHistory {
+export function redo<Value>(history: History<Value>): History<Value> {
+  if (history.future.length === 0) return history;
   const [next, ...rest] = history.future;
-  if (!next) return history;
   return { past: [...history.past, history.present], present: next, future: rest };
 }
 
@@ -200,17 +216,40 @@ function drawShape(context: CanvasRenderingContext2D, mark: ShapeMark) {
 
 function drawText(context: CanvasRenderingContext2D, mark: TextMark) {
   context.font = labelFont(mark.size);
+  if (mark.plain) {
+    drawNote(context, mark);
+    return;
+  }
   context.textBaseline = 'top';
   // A soft halo in the opposite tone keeps the label legible over any part of the picture.
   context.lineWidth = Math.max(2, mark.size / 6);
   context.strokeStyle = isLight(mark.color) ? 'rgba(0, 0, 0, 0.55)' : 'rgba(255, 255, 255, 0.9)';
   const lines = mark.text.split('\n');
   lines.forEach((line, index) => {
-    const y = mark.at.y + index * mark.size * 1.25;
+    const y = mark.at.y + index * mark.size * LINE_HEIGHT;
     context.strokeText(line, mark.at.x, y);
     context.fillStyle = mark.color;
     context.fillText(line, mark.at.x, y);
   });
+}
+
+/**
+ * A note on a PDF page, drawn the way the saved PDF draws it: filled only, on its baseline, without kerning (the PDF
+ * places each glyph at its own advance).
+ */
+function drawNote(context: CanvasRenderingContext2D, mark: TextMark) {
+  context.textBaseline = 'alphabetic';
+  context.fontKerning = 'none';
+  context.fillStyle = mark.color;
+  noteLines(mark).forEach(line => context.fillText(line.text, mark.at.x, line.baseline));
+}
+
+/** Each line of a note with the y of its baseline, for the screen and the saved PDF alike. */
+export function noteLines(mark: TextMark): { text: string; baseline: number }[] {
+  return mark.text.split('\n').map((text, index) => ({
+    text,
+    baseline: mark.at.y + NOTE_ASCENT * mark.size + index * mark.size * LINE_HEIGHT,
+  }));
 }
 
 /**

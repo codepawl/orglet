@@ -3,7 +3,8 @@ import { Button } from './ui';
 import { t } from '../i18n';
 
 const PAGE_BATCH = 10;
-const RENDER_WIDTH = 720;
+/** How wide a page is shown, in the viewer and while marking it up. */
+export const PDF_PAGE_WIDTH = 720;
 
 type PdfModule = typeof import('pdfjs-dist');
 type PdfDocument = import('pdfjs-dist').PDFDocumentProxy;
@@ -14,7 +15,7 @@ let pdfModule: Promise<PdfModule> | undefined;
  * when the window cannot start a Worker from it (a `file:` page cannot), pdf.js falls back to running the same
  * module on the main thread, which is what the packaged app does.
  */
-function loadPdf(): Promise<PdfModule> {
+export function loadPdf(): Promise<PdfModule> {
   if (!pdfModule) {
     pdfModule = import('pdfjs-dist').then(module => {
       module.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
@@ -33,7 +34,7 @@ function PdfPage({ document, pageNumber }: { document: PdfDocument; pageNumber: 
     void document.getPage(pageNumber).then(page => {
       if (cancelled || !canvas.current) return;
       const base = page.getViewport({ scale: 1 });
-      const scale = RENDER_WIDTH / base.width;
+      const scale = PDF_PAGE_WIDTH / base.width;
       const ratio = window.devicePixelRatio || 1;
       const viewport = page.getViewport({ scale: scale * ratio });
       const element = canvas.current;

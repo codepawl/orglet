@@ -41,6 +41,8 @@
   "packageManager": "pnpm@11.19.0",
   "dependencies": {
     "@anthropic-ai/sdk": "0.127.0",
+    "@cantoo/fontkit": "2.0.12",
+    "@cantoo/pdf-lib": "2.11.1",
     "@codemirror/commands": "6.11.1",
     "@codemirror/search": "6.7.2",
     "@codemirror/state": "6.7.6",

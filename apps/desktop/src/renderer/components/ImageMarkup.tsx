@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { ArrowUpRight, Circle, Crop, Highlighter, Pen, Redo2, Square, Type, Undo2 } from 'lucide-react';
 import { Button, Input, ToolbarToggleGroup, type ToolbarToggleItem } from '@codepawl/orglet-ui';
 import { t } from '../i18n';
@@ -58,12 +58,17 @@ const levels: { value: StrokeLevel; size: number }[] = [
  * The drawing bar under the viewer's toolbar: the tool, the colour, the stroke width (also the text size), then undo
  * and redo. Each group is one Tab stop; the keys in the tooltips work anywhere in the viewer.
  */
-export function MarkupToolbar({ tool, onTool, palette, color, onColor, level, onLevel, canUndo, canRedo, onUndo, onRedo }: {
+export function MarkupToolbar({ tools, tool, onTool, palette, color, onColor, level, onLevel, canUndo, canRedo, onUndo, onRedo, children }: {
+  /** The tools offered, when not all of them: a PDF page has no crop. */
+  tools?: readonly MarkupTool[];
   tool: MarkupTool; onTool: (tool: MarkupTool) => void;
   palette: MarkupColor[]; color: string; onColor: (id: string) => void;
   level: StrokeLevel; onLevel: (level: StrokeLevel) => void;
   canUndo: boolean; canRedo: boolean; onUndo: () => void; onRedo: () => void;
+  /** More of the mode's controls at the end of the bar, such as a PDF's pages. */
+  children?: ReactNode;
 }) {
+  const toolItems = markupTools().filter(item => !tools || tools.includes(item.value));
   const colorItems: ToolbarToggleItem[] = palette.map(entry => ({
     value: entry.id, label: entry.label, icon: <span className="markup-swatch" style={{ background: entry.value }} aria-hidden="true" />,
   }));
@@ -73,13 +78,14 @@ export function MarkupToolbar({ tool, onTool, palette, color, onColor, level, on
     icon: <span className="markup-level" style={{ width: entry.size, height: entry.size }} aria-hidden="true" />,
   }));
   return <div role="toolbar" aria-label={t('Công cụ đánh dấu')} className="markup-toolbar">
-    <ToolbarToggleGroup label={t('Công cụ')} items={markupTools()} value={tool} onValueChange={value => onTool(value as MarkupTool)} />
+    <ToolbarToggleGroup label={t('Công cụ')} items={toolItems} value={tool} onValueChange={value => onTool(value as MarkupTool)} />
     <ToolbarToggleGroup label={t('Màu')} items={colorItems} value={color} onValueChange={onColor} className="markup-colors" />
     <ToolbarToggleGroup label={t('Độ dày nét')} items={levelItems} value={level} onValueChange={value => onLevel(value as StrokeLevel)} />
     <span className="markup-history">
       <Button type="button" size="icon" aria-label={t('Hoàn tác')} title={t('Hoàn tác (Ctrl+Z)')} aria-keyshortcuts="Control+Z" disabled={!canUndo} onClick={onUndo}><Undo2 size={16} /></Button>
       <Button type="button" size="icon" aria-label={t('Làm lại')} title={t('Làm lại (Ctrl+Shift+Z)')} aria-keyshortcuts="Control+Shift+Z" disabled={!canRedo} onClick={onRedo}><Redo2 size={16} /></Button>
     </span>
+    {children}
   </div>;
 }
 
@@ -91,9 +97,17 @@ type TextEntry = { at: Point; value: string };
  * turned into picture pixels as they arrive, so zooming the window never moves a mark. A crop dims what it leaves out
  * rather than cutting it away, so it can still be undone or redrawn; the saved PNG holds only the crop.
  */
-export function MarkupCanvas({ picture, size, markup, tool, color, width, fontSize, label, onCommit }: {
-  picture: HTMLImageElement; size: Size; markup: Markup;
+export function MarkupCanvas({ picture, size, markup, tool, color, width, fontSize, label, plainText = false, pageWidth, onCommit }: {
+  /** A picture, or a PDF page already drawn into a canvas. */
+  picture: CanvasImageSource; size: Size; markup: Markup;
   tool: MarkupTool; color: string; width: number; fontSize: number; label: string;
+  /** Labels typed here are notes on a PDF page, drawn as the saved PDF draws them (`TextMark.plain`). */
+  plainText?: boolean;
+  /**
+   * For a document page: shown this many pixels wide (or the space there is), the way the viewer shows it, and
+   * scrolled down rather than shrunk to fit the height, so its text stays readable while marking it up.
+   */
+  pageWidth?: number;
   onCommit: (next: Markup) => void;
 }) {
   const stage = useRef<HTMLDivElement>(null);
@@ -119,15 +133,18 @@ export function MarkupCanvas({ picture, size, markup, tool, color, width, fontSi
     const element = stage.current;
     if (!element) return;
     const fit = () => {
-      const available = { width: element.clientWidth, height: element.clientHeight };
+      const style = getComputedStyle(element);
+      const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+      const available = { width: element.clientWidth - padding, height: element.clientHeight };
       if (available.width <= 0 || available.height <= 0) return;
-      setScale(Math.min(1, available.width / size.width, available.height / size.height));
+      if (pageWidth) setScale(Math.min(pageWidth, available.width) / size.width);
+      else setScale(Math.min(1, available.width / size.width, available.height / size.height));
     };
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [size.width, size.height]);
+  }, [size.width, size.height, pageWidth]);
 
   useEffect(() => {
     const element = canvas.current;
@@ -170,7 +187,9 @@ export function MarkupCanvas({ picture, size, markup, tool, color, width, fontSi
     if (!typed) return;
     const text = typed.value.trim();
     setEntry(undefined);
-    if (text) onCommit({ ...markup, marks: [...markup.marks, { kind: 'text', at: typed.at, text, color, size: fontSize }] });
+    if (!text) return;
+    const mark: Mark = plainText ? { kind: 'text', at: typed.at, text, color, size: fontSize, plain: true } : { kind: 'text', at: typed.at, text, color, size: fontSize };
+    onCommit({ ...markup, marks: [...markup.marks, mark] });
   }
   function start(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (event.button !== 0) return;
@@ -212,11 +231,12 @@ export function MarkupCanvas({ picture, size, markup, tool, color, width, fontSi
     onCommit({ ...markup, marks: [...markup.marks, draft] });
   }
   const cursor = tool === 'text' ? 'text' : 'crosshair';
-  return <div ref={stage} className="markup-stage">
+  return <div ref={stage} className={pageWidth ? 'markup-stage markup-stage-page' : 'markup-stage'}>
     <div ref={frame} tabIndex={-1} className="markup-frame" style={{ width: size.width * scale, height: size.height * scale }}>
       <canvas ref={canvas} className="markup-canvas" role="img" aria-label={label} style={{ width: size.width * scale, height: size.height * scale, cursor }}
         onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={() => { setDraft(undefined); setCropDraft(undefined); }} />
-      {entry && <Input ref={entryField} className="markup-entry" data-popup-open="" aria-label={t('Chữ trên ảnh')} placeholder={t('Nhập chữ…')} value={entry.value}
+      {/* A PDF page is paper whatever the app's theme, so its note field wears the light palette. */}
+      {entry && <Input ref={entryField} className={plainText ? 'markup-entry theme-light' : 'markup-entry'} data-popup-open="" aria-label={plainText ? t('Ghi chú trên trang') : t('Chữ trên ảnh')} placeholder={plainText ? t('Nhập ghi chú…') : t('Nhập chữ…')} value={entry.value}
         style={{ left: entry.at.x * scale, top: entry.at.y * scale, maxWidth: Math.max(size.width * scale - entry.at.x * scale, 48), color, font: labelFont(fontSize * scale) }}
         onChange={event => setEntry({ ...entry, value: event.target.value })}
         onKeyDown={event => {
