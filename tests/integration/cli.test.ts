@@ -330,7 +330,7 @@ describe('orglet round trip through the real server', () => {
     await writeCliToken(folder, token);
     const core = fakeCore();
     const opened: (CliChat | undefined)[] = [];
-    const operations = new CliOperations({ request: core.request, version: () => '9.9.9', open: chat => opened.push(chat), translate: message => `EN:${message}`, pollMilliseconds: 5 });
+    const operations = new CliOperations({ request: core.request, version: () => '9.9.9', open: chat => { opened.push(chat); }, translate: message => `EN:${message}`, pollMilliseconds: 5 });
     server = new CliServer({ endpoint: cliEndpoint(folder), token, handle: (request, signal) => operations.run(request, signal), translate: message => `EN:${message}` });
     await server.start();
     return { folder, token, core, opened };

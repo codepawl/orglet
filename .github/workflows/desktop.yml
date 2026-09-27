@@ -158,6 +158,7 @@ jobs:
           retention-days: 14
       - run: pnpm test:desktop
       - run: pnpm test:packaged
+      - run: pnpm test:cli
       - run: pnpm test:routines
       - run: pnpm test:skills
       - run: pnpm test:run-audit

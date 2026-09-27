@@ -10,6 +10,8 @@ import { z } from 'zod';
 
 /** Written by main on every start, read by the CLI before each request. */
 export const CLI_TOKEN_FILE = 'cli-token';
+/** A terminal command starts only the local backend; `open` explicitly creates the desktop window. */
+export const CLI_BACKGROUND_FLAG = '--orglet-cli-background';
 /** The Unix socket inside the data folder on macOS and Linux. */
 export const CLI_SOCKET_FILE = 'cli.sock';
 /** A request line longer than this is refused and the connection closed. */
