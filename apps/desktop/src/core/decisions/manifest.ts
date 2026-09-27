@@ -7,12 +7,12 @@ import type { PinnedFile } from './download';
  *
  * The tokenizer is the one `codepawl/tacet-sonata` published at commit 10877b45 (the same file the Python package
  * loads). The ONNX file is exported from that commit's weights by `scripts/tacet/export_onnx.py`; it lives in the
- * repository's `onnx/` folder and is read from `main` until it is pinned to the commit that added it. A changed file
- * on `main` fails the hash check and is deleted, so the address can move without the app ever loading other bytes.
+ * repository's `onnx/` folder, pinned to the commit that added it (bfa4f5df), so a later change on `main` never
+ * reaches the app. A file that does not match the hash below fails the check and is deleted.
  */
 const REPOSITORY = 'https://huggingface.co/codepawl/tacet-sonata/resolve';
 const TOKENIZER_REVISION = '10877b45570dcd3e86f841e47c6dec49488037a2';
-const ONNX_REVISION = 'main';
+const ONNX_REVISION = 'bfa4f5df40c72fe9ea1b9c0888ccf9b86013a03c';
 
 export const TACET_MODEL_NAME = 'tacet-sonata';
 
