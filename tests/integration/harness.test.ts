@@ -475,6 +475,11 @@ describe('runner integration', () => {
     reply = async () => { throw new HarnessLimitError('Claude Code', { kind: 'rate', resetsAt: null }); };
     const busy = await run('claude-code');
     expect(busy.runs.at(-1)?.errorCode).toBeUndefined();
+    // One model's own allowance: the account still runs other models, so another account is not the offer (COD-301).
+    reply = async () => { throw new HarnessLimitError('Claude Code', { kind: 'model', model: 'Opus', resetsAt: null }); };
+    const modelOnly = await run('claude-code');
+    expect(modelOnly.runs.at(-1)?.errorCode).toBeUndefined();
+    expect(modelOnly.runs.at(-1)?.error).toContain('hết hạn mức riêng của model Opus');
   });
 
   describe('PDFs and images (COD-260)', () => {

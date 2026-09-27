@@ -110,6 +110,11 @@ export type HarnessAccountUsage = {
   windows: HarnessUsageWindow[];
   unavailable?: HarnessUsageGap;
   checkedAt: string;
+  /**
+   * When this read could not get fresh numbers (an expired saved sign-in, a failed request), the windows are the last
+   * good reading of the same account and this is when it was taken (COD-301). Absent when the windows are fresh.
+   */
+  asOf?: string;
 };
 
 /** Every account of every installed harness, the system account first. */

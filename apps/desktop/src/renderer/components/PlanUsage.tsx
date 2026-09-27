@@ -17,12 +17,22 @@ export function usageResetLabel(resetsAt: string, now = new Date()): string {
   if (remaining <= 0) return t('Đã đặt lại');
   if (remaining < HOUR_MS) return t('Đặt lại sau {0} phút', [Math.max(1, Math.round(remaining / 60_000))]);
   if (remaining < DAY_MS) {
-    const hours = Math.floor(remaining / HOUR_MS);
-    const minutes = Math.round((remaining % HOUR_MS) / 60_000);
+    // Rounded as a whole first, so 1 h 59.7 min reads "2 h", not "1 h 60 min".
+    const totalMinutes = Math.round(remaining / 60_000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
     return minutes ? t('Đặt lại sau {0} giờ {1} phút', [hours, minutes]) : t('Đặt lại sau {0} giờ', [hours]);
   }
   const when = reset.toLocaleString(currentLocale(), { weekday: 'short', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
   return t('Đặt lại {0}', [when]);
+}
+
+/** When an earlier reading was taken (COD-301): the clock time today, the day and time before that. */
+export function usageReadingTime(asOf: string, now = new Date()): string {
+  const taken = new Date(asOf);
+  const sameDay = taken.toDateString() === now.toDateString();
+  if (sameDay) return taken.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' });
+  return taken.toLocaleString(currentLocale(), { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 /** Near the end of an allowance the bar takes the warning colour, then the error colour once nothing is left to spare. */
