@@ -13,7 +13,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/codepawl/orglet)](https://github.com/codepawl/orglet/releases/latest)
-[![Status: early](https://img.shields.io/badge/status-0.2.0%20early-orange)](docs/implementation_status.md)
+[![Status: early](https://img.shields.io/badge/status-early-orange)](docs/implementation_status.md)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/chat-dark.png">
@@ -123,13 +123,13 @@ If an API request fails or its provider omits usage, Orglet keeps the budget res
 
 ## Install
 
-[Latest GitHub Release](https://github.com/codepawl/orglet/releases/latest) includes an unsigned Windows **Setup.exe** and **ZIP**. The release page shows the version and assets available now; [build from source](#dev) if you need the current `main` branch instead.
+[Latest GitHub Release](https://github.com/codepawl/orglet/releases/latest) includes a signed Windows **Setup.exe** and a **ZIP** containing the signed app. The release page shows the version and assets available now; [build from source](#dev) if you need the current `main` branch instead.
 
-Windows installers are unsigned. macOS CI signs when Developer ID credentials are available and notarizes only when Apple credentials are also available; check that artifact's CI run before relying on Gatekeeper approval.
+Windows releases are signed with Certum. A new certificate can still trigger a SmartScreen warning; check that the publisher is **Open Source Developer Xuan An Nguyen**. macOS CI signs when Developer ID credentials are available and notarizes only when Apple credentials are also available; check that artifact's CI run before relying on Gatekeeper approval.
 
 | Platform | Status |
 |---|---|
-| Windows | Public 0.2.x target. Unsigned ZIP and Squirrel Setup are on the [latest release](https://github.com/codepawl/orglet/releases/latest). SmartScreen may warn (unknown publisher); that is expected. See [windows-release-gates.md](docs/windows-release-gates.md). |
+| Windows | Public release target. Signed Squirrel Setup and a ZIP containing the signed app are on the [latest release](https://github.com/codepawl/orglet/releases/latest). SmartScreen may still warn while the certificate builds its reputation. See [windows-release-gates.md](docs/windows-release-gates.md). |
 | macOS | ZIP of `Orglet.app` from `pnpm make` on a Mac, or a signed/unsigned ZIP from macOS CI depending on available credentials. A signed build needs notarization credentials too before Gatekeeper approval is verified. Not a GitHub Release asset yet. See [macos-packaging.md](docs/macos-packaging.md). |
 | Linux | ZIP from `pnpm make` on Linux, or the `orglet-linux-zip` CI artifact. CI builds it and starts it headless on every pull request, but nobody has used it on a real Linux desktop yet, so treat it as untested. See [linux-packaging.md](docs/linux-packaging.md). |
 | iOS and Android | Not started. The shape under discussion is a companion to a desktop workspace, not a port: a phone cannot run a worker. See [mobile.md](docs/mobile.md). |

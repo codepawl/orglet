@@ -5,13 +5,13 @@
   <img src="images/orglets/implementation_status-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-## Starting point
+## Starting point (historical)
 
-The workspace contains only `plans/orglet_mvp_plan_vi.md` and its coding starter. There is no application, repository metadata, dependency manifest, or test suite. Those plans are the product contract.
+The original workspace contained only `plans/orglet_mvp_plan_vi.md` and its coding starter, before the application, repository metadata, dependency manifest and test suite existed. The current product contract is [product.md](product.md).
 
 ## Current milestone
 
-**0.2.0 (Windows):** M0–M4 foundation plus Grok (xAI) API and Cursor Agent local harness. Live API acceptance, clean-machine installer and code signing remain gated on user inputs (see [windows-release-gates.md](windows-release-gates.md) and [release-review.md](release-review.md)). macOS/Linux packaging is deferred.
+**Windows 0.7.x:** public releases are signed with Certum, and the release feed carries the Setup, ZIP and Squirrel update files. The updater has an end-to-end local trial (COD-304). Windows, macOS and Linux build in CI; Windows is the public release target. Clean-machine installation and full live-provider coverage remain separate verification work. See [Signed Windows release verification](#signed-windows-release-verification) and [capabilities.md](capabilities.md) for the scope of the evidence.
 
 ## Decisions
 
@@ -58,7 +58,9 @@ The workspace contains only `plans/orglet_mvp_plan_vi.md` and its coding starter
 - Core tests cover timezone/DST gaps and overlaps, overnight shifts, exact occurrence/task commit, first-tick/gap/overdue deferral, long-overdue reopen with one preserved `pending.dueAt`, dismiss-without-moving-next-due, offline coalescing, duplicate catch-up, source/config changes, disable-during-verification races, restored schedules without approval, failed-write rollback, budget refusal, live capacity, step-boundary pauses and deterministic handoff recovery. Model/pricing catalog changes also invalidate recurring approval.
 - Forge produced the portable Windows package, ZIP and Squirrel Setup. Installer execution remains untested. Artifacts are unsigned.
 
-## Validation still required
+## Foundation validation checklist (historical)
+
+This section records the early foundation milestone. Later sections and [capabilities.md](capabilities.md) supersede its implementation and verification status; it is not the current release checklist.
 
 - Live provider credentials: the user said they will supply an API key later and instructed continuing the API integration now. A single future OpenAI acceptance task is authorized up to $0.05 once the user supplies the key path. No real provider request has been made.
 - Installer execution on this Windows machine, clean-machine installation and signing are distinct checks.
@@ -370,7 +372,9 @@ Measured 2026-09-27 on the same machine with the shipped ONNX file, while other 
 - **Packaged Windows build** (`electron-forge package`, the pinned files copied into a fresh data folder, a fake OpenAI-compatible server on loopback as the model): with the twenty measured notes, one keyword note and one pinned note, "hello" found the model cold and loaded only the pinned note; eight seconds later "bill Acme for May" loaded **Invoice format** with *picked by Tacet, fit 0.90* in Details → Technical detail and *picked by Tacet* in the answer's trace. In Orglet's browser, clicking "Empty trash now" on a loopback page, which the rules let through, showed a card with Tacet's reason; Don't allow journaled it as `click:consequential:declined`.
 - Found on the way, left as it was: the keyword match counts any shared word of three letters or more, "the", "and", "for", "của" and "được" included, so most English messages already load most unpinned notes; Tacet only matters for short messages. And the frozen manifest lists only the omissions among the notes that loaded, since each step compiles the frozen notes again.
 
-## COD-98 tools and team coordination: implementation under verification
+## COD-98 tools and team coordination: earlier verification record
+
+This record predates the epic's completion. It preserves what that milestone proved and did not prove; current harness coverage is recorded in [capabilities.md](capabilities.md).
 
 The worktree now contains a shared tool catalog and permission checks, workspace grants, isolated Windows execution, private copies and Git worktrees, guarded file integration, durable tool/process journals, assignment ownership and dependencies, a bounded mailbox, and lead-controlled reassignment. These extend the existing orchestrator and checkpoints.
 
@@ -383,4 +387,17 @@ Verification so far:
 - Windows package and packaged smoke passed: permission controls, dependency progress, output paging after restart, private-copy inspection without changing the original, cancelled/confirmed retirement, backup and restore. This smoke build includes the plan-schema, Codex launch-policy and CLI checkpoint allowance changes.
 - API and all three CLI adapters have fixture coverage. No successful live provider/harness execution is claimed by this milestone. Codex help confirms the launch flags; Cursor project deny configuration is fixture-tested but its live enforcement remains unverified.
 
-The epic is not complete. Remaining work includes the end-to-end permission audit for each harness, review of budget/pause and cancellation edges, recovery inspection completeness, documentation consistency and issue-separated delivery. DuckDuckGo search reports its challenge explicitly; successful search availability is not proven on this host. These are tracked as unfinished original work, not transferred to a follow-up issue.
+The epic was not complete at this milestone. Remaining work then included the end-to-end permission audit for each harness, review of budget/pause and cancellation edges, recovery inspection completeness, documentation consistency and issue-separated delivery. DuckDuckGo search reported its challenge explicitly; successful search availability was not proven on this host. These were tracked as unfinished original work, not transferred to a follow-up issue.
+
+## Signed Windows release verification
+
+Measured 2026-09-27 on the Windows 11 development machine:
+
+- [0.7.1](https://github.com/codepawl/orglet/releases/tag/v0.7.1), commit `00341c8588f21d54df8ed6d2ee5f688d3812b16d`, is the first Certum-signed public Windows release. [Windows CI](https://github.com/codepawl/orglet/actions/runs/36327001385) passed typecheck, tests and packaged smokes; its signature check found `Orglet.exe`, `WorkspaceIntegrate.exe` and Setup valid and timestamped. The [Release workflow](https://github.com/codepawl/orglet/actions/runs/36327532414) published all four assets. The update feed offered 0.7.1 to 0.7.0, and the published `RELEASES` file named `orglet-0.7.1-full.nupkg`.
+- Downloaded the public 0.7.1 ZIP and extracted it into the verification worktree's ignored `out/Orglet-win32-x64` directory. Windows reported a valid, timestamped signature with publisher `Open Source Developer Xuan An Nguyen`. `node scripts/packaged-checker-smoke.mjs` ran that executable with disposable user data and passed native DuckDB profiling (3 rows, 1 duplicate ID), template roundtrip, workspace permissions and recovery, and backup/restore (1 report, 1 check). The test app closed afterwards. This is evidence for running the signed ZIP on this machine, not a clean-machine Setup install.
+- A separate isolated run of the same signed executable used the real Claude Code 2.1.281 and Codex 0.157.0 system accounts. Each completed one attached-note request, saved one report containing the synthetic verification code, and recorded no run error or Orglet reservation. This proves a basic source-reading turn through the packaged app, not every tool, native permission boundary, cancellation path or crew flow. Cursor was detected but signed out; Gemini CLI was not installed.
+- The existing encrypted xAI credential file could not be read by the test app. A user-supplied key exposed an HTTP 400 rejection of Unicode property escapes in the `propose_settings` tool schema. [COD-308 / PR #394](https://github.com/codepawl/orglet/pull/394) omits that regex from the model-facing schema while preserving local font validation. Live xAI acceptance passed on the fixed source with the test's $0.05 cap. The full source checks then passed: typecheck, 201 test files and 2,033 tests (12 files and 62 tests skipped), and no missing i18n keys. The user chose to retain the key locally outside the repository; no key values were printed or committed.
+- [COD-252 / PR #275](https://github.com/codepawl/orglet/pull/275) was tested against the 0.7.1 main source before merging: typecheck passed; 200 test files and 2,031 tests passed, with 12 files and 62 tests skipped by the existing configuration; i18n reported no missing keys. The change preserves model-written text while translating the core error inside unfinished-role and refused-proposal notes.
+- The signed Windows CI ZIP for merged commit `902b59283c2893d7669cb566eb5b7171e6566f6d` passed the existing i18n smoke with disposable data: English and Vietnamese switching, native dialog text, core validation text and restart persistence. The rendered English home screen was inspected at 1400 × 900.
+
+Still unverified here: installing and uninstalling the signed Setup on another clean Windows machine, a real public 0.7.0-to-0.7.1 update on that machine, other live API providers, and the harness paths named above. The local Squirrel update trial is recorded under [The updater end to end](#the-updater-end-to-end-cod-304).

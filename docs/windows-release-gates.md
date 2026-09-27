@@ -1,11 +1,11 @@
-# Windows release gates (Orglet 0.2)
+# Windows release gates
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="images/orglets/windows-release-gates-dark.png">
   <img src="images/orglets/windows-release-gates-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-This page is the Windows ship checklist: required pull-request CI, how Windows builds are signed, optional human installer validation, and the GitHub Release procedure. [Orglet 0.2.2](https://github.com/codepawl/orglet/releases/tag/v0.2.2) is already public with Windows Setup and ZIP assets.
+This page is the Windows ship checklist: required pull-request CI, how Windows builds are signed, optional human installer validation, and the GitHub Release procedure. The [latest release](https://github.com/codepawl/orglet/releases/latest) carries Windows Setup and ZIP assets. Public Windows releases have been signed since 0.7.1.
 
 It does **not** record that a smoke already ran. It does **not** create tags or Releases.
 
@@ -14,8 +14,8 @@ It does **not** record that a smoke already ran. It does **not** create tags or 
 | Windows desktop CI (table below) | GitHub Actions on every PR | Merge |
 | Windows builds are signed | GitHub Actions on `main` and manual runs, once the Certum secrets exist | A release ships only a signed Setup |
 | Packaged Windows smoke | GitHub Actions on the release commit | GitHub Release |
-| Installer smoke on a clean machine | Optional human validation | Does not block public 0.2.x |
-| Git tag + GitHub Release | Maintainer, after they approve | Public 0.2.x ship |
+| Installer smoke on a clean machine | Optional human validation | Does not block public Windows releases |
+| Git tag + GitHub Release | Maintainer, after they approve | Public Windows release |
 
 Required pull-request CI is the **Windows desktop** workflow (`.github/workflows/desktop.yml`). It runs on `windows-latest`. Separate **macOS desktop** and **Linux desktop** workflows run typecheck, tests and `pnpm make` for dogfood packaging; Linux also starts the packaged app headlessly. macOS signs when Developer ID credentials exist and notarizes only when Apple credentials exist. Neither workflow replaces the required Windows `test` aggregator. See [macos-packaging.md](macos-packaging.md) and [linux-packaging.md](linux-packaging.md).
 
@@ -135,11 +135,11 @@ When a human has actually done these steps, record the VM/machine, OS, commit SH
 
 The repository already has public Windows releases, including [v0.2.2](https://github.com/codepawl/orglet/releases/tag/v0.2.2). New tags and Releases remain maintainer actions. Do not push a git tag or open a GitHub Release from a docs or CI pull request.
 
-When a maintainer is ready to ship public 0.2.x:
+When a maintainer is ready to ship a public Windows release:
 
 1. Confirm required Windows CI is green on the commit you will tag (the `test` aggregator).
 2. Confirm the Windows packaged CI job and required `test` aggregator passed on that commit. If a human ran the optional Setup checklist, record its machine, commit and result; never present CI as a clean-machine install.
-3. Set `package.json` `version` to the 0.2.x you are shipping if it is not already, and land that on `main`.
+3. Set `package.json` `version` to the version you are shipping if it is not already, and land that on `main`.
 4. Write the release notes: put the SmartScreen paragraph in them (see [Signing](#signing)), link this page, state AGPL-3.0 and that the public GitHub Release ships Windows only. macOS and Linux ZIP packaging exist for dogfood and are not Release assets. For the first release that carries the updater, add one line: 0.2.3 and earlier do not update themselves, so install this one by hand.
 5. Create an annotated tag on that commit whose message is those notes, then push it: `git tag -a v<version> <commit> -F notes.md` and `git push origin v<version>`. Only a maintainer does this; do not reuse an existing release tag.
 6. The **Release** workflow (`.github/workflows/release.yml`) takes it from there, on GitHub's side, so no build travels through your machine. It checks that the tag matches `package.json`, waits for the green Windows build of that commit, and attaches from that build **all four** of `Orglet-<version> Setup.exe`, `RELEASES`, `orglet-<version>-full.nupkg` and the ZIP, with the tag message as the notes. `RELEASES` lists the `.nupkg` by name and update.electronjs.org looks both up in the Release assets; without them, installed copies never learn about this version (see [Updates](#updates)). A local `pnpm make` is never a release asset. A tag pushed before this workflow existed is published by hand: **Actions → Release → Run workflow** with the tag.
