@@ -2,16 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import type { Routine, Task, TaskInput, Worker, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
-import { AppWindow, ShieldCheck, CalendarRange, Sun, Users, ArrowLeft, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
+import { AppWindow, Briefcase, ShieldCheck, CalendarRange, Sun, Users, ArrowLeft, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Gauge, Globe, History, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, Timer, UserRound, Wallet, Zap } from 'lucide-react';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
-import { SKIPPED_WHILE_INACTIVE, TimeZone } from '../../shared/schedule';
+import { DAILY_CAP_REACHED, EVERY_HOURS_CHOICES, SKIPPED_WHILE_INACTIVE, TimeZone, nextOccurrence, runsPerDay, scheduleDay, type Schedule, type ScheduleFrequency } from '../../shared/schedule';
+import { cadenceInWords, everyHoursInWords, formatClockTime, keepTimeTogether } from '../scheduleWords';
 import { timeZoneChoices } from '../timeZones';
 import { RowMenu } from './RowMenu';
 import { EllipsisVertical, Trash } from './icons';
 import { Select } from './Select';
 import { t } from '../i18n';
-import { currentLanguage, currentLocale, translated, tMessage } from '../i18n';
+import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Switch, SwitchField } from './Switch';
 import { StatusMark, taskStatusMark, type StatusMarkState } from './StatusMark';
@@ -30,18 +31,8 @@ import { WEB_SEARCH_PROVIDER_NAMES } from '../../shared/web-tools';
 /** Read when shown, so it follows the interface language like every other message. */
 const INVALID_ZONE = () => t('Múi giờ không hợp lệ. Chọn một múi giờ trong danh sách.');
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
-/** Keeps "9:00 AM" on one line: the space before the day period becomes a no-break space, whatever the runtime used. */
-const keepTimeTogether = (text: string) => text.replace(/\s(?=[AP]M\b)/g, '\u00a0');
 export const formatRoutineTime = (iso: string, timeZone: string) => keepTimeTogether(new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' }));
-/**
- * A schedule's saved "HH:mm" on the interface's clock, the same way `formatRoutineTime` writes the next run beside it:
- * "01:36" in Vietnamese, "1:36 AM" in US English (COD-283; the card used to mix the two).
- */
-export function formatClockTime(time: string): string {
-  const [hour, minute] = time.split(':').map(Number);
-  const wallClock = new Date(Date.UTC(2000, 0, 1, hour, minute));
-  return keepTimeTogether(wallClock.toLocaleTimeString(currentLocale(), { timeZone: 'UTC', timeStyle: 'short' }));
-}
+export { formatClockTime };
 /** The command that starts a routine from a terminal (COD-245); the name is quoted so spaces survive the shell. */
 export const runCommandOf = (name: string) => `orglet run "${name.replace(/"/g, '\\"')}"`;
 const TRIGGER_ICONS: Record<RoutineTriggerKind, typeof CalendarClock> = { schedule: CalendarClock, folder: FolderInput, called: SquareTerminal };
@@ -50,10 +41,35 @@ function triggerSummary(routine: Routine): string {
   const trigger = triggerOf(routine);
   if (trigger.kind === 'folder') return t('Khi có tệp mới trong {0}', [trigger.folderName]);
   if (trigger.kind === 'called') return t('Chỉ khi được gọi');
-  // Vietnamese writes the day in lower case mid-sentence ("Mỗi thứ hai"); English keeps "Every Monday".
-  const day = currentLanguage() === 'vi' ? weekdays[routine.schedule.weekday].toLowerCase() : weekdays[routine.schedule.weekday];
-  const cadence = routine.schedule.frequency === 'daily' ? t('Hằng ngày') : t('Mỗi {0}', [day]);
-  return t('{0} lúc {1}', [cadence, formatClockTime(routine.schedule.time)]);
+  return cadenceInWords(routine.schedule);
+}
+/**
+ * What a schedule may cost at most, said before saving (COD-288): "Up to 9 runs a day · up to $4.50 a day at $0.50 per
+ * run", or the daily cap when it is lower. Only a clock schedule knows how many runs a day it starts.
+ */
+export function costCeiling(schedule: Schedule, triggerKind: RoutineTriggerKind, budgetMicros: number, capMicros: number | undefined): string {
+  if (triggerKind !== 'schedule') {
+    if (capMicros === undefined) return t('Không giới hạn theo ngày; mỗi lần chạy tối đa {0}.', [formatMoney(budgetMicros)]);
+    return t('Tối đa {0} một ngày, dù chạy bao nhiêu lần.', [formatMoney(capMicros)]);
+  }
+  // A cap is never below one run's limit, so it cannot lower a weekly schedule's single run.
+  if (schedule.frequency === 'weekly') return t('Tối đa 1 lần một tuần · tối đa {0} một tuần.', [formatMoney(budgetMicros)]);
+  const runs = runsPerDay(schedule);
+  const ceilingMicros = runs * budgetMicros;
+  const runsText = runs === 1 ? t('Tối đa 1 lần một ngày') : t('Tối đa {0} lần một ngày', [runs]);
+  if (capMicros !== undefined && capMicros < ceilingMicros) return t('{0} · tối đa {1} một ngày theo giới hạn.', [runsText, formatMoney(capMicros)]);
+  if (runs === 1) return t('{0} · tối đa {1} một ngày.', [runsText, formatMoney(ceilingMicros)]);
+  return t('{0} · tối đa {1} một ngày, với {2} mỗi lần.', [runsText, formatMoney(ceilingMicros), formatMoney(budgetMicros)]);
+}
+/**
+ * The next time a run can start, for the card: once today's cap is reached the rest of today's times are skipped, so it
+ * is the first time on a later day (COD-288).
+ */
+export function nextRunAt(routine: Pick<Routine, 'nextDueAt' | 'notice' | 'schedule'>, today: string | undefined): string {
+  if (routine.notice?.reason !== DAILY_CAP_REACHED || !today) return routine.nextDueAt;
+  let next = routine.nextDueAt;
+  for (let step = 0; step < 48 && scheduleDay(new Date(next), routine.schedule.timeZone) === today; step++) next = nextOccurrence(routine.schedule, new Date(next));
+  return next;
 }
 /** Why a run was missed, in plain words when it is the usual reason (the app was closed or asleep). */
 function missedReason(reason: string): string {
@@ -112,6 +128,12 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
     const task = item.lastTaskId ? workspace.tasks.find(entry => entry.id === item.lastTaskId) : undefined;
     return task ? lastRunOutcome(task, workspace.heldForReview) : undefined;
   };
+  /** An hourly schedule's runs so far today, in its own time zone (COD-288); other cadences run at most once a day. */
+  const runsToday = (item: Routine) => {
+    if (item.schedule.frequency !== 'hours' || triggerOf(item).kind !== 'schedule') return 0;
+    return workspace.routineToday?.[item.id]?.runs ?? 0;
+  };
+  const spentToday = (item: Routine) => workspace.routineToday?.[item.id]?.spentMicros ?? 0;
   const shownOnCard = workspace.routines.some(item => item.notice && tMessage(item.notice.reason) === error);
   const deleteSchedule = async (item: Routine) => {
     await orglet.call('deleteRoutine', { id: item.id });
@@ -150,9 +172,13 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
         </div>
         <ul className="routine-meta">
           {trigger.kind === 'schedule' && <li><Globe size={14} aria-hidden="true" />{item.schedule.timeZone}</li>}
-          {trigger.kind === 'schedule' && item.enabled && <li><CalendarDays size={14} aria-hidden="true" />{t('Lần tới {0}', [formatRoutineTime(item.nextDueAt, item.schedule.timeZone)])}</li>}
+          {trigger.kind === 'schedule' && item.enabled && <li><CalendarDays size={14} aria-hidden="true" />{t('Lần tới {0}', [formatRoutineTime(nextRunAt(item, workspace.routineToday?.[item.id]?.day), item.schedule.timeZone)])}</li>}
           <li>{assigneeFace(item)}{assignee(item)}</li>
           <li><Wallet size={14} aria-hidden="true" />{t('{0} mỗi lần', [formatMoney(item.task.budgetMicros)])}</li>
+          {/* The day so far (COD-288): an hourly schedule's quiet runs collect here instead of a toast each, and a
+              cap shows what today's runs used of it. */}
+          {runsToday(item) > 0 && <li><History size={14} aria-hidden="true" />{runsToday(item) === 1 ? t('1 lần chạy hôm nay') : t('{0} lần chạy hôm nay', [runsToday(item)])}</li>}
+          {item.schedule.dailyCapMicros !== undefined && <li><Gauge size={14} aria-hidden="true" />{t('Hôm nay {0} / {1}', [formatMoney(spentToday(item)), formatMoney(item.schedule.dailyCapMicros)])}</li>}
           {/* A schedule with no sources says nothing about them, rather than "0 sources" (COD-258). */}
           {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{item.task.sourceIds.length === 1 ? t('1 nguồn') : t('{0} nguồn', [item.task.sourceIds.length])}</li>}
           {item.workspace && <li title={workspaceLevelNames[workspaceLevelOf(item.workspace.permissions)]}><FolderOpen size={14} aria-hidden="true" /><span className="routine-meta-folder">{item.workspace.folderName}</span></li>}
@@ -169,12 +195,20 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
           <Button disabled={busy || !item.enabled} variant="primary" onClick={() => void action(async () => openTask(await orglet.call('catchUpRoutine', { id: item.id })))}>{t('Chạy bù một lần')}</Button>
           <Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Bỏ qua lần lỡ')}</Button>
         </div></div></div>}
-        {item.notice && <div className="routine-alert" role="status"><FolderX size={16} aria-hidden="true" /><div>
+        {/* The day's cap reached is not a failure: it says what today used, and when runs start again (COD-288). */}
+        {item.notice?.reason === DAILY_CAP_REACHED && item.schedule.dailyCapMicros !== undefined && <div className="routine-alert" role="status"><Gauge size={16} aria-hidden="true" /><div>
+          <h4>{t('Đã chạm giới hạn chi phí hôm nay')}</h4>
+          <p>{t('Các lần chạy hôm nay đã dùng {0} trong giới hạn {1}, nên lịch bỏ qua các lần còn lại trong ngày.', [formatMoney(spentToday(item)), formatMoney(item.schedule.dailyCapMicros)])}</p>
+          <p className="muted">{t('Lịch chạy lại sau nửa đêm theo giờ {0}.', [item.schedule.timeZone])}</p>
+          <div className="actions"><Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Ẩn thông báo')}</Button></div>
+        </div></div>}
+        {item.notice && item.notice.reason !== DAILY_CAP_REACHED && <div className="routine-alert" role="status"><FolderX size={16} aria-hidden="true" /><div>
           <h4>{t('Lịch chưa chạy')}</h4>
           <p>{tMessage(item.notice.reason)}</p>
+          {/* The note keeps the time it first appeared; the same reason again is not written twice (COD-288). */}
           <p className="muted">{trigger.kind === 'folder'
             ? t('Lúc {0}. Tệp đến khi app tắt không được chạy lại.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])
-            : t('Lần gần nhất lúc {0}.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])}</p>
+            : t('Từ {0}.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])}</p>
           <div className="actions"><Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Ẩn thông báo')}</Button></div>
         </div></div>}
         {lastRun(item) && <LastRunButton outcome={lastRun(item)!} disabled={busy} onOpen={() => openTask(item.lastTaskId!)} />}
@@ -211,9 +245,17 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const [target, setTarget] = useState(initial?.teamId ? `team:${initial.teamId}` : initial?.workerId ?? workspace.workers[0].id);
   const [sources, setSources] = useState<{ id: string; name: string; bytes?: number }[]>((initial?.sourceIds ?? []).map(id => ({ id, name: t('Nguồn {0}', [id.slice(0, 8)]) })));
   const [budget, setBudget] = useState(toAmount(initial?.budgetMicros ?? 500_000));
-  const [frequency, setFrequency] = useState(routine?.schedule.frequency ?? 'daily');
+  const [frequency, setFrequency] = useState<ScheduleFrequency>(routine?.schedule.frequency ?? 'daily');
   const [weekday, setWeekday] = useState(routine?.schedule.weekday ?? 1);
   const [time, setTime] = useState(routine?.schedule.time ?? '09:00');
+  // An hourly schedule (COD-288): how many hours apart, an optional part of the day, and weekdays only.
+  const [everyHours, setEveryHours] = useState<number>(routine?.schedule.everyHours ?? 1);
+  const [windowOn, setWindowOn] = useState(routine?.schedule.window !== undefined);
+  const [windowFrom, setWindowFrom] = useState(routine?.schedule.window?.from ?? '09:00');
+  const [windowTo, setWindowTo] = useState(routine?.schedule.window?.to ?? '18:00');
+  const [weekdaysOnly, setWeekdaysOnly] = useState(routine?.schedule.weekdaysOnly === true);
+  // The most the schedule's runs may cost in one day, whatever starts them; empty is no cap (COD-288).
+  const [dailyCap, setDailyCap] = useState(routine?.schedule.dailyCapMicros !== undefined ? toAmount(routine.schedule.dailyCapMicros) : '');
   const systemZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [timeZone, setTimeZone] = useState(routine?.schedule.timeZone ?? systemZone);
   // Built once per editor: about four hundred zones, each with its offset now. The saved zone stays in the list.
@@ -253,7 +295,18 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
   const destination = providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo');
   // Leaving asks for confirmation only when something differs from what the editor opened with.
-  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`), web, workFolder?.folderId, workLevel, review]);
+  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`), web, workFolder?.folderId, workLevel, review, everyHours, windowOn, windowFrom, windowTo, weekdaysOnly, dailyCap]);
+  const budgetMicros = toMicros(budget);
+  const capMicros = dailyCap.trim() ? toMicros(dailyCap) : undefined;
+  // The schedule as it would be saved; the hourly fields go only with an hourly schedule.
+  const draftSchedule: Schedule = {
+    frequency, weekday, time, timeZone,
+    ...(frequency === 'hours' ? { everyHours: everyHours as Schedule['everyHours'], ...(windowOn ? { window: { from: windowFrom, to: windowTo } } : {}), ...(weekdaysOnly ? { weekdaysOnly: true } : {}) } : {}),
+    ...(capMicros !== undefined && Number.isSafeInteger(capMicros) ? { dailyCapMicros: capMicros } : {}),
+  };
+  const windowInvalid = frequency === 'hours' && windowOn && windowFrom >= windowTo;
+  const capInvalid = capMicros !== undefined && (!Number.isSafeInteger(capMicros) || capMicros < 1000 || (Number.isSafeInteger(budgetMicros) && capMicros < budgetMicros));
+  const ceiling = Number.isSafeInteger(budgetMicros) && budgetMicros > 0 && !windowInvalid ? costCeiling(draftSchedule, triggerKind, budgetMicros, draftSchedule.dailyCapMicros) : '';
   // The permissions the saved task carries: what it had, with the web and the browser as chosen here. A schedule
   // that never had either keeps carrying none, so saving it again changes nothing.
   const leadProvider = (workspace.workers.find(worker => worker.id === (team?.synthesizerId ?? target)) ?? workspace.workers[0]).provider;
@@ -303,6 +356,8 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       return;
     }
     if (!trigger) { setError(t('Chọn thư mục để lịch theo dõi.')); return; }
+    if (triggerKind === 'schedule' && windowInvalid) { setError(t('Giờ bắt đầu của khung giờ phải trước giờ kết thúc.')); return; }
+    if (capInvalid) { setError(t('Giới hạn mỗi ngày cần ít nhất bằng giới hạn mỗi lần chạy.')); return; }
     setBusy(true);
     try {
       // Saving is the permission (user, 2026-09-19). The tick that used to ask again said nothing the act of
@@ -311,7 +366,9 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       // the worker, skill, team or model has changed since, and a restored backup comes back off and unapproved.
       // An event trigger still carries the time fields, valid ones, so switching back to the clock keeps them.
       const zone = TimeZone.safeParse(timeZone).success ? timeZone : Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { frequency, weekday, time, timeZone: zone }, trigger, workspace: workingFolder, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers,
+      // An event trigger keeps an hourly schedule's valid fields too; a window that does not fit is dropped.
+      const schedule = windowInvalid ? { ...draftSchedule, window: undefined } : draftSchedule;
+      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { ...schedule, timeZone: zone }, trigger, workspace: workingFolder, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers,
         ...(toolCapabilities ? { toolCapabilities } : {}), ...(browserLevel === 'read' ? { browser: { profileId: browserProfile, sites: browserSites } } : {}) } });
       saved();
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
@@ -344,15 +401,38 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       ]} />
       {triggerKind === 'schedule' && <>
         <div className="field-grid">
-          <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as typeof frequency); }} options={[{ value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> }, { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> }]} />
+          <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as ScheduleFrequency); }} options={[
+            { value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> },
+            { value: 'weekdays', label: t('Ngày thường (T2–T6)'), icon: <Briefcase size={16} /> },
+            { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> },
+            { value: 'hours', label: t('Theo giờ'), icon: <Timer size={16} /> },
+          ]} />
           {frequency === 'weekly' && <Select label={<FieldLabel icon={CalendarDays} required>{t('Ngày trong tuần')}</FieldLabel>} value={String(weekday)} onChange={value => { setWeekday(Number(value)); }} options={weekdays.map((day, index) => ({ value: String(index), label: day }))} />}
-          <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><Input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>
+          {frequency === 'hours'
+            ? <Select label={<FieldLabel icon={Timer} required>{t('Cách nhau')}</FieldLabel>} value={String(everyHours)} onChange={value => { setEveryHours(Number(value)); }} options={EVERY_HOURS_CHOICES.map(hours => ({ value: String(hours), label: everyHoursInWords(hours) }))} />
+            : <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><Input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>}
           <Select label={<FieldLabel icon={Globe} required>{t('Múi giờ')}</FieldLabel>} value={timeZone} field="timeZone" menuMinWidth={300} invalid={zoneError} describedBy={zoneError ? 'routine-zone-error' : undefined}
             onChange={value => { setTimeZone(value); if (zoneError) setError(''); }}
             options={zoneChoices.map(zone => ({ value: zone.value, label: zone.label, detail: zone.offset || undefined, group: zone.system ? t('Máy này') : zone.region || t('Khác') }))} inlineDetail />
         </div>
         {zoneError && <p id="routine-zone-error" role="alert" className="error">{error}</p>}
-        <p className="muted">{t('Chỉ chạy khi Orglet đang mở; các lần lỡ gộp thành một lần chạy bù.')}</p>
+        {/* An hourly schedule may keep to part of the day and to weekdays (COD-288). Each is on or off, so a switch. */}
+        {frequency === 'hours' && <div className="routine-hours">
+          <SwitchField checked={windowOn} onChange={setWindowOn}
+            description={windowOn ? t('Lần đầu lúc giờ bắt đầu, lần cuối trước giờ kết thúc.') : t('Chạy suốt ngày, từ nửa đêm.')}>
+            <FieldLabel icon={Clock}>{t('Chỉ trong khung giờ')}</FieldLabel>
+          </SwitchField>
+          {windowOn && <div className="field-grid">
+            <label><FieldLabel icon={Clock} required>{t('Từ')}</FieldLabel><Input type="time" value={windowFrom} onChange={event => setWindowFrom(event.target.value)} aria-invalid={windowInvalid || undefined} required /></label>
+            <label><FieldLabel icon={Clock} required>{t('Đến')}</FieldLabel><Input type="time" value={windowTo} onChange={event => setWindowTo(event.target.value)} aria-invalid={windowInvalid || undefined} required /></label>
+          </div>}
+          <SwitchField checked={weekdaysOnly} onChange={setWeekdaysOnly} description={t('Thứ hai đến thứ sáu.')}>
+            <FieldLabel icon={Briefcase}>{t('Chỉ ngày thường')}</FieldLabel>
+          </SwitchField>
+        </div>}
+        <p className="muted">{frequency === 'hours'
+          ? t('Chỉ chạy khi Orglet đang mở. Đến giờ mà lần trước chưa xong thì bỏ qua giờ đó.')
+          : t('Chỉ chạy khi Orglet đang mở; các lần lỡ gộp thành một lần chạy bù.')}</p>
       </>}
       {triggerKind === 'folder' && <div className="routine-folder">
         <PanelHeading level={3} title={<FieldLabel icon={FolderOpen} required>{t('Thư mục theo dõi')}</FieldLabel>}>
@@ -370,6 +450,11 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
     <section className="routine-group" aria-labelledby="routine-group-limits">
       <h4 id="routine-group-limits">{t('Giới hạn & quyền')}</h4>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} required /></label>
+      {/* The ceiling is said before saving (COD-288), and a lower daily cap can be set under it. */}
+      <div className="routine-cap">
+        <label><FieldLabel icon={Gauge}>{t('Giới hạn mỗi ngày')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={dailyCap} onChange={setDailyCap} placeholder={t('Không giới hạn')} invalid={capInvalid} aria-describedby="routine-cap-ceiling" /></label>
+        {ceiling && <p id="routine-cap-ceiling" className="muted">{ceiling}</p>}
+      </div>
       {/* The schedule's own folder (COD-294): the chat's folder levels and native picker, saved and approved with the
           schedule. Without it a scheduled run has no folder, whatever the orglet's chat was given. */}
       <div className="routine-workspace">

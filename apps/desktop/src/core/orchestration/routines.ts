@@ -1,7 +1,7 @@
-import { RoutineInput, type FolderIntake, type Routine, type TaskInput, type Team, type Worker, type Skill, type Task } from '../../shared/contracts';
-import { SKIPPED_WHILE_INACTIVE, nextOccurrence } from '../../shared/schedule';
+import { RoutineInput, type FolderIntake, type Routine, type RoutineToday, type TaskInput, type Team, type Worker, type Skill, type Task } from '../../shared/contracts';
+import { DAILY_CAP_REACHED, SKIPPED_PREVIOUS_RUNNING, SKIPPED_WHILE_INACTIVE, nextOccurrence, normalizedSchedule, scheduleDay, type Schedule } from '../../shared/schedule';
 import { triggerOf, type RoutineTrigger, type RoutineWorkspace } from '../../shared/routine-triggers';
-import { Store, id, now } from '../storage/database';
+import { Store, id } from '../storage/database';
 import type { RoutineFolders } from '../storage/routine-folders';
 import type { ResolvedDirectory } from '../storage/workspace-grants';
 import { WorkspacePermissions, type WorkspacePermission } from '../../shared/workspace-access';
@@ -11,11 +11,12 @@ import { Sources, fingerprint } from '../tools/sources';
 import { resolveWorkerModel } from '../models/resolve';
 import { readCustomConnections } from '../storage/custom-connections';
 import { defaultBrowserChoice } from '../../shared/browser';
+import { DailyCapReached } from '../budgets/ledger';
+import { UNFINISHED_TASK_STATUSES, daysSoFar, fitsDailyCap } from '../budgets/daily-cap';
 
 /** First tick after startup, a gap, or overdue delay above this is a miss — never auto-replayed. See docs/routines.md. */
 export const ROUTINE_MISS_MS = 30_000;
 export { SKIPPED_WHILE_INACTIVE };
-const UNFINISHED_TASK_STATUSES: readonly Task['status'][] = ['queued', 'running', 'pausing', 'paused', 'interrupted', 'waiting_budget', 'waiting_input'];
 const PREVIOUS_RUN_BEFORE_CATCH_UP = 'Lần trước chưa kết thúc. Xử lý công việc đó trước khi chạy bù.';
 const PREVIOUS_RUN_BEFORE_EVENT = 'Lần trước của lịch này chưa kết thúc. Xử lý công việc đó rồi chạy lại.';
 const ROUTINE_DISABLED = 'Lịch đang tắt. Bật lịch trong app rồi chạy lại.';
@@ -28,6 +29,34 @@ export type RoutineRunFolder = { resolved: ResolvedDirectory; permissions: Works
 
 /** A routine's working folder is gone or replaced: the run does not start and the card says why until the next save. */
 class WorkFolderUnavailable extends Error {}
+
+/** The routine's previous run is still going or its changes still wait for the person, so this run did not start. */
+class PreviousRunBusy extends Error {}
+
+/** A daily cap below one run's limit would never let a run start. */
+const CAP_BELOW_RUN_LIMIT = 'Giới hạn mỗi ngày cần ít nhất bằng giới hạn mỗi lần chạy.';
+
+/**
+ * An hourly schedule runs again within the hour, so a run it could not start is skipped with a note on its card, and
+ * its next on-time run replaces a waiting catch-up; waiting for the person first would stop it for the day.
+ */
+function runsHourly(routine: Routine): boolean {
+  return routine.schedule.frequency === 'hours' && triggerOf(routine).kind === 'schedule';
+}
+
+/**
+ * What saving approves about how often and how much a clock runs a routine (COD-288): an hourly or weekday cadence and
+ * the daily cap. Undefined for a daily or weekly routine without a cap, so their fingerprint stays what it was.
+ */
+export function scheduleApproval(schedule: Schedule | undefined) {
+  if (!schedule) return undefined;
+  const cadence = schedule.frequency === 'hours'
+    ? { frequency: schedule.frequency, everyHours: schedule.everyHours, window: schedule.window ?? null, weekdaysOnly: schedule.weekdaysOnly === true }
+    : schedule.frequency === 'weekdays' ? { frequency: schedule.frequency } : undefined;
+  const cap = schedule.dailyCapMicros;
+  if (!cadence && cap === undefined) return undefined;
+  return { ...(cadence ? { cadence } : {}), ...(cap !== undefined ? { dailyCapMicros: cap } : {}) };
+}
 
 /** Files an event brings to one run, on top of the routine's own sources, and the ones it had to leave out. */
 export type RunAdditions = { sourceIds: string[]; excluded: FolderIntake['skipped'] };
@@ -49,7 +78,7 @@ export class Routines {
    * The fingerprint saving approves. A clock routine keeps the exact shape it had before triggers existed, so an
    * update does not take away every routine's approval; any other trigger adds itself, and a folder its identity.
    */
-  configuration(input: TaskInput, trigger?: RoutineTrigger, workspace?: RoutineWorkspace) {
+  configuration(input: TaskInput, trigger?: RoutineTrigger, workspace?: RoutineWorkspace, schedule?: Schedule) {
     const team = input.teamId ? this.store.get<Team>('teams', input.teamId) : undefined;
     const workers = [...new Set(team ? [...team.memberIds, team.synthesizerId] : [input.workerId])].map(workerId => this.store.get<Worker>('workers', workerId));
     const skills = [...new Set(workers.map(worker => worker.skillId))].map(skillId => this.store.get<Skill>('skills', skillId));
@@ -64,11 +93,14 @@ export class Routines {
     // the exact shape it always had, so these changes take no approval away.
     const browser = routineBrowserApproval(input);
     const folder = workspace ? this.workspaceApproval(workspace) : undefined;
+    // An hourly or weekday cadence and a daily cap are approved the same way (COD-288): a row hand-edited from daily to
+    // hourly, or stripped of its cap, does not run until it is saved again.
+    const cadence = scheduleApproval(schedule);
     const approved = triggerOf({ trigger });
     const base = approved.kind === 'schedule'
       ? { team, workers, skills, models }
       : { team, workers, skills, models, trigger: { kind: approved.kind, folder: approved.kind === 'folder' ? this.folders.identity(approved.folderId) : null } };
-    return fingerprint(JSON.stringify({ ...base, ...(browser ? { browser } : {}), ...(folder ? { workspace: folder } : {}) }));
+    return fingerprint(JSON.stringify({ ...base, ...(browser ? { browser } : {}), ...(folder ? { workspace: folder } : {}), ...(cadence ? { schedule: cadence } : {}) }));
   }
   /** What saving approves about a working folder: which folder on disk (path, volume, file id), how far, and review. */
   private workspaceApproval(workspace: RoutineWorkspace) {
@@ -101,8 +133,10 @@ export class Routines {
     const trigger = this.normalizedTrigger(input.trigger ?? previous?.trigger);
     // The same for the working folder (COD-294): left out keeps it, `null` takes it away.
     const workspace = this.normalizedWorkspace(input.workspace === undefined ? previous?.workspace : input.workspace ?? undefined, input.task);
+    const schedule = normalizedSchedule(input.schedule);
+    if (schedule.dailyCapMicros !== undefined && schedule.dailyCapMicros < input.task.budgetMicros) throw new Error(CAP_BELOW_RUN_LIMIT);
     const { workspace: _workspace, ...rest } = input;
-    const routine: Routine = { ...rest, ...(trigger ? { trigger } : {}), ...(workspace ? { workspace } : {}), id: input.id ?? id(), revision: (previous?.revision ?? 0) + 1, approvedConfig: this.configuration(input.task, trigger, workspace), nextDueAt: nextOccurrence(input.schedule, this.clock()), pending: null, ...(previous?.lastTaskId ? { lastTaskId: previous.lastTaskId } : {}) };
+    const routine: Routine = { ...rest, schedule, ...(trigger ? { trigger } : {}), ...(workspace ? { workspace } : {}), id: input.id ?? id(), revision: (previous?.revision ?? 0) + 1, approvedConfig: this.configuration(input.task, trigger, workspace, schedule), nextDueAt: nextOccurrence(schedule, this.clock()), pending: null, ...(previous?.lastTaskId ? { lastTaskId: previous.lastTaskId } : {}) };
     this.store.put('routines', routine); this.notify(); return routine;
   }
   /**
@@ -131,8 +165,30 @@ export class Routines {
   note(routineId: string, reason: string) {
     const routine = this.store.get<Routine>('routines', routineId);
     if (routine.notice?.reason === reason) return;
-    this.store.update('routines', { ...routine, notice: { at: now(), reason } });
+    this.store.update('routines', { ...routine, notice: { at: this.clock().toISOString(), reason } });
     this.notify();
+  }
+  /**
+   * Each routine's runs and spend so far today, in its own time zone, for its card (COD-288). The spend is what the
+   * ledger holds for the day's runs: settled charges plus what is still held or unknown.
+   */
+  today(): Record<string, RoutineToday> {
+    const at = this.clock();
+    const days: Record<string, string> = {};
+    for (const routine of this.store.all<Routine>('routines')) days[routine.id] = scheduleDay(at, routine.schedule.timeZone);
+    const totals = daysSoFar(this.store, days);
+    const today: Record<string, RoutineToday> = {};
+    for (const [routineId, day] of Object.entries(days)) today[routineId] = { day, ...totals[routineId] };
+    return today;
+  }
+  /**
+   * The day a run of this routine starting now counts against, checked against the daily cap. Core calls it inside the
+   * transaction that writes the run's task, so two starts can never both take the last of the day's cap.
+   */
+  admitRun(routine: Routine, budgetMicros: number): string {
+    const day = scheduleDay(this.clock(), routine.schedule.timeZone);
+    if (!fitsDailyCap(this.store, routine, day, budgetMicros)) throw new DailyCapReached(DAILY_CAP_REACHED);
+    return day;
   }
   /** Whether the task this routine started last is still going or waiting for the person. */
   previousRunActive(routineId: string): boolean {
@@ -202,18 +258,23 @@ export class Routines {
     try {
       for (const listed of this.store.all<Routine>('routines')) {
         // A run awaited above may have given the person time to delete a later routine in the list.
-        const routine = this.store.all<Routine>('routines').find(item => item.id === listed.id);
-        if (!routine || triggerOf(routine).kind !== 'schedule') continue;
+        const found = this.store.all<Routine>('routines').find(item => item.id === listed.id);
+        if (!found) continue;
+        const routine = this.forgetYesterdaysCap(found, at);
+        if (triggerOf(routine).kind !== 'schedule') continue;
         if (!routine.enabled || new Date(routine.nextDueAt).getTime() > timestamp || this.dispatching.has(routine.id)) continue;
-        if (shouldDeferRoutine(timestamp, new Date(routine.nextDueAt).getTime(), previousTick, Boolean(routine.pending))) {
+        const pendingBlocks = Boolean(routine.pending) && !runsHourly(routine);
+        if (shouldDeferRoutine(timestamp, new Date(routine.nextDueAt).getTime(), previousTick, pendingBlocks)) {
           this.defer(routine, at, SKIPPED_WHILE_INACTIVE);
         } else {
           try { await this.runOccurrence(routine, at); }
           catch (error) {
             const current = this.store.get<Routine>('routines', routine.id);
             // A missing folder is not a miss to catch up: running it again fails the same way until the schedule is
-            // saved with a folder that is there. The card already carries the reason; the calendar moves on.
-            if (error instanceof WorkFolderUnavailable) this.advance(current, at);
+            // saved with a folder that is there. The card already carries the reason; the calendar moves on. A day
+            // whose cap is reached skips its remaining runs the same way (COD-288).
+            if (error instanceof WorkFolderUnavailable || error instanceof DailyCapReached) this.advance(current, at);
+            else if (error instanceof PreviousRunBusy && runsHourly(current)) this.skip(current, at, error.message === PREVIOUS_CHANGES_WAIT ? PREVIOUS_CHANGES_WAIT : SKIPPED_PREVIOUS_RUNNING);
             else if (current.revision === routine.revision) this.defer(routine, at, error instanceof Error ? error.message : 'Không thể bắt đầu lịch.');
           }
         }
@@ -223,6 +284,22 @@ export class Routines {
   private advance(routine: Routine, at: Date) {
     this.store.update('routines', { ...routine, nextDueAt: nextOccurrence(routine.schedule, at) });
     this.notify();
+  }
+  /** An hourly run that could not start moves on to the next time and says why on the card, once (COD-288). */
+  private skip(routine: Routine, at: Date, reason: string) {
+    const notice = routine.notice?.reason === reason ? routine.notice : { at: at.toISOString(), reason };
+    this.store.update('routines', { ...routine, notice, nextDueAt: nextOccurrence(routine.schedule, at) });
+    this.notify();
+  }
+  /** The note that the daily cap was reached is about that day; the next day starts without it (COD-288). */
+  private forgetYesterdaysCap(routine: Routine, at: Date): Routine {
+    if (routine.notice?.reason !== DAILY_CAP_REACHED) return routine;
+    const timeZone = routine.schedule.timeZone;
+    if (scheduleDay(new Date(routine.notice.at), timeZone) === scheduleDay(at, timeZone)) return routine;
+    const forgotten = withoutNotice(routine);
+    this.store.update('routines', forgotten);
+    this.notify();
+    return forgotten;
   }
   private defer(routine: Routine, at: Date, reason: string) {
     this.store.update('routines', { ...routine, nextDueAt: nextOccurrence(routine.schedule, at), pending: { dueAt: routine.pending?.dueAt ?? routine.nextDueAt, reason } });
@@ -238,22 +315,37 @@ export class Routines {
     if (this.dispatching.has(routine.id)) throw new Error('Lịch đang được xử lý.');
     this.dispatching.add(routine.id);
     try {
-      if (routine.approvedConfig !== this.configuration(routine.task, routine.trigger, routine.workspace)) throw new Error('Tí, skill, hội hoặc model đã đổi. Mở lịch, kiểm tra và lưu lại quyền chạy.');
-      if (this.previousRunActive(routine.id)) throw new Error(previousRunMessage);
-      if (this.previousChangesWait(routine.id)) throw new Error(PREVIOUS_CHANGES_WAIT);
+      if (routine.approvedConfig !== this.configuration(routine.task, routine.trigger, routine.workspace, routine.schedule)) throw new Error('Tí, skill, hội hoặc model đã đổi. Mở lịch, kiểm tra và lưu lại quyền chạy.');
+      if (this.previousRunActive(routine.id)) throw new PreviousRunBusy(previousRunMessage);
+      if (this.previousChangesWait(routine.id)) throw new PreviousRunBusy(PREVIOUS_CHANGES_WAIT);
+      // Checked here so the card says so before anything else runs; core checks it again as it writes the task.
+      this.assertRoomToday(routine);
       for (const sourceId of routine.task.sourceIds) await this.sources.verify(sourceId, routine.task.sourceIds);
       const folder = routine.workspace ? await this.runFolder(routine) : undefined;
       const current = this.store.get<Routine>('routines', routine.id);
-      if (!current.enabled || current.revision !== routine.revision || current.approvedConfig !== this.configuration(current.task, current.trigger, current.workspace)) throw new Error('Lịch hoặc cấu hình đã thay đổi trong lúc kiểm tra.');
+      if (!current.enabled || current.revision !== routine.revision || current.approvedConfig !== this.configuration(current.task, current.trigger, current.workspace, current.schedule)) throw new Error('Lịch hoặc cấu hình đã thay đổi trong lúc kiểm tra.');
       const task: TaskInput = {
         ...current.task,
         ...(current.workspace ? { toolCapabilities: this.runCapabilities(current, current.workspace) } : {}),
         sourceIds: [...current.task.sourceIds, ...additions.sourceIds],
         excludedSources: [...(current.task.excludedSources ?? []), ...additions.excluded],
       };
-      // Core commits this updated occurrence, the new task and its folder grant in one transaction.
-      return this.dispatch(task, next(current), folder);
+      // Core commits this updated occurrence, the new task and its folder grant in one transaction, and checks the
+      // daily cap inside it (`admitRun`).
+      try {
+        return this.dispatch(task, next(current), folder);
+      } catch (error) {
+        if (error instanceof DailyCapReached) this.note(routine.id, error.message);
+        throw error;
+      }
     } finally { this.dispatching.delete(routine.id); }
+  }
+  /** Refuses a run whose whole limit no longer fits under today's cap, and says so on the card once (COD-288). */
+  private assertRoomToday(routine: Routine) {
+    const day = scheduleDay(this.clock(), routine.schedule.timeZone);
+    if (fitsDailyCap(this.store, routine, day, routine.task.budgetMicros)) return;
+    this.note(routine.id, DAILY_CAP_REACHED);
+    throw new DailyCapReached(DAILY_CAP_REACHED);
   }
 }
 

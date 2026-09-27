@@ -274,6 +274,7 @@ export class CoreService {
         // The stored servers with whether each one is running right now; never a secret value (COD-241).
         workspace.mcpServers = this.mcp.views();
         workspace.running = this.running();
+        workspace.routineToday = this.routines.today();
         return workspace;
       }
       case 'task': {
@@ -1636,6 +1637,8 @@ export class CoreService {
     // A forward's first turn keeps its record on the current input, where every later turn keeps its own (COD-257).
     if (forwarded) task.currentInput = { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, forwarded };
     this.store.transaction(() => {
+      // A schedule's run takes its place under the day's cap in the same transaction that writes it (COD-288).
+      if (routine) task.routineDay = this.routines.admitRun(routine, task.budgetMicros);
       this.store.put('tasks', task);
       this.chatSearch.indexTurn(task.id, 0, task.currentInput ?? task, task.createdAt);
       if (routine) this.store.update('routines', { ...routine, lastTaskId: task.id });

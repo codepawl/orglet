@@ -78,6 +78,12 @@ function editChanges(current: Record<string, unknown>, next: Record<string, unkn
 
 /** "weekly 09:00 · weekday 1 · Asia/Ho_Chi_Minh": the card line for a schedule, before and after alike. */
 function describeSchedule(schedule: Routine['schedule']): string {
+  // An hourly schedule (COD-288) is named by its interval and window; the card turns the line into words.
+  if (schedule.frequency === 'hours') {
+    const window = schedule.window ? ` ${schedule.window.from}-${schedule.window.to}` : '';
+    const workdays = schedule.weekdaysOnly ? ' weekdays' : '';
+    return `every ${schedule.everyHours}h${window}${workdays} · ${schedule.timeZone}`;
+  }
   const day = schedule.frequency === 'weekly' ? ` · weekday ${schedule.weekday}` : '';
   return `${schedule.frequency} ${schedule.time}${day} · ${schedule.timeZone}`;
 }
