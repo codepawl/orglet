@@ -5,7 +5,7 @@
   <img src="images/orglets/viewing-and-editing-files-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-Every file attached to a chat opens in its own viewer. You can read it there, edit a text or code file, mark up a picture, and send the result to the orglet. An edit never changes the file you attached: saving adds a new version to the chat, next to the original.
+Every file attached to a chat opens in its own viewer. You can read it there, edit a text or code file, mark up a picture or a PDF, and send the result to the orglet. An edit never changes the file you attached: saving adds a new version to the chat, next to the original.
 
 Part of the [user guide](user-guide.md). How files get into a chat: [Attach files](chat-guide.md#attach-files).
 
@@ -22,7 +22,7 @@ Click a file card in the chat, or open **Details → Sources** and click a row. 
 The buttons at the top right:
 
 - **Ask about this** puts the file on your next message in this chat and closes the viewer, so you can type your question.
-- **Edit** (text and code) or **Mark up** (images). The key **E** does the same.
+- **Edit** (text and code) or **Mark up** (images and PDFs). The key **E** does the same.
 - The arrow opens the file in the program Windows uses for it (images, video, audio and PDF).
 - The **i** shows the file's kind, size, where it came from and its hash.
 - **⋯ → Revoke read access** stops the orglet reading the file.
@@ -72,6 +72,27 @@ Find and replace:
 
 A marked-up image is always saved as PNG, at the picture's own size: `screen.jpg` becomes `screen (edited).png`.
 
+## Mark up a PDF
+
+1. Open a PDF.
+2. Click **Mark up**.
+3. Pick a tool, a colour and a width, then draw on the page, or pick **Text**, click where the note goes and type.
+4. Move between pages with the arrows at the end of the bar, or **Page Up** and **Page Down**. Marks stay on the page you drew them on.
+5. Click **Save**, or **Ask about this** to save and put it on your next message.
+
+The tools, keys, colours and widths are the ones for images, without crop: a page keeps its size. For notes the widths set the text size: **Thin** 12 points, **Medium** 16, **Thick** 24.
+
+- Notes are typed on one line; press **Enter** to place one, **Esc** to drop it. Vietnamese and other accented letters work, from the keyboard, Unikey or an input method.
+- **Ctrl+Z** and **Ctrl+Shift+Z** undo and redo across pages: when a step changes another page, the viewer turns to that page so you see it.
+- The page is shown at the viewer's reading width and scrolls down, so its text stays readable while you mark it.
+
+The saved PDF is `contract (edited).pdf`, next to `contract.pdf`, with every page of the original. What you drew and typed is part of the page, so any PDF reader shows it the same way:
+
+- Lines, boxes and arrows are drawn on the page.
+- Notes are real text in the PDF, in Inter, the typeface the app uses, embedded with only the letters you typed. You can select and search them in another reader, and the orglet reads them when it reads the PDF's text, after that page's own text.
+
+A PDF that has a password or is locked against changes opens for reading but cannot be marked up; the viewer says so. A note with characters the font does not have, such as an emoji, is refused when you save, with the characters named.
+
 ## Leaving without saving
 
 If you close the viewer, press **Esc**, or click **Cancel** with changes that are not saved, Orglet asks first: **Discard changes** throws the edit away, **Keep editing** takes you back. The original file is never at risk either way.
@@ -86,5 +107,5 @@ If you close the viewer, press **Esc**, or click **Cancel** with changes that ar
 ## What it does not do
 
 - It never writes to the file you attached, or to anything in the chat's working folder. To change a file in the working folder, ask the orglet: its changes wait for you to review before they reach the folder ([Review before the folder changes](chat-guide.md#review-before-the-folder-changes)). To change the file yourself, open it in its own program with the arrow button.
-- Video, audio and Parquet files can be viewed but not edited. PDF pages can be viewed but not edited yet.
+- Video, audio and Parquet files can be viewed but not edited. A PDF's own text cannot be changed; you can mark it up and type notes on it.
 - A revoked file, or one too large to show, cannot be edited.

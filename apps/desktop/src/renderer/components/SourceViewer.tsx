@@ -9,7 +9,7 @@ import { InfoTip, type InfoTipRow } from './InfoTip';
 import { RowMenu, type RowMenuItem } from './RowMenu';
 import { fileKindIcon, fileKindLabel, fileSize } from './Attachment';
 import { SourcePreview, previewKindOf } from './SourcePreview';
-import { ImageEditing, TextEditing } from './SourceEditing';
+import { ImageEditing, PdfEditing, TextEditing } from './SourceEditing';
 import { languageOf } from './highlight';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
@@ -60,10 +60,11 @@ function extensionOf(name: string) {
   return dot > 0 ? name.slice(dot + 1).toUpperCase() : '';
 }
 
-/** What a source can be edited as in the viewer (COD-280), or undefined when it cannot be. */
-export function editKindOf(source: Source): 'text' | 'image' | undefined {
+/** What a source can be edited as in the viewer (COD-280; PDF markup COD-302), or undefined when it cannot be. */
+export function editKindOf(source: Source): 'text' | 'image' | 'pdf' | undefined {
   if (inlineState(source) !== 'ready') return undefined;
   if (source.media === 'image') return 'image';
+  if (source.media === 'pdf') return 'pdf';
   if (source.media) return undefined;
   return 'text';
 }
@@ -198,6 +199,13 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
     return <ImageEditing frame={frame} source={source} media={content.media} save={saveVersion}
       onDone={() => setEditing(false)} onSaved={saved} onAsk={onAsk} onClose={onClose} />;
   }
+  if (editing && editKind === 'pdf' && content.media) {
+    return <PdfEditing frame={frame} source={source} media={content.media} save={saveVersion}
+      onDone={() => setEditing(false)} onSaved={saved} onAsk={onAsk} onClose={onClose} />;
+  }
+  // A picture or a PDF is marked up; text and code are edited.
+  const marksUp = editKind === 'image' || editKind === 'pdf';
+  const editTitle = editKind === 'image' ? t('Đánh dấu ảnh (E)') : editKind === 'pdf' ? t('Đánh dấu PDF (E)') : t('Chỉnh sửa (E)');
   const externally = source.media && !source.revoked
     ? <Button variant="outline" className="doc-action source-open-external" aria-label={t('Mở bằng ứng dụng mặc định')} title={t('Mở bằng ứng dụng mặc định')} onClick={() => void openExternally()}><ExternalLink size={15} /><span className="source-action-label">{t('Mở bằng ứng dụng mặc định')}</span></Button>
     : undefined;
@@ -205,8 +213,8 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
     {!source.revoked && <Button variant="ghost" className="doc-action source-ask" aria-label={t('Hỏi về tệp này')} title={t('Đính kèm tệp này vào tin nhắn tiếp theo')} onClick={() => onAsk(source)}>
       <MessageSquarePlus size={15} /><span className="source-action-label">{t('Hỏi về tệp này')}</span>
     </Button>}
-    {editKind && <Button variant="outline" className="doc-action source-edit" aria-label={editKind === 'image' ? t('Đánh dấu') : t('Chỉnh sửa')} disabled={!ready} aria-keyshortcuts="E" title={editKind === 'image' ? t('Đánh dấu ảnh (E)') : t('Chỉnh sửa (E)')} onClick={() => setEditing(true)}>
-      {editKind === 'image' ? <PenLine size={15} /> : <Pencil size={15} />}<span className="source-action-label">{editKind === 'image' ? t('Đánh dấu') : t('Chỉnh sửa')}</span>
+    {editKind && <Button variant="outline" className="doc-action source-edit" aria-label={marksUp ? t('Đánh dấu') : t('Chỉnh sửa')} disabled={!ready} aria-keyshortcuts="E" title={editTitle} onClick={() => setEditing(true)}>
+      {marksUp ? <PenLine size={15} /> : <Pencil size={15} />}<span className="source-action-label">{marksUp ? t('Đánh dấu') : t('Chỉnh sửa')}</span>
     </Button>}
     {externally}
   </>;

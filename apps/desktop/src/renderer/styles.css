@@ -2178,7 +2178,15 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .markup-level { display:block; border-radius:50%; background:currentColor; }
 .markup-history { display:inline-flex; align-items:center; gap:2px; }
 .markup-history .org-button.org-button-icon { width:30px; height:30px; min-height:30px; }
+/* A PDF's pages while marking up (COD-302): previous, "Page 2/5", next, at the end of the drawing bar. */
+.markup-pages { display:inline-flex; align-items:center; gap:2px; }
+.markup-pages .org-button.org-button-icon { width:30px; height:30px; min-height:30px; }
+.markup-page-count { min-width:76px; font-size:12.5px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* A page on its way: a sheet in a page's usual proportions, at the width pages are shown. */
+.markup-page-shape.org-skeleton { width:min(720px, 100%); height:auto; flex-shrink:0; aspect-ratio:595 / 842; border-radius:4px; }
 .markup-stage { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
+/* A document page keeps the viewer's reading width and scrolls down, with room for its shadow (COD-302). */
+.markup-stage.markup-stage-page { align-items:flex-start; overflow-y:auto; overflow-x:hidden; padding:0 12px 12px; }
 .markup-frame { position:relative; flex-shrink:0; border-radius:4px; box-shadow:0 1px 2px #0000001a, 0 8px 28px #0000000f; }
 /* The picture only takes focus back from a closed label; it is not a control, so it draws no ring. */
 .markup-frame:focus-visible { outline:none; }
