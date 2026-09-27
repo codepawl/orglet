@@ -26,7 +26,13 @@ const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex
 const modelBytes = Buffer.alloc(256 * 1024, 7);
 const tokenizerBytes = Buffer.from('{"stand-in":"tokenizer"}');
 
-type Mode = { cutModelAfter?: number; ignoreRange?: boolean; hangModelAfter?: number; corruptModel?: boolean };
+/**
+ * `cutModelAfter` destroys the socket once the bytes are flushed; `closeModelAfter` half-closes it straight after the
+ * write, so the bytes and the end arrive together, the way macOS delivered the cut that lost them (COD-303).
+ * `redirect` answers every file with a 302 to its real address, as Hugging Face does; `wrongRange` answers a range
+ * from the wrong offset.
+ */
+type Mode = { cutModelAfter?: number; closeModelAfter?: number; ignoreRange?: boolean; hangModelAfter?: number; corruptModel?: boolean; redirect?: boolean; wrongRange?: boolean };
 
 let server: Server;
 let base: string;
@@ -48,6 +54,11 @@ beforeEach(async () => {
   hanging = [];
   directory = await mkdtemp(join(tmpdir(), 'orglet-decisions-'));
   server = createServer((request, response) => {
+    if (mode.redirect && !request.url!.startsWith('/files/')) {
+      response.writeHead(302, { Location: `/files${request.url}` });
+      response.end();
+      return;
+    }
     const isModel = request.url!.endsWith('.onnx');
     let body = isModel ? modelBytes : tokenizerBytes;
     if (isModel && mode.corruptModel) body = Buffer.alloc(modelBytes.length, 9);
@@ -56,13 +67,19 @@ beforeEach(async () => {
     let start = 0;
     if (range && !mode.ignoreRange) {
       start = Number(range[1]);
-      response.writeHead(206, { 'Content-Length': body.length - start, 'Content-Range': `bytes ${start}-${body.length - 1}/${body.length}` });
+      const claimed = mode.wrongRange ? 0 : start;
+      response.writeHead(206, { 'Content-Length': body.length - start, 'Content-Range': `bytes ${claimed}-${body.length - 1}/${body.length}` });
     } else {
       response.writeHead(200, { 'Content-Length': body.length });
     }
     const rest = body.subarray(start);
     if (isModel && mode.cutModelAfter !== undefined && start === 0) {
       response.write(rest.subarray(0, mode.cutModelAfter), () => response.socket?.destroy());
+      return;
+    }
+    if (isModel && mode.closeModelAfter !== undefined && start === 0) {
+      response.write(rest.subarray(0, mode.closeModelAfter));
+      response.socket?.end();
       return;
     }
     if (isModel && mode.hangModelAfter !== undefined) {
@@ -134,6 +151,36 @@ describe('downloading Tacet (COD-303)', () => {
     expect(readFileSync(join(directory, TACET_FILES.model.name)).equals(modelBytes)).toBe(true);
   });
 
+  it('keeps every byte that arrived with the cut itself, and resumes through a redirect', async () => {
+    mode.closeModelAfter = 150_000;
+    mode.redirect = true;
+    const decisions = new Decisions({ directory, files: pinned() });
+    decisions.install();
+    const cut = await settled(decisions);
+    expect(cut.status).toBe('failed');
+    expect((await stat(join(directory, `${TACET_FILES.model.name}.part`))).size).toBe(150_000);
+    mode.closeModelAfter = undefined;
+    decisions.install();
+    expect((await settled(decisions)).status).toBe('ready');
+    // The range goes to the redirect's target too, so the second request only fetched the rest.
+    expect(ranges).toEqual([undefined, 'bytes=150000-']);
+    expect(readFileSync(join(directory, TACET_FILES.model.name)).equals(modelBytes)).toBe(true);
+  });
+
+  it('refuses a range answered from another offset and deletes the part it would have corrupted', async () => {
+    mode.cutModelAfter = 100_000;
+    const decisions = new Decisions({ directory, files: pinned() });
+    decisions.install();
+    expect((await settled(decisions)).status).toBe('failed');
+    mode.cutModelAfter = undefined;
+    mode.wrongRange = true;
+    decisions.install();
+    const state = await settled(decisions);
+    expect(state.status).toBe('failed');
+    expect(state.error).toBe('Máy chủ gửi sai đoạn của tệp.');
+    expect(existsSync(join(directory, `${TACET_FILES.model.name}.part`))).toBe(false);
+  });
+
   it('starts again from the first byte when the server ignores the range', async () => {
     await mkdir(directory, { recursive: true });
     await writeFile(join(directory, `${TACET_FILES.model.name}.part`), modelBytes.subarray(0, 5000));
@@ -147,7 +194,7 @@ describe('downloading Tacet (COD-303)', () => {
   it('gives up on a stalled connection and keeps what arrived', async () => {
     mode.hangModelAfter = 64 * 1024;
     const file = pinned().model;
-    await expect(downloadFile(file, join(directory, file.name), { fetch: (url, init) => fetch(url, init), signal: new AbortController().signal, onBytes: () => {}, stallMs: 200 }))
+    await expect(downloadFile(file, join(directory, file.name), { signal: new AbortController().signal, onBytes: () => {}, stallMs: 200 }))
       .rejects.toThrow('Kết nối bị ngắt giữa chừng.');
     expect((await stat(join(directory, `${file.name}.part`))).size).toBe(64 * 1024);
   });

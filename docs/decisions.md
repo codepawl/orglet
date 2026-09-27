@@ -37,7 +37,7 @@ A yes/no "does this answer report something new that needs the person's attentio
 - **What is fetched.** The model as ONNX (`onnx/tacet-sonata-int8-embeddings.onnx`, 285 MB) and the tokenizer (`tokenizer/tokenizer.json`, 34 MB), from the `codepawl/tacet-sonata` repository on Hugging Face. The tokenizer's address names the commit it was published in. Each file's size and SHA-256 are pinned in the app (`TACET_FILES` in `core/decisions/manifest.ts`).
 - **Where it goes.** `models/tacet-sonata/` in Orglet's data folder, beside the database.
 - **Verified before use.** Bytes land in a `.part` file. Only a file of the pinned size and SHA-256 is renamed into place; one that does not match is deleted and the block says so. The worker checks both hashes again every time it loads the model.
-- **Resumed.** A connection that drops keeps the bytes that arrived, and **Retry** continues from there with an HTTP range request. A server that sends the whole file instead starts it over. Thirty seconds without a byte counts as a dropped connection.
+- **Resumed.** Bytes are written as they arrive, without waiting on the disk between reads, so a connection that drops keeps every byte that arrived, and **Retry** continues from there with an HTTP range request. A server that sends the whole file instead starts it over. Thirty seconds without a byte counts as a dropped connection.
 - **Cancelled.** **Cancel** stops and deletes the partial file, since the person asked for it to stop.
 - **Erased.** **Settings → Data → Erase everything** deletes the folder too.
 - **No other network.** Nothing in the decisions code opens a connection except this download. Asking Tacet happens on this computer.

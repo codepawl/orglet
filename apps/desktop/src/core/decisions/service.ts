@@ -3,7 +3,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DecisionModelState, DecisionQuestions, DecisionResponse, DecisionState } from '../../shared/decisions';
 import { DecisionQuestions as QuestionsSchema, DecisionState as StateSchema } from '../../shared/decisions';
-import { downloadFile, type Fetcher, type PinnedFile } from './download';
+import { downloadFile, type Getter, type PinnedFile } from './download';
 import { TACET_FILES, totalBytes, type DecisionFiles } from './manifest';
 import { DEFAULT_MAX_LENGTH } from './packing';
 
@@ -18,7 +18,8 @@ export type DecisionsOptions = {
   /** Where the model's files live; absent (an in-memory store) means Tacet cannot be installed here. */
   directory?: string;
   files?: DecisionFiles;
-  fetch?: Fetcher;
+  /** How a file is fetched; the default is node:http(s) with redirects (download.ts). */
+  get?: Getter;
   runtime?: DecisionRuntimeFactory;
   /** How long a loaded model stays in memory after its last answer. */
   idleMs?: number;
@@ -117,7 +118,6 @@ export class Decisions {
   private async fetchAll(signal: AbortSignal) {
     const directory = this.options.directory!;
     await mkdir(directory, { recursive: true });
-    const fetcher = this.options.fetch ?? ((url, init) => fetch(url, init));
     // The tokenizer is small, so it goes first; the model's bytes then count on top of it.
     const order = [this.files.tokenizer, this.files.model];
     for (const [index, file] of order.entries()) {
@@ -127,7 +127,7 @@ export class Decisions {
         continue;
       }
       await downloadFile(file, this.pathOf(file), {
-        fetch: fetcher,
+        get: this.options.get,
         signal,
         onBytes: bytes => {
           this.received = before + bytes;
