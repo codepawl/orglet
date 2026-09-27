@@ -2,7 +2,7 @@ import { CircleAlert, CircleCheck, Info } from 'lucide-react';
 import { Toaster as KitToaster, showToast, type ToastAction, type ToastTone } from '@codepawl/orglet-ui';
 // Shown text is re-translated on render, so a toast raised just before a language switch follows the new language.
 import { tMessage } from '../i18n';
-import { recordNotice } from './notifications';
+import { recordNotice, type NoticeKind } from './notifications';
 
 export type { ToastAction };
 export type ToastOptions = {
@@ -27,8 +27,18 @@ export type ToastOptions = {
 export function toast(text: string, tone: ToastTone = 'success', about?: string, options: ToastOptions = {}) {
   const confirmation = tone === 'success' && !options.unread;
   // Every toast is also kept, so a message missed while looking elsewhere can still be found (user, 2026-09-20).
-  recordNotice(text, tone === 'error' ? 'error' : 'done', about, { confirmation, taskId: options.chat, group: options.group?.key, groupSize: options.group?.size });
+  recordNotice(text, noticeKindOf(tone), about, { confirmation, taskId: options.chat, group: options.group?.key, groupSize: options.group?.size });
   showToast(text, tone, options.action);
+}
+
+/**
+ * Where a toast is kept in Notifications: a problem under Problems, a note under Info with the same "i" it had as a
+ * toast, and everything else under Done. An info toast used to be filed under Done with a green check (COD-288 review).
+ */
+export function noticeKindOf(tone: ToastTone): NoticeKind {
+  if (tone === 'error') return 'error';
+  if (tone === 'info') return 'info';
+  return 'done';
 }
 
 const toneIcons = {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { collapseNotices, isUnreadNotice, newNoticesFirst, noticeGroupLabels, useNotices, type Notice } from '../../apps/desktop/src/renderer/components/notifications';
-import { toast } from '../../apps/desktop/src/renderer/components/toast';
+import { noticeKindOf, toast } from '../../apps/desktop/src/renderer/components/toast';
 import { calendarDaysAgo, clockLabel, dayLabel } from '../../apps/desktop/src/renderer/components/TimeMark';
 
 let nextId = 1;
@@ -128,6 +128,22 @@ describe('what counts as unread', () => {
       ['Liên kết trỏ tới Tí không còn', true],
       ['Researcher đã trả lời trong chat phụ', true],
     ]);
+  });
+
+  it('files each toast under its own kind: a problem under Problems, a note under Info, the rest under Done (COD-288 review)', () => {
+    const before = recordedNotices().at(-1)?.id ?? 0;
+    toast('Đã lưu Tí', 'success', 'Researcher');
+    toast('Không xóa được Tí', 'error', 'Researcher');
+    toast('Inbox sweep đã chạm giới hạn chi phí hôm nay', 'info', 'Inbox sweep');
+    toast('Researcher đã trả lời trong chat phụ', 'success', 'Side thread', { unread: true });
+    const added = recordedNotices().filter(notice => notice.id > before);
+    expect(added.map(notice => [notice.text, notice.kind])).toEqual([
+      ['Đã lưu Tí', 'done'],
+      ['Không xóa được Tí', 'error'],
+      ['Inbox sweep đã chạm giới hạn chi phí hôm nay', 'info'],
+      ['Researcher đã trả lời trong chat phụ', 'done'],
+    ]);
+    expect([noticeKindOf('success'), noticeKindOf('error'), noticeKindOf('info')]).toEqual(['done', 'error', 'info']);
   });
 
   it('never files a confirmation under "new", even when it arrived after the centre was last opened', () => {
