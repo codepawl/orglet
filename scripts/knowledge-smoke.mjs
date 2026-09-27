@@ -78,7 +78,8 @@ try {
   // The context manifest sits in the technical dialog now.
   await page.getByRole('button', { name: 'Chi tiết kỹ thuật', exact: true }).click();
   await page.getByText(/Context đã nạp/).first().click();
-  await page.getByText('Knowledge: Evidence limits · v2', { exact: false }).first().waitFor();
+  // The row says why the note loaded (COD-306): it is pinned.
+  await page.getByText('Knowledge: Evidence limits · luôn nạp · v2', { exact: false }).first().waitFor();
   // Templates reuse the same text for team instructions and the skill; the manifest shows the duplicate was dropped.
   await page.getByText('Kỹ năng · v1 · trùng nội dung đã nạp').first().waitFor();
 

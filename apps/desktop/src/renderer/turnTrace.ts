@@ -24,6 +24,8 @@ export type TraceEntry = {
   target?: string;
   /** The core's own sentence for a row that is a note rather than a verb and a target (a refusal, a stored memory). Kept in Vietnamese as saved; the row translates it. */
   note?: string;
+  /** Why the row happened when it is not obvious: a note Tacet loaded (COD-306). */
+  why?: string;
   /** A live step still going. */
   running?: boolean;
 };
@@ -137,7 +139,8 @@ function knowledgeEntries(context: RunContext | undefined): TraceEntry[] {
   if (!context) return [];
   return context.manifest.loaded.filter(entry => entry.kind === 'knowledge').map((entry, index) => {
     const note = context.knowledge.find(item => item.id === entry.id);
-    return { id: `knowledge-${entry.id ?? index}`, kind: 'knowledge' as const, target: note?.title ?? t('Ghi chú') };
+    const why = entry.because === 'tacet' ? { why: t('Tacet chọn') } : {};
+    return { id: `knowledge-${entry.id ?? index}`, kind: 'knowledge' as const, target: note?.title ?? t('Ghi chú'), ...why };
   });
 }
 

@@ -94,6 +94,7 @@ function TraceRow({ entry }: { entry: TraceEntry }) {
       : <>
         <span className="trace-verb">{traceVerb(entry.kind)}</span>
         {entry.target && <span className={proseKinds.includes(entry.kind) ? 'trace-text' : 'trace-target'}>{entry.target}</span>}
+        {entry.why && <span className="trace-why">{entry.why}</span>}
       </>}
   </li>;
 }

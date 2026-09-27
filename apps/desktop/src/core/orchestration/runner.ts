@@ -40,7 +40,8 @@ import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
 import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUnsupportedProcessChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
-import { compileContext, memoryCandidate, type Colleague } from '../context/compiler';
+import { compileContext, frozenTacetFits, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
+import type { NoteCandidate } from '../decisions/knowledge-fit';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
 import { applyThreadManifest, compactThread, fitThread, mainChatTurns, threadMessages, type ThreadExtras } from '../context/thread';
 import { ProviderSlots, type SlotWait } from './slots';
@@ -525,8 +526,27 @@ export class Runner {
   private slots = new ProviderSlots(() => this.store.setting('providerConcurrency', DEFAULT_PROVIDER_CONCURRENCY));
   /** Receives live progress from streaming harnesses; the core process forwards it to the window. */
   onProgress: (update: RunProgressUpdate) => void = () => {};
+  /**
+   * Asks Tacet which notes fit a message their words do not match (COD-306), or answers undefined when Tacet is not
+   * on this computer, fails or is late. Unset in tests that do not need it.
+   */
+  knowledgeFit?: (message: string, notes: NoteCandidate[]) => Promise<Map<string, number> | undefined>;
   constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers, private webSearch: () => WebSearchSettings = () => ({ provider: store.webSearchProvider() }), private browser?: BrowserTools, private desktop?: DesktopTools) {
     this.slots.onChange = () => this.notify();
+  }
+  /**
+   * Tacet's picks among the notes that would not load today: unpinned, and sharing no word with the message. Pinned and
+   * matching notes load as before, so Tacet can only add to them (COD-306).
+   */
+  private async fitUnmatchedKnowledge(brief: string, candidates: readonly { id: string; title: string; content: string; tags: string[]; pinned: boolean }[]): Promise<Map<string, number> | undefined> {
+    if (!this.knowledgeFit) return undefined;
+    const unmatched = candidates.filter(item => !item.pinned && keywordScore(brief, item) === 0);
+    if (!unmatched.length) return undefined;
+    try {
+      return await this.knowledgeFit(brief, unmatched.map(item => ({ id: item.id, title: item.title, tags: item.tags })));
+    } catch {
+      return undefined;
+    }
   }
   isActive(taskId: string) { return [...this.active.values()].some(item => item.taskId === taskId); }
   /** A run this runner is working on now: when it started here and whether a pause was asked for (COD-244). */
@@ -797,14 +817,19 @@ export class Runner {
       }
       // Freeze knowledge and transcript layers before any dispatch; later edits only affect new runs.
       const knowledgeBase = new KnowledgeBase(this.store);
-      const context = run.snapshot.context ?? compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: knowledgeBase.candidates(run.snapshot.worker.id, run.snapshot.team?.id), memories: knowledgeBase.memoryCandidates(run.snapshot.worker.id, run.snapshot.team?.id).map(memoryCandidate) }).context;
+      let context = run.snapshot.context;
+      if (!context) {
+        const candidates = knowledgeBase.candidates(run.snapshot.worker.id, run.snapshot.team?.id);
+        const tacetFits = await this.fitUnmatchedKnowledge(input.brief, candidates);
+        context = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates, memories: knowledgeBase.memoryCandidates(run.snapshot.worker.id, run.snapshot.team?.id).map(memoryCandidate), tacetFits }).context;
+      }
       run = { ...run, snapshot: { ...run.snapshot, context } };
       // Repeated feedback on this worker's earlier work, frozen with the context so a resume sees the same evidence and
       // the tool policy can read it off the snapshot (COD-162). Only a chat run may act on it, never a scheduled one.
       if (this.appProposals && run.snapshot.improvement === undefined && !task.routineId && (run.stage === undefined || run.stage === 'group') && run.snapshot.worker.provider !== 'demo') {
         run = { ...run, snapshot: { ...run.snapshot, improvement: this.appProposals.improvementSignals(run) } };
       }
-      const compiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories });
+      const compiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories, tacetFits: frozenTacetFits(context) });
       run = { ...run, status: 'running' };
       this.store.update('runs', run);
       if (!options.keepTaskOpen) this.store.status(task.id, run.id, 'running');

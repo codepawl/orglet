@@ -77,6 +77,8 @@ import { runBy } from '../shared/schedule-runs';
 import { Decisions } from './decisions/service';
 import { decisionsDirectory } from './decisions/manifest';
 import { QuietRunReview } from './orchestration/quiet-runs';
+import { askKnowledgeFit } from './decisions/knowledge-fit';
+import { actionRiskOpinion } from './decisions/action-risk';
 import { PermissionSuggestions } from './orchestration/permission-suggestions';
 import { TurnRouting } from './orchestration/turn-routing';
 
@@ -190,6 +192,12 @@ export class CoreService {
     const dataDirectory = store.databasePath && store.databasePath !== ':memory:' ? dirname(resolve(store.databasePath)) : undefined;
     this.decisions = new Decisions({ directory: dataDirectory && decisionsDirectory(dataDirectory) });
     this.quietRuns = new QuietRunReview(store, () => this.decisions, this.notify, clock);
+    // COD-306: Tacet adds notes the keywords missed and asks about browser and desktop steps the rules let through.
+    // Both read the service afresh on every call, since the core replaces it with one that can load the model.
+    this.runner.knowledgeFit = (message, notes) => askKnowledgeFit(this.decisions, message, notes);
+    const secondOpinion = actionRiskOpinion(() => this.decisions);
+    this.browser.secondOpinion = secondOpinion;
+    this.desktop.secondOpinion = secondOpinion;
     this.permissionSuggestions = new PermissionSuggestions(() => this.decisions);
     this.turnRouting = new TurnRouting(store, () => this.decisions, clock);
     this.policy.captureHandoffs();

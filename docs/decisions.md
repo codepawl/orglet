@@ -11,11 +11,15 @@ Orglet can run it on this computer, with no GPU and no account. It is not part o
 
 ## What it does today
 
-Three jobs, each only while Tacet is downloaded and ready. Without it, or when it is unsure, Orglet does exactly what it did before:
+Five jobs, each only while Tacet is downloaded and ready. Without it, or when it is unsure or late, Orglet does exactly what it did before:
 
 1. Deciding whether a quiet schedule run is worth telling the person about (below).
 2. Offering, under the message box, a permission a message seems to need and the chat does not have ([Permission hints](#permission-hints-before-sending), COD-305).
 3. Picking who answers a group-chat message that tags nobody ([Who answers in a group chat](#who-answers-in-a-group-chat), COD-305).
+4. Loading an approved note whose words do not match the message, when Tacet says the message is about it ([memory.md](memory.md#which-notes-load-and-why), COD-306). `core/decisions/knowledge-fit.ts`.
+5. A second opinion on a browser or desktop step the rules let through: when Tacet reads it as sending, paying, deleting or publishing, the step asks the person ([browser.md](browser.md#a-second-opinion-from-tacet), [desktop.md](desktop.md#when-the-orglet-asks-you), COD-306). The rules stay the authority, and Tacet can never remove or skip an ask they require. `core/decisions/action-risk.ts`.
+
+The two COD-306 uses ask within a time budget (`decideWithin` in `core/decisions/budget.ts`): 1.5 seconds for the notes, one second for a step. A request that runs out of time keeps going in the worker, so a model that was still loading is ready for the next question. `Decisions.warm()` starts loading the model without a question, which a run does when it first uses the browser or a desktop app.
 
 ### Quiet schedule runs
 
@@ -125,9 +129,11 @@ The installer carries ONNX Runtime's native files for its own platform and archi
 - Silence a run that would be announced anyway: a failure, a question for the person, changes waiting for review.
 - Turn a permission on, or pick a folder, by itself; hold a message back until a hint is answered.
 - Overrule a tag or a reply in a group chat, or change the plan a crew's lead makes.
+- Skip, remove or answer an ask the browser or desktop rules require, or let a step they refuse go ahead.
+- Keep a note out that is pinned or matches the message's words.
 - Download anything the person did not ask for, or from anywhere but the pinned addresses.
 - Send what it reads anywhere.
 
 ## Later uses
 
-The service (`Decisions` in `core/decisions/service.ts`) takes any choice, score or noul question and returns probabilities and a confidence. Each use keeps its question builder in its own file under `core/decisions/` (`permission-questions.ts`, `group-routing.ts`), tuned on its own labelled set. Later uses can ask which knowledge is relevant or who in a crew should take a turn. Low confidence always leaves the app doing what it did without Tacet.
+The service (`Decisions` in `core/decisions/service.ts`) takes any choice, score or noul question and returns probabilities and a confidence. Each use keeps its question builder in its own file under `core/decisions/` (`permission-questions.ts`, `group-routing.ts`, `knowledge-fit.ts`, `action-risk.ts`), tuned on its own labelled set. A later use can ask who in a crew should take a turn. Low confidence always leaves the app doing what it did without Tacet.

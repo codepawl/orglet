@@ -1,6 +1,6 @@
 import type { DesktopActKind } from '../../shared/desktop';
 import type { DesktopTargetFacts } from '../../shared/desktop-host';
-import { CONSEQUENTIAL_WORDS, soundsConsequential } from './browser-risk';
+import { CONSEQUENTIAL_WORDS, riskReasons, soundsConsequential } from './browser-risk';
 
 /**
  * How much one step on a desktop app could change (COD-261, phase 2a), decided here from what UI Automation reports
@@ -17,8 +17,9 @@ export type DesktopVerdict =
 
 export type DesktopStepToJudge = { kind: DesktopActKind; target: DesktopTargetFacts };
 
-/** Why the core asks, as the card shows it; the window translates each one. */
+/** Why the core asks, as the card shows it; the window translates each one. `secondOpinion` is Tacet's (COD-306). */
 export const desktopRiskReasons = {
+  secondOpinion: riskReasons.secondOpinion,
   wording: 'Tên của nó giống một việc khó rút lại: gửi, trả tiền, xóa, lưu đè, đóng hoặc đồng ý',
   dialogDefault: 'Nút mặc định của một hộp thoại',
   dialogConfirm: 'Nút xác nhận của một hộp thoại',
