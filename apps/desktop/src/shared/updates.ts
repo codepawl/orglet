@@ -76,6 +76,46 @@ export type UpdateState =
   | { status: 'ready'; version: string | null }
   | { status: 'error'; message: string; checkedAt: string };
 
+/** Exceptions that only wrap the one that says what went wrong. */
+const WRAPPER_EXCEPTIONS = /(?:AggregateException|TargetInvocationException)$/;
+const REASON_LIMIT = 300;
+
+/**
+ * The part of an updater failure a person can read (COD-304). On Windows the engine's error is Update.exe's exit code
+ * followed by its whole .NET stack trace, which the About row used to print in full; the reason is the message of the
+ * first exception in it that is not a wrapper, such as "The remote server returned an error: (404) Not Found."
+ * Anything else keeps its first line.
+ */
+export function updateErrorReason(message: string): string {
+  const exceptions = [...message.matchAll(/([\w.]+Exception): (.+?)(?= at | ---> |\r?\n|$)/g)];
+  const telling = exceptions.find(match => !WRAPPER_EXCEPTIONS.test(match[1]));
+  const firstLine = message.split(/\r?\n/)[0] ?? message;
+  const reason = (telling?.[2] ?? firstLine).trim();
+  if (reason.length <= REASON_LIMIT) return reason;
+  return `${reason.slice(0, REASON_LIMIT - 1)}…`;
+}
+
+/**
+ * What the main screen shows about an update (COD-304), next to the Settings button: a quiet mark while a new
+ * version downloads, and a restart button once it is ready. Everything else, up to date, checking, a failed check or
+ * a build that cannot update itself, shows nothing there; the About tab says it.
+ */
+export type UpdateIndicator = { kind: 'downloading' } | { kind: 'ready'; version: string | null };
+
+export function updateIndicator(state: UpdateState | undefined): UpdateIndicator | null {
+  if (state?.status === 'downloading') return { kind: 'downloading' };
+  if (state?.status === 'ready') return { kind: 'ready', version: state.version };
+  return null;
+}
+
+/**
+ * Whether this push is the news that an update is ready, which is raised once as a notice: the step into `ready`,
+ * and never a repeat of it or the state a window reads when it opens.
+ */
+export function becameReady(previous: UpdateState | undefined, next: UpdateState): boolean {
+  return next.status === 'ready' && previous?.status !== 'ready';
+}
+
 /** Versions and platform facts for the About tab and for a bug report. The SQLite version comes with the workspace. */
 export type AboutInfo = {
   version: string;

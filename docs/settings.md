@@ -91,6 +91,8 @@ The Orglet face and the version you run. The face says hello when the tab opens,
 
 **Check for updates** shows one state at a time: not checked yet, checking, up to date with the time, downloading, ready with **Restart now**, or the error. **Automatic updates** (on by default) checks 30 seconds after launch and every four hours, downloads in the background, then asks you to restart; if you do not, the next launch uses the new version. Off, it checks only when you click.
 
+You do not have to open this tab to notice an update. While a new version downloads, a grey arrow sits beside **Settings** in the sidebar; once it is ready, that turns into an **Update** button, and one click restarts into the new version. The same restart is on the update's notice in **Notifications**. If orglets are still working, Orglet asks first, because restarting interrupts their runs; you can resume them in their chats afterwards.
+
 | Build | Updates itself |
 |---|---|
 | Windows, installed with Setup.exe | Yes |

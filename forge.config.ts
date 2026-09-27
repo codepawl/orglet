@@ -47,6 +47,9 @@ function unusedOnnxBinary(path: string): boolean {
   return file !== undefined && directMlFiles.includes(file);
 }
 
+/** `ORGLET_UPDATE_TEST_BUILD=1` makes a build that proves the updater end to end; see docs/windows-release-gates.md. */
+const updateTestBuild = process.env.ORGLET_UPDATE_TEST_BUILD === '1';
+
 const config: ForgeConfig = {
   hooks: {
     generateAssets: async () => {
@@ -93,7 +96,8 @@ const config: ForgeConfig = {
   makers: [
     // Linux ships as a ZIP for now: no deb or AppImage until someone is actually running it.
     new MakerZIP({}, ['win32', 'darwin', 'linux']),
-    new MakerSquirrel({ name: 'orglet', setupIcon: 'apps/desktop/assets/icon.ico', signWithParams: resolveSquirrelSign() }),
+    // An update test build (COD-304) installs as its own Squirrel app, in %LOCALAPPDATA%\orgletupdtest, beside Orglet.
+    new MakerSquirrel({ name: updateTestBuild ? 'orgletupdtest' : 'orglet', setupIcon: 'apps/desktop/assets/icon.ico', signWithParams: resolveSquirrelSign() }),
   ],
   plugins: [new VitePlugin({
     build: [

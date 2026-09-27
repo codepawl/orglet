@@ -17,6 +17,8 @@ export type ToastOptions = {
   chat?: string;
   /** Its notice takes the place of the group's unread one, standing for `size` pieces of news (COD-287). */
   group?: { key: string; size: number };
+  /** The toast announces a downloaded update: its notice restarts into it while the update still waits (COD-304). */
+  update?: boolean;
 };
 
 /**
@@ -27,7 +29,7 @@ export type ToastOptions = {
 export function toast(text: string, tone: ToastTone = 'success', about?: string, options: ToastOptions = {}) {
   const confirmation = tone === 'success' && !options.unread;
   // Every toast is also kept, so a message missed while looking elsewhere can still be found (user, 2026-09-20).
-  recordNotice(text, noticeKindOf(tone), about, { confirmation, taskId: options.chat, group: options.group?.key, groupSize: options.group?.size });
+  recordNotice(text, noticeKindOf(tone), about, { confirmation, taskId: options.chat, group: options.group?.key, groupSize: options.group?.size, update: options.update });
   showToast(text, tone, options.action);
 }
 

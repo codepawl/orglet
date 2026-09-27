@@ -136,7 +136,7 @@ Windows installers are unsigned. macOS CI signs when Developer ID credentials ar
 
 ### Updates
 
-A Windows install from **Setup.exe** updates itself. It checks GitHub Releases shortly after launch and every few hours, downloads a new version in the background, and then offers a restart; if you skip it, the next launch uses the new version. **Settings → About** shows the version you run, lets you check by hand or turn automatic updates off, and lists what changed in each release. The ZIP build, macOS and Linux cannot update themselves; the same tab links to the releases page instead. Versions 0.2.3 and earlier have no updater, so install the next release by hand once. Details in the [technical guide](docs/technical-guide.md#about-and-updates).
+A Windows install from **Setup.exe** updates itself. It checks GitHub Releases shortly after launch and every few hours, downloads a new version in the background, and then offers a restart: an **Update** button appears beside **Settings** in the sidebar, and the notice stays in **Notifications** with the same restart. If you skip it, the next launch uses the new version. **Settings → About** shows the version you run, lets you check by hand or turn automatic updates off, and lists what changed in each release. The ZIP build, macOS and Linux cannot update themselves; the same tab links to the releases page instead. Versions 0.2.3 and earlier have no updater, so install the next release by hand once. Details in the [technical guide](docs/technical-guide.md#about-and-updates).
 
 ## Dev
 

@@ -19,7 +19,7 @@ import { readBoundedText, writeAtomicText } from './files';
 import { readSkillDirectory, writeSkillDirectory } from './skill-files';
 import { isViteDevRequest, preferLoopbackIpv4 } from './vite-dev-url';
 import { executeProfile, cancelProfile, stopProfiles } from './profiler';
-import { Updater } from './updater';
+import { Updater, updaterLogWriter } from './updater';
 import { ChangelogFeed } from './changelog';
 import { ABOUT_LINKS, AboutLink, installKind, updateFeedUrl, type AboutInfo, type UpdateEnvironment } from '../shared/updates';
 import type { BackupSummary } from '../core/storage/backup';
@@ -51,6 +51,15 @@ declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 /** Set by vite.main.config.ts from the macOS signing flag at make time. */
 declare const ORGLET_MACOS_SIGNED: boolean;
+/**
+ * Set by vite.main.config.ts when `ORGLET_UPDATE_TEST_BUILD=1` at make time, and false in every other build (COD-304).
+ * A test build proves the updater end to end on a maintainer's machine: it keeps its own data folder, touches none of
+ * the entries an installed Orglet shares (Start menu, `orglet` command, Send to, `orglet://` links), and reads its
+ * update feed from `ORGLET_UPDATE_FEED_URL`, so it can update from a local folder instead of GitHub.
+ */
+declare const ORGLET_UPDATE_TEST_BUILD: boolean;
+const updateTestBuild = typeof ORGLET_UPDATE_TEST_BUILD === 'boolean' && ORGLET_UPDATE_TEST_BUILD;
+if (updateTestBuild) app.setPath('userData', join(app.getPath('appData'), 'Orglet Update Test'));
 if (process.env.ORGLET_DATA_DIR && !app.isPackaged) app.setPath('userData', process.env.ORGLET_DATA_DIR);
 // scripts/dev.ps1 points USERPROFILE at a flag folder for Forge; give the app and its child CLIs the real home back.
 if (process.env.ORGLET_USERPROFILE && !app.isPackaged) { process.env.USERPROFILE = process.env.ORGLET_USERPROFILE; delete process.env.ORGLET_USERPROFILE; }
@@ -81,6 +90,11 @@ const updateEnvironment: UpdateEnvironment = {
   squirrelUpdater: app.isPackaged && process.platform === 'win32' && existsSync(resolve(process.execPath, '..', '..', 'Update.exe')),
   macosSigned: typeof ORGLET_MACOS_SIGNED === 'boolean' && ORGLET_MACOS_SIGNED,
 };
+/** Only an update test build reads its feed from the environment; every other build ignores the variable. */
+function testFeedUrl(): string | undefined {
+  if (!updateTestBuild) return undefined;
+  return process.env.ORGLET_UPDATE_FEED_URL || undefined;
+}
 function aboutInfo(): AboutInfo {
   return {
     version: app.getVersion(),
@@ -183,7 +197,7 @@ function thisCopy(): InstallCopy {
 }
 /** Only a packaged Windows build edits PATH; the shim sits in a folder that survives updates. */
 function cliInstaller(): CliPathInstaller | undefined {
-  if (!app.isPackaged || process.platform !== 'win32') return undefined;
+  if (!app.isPackaged || process.platform !== 'win32' || updateTestBuild) return undefined;
   const localAppData = process.env.LOCALAPPDATA ?? join(app.getPath('home'), 'AppData', 'Local');
   const target = {
     executable: process.execPath,
@@ -230,7 +244,7 @@ const electronShortcuts: ShortcutFiles = {
 };
 /** Only a packaged Windows build adds itself to Send to, in the person's own SendTo folder. */
 function sendToInstaller(): SendToInstaller | undefined {
-  if (!app.isPackaged || process.platform !== 'win32') return undefined;
+  if (!app.isPackaged || process.platform !== 'win32' || updateTestBuild) return undefined;
   const sendToFolder = join(app.getPath('appData'), 'Microsoft', 'Windows', 'SendTo');
   return new SendToInstaller(sendToFolder, launcherPath(), electronShortcuts, thisCopy());
 }
@@ -249,11 +263,11 @@ function sendToState(): SendToState {
  */
 const LINK_ARGUMENTS = ['--'];
 async function registerLinks(): Promise<void> {
-  if (!updateEnvironment.squirrelUpdater) return;
+  if (!updateEnvironment.squirrelUpdater || updateTestBuild) return;
   app.setAsDefaultProtocolClient(LINK_SCHEME, launcherPath(), LINK_ARGUMENTS);
 }
 async function unregisterLinks(): Promise<void> {
-  if (!updateEnvironment.squirrelUpdater) return;
+  if (!updateEnvironment.squirrelUpdater || updateTestBuild) return;
   app.removeAsDefaultProtocolClient(LINK_SCHEME, launcherPath(), LINK_ARGUMENTS);
 }
 const sentFiles = new SentFilesHandOff();
@@ -447,10 +461,11 @@ async function start() {
   updater = new Updater({
     engine: autoUpdater,
     environment: updateEnvironment,
-    feedUrl: updateFeedUrl(process.platform, process.arch, app.getVersion()),
+    feedUrl: testFeedUrl() ?? updateFeedUrl(process.platform, process.arch, app.getVersion()),
     firstRun: process.argv.includes('--squirrel-firstrun'),
     automatic: startupSettings.autoUpdate ?? true,
     onChange: state => { if (window && !window.isDestroyed()) window.webContents.send('orglet:update', state); },
+    log: updaterLogWriter(join(directory, 'updater.log')),
   });
   changelog = new ChangelogFeed({ cacheFile: join(directory, 'changelog-cache.json') });
   const rendererRoot = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
@@ -869,9 +884,11 @@ function handleSquirrelEvent(event: SquirrelEvent) {
   const sendTo = sendToInstaller();
   const userData = app.getPath('userData');
   const freshInstall = event === 'install';
+  // An update test build shares the executable's name with the real app, so its shortcut would replace Orglet's.
+  const noShortcuts = async () => undefined;
   const work = runSquirrelEvent(event, {
-    createShortcuts: () => runUpdateExecutable(process.execPath, [`--createShortcut=${shortcutTarget}`]),
-    removeShortcuts: () => runUpdateExecutable(process.execPath, [`--removeShortcut=${shortcutTarget}`]),
+    createShortcuts: updateTestBuild ? noShortcuts : () => runUpdateExecutable(process.execPath, [`--createShortcut=${shortcutTarget}`]),
+    removeShortcuts: updateTestBuild ? noShortcuts : () => runUpdateExecutable(process.execPath, [`--removeShortcut=${shortcutTarget}`]),
     putOnPath: async () => {
       if (freshInstall) await installer?.install();
       else await installer?.installUnlessTaken();

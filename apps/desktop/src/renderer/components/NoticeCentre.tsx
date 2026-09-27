@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, CircleAlert, CircleCheck, Info, Trash } from 'lucide-react';
+import { ChevronDown, CircleAlert, CircleCheck, Info, RotateCw, Trash } from 'lucide-react';
 import { Button, Drawer } from './ui';
-import { clearNotices, collapseNotices, isUnreadNotice, markNoticesSeen, newNoticesFirst, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, useNotices, type NoticeKind, type NoticeRow } from './notifications';
+import { clearNotices, collapseNotices, isUnreadNotice, markNoticesSeen, newNoticesFirst, noticeGroupLabels, noticeKindNames, noticeKinds, noticesSeenAt, restartNoticeId, useNotices, type NoticeKind, type NoticeRow } from './notifications';
 import { clockLabel, dayLabel } from './TimeMark';
 import { t, tMessage } from '../i18n';
 
@@ -15,10 +15,13 @@ const kindIcons: Record<NoticeKind, typeof Info> = { error: CircleAlert, done: C
  * Each row says what happened and what it was about, and a run of identical notices is one row with a count
  * (COD-174): the owner opened this to twelve rows reading "Saved" and "Command not allowed." and nothing else.
  */
-export function NoticeCentre({ open, onClose, onOpenChat, chatExists }: { open: boolean; onClose: () => void;
+export function NoticeCentre({ open, onClose, onOpenChat, chatExists, updateReady, onRestartUpdate }: { open: boolean; onClose: () => void;
   /** Opens the chat a notice points at, such as a schedule's run (COD-258). */ onOpenChat: (taskId: string) => void;
-  /** A chat deleted since leaves its notice as plain text. */ chatExists: (taskId: string) => boolean }) {
+  /** A chat deleted since leaves its notice as plain text. */ chatExists: (taskId: string) => boolean;
+  /** A downloaded update waits for a restart: its notice carries the restart (COD-304). */ updateReady: boolean;
+  onRestartUpdate: () => void }) {
   const notices = useNotices();
+  const restartId = restartNoticeId(notices, updateReady);
   const [kind, setKind] = useState<NoticeKind | 'all'>('all');
   // What was unread when the centre opened stays marked as new until it closes, even though opening marks it seen.
   const [newSince, setNewSince] = useState<number | null>(null);
@@ -61,7 +64,8 @@ export function NoticeCentre({ open, onClose, onOpenChat, chatExists }: { open: 
           const isNew = newSince !== null && isUnreadNotice(row.notice, newSince);
           return <li key={row.notice.id} className={`notice notice-${row.notice.kind}${isNew ? ' is-new' : ''}`}>
             {startsGroup && <p className="notice-day">{label}</p>}
-            <NoticeItem row={row} isNew={isNew} onOpenChat={row.notice.taskId && chatExists(row.notice.taskId) ? onOpenChat : undefined} />
+            <NoticeItem row={row} isNew={isNew} onOpenChat={row.notice.taskId && chatExists(row.notice.taskId) ? onOpenChat : undefined}
+              onRestart={row.notice.id === restartId ? onRestartUpdate : undefined} />
           </li>;
         })}
       </ol>}
@@ -74,7 +78,7 @@ export function NoticeCentre({ open, onClose, onOpenChat, chatExists }: { open: 
  * A notice about a chat that still exists opens that chat instead (COD-258): that is what the person came for, and
  * its repeats are the same chat, so the count still reads without the list of times.
  */
-function NoticeItem({ row, isNew, onOpenChat }: { row: NoticeRow; isNew: boolean; onOpenChat?: (taskId: string) => void }) {
+function NoticeItem({ row, isNew, onOpenChat, onRestart }: { row: NoticeRow; isNew: boolean; onOpenChat?: (taskId: string) => void; onRestart?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const Icon = kindIcons[row.notice.kind];
   const repeated = row.count > 1;
@@ -88,10 +92,13 @@ function NoticeItem({ row, isNew, onOpenChat }: { row: NoticeRow; isNew: boolean
         {repeated && <span className="notice-count">{t('{0} lần', [row.count])}{!opensChat && <ChevronDown size={13} aria-hidden="true" />}</span>}
       </span>
       {row.notice.about && <span className="notice-about">{tMessage(row.notice.about)}</span>}
+      {onRestart && <span className="notice-actions"><Button variant="outline" onClick={onRestart}><RotateCw size={14} />{t('Khởi động lại')}</Button></span>}
     </span>
     {isNew && <span className="notice-new-dot" aria-hidden="true" />}
     <time dateTime={row.notice.at}>{clockLabel(row.notice.at)}</time>
   </>;
+  // The restart is its own button, so the row around it stays plain.
+  if (onRestart) return <div className="notice-body">{content}</div>;
   if (onOpenChat && taskId) return <button type="button" className="notice-body" title={t('Mở chat')} onClick={() => onOpenChat(taskId)}>{content}</button>;
   if (!repeated) return <div className="notice-body">{content}</div>;
   return <>

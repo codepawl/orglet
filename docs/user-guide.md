@@ -41,7 +41,7 @@ Windows is the public target. The [latest GitHub Release](https://github.com/cod
 
 Run Setup. **Windows protected your PC** (SmartScreen) can appear: the build is signed, but a new signing certificate has no reputation yet. Check that the dialog names **Nguyen Xuan An** as the publisher, then choose **More info → Run anyway**. A dialog that says **Unknown publisher** means the file is not the signed release; stop and download it again from the Release page.
 
-After the first launch, a Setup install checks GitHub Releases shortly after it starts and every few hours, downloads a new version in the background, and offers a restart. If you skip the restart, the next launch already uses the new version. **Settings → About** shows the version you run, lets you check by hand, and can turn automatic updates off. Versions 0.2.3 and earlier have no updater: install the current release by hand once, and from then on it updates itself. Details: [Settings → About](settings.md#about).
+After the first launch, a Setup install checks GitHub Releases shortly after it starts and every few hours, downloads a new version in the background, and offers a restart: an **Update** button beside **Settings** in the sidebar restarts into it with one click. If you skip the restart, the next launch already uses the new version. **Settings → About** shows the version you run, lets you check by hand, and can turn automatic updates off. Versions 0.2.3 and earlier have no updater: install the current release by hand once, and from then on it updates itself. Details: [Settings → About](settings.md#about).
 
 ### macOS and Linux
 
