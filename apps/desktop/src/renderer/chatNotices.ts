@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Routine, Task, TaskStatus, Workspace } from '../shared/contracts';
-import { SKIPPED_WHILE_INACTIVE } from '../shared/schedule';
+import { DAILY_CAP_REACHED, SKIPPED_WHILE_INACTIVE } from '../shared/schedule';
+import { triggerOf } from '../shared/routine-triggers';
 import { BACKGROUND_NOTICE_CHARS, type BackgroundNotice } from '../shared/background-notice';
 import { t, tMessage } from './i18n';
 import { chatHeadline } from '../shared/forward';
@@ -109,6 +110,7 @@ export function besideSideThread(sideThread: Pick<Task, 'sideOf'>, openTask: Pic
 export function inAppNotice(chat: FinishedChat, names: ChatNames, earlierInGroup: (group: string) => number = () => 0): InAppNotice | undefined {
   const { task, outcome } = chat;
   const tone = outcome === 'done' ? 'success' : 'error';
+  if (quietRun(chat, names)) return undefined;
   if (task.routineId) {
     const schedule = scheduleName(task, names);
     const text = outcome === 'done' ? heldForReview(task, names) ? t('{0} đã xong, thay đổi đang chờ bạn xem', [schedule]) : t('{0} đã xong', [schedule])
@@ -130,6 +132,19 @@ export function inAppNotice(chat: FinishedChat, names: ChatNames, earlierInGroup
 /** Whether the chat's changes wait for the person's Apply or Discard (COD-279). */
 function heldForReview(task: Task, names: ChatNames): boolean {
   return names.heldForReview?.includes(task.id) ?? false;
+}
+
+/**
+ * A run of an hourly schedule that simply finished (COD-288). A toast every hour would be noise, so it collects on the
+ * schedule's card ("5 runs today") and its row in the sidebar; a run that failed, waits for the person or holds changes
+ * for review is still announced.
+ */
+export function quietRun(chat: FinishedChat, names: ChatNames): boolean {
+  if (chat.outcome !== 'done' || !chat.task.routineId) return false;
+  if (heldForReview(chat.task, names)) return false;
+  const routine = names.routines.find(item => item.id === chat.task.routineId);
+  if (!routine?.schedule) return false;
+  return routine.schedule.frequency === 'hours' && triggerOf(routine).kind === 'schedule';
 }
 
 /**
@@ -195,7 +210,16 @@ export function backgroundNotice(chat: FinishedChat, names: ChatNames): Backgrou
  */
 export function backgroundNotices(finished: readonly FinishedChat[], names: ChatNames, enabled: boolean): BackgroundNotice[] {
   if (!enabled) return [];
-  return finished.map(chat => backgroundNotice(chat, names));
+  return finished.filter(chat => !quietRun(chat, names)).map(chat => backgroundNotice(chat, names));
+}
+
+/**
+ * The toast for a schedule that could not start: the reason, with a way to the schedules. A day whose cap is reached is
+ * said once, as news rather than a problem (COD-288); the core writes that note once a day, not once per skipped run.
+ */
+export function blockedScheduleNotice(blocked: BlockedSchedule): { text: string; tone: 'error' | 'info'; about: string } {
+  if (blocked.reason === DAILY_CAP_REACHED) return { text: t('{0} đã chạm giới hạn chi phí hôm nay', [blocked.routine.name]), tone: 'info', about: tMessage(blocked.reason) };
+  return { text: t('{0} chưa chạy', [blocked.routine.name]), tone: 'error', about: tMessage(blocked.reason) };
 }
 
 /**
@@ -217,7 +241,8 @@ export function useChatNotices(workspace: Workspace | undefined, openChat: strin
     if (!known) return;
     // A schedule that could not start is unattended work that did not happen, so it is a problem to look at (COD-294).
     for (const blocked of blockedSchedules(known.routines, workspace.routines)) {
-      toast(t('{0} chưa chạy', [blocked.routine.name]), 'error', tMessage(blocked.reason), { action: { label: t('Xem lịch chạy'), onSelect: () => openSchedulesRef.current() } });
+      const notice = blockedScheduleNotice(blocked);
+      toast(notice.text, notice.tone, notice.about, { action: { label: t('Xem lịch chạy'), onSelect: () => openSchedulesRef.current() } });
     }
     // A run started while the last workspace was on its way here is still news, hence the margin.
     const lookedAt = new Date(known.at - LOOK_MARGIN_MS).toISOString();

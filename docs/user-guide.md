@@ -24,7 +24,7 @@ The step-by-step first walk-through with screenshots is [Getting started](gettin
 - **A team with roles.** Each orglet has a name, a face, instructions and a skill. You talk to one orglet, a few of them, or a crew.
 - **Your existing AI plan.** An orglet can run through Claude Code, Codex, Cursor Agent or Gemini CLI using the account you are already logged in to. An API key is optional.
 - **Private by default.** No account, no server. An orglet reads only the files you attach to that chat or the folder you grant it.
-- **Repeat work runs itself.** Schedules send the same request daily or weekly while the app is open.
+- **Repeat work runs itself.** Schedules send the same request daily, on weekdays, weekly or every few hours while the app is open.
 
 What Orglet is not, and what it will not become for now, is in [product.md](product.md).
 

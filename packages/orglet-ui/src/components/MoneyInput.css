@@ -28,4 +28,15 @@
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
+/* An amount is typed, never stepped: the native number spinner only showed on the field under the pointer, so two
+   money fields side by side looked different (COD-288 review). */
+.org-money-input input::-webkit-outer-spin-button,
+.org-money-input input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.org-money-input input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
 .org-money-input-invalid { border-color: var(--org-error, #c62828); }

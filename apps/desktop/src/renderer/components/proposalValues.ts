@@ -3,6 +3,8 @@ import type { Skill, Worker } from '../../shared/contracts';
 import { formatMoney } from './money';
 import { providerName } from './workerModel';
 import { t } from '../i18n';
+import type { Schedule } from '../../shared/schedule';
+import { cadenceInWords } from '../scheduleWords';
 
 /**
  * How the proposal cards turn stored values into what the person reads (COD-212): a skill id into the skill's name,
@@ -96,10 +98,18 @@ export function workflowName(value: string): string {
  * as written.
  */
 export function scheduleInWords(value: string): string {
-  const match = /^(daily|weekly) (\d{2}:\d{2})(?: · weekday ([0-6]))? · (.+)$/.exec(value);
+  const hourly = /^every (\d+)h(?: (\d{2}:\d{2})-(\d{2}:\d{2}))?( weekdays)? · (.+)$/.exec(value);
+  if (hourly) {
+    const [, everyHours, from, to, workdays, zone] = hourly;
+    const window = from && to ? { from, to } : undefined;
+    const cadence = cadenceInWords({ frequency: 'hours', time: '00:00', weekday: 1, everyHours: Number(everyHours) as Schedule['everyHours'], window, weekdaysOnly: Boolean(workdays) });
+    return `${cadence} · ${zone}`;
+  }
+  const match = /^(daily|weekdays|weekly) (\d{2}:\d{2})(?: · weekday ([0-6]))? · (.+)$/.exec(value);
   if (!match) return value;
   const [, frequency, time, weekday, timeZone] = match;
   if (frequency === 'daily') return t('Hằng ngày lúc {0} · {1}', [time, timeZone]);
+  if (frequency === 'weekdays') return `${t('Ngày thường lúc {0}', [time])} · ${timeZone}`;
   const days = [t('Chủ nhật'), t('Thứ hai'), t('Thứ ba'), t('Thứ tư'), t('Thứ năm'), t('Thứ sáu'), t('Thứ bảy')];
   return t('Hằng tuần vào {0} lúc {1} · {2}', [days[Number(weekday ?? 1)], time, timeZone]);
 }

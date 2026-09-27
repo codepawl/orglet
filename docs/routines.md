@@ -13,19 +13,21 @@ The editor's **Starts** field picks one trigger per routine (COD-245):
 
 | Trigger | Runs when | While the app is closed |
 |---|---|---|
-| **On a schedule** | The clock reaches the daily or weekly time | Missed times become one catch-up you can run or skip (below) |
+| **On a schedule** | The clock reaches the daily, weekday, weekly or hourly time ([how often](#how-often)) | Missed times become one catch-up you can run or skip (below) |
 | **When a file arrives** | A new file lands in the folder you picked | Nothing is recorded and nothing is replayed |
 | **Only when called** | `orglet run "<name>"` calls it from a terminal ([cli.md](cli.md#run)) | The command starts the app first; nothing is queued |
 
 Every trigger fires only while Orglet is open. The two event triggers are a clear break from the clock's catch-up: an event that happens while the app is closed is gone, and opening the app never runs it late. Any routine, whatever its trigger, can also be started with `orglet run`, or with **Run now** (the play button) on its card in **Schedules** (`runRoutineNow`). Run now takes the same path as `orglet run` without files (`Routines.runCalled`): the routine must be switched on, approved as it is now and done with its previous run, it runs with the routine's own sources only, and it leaves the next scheduled time where it was. The run opens like any scheduled run.
 
-The row in **Schedules** says the trigger on the line under the name: "Daily at 09:00", "When a file arrives in Invoices" or "Only when called". A routine saved before triggers existed runs on its clock, as it always did.
+The row in **Schedules** says the trigger on the line under the name: "Daily at 09:00", "Every 2 hours, 09:00–18:00, weekdays only", "When a file arrives in Invoices" or "Only when called". A routine saved before triggers existed runs on its clock, as it always did.
 
 ### The trigger is part of what saving approves
 
 Saving a routine is its permission to run unattended. The core stores a fingerprint of the setup it approved (`approvedConfig`): the orglet or crew, their skills and models (a custom connection's price included, COD-242), and the trigger, with the watched folder's identity (its path, volume and file id). A clock routine keeps exactly the fingerprint it had before triggers existed, so updating Orglet does not take away any routine's approval. A changed price asks every routine on that connection to be saved again, whatever its trigger.
 
 Changing the trigger or picking another folder is a new save, so it is approved again then. A trigger that changed without a save, as in a restored backup or a hand-edited row, does not match and the run is refused until the routine is saved again. A change an orglet proposes keeps the routine's trigger and saves it switched off; an orglet cannot pick a folder to watch.
+
+How often and how much are approved the same way (COD-288): an hourly or weekday cadence (with its interval, window and weekdays switch) and a daily cap are added to the fingerprint (`scheduleApproval`). A daily or weekly routine without a cap adds nothing, so its fingerprint and approval stay as they were. A row turned from daily into hourly, given a shorter interval or stripped of its cap without a save does not run until it is saved again.
 
 ### When a file arrives
 
@@ -72,17 +74,48 @@ Every run a routine starts, on the clock, on a new file or from `orglet run`, is
 
 The routine runs only when `orglet run` names it, while the app is open. The editor shows the command to copy. `run` can start a routine but never create or change one, and it passes the same checks as a scheduled run: switched on, approved as it is now, previous run finished.
 
+## How often
+
+The editor's **Frequency** (COD-288) is one of four:
+
+| Frequency | Runs | Saved as |
+|---|---|---|
+| **Daily** | Every day at the time | `frequency: 'daily'` |
+| **Weekdays (Mon–Fri)** | Monday to Friday at the time | `frequency: 'weekdays'` |
+| **Weekly** | One day a week at the time | `frequency: 'weekly'`, `weekday` |
+| **Every few hours** | Every 1, 2, 3, 4, 6, 8 or 12 hours | `frequency: 'hours'`, `everyHours`, optional `window { from, to }` and `weekdaysOnly` |
+
+Nothing runs more often than once an hour. Every interval divides a day, so an hourly schedule's times are the same every day: from midnight, or from the window's **From** time, every few hours while the time is still before **Until**. "Every hour between 09:00 and 18:00" runs at 09:00, 10:00 … 17:00, nine times a day. A window never crosses midnight. **Weekdays only** keeps it to Monday through Friday. The time field only applies to the other three; an hourly schedule keeps it, so switching back restores it.
+
+Each run is a local wall time in the schedule's zone (`nextOccurrence`, `runMinutesOfDay` in `shared/schedule.ts`). When the clocks go forward, the hour that does not exist is skipped. When they go back, the repeated hour runs once, at its first instant, so an hourly schedule has a two-hour gap there rather than two runs in one hour.
+
+An hourly schedule differs from a daily one in what happens when a run cannot start, because the next try is at most a few hours away:
+
+- **The previous run is still going**, or its changes still wait for review (COD-294): the time is skipped, the calendar moves on, and the card shows **The schedule did not run** with the reason, once (`SKIPPED_PREVIOUS_RUNNING`). The next time after that run ends runs as usual and clears the note. A daily or weekly schedule keeps recording this as a missed run, as before.
+- **A catch-up is waiting**: missed times while Orglet was closed still become one catch-up, as for any clock routine. The next on-time run does not wait for the person to answer it; it runs and replaces the catch-up (`pending` is cleared). A daily schedule still holds its next run back until the catch-up is run or skipped.
+
+## A daily cost cap
+
+Every schedule, whatever starts it, can have a **Daily cap** (`schedule.dailyCapMicros`, integer micros). The editor says the ceiling before saving: "Up to 9 runs a day · up to $4.50 a day at $0.50 per run", or "at most $2.00 a day, your cap" when the cap is lower. A cap below one run's limit is refused, since no run could ever start under it.
+
+- **Which day.** A run records the local day it started on, in the schedule's time zone (`Task.routineDay`). The cap resets at midnight there, not at UTC midnight. A run that starts at 23:50 counts on that day even if it spends past midnight, and a message the person sends later in a run's chat counts on the run's day.
+- **What counts.** The ledger's settled charges for that day's runs, plus what is still held or of unknown cost at the amount held. A run that is still going counts at its whole per-run limit, since it may spend up to it.
+- **When a run is refused.** A run starts only if the day's runs so far plus its whole limit fit under the cap (`fitsDailyCap` in `core/budgets/daily-cap.ts`). So the day never goes over the cap, and a run never stops half-way because of it. The check runs again inside the transaction that writes the run's task (`Routines.admitRun`, called from `createTask`), so two starts at the same moment cannot both take the last of the day. Every start is checked: the clock, a new file, `orglet run`, **Run now** and catch-up.
+- **Inside a run.** Every request a run reserves is also checked against the day (`BudgetLedger.reserve`). It only refuses when the day spent elsewhere meanwhile, such as the person's own message in an earlier run's chat; the run then waits for budget with "The schedule reached its cost cap for the day".
+- **What the person sees.** The card's line reads "Today $0.80 of $1.50". When a run is refused, the card shows **Reached today's cost cap** with what today used and when runs start again, and the window raises one notice, not one per skipped run: the core writes the note once (`DAILY_CAP_REACHED`), skips the rest of the day's clock times without recording a catch-up, and drops the note when the schedule's day changes.
+- **Harness runs.** A run on Claude Code, Codex or Cursor Agent is billed to that CLI's plan, which does not enter Orglet's ledger. Its runs still count at their whole limit while they run, but add nothing once they end.
+
 ## Where a run shows up
 
 Every run is its own chat row with `routineId`, apart from the orglet's or crew's main chat, and the routine keeps the newest one as `lastTaskId`. Before COD-258 that chat could only be reached through **Schedules → Open latest run**, so a daily run's answer went unread unless someone went looking. Now a run is found where the person looks and says when it lands, whatever started it:
 
 - **Sidebar.** Each routine has one row under the orglet or crew its newest run was for, next to the orglet's side threads, newest first and three at a time with **Show more** (`chatsUnder` and `scheduleRunsOf` in `apps/desktop/src/shared/schedule-runs.ts`). The row is named after the routine, carries a small schedule mark and the newest run's status mark, and its menu opens the routine, archives the run or deletes it. The row belongs to the run, not to the routine's current setting: a crew run sits under the crew, and a routine moved to another orglet moves when its next run starts. An archived newest run hides the row until the next run, rather than bringing an older run back; deleting it clears `lastTaskId`, which does the same.
 - **The chat.** The header shows the routine's name with the schedule mark instead of the orglet's, so it does not read as the main chat, and the top of the thread says "A run of the schedule *name*, by *orglet*" with **Open schedule**. The header cannot rename it: the name changes in the routine's editor, where saving is also the approval to run.
-- **Notices.** When a run finishes, stops with a problem (failed, partial, interrupted) or waits for the person (an answer or budget), the window shows a toast naming the routine, such as "Daily standup note is ready" or "Daily standup note needs you", with the orglet or crew as what it was about and **Open**. A run whose changes wait for review says "Daily repo check is ready; its changes wait for your review" (COD-294). It is kept unread in **Notifications**, and its row there opens the run (`chatNotices.ts`). A run that started and finished between two workspace reads still counts, since nobody watched it start. A finished run already open says nothing; a run that failed or waits for the person is announced even when it is the chat on screen (`announcedInWindow`), because **Run now** opens the run it starts, and before COD-294 a run that then failed left nothing in **Problems**.
-- **When a run could not start.** A routine that could not start a run (its working folder gone, the last run's changes still waiting, a setup changed since it was saved) raises "*name* did not run" as a problem with the reason and **View schedules** (`blockedSchedules`). A miss while Orglet was closed does not: the card and the catch-up banner already offer to run it once. The **Schedules** button counts these routines with the missed ones.
+- **Notices.** When a run finishes, stops with a problem (failed, partial, interrupted) or waits for the person (an answer or budget), the window shows a toast naming the routine, such as "Daily standup note is ready" or "Daily standup note needs you", with the orglet or crew as what it was about and **Open**. A run whose changes wait for review says "Daily repo check is ready; its changes wait for your review" (COD-294). It is kept unread in **Notifications**, and its row there opens the run (`chatNotices.ts`). A run that started and finished between two workspace reads still counts, since nobody watched it start. A finished run already open says nothing; a run that failed or waits for the person is announced even when it is the chat on screen (`announcedInWindow`), because **Run now** opens the run it starts, and before COD-294 a run that then failed left nothing in **Problems**. An hourly schedule's run that simply finished is the exception (COD-288, `quietRun`): a toast every hour would be noise, so it gets no toast, no row in Notifications and no system notification, and collects on the card instead. Its runs that fail, wait for the person or hold changes for review are announced like any other.
+- **When a run could not start.** A routine that could not start a run (its working folder gone, the last run's changes still waiting, a setup changed since it was saved) raises "*name* did not run" as a problem with the reason and **View schedules** (`blockedSchedules`). A miss while Orglet was closed does not: the card and the catch-up banner already offer to run it once. A day whose cap is reached says "*name* reached today's cost cap" once, as information rather than a problem (`blockedScheduleNotice`). The **Schedules** button counts these routines with the missed ones.
 - **In the background.** With Orglet not focused, the same moment also raises a system notification titled with the routine's name, unless **Settings → Chat** turned it off ([chat guide](chat-guide.md#while-orglet-is-in-the-background)).
 
-The routine's card in **Schedules** says what became of its newest run on the button that opens it: **Open latest run · Done**, **Needs attention**, **Needs you**, **Running** or **Changes wait for your review**, the words in the colour of the status mark before them (`lastRunOutcome`, COD-294). Before, the card only said **Open latest run**, so a run that failed overnight looked the same as one that went well.
+The routine's card in **Schedules** says what became of its newest run on the button that opens it: **Open latest run · Done**, **Needs attention**, **Needs you**, **Running** or **Changes wait for your review**, the words in the colour of the status mark before them (`lastRunOutcome`, COD-294). Before, the card only said **Open latest run**, so a run that failed overnight looked the same as one that went well. An hourly schedule's card also counts today's runs ("5 runs today"), and a schedule with a cap shows what today's runs used of it ("Today $0.80 of $1.50"), both from the core's `routineToday` (COD-288).
 
 ## Deleting a routine
 
@@ -107,11 +140,11 @@ A due routine is a **miss** — and is not started automatically — when any of
 1. **Reopen / first tick:** `lastTick` is null (process just started).
 2. **Gap:** more than 30 seconds since the previous tick (sleep, hang, or the app was not polling).
 3. **Late:** the due time is already more than 30 seconds in the past.
-4. **Already waiting:** `pending` is set.
+4. **Already waiting:** `pending` is set. An hourly schedule is the exception: its next on-time run goes ahead and replaces the waiting catch-up ([how often](#how-often)).
 
 On-time dispatch happens only on a continuous tick: the previous tick was recent, the due time is at most 30 seconds old, and there is no pending catch-up. Opening the app at or after the scheduled time therefore prompts for catch-up instead of silently starting work.
 
-A daylight-saving gap is skipped by `nextOccurrence`; a repeated local time runs at its first instant. Those are schedule math, not catch-up.
+A daylight-saving gap is skipped by `nextOccurrence`; a repeated local time runs at its first instant, for an hourly schedule too. Those are schedule math, not catch-up.
 
 ## Catch-up is one pending, one run
 
@@ -146,3 +179,4 @@ Guards that still apply to catch-up: recurring approval fingerprint, a non-termi
 - No replay of folder events or `orglet run` calls that happened while the app was closed.
 - No watching of subfolders, of folders the person did not pick, or of anything with more than read access.
 - No working folder for a routine's run other than the one picked in the routine's own form, and never at a wider level.
+- No schedule that runs more often than once an hour, and no day of runs that costs more than its daily cap.
