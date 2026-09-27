@@ -317,6 +317,17 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .sidebar-scroll .history { min-height:100px; overflow:visible; }
 .sidebar-scroll .history:has(>.section-items[hidden]) { min-height:0; }
 .sidebar-footer>.org-button { justify-content:flex-start; }
+/* Settings shares its row with the update mark (COD-304): Settings keeps the width, the mark sits at the row's end,
+   centred on it. Downloading is a grey arrow; ready is a small pill in a soft accent tint that restarts into it. */
+.sidebar-settings { display:flex; align-items:center; gap:4px; }
+.sidebar-settings>.org-button:first-child { flex:1; min-width:0; justify-content:flex-start; }
+.update-button { flex-shrink:0; color:var(--muted); }
+.sidebar .update-button:hover:not(:disabled) { color:var(--text); }
+.update-button.ready { gap:5px; padding:4px 10px; min-height:28px; border-radius:999px; color:var(--text); background:color-mix(in srgb, var(--accent) 18%, var(--bg)); white-space:nowrap; animation:notice-dot-in var(--motion-base) var(--ease-out); }
+.sidebar .update-button.ready:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 28%, var(--bg)); }
+.update-button.ready.compact { padding:0; min-height:var(--org-icon-size, 32px); }
+.topbar-rail .update-button.ready:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 28%, var(--bg)); }
+@media (prefers-reduced-motion: reduce) { .update-button.ready { animation:none; } }
 .sidebar-footer .org-status-mark { margin-left:auto; }
 /* Selecting several rows (COD-214). A section's edit button holds its Done state while the section is in select
    mode. A picked row, or every row while picking, carries a checkbox in the status mark's slot, the same 29px it
@@ -1081,6 +1092,8 @@ button.notice-body { cursor:pointer; }
 .notice-line { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 8px; }
 .notice-message { overflow-wrap:anywhere; }
 .notice-about { color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+/* An update notice carries its restart under the message while the update waits (COD-304). */
+.notice-actions { display:flex; margin-top:6px; }
 .notice-count { display:inline-flex; align-items:center; gap:2px; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .notice-count svg { transition:transform var(--motion-base) var(--ease-out); }
 .notice-body[aria-expanded=true] .notice-count svg { transform:rotate(180deg); }
