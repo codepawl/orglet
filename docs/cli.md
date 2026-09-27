@@ -72,8 +72,12 @@ Run `orglet` with no command, or `orglet chat`:
 
 1. The first line shows your orglets' faces. Under it is a list of your orglets and crews, each with its face in its own colour. A crew shows its members side by side.
 2. Move through the list with the Up and Down keys, or type part of a name to narrow it. Case and Vietnamese accents do not matter: `ke` finds "Kế toán". Press Enter to open the highlighted chat, or Tab to fill in its name.
-3. The chat opens with the orglet's face, its name, and its provider and model. Type a message and press Enter.
-4. While the orglet works, its face waits beside you: it blinks and glances around, with the seconds so far. When the answer lands, it prints under the orglet's name with a happy face.
+3. The chat opens with the orglet's face, its name, and its provider and model. Type a message and press Enter. Ctrl+J adds a line; Shift+Enter also works in terminals that report it separately. Paste stays in the draft, including its newlines, until you press Enter to send it.
+4. While the orglet works, the status below the draft shows the elapsed seconds. You can keep editing a visible draft. Pressing Enter adds it to this terminal's queue; the status shows how many messages are waiting. Each goes to the app after the previous wait ends. When an answer lands, it prints under the orglet's name with a happy face, and your unsent draft stays in place.
+
+Type `/` to see commands with descriptions. Up and Down choose one; Tab or Enter fills it into the draft, and Enter on a filled command runs it. Esc dismisses the menu without clearing the draft. `/to ` offers chat names in the same menu. A pasted message with several lines is sent as a message even when its first line starts with `/`.
+
+The draft wraps with the terminal's width. For a long draft, only the rows around the cursor are shown; moving the cursor reveals the rest. Leaving with Ctrl+D or `/exit` drops this terminal's unsent draft and local queue. Messages already sent keep running in the app.
 
 `orglet chat --to Researcher` skips the list and opens that chat. If the name fits several chats, or none, the list opens with it typed in.
 
@@ -85,10 +89,12 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 
 | Key | What it does |
 |---|---|
-| Enter | Sends the message, or opens the chat highlighted in the list |
-| Up, Down | In the list, move the highlight. In a chat, go back through the messages you sent. |
-| Tab | Completes a command or a name after `/to` |
-| Esc | In the list you opened with `/to`, goes back to the chat you were in |
+| Enter | Sends the message, or queues it while waiting. In a menu, fills the highlighted choice; in the chat list, opens the highlighted chat. |
+| Ctrl+J | Adds a line to the draft |
+| Up, Down | Move the highlight in a menu or list. In a multiline draft, move between lines; at its first or last line, go through sent messages and return to the unsent draft. |
+| Left, Right, Home, End | Move within the draft; Home and End go to the start and end of the current line |
+| Tab | Fills the highlighted command or name after `/to` |
+| Esc | Dismisses the command menu, or returns from the `/to` list to the chat |
 | Ctrl+C | While an answer is on its way, stops waiting. The orglet keeps working in the app; `/read` shows the answer later. On an empty line, leaves. |
 | Ctrl+D | Leaves |
 
@@ -212,4 +218,4 @@ Messages that come from the app are in the app's language.
 - On start, a copy of Orglet reads the shim's executable and data folder back and rewrites the shim only when both are its own. A Setup install owns every `app-x.y.z\Orglet.exe` in its folder, so the shim follows an update to a new version folder. An update or uninstall leaves a shim that starts another copy alone; only running Setup or a click in **Settings → About** takes it over.
 - The command itself is the app's own executable running a small script (`resources/orglet-cli.cjs`) as Node, the same way VS Code ships `code`. It needs no separate Node install.
 
-The automatic checks run every command against a packaged build, including a wrong token and a request outside the list, and check that `list` stays plain text when piped. The chat itself is tested with a scripted session against a fake app; the checks do not type into a real terminal window. They do not click **Add to PATH**, because that changes the user PATH of the machine running them.
+The automatic checks run every command against a packaged build, including a wrong token and a request outside the list, and check that `list` stays plain text when piped. Chat tests drive raw terminal input against a fake app and inspect the rendered terminal grid: multiline paste, command choices, queue status, draft preservation, resize and leaving. They do not click **Add to PATH**, because that changes the user PATH of the machine running them.

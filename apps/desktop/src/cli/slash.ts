@@ -24,7 +24,7 @@ export const SLASH_HELP: readonly [string, string][] = [
 ];
 
 export function isSlashCommand(line: string): boolean {
-  return line.trimStart().startsWith('/');
+  return !/[\r\n]/.test(line) && line.trimStart().startsWith('/');
 }
 
 /** Reads one typed line that starts with a slash. Command names ignore case; `/quit` is `/exit`. */
