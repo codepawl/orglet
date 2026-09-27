@@ -334,6 +334,16 @@ Measured 2026-09-27 on the Windows 11 development machine (Ryzen 5 5600X, 6 core
 - Hugging Face: after the upload (commit `bfa4f5df`), the new transport downloaded the tokenizer and the model from the pinned addresses through the CDN redirect; a download stopped at 60 MB resumed with a range request and matched the pinned hash.
 - Not tried: macOS and Linux builds, an ARM64 Windows build, a machine without AVX2.
 
+## Tacet: permission hints and group-chat routing (COD-305)
+
+Measured 2026-09-27 on the same machine with the shipped model file, while other work held the CPU at 100 %, so every latency here is on a loaded machine. How it works: [decisions.md](decisions.md#permission-hints-before-sending).
+
+- Wording search on the 48 labelled messages (`tests/fixtures/tacet/permission-needs.json`), before the thresholds: a six-way choice of needs got 18 of 48 and 20 of 48 right as an argmax; one yes/no per permission 26 of 48; per-permission ranking (AUC) for the four-way tool choice was web 0.85, folder 0.97, browser 0.96, against 0.60 to 0.92 for the yes/no and score forms. Asking the tool choice together with other questions changed its answers (browser AUC 0.96 alone, 0.83 beside a second choice), so the shipped check is two passes.
+- Shipped check (`scripts/tacet/eval-hints-routing.ts`, through the worker thread): no hint on any of the 8 messages that needed nothing; the right control offered for 19 of 25 tuning and 10 of 15 held-out messages that needed one; one wrong control (a CSS edit read as the browser); 10 silent. Core-side latency of a whole check p50 251 ms, p95 1.37 s over 47 warm checks.
+- Routing (`tests/fixtures/tacet/group-routing.json`): 7 of 14 single-orglet messages routed, all to the right orglet; all 7 whole-group messages kept everyone; p50 168 ms, p95 304 ms.
+- Packaged Windows build (onnxruntime added back into the junctioned package's asar), fresh data folder, Tacet downloaded from a loopback copy of the pinned files: the renderer's `suggestPermissions` round trip over the 48 labelled messages p50 170 ms, p95 287 ms, max 340 ms; the web hint on screen 866 ms after typing (450 ms of it the pause); **Turn on web** put `network.web` on the empty chat; the folder hint's ✕ hid folder hints in that chat; **Choose browser access** opened Details with the browser control focused. A group chat of Lan (accounting), Minh (marketing) and Hà (HR) on Codex, asked in Vietnamese about VAT with no tag: Tacet picked Lan at 0.80, only Lan answered (one live Codex run), and the message showed "Tacet picked Lan to answer".
+- `tests/integration/tacet-real-model.test.ts` holds these bars when `ORGLET_TACET_DIR` points at the downloaded files, and skips otherwise.
+
 ## COD-98 tools and team coordination: implementation under verification
 
 The worktree now contains a shared tool catalog and permission checks, workspace grants, isolated Windows execution, private copies and Git worktrees, guarded file integration, durable tool/process journals, assignment ownership and dependencies, a bounded mailbox, and lead-controlled reassignment. These extend the existing orchestrator and checkpoints.

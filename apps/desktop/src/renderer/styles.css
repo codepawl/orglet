@@ -502,6 +502,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @keyframes reaction-row-in-end { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
 .message-reply-context { display:flex; align-items:center; gap:6px; max-width:100%; padding:0; border:0; background:none; color:var(--muted); font:inherit; font-size:12px; text-align:start; overflow-wrap:anywhere; cursor:pointer; }
 .message-reply-context:hover { color:var(--text); }
+/* Who Tacet picked to answer (RoutedLine, COD-305): the same quiet line, but a statement, not a link. */
+.message-routed { margin:0; cursor:default; }
+.message-routed:hover { color:var(--muted); }
 /* The quoted message under a reaction is one clamped line (COD-221), never the whole message. */
 .details-reaction-source { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:1; overflow:hidden; }
 .details-team-message { padding:8px 0; overflow-wrap:anywhere; }
@@ -569,6 +572,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .demo-note { margin:10px 0 0; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 10px; color:var(--muted); font-size:12px; }
 .demo-note p { margin:0; text-align:center; }
 .demo-note .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
+/* The permission a message seems to need (PermissionHint, COD-305): the control's own icon, the sentence, a link that
+   takes the step, and a small ✕, centred on one line and wrapping only when the column is too narrow. */
+.composer-note.permission-hint { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px 6px; }
+.permission-hint > svg { flex:none; }
+.permission-hint .text-link { margin:0; font-size:12px; white-space:nowrap; }
+.permission-hint .text-link:disabled { color:var(--muted); cursor:default; }
+.permission-hint .permission-hint-dismiss { display:inline-grid; place-items:center; width:20px; height:20px; margin:0; padding:0; border:0; border-radius:6px; background:transparent; color:var(--muted); cursor:pointer; }
+.permission-hint .permission-hint-dismiss:hover { color:var(--text); }
 /* Attachment (Attachment.tsx): a card for one attached file — the kind's icon, the name, a line with the kind and
    size, and a remove button that keeps its place and only shows on hover or a visible focus, so nothing shifts when
    the pointer arrives. Same width for every card, so a strip of them reads as a row and not as a ragged line of tags. */

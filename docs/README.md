@@ -47,7 +47,7 @@ What the app does today. Use the words on screen.
 | [memory.md](memory.md) | A worker remembers its chats: how it writes memory, what reaches a run, where you correct it |
 | [self-improvement.md](self-improvement.md) | A worker proposes one sentence for its own instructions after repeated feedback; the card, the click, Undo |
 | [routines.md](routines.md) | Schedules, missed runs, and catch-up (one pending, not a backlog) |
-| [decisions.md](decisions.md) | Tacet on this computer: the one-time download, how it runs, and how it decides which quiet schedule runs to announce |
+| [decisions.md](decisions.md) | Tacet on this computer: the one-time download, how it runs, which quiet schedule runs it announces, the permission hints under the message box, and who answers in a group chat |
 | [recovery.md](recovery.md) | Where the database lives, upgrades, and rollback |
 | [technical-guide.md](technical-guide.md) | Run the app, connect providers and harnesses, limits, checks |
 
