@@ -3,6 +3,7 @@ import type { Bridge, Reply } from '../shared/contracts';
 import type { RunProgressUpdate } from '../shared/progress';
 import type { UpdateState } from '../shared/updates';
 import type { OpenChatTarget } from '../shared/cli';
+import type { DecisionModelState } from '../shared/decisions';
 
 async function invoke<T>(channel: string, args?: unknown): Promise<T> {
   const reply: Reply<T> = await ipcRenderer.invoke(channel, args);
@@ -49,6 +50,11 @@ const bridge: Bridge = {
     const listener = (_event: Electron.IpcRendererEvent, update: RunProgressUpdate) => callback(update);
     ipcRenderer.on('orglet:progress', listener);
     return () => ipcRenderer.removeListener('orglet:progress', listener);
+  },
+  onDecisionModel: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, state: DecisionModelState) => callback(state);
+    ipcRenderer.on('orglet:decision-model', listener);
+    return () => ipcRenderer.removeListener('orglet:decision-model', listener);
   },
   onNavigate: callback => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward') => callback(direction);

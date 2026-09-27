@@ -1,3 +1,4 @@
+import { dirname, resolve } from 'node:path';
 import { WorkspaceRecovery, restoredChangesKey } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { removalStopsWork, snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
@@ -73,6 +74,9 @@ import type { DesktopHost } from '../shared/desktop-host';
 import { neverDesktopProgram } from '../shared/desktop';
 import type { BrowserHost } from '../shared/browser-host';
 import { runBy } from '../shared/schedule-runs';
+import { Decisions } from './decisions/service';
+import { decisionsDirectory } from './decisions/manifest';
+import { QuietRunReview } from './orchestration/quiet-runs';
 
 /**
  * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
@@ -137,6 +141,13 @@ export class CoreService {
   readonly browser: BrowserTools;
   /** The core side of desktop apps: granted programs, the journal and window pictures (COD-261, phase 2a). */
   readonly desktop: DesktopTools;
+  /**
+   * Tacet on this computer (COD-303). The core builds one that can only report and delete what is on disk; the
+   * process entry swaps in one that can download and run the model in its worker thread.
+   */
+  decisions: Decisions;
+  /** Asks Tacet whether a quiet schedule run's answer is news worth announcing (COD-303). */
+  readonly quietRuns: QuietRunReview;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
   /** Set while a read started by a Claude Code run is on, so a run of many steps starts one read, not one per step. */
@@ -170,6 +181,9 @@ export class CoreService {
     this.routineFolders = new RoutineFolders(store);
     this.routines = new Routines(store, this.sources, this.notify, (input, next, folder) => this.createTask(input, next, folder && { pending: { ...folder.resolved, permissions: folder.permissions }, resolved: folder.resolved }), clock, this.routineFolders);
     this.folderTriggers = new FolderTriggers(store, this.routineFolders, this.routines, this.sources, clock);
+    const dataDirectory = store.databasePath && store.databasePath !== ':memory:' ? dirname(resolve(store.databasePath)) : undefined;
+    this.decisions = new Decisions({ directory: dataDirectory && decisionsDirectory(dataDirectory) });
+    this.quietRuns = new QuietRunReview(store, () => this.decisions, this.notify, clock);
     this.policy.captureHandoffs();
   }
   /**
@@ -500,6 +514,10 @@ export class CoreService {
       case 'catchUpRoutine': return this.routines.catchUp((args as { id: string }).id);
       case 'runRoutineNow': return this.routines.runCalled((args as { id: string }).id, []);
       case 'deleteRoutine': return this.deleteRoutine(commands.deleteRoutine.parse(args).id);
+      case 'decisionModel': return this.decisions.state();
+      case 'installDecisionModel': return this.decisions.install();
+      case 'cancelDecisionModel': return this.decisions.cancel();
+      case 'removeDecisionModel': return this.decisions.remove();
       case 'cancel': {
         const taskId = (args as { id: string }).id;
         this.teams.cancel(taskId); this.runner.cancel(taskId);
@@ -757,7 +775,7 @@ export class CoreService {
       }
       case 'eraseData': {
         const input = commands.eraseData.parse(args);
-        return this.eraseData(input.scope, input.confirm);
+        return await this.eraseData(input.scope, input.confirm);
       }
       case 'modelList': return this.modelList(commands.modelList.parse(args));
       case 'saveCustomConnection': {
@@ -994,7 +1012,7 @@ export class CoreService {
    * still leaves its cost row behind and knowledge it taught keeps the artifact it cites. API keys live outside the
    * database, in the credential store, and no scope here touches them.
    */
-  eraseData(scope: EraseScope, confirm?: string): EraseSummary {
+  async eraseData(scope: EraseScope, confirm?: string): Promise<EraseSummary> {
     if (this.isBusy()) throw new Error('Chờ hoặc hủy các task/checker đang chạy trước khi xóa.');
     if (scope === 'everything' && confirm !== ERASE_CONFIRMATION) throw new Error(`Gõ ${ERASE_CONFIRMATION} để xác nhận xóa toàn bộ.`);
     const summary: EraseSummary = { scope, chats: 0, knowledge: 0, memory: 0, sources: 0, sourcesForgotten: 0, entities: 0 };
@@ -1017,6 +1035,8 @@ export class CoreService {
       // Settings went with the tables, so the model lists cached in memory no longer have a row behind them.
       this.modelListMemory = emptyModelListCache();
       this.modelListLoaded = false;
+      // Tacet's files are Orglet's own download, so a full erase deletes them too (COD-303).
+      await this.decisions.remove();
     }
     this.notify();
     return summary;
@@ -1744,6 +1764,7 @@ export class CoreService {
     if (currency.code !== 'USD' && !this.currencyRefresh && Date.now() - this.currencyAttemptAt > 600_000 && (!currency.updatedAt || this.clock().getTime() - new Date(currency.updatedAt).getTime() > RATE_MAX_AGE_MS)) { this.currencyAttemptAt = Date.now(); void this.updateCurrency(currency.code, false); }
     await this.routines.tick();
     await this.folderTriggers.poll();
+    await this.quietRuns.review();
   }
   private start(task: Task, startChecked = false) {
     if (!startChecked) this.policy.assertStart(task.teamId, task.id);

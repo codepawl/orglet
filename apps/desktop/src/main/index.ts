@@ -397,6 +397,10 @@ async function start() {
         if (window && !window.isDestroyed()) window.webContents.send('orglet:progress', message.update);
         return;
       }
+      if (message.type === 'decisionModel') {
+        if (window && !window.isDestroyed()) window.webContents.send('orglet:decision-model', message.state);
+        return;
+      }
       if (message.type === 'key') {
         const provider = CredentialProvider.safeParse(message.provider);
         core.postMessage({ id: message.id, command: 'keyReply', args: provider.success ? await credentials.read(provider.data) : null }); return;

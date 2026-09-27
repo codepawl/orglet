@@ -20,6 +20,9 @@ import { pdfTextInWorker } from './tools/pdf-text';
 import type { WebSearchKeyProvider } from '../shared/web-tools';
 import type { BrowserHost } from '../shared/browser-host';
 import { DesktopHelperProcess } from './tools/desktop-helper';
+import { Decisions } from './decisions/service';
+import { decisionsDirectory, filesFrom } from './decisions/manifest';
+import { workerRuntime } from './decisions/worker-runtime';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
@@ -131,9 +134,17 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   // Each PDF is read in a worker thread built next to this file, so one slow or hostile file cannot stall the core.
 }, pdfTextInWorker(join(__dirname, 'pdf-text.js')), { readKey: requestSearchKey }, browserHost, desktopHelper, [basename(process.execPath).toLowerCase()]);
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
-/** What quitting stops besides this process: the MCP servers and the desktop helper. */
+// Tacet (COD-303): downloaded only when the person asks, and run in its own worker thread built next to this file.
+core.decisions = new Decisions({
+  directory: decisionsDirectory(process.argv[2]),
+  files: filesFrom(process.env.ORGLET_TACET_SOURCE),
+  runtime: workerRuntime(join(__dirname, 'decisions.js')),
+});
+core.decisions.onState = state => port.postMessage({ type: 'decisionModel', state });
+/** What quitting stops besides this process: the MCP servers, the desktop helper and Tacet's worker. */
 async function shutdownHelpers() {
   desktopHelper?.stop();
+  await core.decisions.shutdown();
   await core.mcp.shutdown();
 }
 port.on('message', async ({ data }) => {

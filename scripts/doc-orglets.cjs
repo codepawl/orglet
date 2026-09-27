@@ -58,6 +58,8 @@ const pageOrglets = [
   { name: 'desktop', accessory: 'visor', colour: '#3f9a68', face: 'happy', yaw: -0.3, pitch: 0.08 },
   // Editing files and marking them up, so the page holds the pencil in a colour the writing page lacks.
   { name: 'viewing-and-editing-files', accessory: 'pencil', colour: '#d65c73', face: 'happy', yaw: 0.32, pitch: 0.08 },
+  // Tacet thinks on this computer, so the page wears the thinking-cap propeller in a colour the preflight page lacks.
+  { name: 'decisions', accessory: 'propeller', colour: '#a764c9', face: 'curious', yaw: -0.32, pitch: 0.08 },
 ];
 
 // The README crew: five orglets side by side, the outer ones turned towards the middle.
