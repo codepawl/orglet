@@ -58,7 +58,7 @@ A worker's **Permissions** tab and the chat Details show its abilities as contro
 ## Release
 
 - **Open source under AGPL-3.0, with a CLA.** The repository is public. Contributors sign the CLA so the project can also sell commercial licenses or be acquired later. Parts meant for reuse, such as the UI components, can be released under a more permissive license later.
-- **Every device.** Orglet is for Windows, macOS and Linux, and later iOS and Android. Windows is built and tested first (**0.2.0** ships Windows-only connections for Claude Code, Codex, Cursor Agent, OpenAI, Anthropic and Grok/xAI). macOS has ZIP packaging and a `macos-latest` typecheck/test/make job that Developer ID signs when secrets exist (notarization still needs Apple ID or an App Store Connect API key); that job is not the required merge check. Linux packaging is still later. Public Windows 0.2.x installers stay unsigned; see [windows-release-gates.md](windows-release-gates.md) and [macos-packaging.md](macos-packaging.md).
+- **Every device.** Orglet is for Windows, macOS and Linux, and later iOS and Android. Windows is the public release target, with Certum-signed installers. macOS has ZIP packaging and a `macos-latest` typecheck/test/make job that Developer ID signs when secrets exist (notarization still needs Apple ID or an App Store Connect API key); that job is not the required merge check. Linux CI builds a ZIP and starts it headlessly, but use on a real Linux desktop remains unverified. See [windows-release-gates.md](windows-release-gates.md), [macos-packaging.md](macos-packaging.md) and [linux-packaging.md](linux-packaging.md).
 
 ## Not now
 
