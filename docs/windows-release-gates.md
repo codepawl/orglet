@@ -47,7 +47,18 @@ What the updater does on the person's machine is described in [technical-guide.m
 - Only a Squirrel install (Setup.exe) updates itself. The ZIP has no `Update.exe`, so the app tells the person it cannot update and links the Release page. A dev run, Linux and an unsigned macOS build say the same.
 - The nupkg is not signed (it is a ZIP); Setup and the files inside it are. The signature check in CI covers what Windows checks.
 
-A real update cannot be proven until a Release carries `RELEASES` and the `.nupkg`: the unit tests cover the state machine and the feed URL, the desktop smoke checks the About tab against `package.json`, and nothing in CI runs Squirrel. Record the first successful in-app update (from which version, to which, on what machine) in [implementation_status.md](implementation_status.md).
+The unit tests cover the state machine, the feed URL and the log; the desktop smoke checks the About tab against `package.json`; nothing in CI runs Squirrel. Record each real in-app update (from which version, to which, on what machine) in [implementation_status.md](implementation_status.md).
+
+### Proving an update on your own machine
+
+An **update test build** (COD-304) runs the whole loop, Setup, check, download, the restart button and Squirrel's restart into the new version, without GitHub and without touching an installed Orglet. Make it with `ORGLET_UPDATE_TEST_BUILD=1` set for `pnpm make` (or `electron-forge make --targets squirrel`). Such a build:
+
+- installs as its own Squirrel app, `orgletupdtest`, in `%LOCALAPPDATA%\orgletupdtest`;
+- keeps its data in `%APPDATA%\Orglet Update Test`;
+- makes no Start menu shortcut and never touches the `orglet` command, Send to or `orglet://` links;
+- reads its feed from `ORGLET_UPDATE_FEED_URL` (any folder served over HTTP that holds `RELEASES` and the `.nupkg`). A normal build compiles this out and never reads the variable.
+
+Make two versions (change `version` in `package.json` for each make and put it back after), serve the newer one's `RELEASES` and `orgletupdtest-<version>-full.nupkg`, and run the older Setup with `ORGLET_UPDATE_FEED_URL` pointing at the server. The variable reaches the app through Setup and through Squirrel's restart. Check that `RELEASES` names `orgletupdtest-…` before running any Setup: `--targets @electron-forge/maker-squirrel` makes Forge build a fresh maker without this config, whose package is `orglet` and would install over the real app; `--targets squirrel` keeps it. Remove the test install afterwards with `%LOCALAPPDATA%\orgletupdtest\Update.exe --uninstall`, then delete that folder and `%APPDATA%\Orglet Update Test`.
 
 ## Signing
 

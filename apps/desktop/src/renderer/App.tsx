@@ -83,8 +83,11 @@ import { groupChatFromRecipient, groupChatFromSelection, groupChatKey, groupChat
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
 import { proposedMascot, type ProposalActions } from './components/AppProposals';
 import { EditableText, Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
-import { dwellAbout, dwellChat, dwellModels, followWorkspace, taskDetails } from './caches';
-import { dwellHandlers } from './prefetch';
+import { APP_KEY, dwellAbout, dwellChat, dwellModels, followWorkspace, taskDetails, updateStates } from './caches';
+import { dwellHandlers, useCached } from './prefetch';
+import { becameReady, updateIndicator } from '../shared/updates';
+import { readyUpdateLabel, UpdateButton } from './components/UpdateButton';
+import { restartIntoUpdate } from './updateRestart';
 import { chatClosure, closedChatDestination, openChatRefresh, type ChatDestination, type OpenChatReads } from './openChat';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
@@ -271,6 +274,14 @@ export function App() {
   // person (COD-287), which a paused crew used to hide behind a button with no count.
   const runningNow = runningCount(workspace?.running ?? []);
   const waitingForYou = waitingForPersonCount(workspace?.running ?? []);
+  // Read when a restart is asked for, which can be from a toast raised long before (COD-304).
+  const runningNowRef = useRef(runningNow);
+  runningNowRef.current = runningNow;
+  const restartToUpdate = () => {
+    void restartIntoUpdate(runningNowRef.current).catch(failure => toast((failure as Error).message, 'error', t('Cập nhật')));
+  };
+  const update = useCached(updateStates, window.orglet ? APP_KEY : undefined);
+  const updateMark = updateIndicator(update);
   const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   // Dragging tracks the pointer; a width is the distance from the window edge minus the gap the panel sits in.
   const sidebarPane = usePaneWidth({ storageKey: 'orglet.sidebar-width', bounds: SIDEBAR_WIDTH, widthFromPointer: clientX => clientX - shellGap(), widerKey: 'ArrowRight' });
@@ -393,15 +404,16 @@ export function App() {
     if (!window.orglet) return;
     return watchRunProgress();
   }, []);
-  // A downloaded update asks once, quietly: a notice that stays in the centre, and the restart button in
-  // Settings → Giới thiệu. Nothing interrupts the chat, and Squirrel uses the new build on the next launch anyway (COD-176).
+  // The updater's state is kept in one place for the sidebar and the About tab. A downloaded update is announced once,
+  // quietly: a toast with a restart, kept in Notifications, and the button beside Settings until the restart. Nothing
+  // interrupts the chat, and Squirrel uses the new build on the next launch anyway (COD-176, COD-304).
   useEffect(() => {
     if (!window.orglet) return;
     return orglet.onUpdate(state => {
-      if (state.status !== 'ready') return;
-      toast(state.version
-        ? t('Orglet {0} đã tải xong. Khởi động lại từ Cài đặt → Giới thiệu.', [state.version])
-        : t('Bản Orglet mới đã tải xong. Khởi động lại từ Cài đặt → Giới thiệu.'), 'success', t('Cập nhật'), { unread: true });
+      const previous = updateStates.get(APP_KEY);
+      updateStates.set(APP_KEY, state);
+      if (!becameReady(previous, state) || state.status !== 'ready') return;
+      toast(readyUpdateLabel(state.version), 'success', t('Cập nhật'), { unread: true, update: true, action: { label: t('Khởi động lại'), onSelect: restartToUpdate } });
     });
   }, []);
   useEffect(() => { if (window.orglet) void refresh(); }, [refresh, selected]);
@@ -1523,7 +1535,7 @@ export function App() {
       </SidebarSection>}
       </div>
       {selectionBar}
-      <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => setRunningOpen(true)} aria-label={runningButtonLabel(runningNow, waitingForYou)}><Activity size={18} />{t('Đang chạy')}<RunningCounts running={runningNow} waiting={waitingForYou} /></Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><Button onClick={() => openSettings()} {...dwellHandlers(dwellAbout)}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${hasConnection(connections, workspace.customConnections) ? 'connected' : ''}`} /></Button></div>
+      <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => setRunningOpen(true)} aria-label={runningButtonLabel(runningNow, waitingForYou)}><Activity size={18} />{t('Đang chạy')}<RunningCounts running={runningNow} waiting={waitingForYou} /></Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><div className="sidebar-settings"><Button onClick={() => openSettings()} {...dwellHandlers(dwellAbout)}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${hasConnection(connections, workspace.customConnections) ? 'connected' : ''}`} /></Button>{updateMark && <UpdateButton indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} />}</div></div>
     </aside>
     {/* Collapsed sidebar keeps its two most used actions in a narrow rail, stacked like ChatGPT. */}
 
@@ -1533,6 +1545,8 @@ export function App() {
         {!sidebar && <div className="topbar-rail">
           <Button size="icon" aria-label={t('Mở sidebar')} title={t('Mở sidebar')} onClick={() => setSidebar(true)}><PanelLeft size={18} /></Button>
           <Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-keyshortcuts="Control+K" aria-haspopup="dialog" title={t('Tìm cuộc trò chuyện (Ctrl K)')} onClick={() => setSearchOpen(true)}><Search size={18} /></Button>
+          {/* The sidebar's update button is hidden with it, so a ready update also waits here (COD-304). */}
+          {updateMark?.kind === 'ready' && <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} />}
         </div>}
         <div>
           {/* An empty group chat shows who is in it, the way a crew's row does; a count alone names nobody. */}
@@ -1649,7 +1663,7 @@ export function App() {
     <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}`} open={panel === 'worker'} worker={editingWorker} workspace={workspace} connections={connections} harnesses={harnesses ?? []} initialTab={workerDialogTab} initialField={workerDialogField} connectModel={workerDialogConnect} onClose={close} onOpenChat={taskId => { close(); openTask(taskId); }} onCreated={id => setJustCreated({ kind: 'worker', id })} />
     <TeamDialog key={`team:${panel === 'team'}:${editingTeam?.id ?? 'new'}`} open={panel === 'team'} team={editingTeam} workspace={workspace} onClose={close} onCreated={id => setJustCreated({ kind: 'team', id })} />
     <TaskDialog key={`task:${panel === 'task'}:${editingTask ?? ''}`} open={panel === 'task'} task={workspace.tasks.find(item => item.id === editingTask)} workspace={workspace} usedMicros={editingTask && detail?.task.id === editingTask ? detail.usage.chargedMicros + detail.usage.reservedMicros : 0} onClose={close} />
-    <NoticeCentre open={noticesOpen} onClose={() => setNoticesOpen(false)} onOpenChat={taskId => { setNoticesOpen(false); setPanel(null); openTask(taskId); }} chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} />
+    <NoticeCentre open={noticesOpen} onClose={() => setNoticesOpen(false)} onOpenChat={taskId => { setNoticesOpen(false); setPanel(null); openTask(taskId); }} chatExists={taskId => workspace.tasks.some(task => task.id === taskId && !task.deletedAt)} updateReady={updateMark?.kind === 'ready'} onRestartUpdate={restartToUpdate} />
     <RunningCentre open={runningOpen} items={workspace.running ?? []} tasks={workspace.tasks} teams={workspace.teams} onClose={() => setRunningOpen(false)} onOpenChat={taskId => { setRunningOpen(false); openTask(taskId); }} />
     <Toaster />
     <Confirmer />

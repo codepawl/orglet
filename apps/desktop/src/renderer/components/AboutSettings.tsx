@@ -16,6 +16,8 @@ import { orglet } from '../api';
 import { CommandBlock, Skeleton, SkeletonText } from '@codepawl/orglet-ui';
 import { aboutInfo, APP_KEY, changelogs, updateStates } from '../caches';
 import { useCached } from '../prefetch';
+import { restartIntoUpdate } from '../updateRestart';
+import { runningCount } from '../../shared/running';
 
 /** How the build got here, in the words the details line and the copied text use. */
 function installLabel(kind: InstallKind): string {
@@ -203,12 +205,10 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
   act: (action: () => Promise<string | void>, about?: string) => Promise<void>;
 }) {
   // The build, the updater's state and the release list are kept for the session (COD-218): resting on the way
-  // here fetches them, and the tab draws what it has at once. The updater keeps pushing its state; the newest
-  // push wins over the kept copy.
+  // here fetches them, and the tab draws what it has at once. The app keeps the updater's pushes in the same cache
+  // (COD-304), so this row and the button beside Settings always say the same thing.
   const about = useCached(aboutInfo, APP_KEY);
-  const keptUpdate = useCached(updateStates, APP_KEY);
-  const [pushedUpdate, setPushedUpdate] = useState<UpdateState>();
-  const update = pushedUpdate ?? keptUpdate;
+  const update = useCached(updateStates, APP_KEY);
   const changelog = useCached(changelogs, APP_KEY);
   const [changelogBusy, setChangelogBusy] = useState(false);
   const [showOlder, setShowOlder] = useState(false);
@@ -220,13 +220,6 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
     catch (error) { changelogs.set(APP_KEY, { releases: [], fetchedAt: null, stale: true, error: (error as Error).message }); }
     finally { setChangelogBusy(false); }
   }, []);
-  const takeUpdate = (state: UpdateState) => { updateStates.set(APP_KEY, state); setPushedUpdate(state); };
-
-  useEffect(() => {
-    let live = true;
-    const stop = orglet.onUpdate(state => { if (live) takeUpdate(state); });
-    return () => { live = false; stop(); };
-  }, []);
 
   const unsupported = update?.status === 'unsupported';
   const openLink = (link: AboutLink) => void act(async () => { await orglet.openLink(link); }, section);
@@ -235,8 +228,8 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
     await orglet.copyText(aboutDetailsText(about, workspace.sqliteVersion, installLabel(about.install)));
     return t('Đã sao chép chi tiết bản cài');
   }, section);
-  const checkNow = () => void act(async () => { takeUpdate(await orglet.checkForUpdates()); }, section);
-  const restart = () => void act(async () => { await orglet.installUpdate(); }, section);
+  const checkNow = () => void act(async () => { updateStates.set(APP_KEY, await orglet.checkForUpdates()); }, section);
+  const restart = () => void act(async () => { await restartIntoUpdate(runningCount(workspace.running ?? [])); }, section);
 
   const detailsLine = about
     ? [`Electron ${about.electron}`, `Chromium ${about.chromium}`, `Node ${about.node}`, `SQLite ${workspace.sqliteVersion}`, `${osName(about.platform)} ${about.osRelease} ${about.arch}`, installLabel(about.install)].join(' · ')

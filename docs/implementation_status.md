@@ -334,6 +334,21 @@ Measured 2026-09-27 on the Windows 11 development machine (Ryzen 5 5600X, 6 core
 - Hugging Face: after the upload (commit `bfa4f5df`), the new transport downloaded the tokenizer and the model from the pinned addresses through the CDN redirect; a download stopped at 60 MB resumed with a range request and matched the pinned hash.
 - Not tried: macOS and Linux builds, an ARM64 Windows build, a machine without AVX2.
 
+## The updater end to end (COD-304)
+
+Measured 2026-09-27 on the Windows 11 development machine (Smart App Control on) with two unsigned update test builds, 0.6.1 and 0.6.2, made with `ORGLET_UPDATE_TEST_BUILD=1 electron-forge make --targets squirrel` ([windows-release-gates.md](windows-release-gates.md#proving-an-update-on-your-own-machine)) and a local feed serving `RELEASES` and the `.nupkg` over `http://127.0.0.1`, the package sent at about 12 MB/s so the download could be watched. Two full runs; the numbers are from the second, on the final code, with nothing else heavy running.
+
+- Setup 0.6.1 installed to `%LOCALAPPDATA%\orgletupdtest\app-0.6.1` in about 11 s and started the app with `--squirrel-firstrun`; `updater.log` said "no startup check on the first run after Setup".
+- Started again from `app-0.6.1`: About read "Installed with Setup (Squirrel)". **Check** against a feed answering 404 showed "Could not check: The remote server returned an error: (404) Not Found." (the first run showed the whole .NET stack trace here, fixed in this change); against a feed listing only 0.6.1 it showed "You are on the latest version".
+- With 0.6.2 on the feed, the startup check ran 30.0 s after the updater started, with no click (`check (startup)` in the log); the grey arrow appeared beside Settings 30.2 s after launch, and 31 s later (160 MB) the **Update** button, the toast with **Restart now**, and the Notifications row with its restart. Squirrel's own log: `--checkForUpdate`, then `--update` downloading `orgletupdtest-0.6.2-full.nupkg` and unpacking `app-0.6.2`.
+- One click on **Update**: `Update.exe --processStartAndWait Orglet.exe` waited for the old process (6 s this run, 19 s in the first run while the full test suite ran beside it; a plain quit of the same build took 1.3 to 3.9 s), then started `app-0.6.2\Orglet.exe`. The new process ran from `app-0.6.2`, and its own startup check reached the feed with `localVersion=0.6.2` and found itself up to date. The feed variable reached it through Squirrel's restart.
+- Squirrel's logs are `Squirrel-CheckForUpdate.log`, `Squirrel-Update.log` and `Squirrel-ProcessStart.log` in the install folder, one per kind of `Update.exe` call (not `SquirrelSetup.log`).
+- Smart App Control did not block the unsigned test builds here (inferred to be this machine's reputation state, not a guarantee for other machines).
+- Nothing outside the test folders changed: the owner's `%LOCALAPPDATA%\orglet` (still `app-0.5.0`), `%APPDATA%\Orglet` and both Start menu shortcuts had the same files and times before and after; the test install made no shortcut. `Update.exe --uninstall` removed its uninstall entry, and both test folders were deleted afterwards. The process paths reported the plain `%LOCALAPPDATA%\orgletupdtest`; no copy was found in the Claude package's `LocalCache` after the run (not checked during it).
+- The owner's own 0.5.0 install last checked on 2026-09-26 at 00:29:53, when 0.5.0 was the newest release, and has not run since, so it never saw 0.5.1 or 0.6.0; update.electronjs.org does offer 0.6.0 to 0.5.1.
+
+Not proven: an update from a real GitHub Release through update.electronjs.org to a Setup install (the feed was local; the next release is the first chance), a signed build, delta packages (none are made), and the restart question with runs in flight on screen (covered by `tests/integration/update-restart.test.ts`).
+
 ## COD-98 tools and team coordination: implementation under verification
 
 The worktree now contains a shared tool catalog and permission checks, workspace grants, isolated Windows execution, private copies and Git worktrees, guarded file integration, durable tool/process journals, assignment ownership and dependencies, a bounded mailbox, and lead-controlled reassignment. These extend the existing orchestrator and checkpoints.
