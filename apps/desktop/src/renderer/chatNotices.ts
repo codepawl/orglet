@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { Routine, Task, TaskStatus, Workspace } from '../shared/contracts';
 import { DAILY_CAP_REACHED, SKIPPED_WHILE_INACTIVE } from '../shared/schedule';
 import { triggerOf } from '../shared/routine-triggers';
+import { isQuietScheduleRun } from '../shared/quiet-runs';
 import { BACKGROUND_NOTICE_CHARS, type BackgroundNotice } from '../shared/background-notice';
 import { t, tMessage } from './i18n';
 import { chatHeadline } from '../shared/forward';
@@ -141,10 +142,36 @@ function heldForReview(task: Task, names: ChatNames): boolean {
  */
 export function quietRun(chat: FinishedChat, names: ChatNames): boolean {
   if (chat.outcome !== 'done' || !chat.task.routineId) return false;
-  if (heldForReview(chat.task, names)) return false;
   const routine = names.routines.find(item => item.id === chat.task.routineId);
   if (!routine?.schedule) return false;
-  return routine.schedule.frequency === 'hours' && triggerOf(routine).kind === 'schedule';
+  return isQuietScheduleRun(routine.schedule.frequency, triggerOf(routine).kind, heldForReview(chat.task, names));
+}
+
+/** The quiet runs Tacet has already looked at, to compare against on the next workspace (COD-303). */
+export function attendedRuns(tasks: readonly Task[]): Set<string> {
+  return new Set(tasks.filter(task => task.attention).map(task => task.id));
+}
+
+/**
+ * Quiet runs Tacet judged worth announcing since `previous` was taken (COD-303). Its verdict lands a few seconds after
+ * the run finished, so this is its own moment rather than part of `finishedChats`: the run was already quiet then. A
+ * verdict older than `lookedAt` came with a restored backup or an earlier session and is history.
+ */
+export function noteworthyRuns(previous: ReadonlySet<string>, tasks: readonly Task[], lookedAt?: string): Task[] {
+  return tasks.filter(task => {
+    if (task.deletedAt || !task.attention?.notified || previous.has(task.id)) return false;
+    return !lookedAt || task.attention.decidedAt >= lookedAt;
+  });
+}
+
+/** The toast for a quiet run Tacet flagged: the schedule found something, about its orglet or crew. */
+export function noteworthyNotice(task: Task, names: ChatNames): InAppNotice {
+  return { taskId: task.id, text: t('{0} có điều mới', [scheduleName(task, names)]), tone: 'success', about: ownerName(task, names) };
+}
+
+/** The system notification for it: the schedule's name, and that something is new; never the answer itself. */
+export function noteworthyBackgroundNotice(task: Task, names: ChatNames): BackgroundNotice {
+  return { taskId: task.id, title: clipped(scheduleName(task, names)), body: clipped(t('Có điều mới')) };
 }
 
 /**
@@ -229,7 +256,7 @@ export function blockedScheduleNotice(blocked: BlockedSchedule): { text: string;
  * notification, unless Settings turned that off; main shows it only while the window is in the background.
  */
 export function useChatNotices(workspace: Workspace | undefined, openChat: string | null, open: (taskId: string) => void, openSchedules: () => void) {
-  const previous = useRef<{ statuses: Map<string, TaskStatus>; routines: Routine[]; at: number }>(undefined);
+  const previous = useRef<{ statuses: Map<string, TaskStatus>; routines: Routine[]; attended: Set<string>; at: number }>(undefined);
   const openRef = useRef(open);
   openRef.current = open;
   const openSchedulesRef = useRef(openSchedules);
@@ -237,7 +264,7 @@ export function useChatNotices(workspace: Workspace | undefined, openChat: strin
   useEffect(() => {
     if (!workspace) return;
     const known = previous.current;
-    previous.current = { statuses: chatStatuses(workspace.tasks), routines: workspace.routines, at: Date.now() };
+    previous.current = { statuses: chatStatuses(workspace.tasks), routines: workspace.routines, attended: attendedRuns(workspace.tasks), at: Date.now() };
     if (!known) return;
     // A schedule that could not start is unattended work that did not happen, so it is a problem to look at (COD-294).
     for (const blocked of blockedSchedules(known.routines, workspace.routines)) {
@@ -246,9 +273,17 @@ export function useChatNotices(workspace: Workspace | undefined, openChat: strin
     }
     // A run started while the last workspace was on its way here is still news, hence the margin.
     const lookedAt = new Date(known.at - LOOK_MARGIN_MS).toISOString();
+    const openTask = openChat ? workspace.tasks.find(task => task.id === openChat) : undefined;
+    // A quiet run Tacet flagged says so now, the way a finished schedule run would have (COD-303).
+    for (const task of noteworthyRuns(known.attended, workspace.tasks, lookedAt)) {
+      if (task.id !== openTask?.id) {
+        const notice = noteworthyNotice(task, workspace);
+        toast(notice.text, notice.tone, notice.about, { action: { label: t('Mở'), onSelect: () => openRef.current(notice.taskId) }, unread: true, chat: notice.taskId });
+      }
+      if (workspace.backgroundNotifications) void window.orglet?.notifyInBackground?.(noteworthyBackgroundNotice(task, workspace)).catch(() => undefined);
+    }
     const finished = finishedChats(known.statuses, workspace.tasks, lookedAt);
     if (!finished.length) return;
-    const openTask = openChat ? workspace.tasks.find(task => task.id === openChat) : undefined;
     for (const chat of finished) {
       if (!announcedInWindow(chat, openTask)) continue;
       const notice = inAppNotice(chat, workspace, pendingGroupSize);

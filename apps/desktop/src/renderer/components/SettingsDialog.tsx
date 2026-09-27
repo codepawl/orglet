@@ -38,6 +38,7 @@ import { dwellAbout, modelLists } from '../caches';
 import { dwellHandlers } from '../prefetch';
 import { chatHeadline } from '../../shared/forward';
 import { forgetAllDrafts } from '../drafts';
+import { TacetSetup } from './TacetSetup';
 
 /** 1 to 8 requests in flight per provider (COD-242). */
 const concurrencyChoices = Array.from({ length: MAX_PROVIDER_CONCURRENCY }, (_, index) => index + 1);
@@ -551,6 +552,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row id="background-notifications-label" title={t('Báo khi cuộc trò chuyện xong')} description={t('Chỉ khi Orglet chạy nền; không kèm câu trả lời.')}>
                 <Switch checked={workspace.backgroundNotifications} disabled={busy} labelledBy="background-notifications-label" onChange={value => void save({ backgroundNotifications: value })} />
               </Row>
+              {/* What makes a quiet hourly run announce itself (COD-303), beside the other rule for notices. */}
+              <TacetSetup />
               <Row title={t('Định dạng khi sao chép')} description={t('Bấm là sao chép, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi sao chép')} className="setting-select" value={workspace.copyFormat} disabled={busy} onChange={value => void save({ copyFormat: value as Workspace['copyFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản thuần') }, { value: 'markdown', label: 'Markdown' }]} />
               </Row>

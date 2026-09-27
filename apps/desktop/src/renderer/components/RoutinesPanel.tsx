@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Routine, Task, TaskInput, Worker, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
-import { AppWindow, Briefcase, ShieldCheck, CalendarRange, Sun, Users, ArrowLeft, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Gauge, Globe, History, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, Timer, UserRound, Wallet, Zap } from 'lucide-react';
+import { AppWindow, BellRing, Briefcase, ShieldCheck, CalendarRange, Sun, Users, ArrowLeft, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Gauge, Globe, History, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, Timer, UserRound, Wallet, Zap } from 'lucide-react';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
 import { DAILY_CAP_REACHED, EVERY_HOURS_CHOICES, SKIPPED_WHILE_INACTIVE, TimeZone, nextOccurrence, runsPerDay, scheduleDay, type Schedule, type ScheduleFrequency } from '../../shared/schedule';
@@ -33,6 +33,12 @@ const INVALID_ZONE = () => t('Múi giờ không hợp lệ. Chọn một múi gi
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
 export const formatRoutineTime = (iso: string, timeZone: string) => keepTimeTogether(new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' }));
 export { formatClockTime };
+/** When Tacet flagged a run (COD-303): the time alone when that was today in the schedule's zone, so the card's line fits. */
+export function flaggedWhen(iso: string, timeZone: string, now = new Date()): string {
+  const at = new Date(iso);
+  if (scheduleDay(at, timeZone) !== scheduleDay(now, timeZone)) return formatRoutineTime(iso, timeZone);
+  return keepTimeTogether(at.toLocaleTimeString(currentLocale(), { timeZone, timeStyle: 'short' }));
+}
 /** The command that starts a routine from a terminal (COD-245); the name is quoted so spaces survive the shell. */
 export const runCommandOf = (name: string) => `orglet run "${name.replace(/"/g, '\\"')}"`;
 const TRIGGER_ICONS: Record<RoutineTriggerKind, typeof CalendarClock> = { schedule: CalendarClock, folder: FolderInput, called: SquareTerminal };
@@ -134,6 +140,15 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
     return workspace.routineToday?.[item.id]?.runs ?? 0;
   };
   const spentToday = (item: Routine) => workspace.routineToday?.[item.id]?.spentMicros ?? 0;
+  /** The newest quiet run Tacet announced (COD-303), so the card says why an hourly schedule spoke up. */
+  const lastAnnounced = (item: Routine) => {
+    let newest: Task | undefined;
+    for (const task of workspace.tasks) {
+      if (task.routineId !== item.id || !task.attention?.notified) continue;
+      if (!newest || task.attention.decidedAt > newest.attention!.decidedAt) newest = task;
+    }
+    return newest;
+  };
   const shownOnCard = workspace.routines.some(item => item.notice && tMessage(item.notice.reason) === error);
   const deleteSchedule = async (item: Routine) => {
     await orglet.call('deleteRoutine', { id: item.id });
@@ -146,6 +161,7 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
         const trigger = triggerOf(item);
         const TriggerIcon = TRIGGER_ICONS[trigger.kind];
         const summary = triggerSummary(item);
+        const announced = lastAnnounced(item)?.attention;
         return <section key={item.id} className="routine-card" aria-label={t('Lịch {0}', [item.name])}>
         <div className="routine-head">
           <span className="routine-icon" aria-hidden="true"><TriggerIcon size={18} /></span>
@@ -178,6 +194,8 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
           {/* The day so far (COD-288): an hourly schedule's quiet runs collect here instead of a toast each, and a
               cap shows what today's runs used of it. */}
           {runsToday(item) > 0 && <li><History size={14} aria-hidden="true" />{runsToday(item) === 1 ? t('1 lần chạy hôm nay') : t('{0} lần chạy hôm nay', [runsToday(item)])}</li>}
+          {/* Why an hourly schedule spoke up (COD-303): when Tacet flagged a run, and its rating behind the line. */}
+          {announced && <li title={t('Lịch hằng giờ thường im lặng khi xong. Tacet chấm câu trả lời này {0}% đáng chú ý nên đã báo bạn.', [Math.round(announced.score * 100)])}><BellRing size={14} aria-hidden="true" />{t('Tacet đã báo {0}', [flaggedWhen(announced.decidedAt, item.schedule.timeZone)])}</li>}
           {item.schedule.dailyCapMicros !== undefined && <li><Gauge size={14} aria-hidden="true" />{t('Hôm nay {0} / {1}', [formatMoney(spentToday(item)), formatMoney(item.schedule.dailyCapMicros)])}</li>}
           {/* A schedule with no sources says nothing about them, rather than "0 sources" (COD-258). */}
           {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{item.task.sourceIds.length === 1 ? t('1 nguồn') : t('{0} nguồn', [item.task.sourceIds.length])}</li>}

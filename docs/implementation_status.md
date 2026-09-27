@@ -315,6 +315,25 @@ Verified on Windows 11 Home 26200 with Smart App Control on (2026-09-26):
 
 Not verified: WPF, WinUI 3, Electron and Store apps through Orglet (the earlier spike measured Invoke and Value on WPF, WinForms, Win32 and WinUI 3 in the background, Electron partly, Flutter and canvas apps not at all); a real modal dialog's default button in a Windows Forms app, which draws its own buttons (`FlatStyle.Standard`) and so carries no default push-button style (dialog OK and Yes still ask by name); apps running as administrator (the integrity check is in the helper, not exercised with an elevated window); scaled displays other than 100 %; the Claude Code, Cursor Agent, Gemini CLI and API paths with a live model (fixture-level only).
 
+## Tacet on this computer (COD-303)
+
+Measured 2026-09-27 on the Windows 11 development machine (Ryzen 5 5600X, 6 cores, shared with other jobs, so p95 figures are noisy), onnxruntime-node 1.30.0, two intra-op threads, CPU provider. How it works: [decisions.md](decisions.md).
+
+| Variant | File | Worst probability difference vs Python (43 answers) | Answers changed | Load | +RSS | 56 tokens p50 | 512 tokens p50 | 1,536 tokens p50 |
+|---|---|---|---|---|---|---|---|---|
+| float32 | 580 MB | 0.0000 | 0 | 1.8 s | 613 MB | 46 ms | 561 ms | 3.0 s |
+| int8 embeddings, float32 elsewhere (shipped) | 285 MB | 0.0047 | 0 | 0.8 s | 296 MB | 44 ms | 609 ms | 3.6 s |
+| float16 weights (converter output repaired) | 292 MB | 0.0032 | 0 | 1.1 s | 400 MB | 48 ms | 571 ms | 4.9 s |
+| int8 embeddings, float16 elsewhere | 193 MB | 0.0050 | 0 | 1.7 s | 302 MB | 51 ms | 1,043 ms | 5.4 s |
+| int8 everywhere (MatMul and Gather; measured on the 15 fixture answers, four threads) | 147 MB | 0.6054 | 8 of 15 | 0.7 s | 164 MB | 26 ms | — | 3.0 s |
+
+- Parity: the TypeScript packing reproduces the Python package's token ids, segments and markers on all 12 fixture requests with the full tokenizer and with the cut one CI uses; decoding matches to 0.0001. tokenizers.js 0.2.0 ignores Metaspace `split: true` (runs of spaces came out as other tokens); the port rebuilds the split.
+- The quiet-run question on the shipped file, through the worker thread in Node: routine answers 0.119 to 0.414, noteworthy answers 0.496 to 0.777, so 14 of 14 announced and 0 of 14 false alarms at 0.45. First answer 2.3 s (hash checks and load), then p50 67 ms, p95 89 ms.
+- Packaged Windows build: Settings downloaded both files from a loopback server with progress and verified them; two hourly schedules ran on Codex with fixed answers. "The backup stopped … disk full" rated 0.564 and was announced; "the site answered in 210 ms, same as usual" rated 0.182 and stayed quiet. The core process had `onnxruntime_binding.node` and `onnxruntime.dll` loaded from `resources\app.asar.unpacked`, with Smart App Control on. Both files carry Microsoft's signature, so the signing step leaves them alone.
+- macOS CI lost the bytes of a cut download (the resume test kept 0 of 100,000). Cause: the first version read the body through `fetch` and waited on the disk before each read, and undici throws away whatever it holds when the connection errors. On Windows a consumer slowed by 5 ms per chunk lost 34,591 of 100,000 bytes the same way; macOS lost all of them because the data and the cut arrive together while the file is still being opened. The download now uses `node:http`/`node:https` with `data` events, writes into a file stream without waiting on the disk (8 MiB of backlog before reading pauses), and closes the file before measuring or resuming. Tests add a cut that arrives with the data, a resume through a redirect, and a range answered from the wrong offset.
+- Hugging Face: after the upload (commit `bfa4f5df`), the new transport downloaded the tokenizer and the model from the pinned addresses through the CDN redirect; a download stopped at 60 MB resumed with a range request and matched the pinned hash.
+- Not tried: macOS and Linux builds, an ARM64 Windows build, a machine without AVX2.
+
 ## COD-98 tools and team coordination: implementation under verification
 
 The worktree now contains a shared tool catalog and permission checks, workspace grants, isolated Windows execution, private copies and Git worktrees, guarded file integration, durable tool/process journals, assignment ownership and dependencies, a bounded mailbox, and lead-controlled reassignment. These extend the existing orchestrator and checkpoints.
