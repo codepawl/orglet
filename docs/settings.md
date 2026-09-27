@@ -11,7 +11,7 @@ Language (English (US), English (UK), Tiếng Việt), **Appearance** (light or 
 ## Chat
 
 - **Name chats automatically**: a title from the first message.
-- **Tacet on this computer**: a small model that reads your hourly schedules' answers and tells you when one has something new, instead of every run finishing quietly. It is not installed with Orglet. **Download** fetches about 305 MB once, with a bar and **Cancel**; if the connection drops, **Retry** picks up where it stopped. It runs on this computer and sends nothing out. **Remove** deletes it, and so does **Erase everything**. How it decides: [decisions.md](decisions.md).
+- **Tacet on this computer**: a small model that tells you when an hourly schedule's answer has something new instead of every run finishing quietly, offers a permission a message seems to need under the message box, and picks who answers a group-chat message that tags nobody. It is not installed with Orglet. **Download** fetches about 305 MB once, with a bar and **Cancel**; if the connection drops, **Retry** picks up where it stopped. It runs on this computer and sends nothing out. **Remove** deletes it, and so does **Erase everything**. How it decides: [decisions.md](decisions.md).
 - **Copy format** and **Download format**: plain text or Markdown for answers and reports.
 - **Ask before opening a task**.
 - **Delete archived items**: archived chats, orglets and crews can clear themselves after a while.

@@ -76,7 +76,8 @@ import { orglet } from './api';
 import { useAppChangeNotices } from './appChangeNotices';
 import type { NewChatTarget, WorkspaceGrantView } from '../shared/workspace-access';
 import { snapshotCapabilities, withCapability, type ToolCapability } from '../shared/tool-policy';
-import { permissionsForLevel, type WorkspaceLevel } from '../shared/capability-status';
+import { permissionsForLevel, permissionState, type WorkspaceLevel } from '../shared/capability-status';
+import { ComposerPermissionHint, type PermissionHintControls } from './permissionHints';
 import { appView, createHistory, recordView, replaceView, stepHistory, useNavigationInput, viewKey, type AppView, type NavigationDirection, type NavigationHistory } from './navigation';
 import { noSelection, pruneSelection, selectRange, toggleSelection, type SelectionPickMode, type SidebarSelection, type SidebarSelectionSection } from './sidebarSelection';
 import { groupChatFromRecipient, groupChatFromSelection, groupChatKey, groupChatNames, groupChatRecipient, groupChatTaskInput, isGroupChat, isGroupChatTask, openGroupChats, pruneGroupChat, type PendingGroupChat } from './groupChat';
@@ -1493,11 +1494,55 @@ export function App() {
     <Button size="icon" className="row-action" aria-label={t('Bỏ chọn')} title={t('Bỏ chọn')} onClick={clearSelection}><SidebarX size={16} /></Button>
   </div>;
   const emptyChatDemoWorker = demoWorkerToConnect(executionWorkers, team);
+  /**
+   * The browser's level is the person's call (reading pages, or acting on them too), so its hint opens that control
+   * in Details rather than choosing a level for them (COD-305).
+   */
+  const openBrowserControl = () => {
+    setPanel('activity');
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const control = document.querySelector<HTMLElement>(`.task-tools [aria-label="${t('Trình duyệt')}"]`);
+      control?.scrollIntoView({ block: 'center' });
+      control?.focus();
+    }));
+  };
+  /** The permission hint under the empty chat's bar (COD-305): what its link does is what Details would do. */
+  const emptyChatPermissions = permissionState({ provider: executionWorkers[0]?.provider ?? 'demo', capabilities: newChatCapabilities, grant: null, pending: newChatWorkspace });
+  const emptyChatHint: PermissionHintControls | undefined = newChatTarget ? {
+    chatKey: newChatKey(newChatTarget),
+    permissions: emptyChatPermissions,
+    enabled: !isDemo && missingConnections.length === 0 && !emptyChatDemoWorker,
+    busy: toolPolicyBusy,
+    onApply: need => {
+      if (need === 'browser') openBrowserControl();
+      else if (need === 'web') changeNewChatCapability('network.web', true);
+      else changeNewChatWorkspace(need, emptyChatPermissions.folder ? 'keep' : 'pick');
+    },
+  } : undefined;
+  /** The same hint under an open chat's bar. A side thread takes its permissions from its main chat, so it has none. */
+  const chatHint = (taskDetail: TaskDetail): PermissionHintControls => {
+    const grant = workspaceAccess?.taskId === taskDetail.task.id ? workspaceAccess.grant : undefined;
+    const permissions = permissionState({ provider: taskWorkers(taskDetail.task, workspace!)[0]?.provider ?? 'demo', capabilities: taskDetail.task.toolCapabilities, grant, taskId: taskDetail.task.id });
+    return {
+      chatKey: taskDetail.task.id,
+      permissions,
+      enabled: grant !== undefined && !taskDetail.task.sideOf && !readOnlyChat,
+      busy: toolPolicyBusy,
+      onApply: need => {
+        if (need === 'browser') openBrowserControl();
+        else if (need === 'web') changeTaskCapability(taskDetail, 'network.web', true);
+        else toolAction(async () => {
+          if (permissions.workspace === 'none') await orglet.pickWorkspace(taskDetail.task.id, permissionsForLevel(need));
+          else await orglet.call('setWorkspaceLevel', { taskId: taskDetail.task.id, permissions: permissionsForLevel(need) });
+        });
+      },
+    };
+  };
   const composerHint = missingConnections.length > 0
     ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p>
     : emptyChatDemoWorker
       ? <DemoNote someOnDemo={isDemo ? undefined : emptyChatDemoWorker.name} preflight={isDemo && Boolean(team?.preflight)} onConnect={() => connectModel(emptyChatDemoWorker)} />
-      : null;
+      : emptyChatHint ? <ComposerPermissionHint text={brief} controls={emptyChatHint} /> : null;
   return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsPane.width}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
@@ -1578,7 +1623,7 @@ export function App() {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
-      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} onConnectModel={connectModel} /></> : <ThreadSkeleton />}</> : (team || group || worker) ? <div className="team-chat team-chat-fresh">
+      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} onConnectModel={connectModel} permissionHint={chatHint(detail)} /></> : <ThreadSkeleton />}</> : (team || group || worker) ? <div className="team-chat team-chat-fresh">
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">

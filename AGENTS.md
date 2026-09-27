@@ -56,7 +56,7 @@ Renderer talks to core through `preload` → typed `Bridge` / `commands` in `app
 | Self-improvement proposals | [docs/self-improvement.md](docs/self-improvement.md) | `core/orchestration/self-improvement.ts` |
 | The trace in the chat and the diff | [docs/worker-actions.md](docs/worker-actions.md) | `renderer/components/LiveRun.tsx`, `core/tools/workspace-diff.ts` |
 | Schedules | [docs/routines.md](docs/routines.md) | `core/orchestration/routines.ts` |
-| Tacet on the device: the download, the ONNX worker, quiet-run announcements | [docs/decisions.md](docs/decisions.md) | `core/decisions/`, `core/orchestration/quiet-runs.ts`, `renderer/components/TacetSetup.tsx` |
+| Tacet on the device: the download, the ONNX worker, quiet-run announcements, permission hints, group-chat routing | [docs/decisions.md](docs/decisions.md) | `core/decisions/`, `core/orchestration/quiet-runs.ts`, `core/orchestration/permission-suggestions.ts`, `core/orchestration/turn-routing.ts`, `renderer/components/TacetSetup.tsx`, `renderer/permissionHints.tsx` |
 | Connections, harnesses, model lists, limits, updater, erase | [docs/technical-guide.md](docs/technical-guide.md), [docs/capabilities.md](docs/capabilities.md), [docs/model-list-fetch.md](docs/model-list-fetch.md) | `core/harness/`, `core/adapters/`, `main/` |
 | Notifications | [docs/chat-guide.md](docs/chat-guide.md#notifications) | `renderer/components/notifications.tsx` |
 | The Running view: every run and the queue across chats | [docs/chat-guide.md](docs/chat-guide.md#what-is-running), [docs/technical-guide.md](docs/technical-guide.md#what-is-running-and-the-queue) | `core/orchestration/running.ts`, `core/orchestration/slots.ts`, `renderer/components/RunningCentre.tsx` |

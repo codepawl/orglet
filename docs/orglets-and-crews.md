@@ -73,6 +73,8 @@ A group chat is a few orglets in one conversation without a lead: each one answe
 
 A group chat is its own conversation. It does not become any orglet's live chat, and search finds it later. Permissions and a working folder set in **Details** before the first message apply to it the same way as for an orglet or crew.
 
+If you downloaded Tacet in **Settings → Chat**, a message that tags nobody and replies to no one can go to just the orglet it clearly fits, going by each orglet's name, description and instructions. Your message then says **Tacet picked *name* to answer**. When Tacet is not sure, everyone answers, as without it. Tag `@all` to ask everyone anyway. See [how Tacet decides](decisions.md#who-answers-in-a-group-chat).
+
 ## Reply to a message
 
 Hover a saved message, yours or an orglet's, and choose **Reply**. The next turn quotes that message so the orglet knows exactly what you mean. **Stop replying to it** in the message box drops the quote. A reply never widens what the orglet may read or change.
