@@ -1,5 +1,5 @@
-import { createInterface, type Interface, type Key } from 'node:readline';
-import { Writable } from 'node:stream';
+import { createInterface, type Interface } from 'node:readline';
+import { TerminalComposer } from './composer';
 import { AppRefusal, type ChatClient } from './chat-client';
 import { StoppedError, UnreachableError } from './client';
 import { renderMiniFaces } from './faces';
@@ -8,16 +8,15 @@ import { answerColor, chatHeader, renderAnswers, styledList } from './pretty';
 import { EXIT_CODES, type CliAnswer, type SendValue } from './protocol';
 import { completeSlash, isSlashCommand, parseSlash, SLASH_HELP, type SlashCommand } from './slash';
 import { ANSI, ERROR_COLOR, muted, MUTED_COLOR, padEnd, paint, wrapSegments, type ColorMode, type Style } from './terminal';
-import { NO_WAITING, WaitingFace, WaitingLine, type Waiting } from './waiting';
 
 /**
  * `orglet chat` (COD-236): pick an orglet or crew, then talk to it from the terminal. Everything outside this module
  * is injected (the input and output streams and the app client), so a test drives a whole session with a script of
- * lines and a fake app. On a real terminal the input is in raw mode through `readline`: arrow keys move the picker
- * and walk the history, Tab completes commands and names, and the waiting face animates in place.
+ * lines and a fake app. A terminal composer owns raw keys, paste, history and redraws; this session owns the queue
+ * and backend calls. Scripted sessions use readline without terminal control.
  */
 
-export type InteractiveInput = NodeJS.ReadableStream & { isTTY?: boolean };
+export type InteractiveInput = NodeJS.ReadableStream & { isTTY?: boolean; isRaw?: boolean; setRawMode?: (raw: boolean) => unknown };
 export type InteractiveOutput = NodeJS.WritableStream & { isTTY?: boolean; columns?: number; rows?: number };
 
 export type InteractiveOptions = {
@@ -28,56 +27,24 @@ export type InteractiveOptions = {
   version: string;
   /** Open this chat straight away (`orglet chat --to <name>`). */
   to?: string;
-  /** Raw keys, redraws and the animated face. Defaults to whether both streams are terminals. */
+  /** Raw keys and redraws. Defaults to whether both streams are terminals. */
   terminal?: boolean;
-  frameMilliseconds?: number;
 };
 
 const DEFAULT_COLUMNS = 80;
 const PICKER_MAX_ROWS = 8;
 /** The faces on the welcome line; more would wrap a narrow terminal. */
 const WELCOME_FACE_LIMIT = 12;
-const CHAT_HINT = 'Type a message and press Enter. /help lists commands. Ctrl+D or /exit leaves.';
+const CHAT_HINT = 'Enter sends. Ctrl+J adds a line. Paste stays in the draft. /help lists commands. Ctrl+D leaves.';
 
-/**
- * Readline draws the prompt and echoes what is typed. While an answer is on its way that output is held back, so
- * keys pressed then do not scribble over the waiting face; what was typed stays in the line and shows at the next
- * prompt.
- */
-class HeldOutput extends Writable {
-  held = false;
-
-  constructor(private readonly target: InteractiveOutput) {
-    super();
-    target.on('resize', () => this.emit('resize'));
-  }
-
-  get columns(): number | undefined {
-    return this.target.columns;
-  }
-
-  get rows(): number | undefined {
-    return this.target.rows;
-  }
-
-  get isTTY(): boolean {
-    return Boolean(this.target.isTTY);
-  }
-
-  override _write(chunk: Buffer | string, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
-    if (!this.held) this.target.write(chunk);
-    callback();
-  }
-}
-
-type QueuedLine = { text: string; echoed: boolean };
+type QueuedLine = { text: string };
 type View = 'picker' | 'chat';
 
 class Session {
   private readonly terminal: boolean;
   private readonly mode: ColorMode;
-  private readonly held: HeldOutput;
-  private readline!: Interface;
+  private readline: Interface | undefined;
+  private composer: TerminalComposer | undefined;
   private entries: ChatEntry[] = [];
   private view: View = 'picker';
   private picker: PickerState = createPicker([]);
@@ -85,21 +52,18 @@ class Session {
   private pickerReturn: ChatEntry | undefined;
   private chat: ChatEntry | undefined;
   private shownHint = false;
-  private readonly history: string[] = [];
-  private historyIndex = 0;
-  private draft = '';
   private readonly queue: QueuedLine[] = [];
   private processing = false;
   private inputClosed = false;
   private finished = false;
   private waitingController: AbortController | undefined;
   private finish: (code: number) => void = () => undefined;
-  private readonly onKeypress = (_sequence: string | undefined, key: Key | undefined) => this.keypress(key);
+  private waitingStartedAt = 0;
+  private waitingTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly options: InteractiveOptions) {
     this.terminal = options.terminal ?? Boolean(options.input.isTTY && options.output.isTTY);
     this.mode = options.mode;
-    this.held = new HeldOutput(options.output);
   }
 
   async run(): Promise<number> {
@@ -132,13 +96,39 @@ class Session {
   }
 
   private openReadline(): void {
+    if (this.terminal) {
+      this.composer = new TerminalComposer({
+        input: this.options.input,
+        output: this.options.output,
+        mode: this.mode,
+        prompt: () => this.currentPrompt(),
+        rows: () => renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: this.pickerRows() }),
+        status: () => this.composerStatus(),
+        hint: () => this.waitingController ? 'Enter queues · Ctrl+J newline · Ctrl+C stops waiting' : 'Enter send · Ctrl+J newline · / commands',
+        picker: () => this.view === 'picker',
+        suggestions: text => completeSlash(text, this.entries.map(entry => entry.name))[0].map(candidate => ({
+          text: candidate,
+          description: SLASH_HELP.find(([usage]) => usage.split(' ')[0] === candidate.trim())?.[1] ?? 'Open this chat',
+        })),
+        change: text => {
+          if (this.view === 'picker') this.picker = setFilter(this.picker, text);
+        },
+        navigate: direction => {
+          if (direction === 0) this.composer?.replace(chosenEntry(this.picker)?.name ?? '');
+          else this.picker = moveSelection(this.picker, direction);
+        },
+        escape: () => this.leavePicker(),
+        submit: text => this.enqueue(text),
+        interrupt: () => this.interrupt(),
+        close: () => this.end(EXIT_CODES.ok),
+      });
+      this.composer.start();
+      return;
+    }
     this.readline = createInterface({
       input: this.options.input,
-      output: this.held,
-      terminal: this.terminal,
+      terminal: false,
       historySize: 0,
-      tabSize: 2,
-      completer: (line: string) => this.complete(line),
     });
     this.readline.on('line', line => this.enqueue(line));
     this.readline.on('SIGINT', () => this.interrupt());
@@ -146,7 +136,14 @@ class Session {
       this.inputClosed = true;
       void this.drain();
     });
-    if (this.terminal) this.options.input.on('keypress', this.onKeypress);
+  }
+
+  private composerStatus(): string {
+    if (!this.chat || this.view === 'picker') return '';
+    const state = this.waitingController ? 'working' : 'ready';
+    const queued = this.queue.length ? ` · ${this.queue.length} queued` : '';
+    const elapsed = this.waitingController ? ` · ${Math.floor((Date.now() - this.waitingStartedAt) / 1000)}s` : '';
+    return `${state}${queued}${elapsed} · ${renderMiniFaces([this.chat.color], this.mode)} ${this.chat.name} · ${this.chat.detail}`;
   }
 
   private openFirstView(): void {
@@ -168,7 +165,7 @@ class Session {
 
   /** Text width for answers: one column short of the edge, so a full line never wraps on its own. */
   private textWidth(): number {
-    return Math.max(20, this.columns() - 1);
+    return Math.max(4, this.columns() - 1);
   }
 
   private write(text: string): void {
@@ -176,7 +173,9 @@ class Session {
   }
 
   private print(text = ''): void {
-    this.write(`${text}\n`);
+    if (this.finished) return;
+    this.composer?.clear();
+    this.write(`${text}${this.terminal ? '\r\n' : '\n'}`);
   }
 
   private printLines(lines: readonly string[]): void {
@@ -221,19 +220,12 @@ class Session {
   /** On a terminal, draws the prompt (and the picker's list); a script of lines gets no prompts, only echoes. */
   private showPrompt(): void {
     if (!this.terminal || this.finished) return;
-    this.readline.setPrompt(this.currentPrompt());
-    this.readline.prompt(true);
-    if (this.view === 'picker') {
-      if (this.readline.line !== this.picker.filter) this.replaceLine(this.picker.filter);
-      this.drawPickerList();
-    }
+    this.composer?.draw();
   }
 
-  /** Swaps what is typed on the prompt line, as if the person had cleared it and typed `text`. */
+  /** Replaces the draft when a picker fills or clears its filter. */
   private replaceLine(text: string): void {
-    this.readline.write(null, { ctrl: true, name: 'e' });
-    this.readline.write(null, { ctrl: true, name: 'u' });
-    if (text) this.readline.write(text);
+    this.composer?.replace(text);
   }
 
   private pickerRows(): number {
@@ -246,27 +238,11 @@ class Session {
     this.picker = createPicker(this.entries, filter);
     this.pickerReturn = returnTo;
     if (this.terminal) {
-      // Room for the list under the prompt, made now so drawing it later never scrolls the prompt away.
-      const room = this.pickerRows() + 1;
-      this.write(`${'\n'.repeat(room)}${ANSI.up(room)}`);
+      this.replaceLine(filter);
       return;
     }
     const lines = renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: this.entries.length });
     this.printLines(lines.slice(0, -1));
-  }
-
-  /** The list under the picker's prompt, redrawn in place; the cursor goes back to where the person types. */
-  private drawPickerList(): void {
-    const lines = renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: this.pickerRows() });
-    const body = lines.map(line => `\r\n${ANSI.clearLine}${line}`).join('');
-    const cursor = this.readline.getCursorPos();
-    this.write(`${body}${ANSI.clearBelow}${ANSI.up(lines.length)}\r${ANSI.right(cursor.cols)}`);
-  }
-
-  /** Takes the list and the prompt line away once a chat is chosen. After Enter the cursor is on the list's first line. */
-  private clearPicker(): void {
-    if (!this.terminal) return;
-    this.write(`${ANSI.clearBelow}${ANSI.up(1)}\r${ANSI.clearBelow}`);
   }
 
   private enterChat(entry: ChatEntry): void {
@@ -279,61 +255,15 @@ class Session {
     this.print();
   }
 
-  private complete(line: string): [string[], string] {
-    const names = this.entries.map(entry => entry.name);
-    if (this.view === 'picker') {
-      // Tab takes the highlighted name, so the list under the prompt is never pushed around by a list of candidates.
-      const highlighted = chosenEntry(setFilter(this.picker, line));
-      return highlighted ? [[highlighted.name], line] : [[], line];
-    }
-    return completeSlash(line, names);
-  }
-
-  private keypress(key: Key | undefined): void {
-    if (!key || this.finished || this.waitingController) return;
-    if (key.name === 'return' || key.name === 'enter') return;
-    if (this.view === 'picker') {
-      this.pickerKey(key);
-      return;
-    }
-    if (key.name === 'up') this.historyBack();
-    if (key.name === 'down') this.historyForward();
-  }
-
-  private pickerKey(key: Key): void {
-    if (key.name === 'escape' && this.pickerReturn) {
+  private leavePicker(): void {
+    if (this.view === 'picker' && this.pickerReturn) {
       const back = this.pickerReturn;
-      this.replaceLine('');
-      this.write(`\r${ANSI.clearBelow}`);
       this.view = 'chat';
       this.chat = back;
       this.pickerReturn = undefined;
+      this.replaceLine('');
       this.showPrompt();
-      return;
     }
-    if (key.name === 'up') this.picker = moveSelection(this.picker, -1);
-    else if (key.name === 'down') this.picker = moveSelection(this.picker, 1);
-    else this.picker = setFilter(this.picker, this.readline.line);
-    this.drawPickerList();
-  }
-
-  private historyBack(): void {
-    if (this.history.length === 0 || this.historyIndex === 0) return;
-    if (this.historyIndex === this.history.length) this.draft = this.readline.line;
-    this.historyIndex -= 1;
-    this.replaceLine(this.history[this.historyIndex]);
-  }
-
-  private historyForward(): void {
-    if (this.historyIndex >= this.history.length) return;
-    this.historyIndex += 1;
-    this.replaceLine(this.historyIndex === this.history.length ? this.draft : this.history[this.historyIndex]);
-  }
-
-  private remember(text: string): void {
-    if (this.history[this.history.length - 1] !== text) this.history.push(text);
-    this.historyIndex = this.history.length;
-    this.draft = '';
   }
 
   /** Ctrl+C: stop waiting if an answer is on its way, clear a typed line, or leave from an empty prompt. */
@@ -342,21 +272,24 @@ class Session {
       this.waitingController.abort();
       return;
     }
-    if (this.readline.line !== '') {
+    if (this.composer?.text) {
       this.replaceLine('');
-      if (this.view === 'picker') {
-        this.picker = setFilter(this.picker, '');
-        this.drawPickerList();
-      }
       return;
     }
     this.end(EXIT_CODES.ok);
   }
 
   private enqueue(text: string): void {
-    const echoed = this.terminal && !this.held.held;
-    this.queue.push({ text, echoed });
+    if (this.view === 'chat' && !text.trim()) return;
+    // `/exit` must leave immediately, even when an earlier message is still waiting for its answer.
+    if (this.terminal && isSlashCommand(text) && /^\/(exit|quit)\s*$/i.test(text)) {
+      this.end(EXIT_CODES.ok);
+      return;
+    }
+    if (this.view === 'chat' && text.trim() && !isSlashCommand(text)) this.composer?.remember(text.trim());
+    this.queue.push({ text });
     void this.drain();
+    this.showPrompt();
   }
 
   /** Lines are handled one at a time: a line typed while an answer is on its way waits its turn. */
@@ -378,7 +311,6 @@ class Session {
 
   /** Shows a line that was not echoed as it was typed: from a script, or typed while an answer was on its way. */
   private echo(line: QueuedLine, prompt: string): void {
-    if (line.echoed) return;
     this.print(`${prompt}${line.text}`);
   }
 
@@ -390,17 +322,15 @@ class Session {
     this.echo(line, this.chatPrompt());
     const text = line.text.trim();
     if (text === '') return;
-    if (isSlashCommand(text)) {
+    if (isSlashCommand(line.text)) {
       await this.command(parseSlash(text));
       return;
     }
-    this.remember(text);
     await this.send(text);
   }
 
   private choose(line: QueuedLine): void {
-    if (line.echoed) this.clearPicker();
-    else this.echo(line, this.pickerPrompt());
+    this.echo(line, this.pickerPrompt());
     const entry = chosenEntry(setFilter(this.picker, line.text));
     if (entry) {
       this.enterChat(entry);
@@ -418,7 +348,7 @@ class Session {
       case 'open': return this.openInApp();
       case 'clear': return this.clear();
       case 'help': return this.help();
-      case 'exit': return this.end(EXIT_CODES.ok, true);
+      case 'exit': return this.end(EXIT_CODES.ok);
       case 'unknown': return this.printMuted(`Unknown command ${command.command}. /help lists the commands.`);
     }
   }
@@ -480,45 +410,30 @@ class Session {
   private help(): void {
     const width = Math.max(...SLASH_HELP.map(([usage]) => usage.length));
     for (const [usage, meaning] of SLASH_HELP) this.print(`  ${padEnd(usage, width)}  ${muted(meaning, this.mode)}`);
-    this.printMuted('  Tab completes commands and names. Up and Down go through what you sent.');
+    this.printMuted('  Ctrl+J adds a line. Paste stays in the draft. / opens the command menu; Tab fills the choice.');
     this.print();
-  }
-
-  private waitingFor(chat: ChatEntry): Waiting {
-    if (!this.terminal) return NO_WAITING;
-    const label = `${chat.name} is working`;
-    const hint = 'Ctrl+C stops waiting';
-    if (this.mode === 'none') return new WaitingLine(text => this.write(text), `${label}… (${hint})`);
-    return new WaitingFace({
-      write: text => this.write(text),
-      color: chat.color,
-      mode: this.mode,
-      label,
-      hint,
-      columns: () => this.columns(),
-      frameMilliseconds: this.options.frameMilliseconds,
-    });
   }
 
   private async send(text: string): Promise<void> {
     const chat = this.chat!;
     const controller = new AbortController();
-    const waiting = this.waitingFor(chat);
     const startedAt = Date.now();
     this.waitingController = controller;
-    this.held.held = this.terminal;
-    waiting.start();
+    this.waitingStartedAt = startedAt;
+    this.showPrompt();
+    if (this.terminal) this.waitingTimer = setInterval(() => this.showPrompt(), 1000);
     try {
       const value = await this.options.client.send(chat.name, text, controller.signal);
-      waiting.stop();
+      if (this.finished) return;
       this.printTurn(value, Math.round((Date.now() - startedAt) / 1000));
     } catch (error) {
-      waiting.stop();
+      if (this.finished) return;
       if (error instanceof StoppedError) this.printMuted(`Stopped waiting. ${chat.name} keeps working in the app; /read shows the answer when it is ready.`);
       else this.printFailure(error);
     } finally {
       this.waitingController = undefined;
-      this.held.held = false;
+      if (this.waitingTimer) clearInterval(this.waitingTimer);
+      this.waitingTimer = undefined;
     }
     this.print();
   }
@@ -552,17 +467,14 @@ class Session {
     this.printError(error instanceof Error ? error.message : String(error));
   }
 
-  /** Leaves the session. `atLineStart` is true after a typed command, when the cursor already sits on a fresh line. */
-  private end(code: number, atLineStart = false): void {
+  /** Leaving drops this terminal's queue; it never cancels work already sent to the app. */
+  private end(code: number): void {
     if (this.finished) return;
     this.finished = true;
     this.waitingController?.abort();
-    if (this.terminal) {
-      if (!atLineStart) this.write('\r\n');
-      this.write(`${ANSI.clearBelow}${ANSI.showCursor}`);
-      this.options.input.removeListener('keypress', this.onKeypress);
-    }
-    this.readline.close();
+    if (this.waitingTimer) clearInterval(this.waitingTimer);
+    this.composer?.stop();
+    this.readline?.close();
     this.finish(code);
   }
 }
