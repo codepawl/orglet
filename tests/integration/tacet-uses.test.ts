@@ -279,10 +279,10 @@ describe('warming the model before a question', () => {
 });
 
 /**
- * The real model on this computer, when `ORGLET_TACET_MODEL_DIR` names a folder holding the pinned ONNX file and
+ * The real model on this computer, when `ORGLET_TACET_DIR` names a folder holding the pinned ONNX file and
  * tokenizer (the app's `models/tacet-sonata` folder works). Skipped otherwise, which is every CI run.
  */
-const modelDirectory = process.env.ORGLET_TACET_MODEL_DIR;
+const modelDirectory = process.env.ORGLET_TACET_DIR;
 const realModel = modelDirectory && existsSync(join(modelDirectory, TACET_FILES.model.name)) && existsSync(join(modelDirectory, TACET_FILES.tokenizer.name)) ? modelDirectory : undefined;
 
 describe.runIf(realModel !== undefined)('the real model on the measured cases', { timeout: 120_000 }, () => {

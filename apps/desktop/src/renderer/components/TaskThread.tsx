@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route } from 'lucide-react';
+import { routeOfTurn, type TurnRoute } from '../../shared/turn-routing';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -521,6 +522,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
               {turn.replyTo && <button type="button" className="message-reply-context" onClick={() => openMessage(turn.replyTo!)}>
                 <Reply size={13} aria-hidden="true" />{t('Mở tin gốc: {0}', [replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')])}
               </button>}
+              <RoutedLine route={routeOfTurn(detail.task.routedTurns, turn.revision)} nameOf={workerId => workspace.workers.find(worker => worker.id === workerId)?.name
+                ?? detail.runs.find(run => run.snapshot.worker.id === workerId)?.snapshot.worker.name} />
               <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
               {/* On the bubble's start corner: the bubble is right-aligned, so that corner faces the thread. */}
               <MessageBadges taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="start" />
@@ -701,6 +704,20 @@ function forwardedAuthor(forwarded: ForwardedMessage): string {
  * exists), then the note, if any, as the person's own bubble. Files that were not sent along are named under the
  * text; the ones that were are this turn's files and sit above it like any attachment.
  */
+/**
+ * Who answers a group-chat message that tagged nobody, when Tacet picked one orglet for it (COD-305). It sits where a
+ * reply names the message it answers, so a narrower turn is never silent; the tooltip says why and how to ask everyone.
+ */
+export function RoutedLine({ route, nameOf }: { route?: TurnRoute; nameOf: (workerId: string) => string | undefined }) {
+  if (!route) return null;
+  const names = route.workerIds.map(workerId => nameOf(workerId)).filter((name): name is string => Boolean(name));
+  if (!names.length) return null;
+  const why = t('Tin nhắn không gắn thẻ ai, nên Tacet chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.', [Math.round(route.probability * 100)]);
+  return <p className="message-reply-context message-routed" title={why}>
+    <Route size={13} aria-hidden="true" />{t('Tacet chọn {0} trả lời', [names.join(', ')])}
+  </p>;
+}
+
 function ForwardedTurn({ forwarded, elementId, badges, openOrigin, mentionPeople, mentionAllNames }: { forwarded: ForwardedMessage; elementId: string; badges: ReactNode; openOrigin?: () => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const author = forwardedAuthor(forwarded);
   const sameName = forwarded.authorKind === 'orglet' && author === forwarded.from;

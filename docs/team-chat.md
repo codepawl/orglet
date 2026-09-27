@@ -188,8 +188,8 @@ While a turn runs, the **Running** view in the footer lists each job: the member
 
 In a **team** or **group** chat, type `@` in the composer to pick a worker or `@all`. Tagged names highlight in the message. The team's own name is not offered, because tagging it means what `@all` means; typed by hand it still works, so older messages keep their meaning.
 
-- **Group chat:** only tagged assignees answer that turn. `@all`, the team name, or no tag keeps everyone. A reply to one orglet's answer with no tag in it counts as tagging that orglet, so only it answers; any tag in the message (`@all` included) decides instead, so replying to Writer and asking `@Reviewer` gets Reviewer alone (`groupTurnWorkers` in `core/service.ts`, COD-257).
-- **Team chat:** Demo assigns the tagged members. A live planner is told who you tagged and may still assign others. Untagged messages still assign every member.
+- **Group chat:** only tagged assignees answer that turn. `@all`, the team name, or no tag keeps everyone. A reply to one orglet's answer with no tag in it counts as tagging that orglet, so only it answers; any tag in the message (`@all` included) decides instead, so replying to Writer and asking `@Reviewer` gets Reviewer alone (`groupTurnWorkers` in `core/service.ts`, COD-257). With Tacet downloaded, a message of your own with no tag and no reply is read against each orglet's name, description and instructions; an orglet it rates 0.65 or more answers alone, and anything less keeps everyone. The message then says **Tacet picked *name* to answer** where a reply names its message, the pick is kept on the chat for a retry or a resume, and `@all` asks everyone again. Forwards are never routed ([how it decides](decisions.md#who-answers-in-a-group-chat), COD-305).
+- **Team chat:** Demo assigns the tagged members. A live planner is told who you tagged and may still assign others. Untagged messages still assign every member. Tacet never routes a crew's message: its lead plans the turn.
 
 Unknown `@` text is left as typed and does not change who runs.
 

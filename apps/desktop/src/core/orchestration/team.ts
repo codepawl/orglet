@@ -192,9 +192,10 @@ export class TeamRunner {
   }
   /**
    * Group chat: every assigned worker answers the latest message in order, each seeing the replies before it. Workers
-   * that already answered this message are skipped, so resume and retry only run the rest.
+   * that already answered this message are skipped, so resume and retry only run the rest. `route`, when given, first
+   * narrows who answers (Tacet's pick, COD-305); it runs once the turn counts as running, so Stop and Pause reach it.
    */
-  async chat(task: Task, workers: Worker[], resume = false) {
+  async chat(task: Task, workers: Worker[], resume = false, route?: () => Promise<Worker[]>) {
     if (this.active.has(task.id)) throw new Error('Hội đang chạy task này.');
     if (!workers.length) throw new Error('Chưa có Tí nào để giao việc.');
     const control = { cancelled: false, paused: false, controller: new AbortController() }; this.active.set(task.id, control);
@@ -204,6 +205,10 @@ export class TeamRunner {
     let answered = 0, failed = 0, waitingBudget = false;
     const queuedSince = Date.now();
     try {
+      if (route) {
+        workers = await route();
+        this.notify();
+      }
       for (const [index, worker] of workers.entries()) {
         if (!this.canDispatch(task)) control.paused = true;
         if (control.cancelled || control.paused) break;

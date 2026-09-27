@@ -3289,7 +3289,7 @@ export const en: Dictionary = {
   '{0} đã chạm giới hạn chi phí hôm nay': '{0} reached today\'s cost cap',
   // Tacet on this computer (COD-303).
   'Tacet trên máy': 'Tacet on this computer',
-  'Báo khi lịch chạy hằng giờ có điều mới, nạp ghi chú hợp với tin nhắn, và hỏi bạn trước một bước trên trang hay ứng dụng trông dễ gây hậu quả. Chạy trên máy này, không gửi gì ra ngoài.': 'Tells you when an hourly schedule finds something new, loads notes that fit your message, and asks you before a step on a page or in an app that looks risky. Runs on this computer; nothing is sent out.',
+  'Báo khi lịch chạy hằng giờ có điều mới, gợi ý quyền một tin nhắn cần, chọn Tí trả lời trong trò chuyện nhóm, nạp ghi chú hợp với tin nhắn và hỏi bạn trước một bước trông dễ gây hậu quả trên trang hay ứng dụng. Chạy trên máy này, không gửi gì ra ngoài.': 'Tells you when an hourly schedule finds something new, suggests the permissions a message needs, picks who answers in a group chat, loads notes that fit your message, and asks you before a step on a page or in an app that looks risky. Runs on this computer; nothing is sent out.',
   '{0}, tải một lần': '{0}, downloaded once',
   '{0} trên {1}': '{0} of {1}',
   'Đang tải {0}': 'Downloading {0}',
@@ -3299,7 +3299,7 @@ export const en: Dictionary = {
   'Đã có {0}, lần sau tải tiếp từ đó.': '{0} is kept, so the next try picks up from there.',
   'Tải về': 'Download',
   'Gỡ Tacet khỏi máy?': 'Remove Tacet from this computer?',
-  'Tệp của mô hình bị xóa. Orglet làm như trước khi có Tacet: lịch chạy hằng giờ im lặng khi xong, ghi chú chỉ nạp khi khớp từ khóa. Bạn có thể tải lại bất cứ lúc nào.': 'The model\'s files are deleted. Orglet works as it did before Tacet: hourly schedules finish quietly, and notes load only when their words match. You can download it again any time.',
+  'Tệp của mô hình bị xóa và mọi thứ như trước: lịch chạy hằng giờ im lặng khi xong, không có gợi ý quyền, cả nhóm cùng trả lời, ghi chú chỉ nạp khi khớp từ khóa, và chỉ các quy tắc quyết định khi nào hỏi bạn. Bạn có thể tải lại bất cứ lúc nào.': 'The model\'s files are deleted and everything is as before: hourly schedules finish quietly, there are no permission hints, everyone in a group chat answers, notes load only when their words match, and the rules alone decide when to ask you. You can download it again any time.',
   'Đã gỡ Tacet': 'Tacet removed',
   '{0} có điều mới': '{0} has something new',
   'Có điều mới': 'Something new',
@@ -3327,6 +3327,21 @@ export const en: Dictionary = {
   'Tacet gặp lỗi.': 'Tacet ran into an error.',
   'Tacet đã dừng.': 'Tacet stopped.',
   'Tacet đã dừng trước khi tải xong.': 'Tacet stopped before it finished loading.',
+  // Tacet's permission hints and group-chat picks (COD-305).
+  'Tin nhắn này có vẻ cần web, mà chat chưa bật web.': 'This message seems to need the web, which is off in this chat.',
+  'Bật web': 'Turn on web',
+  'Tin nhắn này có vẻ cần trình duyệt của Orglet, mà chat chưa bật.': 'This message seems to need Orglet\'s browser, which is off in this chat.',
+  'Chọn quyền trình duyệt': 'Choose browser access',
+  'Tin nhắn này có vẻ cần đọc file trong một thư mục.': 'This message seems to need files in a folder.',
+  'Tin nhắn này có vẻ cần sửa file trong một thư mục.': 'This message seems to need to edit files in a folder.',
+  'Tin nhắn này có vẻ cần chạy lệnh trong một thư mục.': 'This message seems to need to run commands in a folder.',
+  'Tin nhắn này có vẻ cần sửa file, mà thư mục chỉ cho đọc.': 'This message seems to need to edit files, and the folder is read only.',
+  'Cho phép sửa file': 'Allow editing',
+  'Tin nhắn này có vẻ cần chạy lệnh, mà thư mục chưa cho chạy lệnh.': 'This message seems to need to run commands, which the folder does not allow yet.',
+  'Cho phép chạy lệnh': 'Allow commands',
+  'Ẩn gợi ý quyền': 'Hide permission hint',
+  'Tacet chọn {0} trả lời': 'Tacet picked {0} to answer',
+  'Tin nhắn không gắn thẻ ai, nên Tacet chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.': 'The message tagged no one, so Tacet picked the orglet that fits best ({0}% sure). Tag @all to ask the whole group.',
 };
 
 // British English differs from the US text only in these spellings, so it is derived instead of duplicated.

@@ -21,6 +21,7 @@ import { toast } from './toast';
 import { canStartSideThread } from '../../shared/side-threads';
 import { keepDraft, readDraft, taskDraftKey } from '../drafts';
 import { overflowAttributes, useStripOverflow } from '../stripOverflow';
+import { ComposerPermissionHint, type PermissionHintControls } from '../permissionHints';
 
 const SINGLE_LINE = 40;
 
@@ -316,7 +317,7 @@ export function DemoNote({ someOnDemo, preflight, onConnect }: { /** Only some o
  * `onPrefilled` lets the caller forget it once it is in. What is typed and added but not sent stays with the chat
  * across restarts (COD-257, `drafts.ts`), so leaving the chat and coming back finds it on the bar.
  */
-export function FollowUpComposer({ detail, workspace, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void }) {
+export function FollowUpComposer({ detail, workspace, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel, permissionHint }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void; /** Offers a permission the message seems to need (COD-305), when Tacet is on this computer. */ permissionHint?: PermissionHintControls }) {
   const draftKey = taskDraftKey(detail.task.id);
   const [text, setText] = useState(() => readDraft(draftKey)?.text ?? '');
   // Files added for the next message, and what could not be added with the reason, as in the empty chat.
@@ -458,5 +459,7 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
     {readOnly && <p className="composer-note" role="status">{readOnly.note}{readOnly.action && <button type="button" onClick={readOnly.action.onSelect}>{readOnly.action.label}</button>}</p>}
     {!busy && !readOnly && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
     {!readOnly && !blocked && demoWorker && onConnectModel && <DemoNote someOnDemo={providers.length > 0 ? demoWorker.name : undefined} preflight={providers.length === 0 && Boolean(team?.preflight)} onConnect={() => onConnectModel(demoWorker)} />}
+    {/* One line under the bar at most: a note above says what to do first. */}
+    {permissionHint && <ComposerPermissionHint text={text} controls={{ ...permissionHint, enabled: permissionHint.enabled && !readOnly && !blocked && !demoWorker }} />}
   </div>;
 }
