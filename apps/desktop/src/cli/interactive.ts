@@ -116,12 +116,12 @@ class Session {
         detail: () => this.confirmingExit ? 'Runs already sent keep working in the app.' : this.chat && this.view === 'chat' ? `${this.chat.model ?? 'provider default'} · effort: provider default` : '',
         shortcut: action => this.shortcut(action),
         prompt: () => this.currentPrompt(),
-        rows: () => renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: this.pickerRows(), showFaces: false }),
+        rows: () => renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: this.pickerRows(), showFaces: true }),
         status: () => this.composerStatus(),
         hint: () => {
-          if (this.confirmingExit) return 'Y exits · N / Enter / Esc stays';
+          if (this.confirmingExit) return 'Esc stays · typing continues';
           if (this.panel || this.agentsVisible) return 'PgUp/PgDn scroll · Esc closes · Ctrl+P switch';
-          return this.waitingController ? 'Ctrl+Q queue · Ctrl+Z undo · Ctrl+C exit' : 'Ctrl+J newline · Ctrl+O details · ← agents · /help';
+          return this.waitingController ? 'Ctrl+Q queue · Ctrl+Z undo · Ctrl+C exit' : 'Ctrl+J newline · Ctrl+O details · ← chats · /help';
         },
         picker: () => this.view === 'picker',
         suggestions: text => completeSlash(text, this.entries.map(entry => entry.name))[0].map(candidate => ({
@@ -181,7 +181,7 @@ class Session {
     if (this.panel) panel = this.panelRows(width);
     else if (this.agentsVisible && this.chat) panel = agentDetails(this.chat, this.entries, directory, width, this.mode);
     this.panelOffset = Math.max(0, Math.min(this.panelOffset, Math.max(0, (panel?.length ?? 0) - room)));
-    const content = panel ? panel.slice(this.panelOffset, this.panelOffset + room) : this.transcript.view(room, width, this.mode);
+    const content = this.view === 'picker' ? [] : panel ? panel.slice(this.panelOffset, this.panelOffset + room) : this.transcript.view(room, width, this.mode);
     return [...header.slice(0, headerRows), ...(height > 6 ? [''] : []), ...content];
   }
 
@@ -311,8 +311,13 @@ class Session {
 
   private showPicker(filter: string, returnTo?: ChatEntry): void {
     this.saveDraft();
+    this.agentsVisible = false;
+    this.panel = undefined;
     this.view = 'picker';
     this.picker = createPicker(this.entries, filter);
+    if (!filter && returnTo) {
+      this.picker.selected = Math.max(0, this.entries.findIndex(entry => entry.kind === returnTo.kind && entry.name === returnTo.name));
+    }
     this.pickerReturn = returnTo;
     if (this.terminal) {
       this.replaceLine(filter);

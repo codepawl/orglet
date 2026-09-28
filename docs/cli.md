@@ -70,13 +70,13 @@ This uses the script `pnpm dev` builds into `.vite/build/orglet-cli.cjs`. It can
 
 Run `orglet` with no command, or `orglet chat`:
 
-1. One mascot sits beside the product name and version. The list below lets you choose an orglet or crew.
+1. One mascot sits beside the product name and version. Each row of the chat list has a small mascot in its orglet's colour; a crew uses its lead's colour. The mascots remain visible when colour is off.
 2. Move through the list with the Up and Down keys, or type part of a name to narrow it. Case and Vietnamese accents do not matter: `ke` finds "Kế toán". Press Enter to open the highlighted chat, or Tab to fill in its name.
 3. The header shows the chat name, connection, selected model, billing category and your terminal's current directory. This directory does not grant folder access. The app still controls which folder the chat can use. The connection's exact plan tier and thinking effort are not reported; the terminal says so instead of guessing.
 4. The conversation sits above an input between two horizontal rules. Your turns start with **You**; answers start with the orglet's name. Type a message and press Enter. Ctrl+J adds a line; Shift+Enter also works in terminals that report it separately. Paste stays in the draft, including its newlines, until you press Enter to send it.
 5. While the orglet works, the status changes from **message** to **queue** and shows elapsed seconds. You can keep editing a visible draft. Enter adds it to this terminal's queue; each item goes to the app after the previous wait ends. The unsent draft stays in place when an answer arrives.
 
-Long answers show a short preview. Ctrl+O expands the full answer and each crew member's reply, or collapses them to the lead's synthesis. Page Up and Page Down scroll the conversation or an open details panel. Left on an empty draft, or Ctrl+G, opens agent names and connection details. Esc closes the panel. Small terminals use a compact header and keep the input visible.
+Long answers show a short preview. Ctrl+O expands the full answer and each crew member's reply, or collapses them to the lead's synthesis. Page Up and Page Down scroll the conversation or an open details panel. Ctrl+G opens agent names, small mascots and connection details; Esc closes the panel. Left on an empty draft returns to the orglet and crew picker with the current chat highlighted. Esc returns to the chat, preserving its draft and transcript. While waiting, switching waits behind earlier queued work. Small terminals use a compact header and keep the input visible.
 
 Interactive chat requires a real connection. If an orglet or any member of its crew still uses Demo, a message is refused before sending. Use `/open` to choose a signed-in CLI or an API/local connection in the app, then `/list` to refresh and choose the chat again. One-shot commands retain their existing Demo support.
 
@@ -86,7 +86,7 @@ While an answer is on its way, `/queue` shows previews of the messages and comma
 
 `/open`, `/help`, `/clear`, `/queue` and `/undo` run immediately while waiting. This lets you open the desktop for an approval without waiting for the blocked turn to finish. Other messages and commands, including `/to`, keep their order in the queue.
 
-The draft wraps with the terminal's width. For a long draft, only the rows around the cursor are shown; moving the cursor reveals the rest. Ctrl+C asks before leaving; only Y confirms. Enter, N or Esc returns to the draft, and bracketed paste does not confirm. Ctrl+D or `/exit` leaves immediately. Leaving drops this terminal's unsent draft and local queue. Messages already sent keep running in the app.
+The draft wraps with the terminal's width. For a long draft, only the rows around the cursor are shown; moving the cursor reveals the rest. Press Ctrl+C twice to leave: the first press shows a reminder and pauses queue dispatch, the second exits. Esc or Enter dismisses the reminder without sending; typing or pasting dismisses it and continues editing. Pasted control keys never confirm. Ctrl+D or `/exit` leaves immediately. Leaving drops this terminal's unsent draft and local queue. Messages already sent keep running in the app.
 
 `orglet chat --to Researcher` skips the list and opens that chat. If the name fits several chats, or none, the list opens with it typed in.
 
@@ -101,16 +101,16 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 | Enter | Sends the message, or queues it while waiting. In a menu, fills the highlighted choice; in the chat list, opens the highlighted chat. |
 | Ctrl+J | Adds a line to the draft |
 | Ctrl+O | Expands or collapses answer details |
-| Ctrl+G, Left with an empty draft | Opens or closes agent details |
+| Ctrl+G | Opens or closes agent details |
 | Ctrl+Q | Opens or closes the local queue |
 | Ctrl+Z | Takes the last queued item into an empty draft |
-| Ctrl+P | Opens the chat picker after any earlier queued work |
+| Ctrl+P, Left with an empty draft | Returns to the orglet and crew picker after any earlier queued work |
 | Page Up, Page Down | Scrolls the conversation or details panel |
 | Up, Down | Move the highlight in a menu or list. In a multiline draft, move between lines; at its first or last line, go through sent messages and return to the unsent draft. |
 | Left, Right, Home, End | Move within the draft; Home and End go to the start and end of the current line |
 | Tab | Fills the highlighted command or name after `/to` |
 | Esc | Dismisses the command menu, closes details, or returns from the `/to` list to the chat |
-| Ctrl+C | Asks before leaving: Y exits; N, Enter or Esc stays with the draft and queue intact. Queue dispatch pauses while the question is open. Sent work keeps running in the app. |
+| Ctrl+C | First press shows an exit reminder and pauses queue dispatch; press again to leave. Esc, Enter, typing or paste dismisses it and keeps the draft and queue. Sent work keeps running in the app. |
 | Ctrl+D | Leaves |
 
 ### Commands in the chat

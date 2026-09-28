@@ -154,7 +154,7 @@ export class TerminalComposer {
   }
 
   private insert(text: string): void {
-    if (this.options.confirmingExit()) return;
+    if (this.options.confirmingExit()) this.options.confirmExit(false);
     if (this.options.picker()) text = text.replace(/\n/g, ' ');
     this.text = this.text.slice(0, this.cursor) + text + this.text.slice(this.cursor);
     this.cursor += text.length;
@@ -182,9 +182,12 @@ export class TerminalComposer {
   private key(sequence: string, key: Key): void {
     if (this.closed) return;
     if (this.options.confirmingExit()) {
-      if (!key.ctrl && !key.meta && sequence.toLowerCase() === 'y') this.options.confirmExit(true);
-      else if ((!key.ctrl && !key.meta && sequence.toLowerCase() === 'n') || ['escape', 'return', 'enter'].includes(key.name ?? '')) this.options.confirmExit(false);
-      return;
+      if (key.ctrl && key.name === 'c') {
+        this.options.confirmExit(true);
+        return;
+      }
+      this.options.confirmExit(false);
+      if (['escape', 'return', 'enter'].includes(key.name ?? '')) return;
     }
     if (key.ctrl && key.name === 'c') return this.options.interrupt();
     if (key.ctrl && key.name === 'd') return this.options.close();
@@ -200,7 +203,7 @@ export class TerminalComposer {
       return;
     }
     if (key.name === 'left' && !this.text && !this.options.picker() && this.options.shortcut) {
-      this.options.shortcut('agents');
+      this.options.shortcut('switch');
       this.draw();
       return;
     }
@@ -299,7 +302,7 @@ export class TerminalComposer {
     const width = Math.max(4, (this.options.output.columns ?? 80) - 1);
     const confirmingExit = this.options.confirmingExit();
     const draft = confirmingExit ? '' : this.text;
-    const prompt = truncate(confirmingExit ? 'Exit CLI? [y/N] ' : this.options.prompt(), width - 2);
+    const prompt = truncate(confirmingExit ? 'Ctrl+C again to exit' : this.options.prompt(), width - 2);
     const prefixWidth = displayWidth(prompt);
     const contentWidth = Math.max(1, width - prefixWidth);
     const lines = [prompt];

@@ -157,11 +157,12 @@ describe('terminal composer', () => {
     }
   });
 
-  it('uses Left for agents only with an empty draft and keeps each chat transcript separate', async () => {
+  it('uses Left for the chat picker only with an empty draft and keeps each chat transcript separate', async () => {
     const session = await terminal();
     try {
       await session.key('\x1b[D');
-      expect(session.screen.text()).toContain('Agents · Researcher');
+      expect(session.screen.text()).toContain('Open ›');
+      expect(session.screen.text()).not.toContain('Agents · Researcher');
       await session.key('\x1b');
       await session.key('hello');
       await session.key('\x1b[D');
@@ -169,6 +170,12 @@ describe('terminal composer', () => {
       expect(session.screen.text()).toContain('› hellXo');
       expect(session.screen.text()).not.toContain('Agents · Researcher');
       await session.key('\r');
+      expect(session.screen.text()).toContain('Answer: hellXo');
+      await session.key('\x1b[D');
+      expect(session.screen.text()).toContain('Open ›');
+      expect(session.screen.text()).not.toContain('Answer: hellXo');
+      await session.key('\x1b');
+      expect(session.screen.text()).toContain('Answer: hellXo');
       await session.key('/to Kế toán');
       await session.key('\r');
       expect(session.screen.text()).not.toContain('Answer: hellXo');
@@ -503,12 +510,13 @@ describe('terminal composer', () => {
     } finally { await session.stop(); }
   });
 
-  it('confirms Ctrl+C without losing an idle draft, and defaults to staying', async () => {
+  it('arms exit with Ctrl+C and restores the draft on Enter, Esc or ordinary typing', async () => {
     const session = await terminal();
     try {
       await session.key('unsent draft');
       await session.key('\x03');
-      expect(session.screen.text()).toContain('Exit CLI? [y/N]');
+      expect(session.screen.text()).toContain('Ctrl+C again to exit');
+      expect(session.screen.text()).not.toContain('[y/N]');
       await session.key('\r');
       expect(session.screen.text()).toContain('› unsent draft');
       expect(session.sent).toEqual([]);
@@ -516,8 +524,9 @@ describe('terminal composer', () => {
       await session.key('\x1b');
       expect(session.screen.text()).toContain('› unsent draft');
       await session.key('\x03');
-      await session.key('n');
-      expect(session.screen.text()).toContain('› unsent draft');
+      await session.key('y');
+      expect(session.screen.text()).toContain('› unsent drafty');
+      expect(session.input.isRaw).toBe(true);
     } finally { await session.stop(); }
   });
 
@@ -530,16 +539,16 @@ describe('terminal composer', () => {
       await session.key('\r');
       await session.key('draft');
       await session.key('\x03');
-      expect(session.screen.text()).toContain('Exit CLI? [y/N]');
+      expect(session.screen.text()).toContain('Ctrl+C again to exit');
       await session.resolve();
       expect(session.sent).toEqual(['one']);
-      await session.key('n');
+      await session.key('\x1b');
       expect(session.sent).toEqual(['one', 'queued']);
       expect(session.screen.text()).toContain('› draft');
     } finally { await session.stop(); }
   });
 
-  it('exits only after Y while waiting and drops queued work without sending it', async () => {
+  it('exits after the second Ctrl+C while waiting and drops queued work without sending it', async () => {
     const session = await terminal({ slow: true });
     try {
       await session.key('one');
@@ -548,24 +557,34 @@ describe('terminal composer', () => {
       await session.key('\r');
       await session.key('\x03');
       expect(session.input.isRaw).toBe(true);
-      await session.key('y');
+      await session.key('\x03');
       expect(session.input.isRaw).toBe(false);
       expect(session.sent).toEqual(['one']);
       expect(session.transcript()).toContain('\x1b[?1049l');
     } finally { await session.stop(); }
   });
 
-  it('does not accept pasted confirmation text or repeated Ctrl+C', async () => {
+  it('does not treat pasted Ctrl+C as exit and resets confirmation when pasting', async () => {
     const session = await terminal();
     try {
       await session.key('draft');
       await session.key('\x03');
-      await session.key('\x1b[200~y\r\x1b[201~');
+      await session.key('\x1b[200~\x03\x03safe\x1b[201~');
+      expect(session.screen.text()).toContain('› draftsafe');
       await session.key('\x03');
-      expect(session.screen.text()).toContain('Exit CLI? [y/N]');
+      expect(session.screen.text()).toContain('Ctrl+C again to exit');
       expect(session.input.isRaw).toBe(true);
-      await session.key('n');
-      expect(session.screen.text()).toContain('› draft');
+      await session.key('\x1b');
+      expect(session.screen.text()).toContain('› draftsafe');
+    } finally { await session.stop(); }
+  });
+
+  it('accepts two Ctrl+C keypresses arriving in one raw input chunk', async () => {
+    const session = await terminal();
+    try {
+      await session.key('\x03\x03');
+      expect(session.input.isRaw).toBe(false);
+      expect(session.sent).toEqual([]);
     } finally { await session.stop(); }
   });
 
@@ -574,10 +593,9 @@ describe('terminal composer', () => {
     try {
       await session.key('Kế');
       await session.key('\x03');
-      expect(session.screen.text()).toContain('Exit CLI? [y/N]');
-      await session.key('\x04');
+      expect(session.screen.text()).toContain('Ctrl+C again to exit');
       expect(session.input.isRaw).toBe(true);
-      await session.key('N');
+      await session.key('\x1b');
       expect(session.screen.text()).toContain('Open › Kế');
       await session.key('\r');
       expect(session.screen.text()).toContain('Orglet test · Kế toán');
@@ -590,12 +608,12 @@ describe('terminal composer', () => {
     try {
       await session.key('draft');
       await session.key('\x03');
-      expect(session.screen.text()).toContain('Exit CLI? [y/N]');
+      expect(session.screen.text()).toContain('Ctrl+C again to exit');
       expect(session.screen.lines.length).toBeLessThan(rows);
       await session.key('\n');
       expect(session.screen.text()).toContain('› draft');
       await session.key('\x03');
-      await session.key('Y');
+      await session.key('\x03');
       expect(session.input.isRaw).toBe(false);
     } finally { await session.stop(); }
   });
@@ -615,6 +633,30 @@ describe('terminal composer', () => {
       expect(session.input.isRaw).toBe(false);
       expect(session.sent).toEqual(['one']);
       expect(session.transcript()).toContain('\x1b[?1049l');
+    } finally { await session.stop(); }
+  });
+
+  it.each(['none', 'truecolor'] as const)('shows a mascot on every picker row in %s mode and opens a crew with arrow keys', async mode => {
+    const session = await terminal({ mode, list: {
+      orglets: [{ name: 'Researcher', provider: 'codex', model: 'configured-model', color: '#4f7fe0' }, { name: 'Writer', provider: 'codex', model: 'configured-model', color: '#64b282' }],
+      crews: [{ name: 'Review crew', lead: 'Researcher', members: ['Researcher', 'Writer'] }],
+    } });
+    try {
+      await session.key('\x1b[D');
+      expect(session.screen.text()).toContain('▐••▌ Researcher');
+      expect(session.screen.text()).toContain('▐••▌ Writer');
+      expect(session.screen.text()).toContain('▐••▌ Review crew');
+      await session.key('\x1b[B');
+      await session.key('\x1b[B');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Orglet test · Review crew');
+      await session.key('\x07');
+      expect(session.screen.text()).toContain('▐••▌ Researcher');
+      expect(session.screen.text()).toContain('▐••▌ Writer');
+      await session.key('\x1b[D');
+      expect(session.screen.text()).toContain('Open ›');
+      expect(session.screen.text()).not.toContain('Agents · Review crew');
+      expect(session.sent).toEqual([]);
     } finally { await session.stop(); }
   });
 
