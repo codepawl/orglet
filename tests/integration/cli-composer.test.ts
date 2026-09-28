@@ -116,12 +116,12 @@ describe('terminal composer', () => {
       expect(screen).toContain('› Search orglets or crews…');
       expect(screen).not.toContain('Open ›');
       expect(session.screen.column).toBe(2);
-      expect(screen).toMatch(/  Orglets\n› ▐••▌ Researcher[^\n]*\n  ▐••▌ Writer[^\n]*\n\n  Crews\n  ▐••▌ Review crew/);
+      expect(screen).toMatch(/  \[ Orglets · 2 \]\n› ▐••▌ Researcher[^\n]*\n  ▐••▌ Writer[^\n]*\n\n  \[ Crews · 1 \]\n  ▦\s+Review crew/);
       await session.key('review');
       expect(session.screen.text()).toContain('› review');
       expect(session.screen.text()).not.toContain('Search orglets or crews');
-      expect(session.screen.text()).not.toContain('  Orglets');
-      expect(session.screen.text()).toContain('  Crews');
+      expect(session.screen.text()).not.toContain('[ Orglets');
+      expect(session.screen.text()).toContain('[ Crews · 1 ]');
       await session.key('\x15');
       expect(session.screen.text()).toContain('› Search orglets or crews…');
       await session.key('review');
@@ -140,8 +140,8 @@ describe('terminal composer', () => {
     } });
     try {
       await session.key('\x1b[A');
-      expect(session.screen.text()).toContain('  Crews');
-      expect(session.screen.text()).toContain('› ▐••▌ Review crew');
+      expect(session.screen.text()).toContain('[ Crews · 1 ]');
+      expect(session.screen.text()).toContain('› ▦    Review crew');
       expect(session.screen.lines.length).toBeLessThanOrEqual(9);
       await session.key('\r');
       expect(session.screen.text()).toContain('Orglet test · Review crew');
@@ -562,8 +562,10 @@ describe('terminal composer', () => {
       await session.key('\x03');
       expect(session.screen.text()).toContain('Ctrl+C again to exit');
       expect(session.screen.text()).not.toContain('[y/N]');
+      expect(session.screen.text()).not.toMatch(/─{20,}/);
       await session.key('\r');
       expect(session.screen.text()).toContain('› unsent draft');
+      expect(session.screen.text().match(/─{20,}/g)).toHaveLength(2);
       expect(session.sent).toEqual([]);
       await session.key('\x03');
       await session.key('\x1b');
@@ -681,7 +683,7 @@ describe('terminal composer', () => {
     } finally { await session.stop(); }
   });
 
-  it.each(['none', 'truecolor'] as const)('shows a mascot on every picker row in %s mode and opens a crew with arrow keys', async mode => {
+  it.each(['none', 'truecolor'] as const)('shows orglet mascots and a crew group icon in %s mode and opens a crew with arrow keys', async mode => {
     const session = await terminal({ mode, list: {
       orglets: [{ name: 'Researcher', provider: 'codex', model: 'configured-model', color: '#4f7fe0' }, { name: 'Writer', provider: 'codex', model: 'configured-model', color: '#64b282' }],
       crews: [{ name: 'Review crew', lead: 'Researcher', members: ['Researcher', 'Writer'] }],
@@ -690,7 +692,8 @@ describe('terminal composer', () => {
       await session.key('\x1b[D');
       expect(session.screen.text()).toContain('▐••▌ Researcher');
       expect(session.screen.text()).toContain('▐••▌ Writer');
-      expect(session.screen.text()).toContain('▐••▌ Review crew');
+      expect(session.screen.text()).toContain('▦    Review crew');
+      expect(session.screen.text()).not.toContain('▐••▌ Review crew');
       await session.key('\x1b[B');
       await session.key('\x1b[B');
       await session.key('\r');

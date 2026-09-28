@@ -1,5 +1,5 @@
 import { normalizeRoleText } from '../shared/role-words';
-import { renderMiniFace, renderMiniFaces, MINI_FACE_WIDTH } from './faces';
+import { renderMiniFace, MINI_FACE_WIDTH } from './faces';
 import type { ChatKind, ListValue } from './protocol';
 import { displayWidth, isHexColor, muted, NEUTRAL_COLOR, padEnd, paint, truncate, type ColorMode } from './terminal';
 
@@ -136,7 +136,7 @@ function windowStart(count: number, selected: number, maxRows: number): number {
 export function entryLine(entry: ChatEntry, selected: boolean, layout: PickerLayout, facesWidth: number, nameWidth: number): string {
   const marker = selected ? paint('›', { foreground: entry.color, bold: true }, layout.mode) : ' ';
   const showFaces = layout.showFaces ?? layout.mode !== 'none';
-  const face = layout.showFaces === true ? renderMiniFace(entry.color, layout.mode) : renderMiniFaces(entry.colors, layout.mode);
+  const face = entry.kind === 'team' ? paint('▦', { foreground: entry.color, bold: true }, layout.mode) : renderMiniFace(entry.color, layout.mode);
   const faces = showFaces ? `${padEnd(face, facesWidth)} ` : '';
   const name = truncate(entry.name, nameWidth);
   const paddedName = padEnd(selected ? paint(name, { bold: true }, layout.mode) : name, nameWidth);
@@ -147,7 +147,7 @@ export function entryLine(entry: ChatEntry, selected: boolean, layout: PickerLay
 
 /** Column widths shared by every line of one list, so names and details line up. */
 export function columnWidths(entries: readonly ChatEntry[], width: number): { facesWidth: number; nameWidth: number } {
-  const facesWidth = Math.max(MINI_FACE_WIDTH, ...entries.map(entry => entry.colors.length * MINI_FACE_WIDTH));
+  const facesWidth = MINI_FACE_WIDTH;
   const longestName = Math.max(0, ...entries.map(entry => displayWidth(entry.name)));
   const nameWidth = Math.min(longestName, Math.max(8, Math.floor(width / 2)));
   return { facesWidth, nameWidth };
@@ -176,13 +176,16 @@ export function renderPickerLines(state: PickerState, layout: PickerLayout): str
     else end -= 1;
   }
   const shown = visible.slice(start, end);
-  const { nameWidth, facesWidth: fullFacesWidth } = columnWidths(state.entries, layout.width);
-  const facesWidth = layout.showFaces === true ? MINI_FACE_WIDTH : fullFacesWidth;
+  const { nameWidth, facesWidth } = columnWidths(state.entries, layout.width);
   const lines: string[] = [];
   for (const [index, entry] of shown.entries()) {
     if (showHeadings && (index === 0 || entry.kind !== shown[index - 1].kind)) {
       if (index > 0) lines.push('');
-      lines.push(paint(`  ${entry.kind === 'worker' ? 'Orglets' : 'Crews'}`, { bold: true }, layout.mode));
+      const count = visible.filter(candidate => candidate.kind === entry.kind).length;
+      const total = state.entries.filter(candidate => candidate.kind === entry.kind).length;
+      const countLabel = count === total ? `${count}` : `${count}/${total}`;
+      const title = entry.kind === 'worker' ? 'Orglets' : 'Crews';
+      lines.push(paint(`  [ ${title} · ${countLabel} ]`, { bold: true }, layout.mode));
     }
     lines.push(entryLine(entry, start + index === state.selected, layout, facesWidth, nameWidth));
   }

@@ -32,7 +32,7 @@ function listLines(entries: readonly ChatEntry[], layout: Layout): string[] {
   return entries.map(entry => entryLine(entry, false, { ...layout, maxRows: entries.length }, facesWidth, nameWidth));
 }
 
-/** `orglet list` with each orglet's face, and each crew's members side by side. */
+/** `orglet list` with orglet faces and a distinct group icon for crews. */
 export function styledList(value: ListValue, layout: Layout): string {
   const entries = entriesFromList(value);
   const orglets = entries.filter(entry => entry.kind === 'worker');
