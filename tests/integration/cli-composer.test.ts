@@ -259,6 +259,7 @@ describe('terminal composer', () => {
     } });
     try {
       await session.key('/new orglet');
+      expect(session.screen.text()).toContain('Create an orglet or crew in this terminal');
       await session.key('\r');
       expect(session.screen.text()).toContain('Create orglet');
       await session.key('Name');

@@ -135,7 +135,7 @@ class Session {
         picker: () => this.editor ? this.editor.isPicker : this.view === 'picker' && !this.composer?.text.startsWith('/'),
         suggestions: text => this.editor ? [] : completeSlash(text, this.entries.map(entry => entry.name))[0].map(candidate => ({
           text: candidate,
-          description: SLASH_HELP.find(([usage]) => usage.split(' ')[0] === candidate.trim())?.[1] ?? 'Open this chat',
+          description: SLASH_HELP.find(([usage]) => usage.split(' ')[0] === candidate.trim().split(' ')[0])?.[1] ?? 'Open this chat',
         })),
         change: text => {
           if (this.editor) return this.editor.change(text);
