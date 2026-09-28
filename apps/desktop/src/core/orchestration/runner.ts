@@ -526,6 +526,8 @@ export class Runner {
   private slots = new ProviderSlots(() => this.store.setting('providerConcurrency', DEFAULT_PROVIDER_CONCURRENCY));
   /** Receives live progress from streaming harnesses; the core process forwards it to the window. */
   onProgress: (update: RunProgressUpdate) => void = () => {};
+  /** Tool-loop progress has no desktop answer stream; only authenticated CLI waits observe it. */
+  onCliProgress: (update: RunProgressUpdate) => void = () => {};
   /**
    * Asks Tacet which notes fit a message their words do not match (COD-306), or answers undefined when Tacet is not
    * on this computer, fails or is late. Unset in tests that do not need it.
@@ -675,6 +677,20 @@ export class Runner {
     return [];
   }
   private event(runId: string, message: string) { this.store.event(runId, message); this.notify(); }
+
+  private async modelActivity<Result>(run: Run, requestId: string, signal: AbortSignal, perform: () => Promise<Result>): Promise<Result> {
+    const startedAt = now();
+    const activity = { id: `model:${requestId}:${startedAt}`, runId: run.id, taskId: run.taskId, kind: 'model' as const, label: 'model', startedAt };
+    this.store.activity({ ...activity, state: 'running', updatedAt: startedAt });
+    try {
+      const result = await perform();
+      this.store.activity({ ...activity, state: 'completed', updatedAt: now() });
+      return result;
+    } catch (error) {
+      this.store.activity({ ...activity, state: signal.aborted ? 'stopped' : 'failed', updatedAt: now() });
+      throw error;
+    }
+  }
   /**
    * Says in the turn's steps which attached images this run cannot see, as the run starts (COD-292). Before, the line
    * appeared only when the orglet asked for the image, so an orglet that never asked answered as if it had seen every
@@ -777,7 +793,7 @@ export class Runner {
   private recordSteps(runId: string, progress: HarnessProgress | null) {
     if (!progress) return;
     for (const step of progress.activity) {
-      if (!step.target) continue;
+      if (!step.target || !step.done || step.failed) continue;
       if (step.kind === 'read') this.store.event(runId, `Đã đọc ${step.target}`);
       if (step.kind === 'search') this.store.event(runId, `Đã tìm ${step.target}`);
       if (step.kind === 'list') this.store.event(runId, `Đã liệt kê tệp ${step.target}`);
@@ -1051,11 +1067,17 @@ export class Runner {
           // nothing there and has no native tools to read it with, and its working directory is part of the fixed prompt
           // it sends the provider, so one directory per run keeps that prompt identical from step to step (COD-183).
           const callDirectory = provider === 'claude-code' ? harnessDirectory! : await mkdtemp(join(harnessDirectory!, 'call-'));
-          try { return await this.harness.execute({ ...request, cwd: callDirectory, maxBudgetUsd: harnessRemainingUsd }); }
+          const progress = new ProgressSender(task.id, run.id, update => this.onCliProgress(update));
+          try {
+            return await this.harness.execute({ ...request, cwd: callDirectory, maxBudgetUsd: harnessRemainingUsd,
+              onProgress: update => progress.update(update),
+            });
+          }
           catch (error) {
             if (error instanceof HarnessTerminationError) retainHarnessDirectory = true;
             throw error;
           } finally {
+            progress.close();
             if (!retainHarnessDirectory && callDirectory !== harnessDirectory) await rm(callDirectory, { recursive: true, force: true });
           }
         },
@@ -1160,7 +1182,7 @@ export class Runner {
               }
               this.checkpoints.save({ ...checkpoint, phase: 'requesting' });
               try {
-                reply = await model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(900000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(900000)]), () => this.event(run.id, 'Model đang trả kết quả…')));
               } catch (error) {
                 // The CLI answered with a budget stop, so what it spent is known and the step can run again once the
                 // limit is raised; an unknown in-flight request would stay at 'requesting'.
@@ -1178,7 +1200,7 @@ export class Runner {
             } else if (isLocalApi(provider)) {
               this.event(run.id, modelStepLine(step, maxSteps));
               try {
-                reply = await model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…')));
                 reply = sanitizeReportReply(run, reply);
                 this.checkpoints.received(checkpoint, reply);
               } catch {
@@ -1189,7 +1211,7 @@ export class Runner {
               // verified price to reserve against, so a multi-call task and a retry run straight through.
               this.event(run.id, modelStepLine(step, maxSteps));
               try {
-                reply = await model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…')));
                 reply = sanitizeReportReply(run, reply);
                 this.checkpoints.received(checkpoint, reply);
               } catch (error) {
@@ -1211,7 +1233,7 @@ export class Runner {
                 : ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, journal);
               this.event(run.id, modelStepLine(step, maxSteps));
               try {
-                reply = await model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation);
+                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation));
                 reply = sanitizeReportReply(run, reply);
                 if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
                 else ledger.unknown(reservation, 'missing_usage');
@@ -1966,7 +1988,7 @@ export class Runner {
       let result: Awaited<ReturnType<HarnessRuntime['execute']>>;
       try {
         for (const capability of run.snapshot.toolCapabilities ?? []) assertCapability(run, this.store.get<Task>('tasks', task.id), capability);
-        result = await this.harness.execute({
+        result = await this.modelActivity(run, 'harness', signal, () => this.harness.execute({
           harness: provider,
           executable: tool.executable,
           ...(tool.configDir ? { configDir: tool.configDir } : {}),
@@ -1979,7 +2001,7 @@ export class Runner {
           ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
           ...(attachedImages.length ? { images: attachedImages } : {}),
           onProgress: update => progress.update(showSourceNames(update)),
-        });
+        }));
       } finally {
         progress.close();
         this.recordSteps(run.id, progress.lastProgress);

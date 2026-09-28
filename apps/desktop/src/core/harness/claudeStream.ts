@@ -194,11 +194,12 @@ export class ClaudeStreamParser {
   private markFinishedTools(content: unknown) {
     if (!Array.isArray(content)) return;
     let changed = false;
-    for (const item of content as { type?: string; tool_use_id?: string }[]) {
+    for (const item of content as { type?: string; tool_use_id?: string; is_error?: boolean }[]) {
       if (item.type !== 'tool_result' || !item.tool_use_id) continue;
       const step = this.progress.activity.find(entry => entry.id === item.tool_use_id);
       if (step && !step.done) {
         step.done = true;
+        if (item.is_error === true) step.failed = true;
         changed = true;
       }
     }

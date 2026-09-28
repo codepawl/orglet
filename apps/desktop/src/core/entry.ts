@@ -134,6 +134,8 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   // Each PDF is read in a worker thread built next to this file, so one slow or hostile file cannot stall the core.
 }, pdfTextInWorker(join(__dirname, 'pdf-text.js')), { readKey: requestSearchKey }, browserHost, desktopHelper, [basename(process.execPath).toLowerCase()]);
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
+core.runner.onCliProgress = update => port.postMessage({ type: 'cliProgress', update });
+store.onActivity = activity => port.postMessage({ type: 'activity', activity });
 // Tacet (COD-303): downloaded only when the person asks, and run in its own worker thread built next to this file.
 core.decisions = new Decisions({
   directory: decisionsDirectory(process.argv[2]),

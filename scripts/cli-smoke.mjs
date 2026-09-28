@@ -59,7 +59,7 @@ function orgletWith(extraEnvironment, userData, ...argumentList) {
 }
 
 /** One raw line to the app's pipe, for what the command itself never sends. */
-function rawRequest(userData, request) {
+function rawRequest(userData, request, allFrames = false) {
   return new Promise((resolveResponse, reject) => {
     const socket = createConnection(endpoint(userData), () => socket.write(`${JSON.stringify(request)}\n`));
     let received = '';
@@ -67,7 +67,12 @@ function rawRequest(userData, request) {
     socket.on('data', chunk => { received += chunk; });
     socket.on('error', reject);
     socket.on('close', () => {
-      try { resolveResponse(JSON.parse(received.split('\n')[0])); } catch (error) { reject(error); }
+      try {
+        const lines = received.split('\n').filter(Boolean).map(line => JSON.parse(line));
+        resolveResponse(allFrames ? lines : lines[0]);
+      } catch (error) {
+        reject(error);
+      }
     });
   });
 }
@@ -129,6 +134,11 @@ try {
   assert.ok(answer.length > 0, 'orglet send printed no answer');
   const read = expectOk(orglet(userData, 'read', '--to', 'Researcher'), 'orglet read');
   assert.equal(read, answer, 'orglet read should print the answer orglet send printed');
+  const progressFrames = await rawRequest(userData, { op: 'send', token, to: 'Researcher', message: 'progress protocol smoke',
+    files: [], wait: true, timeoutSeconds: 120, progress: true }, true);
+  assert.ok(progressFrames.some(frame => frame.type === 'progress' && Array.isArray(frame.steps)), 'An opted-in send must emit a progress frame');
+  assert.equal(progressFrames.at(-1).ok, true, 'Progress must end with the normal response');
+  assert.equal(progressFrames.at(-1).value.finished, true);
   // A second message continues the same chat as a new turn, exactly like the composer.
   const second = JSON.parse(expectOk(orglet(userData, 'send', 'and a second message', '--to', 'Researcher', '--json'), 'orglet send --json'));
   assert.equal(second.finished, true);

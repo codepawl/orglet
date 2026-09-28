@@ -1,5 +1,6 @@
 import { callStartingApp } from './client';
 import { DEFAULT_WAIT_SECONDS, type CliErrorCode, type CliRequestBody, type ListValue, type OpenValue, type ReadValue, type SendValue } from './protocol';
+import type { CliProgressFrame } from './protocol';
 
 /**
  * What `orglet chat` asks the app (COD-236), as one object the interactive session takes, so a test can hand it a fake
@@ -8,7 +9,7 @@ import { DEFAULT_WAIT_SECONDS, type CliErrorCode, type CliRequestBody, type List
 export type ChatClient = {
   list: () => Promise<ListValue>;
   /** Waits for the turn; aborting `signal` stops waiting and leaves the turn running in the app. */
-  send: (to: string, message: string, signal: AbortSignal) => Promise<SendValue>;
+  send: (to: string, message: string, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void) => Promise<SendValue>;
   read: (to: string) => Promise<ReadValue>;
   open: (to: string) => Promise<OpenValue>;
 };
@@ -21,14 +22,23 @@ export class AppRefusal extends Error {
 }
 
 export function appChatClient(userData: string, executable: string | undefined): ChatClient {
-  async function request<Value>(body: CliRequestBody, signal?: AbortSignal): Promise<Value> {
-    const response = await callStartingApp(userData, body, executable, signal);
+  async function request<Value>(body: CliRequestBody, signal?: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<Value> {
+    const response = await callStartingApp(userData, body, executable, signal, progress);
     if (!response.ok) throw new AppRefusal(response.error, response.code);
     return response.value as Value;
   }
   return {
     list: () => request<ListValue>({ op: 'list' }),
-    send: (to, message, signal) => request<SendValue>({ op: 'send', to, message, files: [], wait: true, timeoutSeconds: DEFAULT_WAIT_SECONDS }, signal),
+    send: async (to, message, signal, progress) => {
+      const body = { op: 'send' as const, to, message, files: [], wait: true, timeoutSeconds: DEFAULT_WAIT_SECONDS };
+      try {
+        return await request<SendValue>({ ...body, ...(progress ? { progress: true } : {}) }, signal, progress);
+      } catch (error) {
+        // An old strict schema refuses the flag before dispatch; retrying only that refusal cannot send twice.
+        if (!progress || !(error instanceof AppRefusal) || error.code !== 'invalid') throw error;
+        return request<SendValue>(body, signal);
+      }
+    },
     read: to => request<ReadValue>({ op: 'read', to }),
     open: to => request<OpenValue>({ op: 'open', to }),
   };

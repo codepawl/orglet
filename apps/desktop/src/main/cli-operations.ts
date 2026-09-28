@@ -6,6 +6,8 @@ import { connectionPricing, findCustomConnection } from '../shared/custom-connec
 import { isHarness } from '../shared/harness';
 import { isLocalApi, isPlanApi } from '../shared/contracts';
 import { resolveWorkerModel } from '../core/models/resolve';
+import { CliActivityFeed, type CliObserver } from './cli-activity';
+import type { CliProgressFrame } from '../cli/protocol';
 
 /**
  * What each `orglet` command does inside the app (COD-234). Every step goes through the same core commands the
@@ -31,6 +33,7 @@ export type CliDependencies = {
   translate: (message: string) => string;
   /** How often `send` reads the chat while it waits. */
   pollMilliseconds?: number;
+  observe?: (observer: CliObserver) => () => void;
 };
 
 /** Statuses of a turn that is still going; anything else means the turn has stopped. */
@@ -151,11 +154,11 @@ function delay(milliseconds: number): Promise<void> {
 export class CliOperations {
   constructor(private readonly dependencies: CliDependencies) {}
 
-  async run(request: CliRequest, signal: AbortSignal): Promise<unknown> {
+  async run(request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<unknown> {
     switch (request.op) {
       case 'status': return this.status();
       case 'list': return this.list();
-      case 'send': return this.send(request, signal);
+      case 'send': return this.send(request, signal, progress);
       case 'read': return this.read(request.to);
       case 'open': return this.open(request.to);
       case 'run': return this.runSchedule(request);
@@ -205,7 +208,12 @@ export class CliOperations {
    * creates the row (a crew's row belongs to its lead). Consent and provider scopes are the non-Demo providers of the
    * orglets that will run, and the cost limit is the chat's own or the orglet's or crew's default.
    */
-  async send(request: Extract<CliRequest, { op: 'send' }>, signal: AbortSignal): Promise<SendValue> {
+  async send(request: Extract<CliRequest, { op: 'send' }>, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<SendValue> {
+    const feed = request.progress && request.wait && progress ? new CliActivityFeed(progress, this.dependencies.translate) : undefined;
+    return this.sendTurn(request, signal, feed);
+  }
+
+  private async sendTurn(request: Extract<CliRequest, { op: 'send' }>, signal: AbortSignal, feed?: CliActivityFeed): Promise<SendValue> {
     const workspace = await this.workspace();
     const chat = matchChat(request.to, chatsOf(workspace));
     const sources = request.files.length ? await this.dependencies.request('importSources', request.files) as Source[] : [];
@@ -215,34 +223,45 @@ export class CliOperations {
     const runners = team ? crewRoster(team, workspace.workers) : worker ? [worker] : [];
     const providerScopes = [...new Set(runners.map(item => item.provider).filter(provider => provider !== 'demo'))] as NonNullable<TaskInput['providerScopes']>;
     const live = team ? liveTeamTask(workspace.tasks, team.id) : liveWorkerTask(workspace.tasks, chat.id);
-    let taskId: string;
-    if (live) {
-      await this.dependencies.request('reviseTask', { taskId: live.id, brief: request.message, sourceIds, excludedSources: [], consent: true, providerScopes, budgetMicros: live.budgetMicros });
-      taskId = live.id;
-    } else {
-      const budgetMicros = (team ?? worker)?.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS;
-      const owner = team ? { workerId: team.synthesizerId, teamId: team.id } : { workerId: chat.id };
-      const input: TaskInput = { ...owner, brief: request.message, sourceIds, excludedSources: [], consent: true, providerScopes, budgetMicros };
-      taskId = String(await this.dependencies.request('createTask', input));
+    const unsubscribe = feed ? this.dependencies.observe?.(observation => feed.observe(observation)) : undefined;
+    if (live) feed?.bind(live.id);
+    if (unsubscribe) signal.addEventListener('abort', unsubscribe, { once: true });
+    try {
+      let taskId: string;
+      if (live) {
+        await this.dependencies.request('reviseTask', { taskId: live.id, brief: request.message, sourceIds, excludedSources: [], consent: true, providerScopes, budgetMicros: live.budgetMicros });
+        taskId = live.id;
+      } else {
+        const budgetMicros = (team ?? worker)?.taskBudgetMicros ?? DEFAULT_TASK_BUDGET_MICROS;
+        const owner = team ? { workerId: team.synthesizerId, teamId: team.id } : { workerId: chat.id };
+        const input: TaskInput = { ...owner, brief: request.message, sourceIds, excludedSources: [], consent: true, providerScopes, budgetMicros };
+        taskId = String(await this.dependencies.request('createTask', input));
+      }
+      feed?.bind(taskId);
+      let detail = await this.taskDetail(taskId);
+      const revision = detail.task.inputRevision ?? 0;
+      if (!request.wait) {
+        return { chat, taskId, waited: false, finished: false, status: detail.task.status, answers: [], errors: [] };
+      }
+      feed?.update(detail, revision);
+      detail = await this.waitForTurn(taskId, detail, request.timeoutSeconds, signal, feed, revision);
+      const finished = !isTurnRunning(detail.task);
+      const errors = finished ? turnErrors(detail, revision).map(error => this.dependencies.translate(error)) : [];
+      return { chat, taskId, waited: true, finished, status: detail.task.status, answers: turnAnswers(detail, revision), errors };
+    } finally {
+      unsubscribe?.();
+      if (unsubscribe) signal.removeEventListener('abort', unsubscribe);
     }
-    let detail = await this.taskDetail(taskId);
-    const revision = detail.task.inputRevision ?? 0;
-    if (!request.wait) {
-      return { chat, taskId, waited: false, finished: false, status: detail.task.status, answers: [], errors: [] };
-    }
-    detail = await this.waitForTurn(taskId, detail, request.timeoutSeconds, signal);
-    const finished = !isTurnRunning(detail.task);
-    const errors = finished ? turnErrors(detail, revision).map(error => this.dependencies.translate(error)) : [];
-    return { chat, taskId, waited: true, finished, status: detail.task.status, answers: turnAnswers(detail, revision), errors };
   }
 
-  private async waitForTurn(taskId: string, first: TaskDetail, timeoutSeconds: number, signal: AbortSignal): Promise<TaskDetail> {
+  private async waitForTurn(taskId: string, first: TaskDetail, timeoutSeconds: number, signal: AbortSignal, feed?: CliActivityFeed, revision = 0): Promise<TaskDetail> {
     const deadline = Date.now() + timeoutSeconds * 1000;
     const interval = this.dependencies.pollMilliseconds ?? DEFAULT_POLL_MILLISECONDS;
     let detail = first;
     while (isTurnRunning(detail.task) && Date.now() < deadline && !signal.aborted) {
       await delay(interval);
       detail = await this.taskDetail(taskId);
+      feed?.update(detail, revision);
     }
     return detail;
   }

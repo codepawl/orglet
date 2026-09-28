@@ -28,6 +28,8 @@ import type { CliInstallState } from '../shared/cli';
 import { CLI_BACKGROUND_FLAG, cliEndpoint, type CliChat } from '../cli/protocol';
 import { CliServer, createCliToken, writeCliToken } from './cli-server';
 import { chatsOf, CliOperations } from './cli-operations';
+import type { CliObserver } from './cli-activity';
+import { RunActivity } from '../shared/run-activity';
 import { CliPathInstaller, isKeptOffPath, keepOffPath } from './cli-path';
 import type { InstallCopy } from './install-copy';
 import { runSquirrelEvent, runUpdateExecutable, squirrelEventOf, type SquirrelEvent } from './squirrel-events';
@@ -126,6 +128,7 @@ let language: Language = DEFAULT_LANGUAGE;
 const activeDictionary = () => language === 'en' ? en : language === 'en-GB' ? enGB : null;
 const tr = (key: string, params?: readonly unknown[]) => translate(activeDictionary(), key, params);
 let cliServer: CliServer | undefined;
+const cliObservers = new Set<CliObserver>();
 /**
  * Brings the window forward for `orglet open`, and with a chat asks the renderer to show it. Windows may only flash
  * the taskbar button instead: it does not let a background process take the foreground.
@@ -188,11 +191,16 @@ async function startCliServer(directory: string) {
   const token = createCliToken();
   await writeCliToken(directory, token);
   const translateForCli = (message: string) => translateMessage(activeDictionary(), message);
-  const operations = new CliOperations({ request, version: () => app.getVersion(), open: showWindow, translate: translateForCli });
+  const operations = new CliOperations({ request, version: () => app.getVersion(), open: showWindow, translate: translateForCli,
+    observe: observer => {
+      cliObservers.add(observer);
+      return () => cliObservers.delete(observer);
+    },
+  });
   cliServer = new CliServer({
     endpoint: cliEndpoint(directory),
     token,
-    handle: (cliRequest, signal) => operations.run(cliRequest, signal),
+    handle: (cliRequest, signal, progress) => operations.run(cliRequest, signal, progress),
     translate: translateForCli,
   });
   await cliServer.start();
@@ -448,8 +456,14 @@ async function start() {
     core.on('message', async message => {
       if (message.type === 'ready') { ready = true; clearTimeout(timer); resolve(); return; }
       if (message.type === 'changed') { if (window && !window.isDestroyed()) window.webContents.send('orglet:changed'); return; }
-      if (message.type === 'progress') {
-        if (window && !window.isDestroyed()) window.webContents.send('orglet:progress', message.update);
+      if (message.type === 'progress' || message.type === 'cliProgress') {
+        if (message.type === 'progress' && window && !window.isDestroyed()) window.webContents.send('orglet:progress', message.update);
+        for (const observer of cliObservers) observer({ progress: message.update });
+        return;
+      }
+      if (message.type === 'activity') {
+        const parsed = RunActivity.safeParse(message.activity);
+        if (parsed.success) for (const observer of cliObservers) observer({ activity: parsed.data });
         return;
       }
       if (message.type === 'decisionModel') {

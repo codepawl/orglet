@@ -4,6 +4,7 @@ import { createConnection } from 'node:net';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { CLI_BACKGROUND_FLAG, CLI_TOKEN_FILE, cliEndpoint, MAX_LINE_BYTES, type CliRequestBody, type CliResponse } from './protocol';
+import { CliProgressFrame, CliResponseFrame } from './protocol';
 
 /** Finding the app's data folder, reaching its pipe, and starting the app when nothing answers (COD-234). */
 
@@ -48,7 +49,7 @@ async function readToken(userData: string): Promise<string> {
 const UNREACHABLE_CODES = new Set(['ENOENT', 'ECONNREFUSED', 'EPIPE', 'ECONNRESET', 'ENOTSOCK']);
 
 /** Sends one request line and reads one response line. Aborting `signal` closes the connection and rejects. */
-export function exchange(endpoint: string, request: object, signal?: AbortSignal): Promise<CliResponse> {
+export function exchange(endpoint: string, request: object, signal?: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<CliResponse> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new StoppedError());
@@ -57,6 +58,7 @@ export function exchange(endpoint: string, request: object, signal?: AbortSignal
     const socket = createConnection(endpoint);
     let received = Buffer.alloc(0);
     let connected = false;
+    let response: CliResponse | undefined;
     const stop = () => {
       socket.destroy();
       reject(new StoppedError());
@@ -69,6 +71,29 @@ export function exchange(endpoint: string, request: object, signal?: AbortSignal
     });
     socket.on('data', (chunk: Buffer) => {
       received = Buffer.concat([received, chunk]);
+      let newline = received.indexOf(0x0a);
+      while (newline !== -1) {
+        if (newline > MAX_LINE_BYTES * 16) {
+          socket.destroy(new Error('The app sent too much data.'));
+          return;
+        }
+        try {
+          const parsed = JSON.parse(received.subarray(0, newline).toString('utf8'));
+          if (parsed?.type === 'progress') {
+            const frame = CliProgressFrame.parse(parsed);
+            if (response || !progress) throw new Error('Unexpected progress frame.');
+            progress(frame);
+          } else {
+            if (response) throw new Error('Duplicate response.');
+            response = CliResponseFrame.parse(parsed);
+          }
+        } catch {
+          socket.destroy(new Error('The app sent an answer this command cannot read.'));
+          return;
+        }
+        received = received.subarray(newline + 1);
+        newline = received.indexOf(0x0a);
+      }
       if (received.length > MAX_LINE_BYTES * 16) socket.destroy(new Error('The app sent too much data.'));
     });
     socket.on('error', error => {
@@ -77,24 +102,19 @@ export function exchange(endpoint: string, request: object, signal?: AbortSignal
       else reject(error);
     });
     socket.on('close', () => {
-      const newline = received.indexOf(0x0a);
-      if (newline === -1) {
+      if (!response) {
         reject(connected ? new Error('The app closed the connection without an answer.') : new UnreachableError('Orglet is not running.'));
         return;
       }
-      try {
-        resolve(JSON.parse(received.subarray(0, newline).toString('utf8')) as CliResponse);
-      } catch {
-        reject(new Error('The app sent an answer this command cannot read.'));
-      }
+      resolve(response);
     });
   });
 }
 
 /** One request with this start's token. */
-export async function call(userData: string, request: CliRequestBody, signal?: AbortSignal): Promise<CliResponse> {
+export async function call(userData: string, request: CliRequestBody, signal?: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<CliResponse> {
   const token = await readToken(userData);
-  return exchange(cliEndpoint(userData), { ...request, token }, signal);
+  return exchange(cliEndpoint(userData), { ...request, token }, signal, progress);
 }
 
 /**
@@ -138,9 +158,9 @@ const RETRY_MILLISECONDS = 500;
  * Tries the request; when the app does not answer, starts it and keeps trying for up to 30 seconds. While it starts,
  * the token on disk may still be the previous run's, so a refused token is retried too.
  */
-export async function callStartingApp(userData: string, request: CliRequestBody, executable: string | undefined, signal?: AbortSignal): Promise<CliResponse> {
+export async function callStartingApp(userData: string, request: CliRequestBody, executable: string | undefined, signal?: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<CliResponse> {
   try {
-    return await call(userData, request, signal);
+    return await call(userData, request, signal, progress);
   } catch (error) {
     if (!(error instanceof UnreachableError) || !executable) throw error;
   }
@@ -149,7 +169,7 @@ export async function callStartingApp(userData: string, request: CliRequestBody,
   while (Date.now() < deadline) {
     await delay(RETRY_MILLISECONDS, signal);
     try {
-      const response = await call(userData, request, signal);
+      const response = await call(userData, request, signal, progress);
       const staleToken = !response.ok && response.code === 'unauthorized';
       if (!staleToken) return response;
     } catch (error) {
