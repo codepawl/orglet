@@ -4,6 +4,8 @@ What you can do inside a chat once an orglet or crew is set up: attach files, ty
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
+In an orglet's chat, the model picker in the message box shows the selected model's name. Open it to see the exact model IDs and choose another model for that orglet.
+
 ## Attach files
 
 An orglet reads only what you attach to **that** chat, or what is inside the working folder you granted it ([Permissions](permissions-and-learning.md#permissions)).
