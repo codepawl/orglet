@@ -253,7 +253,7 @@ describe('orglet chat picker', () => {
         const lines = renderPickerLines({ ...createPicker(entries), selected }, { width: 80, mode: 'none', maxRows: 8, maxLines, grouped: true, showFaces: true });
         expect(lines.length).toBeLessThanOrEqual(maxLines);
         expect(lines.find(line => line.startsWith('› '))).toContain(entries[selected].name);
-        if (maxLines >= 2) expect(lines).toContain(`  ${entries[selected].kind === 'worker' ? 'Orglets' : 'Crews'}`);
+        if (maxLines >= 2) expect(lines).toContain(entries[selected].kind === 'worker' ? '  [ Orglets · 3 ]' : '  [ Crews · 1 ]');
       }
     }
   });
@@ -269,7 +269,7 @@ describe('orglet one-shot commands in colour', () => {
       '  ▐••▌ Kế toán     anthropic',
       '',
       'Crews',
-      '  ▐••▌▐••▌▐••▌ Review crew  lead Writer  Researcher, Kế toán',
+      '  ▦    Review crew  lead Writer  Researcher, Kế toán',
     ]);
     expect(colored).toContain('\x1b[38;2;167;100;201m▐');
     const status = styledStatus({ version: '1.0.0', orglets: 2, crews: 0, running: 1, colors: [BLUE, PURPLE] }, 'truecolor');

@@ -346,7 +346,7 @@ export class TerminalComposer {
     const height = Math.max(1, (this.options.output.rows ?? 24) - 1);
     const footer = status && height > 3 ? [muted(truncate(status, width), this.options.mode)] : [];
     if (hint && height > 4) footer.push(muted(truncate(hint, width), this.options.mode));
-    const rules = this.options.frame && height >= 3 ? 2 : 0;
+    const rules = this.options.frame && !confirmingExit && height >= 3 ? 2 : 0;
     const detail = height >= 14 ? this.options.detail?.() : undefined;
     const detailRows = detail ? 1 : 0;
     const maxExtraLines = Math.max(0, height - footer.length - 1 - rules - detailRows - (this.options.frame ? 2 : 0));
