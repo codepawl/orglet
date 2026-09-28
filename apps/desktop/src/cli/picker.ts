@@ -1,5 +1,5 @@
 import { normalizeRoleText } from '../shared/role-words';
-import { renderMiniFaces, MINI_FACE_WIDTH } from './faces';
+import { renderMiniFace, renderMiniFaces, MINI_FACE_WIDTH } from './faces';
 import type { ChatKind, ListValue } from './protocol';
 import { displayWidth, isHexColor, muted, NEUTRAL_COLOR, padEnd, paint, truncate, type ColorMode } from './terminal';
 
@@ -132,7 +132,9 @@ function windowStart(count: number, selected: number, maxRows: number): number {
 
 export function entryLine(entry: ChatEntry, selected: boolean, layout: PickerLayout, facesWidth: number, nameWidth: number): string {
   const marker = selected ? paint('›', { foreground: entry.color, bold: true }, layout.mode) : ' ';
-  const faces = layout.mode === 'none' || layout.showFaces === false ? '' : `${padEnd(renderMiniFaces(entry.colors, layout.mode), facesWidth)} `;
+  const showFaces = layout.showFaces ?? layout.mode !== 'none';
+  const face = layout.showFaces === true ? renderMiniFace(entry.color, layout.mode) : renderMiniFaces(entry.colors, layout.mode);
+  const faces = showFaces ? `${padEnd(face, facesWidth)} ` : '';
   const name = truncate(entry.name, nameWidth);
   const paddedName = padEnd(selected ? paint(name, { bold: true }, layout.mode) : name, nameWidth);
   const used = 2 + displayWidth(faces) + nameWidth + 2;
@@ -156,7 +158,8 @@ export function renderPickerLines(state: PickerState, layout: PickerLayout): str
   if (visible.length === 0) return [muted(`  Nothing matches "${state.filter.trim()}".`, layout.mode), muted(`  ${PICKER_HINT}`, layout.mode)];
   const start = windowStart(visible.length, state.selected, layout.maxRows);
   const shown = visible.slice(start, start + layout.maxRows);
-  const { facesWidth, nameWidth } = columnWidths(state.entries, layout.width);
+  const { nameWidth, facesWidth: fullFacesWidth } = columnWidths(state.entries, layout.width);
+  const facesWidth = layout.showFaces === true ? MINI_FACE_WIDTH : fullFacesWidth;
   const lines = shown.map((entry, index) => entryLine(entry, start + index === state.selected, layout, facesWidth, nameWidth));
   const more = visible.length - shown.length;
   const hint = more > 0 ? `${PICKER_HINT} · ${more} more` : PICKER_HINT;

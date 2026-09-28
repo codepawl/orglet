@@ -26,7 +26,7 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/queue', 'Show this terminal\'s pending messages and commands'],
   ['/undo', 'Take the last queued item back into the draft'],
   ['/details', 'Expand or collapse answers (Ctrl+O)'],
-  ['/agents', 'Show or hide agent context (Ctrl+G or Left on an empty draft)'],
+  ['/agents', 'Show or hide agent context (Ctrl+G)'],
   ['/help', 'Show these commands'],
   ['/exit', 'Leave (Ctrl+D does the same)'],
 ];

@@ -1,4 +1,4 @@
-import { HEADER_FACE_WIDTH, renderHeaderFace } from './faces';
+import { HEADER_FACE_WIDTH, renderHeaderFace, renderMiniFace } from './faces';
 import type { ChatEntry } from './picker';
 import { muted, paint, truncate, wrapSegments, type ColorMode } from './terminal';
 
@@ -21,10 +21,10 @@ export function agentDetails(chat: ChatEntry, entries: readonly ChatEntry[], dir
   const lines = [`Agents · ${chat.name}`];
   for (const name of names) {
     const agent = entries.find(entry => entry.kind === 'worker' && entry.name === name);
-    lines.push(`${name} · ${agent?.detail ?? 'connection unknown'}`);
-    if (agent?.description) lines.push(`  ${agent.description}`);
+    lines.push(`${renderMiniFace(agent?.color, mode)} ${name} · ${agent?.detail ?? 'connection unknown'}`);
+    if (agent?.description) lines.push(`     ${agent.description}`);
   }
   lines.push(`Terminal: ${directory}`, 'Plan tier: not reported by this connection.', 'Thinking effort: provider default; no Orglet override.');
-  lines.push('Ctrl+G / ← toggles · Ctrl+P switches chat · Esc closes');
+  lines.push('Ctrl+G toggles · ← picks a chat · Esc closes');
   return lines.flatMap((line, index) => wrapSegments([{ text: line, style: { bold: index === 0 } }], { width, mode }));
 }

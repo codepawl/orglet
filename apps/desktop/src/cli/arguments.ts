@@ -55,13 +55,13 @@ In the chat, /to <name> switches chat, /list lists orglets and crews, /read
 shows the latest answer again, /open brings the app to this chat, /clear
 clears the screen, /queue shows pending messages and commands, /undo takes the
 last queued item back into the draft, /help lists these and /exit leaves.
-/open, /clear, /queue, /undo and /help work while waiting. Ctrl+C asks before
-leaving: Y exits; N, Enter or Esc stays. Sent work keeps running in the app.
+/open, /clear, /queue, /undo and /help work while waiting. Press Ctrl+C twice
+to leave; typing or Esc dismisses the first hint. Sent work keeps running.
 
 The header shows the connection and selected model. Chat requires a real
 connection; /open configures it in the app, then /list refreshes the picker.
-Ctrl+O expands answer details, Ctrl+G (or Left on an empty draft) shows agents,
-Ctrl+Q shows the queue, Ctrl+Z edits its last item and Ctrl+P switches chat.
+Ctrl+O expands answer details and Ctrl+G shows agents. Ctrl+Q shows the queue,
+Ctrl+Z edits its last item; Ctrl+P or Left on an empty draft picks another chat.
 Page Up/Down scrolls. Ctrl+J adds a line; Ctrl+D leaves.
 
 Options:
