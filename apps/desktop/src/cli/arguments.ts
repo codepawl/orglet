@@ -55,8 +55,8 @@ In the chat, /to <name> switches chat, /list lists orglets and crews, /read
 shows the latest answer again, /open brings the app to this chat, /clear
 clears the screen, /queue shows pending messages and commands, /undo takes the
 last queued item back into the draft, /help lists these and /exit leaves.
-/open, /clear, /queue, /undo and /help work while waiting. Ctrl+C stops waiting
-for an answer; the orglet keeps working in the app.
+/open, /clear, /queue, /undo and /help work while waiting. Ctrl+C asks before
+leaving: Y exits; N, Enter or Esc stays. Sent work keeps running in the app.
 
 The header shows the connection and selected model. Chat requires a real
 connection; /open configures it in the app, then /list refreshes the picker.

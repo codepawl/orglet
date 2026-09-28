@@ -101,7 +101,7 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
     key: async (text: string | Buffer) => { input.write(text); await pause(); },
     resolve: async () => { finishSend?.(); await pause(); },
     failOpen: async () => { failOpen?.(); await pause(); },
-    stop: async () => { input.write('\x04'); await running; },
+    stop: async () => { input.end(); await running; },
   };
 }
 
@@ -478,7 +478,7 @@ describe('terminal composer', () => {
       await session.key('/');
       await session.key('\x1b');
       expect(session.screen.text()).not.toContain('Tab/Enter fill');
-      await session.key('\x03');
+      await session.key('\x15');
       expect(session.screen.text()).toContain('› ');
     } finally { await session.stop(); }
   });
@@ -503,19 +503,119 @@ describe('terminal composer', () => {
     } finally { await session.stop(); }
   });
 
-  it('cancels waiting without losing the draft, and exits immediately with queued work', async () => {
+  it('confirms Ctrl+C without losing an idle draft, and defaults to staying', async () => {
+    const session = await terminal();
+    try {
+      await session.key('unsent draft');
+      await session.key('\x03');
+      expect(session.screen.text()).toContain('Exit CLI? [y/N]');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('› unsent draft');
+      expect(session.sent).toEqual([]);
+      await session.key('\x03');
+      await session.key('\x1b');
+      expect(session.screen.text()).toContain('› unsent draft');
+      await session.key('\x03');
+      await session.key('n');
+      expect(session.screen.text()).toContain('› unsent draft');
+    } finally { await session.stop(); }
+  });
+
+  it('pauses queue dispatch during confirmation and resumes it after staying', async () => {
     const session = await terminal({ slow: true });
-    await session.key('one');
-    await session.key('\r');
-    await session.key('draft');
-    await session.key('\x03');
-    expect(session.screen.text()).toContain('keeps working in the app');
-    expect(session.screen.text()).toContain('› draft');
-    await session.key('\r');
-    await session.key('queued');
-    await session.key('\r');
-    await session.stop();
-    expect(session.sent).toEqual(['one', 'draft']);
+    try {
+      await session.key('one');
+      await session.key('\r');
+      await session.key('queued');
+      await session.key('\r');
+      await session.key('draft');
+      await session.key('\x03');
+      expect(session.screen.text()).toContain('Exit CLI? [y/N]');
+      await session.resolve();
+      expect(session.sent).toEqual(['one']);
+      await session.key('n');
+      expect(session.sent).toEqual(['one', 'queued']);
+      expect(session.screen.text()).toContain('› draft');
+    } finally { await session.stop(); }
+  });
+
+  it('exits only after Y while waiting and drops queued work without sending it', async () => {
+    const session = await terminal({ slow: true });
+    try {
+      await session.key('one');
+      await session.key('\r');
+      await session.key('queued');
+      await session.key('\r');
+      await session.key('\x03');
+      expect(session.input.isRaw).toBe(true);
+      await session.key('y');
+      expect(session.input.isRaw).toBe(false);
+      expect(session.sent).toEqual(['one']);
+      expect(session.transcript()).toContain('\x1b[?1049l');
+    } finally { await session.stop(); }
+  });
+
+  it('does not accept pasted confirmation text or repeated Ctrl+C', async () => {
+    const session = await terminal();
+    try {
+      await session.key('draft');
+      await session.key('\x03');
+      await session.key('\x1b[200~y\r\x1b[201~');
+      await session.key('\x03');
+      expect(session.screen.text()).toContain('Exit CLI? [y/N]');
+      expect(session.input.isRaw).toBe(true);
+      await session.key('n');
+      expect(session.screen.text()).toContain('› draft');
+    } finally { await session.stop(); }
+  });
+
+  it('restores the picker filter after declining exit without opening a chat', async () => {
+    const session = await terminal({ picker: true });
+    try {
+      await session.key('Kế');
+      await session.key('\x03');
+      expect(session.screen.text()).toContain('Exit CLI? [y/N]');
+      await session.key('\x04');
+      expect(session.input.isRaw).toBe(true);
+      await session.key('N');
+      expect(session.screen.text()).toContain('Open › Kế');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Orglet test · Kế toán');
+      expect(session.sent).toEqual([]);
+    } finally { await session.stop(); }
+  });
+
+  it.each([4, 5, 10])('keeps exit confirmation visible in a %i-row terminal', async rows => {
+    const session = await terminal({ columns: 24, rows });
+    try {
+      await session.key('draft');
+      await session.key('\x03');
+      expect(session.screen.text()).toContain('Exit CLI? [y/N]');
+      expect(session.screen.lines.length).toBeLessThan(rows);
+      await session.key('\n');
+      expect(session.screen.text()).toContain('› draft');
+      await session.key('\x03');
+      await session.key('Y');
+      expect(session.input.isRaw).toBe(false);
+    } finally { await session.stop(); }
+  });
+
+  it.each(['Ctrl+D', '/exit'])('still leaves a busy chat immediately with %s outside confirmation', async exit => {
+    const session = await terminal({ slow: true });
+    try {
+      await session.key('one');
+      await session.key('\r');
+      await session.key('queued');
+      await session.key('\r');
+      if (exit === 'Ctrl+D') await session.key('\x04');
+      else {
+        await session.key('/exit');
+        await session.key('\r');
+      }
+      expect(session.input.isRaw).toBe(false);
+      expect(session.sent).toEqual(['one']);
+      expect(session.transcript()).toContain('\x1b[?1049l');
+    } finally { await session.stop(); }
   });
 
   it('retains picker navigation, filtering, Tab and Esc back to the chat', async () => {

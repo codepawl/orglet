@@ -60,6 +60,7 @@ class Session {
   private processing = false;
   private inputClosed = false;
   private finished = false;
+  private confirmingExit = false;
   private waitingController: AbortController | undefined;
   private finish: (code: number) => void = () => undefined;
   private waitingStartedAt = 0;
@@ -112,14 +113,15 @@ class Session {
         output: this.options.output,
         mode: this.mode,
         frame: (height, width) => this.frame(height, width),
-        detail: () => this.chat && this.view === 'chat' ? `${this.chat.model ?? 'provider default'} · effort: provider default` : '',
+        detail: () => this.confirmingExit ? 'Runs already sent keep working in the app.' : this.chat && this.view === 'chat' ? `${this.chat.model ?? 'provider default'} · effort: provider default` : '',
         shortcut: action => this.shortcut(action),
         prompt: () => this.currentPrompt(),
         rows: () => renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: this.pickerRows(), showFaces: false }),
         status: () => this.composerStatus(),
         hint: () => {
+          if (this.confirmingExit) return 'Y exits · N / Enter / Esc stays';
           if (this.panel || this.agentsVisible) return 'PgUp/PgDn scroll · Esc closes · Ctrl+P switch';
-          return this.waitingController ? 'Ctrl+Q queue · Ctrl+Z undo · Ctrl+C stop waiting' : 'Ctrl+J newline · Ctrl+O details · ← agents · /help';
+          return this.waitingController ? 'Ctrl+Q queue · Ctrl+Z undo · Ctrl+C exit' : 'Ctrl+J newline · Ctrl+O details · ← agents · /help';
         },
         picker: () => this.view === 'picker',
         suggestions: text => completeSlash(text, this.entries.map(entry => entry.name))[0].map(candidate => ({
@@ -140,6 +142,8 @@ class Session {
         },
         submit: text => this.enqueue(text),
         interrupt: () => this.interrupt(),
+        confirmingExit: () => this.confirmingExit,
+        confirmExit: leave => this.confirmExit(leave),
         close: () => this.end(EXIT_CODES.ok),
       });
       this.composer.start();
@@ -159,6 +163,7 @@ class Session {
   }
 
   private composerStatus(): string {
+    if (this.confirmingExit) return 'Unsent draft and queue will be discarded.';
     if (!this.chat || this.view === 'picker') return '';
     const state = this.waitingController ? 'working' : 'ready';
     const queued = this.queue.length ? ` · ${this.queue.length} queued` : '';
@@ -352,8 +357,13 @@ class Session {
     }
   }
 
-  /** Ctrl+C: stop waiting if an answer is on its way, clear a typed line, or leave from an empty prompt. */
+  /** Raw terminals confirm before leaving; scripted sessions retain their signal handling. */
   private interrupt(): void {
+    if (this.terminal) {
+      this.confirmingExit = true;
+      this.showPrompt();
+      return;
+    }
     if (this.waitingController) {
       this.waitingController.abort();
       return;
@@ -363,6 +373,16 @@ class Session {
       return;
     }
     this.end(EXIT_CODES.ok);
+  }
+
+  private confirmExit(leave: boolean): void {
+    this.confirmingExit = false;
+    if (leave) {
+      this.end(EXIT_CODES.ok);
+      return;
+    }
+    this.showPrompt();
+    void this.drain();
   }
 
   private enqueue(text: string): void {
@@ -389,7 +409,7 @@ class Session {
   private async drain(): Promise<void> {
     if (this.processing) return;
     this.processing = true;
-    while (this.queue.length > 0 && !this.finished) {
+    while (this.queue.length > 0 && !this.finished && !this.confirmingExit) {
       const line = this.queue.shift()!;
       await this.handle(line);
     }

@@ -148,7 +148,7 @@ export function columnWidths(entries: readonly ChatEntry[], width: number): { fa
   return { facesWidth, nameWidth };
 }
 
-export const PICKER_HINT = '↑↓ move · type to filter · Enter opens · Ctrl+C quits';
+export const PICKER_HINT = '↑↓ move · type to filter · Enter opens · Ctrl+C exit';
 
 /** The list under the picker's prompt, with a hint line; at most `maxRows` entries. */
 export function renderPickerLines(state: PickerState, layout: PickerLayout): string[] {

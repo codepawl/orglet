@@ -86,7 +86,7 @@ While an answer is on its way, `/queue` shows previews of the messages and comma
 
 `/open`, `/help`, `/clear`, `/queue` and `/undo` run immediately while waiting. This lets you open the desktop for an approval without waiting for the blocked turn to finish. Other messages and commands, including `/to`, keep their order in the queue.
 
-The draft wraps with the terminal's width. For a long draft, only the rows around the cursor are shown; moving the cursor reveals the rest. Leaving with Ctrl+D or `/exit` drops this terminal's unsent draft and local queue. Messages already sent keep running in the app.
+The draft wraps with the terminal's width. For a long draft, only the rows around the cursor are shown; moving the cursor reveals the rest. Ctrl+C asks before leaving; only Y confirms. Enter, N or Esc returns to the draft, and bracketed paste does not confirm. Ctrl+D or `/exit` leaves immediately. Leaving drops this terminal's unsent draft and local queue. Messages already sent keep running in the app.
 
 `orglet chat --to Researcher` skips the list and opens that chat. If the name fits several chats, or none, the list opens with it typed in.
 
@@ -110,7 +110,7 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 | Left, Right, Home, End | Move within the draft; Home and End go to the start and end of the current line |
 | Tab | Fills the highlighted command or name after `/to` |
 | Esc | Dismisses the command menu, closes details, or returns from the `/to` list to the chat |
-| Ctrl+C | While an answer is on its way, stops waiting. The orglet keeps working in the app; `/read` shows the answer later. On an empty line, leaves. |
+| Ctrl+C | Asks before leaving: Y exits; N, Enter or Esc stays with the draft and queue intact. Queue dispatch pauses while the question is open. Sent work keeps running in the app. |
 | Ctrl+D | Leaves |
 
 ### Commands in the chat
