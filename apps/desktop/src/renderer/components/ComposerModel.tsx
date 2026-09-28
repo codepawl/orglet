@@ -50,6 +50,7 @@ export function ComposerModel({ worker, onChange }: {
     onChange={onChange}
     options={options}
     showIcon={false}
+    showDetail={false}
     inlineDetail
     menuMinWidth={280}
   />;
