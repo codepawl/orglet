@@ -8,6 +8,7 @@ import { isLocalApi, isPlanApi } from '../shared/contracts';
 import { resolveWorkerModel } from '../core/models/resolve';
 import { CliActivityFeed, type CliObserver } from './cli-activity';
 import type { CliProgressFrame } from '../cli/protocol';
+import { manageCli } from './cli-management';
 
 /**
  * What each `orglet` command does inside the app (COD-234). Every step goes through the same core commands the
@@ -162,6 +163,10 @@ export class CliOperations {
       case 'read': return this.read(request.to);
       case 'open': return this.open(request.to);
       case 'run': return this.runSchedule(request);
+      case 'config':
+      case 'save-orglet':
+      case 'save-crew':
+      case 'delete-entity': return manageCli(request, this.dependencies.request);
     }
   }
 

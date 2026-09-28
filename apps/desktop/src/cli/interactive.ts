@@ -1,3 +1,4 @@
+import { t } from './text';
 import { createInterface, type Interface } from 'node:readline';
 import { TerminalComposer } from './composer';
 import { agentDetails, terminalHeader } from './chat-layout';
@@ -10,6 +11,8 @@ import { answerColor, chatHeader, renderAnswers, styledList } from './pretty';
 import { EXIT_CODES, type CliAnswer, type SendValue } from './protocol';
 import { completeSlash, isSlashCommand, parseSlash, SLASH_HELP, type SlashCommand } from './slash';
 import { ERROR_COLOR, muted, MUTED_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
+import { ManagementEditor, type EditorResult, type ManagementAction } from './management-editor';
+import type { ManagementResult } from './management';
 
 /**
  * `orglet chat` (COD-236): pick an orglet or crew, then talk to it from the terminal. Everything outside this module
@@ -72,6 +75,8 @@ class Session {
   private agentsVisible = false;
   private panel: 'queue' | 'help' | undefined;
   private panelOffset = 0;
+  private editor: ManagementEditor | undefined;
+  private editorDraft = '';
 
   constructor(private readonly options: InteractiveOptions) {
     this.terminal = options.terminal ?? Boolean(options.input.isTTY && options.output.isTTY);
@@ -84,7 +89,7 @@ class Session {
     } catch (error) {
       return this.startFailure(error);
     }
-    if (this.entries.length === 0) {
+    if (this.entries.length === 0 && !this.options.client.management) {
       this.print('No orglets yet. Add one in the Orglet app, then run orglet chat again.');
       return EXIT_CODES.failure;
     }
@@ -114,30 +119,45 @@ class Session {
         output: this.options.output,
         mode: this.mode,
         frame: (height, width) => this.frame(height, width),
-        detail: () => this.confirmingExit ? 'Runs already sent keep working in the app.' : this.chat && this.view === 'chat' ? `${this.chat.model ?? 'provider default'} · effort: provider default` : '',
+        detail: () => this.confirmingExit ? 'Runs already sent keep working in the app.' : !this.editor && this.chat && this.view === 'chat' ? `${this.chat.model ?? 'provider default'} · effort: provider default` : '',
         shortcut: action => this.shortcut(action),
         prompt: () => this.currentPrompt(),
-        placeholder: () => this.view === 'picker' ? 'Search orglets or crews…' : '',
-        rows: maxLines => renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: PICKER_MAX_ROWS, maxLines, grouped: true, showFaces: true }),
+        placeholder: () => this.editor?.placeholder ?? (this.view === 'picker' ? 'Search orglets or crews…' : ''),
+        rows: maxLines => this.editor ? this.editor.rows(this.textWidth(), maxLines, this.mode) : renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: PICKER_MAX_ROWS, maxLines, grouped: true, showFaces: true }),
         status: () => this.composerStatus(),
         hint: () => {
           if (this.confirmingExit) return 'Esc stays · typing continues';
+          if (this.editor) return t('Esc quay lại/hủy · PgUp/PgDn chi tiết');
+          if (this.view === 'picker') return t("/new tạo · /edit sửa · /delete xóa");
           if (this.panel || this.agentsVisible) return 'PgUp/PgDn scroll · Esc closes · Ctrl+P switch';
           return this.waitingController ? 'Ctrl+Q queue · Ctrl+Z undo · Ctrl+C exit' : 'Ctrl+J newline · Ctrl+O details · ← chats · /help';
         },
-        picker: () => this.view === 'picker',
-        suggestions: text => completeSlash(text, this.entries.map(entry => entry.name))[0].map(candidate => ({
+        picker: () => this.editor ? this.editor.isPicker : this.view === 'picker' && !this.composer?.text.startsWith('/'),
+        suggestions: text => this.editor ? [] : completeSlash(text, this.entries.map(entry => entry.name))[0].map(candidate => ({
           text: candidate,
           description: SLASH_HELP.find(([usage]) => usage.split(' ')[0] === candidate.trim())?.[1] ?? 'Open this chat',
         })),
         change: text => {
+          if (this.editor) return this.editor.change(text);
           if (this.view === 'picker') this.picker = setFilter(this.picker, text);
         },
         navigate: direction => {
+          if (this.editor) {
+            if (direction !== 0) this.editor.navigate(direction);
+            return;
+          }
           if (direction === 0) this.composer?.replace(chosenEntry(this.picker)?.name ?? '');
           else this.picker = moveSelection(this.picker, direction);
         },
         escape: () => {
+          if (this.editor) {
+            if (this.editor.escape()) {
+              this.closeEditor();
+              void this.drain();
+            }
+            else this.replaceLine(this.editor.draft());
+            return;
+          }
           this.agentsVisible = false;
           this.panel = undefined;
           this.leavePicker();
@@ -166,7 +186,8 @@ class Session {
 
   private composerStatus(): string {
     if (this.confirmingExit) return 'Unsent draft and queue will be discarded.';
-    if (!this.chat || this.view === 'picker') return '';
+    if (this.editor) return this.editor.state === 'saving' ? t("Đang áp dụng cấu hình…") : this.editor.state === 'confirm' ? this.editor.error || t("Xóa cần tên khớp hoàn toàn · Esc hủy") : t("Cấu hình · không gửi tin nhắn chat");
+    if (!this.chat || this.view === 'picker') return t("/new tạo · /edit sửa · /delete xóa");
     const state = this.waitingController ? 'working' : 'ready';
     const queued = this.queue.length ? ` · ${this.queue.length} queued` : '';
     const elapsed = this.waitingController ? ` · ${Math.floor((Date.now() - this.waitingStartedAt) / 1000)}s` : '';
@@ -175,6 +196,13 @@ class Session {
 
   private frame(height: number, width: number): string[] {
     const directory = this.options.directory ?? process.cwd();
+    if (this.editor) {
+      const header = this.editor.state === 'confirm' ? [] : [muted(truncate(`Orglet ${this.options.version} · ${directory}`, width), this.mode)];
+      const context = this.editor.context(width, this.mode);
+      const room = Math.max(0, height - header.length);
+      this.editor.contextOffset = Math.max(0, Math.min(this.editor.contextOffset, Math.max(0, context.length - room)));
+      return [...header, ...context.slice(this.editor.contextOffset, this.editor.contextOffset + room)];
+    }
     const chat = this.view === 'chat' ? this.chat : undefined;
     const header = terminalHeader(chat, this.options.version, directory, width, this.options.output.rows ?? 24, this.mode);
     const headerRows = Math.min(header.length, Math.max(1, height - 3));
@@ -195,6 +223,11 @@ class Session {
   }
 
   private shortcut(action: 'agents' | 'details' | 'queue' | 'undo' | 'switch' | 'pageUp' | 'pageDown'): void {
+    if (this.editor) {
+      if (action === 'pageUp') this.editor.contextOffset -= 3;
+      if (action === 'pageDown') this.editor.contextOffset += 3;
+      return;
+    }
     if (action === 'pageUp' || action === 'pageDown') {
       if (this.panel || this.agentsVisible) this.panelOffset += action === 'pageUp' ? -5 : 5;
       else this.transcript.offset += action === 'pageUp' ? 5 : -5;
@@ -389,6 +422,12 @@ class Session {
   }
 
   private enqueue(text: string): void {
+    if (this.editor) {
+      const result = this.editor.submit(text);
+      if (result) void this.applyEditorResult(result);
+      else this.replaceLine(this.editor.draft());
+      return;
+    }
     if (this.view === 'chat' && !text.trim()) return;
     // `/exit` must leave immediately, even when an earlier message is still waiting for its answer.
     if (this.terminal && isSlashCommand(text) && /^\/(exit|quit)\s*$/i.test(text)) {
@@ -412,7 +451,7 @@ class Session {
   private async drain(): Promise<void> {
     if (this.processing) return;
     this.processing = true;
-    while (this.queue.length > 0 && !this.finished && !this.confirmingExit) {
+    while (this.queue.length > 0 && !this.finished && !this.confirmingExit && (!this.terminal || !this.editor)) {
       const line = this.queue.shift()!;
       await this.handle(line);
     }
@@ -436,17 +475,23 @@ class Session {
   }
 
   private async handle(line: QueuedLine): Promise<void> {
+    if (this.editor) {
+      const result = this.editor.submit(line.text);
+      if (result) await this.applyEditorResult(result);
+      return;
+    }
+    if (isSlashCommand(line.text)) {
+      if (!this.terminal && this.view === 'chat') this.echo(line, this.chatPrompt());
+      await this.command(parseSlash(line.text));
+      return;
+    }
     if (this.view === 'picker') {
       this.choose(line);
       return;
     }
-    if (!this.terminal || !isSlashCommand(line.text)) this.echo(line, this.chatPrompt());
+    this.echo(line, this.chatPrompt());
     const text = line.text.trim();
     if (text === '') return;
-    if (isSlashCommand(line.text)) {
-      await this.command(parseSlash(text));
-      return;
-    }
     await this.send(text);
   }
 
@@ -472,10 +517,114 @@ class Session {
       case 'undo': return this.undoQueued();
       case 'details': return this.shortcut('details');
       case 'agents': return this.shortcut('agents');
+      case 'new': return this.manage('new', command.entity);
+      case 'edit': return this.manage('edit', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
+      case 'delete': return this.manage('delete', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
       case 'help': return this.help();
       case 'exit': return this.end(EXIT_CODES.ok);
       case 'unknown': return this.printMuted(`Unknown command ${command.command}. /help lists the commands.`);
     }
+  }
+
+  private async manage(action: ManagementAction, kind?: 'worker' | 'team', name?: string): Promise<void> {
+    const management = this.options.client.management;
+    if (!management) {
+      this.printError(t("Cập nhật Orglet và CLI để quản lý Tí và hội ở đây."));
+      return;
+    }
+    try {
+      const catalog = await management.catalog();
+      this.editorDraft = this.composer?.text ?? '';
+      this.editor = new ManagementEditor(action, catalog, kind, name);
+      this.replaceLine('');
+      if (!this.terminal) this.printLines(this.editor.context(this.textWidth(), this.mode));
+    } catch (error) {
+      if (error instanceof AppRefusal && error.code === 'invalid') this.printError(t("Cập nhật Orglet và CLI để quản lý Tí và hội ở đây."));
+      else this.printFailure(error);
+    }
+  }
+
+  private closeEditor(): void {
+    this.editor = undefined;
+    this.replaceLine(this.editorDraft);
+    this.editorDraft = '';
+    this.showPrompt();
+  }
+
+  private async applyEditorResult(result: EditorResult): Promise<void> {
+    if (result.action === 'cancel') {
+      this.closeEditor();
+      void this.drain();
+      return;
+    }
+    const editor = this.editor!;
+    const previousState = editor.state;
+    editor.state = 'saving';
+    let saved: ManagementResult | undefined;
+    this.showPrompt();
+    try {
+      const management = this.options.client.management!;
+      if (result.action === 'delete' && this.chat?.kind === result.kind && this.chat.name === editor.originalName && this.queue.length) {
+        throw new Error(t('Hàng đợi terminal còn tin nhắn. Nhấn Esc, dùng /queue và /undo trước khi xóa chat này.'));
+      }
+      saved = result.action === 'delete'
+        ? await management.delete(result.kind, result.target, result.confirmName)
+        : result.kind === 'worker'
+          ? await management.saveOrglet(result.config, result.target)
+          : await management.saveCrew(result.config, result.target);
+      const value = await this.options.client.list();
+      this.entries = entriesFromList(value);
+      this.closeEditor();
+      this.restoreManagedChat(saved, editor.originalName, editor.action);
+      this.printMuted(t(saved.deleted ? 'Đã xóa {0} {1}.' : 'Đã lưu {0} {1}.', saved.kind === 'worker' ? 'orglet' : 'crew', saved.name));
+    } catch (error) {
+      if (saved) {
+        this.closeEditor();
+        this.entries = this.entries.flatMap(entry => entry.kind === saved!.kind && entry.name === editor.originalName
+          ? saved!.deleted ? [] : [{ ...entry, name: saved!.name }]
+          : [entry]);
+        this.restoreManagedChat(saved, editor.originalName, editor.action);
+        this.printError(t("Đã áp dụng cấu hình nhưng chưa tải lại được danh sách. Dùng /list để tải lại."));
+      } else {
+        editor.state = previousState;
+        editor.error = error instanceof Error ? error.message : String(error);
+        this.replaceLine(editor.draft());
+        if (!this.terminal) this.printError(editor.error);
+      }
+    }
+    this.showPrompt();
+    if (!this.editor) void this.drain();
+  }
+
+  private restoreManagedChat(saved: ManagementResult, originalName: string, action: ManagementAction): void {
+    const isCurrent = this.chat?.kind === saved.kind && this.chat.name === originalName;
+    const oldKey = `${saved.kind}:${originalName}`;
+    const newKey = `${saved.kind}:${saved.name}`;
+    if (!saved.deleted && oldKey !== newKey) {
+      const transcript = this.transcripts.get(oldKey);
+      const draft = this.drafts.get(oldKey);
+      if (transcript) this.transcripts.set(newKey, transcript);
+      if (draft !== undefined) this.drafts.set(newKey, draft);
+      this.transcripts.delete(oldKey);
+      this.drafts.delete(oldKey);
+    }
+    if (saved.deleted) {
+      this.transcripts.delete(oldKey);
+      this.drafts.delete(oldKey);
+      if (isCurrent) {
+        this.chat = undefined;
+        this.pickerReturn = undefined;
+        this.showPicker('');
+      } else if (this.view === 'picker') this.showPicker('', this.chat);
+      return;
+    }
+    const entry = this.entries.find(candidate => candidate.kind === saved.kind && candidate.name === saved.name);
+    if (isCurrent && entry) {
+      this.chat = entry;
+      this.pickerReturn = this.pickerReturn ? entry : undefined;
+    }
+    if (entry && action === 'new' && !this.queue.length) this.enterChat(entry);
+    else if (this.view === 'picker') this.showPicker('', this.pickerReturn ?? this.chat);
   }
 
   private switchChat(name: string | undefined): void {

@@ -2,7 +2,7 @@
 // the command the way a terminal would (orglet.cmd through cmd.exe on Windows, the sh launcher elsewhere).
 // Run after `pnpm build` or `pnpm make`.
 import { _electron as electron } from 'playwright';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, win32 } from 'node:path';
@@ -147,6 +147,34 @@ try {
   assert.equal(status.orglets >= 1, true);
   assert.equal(`orglet ${status.version}`, version);
   assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 0, 'Status, list, send and read must work without creating a window');
+
+  // Person-driven configuration never calls a model or opens a desktop window.
+  const configurations = JSON.parse(expectOk(orglet(userData, 'config', '--json'), 'orglet config'));
+  assert.equal(configurations.orglets.length, status.orglets);
+  assert.ok(configurations.providers.every(provider => provider.id !== 'demo'));
+  assert.ok(configurations.orglets.every(orglet => !('mcpServerIds' in orglet.config) && !('autoApplyProposals' in orglet.config)));
+  const orgletConfigFile = join(directory, 'orglet.json');
+  await writeFile(orgletConfigFile, JSON.stringify({ name: 'CLI managed orglet', instructions: 'Review supplied work.', provider: 'codex', skillId: configurations.skills[0].id }));
+  const managedOrglet = JSON.parse(expectOk(orglet(userData, 'create', 'orglet', '--config', orgletConfigFile, '--json'), 'orglet create orglet'));
+  const crewConfigFile = join(directory, 'crew.json');
+  await writeFile(crewConfigFile, JSON.stringify({ name: 'CLI managed crew', instructions: 'Review together.', memberIds: [managedOrglet.id], synthesizerId: configurations.orglets[0].id, workflow: 'parallel', monthlyBudgetMicros: 100_000 }));
+  const managedCrew = JSON.parse(expectOk(orglet(userData, 'create', 'crew', '--config', crewConfigFile, '--json'), 'orglet create crew'));
+  const patchFile = join(directory, 'patch.json');
+  await writeFile(patchFile, JSON.stringify({ name: 'CLI renamed orglet', description: 'Edited from the terminal' }));
+  const revisedOrglet = JSON.parse(expectOk(orglet(userData, 'edit', 'orglet', managedOrglet.name, '--config', patchFile, '--json'), 'orglet edit orglet'));
+  assert.equal(revisedOrglet.id, managedOrglet.id);
+  assert.equal(revisedOrglet.revision, managedOrglet.revision + 1);
+  await writeFile(patchFile, JSON.stringify({ workflow: 'sequential' }));
+  const revisedCrew = JSON.parse(expectOk(orglet(userData, 'edit', 'crew', managedCrew.name, '--config', patchFile, '--json'), 'orglet edit crew'));
+  assert.equal(revisedCrew.revision, managedCrew.revision + 1);
+  assert.equal(orglet(userData, 'delete', 'orglet', revisedOrglet.name, '--confirm', revisedOrglet.name).code, 1, 'Crew membership must prevent deletion');
+  assert.equal(orglet(userData, 'delete', 'crew', managedCrew.name, '--confirm', 'wrong').code, 2, 'A wrong confirmation must not delete');
+  expectOk(orglet(userData, 'delete', 'crew', managedCrew.name, '--confirm', managedCrew.name), 'orglet delete crew');
+  expectOk(orglet(userData, 'delete', 'orglet', revisedOrglet.name, '--confirm', revisedOrglet.name), 'orglet delete orglet');
+  const restoredStatus = JSON.parse(expectOk(orglet(userData, 'status', '--json'), 'status after management'));
+  assert.equal(restoredStatus.orglets, status.orglets);
+  assert.equal(restoredStatus.crews, status.crews);
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 0, 'Managing configurations must not open a window');
 
   // A racing terminal start must not turn the background instance into a desktop launch.
   async function secondInstance(background) {

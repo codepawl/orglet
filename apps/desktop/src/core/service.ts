@@ -834,6 +834,7 @@ export class CoreService {
       }
       case 'deleteEntity': {
         const input = commands.deleteEntity.parse(args);
+        this.assertEntityRevision(input.kind, input.id, input.expectedRevision, input.expectedName);
         this.deleteEntity(input.kind, input.id); this.notify(); return;
       }
       case 'updateTask': {
@@ -872,9 +873,10 @@ export class CoreService {
   }
   /** Creates a worker or a new revision of one, validated the way the worker dialog is. */
   private saveWorker(input: Args<'saveWorker'>): Worker {
+    this.assertEntityRevision('worker', input.id, input.expectedRevision);
     assertSkillReady(this.store.get<Skill>('skills', input.skillId), this.store);
     if (input.id) this.store.get<Worker>('workers', input.id);
-    const { modelId, mcpServerIds, ...fields } = input;
+    const { modelId, mcpServerIds, expectedRevision, ...fields } = input;
     if (isOpenCodePlan(fields.provider)) assertOpenCodeModel(fields.provider, modelId);
     if (isCustomProvider(fields.provider)) {
       const connection = requireCustomConnection(this.store, fields.provider);
@@ -900,9 +902,11 @@ export class CoreService {
     return skill;
   }
   private saveTeam(input: Args<'saveTeam'>): Team {
+    this.assertEntityRevision('team', input.id, input.expectedRevision);
     for (const workerId of [...input.memberIds, input.synthesizerId]) this.assertAssignable('worker', workerId);
     if (input.id) this.store.get<Team>('teams', input.id);
-    const team: Team = { ...input, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
+    const { expectedRevision, ...fields } = input;
+    const team: Team = { ...fields, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
     this.store.version('teams', team);
     return team;
   }
@@ -1295,6 +1299,14 @@ export class CoreService {
     const uses = (task: Task) => runBy(task, kind, entityId) || (kind === 'worker' && task.assignees === 'all');
     if (this.store.all<Task>('tasks').some(task => !task.deletedAt && ['queued', 'running', 'pausing'].includes(task.status) && uses(task))) throw new Error('Đợi công việc đang chạy xong rồi thử lại.');
   }
+  private assertEntityRevision(kind: 'worker' | 'team', entityId: string | undefined, expectedRevision?: number, expectedName?: string): void {
+    if (expectedRevision === undefined && expectedName === undefined) return;
+    const found = entityId ? this.entity(kind, entityId) : undefined;
+    if (!found || found.archived || found.row.revision !== expectedRevision || (expectedName !== undefined && found.row.name !== expectedName)) {
+      throw new Error('Cấu hình đã thay đổi. Tải lại rồi thử lại.');
+    }
+  }
+
   private deleteEntity(kind: 'worker' | 'team', entityId: string) {
     this.assertRemovable(kind, entityId);
     this.setEntityState(kind, entityId, { deletedAt: this.clock().toISOString() });

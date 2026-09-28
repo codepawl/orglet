@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { join, win32 } from 'node:path';
 import { z } from 'zod';
 import { RunActivity } from '../shared/run-activity';
+import { CrewPatch, ManagementTarget, OrgletPatch } from './management';
 
 /**
  * The line protocol between the `orglet` command and the running app (COD-234). One JSON request per line, one JSON
@@ -48,12 +49,17 @@ const ScheduleName = z.string().trim().min(1).max(80);
 
 /**
  * Everything the CLI may ask. Anything else, such as granting a folder, touching keys, connections, settings,
- * permissions or backups, or deleting and archiving, has no operation here and is refused. `run` starts a schedule
+ * permissions or backups, or archiving, has no operation here and is refused. Person-driven configuration changes
+ * use a whitelist and revision checks; deletion also requires the displayed full name. `run` starts a schedule
  * that already exists, is switched on and was approved as it is; it cannot create or change one (COD-245).
  */
 export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('status'), token: CliToken }).strict(),
   z.object({ op: z.literal('list'), token: CliToken }).strict(),
+  z.object({ op: z.literal('config'), token: CliToken }).strict(),
+  z.object({ op: z.literal('save-orglet'), token: CliToken, config: OrgletPatch, target: ManagementTarget.optional() }).strict(),
+  z.object({ op: z.literal('save-crew'), token: CliToken, config: CrewPatch, target: ManagementTarget.optional() }).strict(),
+  z.object({ op: z.literal('delete-entity'), token: CliToken, kind: z.enum(['worker', 'team']), target: ManagementTarget, confirmName: ChatName }).strict(),
   z.object({
     op: z.literal('send'),
     token: CliToken,

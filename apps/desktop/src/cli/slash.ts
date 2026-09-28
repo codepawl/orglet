@@ -1,3 +1,4 @@
+import { t } from './text';
 /** The commands of `orglet chat` that start with a slash, and their Tab completion (COD-236). */
 
 export type SlashCommand =
@@ -10,12 +11,14 @@ export type SlashCommand =
   | { kind: 'undo' }
   | { kind: 'details' }
   | { kind: 'agents' }
+  | { kind: 'new'; entity?: 'worker' | 'team' }
+  | { kind: 'edit' | 'delete'; name?: string }
   | { kind: 'help' }
   | { kind: 'exit' }
   | { kind: 'unknown'; command: string };
 
 /** In the order `/help` lists them. */
-export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents', '/help', '/exit'] as const;
+export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents', '/new', '/edit', '/delete', '/help', '/exit'] as const;
 
 export const SLASH_HELP: readonly [string, string][] = [
   ['/to <name>', 'Switch to another orglet or crew; without a name, pick from the list'],
@@ -27,6 +30,9 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/undo', 'Take the last queued item back into the draft'],
   ['/details', 'Expand or collapse steps and answers (Ctrl+O)'],
   ['/agents', 'Show or hide agent context (Ctrl+G)'],
+  ['/new [orglet|crew]', t("Tạo Tí hoặc hội trong terminal này")],
+  ['/edit [name]', t("Sửa cấu hình; bỏ tên để chọn trong danh sách")],
+  ['/delete [name]', t("Xóa Tí hoặc hội sau khi gõ tên đầy đủ")],
   ['/help', 'Show these commands'],
   ['/exit', 'Leave (Ctrl+D does the same)'],
 ];
@@ -51,6 +57,9 @@ export function parseSlash(line: string): SlashCommand {
     case '/undo': return { kind: 'undo' };
     case '/details': return { kind: 'details' };
     case '/agents': return { kind: 'agents' };
+    case '/new': return rest === 'orglet' ? { kind: 'new', entity: 'worker' } : rest === 'crew' || rest === 'team' ? { kind: 'new', entity: 'team' } : rest ? { kind: 'unknown', command: trimmed } : { kind: 'new' };
+    case '/edit': return { kind: 'edit', ...(rest ? { name: rest } : {}) };
+    case '/delete': return { kind: 'delete', ...(rest ? { name: rest } : {}) };
     case '/help': return { kind: 'help' };
     case '/exit':
     case '/quit': return { kind: 'exit' };
@@ -68,11 +77,13 @@ function startsWithIgnoringCase(text: string, start: string): boolean {
  */
 export function completeSlash(line: string, names: readonly string[]): [string[], string] {
   if (!isSlashCommand(line)) return [[], line];
-  const toMatch = line.match(/^\s*\/to\s+(.*)$/i);
+  const newMatch = line.match(/^\s*\/new\s+(.*)$/i);
+  if (newMatch) return [['orglet', 'crew'].filter(kind => startsWithIgnoringCase(kind, newMatch[1])).map(kind => `/new ${kind}`), line];
+  const toMatch = line.match(/^\s*\/(to|edit|delete)\s+(.*)$/i);
   if (toMatch) {
-    const partial = toMatch[1];
+    const partial = toMatch[2];
     const matches = names.filter(name => startsWithIgnoringCase(name, partial));
-    return [matches.map(name => `/to ${name}`), line];
+    return [matches.map(name => `/${toMatch[1].toLowerCase()} ${name}`), line];
   }
   if (/\s/.test(line.trim())) return [[], line];
   const typed = line.trim();
