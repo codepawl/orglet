@@ -11,7 +11,8 @@ type ComposerOptions = {
   output: Output;
   mode: ColorMode;
   prompt: () => string;
-  rows: () => string[];
+  placeholder?: () => string;
+  rows: (maxLines: number) => string[];
   status: () => string;
   hint: () => string;
   picker: () => boolean;
@@ -335,12 +336,11 @@ export class TerminalComposer {
       cursorRow = row;
       cursorColumn = prefixWidth + column;
     }
+    if (!confirmingExit && !draft) {
+      lines[0] += muted(truncate(this.options.placeholder?.() ?? '', contentWidth), this.options.mode);
+    }
     const choices = this.suggestions();
     const menuStart = Math.max(0, this.selected - 3);
-    const extras = confirmingExit ? [] : this.options.picker() ? this.options.rows() : choices.slice(menuStart, menuStart + 4).map((choice, index) => {
-      const active = menuStart + index === this.selected;
-      return paint(truncate(`${active ? '›' : ' '} ${choice.text.trim()}  ${choice.description}`, width), { bold: active }, this.options.mode);
-    });
     const status = this.options.status();
     const hint = confirmingExit ? this.options.hint() : choices.length ? '↑↓ choose · Tab/Enter fill · Esc dismiss' : this.options.picker() ? '' : this.options.hint();
     const height = Math.max(1, (this.options.output.rows ?? 24) - 1);
@@ -349,7 +349,12 @@ export class TerminalComposer {
     const rules = this.options.frame && height >= 3 ? 2 : 0;
     const detail = height >= 14 ? this.options.detail?.() : undefined;
     const detailRows = detail ? 1 : 0;
-    const extraRows = extras.slice(0, Math.max(0, height - footer.length - 1 - rules - detailRows - (this.options.frame ? 2 : 0))).map(line => truncate(line, width));
+    const maxExtraLines = Math.max(0, height - footer.length - 1 - rules - detailRows - (this.options.frame ? 2 : 0));
+    const extras = confirmingExit ? [] : this.options.picker() ? this.options.rows(maxExtraLines) : choices.slice(menuStart, menuStart + 4).map((choice, index) => {
+      const active = menuStart + index === this.selected;
+      return paint(truncate(`${active ? '›' : ' '} ${choice.text.trim()}  ${choice.description}`, width), { bold: active }, this.options.mode);
+    });
+    const extraRows = extras.slice(0, maxExtraLines).map(line => truncate(line, width));
     const maxDraftRows = Math.max(1, Math.min(Math.floor(height / 3), height - extraRows.length - footer.length - rules - detailRows));
     const startRow = Math.max(0, cursorRow - maxDraftRows + 1);
     const visible = lines.slice(startRow, startRow + maxDraftRows);
