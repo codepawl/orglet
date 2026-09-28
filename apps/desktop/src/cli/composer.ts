@@ -21,6 +21,8 @@ type ComposerOptions = {
   escape: () => void;
   submit: (text: string) => void;
   interrupt: () => void;
+  confirmingExit: () => boolean;
+  confirmExit: (leave: boolean) => void;
   close: () => void;
   /** A fixed viewport above the draft; absent for callers using inline terminal output. */
   frame?: (height: number, width: number) => string[];
@@ -138,7 +140,11 @@ export class TerminalComposer {
   private consume(text: string): void {
     if (!text) return;
     // Raw terminals send Enter as CR; Ctrl+J is LF. Readline otherwise names both "enter".
-    if (text === '\n') return this.insert('\n');
+    if (text === '\n') {
+      if (this.options.confirmingExit()) this.options.confirmExit(false);
+      else this.insert('\n');
+      return;
+    }
     if (text === '\x1b') return this.key(text, { name: 'escape' });
     if (/^\x1b\[(13;2u|27;2;13~)$/.test(text)) return this.insert('\n');
     // Terminals without paste framing deliver a burst. Its newlines must not submit separate turns.
@@ -148,6 +154,7 @@ export class TerminalComposer {
   }
 
   private insert(text: string): void {
+    if (this.options.confirmingExit()) return;
     if (this.options.picker()) text = text.replace(/\n/g, ' ');
     this.text = this.text.slice(0, this.cursor) + text + this.text.slice(this.cursor);
     this.cursor += text.length;
@@ -162,7 +169,7 @@ export class TerminalComposer {
   }
 
   private suggestions(): Suggestion[] {
-    return this.dismissed || this.options.picker() || this.text.includes('\n') ? [] : this.options.suggestions(this.text);
+    return this.options.confirmingExit() || this.dismissed || this.options.picker() || this.text.includes('\n') ? [] : this.options.suggestions(this.text);
   }
 
   private boundary(direction: number): number {
@@ -174,6 +181,11 @@ export class TerminalComposer {
 
   private key(sequence: string, key: Key): void {
     if (this.closed) return;
+    if (this.options.confirmingExit()) {
+      if (!key.ctrl && !key.meta && sequence.toLowerCase() === 'y') this.options.confirmExit(true);
+      else if ((!key.ctrl && !key.meta && sequence.toLowerCase() === 'n') || ['escape', 'return', 'enter'].includes(key.name ?? '')) this.options.confirmExit(false);
+      return;
+    }
     if (key.ctrl && key.name === 'c') return this.options.interrupt();
     if (key.ctrl && key.name === 'd') return this.options.close();
     const shortcuts = { g: 'agents', o: 'details', q: 'queue', z: 'undo', p: 'switch' } as const;
@@ -285,7 +297,9 @@ export class TerminalComposer {
     if (this.closed) return;
     this.clear();
     const width = Math.max(4, (this.options.output.columns ?? 80) - 1);
-    const prompt = truncate(this.options.prompt(), width - 2);
+    const confirmingExit = this.options.confirmingExit();
+    const draft = confirmingExit ? '' : this.text;
+    const prompt = truncate(confirmingExit ? 'Exit CLI? [y/N] ' : this.options.prompt(), width - 2);
     const prefixWidth = displayWidth(prompt);
     const contentWidth = Math.max(1, width - prefixWidth);
     const lines = [prompt];
@@ -293,7 +307,7 @@ export class TerminalComposer {
     let column = 0;
     let cursorRow = 0;
     let cursorColumn = prefixWidth;
-    for (const segment of graphemes.segment(this.text)) {
+    for (const segment of graphemes.segment(draft)) {
       const character = segment.segment;
       const columns = displayWidth(character === '\t' ? '  ' : character);
       if (character !== '\n' && column + columns > contentWidth) {
@@ -314,18 +328,18 @@ export class TerminalComposer {
         column += columns;
       }
     }
-    if (this.cursor === this.text.length) {
+    if (confirmingExit || this.cursor === this.text.length) {
       cursorRow = row;
       cursorColumn = prefixWidth + column;
     }
     const choices = this.suggestions();
     const menuStart = Math.max(0, this.selected - 3);
-    const extras = this.options.picker() ? this.options.rows() : choices.slice(menuStart, menuStart + 4).map((choice, index) => {
+    const extras = confirmingExit ? [] : this.options.picker() ? this.options.rows() : choices.slice(menuStart, menuStart + 4).map((choice, index) => {
       const active = menuStart + index === this.selected;
       return paint(truncate(`${active ? '›' : ' '} ${choice.text.trim()}  ${choice.description}`, width), { bold: active }, this.options.mode);
     });
     const status = this.options.status();
-    const hint = choices.length ? '↑↓ choose · Tab/Enter fill · Esc dismiss' : this.options.picker() ? '' : this.options.hint();
+    const hint = confirmingExit ? this.options.hint() : choices.length ? '↑↓ choose · Tab/Enter fill · Esc dismiss' : this.options.picker() ? '' : this.options.hint();
     const height = Math.max(1, (this.options.output.rows ?? 24) - 1);
     const footer = status && height > 3 ? [muted(truncate(status, width), this.options.mode)] : [];
     if (hint && height > 4) footer.push(muted(truncate(hint, width), this.options.mode));
