@@ -77,6 +77,10 @@ Run `orglet` with no command, or `orglet chat`:
 
 Type `/` to see commands with descriptions. Up and Down choose one; Tab or Enter fills it into the draft, and Enter on a filled command runs it. Esc dismisses the menu without clearing the draft. `/to ` offers chat names in the same menu. A pasted message with several lines is sent as a message even when its first line starts with `/`.
 
+While an answer is on its way, `/queue` shows previews of the messages and commands waiting in this terminal. `/undo` takes the last one out of that queue and puts its full text back into the draft, including its newlines. Edit it and press Enter to queue it again, or clear the draft to leave it unsent. It cannot take back a message already sent to the app, and it does not stop the current run. This queue belongs to the terminal session and is not saved between sessions.
+
+`/open`, `/help`, `/clear`, `/queue` and `/undo` run immediately while waiting. This lets you open the desktop for an approval without waiting for the blocked turn to finish. Other messages and commands, including `/to`, keep their order in the queue.
+
 The draft wraps with the terminal's width. For a long draft, only the rows around the cursor are shown; moving the cursor reveals the rest. Leaving with Ctrl+D or `/exit` drops this terminal's unsent draft and local queue. Messages already sent keep running in the app.
 
 `orglet chat --to Researcher` skips the list and opens that chat. If the name fits several chats, or none, the list opens with it typed in.
@@ -107,6 +111,8 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 | `/read` | Shows the latest answer in this chat again, including one you stopped waiting for |
 | `/open` | Brings the app forward on this chat |
 | `/clear` | Clears the screen |
+| `/queue` | Shows previews of messages and commands waiting in this terminal |
+| `/undo` | Takes the last queued item back into the draft for editing; already sent work keeps running |
 | `/help` | Lists these commands |
 | `/exit` | Leaves |
 
@@ -218,4 +224,4 @@ Messages that come from the app are in the app's language.
 - On start, a copy of Orglet reads the shim's executable and data folder back and rewrites the shim only when both are its own. A Setup install owns every `app-x.y.z\Orglet.exe` in its folder, so the shim follows an update to a new version folder. An update or uninstall leaves a shim that starts another copy alone; only running Setup or a click in **Settings → About** takes it over.
 - The command itself is the app's own executable running a small script (`resources/orglet-cli.cjs`) as Node, the same way VS Code ships `code`. It needs no separate Node install.
 
-The automatic checks run every command against a packaged build, including a wrong token and a request outside the list, and check that `list` stays plain text when piped. Chat tests drive raw terminal input against a fake app and inspect the rendered terminal grid: multiline paste, command choices, queue status, draft preservation, resize and leaving. They do not click **Add to PATH**, because that changes the user PATH of the machine running them.
+The automatic checks run every command against a packaged build, including a wrong token and a request outside the list, and check that `list` stays plain text when piped. Chat tests drive raw terminal input against a fake app and inspect the rendered terminal grid: multiline paste, command choices, queue previews and undo, immediate desktop opening while a turn is waiting, draft preservation after a delayed error, resize and leaving. They do not click **Add to PATH**, because that changes the user PATH of the machine running them.

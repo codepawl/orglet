@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { runInteractive } from '../../apps/desktop/src/cli/interactive';
 import { StoppedError } from '../../apps/desktop/src/cli/client';
 import { type ChatClient } from '../../apps/desktop/src/cli/chat-client';
-import { displayWidth, stripAnsi } from '../../apps/desktop/src/cli/terminal';
+import { displayWidth, stripAnsi, type ColorMode } from '../../apps/desktop/src/cli/terminal';
 import { type SendValue } from '../../apps/desktop/src/cli/protocol';
 
 /** A terminal grid, so assertions see the final screen rather than text already erased by a redraw. */
@@ -50,7 +50,7 @@ const response = (message: string): SendValue => ({
   waited: true, finished: true, answers: [{ name: 'Researcher', text: `Answer: ${message}`, createdAt: '1' }], errors: [],
 });
 
-async function terminal(options: { picker?: boolean; slow?: boolean; columns?: number; rows?: number } = {}) {
+async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: boolean; columns?: number; rows?: number; mode?: ColorMode } = {}) {
   const screen = new Screen();
   const input = Object.assign(new PassThrough(), { isTTY: true, isRaw: false, setRawMode(raw: boolean) { this.isRaw = raw; } });
   let transcript = '';
@@ -60,12 +60,15 @@ async function terminal(options: { picker?: boolean; slow?: boolean; columns?: n
     callback();
   } }), { isTTY: true, columns: options.columns ?? 80, rows: options.rows ?? 24 });
   const sent: string[] = [];
+  const sentTo: string[] = [];
   const opened: string[] = [];
   let finishSend: (() => void) | undefined;
+  let failOpen: (() => void) | undefined;
   const client: ChatClient = {
     list: async () => ({ orglets: [{ name: 'Researcher', provider: 'demo', color: '#4f7fe0' }, { name: 'Kế toán', provider: 'demo', color: '#64b282' }], crews: [] }),
-    send: async (_to, message, signal) => {
+    send: async (to, message, signal) => {
       sent.push(message);
+      sentTo.push(to);
       if (options.slow) await new Promise<void>((resolve, reject) => {
         finishSend = resolve;
         signal.addEventListener('abort', () => reject(new StoppedError()), { once: true });
@@ -73,20 +76,162 @@ async function terminal(options: { picker?: boolean; slow?: boolean; columns?: n
       return response(message);
     },
     read: async () => ({ chat: response('').chat, taskId: 'task', status: 'completed', answers: response('earlier').answers }),
-    open: async name => { opened.push(name); return { chat: response('').chat }; },
+    open: async name => {
+      opened.push(name);
+      if (options.slowOpen) {
+        await new Promise<void>((_resolve, reject) => {
+          failOpen = () => reject(new Error('Could not open the desktop.'));
+        });
+      }
+      return { chat: response('').chat };
+    },
   };
-  const running = runInteractive({ input, output, client, mode: 'none', version: 'test', terminal: true, ...(options.picker ? {} : { to: 'Researcher' }) });
+  const running = runInteractive({ input, output, client, mode: options.mode ?? 'none', version: 'test', terminal: true, ...(options.picker ? {} : { to: 'Researcher' }) });
   await pause();
   return {
-    screen, input, output, sent, opened,
+    screen, input, output, sent, sentTo, opened,
     transcript: () => transcript,
     key: async (text: string | Buffer) => { input.write(text); await pause(); },
     resolve: async () => { finishSend?.(); await pause(); },
+    failOpen: async () => { failOpen?.(); await pause(); },
     stop: async () => { input.write('\x04'); await running; },
   };
 }
 
 describe('terminal composer', () => {
+  it('shows the local queue and restores its last multiline item for editing without stopping the active turn', async () => {
+    const session = await terminal({ slow: true });
+    try {
+      await session.key('active');
+      await session.key('\r');
+      await session.key('first queued');
+      await session.key('\r');
+      await session.key('\x1b[200~Kế toán\n日本\x1b[201~');
+      await session.key('\r');
+      await session.key('/queue');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Waiting in this terminal (2)');
+      expect(session.screen.text()).toContain('1. first queued');
+      expect(session.screen.text()).toContain('2. Kế toán 日 本');
+      await session.key('/undo');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('› Kế toán\n  日 本');
+      expect(session.screen.text()).toContain('1 queued');
+      expect(session.screen.text()).toContain('working');
+      expect(session.sent).toEqual(['active']);
+      await session.key(' edited');
+      await session.key('\r');
+      await session.resolve();
+      expect(session.sent).toEqual(['active', 'first queued']);
+      await session.resolve();
+      expect(session.sent).toEqual(['active', 'first queued', 'Kế toán\n日本 edited']);
+      await session.resolve();
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('opens the active chat and shows help immediately while queued chat switches retain their order', async () => {
+    const session = await terminal({ slow: true });
+    try {
+      await session.key('active');
+      await session.key('\r');
+      await session.key('/to Kế toán');
+      await session.key('\r');
+      await session.key('next chat');
+      await session.key('\r');
+      await session.key('/open');
+      await session.key('\r');
+      expect(session.opened).toEqual(['Researcher']);
+      await session.key('/help');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('/queue');
+      expect(session.screen.text()).toContain('/undo');
+      expect(session.screen.text()).toContain('2 queued');
+      await session.key('/clear');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('working');
+      await session.key('/queue');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('1. /to Kế toán');
+      expect(session.screen.text()).toContain('2. next chat');
+      await session.resolve();
+      expect(session.sentTo).toEqual(['Researcher', 'Kế toán']);
+      await session.resolve();
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('reports an empty queue without cancelling a sent turn, and bounds queue previews in a narrow terminal', async () => {
+    const session = await terminal({ slow: true, columns: 32, rows: 10 });
+    try {
+      await session.key('active');
+      await session.key('\r');
+      await session.key('/queue');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Nothing is waiting in this');
+      await session.key('/undo');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('No queued items to edit.');
+      expect(session.screen.text()).toContain('working');
+      const longMessage = 'Kế toán 日本 '.repeat(20);
+      await session.key(longMessage);
+      await session.key('\r');
+      await session.key('/queue');
+      await session.key('\r');
+      // Screen.text adds placeholder cells after wide characters; measure the emitted row itself.
+      const preview = stripAnsi(session.transcript()).split(/\r?\n/).find(line => line.startsWith('1. '));
+      expect(preview).toBeDefined();
+      expect(displayWidth(preview!)).toBeLessThan(32);
+      expect(session.sent).toEqual(['active']);
+      await session.key('/undo');
+      await session.key('\r');
+      await session.key('\r');
+      await session.resolve();
+      expect(session.sent).toEqual(['active', longMessage.trim()]);
+      await session.resolve();
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('keeps a new draft and the active wait intact when an immediate desktop-open request fails later', async () => {
+    const session = await terminal({ slow: true, slowOpen: true });
+    try {
+      await session.key('active');
+      await session.key('\r');
+      await session.key('/open');
+      await session.key('\r');
+      expect(session.opened).toEqual(['Researcher']);
+      await session.key('unsent draft');
+      await session.failOpen();
+      expect(session.screen.text()).toContain('Could not open the desktop.');
+      expect(session.screen.text()).toContain('› unsent draft');
+      expect(session.screen.text()).toContain('working');
+      expect(session.sent).toEqual(['active']);
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it.each(['truecolor', 'ansi256'] as const)('renders a compact %s queue status without broken colour controls', async mode => {
+    const session = await terminal({ slow: true, columns: 32, rows: 10, mode });
+    try {
+      await session.key('active');
+      await session.key('\r');
+      await session.key('pending');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('working · 1 queued · 0s · ▐••▌');
+      expect(session.screen.text()).not.toContain('[38;');
+      await session.resolve();
+      await session.resolve();
+      expect(session.screen.text()).toContain('ready');
+    } finally {
+      await session.stop();
+    }
+  });
+
   it('keeps split bracketed paste in one draft and sends only on the next Enter', async () => {
     const session = await terminal();
     try {

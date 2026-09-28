@@ -178,19 +178,24 @@ export function displayWidth(text: string): number {
   return width;
 }
 
-/** Cuts plain text to at most `width` columns, ending with an ellipsis when something was cut. */
+/** Cuts text to at most `width` columns, preserving complete colour sequences. */
 export function truncate(text: string, width: number): string {
   if (displayWidth(text) <= width) return text;
   if (width <= 1) return width === 1 ? '…' : '';
   let result = '';
   let used = 0;
-  for (const character of text) {
+  for (const character of text.match(/\x1b\[[0-9;]*m|[\s\S]/gu) ?? []) {
+    if (character.startsWith('\x1b')) {
+      result += character;
+      continue;
+    }
     const characterColumns = characterWidth(character);
     if (used + characterColumns > width - 1) break;
     result += character;
     used += characterColumns;
   }
-  return `${result}…`;
+  // A shortened coloured run may lose its trailing reset; do not colour the next output.
+  return `${result}…${result.includes('\x1b') ? '\x1b[0m' : ''}`;
 }
 
 export function padEnd(text: string, width: number): string {

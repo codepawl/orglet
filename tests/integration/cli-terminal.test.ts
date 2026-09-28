@@ -106,6 +106,15 @@ describe('orglet colour rules', () => {
     expect(displayWidth('日本')).toBe(4);
     expect(truncate('Researcher', 6)).toBe('Resea…');
   });
+
+  it.each(['truecolor', 'ansi256'] as const)('keeps %s escape sequences intact when shortening a coloured queue status', mode => {
+    const status = `working · 2 queued · 0s · ${renderMiniFace(BLUE, mode)} Researcher · demo`;
+    const shortened = truncate(status, 32);
+    expect(stripAnsi(shortened)).toBe(truncate(stripAnsi(status), 32));
+    expect(displayWidth(shortened)).toBeLessThanOrEqual(32);
+    expect(shortened).toContain('\x1b[');
+    expect(shortened).toMatch(/\x1b\[0m$/);
+  });
 });
 
 describe('orglet light Markdown', () => {
@@ -147,6 +156,8 @@ describe('orglet chat slash commands', () => {
     expect(parseSlash('/read')).toEqual({ kind: 'read' });
     expect(parseSlash('/open')).toEqual({ kind: 'open' });
     expect(parseSlash('/clear')).toEqual({ kind: 'clear' });
+    expect(parseSlash('/QUEUE')).toEqual({ kind: 'queue' });
+    expect(parseSlash('/undo')).toEqual({ kind: 'undo' });
     expect(parseSlash('/help')).toEqual({ kind: 'help' });
     expect(parseSlash('/quit')).toEqual({ kind: 'exit' });
     expect(parseSlash('/nope x')).toEqual({ kind: 'unknown', command: '/nope' });
@@ -155,7 +166,7 @@ describe('orglet chat slash commands', () => {
   it('completes commands and chat names', () => {
     const names = ['Researcher', 'Review crew', 'Writer'];
     expect(completeSlash('/l', names)).toEqual([['/list'], '/l']);
-    expect(completeSlash('/', names)[0]).toEqual(['/to ', '/list', '/read', '/open', '/clear', '/help', '/exit']);
+    expect(completeSlash('/', names)[0]).toEqual(['/to ', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/help', '/exit']);
     expect(completeSlash('/t', names)).toEqual([['/to '], '/t']);
     expect(completeSlash('/to re', names)).toEqual([['/to Researcher', '/to Review crew'], '/to re']);
     expect(completeSlash('/TO wr', names)).toEqual([['/to Writer'], '/TO wr']);
