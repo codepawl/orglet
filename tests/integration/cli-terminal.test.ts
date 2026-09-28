@@ -2,11 +2,13 @@ import { PassThrough, Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { AppRefusal, type ChatClient } from '../../apps/desktop/src/cli/chat-client';
 import { StoppedError } from '../../apps/desktop/src/cli/client';
-import { FACE_HEIGHT, FACE_WIDTH, faceCells, miniFaceCells, renderFace, renderMiniFace, WAITING_FRAMES } from '../../apps/desktop/src/cli/faces';
+import { FACE_HEIGHT, FACE_WIDTH, HEADER_FACE_WIDTH, faceCells, miniFaceCells, renderFace, renderHeaderFace, renderMiniFace, WAITING_FRAMES } from '../../apps/desktop/src/cli/faces';
+import { terminalHeader } from '../../apps/desktop/src/cli/chat-layout';
 import { runInteractive } from '../../apps/desktop/src/cli/interactive';
 import { parseInline, renderMarkdown } from '../../apps/desktop/src/cli/markdown';
 import { chosenEntry, createPicker, entriesFromList, findChat, moveSelection, renderPickerLines, setFilter, visibleEntries } from '../../apps/desktop/src/cli/picker';
 import { styledList, styledStatus } from '../../apps/desktop/src/cli/pretty';
+import { Transcript } from '../../apps/desktop/src/cli/transcript';
 import type { ListValue, ReadValue, SendValue } from '../../apps/desktop/src/cli/protocol';
 import { runCli } from '../../apps/desktop/src/cli/run';
 import { completeSlash, parseSlash } from '../../apps/desktop/src/cli/slash';
@@ -15,6 +17,7 @@ import { chatsOf, CliOperations } from '../../apps/desktop/src/main/cli-operatio
 import { mascotIds } from '../../apps/desktop/src/renderer/components/mascots';
 import type { Workspace } from '../../apps/desktop/src/shared/contracts';
 import { defaultAvatarColor, MASCOT_IDS } from '../../apps/desktop/src/shared/mascot-suggest';
+import { modelCatalog } from '../../apps/desktop/src/core/adapters/catalog';
 
 const BLUE = '#4f7fe0';
 const PURPLE = '#a764c9';
@@ -84,6 +87,25 @@ describe('orglet faces', () => {
 });
 
 describe('orglet colour rules', () => {
+  it.each(['none', 'truecolor', 'ansi256'] as const)('keeps the solid header mascot and text columns aligned in %s', mode => {
+    const mascot = renderHeaderFace(BLUE, mode);
+    expect(mascot).toHaveLength(4);
+    expect(mascot.map(displayWidth)).toEqual([HEADER_FACE_WIDTH, HEADER_FACE_WIDTH, HEADER_FACE_WIDTH, HEADER_FACE_WIDTH]);
+    if (mode === 'none') {
+      expect(mascot[0]).toBe('▄██████▄');
+      expect(mascot[1]).toBe('██ ██ ██');
+    } else {
+      expect(stripAnsi(mascot[0])).toBe('▄      ▄');
+      expect(mascot[1]).toContain('\x1b[48;');
+    }
+    const header = terminalHeader(entriesFromList({
+      orglets: [{ name: 'Researcher', provider: 'codex', model: 'selected-model', billing: 'CLI account', color: BLUE }], crews: [],
+    })[0], 'test', 'working-directory', 80, 24, mode).map(stripAnsi);
+    for (const [index, text] of ['Orglet test', 'selected-model', 'CLI account', 'working-directory'].entries()) {
+      expect(header[index].indexOf(text)).toBe(HEADER_FACE_WIDTH + 3);
+    }
+  });
+
   it('colours only a terminal without NO_COLOR or TERM=dumb, never --json, and FORCE_COLOR wins', () => {
     expect(detectColorMode({ isTTY: true, environment: {} })).toBe('truecolor');
     expect(detectColorMode({ isTTY: true, environment: {}, colorDepth: 8 })).toBe('ansi256');
@@ -166,7 +188,7 @@ describe('orglet chat slash commands', () => {
   it('completes commands and chat names', () => {
     const names = ['Researcher', 'Review crew', 'Writer'];
     expect(completeSlash('/l', names)).toEqual([['/list'], '/l']);
-    expect(completeSlash('/', names)[0]).toEqual(['/to ', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/help', '/exit']);
+    expect(completeSlash('/', names)[0]).toEqual(['/to ', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents', '/help', '/exit']);
     expect(completeSlash('/t', names)).toEqual([['/to '], '/t']);
     expect(completeSlash('/to re', names)).toEqual([['/to Researcher', '/to Review crew'], '/to re']);
     expect(completeSlash('/TO wr', names)).toEqual([['/to Writer'], '/TO wr']);
@@ -348,6 +370,44 @@ describe('orglet chat session', () => {
 });
 
 describe('orglet colours from the app', () => {
+  it('projects only public connection metadata and resolves defaults without probing accounts', async () => {
+    const customId = '11111111-1111-4111-8111-111111111111';
+    const workspace = {
+      workers: [
+        { id: 'w1', name: 'API', provider: 'openai', instructions: 'private instructions' },
+        { id: 'w2', name: 'CLI', provider: 'codex', description: 'Reviews code' },
+        { id: 'w3', name: 'Local', provider: `custom:${customId}`, modelId: 'local-model' },
+      ],
+      teams: [], tasks: [],
+      customConnections: [{ id: customId, name: 'My server', baseUrl: 'http://localhost:1234/v1' }],
+      credentials: 'never expose this',
+    } as unknown as Workspace;
+    const commands: string[] = [];
+    const operations = new CliOperations({ request: async command => {
+      commands.push(command);
+      return workspace;
+    }, version: () => '1', open: () => undefined, translate: message => message });
+    const value = await operations.list();
+    expect(commands).toEqual(['workspace']);
+    expect(value.orglets[0]).toMatchObject({ model: modelCatalog.openai.model, billing: 'API billing' });
+    expect(value.orglets[1]).toMatchObject({ providerId: 'codex', billing: 'CLI account', description: 'Reviews code' });
+    expect(value.orglets[1]).not.toHaveProperty('model');
+    expect(value.orglets[2]).toMatchObject({ provider: 'My server', model: 'local-model', billing: 'local' });
+    expect(JSON.stringify(value)).not.toMatch(/private instructions|never expose this|localhost/);
+  });
+
+  it('keeps all crew replies behind the collapsed synthesis view', () => {
+    const transcript = new Transcript();
+    transcript.answer([
+      { name: 'Researcher', text: 'Member evidence', stage: 'member', createdAt: '1' },
+      { name: 'Lead', text: 'Final answer', stage: 'synthesis', createdAt: '2' },
+    ]);
+    expect(transcript.lines(80, 'none').join('\n')).toContain('Final answer');
+    expect(transcript.lines(80, 'none').join('\n')).not.toContain('Member evidence');
+    transcript.expanded = true;
+    expect(transcript.lines(80, 'none').join('\n')).toContain('Member evidence');
+  });
+
   it('uses the same default face colour as the app avatar', () => {
     expect(mascotIds).toEqual([...MASCOT_IDS]);
     expect(defaultAvatarColor({ id: 'a', name: 'Researcher', avatar: { color: '#123456' } })).toBe('#123456');
@@ -365,7 +425,7 @@ describe('orglet colours from the app', () => {
     const workspace = { workers, teams, tasks: [] } as unknown as Workspace;
     const operations = new CliOperations({ request: async () => workspace, version: () => '1', open: () => undefined, translate: message => message });
     expect(await operations.list()).toEqual({
-      orglets: [{ name: 'Researcher', provider: 'demo', color: BLUE }, { name: 'Writer', provider: 'openai', model: 'gpt-5', color: '#abcdef' }],
+      orglets: [{ name: 'Researcher', provider: 'demo', providerId: 'demo', billing: 'sample replies', color: BLUE }, { name: 'Writer', provider: 'openai', providerId: 'openai', billing: 'API billing', model: 'gpt-5', color: '#abcdef' }],
       crews: [{ name: 'Crew', lead: 'Writer', members: ['Researcher'], colors: [BLUE, '#abcdef'] }],
     });
     expect((await operations.status()).colors).toEqual([BLUE, '#abcdef']);

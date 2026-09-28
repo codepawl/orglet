@@ -58,6 +58,12 @@ last queued item back into the draft, /help lists these and /exit leaves.
 /open, /clear, /queue, /undo and /help work while waiting. Ctrl+C stops waiting
 for an answer; the orglet keeps working in the app.
 
+The header shows the connection and selected model. Chat requires a real
+connection; /open configures it in the app, then /list refreshes the picker.
+Ctrl+O expands answer details, Ctrl+G (or Left on an empty draft) shows agents,
+Ctrl+Q shows the queue, Ctrl+Z edits its last item and Ctrl+P switches chat.
+Page Up/Down scrolls. Ctrl+J adds a line; Ctrl+D leaves.
+
 Options:
   --to <name>    Open this chat straight away`,
   status: `Usage: orglet status [--json]

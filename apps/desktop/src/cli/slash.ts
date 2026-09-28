@@ -8,12 +8,14 @@ export type SlashCommand =
   | { kind: 'clear' }
   | { kind: 'queue' }
   | { kind: 'undo' }
+  | { kind: 'details' }
+  | { kind: 'agents' }
   | { kind: 'help' }
   | { kind: 'exit' }
   | { kind: 'unknown'; command: string };
 
 /** In the order `/help` lists them. */
-export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/help', '/exit'] as const;
+export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents', '/help', '/exit'] as const;
 
 export const SLASH_HELP: readonly [string, string][] = [
   ['/to <name>', 'Switch to another orglet or crew; without a name, pick from the list'],
@@ -23,6 +25,8 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/clear', 'Clear the screen'],
   ['/queue', 'Show this terminal\'s pending messages and commands'],
   ['/undo', 'Take the last queued item back into the draft'],
+  ['/details', 'Expand or collapse answers (Ctrl+O)'],
+  ['/agents', 'Show or hide agent context (Ctrl+G or Left on an empty draft)'],
   ['/help', 'Show these commands'],
   ['/exit', 'Leave (Ctrl+D does the same)'],
 ];
@@ -45,6 +49,8 @@ export function parseSlash(line: string): SlashCommand {
     case '/clear': return { kind: 'clear' };
     case '/queue': return { kind: 'queue' };
     case '/undo': return { kind: 'undo' };
+    case '/details': return { kind: 'details' };
+    case '/agents': return { kind: 'agents' };
     case '/help': return { kind: 'help' };
     case '/exit':
     case '/quit': return { kind: 'exit' };

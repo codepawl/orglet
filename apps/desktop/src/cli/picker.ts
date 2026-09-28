@@ -14,6 +14,12 @@ export type ChatEntry = {
   color: string;
   /** One face per orglet: the orglet itself, or a crew's members then its lead. */
   colors: string[];
+  provider?: string;
+  providerId?: string;
+  model?: string;
+  billing?: string;
+  description?: string;
+  members?: string[];
 };
 
 function validColor(color: string | undefined): string {
@@ -26,13 +32,36 @@ export function entriesFromList(list: ListValue): ChatEntry[] {
   const orglets = list.orglets.map(orglet => {
     const color = validColor(orglet.color);
     const detail = orglet.model ? `${orglet.provider}/${orglet.model}` : orglet.provider;
-    return { kind: 'worker' as const, name: orglet.name, detail, color, colors: [color] };
+    return {
+      kind: 'worker' as const,
+      name: orglet.name,
+      detail,
+      color,
+      colors: [color],
+      provider: orglet.provider,
+      providerId: orglet.providerId ?? orglet.provider,
+      model: orglet.model,
+      billing: orglet.billing,
+      description: orglet.description,
+    };
   });
   const crews = list.crews.map(crew => {
     const roster = [...new Set([...crew.members, crew.lead])];
     const colors = crew.colors?.length ? crew.colors.map(validColor) : roster.map(name => colorByName.get(name) ?? NEUTRAL_COLOR);
     const color = colorByName.get(crew.lead) ?? colors[colors.length - 1] ?? NEUTRAL_COLOR;
-    return { kind: 'team' as const, name: crew.name, detail: `crew · lead ${crew.lead}`, color, colors };
+    const lead = orglets.find(orglet => orglet.name === crew.lead);
+    return {
+      kind: 'team' as const,
+      name: crew.name,
+      detail: `crew · lead ${crew.lead}`,
+      color,
+      colors,
+      provider: lead?.provider,
+      providerId: lead?.providerId,
+      model: lead?.model,
+      billing: lead?.billing,
+      members: roster,
+    };
   });
   return [...orglets, ...crews];
 }
@@ -92,7 +121,7 @@ export function chosenEntry(state: PickerState): ChatEntry | undefined {
   return visibleEntries(state)[state.selected];
 }
 
-export type PickerLayout = { width: number; mode: ColorMode; maxRows: number };
+export type PickerLayout = { width: number; mode: ColorMode; maxRows: number; showFaces?: boolean };
 
 /** The first visible entry when more match than fit: a window that keeps the selection in view. */
 function windowStart(count: number, selected: number, maxRows: number): number {
@@ -103,7 +132,7 @@ function windowStart(count: number, selected: number, maxRows: number): number {
 
 export function entryLine(entry: ChatEntry, selected: boolean, layout: PickerLayout, facesWidth: number, nameWidth: number): string {
   const marker = selected ? paint('›', { foreground: entry.color, bold: true }, layout.mode) : ' ';
-  const faces = layout.mode === 'none' ? '' : `${padEnd(renderMiniFaces(entry.colors, layout.mode), facesWidth)} `;
+  const faces = layout.mode === 'none' || layout.showFaces === false ? '' : `${padEnd(renderMiniFaces(entry.colors, layout.mode), facesWidth)} `;
   const name = truncate(entry.name, nameWidth);
   const paddedName = padEnd(selected ? paint(name, { bold: true }, layout.mode) : name, nameWidth);
   const used = 2 + displayWidth(faces) + nameWidth + 2;

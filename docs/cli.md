@@ -70,10 +70,15 @@ This uses the script `pnpm dev` builds into `.vite/build/orglet-cli.cjs`. It can
 
 Run `orglet` with no command, or `orglet chat`:
 
-1. The first line shows your orglets' faces. Under it is a list of your orglets and crews, each with its face in its own colour. A crew shows its members side by side.
+1. One mascot sits beside the product name and version. The list below lets you choose an orglet or crew.
 2. Move through the list with the Up and Down keys, or type part of a name to narrow it. Case and Vietnamese accents do not matter: `ke` finds "Kế toán". Press Enter to open the highlighted chat, or Tab to fill in its name.
-3. The chat opens with the orglet's face, its name, and its provider and model. Type a message and press Enter. Ctrl+J adds a line; Shift+Enter also works in terminals that report it separately. Paste stays in the draft, including its newlines, until you press Enter to send it.
-4. While the orglet works, the status below the draft shows the elapsed seconds. You can keep editing a visible draft. Pressing Enter adds it to this terminal's queue; the status shows how many messages are waiting. Each goes to the app after the previous wait ends. When an answer lands, it prints under the orglet's name with a happy face, and your unsent draft stays in place.
+3. The header shows the chat name, connection, selected model, billing category and your terminal's current directory. This directory does not grant folder access. The app still controls which folder the chat can use. The connection's exact plan tier and thinking effort are not reported; the terminal says so instead of guessing.
+4. The conversation sits above an input between two horizontal rules. Your turns start with **You**; answers start with the orglet's name. Type a message and press Enter. Ctrl+J adds a line; Shift+Enter also works in terminals that report it separately. Paste stays in the draft, including its newlines, until you press Enter to send it.
+5. While the orglet works, the status changes from **message** to **queue** and shows elapsed seconds. You can keep editing a visible draft. Enter adds it to this terminal's queue; each item goes to the app after the previous wait ends. The unsent draft stays in place when an answer arrives.
+
+Long answers show a short preview. Ctrl+O expands the full answer and each crew member's reply, or collapses them to the lead's synthesis. Page Up and Page Down scroll the conversation or an open details panel. Left on an empty draft, or Ctrl+G, opens agent names and connection details. Esc closes the panel. Small terminals use a compact header and keep the input visible.
+
+Interactive chat requires a real connection. If an orglet or any member of its crew still uses Demo, a message is refused before sending. Use `/open` to choose a signed-in CLI or an API/local connection in the app, then `/list` to refresh and choose the chat again. One-shot commands retain their existing Demo support.
 
 Type `/` to see commands with descriptions. Up and Down choose one; Tab or Enter fills it into the draft, and Enter on a filled command runs it. Esc dismisses the menu without clearing the draft. `/to ` offers chat names in the same menu. A pasted message with several lines is sent as a message even when its first line starts with `/`.
 
@@ -87,7 +92,7 @@ The draft wraps with the terminal's width. For a long draft, only the rows aroun
 
 A message you send is the same turn the app's message box makes, with the same consent and cost limit as [send](#send). The answer is also in the app.
 
-Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, lists and quotes are shown as such, links print as their text followed by the address, and code blocks are kept exactly as written, indented. A crew prints each member's answer under that member's name and colour, and then the lead's.
+Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, lists and quotes are shown as such, links print as their text followed by the address, and code blocks are kept exactly as written, indented. Switching chats keeps their terminal histories separate. `/read` retrieves the latest saved answer; `/clear` clears only the terminal view. Leaving restores the terminal screen that was there before chat opened.
 
 ### Keys
 
@@ -95,10 +100,16 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 |---|---|
 | Enter | Sends the message, or queues it while waiting. In a menu, fills the highlighted choice; in the chat list, opens the highlighted chat. |
 | Ctrl+J | Adds a line to the draft |
+| Ctrl+O | Expands or collapses answer details |
+| Ctrl+G, Left with an empty draft | Opens or closes agent details |
+| Ctrl+Q | Opens or closes the local queue |
+| Ctrl+Z | Takes the last queued item into an empty draft |
+| Ctrl+P | Opens the chat picker after any earlier queued work |
+| Page Up, Page Down | Scrolls the conversation or details panel |
 | Up, Down | Move the highlight in a menu or list. In a multiline draft, move between lines; at its first or last line, go through sent messages and return to the unsent draft. |
 | Left, Right, Home, End | Move within the draft; Home and End go to the start and end of the current line |
 | Tab | Fills the highlighted command or name after `/to` |
-| Esc | Dismisses the command menu, or returns from the `/to` list to the chat |
+| Esc | Dismisses the command menu, closes details, or returns from the `/to` list to the chat |
 | Ctrl+C | While an answer is on its way, stops waiting. The orglet keeps working in the app; `/read` shows the answer later. On an empty line, leaves. |
 | Ctrl+D | Leaves |
 
@@ -107,12 +118,14 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 | Command | What it does |
 |---|---|
 | `/to <name>` | Switches to another orglet or crew. Without a name, it opens the list. |
-| `/list` | Lists orglets and crews |
+| `/list` | Refreshes connections and opens the orglet and crew picker |
 | `/read` | Shows the latest answer in this chat again, including one you stopped waiting for |
 | `/open` | Brings the app forward on this chat |
 | `/clear` | Clears the screen |
 | `/queue` | Shows previews of messages and commands waiting in this terminal |
 | `/undo` | Takes the last queued item back into the draft for editing; already sent work keeps running |
+| `/details` | Expands or collapses answer details |
+| `/agents` | Opens or closes agent details |
 | `/help` | Lists these commands |
 | `/exit` | Leaves |
 
