@@ -76,7 +76,7 @@ Run `orglet` with no command, or `orglet chat`:
 4. The conversation sits above an input between two horizontal rules. Your turns start with **You**; answers start with the orglet's name. Type a message and press Enter. Ctrl+J adds a line; Shift+Enter also works in terminals that report it separately. Paste stays in the draft, including its newlines, until you press Enter to send it.
 5. While the orglet works, the status changes from **message** to **queue** and shows elapsed seconds. You can keep editing a visible draft. Enter adds it to this terminal's queue; each item goes to the app after the previous wait ends. The unsent draft stays in place when an answer arrives.
 
-Long answers show a short preview. Ctrl+O expands the full answer and each crew member's reply, or collapses them to the lead's synthesis. Page Up and Page Down scroll the conversation or an open details panel. Ctrl+G opens agent names, small mascots and connection details; Esc closes the panel. Left on an empty draft returns to the orglet and crew picker with the current chat highlighted. Esc returns to the chat, preserving its draft and transcript. While waiting, switching waits behind earlier queued work. Small terminals use a compact header and keep the input visible.
+Model requests and observed tool calls appear as timestamped rows in the conversation, in the order they started. The current step has a light moving across its words; a finished step folds to one line. Ctrl+O opens or closes completed step details, including a tool target or an explicitly shared Codex reasoning summary, along with long answers and crew member replies. API connections show model request status without invented reasoning. A tool that returned an error says failed; an interrupted tool whose effect is uncertain stays marked outcome unknown. A returned tool call does not mean its requested work succeeded. Native harness steps are shown only when that harness reports them. Short steps are still retained even if they finish between chat polls. This live history belongs to the terminal session; `/read` retrieves saved answers, not transient reasoning. Page Up and Page Down scroll the conversation or an open details panel. Ctrl+G opens agent names, small mascots and connection details; Esc closes the panel. Left on an empty draft returns to the orglet and crew picker with the current chat highlighted. Esc returns to the chat, preserving its draft and transcript. While waiting, switching waits behind earlier queued work. Small terminals use a compact header and keep the input visible.
 
 Interactive chat requires a real connection. If an orglet or any member of its crew still uses Demo, a message is refused before sending. Use `/open` to choose a signed-in CLI or an API/local connection in the app, then `/list` to refresh and choose the chat again. One-shot commands retain their existing Demo support.
 
@@ -100,7 +100,7 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 |---|---|
 | Enter | Sends the message, or queues it while waiting. In a menu, fills the highlighted choice; in the chat list, opens the highlighted chat. |
 | Ctrl+J | Adds a line to the draft |
-| Ctrl+O | Expands or collapses answer details |
+| Ctrl+O | Expands or collapses completed steps and answer details |
 | Ctrl+G | Opens or closes agent details |
 | Ctrl+Q | Opens or closes the local queue |
 | Ctrl+Z | Takes the last queued item into an empty draft |
@@ -113,6 +113,8 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 | Ctrl+C | First press shows an exit reminder and pauses queue dispatch; press again to leave. Esc, Enter, typing or paste dismisses it and keeps the draft and queue. Sent work keeps running in the app. |
 | Ctrl+D | Leaves |
 
+Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text still. In PowerShell: `$env:ORGLET_REDUCED_MOTION='1'; orglet`. No-colour chat also holds still. Completed steps and waits for the person do not animate.
+
 ### Commands in the chat
 
 | Command | What it does |
@@ -124,7 +126,7 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 | `/clear` | Clears the screen |
 | `/queue` | Shows previews of messages and commands waiting in this terminal |
 | `/undo` | Takes the last queued item back into the draft for editing; already sent work keeps running |
-| `/details` | Expands or collapses answer details |
+| `/details` | Expands or collapses completed steps and answer details |
 | `/agents` | Opens or closes agent details |
 | `/help` | Lists these commands |
 | `/exit` | Leaves |
@@ -227,14 +229,16 @@ Messages that come from the app are in the app's language.
 
 - While Orglet runs, it listens on a named pipe on Windows (`\\.\pipe\orglet-cli-` plus a hash of the data folder) or a socket file `cli.sock` in the data folder on macOS and Linux. Nothing listens on the network.
 - Each start writes a new random token to `cli-token` in the data folder, readable only by you where the system supports it. Every request must carry it; the app compares it in constant time. Anyone who cannot read your data folder cannot use the pipe.
-- A request is one line of JSON and the answer is one line back. The app checks each request against a fixed list of six operations and refuses everything else, lines over 1 MB, and more than eight commands at once.
+- A request is one line of JSON and the final answer is one line back. Interactive sends opt into intermediate progress lines on that same authenticated connection; other commands keep their single response. The app checks each request against a fixed list of six operations and refuses everything else, lines over 1 MB, and more than eight commands at once.
+- If an older app refuses the progress option before dispatch, chat retries once without it. The message is sent once, with the older app's usual waiting status.
 - `send` goes through the same steps as the message box: attached files are imported by the app, then the chat's live conversation takes the message or a new one starts. The app then checks the chat until the turn stops.
 - `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window's **Run now** (`runRoutineNow`) starts a schedule through the same checks too, but it names the schedule and nothing else, so no file reaches a schedule from the window; only `run` attaches files by path.
-- Chat in the terminal makes only the requests `list`, `send`, `read` and `open` make; the pipe has no operation of its own for it. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
+- Chat in the terminal uses `list`, `send`, `read` and `open`; its waiting `send` sets `progress: true`. Progress frames contain validated IDs, authors, timestamps and bounded lifecycle details, with up to 500 steps and a visible omission count. The core observes model requests and journaled tools; per-send listeners join only the captured input revision. Codex public summaries remain in memory, while private tool output, checkpoints and model working notes never enter the frames. Listeners detach when the wait ends or disconnects. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
+- Native harness step times are when Orglet first observes the start and completion. They are not exact internal harness timings. A step received before its crew member's run metadata keeps those observed times when the author is joined later.
 - The answers to `list`, `status`, `send` and `read` carry each orglet's colour as `#rrggbb`: the one picked in the app, or the colour of the face the app chose for it by name. The command draws the faces from these fields and falls back to grey when they are missing.
 - If nothing answers, the command starts Orglet's backend on the same data folder without creating a desktop window and tries again for up to 30 seconds. `open` creates the window and waits for its page to load before confirming. A normal app launch also opens the window of an existing background instance.
 - The command finds the data folder from `ORGLET_USER_DATA`, then `ORGLET_DATA_DIR` (what a source run uses), then the usual place for the app. The Windows shim sets `ORGLET_USER_DATA` for you.
 - On start, a copy of Orglet reads the shim's executable and data folder back and rewrites the shim only when both are its own. A Setup install owns every `app-x.y.z\Orglet.exe` in its folder, so the shim follows an update to a new version folder. An update or uninstall leaves a shim that starts another copy alone; only running Setup or a click in **Settings → About** takes it over.
 - The command itself is the app's own executable running a small script (`resources/orglet-cli.cjs`) as Node, the same way VS Code ships `code`. It needs no separate Node install.
 
-The automatic checks run every command against a packaged build, including a wrong token and a request outside the list, and check that `list` stays plain text when piped. Chat tests drive raw terminal input against a fake app and inspect the rendered terminal grid: multiline paste, command choices, queue previews and undo, immediate desktop opening while a turn is waiting, draft preservation after a delayed error, resize and leaving. They do not click **Add to PATH**, because that changes the user PATH of the machine running them.
+The automatic checks run every command against a packaged build, including a wrong token and a request outside the list, and check that `list` stays plain text when piped. Progress tests exercise the real pipe and tool journal, including legacy responses, early events, revision filtering, failed and unknown steps, disconnect cleanup and motion controls. Chat tests drive raw terminal input against a fake app and inspect the rendered terminal grid: multiline paste, command choices, queue previews and undo, immediate desktop opening while a turn is waiting, draft preservation after a delayed error, resize and leaving. They do not click **Add to PATH**, because that changes the user PATH of the machine running them.

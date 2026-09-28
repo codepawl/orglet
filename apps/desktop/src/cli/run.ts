@@ -195,7 +195,9 @@ function reportStopped(command: RequestCommand, output: Output): number {
 
 function runChat(to: string | undefined, environment: NodeJS.ProcessEnv, terminal: InteractiveTerminal): Promise<number> {
   const client = appChatClient(resolveUserData(environment), appExecutable(environment));
-  return runInteractive({ input: terminal.input, output: terminal.output, client, mode: terminal.mode, version: packageJson.version, ...(to ? { to } : {}) });
+  return runInteractive({ input: terminal.input, output: terminal.output, client, mode: terminal.mode, version: packageJson.version,
+    reducedMotion: environment.ORGLET_REDUCED_MOTION === '1', ...(to ? { to } : {}),
+  });
 }
 
 export async function runCli(argumentList: readonly string[], output: Output, environment: NodeJS.ProcessEnv = process.env, workingDirectory = process.cwd(), extras: RunExtras = {}): Promise<number> {

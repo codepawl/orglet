@@ -32,6 +32,7 @@ export type InteractiveOptions = {
   /** Raw keys and redraws. Defaults to whether both streams are terminals. */
   terminal?: boolean;
   directory?: string;
+  reducedMotion?: boolean;
 };
 
 const DEFAULT_COLUMNS = 80;
@@ -182,7 +183,8 @@ class Session {
     if (this.panel) panel = this.panelRows(width);
     else if (this.agentsVisible && this.chat) panel = agentDetails(this.chat, this.entries, directory, width, this.mode);
     this.panelOffset = Math.max(0, Math.min(this.panelOffset, Math.max(0, (panel?.length ?? 0) - room)));
-    const content = this.view === 'picker' ? [] : panel ? panel.slice(this.panelOffset, this.panelOffset + room) : this.transcript.view(room, width, this.mode);
+    const content = this.view === 'picker' ? [] : panel ? panel.slice(this.panelOffset, this.panelOffset + room)
+      : this.transcript.view(room, width, this.mode, Date.now() - this.waitingStartedAt, this.options.reducedMotion ?? false);
     return [...header.slice(0, headerRows), ...(height > 6 ? [''] : []), ...content];
   }
 
@@ -605,10 +607,16 @@ class Session {
     const startedAt = Date.now();
     this.waitingController = controller;
     this.waitingStartedAt = startedAt;
+    const activity = this.terminal ? this.transcript.beginActivity() : undefined;
     this.showPrompt();
-    if (this.terminal) this.waitingTimer = setInterval(() => this.showPrompt(), 1000);
+    if (this.terminal) this.waitingTimer = setInterval(() => this.showPrompt(), this.options.reducedMotion || this.mode === 'none' ? 1000 : 120);
     try {
-      const value = await this.options.client.send(chat.name, text, controller.signal);
+      const progress = activity ? (frame: import('./protocol').CliProgressFrame) => {
+        if (this.finished || controller.signal.aborted) return;
+        activity.frame = frame;
+        this.showPrompt();
+      } : undefined;
+      const value = await this.options.client.send(chat.name, text, controller.signal, progress);
       if (this.finished) return;
       this.printTurn(value, Math.round((Date.now() - startedAt) / 1000));
     } catch (error) {
@@ -616,6 +624,7 @@ class Session {
       if (error instanceof StoppedError) this.printMuted(`Stopped waiting. ${chat.name} keeps working in the app; /read shows the answer when it is ready.`);
       else this.printFailure(error);
     } finally {
+      if (activity) activity.following = false;
       this.waitingController = undefined;
       if (this.waitingTimer) clearInterval(this.waitingTimer);
       this.waitingTimer = undefined;

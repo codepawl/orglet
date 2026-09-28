@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { join, win32 } from 'node:path';
 import { z } from 'zod';
+import { RunActivity } from '../shared/run-activity';
 
 /**
  * The line protocol between the `orglet` command and the running app (COD-234). One JSON request per line, one JSON
@@ -60,6 +61,7 @@ export const CliRequest = z.discriminatedUnion('op', [
     message: z.string().trim().min(1).max(16000),
     files: z.array(z.string().min(1).max(32768)).max(MAX_FILES),
     wait: z.boolean(),
+    progress: z.boolean().optional(),
     timeoutSeconds: z.number().int().min(1).max(MAX_WAIT_SECONDS),
   }).strict(),
   z.object({ op: z.literal('read'), token: CliToken, to: ChatName }).strict(),
@@ -78,6 +80,20 @@ export type CliRequestBody = CliRequest extends infer Request ? Request extends 
 
 export type CliErrorCode = 'unauthorized' | 'invalid' | 'too_large' | 'busy' | 'not_found' | 'ambiguous' | 'failed';
 export type CliResponse<T = unknown> = { ok: true; value: T } | { ok: false; code: CliErrorCode; error: string };
+export const CliResponseFrame = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), value: z.unknown() }).strict(),
+  z.object({ ok: z.literal(false), code: z.enum(['unauthorized', 'invalid', 'too_large', 'busy', 'not_found', 'ambiguous', 'failed']), error: z.string() }).strict(),
+]);
+
+export const CliActivity = RunActivity.extend({ name: z.string().max(80), color: z.string().regex(/^#[a-f0-9]{6}$/i).optional() });
+export type CliActivity = z.infer<typeof CliActivity>;
+export const CliProgressFrame = z.object({
+  type: z.literal('progress'),
+  taskId: z.string().min(1).max(100),
+  steps: z.array(CliActivity).max(500),
+  omitted: z.number().int().nonnegative(),
+}).strict();
+export type CliProgressFrame = z.infer<typeof CliProgressFrame>;
 
 export type ChatKind = 'worker' | 'team';
 /**

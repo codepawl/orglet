@@ -14,6 +14,7 @@ import { readCustomConnections } from './custom-connections';
 import { McpServer, type McpServerView } from '../../shared/mcp';
 import { CHAT_SEARCH_BACKFILL } from './chat-search';
 import { DEFAULT_WEB_SEARCH_PROVIDER, WebSearchProvider } from '../../shared/web-tools';
+import type { RunActivity } from '../../shared/run-activity';
 
 /** The skill a new workspace starts with. */
 export function seedSkill(skillId: string): Skill {
@@ -29,6 +30,17 @@ export const SCHEMA_VERSION = 19;
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export class Store {
+  onActivity: (activity: RunActivity) => void = () => {};
+
+  /** Progress must never change a tool's authorization, result or journal. */
+  activity(activity: RunActivity): void {
+    try {
+      this.onActivity(activity);
+    } catch {
+      // A disconnected observer cannot fail an operation already recorded.
+    }
+  }
+
   readonly db: DatabaseSync;
   readonly sqliteVersion: string;
   /** Where the database lives; files Orglet keeps for the person (edited sources, COD-280) sit in the same folder. */

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Store, now } from './database';
 import { WorkspaceRecovery } from './workspace-recovery';
 import { describeToolCallArguments } from '../../shared/workspace-recovery';
-import type { RunErrorCode } from '../../shared/contracts';
+import type { Run, RunErrorCode } from '../../shared/contracts';
 
 /**
  * An earlier attempt in this chat holds an effect whose outcome is unknown: a write, a command or a working copy
@@ -19,6 +19,18 @@ const RecordedCall = z.object({
   state: z.enum(['started', 'completed', 'uncertain']),
   output: z.string().nullable(),
 }).strict();
+
+/** Known tool envelopes can return an error without throwing. Observe the outcome without exposing its content. */
+function returnedFailure(result: unknown): boolean {
+  if (!result || typeof result !== 'object') return false;
+  const fields = result as Record<string, unknown>;
+  if (typeof fields.error === 'string' && fields.error.length > 0) return true;
+  if (fields.isError === true) return true;
+  if (fields.state === 'exited' && typeof fields.exitCode === 'number' && fields.exitCode !== 0) return true;
+  if (!fields.result || typeof fields.result !== 'object') return false;
+  const nested = fields.result as Record<string, unknown>;
+  return (typeof nested.error === 'string' && nested.error.length > 0) || nested.isError === true;
+}
 
 /** Keeps tool results outside exported backups, like model checkpoints that contain source text. */
 export class ToolCalls {
@@ -70,9 +82,22 @@ export class ToolCalls {
       return undefined;
     });
     if (retained) return JSON.parse(retained.output) as Result;
+    const startedAt = now();
+    const activity = {
+      id: `tool:${options.callId}:${startedAt}`,
+      runId: options.runId,
+      taskId: this.store.get<Run>('runs', options.runId).taskId,
+      kind: 'tool' as const,
+      label: options.name.slice(0, 300),
+      detail: describeToolCallArguments(options.name, options.arguments) ?? undefined,
+      startedAt,
+    };
+    let dispatched = false;
     try {
       // Authorize again after claiming; a stored result never authorizes another operation.
       options.authorize();
+      dispatched = true;
+      this.store.activity({ ...activity, state: 'running', updatedAt: startedAt });
       const result = await options.perform();
       const output = JSON.stringify(result);
       if (output === undefined || Buffer.byteLength(output, 'utf8') > 512 * 1024) {
@@ -81,10 +106,13 @@ export class ToolCalls {
       this.store.db.prepare("UPDATE tool_calls SET state='completed',output=? WHERE run_id=? AND call_id=? AND state='started'")
         .run(output, options.runId, options.callId);
       options.authorize();
+      const failed = returnedFailure(result);
+      this.store.activity({ ...activity, state: failed ? 'failed' : 'completed', updatedAt: now() });
       return result;
     } catch (error) {
       this.store.db.prepare("UPDATE tool_calls SET state='uncertain' WHERE run_id=? AND call_id=? AND state='started'")
         .run(options.runId, options.callId);
+      this.store.activity({ ...activity, state: dispatched ? 'unknown' : 'failed', updatedAt: now() });
       throw error;
     }
   }

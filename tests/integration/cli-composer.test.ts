@@ -4,7 +4,7 @@ import { runInteractive } from '../../apps/desktop/src/cli/interactive';
 import { StoppedError } from '../../apps/desktop/src/cli/client';
 import { type ChatClient } from '../../apps/desktop/src/cli/chat-client';
 import { displayWidth, stripAnsi, type ColorMode } from '../../apps/desktop/src/cli/terminal';
-import { type ListValue, type SendValue } from '../../apps/desktop/src/cli/protocol';
+import { type CliProgressFrame, type ListValue, type SendValue } from '../../apps/desktop/src/cli/protocol';
 
 /** A terminal grid, so assertions see the final screen rather than text already erased by a redraw. */
 class Screen {
@@ -69,9 +69,11 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
   const opened: string[] = [];
   let finishSend: (() => void) | undefined;
   let failOpen: (() => void) | undefined;
+  let updateProgress: ((frame: CliProgressFrame) => void) | undefined;
   const client: ChatClient = {
     list: async () => options.list ?? ({ orglets: [{ name: 'Researcher', provider: 'codex', model: 'configured-model', billing: 'CLI account', color: '#4f7fe0' }, { name: 'Kế toán', provider: 'codex', model: 'configured-model', color: '#64b282' }], crews: [] }),
-    send: async (to, message, signal) => {
+    send: async (to, message, signal, progress) => {
+      updateProgress = progress;
       sent.push(message);
       sentTo.push(to);
       if (options.slow) await new Promise<void>((resolve, reject) => {
@@ -101,11 +103,47 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
     key: async (text: string | Buffer) => { input.write(text); await pause(); },
     resolve: async () => { finishSend?.(); await pause(); },
     failOpen: async () => { failOpen?.(); await pause(); },
+    progress: async (frame: CliProgressFrame) => { updateProgress?.(frame); await pause(); },
     stop: async () => { input.end(); await running; },
   };
 }
 
 describe('terminal composer', () => {
+  it('updates chronological steps above the draft, collapses finished details, and preserves the draft on disclosure and resize', async () => {
+    const session = await terminal({ slow: true, mode: 'truecolor' });
+    const startedAt = '2026-09-28T10:00:00.000Z';
+    const thinking = { id: 'model:1', runId: 'run', taskId: 'task', kind: 'model' as const, state: 'running' as const,
+      label: 'thinking', name: 'Researcher', startedAt, updatedAt: startedAt, detail: 'Public summary details' };
+    try {
+      await session.key('check notes');
+      await session.key('\r');
+      await session.key('unsent draft');
+      await session.progress({ type: 'progress', taskId: 'task', steps: [thinking], omitted: 0 });
+      expect(session.screen.text()).toContain('00:00 ● Thinking…');
+      expect(session.screen.text()).toContain('› unsent draft');
+      const finished = { ...thinking, state: 'completed' as const, updatedAt: '2026-09-28T10:00:02.000Z' };
+      const tool = { ...thinking, id: 'read', kind: 'tool' as const, label: 'workspace_read', detail: 'notes.txt', startedAt: '2026-09-28T10:00:02.000Z' };
+      await session.progress({ type: 'progress', taskId: 'task', steps: [finished, tool], omitted: 0 });
+      expect(session.screen.text()).toMatch(/00:00 ▸ Model responded\n00:02 ● Read file · notes.txt/);
+      expect(session.screen.text()).not.toContain('Public summary details');
+      await session.key('\x0f');
+      expect(session.screen.text()).toContain('Public summary details');
+      expect(session.screen.text()).toContain('› unsent draft');
+      session.output.columns = 32;
+      session.output.rows = 10;
+      session.output.emit('resize');
+      await pause();
+      expect(session.screen.text()).toContain('› unsent draft');
+      expect(session.screen.lines.length).toBeLessThanOrEqual(9);
+      expect(session.screen.lines.every(line => displayWidth(line.join('')) <= 32)).toBe(true);
+      await session.resolve();
+      expect(session.screen.text()).toContain('› unsent draft');
+      expect(session.sent).toEqual(['check notes']);
+    } finally {
+      await session.stop();
+    }
+  });
+
   it('puts search guidance inside the empty input and separates orglets from crews', async () => {
     const session = await terminal({ picker: true, list: {
       orglets: [{ name: 'Researcher', provider: 'codex' }, { name: 'Writer', provider: 'codex' }],

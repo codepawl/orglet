@@ -3350,6 +3350,27 @@ export const en: Dictionary = {
   'Ẩn gợi ý quyền': 'Hide permission hint',
   'Tacet chọn {0} trả lời': 'Tacet picked {0} to answer',
   'Tin nhắn không gắn thẻ ai, nên Tacet chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.': 'The message tagged no one, so Tacet picked the orglet that fits best ({0}% sure). Tag @all to ask the whole group.',
+  // Terminal activity vocabulary (COD-322).
+  'Đọc file': 'Read file',
+  'Liệt kê file': 'List files',
+  'Tìm trong file': 'Search files',
+  'Ghi file': 'Write file',
+  'Sửa file': 'Edit file',
+  'Chạy câu lệnh': 'Run command',
+  'Đọc đầu ra lệnh': 'Read command output',
+  'Đọc một trang web': 'Read web page',
+  'Sử dụng công cụ': 'Use tool',
+  'Model đã trả kết quả': 'Model responded',
+  'Lượt gọi model thất bại': 'Model request failed',
+  'Lượt gọi model đã dừng': 'Model request stopped',
+  'Lượt gọi model': 'Model request',
+  'Model đang làm việc…': 'Model working…',
+  ' · tiếp tục trong app': ' · continues in app',
+  ' · thất bại': ' · failed',
+  ' · chưa rõ kết quả': ' · outcome unknown',
+  ' · đang chờ': ' · waiting',
+  ' · đã dừng': ' · stopped',
+
 };
 
 // British English differs from the US text only in these spellings, so it is derived instead of duplicated.

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { createServer, type Server, type Socket } from 'node:net';
 import { CLI_TOKEN_FILE, CliRequest, MAX_CONNECTIONS, MAX_LINE_BYTES, type CliErrorCode, type CliResponse } from '../cli/protocol';
 import { CliFailure } from './cli-operations';
+import { CliProgressFrame } from '../cli/protocol';
 
 /**
  * The app's end of the `orglet` command (COD-234): a named pipe on Windows, a Unix socket elsewhere, answering one
@@ -11,7 +12,7 @@ import { CliFailure } from './cli-operations';
  * someone who can read that folder can talk to the app. No Electron here, so tests run the real server.
  */
 
-export type CliHandler = (request: CliRequest, signal: AbortSignal) => Promise<unknown>;
+export type CliHandler = (request: CliRequest, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void) => Promise<unknown>;
 
 export type CliServerOptions = {
   endpoint: string;
@@ -52,7 +53,7 @@ function failure(code: CliErrorCode, error: string): CliResponse {
 }
 
 /** Reads one request line and answers it; exported so the tests can call it without a socket. */
-export async function answerLine(line: string, options: Pick<CliServerOptions, 'token' | 'handle' | 'translate'>, signal: AbortSignal): Promise<CliResponse> {
+export async function answerLine(line: string, options: Pick<CliServerOptions, 'token' | 'handle' | 'translate'>, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void): Promise<CliResponse> {
   let raw: unknown;
   try {
     raw = JSON.parse(line);
@@ -67,7 +68,8 @@ export async function answerLine(line: string, options: Pick<CliServerOptions, '
   const parsed = CliRequest.safeParse(raw);
   if (!parsed.success) return failure('invalid', options.translate('Yêu cầu CLI không hợp lệ.'));
   try {
-    return { ok: true, value: await options.handle(parsed.data, signal) };
+    const emit = parsed.data.op === 'send' && parsed.data.progress && parsed.data.wait ? progress : undefined;
+    return { ok: true, value: await options.handle(parsed.data, signal, emit) };
   } catch (error) {
     const code = error instanceof CliFailure ? error.code : 'failed';
     const message = error instanceof Error ? error.message : 'Không thể thực hiện thao tác.';
@@ -142,7 +144,18 @@ export class CliServer {
       }
       answering = true;
       const line = buffered.subarray(0, newline).toString('utf8');
-      void answerLine(line, this.options, controller.signal).then(response => this.reply(socket, response));
+      const progress = (frame: CliProgressFrame) => {
+        if (socket.destroyed || controller.signal.aborted) return;
+        const parsed = CliProgressFrame.safeParse(frame);
+        if (!parsed.success) return;
+        // A slow reader cannot retain an unbounded stream in main's socket buffer.
+        if (socket.writableLength > MAX_LINE_BYTES * 4) {
+          socket.destroy();
+          return;
+        }
+        socket.write(`${JSON.stringify(parsed.data)}\n`);
+      };
+      void answerLine(line, this.options, controller.signal, progress).then(response => this.reply(socket, response));
     });
   }
 
