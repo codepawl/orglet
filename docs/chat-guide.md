@@ -81,6 +81,8 @@ Orglets never forward anything themselves. How it works: [team-chat.md](team-cha
 
 ## Reports as documents
 
+Orglet saves chat answers up to 262,144 characters, including complete HTML or code documents, without cutting them. Structured report summaries still have a 16,000-character limit. HTML in a chat is text; it does not run inside Orglet.
+
 Ask for a report and it arrives as a card, not a wall of text. Open it to read it; **Copy** puts it on the clipboard and **Download** saves it. Whether copy and download give plain text or Markdown is set in **Settings → Chat**. A download of one answer carries its message ID, reply link and reactions; to move a whole conversation, use a backup.
 
 ## What the orglet did

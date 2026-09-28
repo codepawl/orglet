@@ -9,7 +9,7 @@ import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../.
 import { HarnessAccounts } from '../../apps/desktop/src/core/harness/accounts';
 import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import { harnessNames, harnessReady, harnessStatus, loginCommand, loginCommands, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
-import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
+import { MAX_CHAT_MESSAGE_CHARACTERS, type Source, type Task, type Worker } from '../../apps/desktop/src/shared/contracts';
 import { invoicePdf } from './pdf-fixture';
 
 let directory: string;
@@ -464,6 +464,32 @@ describe('runner integration', () => {
     expect(report).not.toHaveProperty('cwd');
     expect(detail.usage).toEqual({ chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 });
     expect(detail.events.map(event => event.message).join(' ')).toContain('$0.0030');
+  });
+
+  it.each(['claude-code', 'codex', 'gemini'] as const)('saves a full HTML chat answer from %s longer than the structured-report summary limit', async provider => {
+    const html = `<!doctype html>\n<html><body>${'<p>Full document content.</p>\n'.repeat(1000)}</body></html>`;
+    reply = async () => ({ message: html, title: null, report: null });
+    const detail = await run(provider);
+    expect(detail.task.status).toBe('completed');
+    expect(detail.runs.at(-1)?.error).toBeNull();
+    expect(detail.artifacts[0].report.format).toBe('chat');
+    expect(detail.artifacts[0].report.summary).toBe(html);
+  });
+
+  it('rejects an oversized chat envelope as an answer error without saving or truncating it', async () => {
+    reply = async () => ({ message: 'x'.repeat(MAX_CHAT_MESSAGE_CHARACTERS + 1), title: null, report: null });
+    const detail = await run('codex');
+    expect(detail.task.status).toBe('failed');
+    expect(detail.artifacts).toHaveLength(0);
+    expect(detail.runs.at(-1)?.error).toBe('Câu trả lời quá dài; chưa được lưu. Hãy yêu cầu chia nội dung thành nhiều phần.');
+  });
+
+  it('rejects a malformed chat envelope without falling back to structured-report validation', async () => {
+    reply = async () => ({ message: '<html>Document</html>', title: false, report: null });
+    const detail = await run('codex');
+    expect(detail.task.status).toBe('failed');
+    expect(detail.artifacts).toHaveLength(0);
+    expect(detail.runs.at(-1)?.error).toBe('Câu trả lời thiếu phần bắt buộc hoặc có phần sai dạng; chưa được lưu.');
   });
 
   it('marks a run whose harness account ran out of plan usage, so the chat can offer another account (COD-225)', async () => {

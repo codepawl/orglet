@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { FontFamily } from '../../shared/fonts';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import { Finding, FindingCategory, Id, MAX_CREW_MEMBERS, Report, SourceLocation, TeamPlan, PlanAssignment, type Run, type Task } from '../../shared/contracts';
+import { ChatMessage, Finding, FindingCategory, Id, MAX_CREW_MEMBERS, StructuredReport, SourceLocation, TeamPlan, PlanAssignment, type Run, type Task } from '../../shared/contracts';
 import { ProfileArgs } from '../../shared/profiles';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { Review } from '../../shared/review';
@@ -38,7 +38,7 @@ const CheckerIds = z.array(Id).max(20);
 export const Proposals = z.array(KnowledgeProposal).max(3);
 const Locations = z.array(SourceLocation).max(20);
 const ModelFindingSchema = Finding.omit({ provenance: true }).extend({ category: FindingCategory, recommendation: Recommendation, checkerIds: CheckerIds, locations: Locations, workspaceEvidenceIds: z.array(Id).max(20) });
-export const ModelReportSchema = Report.omit({ format: true }).extend({ review: Review, findings: z.array(ModelFindingSchema).max(50), limitations: z.array(z.string().min(1).max(2000)).max(30), knowledgeProposals: Proposals });
+export const ModelReportSchema = StructuredReport.omit({ format: true }).extend({ review: Review, findings: z.array(ModelFindingSchema).max(50), limitations: z.array(z.string().min(1).max(2000)).max(30), knowledgeProposals: Proposals });
 export const MemberReportSchema = ModelReportSchema.extend({ assignmentOutcome: z.enum(['completed', 'blocked']) });
 // Old persisted replies predate these fields. Defaults do not fabricate a recommendation or evidence.
 const ModelFinding = ModelFindingSchema.extend({ category: FindingCategory.default('other'), recommendation: Recommendation.default(null), checkerIds: CheckerIds.default([]), locations: Locations.default([]), workspaceEvidenceIds: z.array(Id).max(20).default([]) });
@@ -55,11 +55,11 @@ export const SUBMIT_REPORT_DESCRIPTION = 'Finish with an evidence-backed report.
 const SUBMIT_PLAN_DESCRIPTION = 'Assign this user message to one or more listed team members. Use only those member ids. You may assign a subset. Each assignment brief is that worker\'s job for this turn. Each assignment should state expectedOutput, dependsOn (assigned worker ids whose committed results are required), and writeResources (relative workspace files or directories, empty for read-only work). Use empty dependencies for independent work. Ownership never grants file permissions. Combining the members\' results into the final answer is the lead\'s own synthesis step, which runs after the members finish: never assign it as a member job; put notes for the final answer in synthesisBrief instead. Do not invent workers or missing results.';
 const REPLY_DESCRIPTION = 'Send your answer to the user as a normal chat message (Markdown allowed). Use this for questions, discussion and ordinary requests. Mention the sources you relied on by name, never by their id. title: when the latest message has nameChat true, a short name for this chat (2 to 6 words, in the user\'s language, no quotes or trailing period); otherwise null. knowledgeProposals may suggest at most three reusable, general lessons for user review; use an empty array when nothing qualifies.';
 const ChatTitle = z.string().trim().min(1).max(80).nullable();
-const ChatReplySchema = z.object({ message: z.string().min(1).max(16000), title: ChatTitle, knowledgeProposals: Proposals }).strict();
+const ChatReplySchema = z.object({ message: ChatMessage, title: ChatTitle, knowledgeProposals: Proposals }).strict();
 export const ChatReply = ChatReplySchema.extend({ title: ChatTitle.default(null), knowledgeProposals: Proposals.default([]) });
 // Local harnesses return one JSON answer: the message, plus a report only when one was asked for.
-export const HarnessAnswerSchema = z.object({ message: z.string().min(1).max(16000), title: ChatTitle, report: ModelReportSchema.nullable() }).strict();
-export const HarnessAnswer = z.object({ message: z.string().min(1).max(16000), title: ChatTitle.default(null), report: z.unknown().nullable(), appProposals: z.array(z.unknown()).nullable().optional(), memories: z.array(z.unknown()).nullable().optional(), selfImprovement: z.unknown().nullable().optional(), reactions: z.array(z.unknown()).nullable().optional() });
+export const HarnessAnswerSchema = z.object({ message: ChatMessage, title: ChatTitle, report: ModelReportSchema.nullable() }).strict();
+export const HarnessAnswer = z.object({ message: ChatMessage, title: ChatTitle.default(null), report: z.unknown().nullable(), appProposals: z.array(z.unknown()).nullable().optional(), memories: z.array(z.unknown()).nullable().optional(), selfImprovement: z.unknown().nullable().optional(), reactions: z.array(z.unknown()).nullable().optional() });
 /** Whether this run may propose app changes: the same rules as the tool loop, read off the tools it would be offered. */
 export const proposalsAllowed = (run: Run, task: Task) => toolsFor(run, task).some(tool => tool.type === 'function' && isProposalTool(tool.function.name));
 /**

@@ -40,6 +40,8 @@ Forward a message, yours or an orglet's, to up to five other chats at once, with
 
 > Orglet is early. Expect rough edges, and check answers against your own sources before you rely on them.
 
+Chat answers can hold a complete HTML or code document, up to 262,144 characters. Structured reports keep their own summary and evidence limits. [Chat guide](docs/chat-guide.md).
+
 | | |
 |---|---|
 | 💬 **Chat with a worker** | Click a worker. One live thread — a new message is a turn, not a new task. |
