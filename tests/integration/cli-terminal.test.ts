@@ -2,7 +2,8 @@ import { PassThrough, Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { AppRefusal, type ChatClient } from '../../apps/desktop/src/cli/chat-client';
 import { StoppedError } from '../../apps/desktop/src/cli/client';
-import { FACE_HEIGHT, FACE_WIDTH, faceCells, miniFaceCells, renderFace, renderMiniFace, WAITING_FRAMES } from '../../apps/desktop/src/cli/faces';
+import { FACE_HEIGHT, FACE_WIDTH, HEADER_FACE_WIDTH, faceCells, miniFaceCells, renderFace, renderHeaderFace, renderMiniFace, WAITING_FRAMES } from '../../apps/desktop/src/cli/faces';
+import { terminalHeader } from '../../apps/desktop/src/cli/chat-layout';
 import { runInteractive } from '../../apps/desktop/src/cli/interactive';
 import { parseInline, renderMarkdown } from '../../apps/desktop/src/cli/markdown';
 import { chosenEntry, createPicker, entriesFromList, findChat, moveSelection, renderPickerLines, setFilter, visibleEntries } from '../../apps/desktop/src/cli/picker';
@@ -86,6 +87,25 @@ describe('orglet faces', () => {
 });
 
 describe('orglet colour rules', () => {
+  it.each(['none', 'truecolor', 'ansi256'] as const)('keeps the solid header mascot and text columns aligned in %s', mode => {
+    const mascot = renderHeaderFace(BLUE, mode);
+    expect(mascot).toHaveLength(4);
+    expect(mascot.map(displayWidth)).toEqual([HEADER_FACE_WIDTH, HEADER_FACE_WIDTH, HEADER_FACE_WIDTH, HEADER_FACE_WIDTH]);
+    if (mode === 'none') {
+      expect(mascot[0]).toBe('▄██████▄');
+      expect(mascot[1]).toBe('██ ██ ██');
+    } else {
+      expect(stripAnsi(mascot[0])).toBe('▄      ▄');
+      expect(mascot[1]).toContain('\x1b[48;');
+    }
+    const header = terminalHeader(entriesFromList({
+      orglets: [{ name: 'Researcher', provider: 'codex', model: 'selected-model', billing: 'CLI account', color: BLUE }], crews: [],
+    })[0], 'test', 'working-directory', 80, 24, mode).map(stripAnsi);
+    for (const [index, text] of ['Orglet test', 'selected-model', 'CLI account', 'working-directory'].entries()) {
+      expect(header[index].indexOf(text)).toBe(HEADER_FACE_WIDTH + 3);
+    }
+  });
+
   it('colours only a terminal without NO_COLOR or TERM=dumb, never --json, and FORCE_COLOR wins', () => {
     expect(detectColorMode({ isTTY: true, environment: {} })).toBe('truecolor');
     expect(detectColorMode({ isTTY: true, environment: {}, colorDepth: 8 })).toBe('ansi256');

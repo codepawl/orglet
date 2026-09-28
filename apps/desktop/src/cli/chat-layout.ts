@@ -1,4 +1,4 @@
-import { renderFace } from './faces';
+import { HEADER_FACE_WIDTH, renderHeaderFace } from './faces';
 import type { ChatEntry } from './picker';
 import { muted, paint, truncate, wrapSegments, type ColorMode } from './terminal';
 
@@ -9,9 +9,11 @@ export function terminalHeader(chat: ChatEntry | undefined, version: string, dir
   if (height < 12 || width < 54) {
     return [paint(truncate(title, width), { bold: true }, mode), muted(truncate(height < 7 ? model : `${model} · ${directory}`, width), mode)];
   }
-  const beside = [paint(title, { bold: true }, mode), model, chat?.billing ?? 'Plan not reported', directory, ''];
-  const mascot = mode === 'none' ? ['  ▄████▄  ', ' █ •  • █ ', ' █      █ ', ' ████████ ', ' ▀        '] : renderFace(chat?.color, 'open', mode);
-  return mascot.map((row, index) => `${row}  ${truncate(beside[index], width - 12)}`);
+  const beside = [paint(title, { bold: true }, mode), model, chat?.billing ?? 'Plan not reported', directory];
+  const gap = '   ';
+  const mascot = renderHeaderFace(chat?.color, mode);
+  const textWidth = width - HEADER_FACE_WIDTH - gap.length;
+  return mascot.map((row, index) => `${row}${gap}${truncate(beside[index], textWidth)}`);
 }
 
 export function agentDetails(chat: ChatEntry, entries: readonly ChatEntry[], directory: string, width: number, mode: ColorMode): string[] {
