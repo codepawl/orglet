@@ -6,12 +6,14 @@ export type SlashCommand =
   | { kind: 'read' }
   | { kind: 'open' }
   | { kind: 'clear' }
+  | { kind: 'queue' }
+  | { kind: 'undo' }
   | { kind: 'help' }
   | { kind: 'exit' }
   | { kind: 'unknown'; command: string };
 
 /** In the order `/help` lists them. */
-export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/help', '/exit'] as const;
+export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/help', '/exit'] as const;
 
 export const SLASH_HELP: readonly [string, string][] = [
   ['/to <name>', 'Switch to another orglet or crew; without a name, pick from the list'],
@@ -19,6 +21,8 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/read', 'Show the latest answer in this chat again'],
   ['/open', 'Bring the app forward on this chat'],
   ['/clear', 'Clear the screen'],
+  ['/queue', 'Show this terminal\'s pending messages and commands'],
+  ['/undo', 'Take the last queued item back into the draft'],
   ['/help', 'Show these commands'],
   ['/exit', 'Leave (Ctrl+D does the same)'],
 ];
@@ -39,6 +43,8 @@ export function parseSlash(line: string): SlashCommand {
     case '/read': return { kind: 'read' };
     case '/open': return { kind: 'open' };
     case '/clear': return { kind: 'clear' };
+    case '/queue': return { kind: 'queue' };
+    case '/undo': return { kind: 'undo' };
     case '/help': return { kind: 'help' };
     case '/exit':
     case '/quit': return { kind: 'exit' };

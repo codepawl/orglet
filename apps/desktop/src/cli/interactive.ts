@@ -7,7 +7,7 @@ import { chosenEntry, createPicker, entriesFromList, findChat, moveSelection, re
 import { answerColor, chatHeader, renderAnswers, styledList } from './pretty';
 import { EXIT_CODES, type CliAnswer, type SendValue } from './protocol';
 import { completeSlash, isSlashCommand, parseSlash, SLASH_HELP, type SlashCommand } from './slash';
-import { ANSI, ERROR_COLOR, muted, MUTED_COLOR, padEnd, paint, wrapSegments, type ColorMode, type Style } from './terminal';
+import { ANSI, ERROR_COLOR, muted, MUTED_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
 
 /**
  * `orglet chat` (COD-236): pick an orglet or crew, then talk to it from the terminal. Everything outside this module
@@ -36,6 +36,8 @@ const PICKER_MAX_ROWS = 8;
 /** The faces on the welcome line; more would wrap a narrow terminal. */
 const WELCOME_FACE_LIMIT = 12;
 const CHAT_HINT = 'Enter sends. Ctrl+J adds a line. Paste stays in the draft. /help lists commands. Ctrl+D leaves.';
+/** These controls do not change the chat or submit a turn, so they need not wait behind one. */
+const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help']);
 
 type QueuedLine = { text: string };
 type View = 'picker' | 'chat';
@@ -104,7 +106,7 @@ class Session {
         prompt: () => this.currentPrompt(),
         rows: () => renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: this.pickerRows() }),
         status: () => this.composerStatus(),
-        hint: () => this.waitingController ? 'Enter queues · Ctrl+J newline · Ctrl+C stops waiting' : 'Enter send · Ctrl+J newline · / commands',
+        hint: () => this.waitingController ? 'Enter queues · /queue · /undo · Ctrl+C stops waiting' : 'Enter send · Ctrl+J newline · / commands',
         picker: () => this.view === 'picker',
         suggestions: text => completeSlash(text, this.entries.map(entry => entry.name))[0].map(candidate => ({
           text: candidate,
@@ -286,6 +288,14 @@ class Session {
       this.end(EXIT_CODES.ok);
       return;
     }
+    if (this.terminal && this.view === 'chat' && isSlashCommand(text)) {
+      const command = parseSlash(text);
+      if (IMMEDIATE_COMMANDS.has(command.kind)) {
+        this.echo({ text }, this.chatPrompt());
+        void this.command(command).finally(() => this.showPrompt());
+        return;
+      }
+    }
     if (this.view === 'chat' && text.trim() && !isSlashCommand(text)) this.composer?.remember(text.trim());
     this.queue.push({ text });
     void this.drain();
@@ -347,6 +357,8 @@ class Session {
       case 'read': return this.read();
       case 'open': return this.openInApp();
       case 'clear': return this.clear();
+      case 'queue': return this.showQueue();
+      case 'undo': return this.undoQueued();
       case 'help': return this.help();
       case 'exit': return this.end(EXIT_CODES.ok);
       case 'unknown': return this.printMuted(`Unknown command ${command.command}. /help lists the commands.`);
@@ -412,6 +424,38 @@ class Session {
     for (const [usage, meaning] of SLASH_HELP) this.print(`  ${padEnd(usage, width)}  ${muted(meaning, this.mode)}`);
     this.printMuted('  Ctrl+J adds a line. Paste stays in the draft. / opens the command menu; Tab fills the choice.');
     this.print();
+  }
+
+  private showQueue(): void {
+    if (this.queue.length === 0) {
+      this.printMuted('Nothing is waiting in this terminal.');
+      return;
+    }
+    this.printMuted(`Waiting in this terminal (${this.queue.length})`);
+    for (const [index, item] of this.queue.entries()) {
+      const preview = item.text.trim().replace(/\s+/gu, ' ');
+      this.print(truncate(`${index + 1}. ${preview}`, this.textWidth()));
+    }
+    this.printMuted('/undo takes the last item back into the draft. Sent work keeps running.');
+    this.print();
+  }
+
+  private undoQueued(): void {
+    if (!this.composer) {
+      this.printMuted('/undo needs an interactive terminal.');
+      return;
+    }
+    if (this.composer.text) {
+      this.printMuted('Clear the current draft before taking a queued item back.');
+      return;
+    }
+    const item = this.queue.pop();
+    if (!item) {
+      this.printMuted('No queued items to edit.');
+      return;
+    }
+    this.printMuted('Taken out of the queue. Edit the draft, then Enter sends or queues it again.');
+    this.composer.replace(item.text);
   }
 
   private async send(text: string): Promise<void> {
