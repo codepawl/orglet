@@ -111,6 +111,211 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
 }
 
 describe('terminal composer', () => {
+  function managementFixture() {
+    const workerId = '11111111-1111-4111-8111-111111111111';
+    const otherId = '22222222-2222-4222-8222-222222222222';
+    const crewId = '33333333-3333-4333-8333-333333333333';
+    const skillId = '44444444-4444-4444-8444-444444444444';
+    const list: ListValue = {
+      orglets: [
+        { name: 'Researcher', provider: 'codex', model: 'configured-model', color: '#4f7fe0' },
+        { name: 'Kế toán', provider: 'codex', model: 'another-model', color: '#3f9a68' },
+      ],
+      crews: [{ name: 'Review crew', members: ['Kế toán'], lead: 'Researcher' }],
+    };
+    const catalog: ManagementCatalog = {
+      orglets: [workerId, otherId].map((id, index) => ({ id, revision: 1, config: {
+        name: list.orglets[index].name, provider: 'codex', modelId: list.orglets[index].model,
+        skillId, instructions: 'Review the supplied files.', avatar: { color: list.orglets[index].color },
+      } })),
+      crews: [{ id: crewId, revision: 1, config: { name: 'Review crew', memberIds: [otherId], synthesizerId: workerId, workflow: 'parallel', monthlyBudgetMicros: 1000000, instructions: 'Review together.' } }],
+      skills: [{ id: skillId, name: 'Review' }], providers: [{ id: 'codex', name: 'Codex' }],
+    };
+    const saved: { id: string; name: string }[] = [];
+    const deleted: string[] = [];
+    const management: ManagementClient = {
+      catalog: async () => catalog,
+      saveOrglet: async (config, target) => {
+        const index = catalog.orglets.findIndex(entry => entry.id === target?.id);
+        if (index < 0) throw new Error('This fixture edits existing orglets only.');
+        const orglet = catalog.orglets[index];
+        Object.assign(orglet.config, config);
+        orglet.revision += 1;
+        list.orglets[index].name = orglet.config.name;
+        saved.push({ id: orglet.id, name: orglet.config.name });
+        return { kind: 'worker', id: orglet.id, name: orglet.config.name, revision: orglet.revision };
+      },
+      saveCrew: async () => { throw new Error('Unexpected crew mutation'); },
+      delete: async (_kind, target) => {
+        deleted.push(target.id);
+        throw new Error('Unexpected deletion');
+      },
+    };
+    return { list, catalog, management, saved, deleted, otherId };
+  }
+
+  it('shows per-entity icons and model details without changing the command inserted by Tab', async () => {
+    const fixture = managementFixture();
+    const session = await terminal(fixture);
+    try {
+      await session.key('/edit ');
+      const screen = session.screen.text();
+      expect(screen).toContain('▐••▌ Researcher');
+      expect(screen).toContain('codex/configured-model');
+      expect(screen).toContain('▦ Review crew');
+      expect(screen).toContain('crew · lead Researcher');
+      expect(screen).not.toContain('Edit configuration; without a name');
+      await session.key('\x1b[B');
+      await session.key('\t');
+      expect(session.screen.text()).toContain('› /edit Kế toán');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('▐••▌ Edit orglet · Kế toán');
+      expect(session.screen.text()).toContain('Codex · another-model');
+      expect(session.sent).toEqual([]);
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it.each([[80, 24], [32, 10]])('opens the highlighted filtered orglet menu and preserves selection at %s × %s', async (columns, rows) => {
+    const fixture = managementFixture();
+    const session = await terminal({ ...fixture, picker: true, columns, rows });
+    try {
+      await session.key('Kế');
+      await session.key('\x1b[D');
+      expect(session.screen.text()).toContain('Manage orglet');
+      expect(session.screen.text()).toContain('Edit configuration');
+      await session.key('\x1b[B');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Type Kế toán to delete');
+      await session.key('\r');
+      expect(fixture.deleted).toEqual([]);
+      await session.key('\x1b');
+      expect(session.screen.text()).toContain('› Kế');
+      expect(session.screen.text()).toContain('1/2');
+      await session.key('\x1b[D');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Edit orglet');
+      await session.key('Name');
+      await session.key('\r');
+      await session.key('\x15');
+      await session.key('Kế toán edited');
+      await session.key('\r');
+      await session.key('Save');
+      await session.key('\r');
+      expect(fixture.saved).toEqual([{ id: fixture.otherId, name: 'Kế toán edited' }]);
+      expect(session.sent).toEqual([]);
+      expect(session.screen.text()).toContain('Kế toán edited');
+      for (const line of session.screen.text().split('\n')) {
+        expect(displayWidth(line)).toBeLessThan(columns);
+      }
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('opens the selected crew menu with group icon and retains its row after cancel', async () => {
+    const fixture = managementFixture();
+    const session = await terminal({ ...fixture, picker: true });
+    try {
+      await session.key('\x1b[A');
+      await session.key('\x1b[D');
+      expect(session.screen.text()).toContain('▦ Manage crew · Review crew');
+      expect(session.screen.text()).toContain('Lead: Researcher');
+      await session.key('\x1b[B');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Type Review crew to delete');
+      await session.key('\x1b');
+      expect(session.screen.text()).toContain('› ▦    Review crew');
+      await session.key('\x1b[D');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('▦ Edit crew · Review crew');
+      expect(fixture.deleted).toEqual([]);
+      expect(session.sent).toEqual([]);
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('opens Ctrl+N creation choices without replacing a draft or an unsaved form', async () => {
+    const fixture = managementFixture();
+    const session = await terminal(fixture);
+    try {
+      await session.key('valuable draft');
+      await session.key('\x0e');
+      expect(session.screen.text()).toContain('Create orglet or crew');
+      await session.key('\x1b[B');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Create crew');
+      await session.key('Name');
+      await session.key('\r');
+      await session.key('Unsaved crew');
+      await session.key('\x0e');
+      expect(session.screen.text()).toContain('Unsaved crew');
+      await session.key('\x1b');
+      await session.key('\x1b');
+      expect(session.screen.text()).toContain('valuable draft');
+      expect(session.sent).toEqual([]);
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('holds queued messages while the Ctrl+N form is open and resumes on cancel', async () => {
+    const fixture = managementFixture();
+    const session = await terminal({ ...fixture, slow: true });
+    try {
+      await session.key('first');
+      await session.key('\r');
+      await session.key('second');
+      await session.key('\r');
+      await session.key('draft after queue');
+      await session.key('\x0e');
+      expect(session.screen.text()).toContain('Create orglet or crew');
+      await session.resolve();
+      expect(session.sent).toEqual(['first']);
+      await session.key('\x1b');
+      expect(session.sent).toEqual(['first', 'second']);
+      expect(session.sentTo).toEqual(['Researcher', 'Researcher']);
+      expect(session.screen.text()).toContain('draft after queue');
+      await session.resolve();
+    } finally {
+      await session.resolve();
+      await session.stop();
+    }
+  });
+
+  it('cancels a pending configuration load and ignores its late reply without sending input', async () => {
+    const fixture = managementFixture();
+    let resolveCatalog: (() => void) | undefined;
+    let reads = 0;
+    const session = await terminal({ ...fixture, management: { ...fixture.management, catalog: async () => {
+      reads += 1;
+      if (reads === 1) await new Promise<void>(resolve => { resolveCatalog = resolve; });
+      return fixture.catalog;
+    } } });
+    try {
+      await session.key('keep this draft');
+      await session.key('\x0e');
+      await session.key('\x0e');
+      expect(reads).toBe(1);
+      expect(session.screen.text()).toContain('Opening configuration');
+      await session.key('\r');
+      expect(session.sent).toEqual([]);
+      await session.key('\x1b');
+      resolveCatalog?.();
+      await pause();
+      expect(session.screen.text()).not.toContain('Create orglet or crew');
+      expect(session.screen.text()).toContain('keep this draft');
+      await session.key('\x0e');
+      expect(reads).toBe(2);
+      expect(session.screen.text()).toContain('Create orglet or crew');
+    } finally {
+      resolveCatalog?.();
+      await session.stop();
+    }
+  });
+
   it('keeps the current chat when editing or deleting another entry and restores a canceled picker draft', async () => {
     const workerId = '11111111-1111-4111-8111-111111111111';
     const otherId = '22222222-2222-4222-8222-222222222222';

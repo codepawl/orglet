@@ -1,11 +1,12 @@
 import { emitKeypressEvents, type Key } from 'node:readline';
 import { PassThrough } from 'node:stream';
 import { StringDecoder } from 'node:string_decoder';
-import { ANSI, displayWidth, muted, paint, truncate, type ColorMode } from './terminal';
+import { ANSI, displayWidth, muted, padEnd, paint, truncate, type ColorMode } from './terminal';
 
 type Input = NodeJS.ReadableStream & { isRaw?: boolean; setRawMode?: (raw: boolean) => unknown };
 type Output = NodeJS.WritableStream & { columns?: number; rows?: number };
-export type Suggestion = { text: string; description: string };
+export type Suggestion = { text: string; description: string; label?: string };
+export type ComposerShortcut = 'agents' | 'details' | 'queue' | 'undo' | 'switch' | 'pageUp' | 'pageDown' | 'menu' | 'new';
 type ComposerOptions = {
   input: Input;
   output: Output;
@@ -28,7 +29,7 @@ type ComposerOptions = {
   /** A fixed viewport above the draft; absent for callers using inline terminal output. */
   frame?: (height: number, width: number) => string[];
   detail?: () => string;
-  shortcut?: (action: 'agents' | 'details' | 'queue' | 'undo' | 'switch' | 'pageUp' | 'pageDown') => void;
+  shortcut?: (action: ComposerShortcut) => boolean | void;
 };
 
 const PASTE_START = '\x1b[200~';
@@ -192,7 +193,7 @@ export class TerminalComposer {
     }
     if (key.ctrl && key.name === 'c') return this.options.interrupt();
     if (key.ctrl && key.name === 'd') return this.options.close();
-    const shortcuts = { g: 'agents', o: 'details', q: 'queue', z: 'undo', p: 'switch' } as const;
+    const shortcuts = { g: 'agents', o: 'details', q: 'queue', z: 'undo', p: 'switch', n: 'new' } as const;
     if (key.ctrl && key.name && key.name in shortcuts && this.options.shortcut) {
       this.options.shortcut(shortcuts[key.name as keyof typeof shortcuts]);
       this.draw();
@@ -200,6 +201,10 @@ export class TerminalComposer {
     }
     if ((key.name === 'pageup' || key.name === 'pagedown') && this.options.shortcut) {
       this.options.shortcut(key.name === 'pageup' ? 'pageUp' : 'pageDown');
+      this.draw();
+      return;
+    }
+    if (key.name === 'left' && this.options.shortcut?.('menu')) {
       this.draw();
       return;
     }
@@ -341,6 +346,8 @@ export class TerminalComposer {
     }
     const choices = this.suggestions();
     const menuStart = Math.max(0, this.selected - 3);
+    const labeledChoices = choices.some(choice => choice.label !== undefined);
+    const labelWidth = Math.min(Math.max(0, ...choices.map(choice => displayWidth(choice.label ?? choice.text.trim()))), Math.floor(width / 2));
     const status = this.options.status();
     const hint = confirmingExit ? this.options.hint() : choices.length ? '↑↓ choose · Tab/Enter fill · Esc dismiss' : this.options.picker() ? '' : this.options.hint();
     const height = Math.max(1, (this.options.output.rows ?? 24) - 1);
@@ -352,7 +359,8 @@ export class TerminalComposer {
     const maxExtraLines = Math.max(0, height - footer.length - 1 - rules - detailRows - (this.options.frame ? 2 : 0));
     const extras = confirmingExit ? [] : this.options.picker() ? this.options.rows(maxExtraLines) : choices.slice(menuStart, menuStart + 4).map((choice, index) => {
       const active = menuStart + index === this.selected;
-      return paint(truncate(`${active ? '›' : ' '} ${choice.text.trim()}  ${choice.description}`, width), { bold: active }, this.options.mode);
+      const label = labeledChoices ? padEnd(truncate(choice.label ?? choice.text.trim(), labelWidth), labelWidth) : choice.text.trim();
+      return paint(truncate(`${active ? '›' : ' '} ${label}  ${choice.description}`, width), { bold: active }, this.options.mode);
     });
     const extraRows = extras.slice(0, maxExtraLines).map(line => truncate(line, width));
     const maxDraftRows = Math.max(1, Math.min(Math.floor(height / 3), height - extraRows.length - footer.length - rules - detailRows));
