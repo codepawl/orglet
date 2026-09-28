@@ -1,14 +1,14 @@
 import { t } from './text';
 import type { CrewPatch, ManagementCatalog, ManagementTarget, OrgletPatch } from './management';
-import { muted, paint, truncate, wrapSegments, type ColorMode } from './terminal';
+import { displayWidth, muted, padEnd, paint, truncate, wrapSegments, type ColorMode } from './terminal';
 import { renderMiniFace } from './faces';
 import { normalizeRoleText } from '../shared/role-words';
 
-export type ManagementAction = 'new' | 'edit' | 'delete';
+export type ManagementAction = 'new' | 'edit' | 'delete' | 'menu';
 type EntityKind = 'worker' | 'team';
-type Choice = { key: string; label: string };
+type Choice = { key: string; label: string; detail?: string };
 type Field = { key: string; label: string; hint?: string };
-type EditorState = 'kind' | 'entity' | 'fields' | 'value' | 'confirm' | 'saving';
+type EditorState = 'kind' | 'entity' | 'menu' | 'fields' | 'value' | 'confirm' | 'saving';
 export type EditorResult =
   | { action: 'cancel' }
   | { action: 'save'; kind: 'worker'; config: OrgletPatch; target?: ManagementTarget }
@@ -57,7 +57,7 @@ export class ManagementEditor {
   field: Field | undefined;
   contextOffset = 0;
 
-  constructor(readonly action: ManagementAction, readonly catalog: ManagementCatalog, kind?: EntityKind, name?: string) {
+  constructor(public action: ManagementAction, readonly catalog: ManagementCatalog, kind?: EntityKind, name?: string) {
     this.kind = kind;
     this.state = action === 'new' ? kind ? 'fields' : 'kind' : 'entity';
     if (kind && action === 'new') this.initialize();
@@ -74,11 +74,11 @@ export class ManagementEditor {
   }
 
   get isPicker(): boolean {
-    return ['kind', 'entity', 'fields'].includes(this.state) || (this.state === 'value' && ['provider', 'skillId', 'workflow', 'synthesizerId', 'memberIds'].includes(this.field?.key ?? ''));
+    return ['kind', 'entity', 'menu', 'fields'].includes(this.state) || (this.state === 'value' && ['provider', 'skillId', 'workflow', 'synthesizerId', 'memberIds'].includes(this.field?.key ?? ''));
   }
 
   get title(): string {
-    const verb = this.action === 'new' ? t("Tạo") : this.action === 'edit' ? t("Sửa") : t("Xóa");
+    const verb = { new: t("Tạo"), edit: t("Sửa"), delete: t("Xóa"), menu: t('Quản lý') }[this.action];
     return `${verb} ${this.kind === 'team' ? 'crew' : this.kind === 'worker' ? 'orglet' : 'orglet or crew'}${this.originalName ? ` · ${this.originalName}` : ''}`;
   }
 
@@ -90,8 +90,15 @@ export class ManagementEditor {
   }
 
   context(width: number, mode: ColorMode): string[] {
-    const title = this.state === 'confirm' ? `${t('Xóa')} ${this.kind === 'team' ? 'crew' : 'orglet'}` : this.title;
+    const icon = this.kind === 'team' ? '▦' : this.kind === 'worker' ? renderMiniFace((this.values.avatar as { color?: string } | undefined)?.color, mode) : '';
+    const title = this.state === 'confirm' ? `${t('Xóa')} ${this.kind === 'team' ? 'crew' : 'orglet'}` : `${icon ? `${icon} ` : ''}${this.title}`;
     const lines = [paint(truncate(title, width), { bold: true }, mode)];
+    if (this.target && this.state !== 'confirm' && this.state !== 'saving') {
+      const detail = this.kind === 'worker'
+        ? [this.catalog.providers.find(provider => provider.id === this.values.provider)?.name ?? String(this.values.provider), this.values.modelId ?? t('model mặc định')].join(' · ')
+        : `${t('Đã chọn {0}', (this.values.memberIds as string[]).length)} · ${t('Tí dẫn dắt')}: ${this.catalog.orglets.find(entity => entity.id === this.values.synthesizerId)?.config.name ?? '—'} · ${this.values.workflow}`;
+      lines.push(muted(truncate(detail, width), mode));
+    }
     if (this.error && this.state !== 'confirm') lines.push(truncate(this.error, width));
     if (this.state !== 'confirm') lines.push('');
     if (this.state === 'confirm') {
@@ -111,10 +118,11 @@ export class ManagementEditor {
   choices(): Choice[] {
     let choices: Choice[];
     if (this.state === 'kind') choices = [{ key: 'worker', label: 'Orglet' }, { key: 'team', label: 'Crew' }, { key: 'cancel', label: t("Hủy") }];
+    else if (this.state === 'menu') choices = [{ key: 'edit', label: t('Sửa cấu hình') }, { key: 'delete', label: t('Xóa') }, { key: 'cancel', label: t('Quay lại danh sách') }];
     else if (this.state === 'entity') {
       choices = [
-        ...(this.kind !== 'team' ? this.catalog.orglets.map(entity => ({ key: `worker:${entity.id}`, label: `Orglet · ${this.entityName(entity, this.catalog.orglets)}` })) : []),
-        ...(this.kind !== 'worker' ? this.catalog.crews.map(entity => ({ key: `team:${entity.id}`, label: `Crew · ${this.entityName(entity, this.catalog.crews)}` })) : []),
+        ...(this.kind !== 'team' ? this.catalog.orglets.map(entity => ({ key: `worker:${entity.id}`, label: this.entityName(entity, this.catalog.orglets), detail: `${entity.config.provider}${entity.config.modelId ? `/${entity.config.modelId}` : ''}` })) : []),
+        ...(this.kind !== 'worker' ? this.catalog.crews.map(entity => ({ key: `team:${entity.id}`, label: this.entityName(entity, this.catalog.crews), detail: `crew · ${t('Tí dẫn dắt')}: ${this.catalog.orglets.find(orglet => orglet.id === entity.config.synthesizerId)?.config.name ?? '—'}` })) : []),
         { key: 'cancel', label: t("Hủy") },
       ];
     } else if (this.state === 'fields') choices = [...this.fields().map(field => ({ key: field.key, label: `${field.label}  ${this.valueLabel(field)}` })), { key: 'save', label: t("Lưu") }, { key: 'cancel', label: t("Hủy") }];
@@ -127,11 +135,13 @@ export class ManagementEditor {
     this.selected = Math.max(0, Math.min(this.selected, choices.length - 1));
     const count = Math.max(0, maximum - 1);
     const start = Math.max(0, this.selected - Math.max(0, count - 1));
+    const nameWidth = Math.min(Math.max(0, ...choices.map(choice => displayWidth(choice.label))), Math.max(4, Math.floor(width / 2) - 5));
     const rows = choices.slice(start, start + count).map((choice, index) => {
       const workerId = choice.key.startsWith('worker:') ? choice.key.slice(7) : ['memberIds', 'synthesizerId'].includes(this.field?.key ?? '') ? choice.key : undefined;
       const orglet = workerId ? this.catalog.orglets.find(entity => entity.id === workerId) : undefined;
       const icon = orglet ? `${renderMiniFace(orglet.config.avatar?.color, mode)} ` : choice.key.startsWith('team:') ? '▦ ' : '';
-      return paint(truncate(`${start + index === this.selected ? '›' : ' '} ${icon}${choice.label}`, width), { bold: start + index === this.selected }, mode);
+      const label = choice.detail ? `${padEnd(truncate(choice.label, nameWidth), nameWidth)}  ${muted(choice.detail, mode)}` : choice.label;
+      return paint(truncate(`${start + index === this.selected ? '›' : ' '} ${icon}${label}`, width), { bold: start + index === this.selected }, mode);
     });
     if (maximum > 0) rows.push(muted(truncate(choices.length ? t("↑↓ di chuyển · Enter chọn · Esc quay lại/hủy") : t("Không có mục khớp · Esc quay lại"), width), mode));
     return rows;
@@ -179,7 +189,10 @@ export class ManagementEditor {
       return;
     }
     if (choice?.key === 'cancel') return { action: 'cancel' };
-    if (this.state === 'kind' && choice) {
+    if (this.state === 'menu' && choice) {
+      this.action = choice.key === 'edit' ? 'edit' : 'delete';
+      this.state = this.action === 'edit' ? 'fields' : 'confirm';
+    } else if (this.state === 'kind' && choice) {
       this.kind = choice.key as EntityKind;
       this.state = this.action === 'new' ? 'fields' : 'entity';
       if (this.action === 'new') this.initialize();
@@ -249,7 +262,7 @@ export class ManagementEditor {
     this.target = { id, revision: entity.revision };
     this.originalName = entity.config.name;
     this.values = structuredClone(entity.config);
-    this.state = this.action === 'delete' ? 'confirm' : 'fields';
+    this.state = this.action === 'delete' ? 'confirm' : this.action === 'menu' ? 'menu' : 'fields';
     this.filter = '';
     this.selected = 0;
   }

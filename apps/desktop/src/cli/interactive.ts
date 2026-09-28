@@ -1,12 +1,12 @@
 import { t } from './text';
 import { createInterface, type Interface } from 'node:readline';
-import { TerminalComposer } from './composer';
+import { TerminalComposer, type ComposerShortcut, type Suggestion } from './composer';
 import { agentDetails, terminalHeader } from './chat-layout';
 import { Transcript } from './transcript';
-import { renderMiniFaces } from './faces';
+import { renderMiniFace, renderMiniFaces } from './faces';
 import { AppRefusal, type ChatClient } from './chat-client';
 import { StoppedError, UnreachableError } from './client';
-import { chosenEntry, createPicker, entriesFromList, findChat, moveSelection, renderPickerLines, setFilter, type ChatEntry, type PickerState } from './picker';
+import { chosenEntry, createPicker, entriesFromList, findChat, moveSelection, renderPickerLines, setFilter, visibleEntries, type ChatEntry, type PickerState } from './picker';
 import { answerColor, chatHeader, renderAnswers, styledList } from './pretty';
 import { EXIT_CODES, type CliAnswer, type SendValue } from './protocol';
 import { completeSlash, isSlashCommand, parseSlash, SLASH_HELP, type SlashCommand } from './slash';
@@ -77,6 +77,7 @@ class Session {
   private panelOffset = 0;
   private editor: ManagementEditor | undefined;
   private editorDraft = '';
+  private managementOpening: { action: ManagementAction } | undefined;
 
   constructor(private readonly options: InteractiveOptions) {
     this.terminal = options.terminal ?? Boolean(options.input.isTTY && options.output.isTTY);
@@ -128,15 +129,12 @@ class Session {
         hint: () => {
           if (this.confirmingExit) return 'Esc stays · typing continues';
           if (this.editor) return t('Esc quay lại/hủy · PgUp/PgDn chi tiết');
-          if (this.view === 'picker') return t("/new tạo · /edit sửa · /delete xóa");
+          if (this.view === 'picker') return t('Ctrl+N tạo · ← quản lý mục đang chọn');
           if (this.panel || this.agentsVisible) return 'PgUp/PgDn scroll · Esc closes · Ctrl+P switch';
-          return this.waitingController ? 'Ctrl+Q queue · Ctrl+Z undo · Ctrl+C exit' : 'Ctrl+J newline · Ctrl+O details · ← chats · /help';
+          return this.waitingController ? `Ctrl+Q queue · Ctrl+Z undo · ${t('Ctrl+N tạo')} · Ctrl+C exit` : `Ctrl+J newline · Ctrl+O details · ← chats · ${t('Ctrl+N tạo')}`;
         },
         picker: () => this.editor ? this.editor.isPicker : this.view === 'picker' && !this.composer?.text.startsWith('/'),
-        suggestions: text => this.editor ? [] : completeSlash(text, this.entries.map(entry => entry.name))[0].map(candidate => ({
-          text: candidate,
-          description: SLASH_HELP.find(([usage]) => usage.split(' ')[0] === candidate.trim().split(' ')[0])?.[1] ?? 'Open this chat',
-        })),
+        suggestions: text => this.editor || this.managementOpening ? [] : this.suggestions(text),
         change: text => {
           if (this.editor) return this.editor.change(text);
           if (this.view === 'picker') this.picker = setFilter(this.picker, text);
@@ -150,6 +148,11 @@ class Session {
           else this.picker = moveSelection(this.picker, direction);
         },
         escape: () => {
+          if (this.managementOpening) {
+            this.managementOpening = undefined;
+            void this.drain();
+            return;
+          }
           if (this.editor) {
             if (this.editor.escape()) {
               this.closeEditor();
@@ -186,8 +189,9 @@ class Session {
 
   private composerStatus(): string {
     if (this.confirmingExit) return 'Unsent draft and queue will be discarded.';
+    if (this.managementOpening) return t('Đang mở cấu hình…');
     if (this.editor) return this.editor.state === 'saving' ? t("Đang áp dụng cấu hình…") : this.editor.state === 'confirm' ? this.editor.error || t("Xóa cần tên khớp hoàn toàn · Esc hủy") : t("Cấu hình · không gửi tin nhắn chat");
-    if (!this.chat || this.view === 'picker') return t("/new tạo · /edit sửa · /delete xóa");
+    if (!this.chat || this.view === 'picker') return t('Ctrl+N tạo · ← quản lý mục đang chọn');
     const state = this.waitingController ? 'working' : 'ready';
     const queued = this.queue.length ? ` · ${this.queue.length} queued` : '';
     const elapsed = this.waitingController ? ` · ${Math.floor((Date.now() - this.waitingStartedAt) / 1000)}s` : '';
@@ -222,11 +226,37 @@ class Session {
     return [`Waiting in this terminal (${this.queue.length})`, ...this.queue.map((item, index) => truncate(`${index + 1}. ${item.text.trim().replace(/\s+/gu, ' ')}`, width))];
   }
 
-  private shortcut(action: 'agents' | 'details' | 'queue' | 'undo' | 'switch' | 'pageUp' | 'pageDown'): void {
+  private suggestions(text: string): Suggestion[] {
+    const [candidates] = completeSlash(text, this.entries.map(entry => entry.name));
+    const entityCommand = text.match(/^\s*\/(to|edit|delete)\s+/i)?.[1].toLowerCase();
+    if (entityCommand) {
+      const matching = new Set(candidates);
+      return this.entries.filter(entry => matching.has(`/${entityCommand} ${entry.name}`)).map(entry => ({
+        text: `/${entityCommand} ${entry.name}`,
+        label: `${entry.kind === 'team' ? paint('▦', { foreground: entry.color }, this.mode) : renderMiniFace(entry.color, this.mode)} ${entry.name}`,
+        description: entry.detail,
+      }));
+    }
+    return candidates.map(candidate => ({ text: candidate, description: SLASH_HELP.find(([usage]) => usage.split(' ')[0] === candidate.trim().split(' ')[0])?.[1] ?? 'Open this chat' }));
+  }
+
+  private shortcut(action: ComposerShortcut): boolean | void {
+    if (this.managementOpening) return;
     if (this.editor) {
       if (action === 'pageUp') this.editor.contextOffset -= 3;
       if (action === 'pageDown') this.editor.contextOffset += 3;
       return;
+    }
+    if (action === 'new') {
+      void this.manage('new');
+      return;
+    }
+    if (action === 'menu') {
+      if (this.view !== 'picker' || this.composer?.text.trimStart().startsWith('/')) return false;
+      const entry = chosenEntry(this.picker);
+      if (!entry) return false;
+      void this.manage('menu', entry.kind, entry.name);
+      return true;
     }
     if (action === 'pageUp' || action === 'pageDown') {
       if (this.panel || this.agentsVisible) this.panelOffset += action === 'pageUp' ? -5 : 5;
@@ -422,6 +452,10 @@ class Session {
   }
 
   private enqueue(text: string): void {
+    if (this.managementOpening) {
+      this.replaceLine(text);
+      return;
+    }
     if (this.editor) {
       const result = this.editor.submit(text);
       if (result) void this.applyEditorResult(result);
@@ -451,7 +485,7 @@ class Session {
   private async drain(): Promise<void> {
     if (this.processing) return;
     this.processing = true;
-    while (this.queue.length > 0 && !this.finished && !this.confirmingExit && (!this.terminal || !this.editor)) {
+    while (this.queue.length > 0 && !this.finished && !this.confirmingExit && (!this.terminal || (!this.editor && !this.managementOpening))) {
       const line = this.queue.shift()!;
       await this.handle(line);
     }
@@ -515,8 +549,12 @@ class Session {
       case 'clear': return this.clear();
       case 'queue': return this.showQueue();
       case 'undo': return this.undoQueued();
-      case 'details': return this.shortcut('details');
-      case 'agents': return this.shortcut('agents');
+      case 'details':
+        this.shortcut('details');
+        return;
+      case 'agents':
+        this.shortcut('agents');
+        return;
       case 'new': return this.manage('new', command.entity);
       case 'edit': return this.manage('edit', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
       case 'delete': return this.manage('delete', undefined, command.name ?? (this.view === 'chat' ? this.chat?.name : undefined));
@@ -527,20 +565,32 @@ class Session {
   }
 
   private async manage(action: ManagementAction, kind?: 'worker' | 'team', name?: string): Promise<void> {
+    if (this.editor || this.managementOpening) return;
     const management = this.options.client.management;
     if (!management) {
       this.printError(t("Cập nhật Orglet và CLI để quản lý Tí và hội ở đây."));
       return;
     }
+    const opening = { action };
+    this.managementOpening = opening;
+    this.showPrompt();
     try {
       const catalog = await management.catalog();
+      if (this.managementOpening !== opening || this.finished) return;
       this.editorDraft = this.composer?.text ?? '';
       this.editor = new ManagementEditor(action, catalog, kind, name);
       this.replaceLine('');
       if (!this.terminal) this.printLines(this.editor.context(this.textWidth(), this.mode));
     } catch (error) {
+      if (this.managementOpening !== opening || this.finished) return;
       if (error instanceof AppRefusal && error.code === 'invalid') this.printError(t("Cập nhật Orglet và CLI để quản lý Tí và hội ở đây."));
       else this.printFailure(error);
+    } finally {
+      if (this.managementOpening === opening) {
+        this.managementOpening = undefined;
+        this.showPrompt();
+        if (!this.editor) void this.drain();
+      }
     }
   }
 
@@ -615,7 +665,7 @@ class Session {
         this.chat = undefined;
         this.pickerReturn = undefined;
         this.showPicker('');
-      } else if (this.view === 'picker') this.showPicker('', this.chat);
+      } else if (this.view === 'picker') this.refreshManagedPicker();
       return;
     }
     const entry = this.entries.find(candidate => candidate.kind === saved.kind && candidate.name === saved.name);
@@ -624,7 +674,16 @@ class Session {
       this.pickerReturn = this.pickerReturn ? entry : undefined;
     }
     if (entry && action === 'new' && !this.queue.length) this.enterChat(entry);
-    else if (this.view === 'picker') this.showPicker('', this.pickerReturn ?? this.chat);
+    else if (this.view === 'picker') this.refreshManagedPicker(entry);
+  }
+
+  private refreshManagedPicker(preferred?: ChatEntry): void {
+    const previous = preferred ?? chosenEntry(this.picker);
+    this.picker = { ...this.picker, entries: this.entries };
+    const visible = visibleEntries(this.picker);
+    const selected = visible.findIndex(entry => entry.kind === previous?.kind && entry.name === previous.name);
+    this.picker.selected = selected >= 0 ? selected : Math.max(0, Math.min(this.picker.selected, visible.length - 1));
+    this.replaceLine(this.picker.filter);
   }
 
   private switchChat(name: string | undefined): void {

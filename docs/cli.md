@@ -84,7 +84,7 @@ Model requests and observed tool calls appear as timestamped rows in the convers
 
 Interactive chat requires a real connection. If an orglet or any member of its crew still uses Demo, a message is refused before sending. Use `/open` to choose a signed-in CLI or an API/local connection in the app, then `/list` to refresh and choose the chat again. One-shot commands retain their existing Demo support.
 
-Type `/` to see commands with descriptions. Up and Down choose one; Tab or Enter fills it into the draft, and Enter on a filled command runs it. Esc dismisses the menu without clearing the draft. `/to ` offers chat names in the same menu. A pasted message with several lines is sent as a message even when its first line starts with `/`.
+Type `/` to see commands with descriptions. Up and Down choose one; Tab or Enter fills it into the draft, and Enter on a filled command runs it. Esc dismisses the menu without clearing the draft. `/to `, `/edit ` and `/delete ` offer entity names with orglet mascots or crew icons and connection/model or lead details, instead of repeating the command description on every row. A pasted message with several lines is sent as a message even when its first line starts with `/`.
 
 While an answer is on its way, `/queue` shows previews of the messages and commands waiting in this terminal. `/undo` takes the last one out of that queue and puts its full text back into the draft, including its newlines. Edit it and press Enter to queue it again, or clear the draft to leave it unsent. It cannot take back a message already sent to the app, and it does not stop the current run. This queue belongs to the terminal session and is not saved between sessions.
 
@@ -100,7 +100,9 @@ Answers are wrapped to the width of the terminal. Headings, **bold**, `code`, li
 
 ## Create, edit and remove orglets and crews
 
-Type `/new` from the picker or a chat, then choose **Orglet** or **Crew**. `/new orglet` and `/new crew` skip that choice. Up and Down move between settings; Enter edits one. Text values reuse the input, with Ctrl+J for instructions on several lines. Connection, skill, member and lead choices use arrows and a search filter. A crew can have up to eight members and a separate lead; select members with Enter, then **Done choosing members**. Choose **Save** to apply the configuration or **Cancel** to discard it. Esc goes back from a field and cancels from the settings list.
+Press **Ctrl+N** from the picker or a chat to create an **Orglet** or **Crew**. It keeps the current draft. `/new` opens the same choice; `/new orglet` and `/new crew` skip it. Up and Down move between settings; Enter edits one. Text values reuse the input, with Ctrl+J for instructions on several lines. Connection, skill, member and lead choices use arrows and a search filter. A crew can have up to eight members and a separate lead; select members with Enter, then **Done choosing members**. Choose **Save** to apply the configuration or **Cancel** to discard it. Esc goes back from a field and cancels from the settings list. Ctrl+N does not replace an unsaved form.
+
+In the orglet/crew list, press **Left** on the highlighted entry to open its **Edit configuration / Delete / Back to list** menu. A typed search filter is kept, along with the selected row, when Esc returns to the list. The menu and editor show the entity's icon and current connection/model or crew members, lead and workflow. Left on an empty chat draft still opens the list; press Left again for the highlighted entry's menu. Left in an ordinary text draft still moves the cursor.
 
 Orglets need a name, instructions, an existing skill and a real connection. A blank model uses that connection’s default; custom connections require an explicit model ID. Creating an orglet does not sign in or set up credentials. A packaged skill still needs its review in the desktop library. Task and monthly limits in the form are USD amounts; Orglet stores integer micros.
 
