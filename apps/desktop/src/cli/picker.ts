@@ -94,13 +94,16 @@ function matchRank(name: string, filter: string): number {
   return -1;
 }
 
-/** The entries the filter keeps, best fit first. Case and Vietnamese diacritics are ignored: "nghien" finds "Nghiên". */
+/** Orglets then crews, best fit within each group. Case and Vietnamese diacritics are ignored: "nghien" finds "Nghiên". */
 export function visibleEntries(state: PickerState): ChatEntry[] {
   const filter = normalizeRoleText(state.filter.trim());
   if (filter === '') return [...state.entries];
   const ranked = state.entries.map(entry => ({ entry, rank: matchRank(entry.name, filter) })).filter(item => item.rank >= 0);
-  // Array sort is stable, so entries of one rank keep the list's order.
-  return ranked.sort((first, second) => first.rank - second.rank).map(item => item.entry);
+  // The keyboard follows the same groups as the screen; stable ranks retain the app's order within a group.
+  return ranked.sort((first, second) => {
+    if (first.entry.kind !== second.entry.kind) return first.entry.kind === 'worker' ? -1 : 1;
+    return first.rank - second.rank;
+  }).map(item => item.entry);
 }
 
 /** A new filter starts the selection over at the best fit. */
@@ -121,7 +124,7 @@ export function chosenEntry(state: PickerState): ChatEntry | undefined {
   return visibleEntries(state)[state.selected];
 }
 
-export type PickerLayout = { width: number; mode: ColorMode; maxRows: number; showFaces?: boolean };
+export type PickerLayout = { width: number; mode: ColorMode; maxRows: number; maxLines?: number; grouped?: boolean; showFaces?: boolean };
 
 /** The first visible entry when more match than fit: a window that keeps the selection in view. */
 function windowStart(count: number, selected: number, maxRows: number): number {
@@ -152,17 +155,39 @@ export function columnWidths(entries: readonly ChatEntry[], width: number): { fa
 
 export const PICKER_HINT = '↑↓ move · type to filter · Enter opens · Ctrl+C exit';
 
-/** The list under the picker's prompt, with a hint line; at most `maxRows` entries. */
+/** At most `maxRows` entries; `maxLines` also budgets group headings, spacing and the hint. */
 export function renderPickerLines(state: PickerState, layout: PickerLayout): string[] {
   const visible = visibleEntries(state);
-  if (visible.length === 0) return [muted(`  Nothing matches "${state.filter.trim()}".`, layout.mode), muted(`  ${PICKER_HINT}`, layout.mode)];
-  const start = windowStart(visible.length, state.selected, layout.maxRows);
-  const shown = visible.slice(start, start + layout.maxRows);
+  const maxLines = Math.max(0, layout.maxLines ?? Infinity);
+  if (maxLines === 0) return [];
+  if (visible.length === 0) return [muted(`  Nothing matches "${state.filter.trim()}".`, layout.mode), muted(`  ${PICKER_HINT}`, layout.mode)].slice(0, maxLines);
+  let start = windowStart(visible.length, state.selected, Math.max(1, layout.maxRows));
+  let end = Math.min(visible.length, start + Math.max(1, layout.maxRows));
+  const showHeadings = layout.grouped && maxLines >= 2;
+  const showHint = maxLines >= 3;
+  const available = maxLines - (showHint ? 1 : 0);
+  // Headings and their gap count as real rows. Trim the farthest edge, never the selected entry.
+  const lineCount = () => {
+    const groups = visible[start].kind === visible[end - 1].kind ? 1 : 2;
+    return end - start + (showHeadings ? groups * 2 - 1 : 0);
+  };
+  while (end - start > 1 && lineCount() > available) {
+    if (state.selected - start >= end - 1 - state.selected) start += 1;
+    else end -= 1;
+  }
+  const shown = visible.slice(start, end);
   const { nameWidth, facesWidth: fullFacesWidth } = columnWidths(state.entries, layout.width);
   const facesWidth = layout.showFaces === true ? MINI_FACE_WIDTH : fullFacesWidth;
-  const lines = shown.map((entry, index) => entryLine(entry, start + index === state.selected, layout, facesWidth, nameWidth));
+  const lines: string[] = [];
+  for (const [index, entry] of shown.entries()) {
+    if (showHeadings && (index === 0 || entry.kind !== shown[index - 1].kind)) {
+      if (index > 0) lines.push('');
+      lines.push(paint(`  ${entry.kind === 'worker' ? 'Orglets' : 'Crews'}`, { bold: true }, layout.mode));
+    }
+    lines.push(entryLine(entry, start + index === state.selected, layout, facesWidth, nameWidth));
+  }
   const more = visible.length - shown.length;
-  const hint = more > 0 ? `${PICKER_HINT} · ${more} more` : PICKER_HINT;
-  lines.push(muted(`  ${truncate(hint, Math.max(0, layout.width - 2))}`, layout.mode));
+  const hint = more > 0 ? `${more} more · ${PICKER_HINT}` : PICKER_HINT;
+  if (showHint) lines.push(muted(`  ${truncate(hint, Math.max(0, layout.width - 2))}`, layout.mode));
   return lines;
 }

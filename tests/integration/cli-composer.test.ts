@@ -106,6 +106,51 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
 }
 
 describe('terminal composer', () => {
+  it('puts search guidance inside the empty input and separates orglets from crews', async () => {
+    const session = await terminal({ picker: true, list: {
+      orglets: [{ name: 'Researcher', provider: 'codex' }, { name: 'Writer', provider: 'codex' }],
+      crews: [{ name: 'Review crew', lead: 'Writer', members: ['Researcher'] }],
+    } });
+    try {
+      const screen = session.screen.text();
+      expect(screen).toContain('› Search orglets or crews…');
+      expect(screen).not.toContain('Open ›');
+      expect(session.screen.column).toBe(2);
+      expect(screen).toMatch(/  Orglets\n› ▐••▌ Researcher[^\n]*\n  ▐••▌ Writer[^\n]*\n\n  Crews\n  ▐••▌ Review crew/);
+      await session.key('review');
+      expect(session.screen.text()).toContain('› review');
+      expect(session.screen.text()).not.toContain('Search orglets or crews');
+      expect(session.screen.text()).not.toContain('  Orglets');
+      expect(session.screen.text()).toContain('  Crews');
+      await session.key('\x15');
+      expect(session.screen.text()).toContain('› Search orglets or crews…');
+      await session.key('review');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Orglet test · Review crew');
+      expect(session.sent).toEqual([]);
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('keeps the selected crew and its heading visible in a short picker viewport', async () => {
+    const session = await terminal({ picker: true, columns: 32, rows: 10, list: {
+      orglets: Array.from({ length: 6 }, (_, index) => ({ name: `Orglet ${index + 1}`, provider: 'codex' })),
+      crews: [{ name: 'Review crew', lead: 'Orglet 1', members: ['Orglet 2'] }],
+    } });
+    try {
+      await session.key('\x1b[A');
+      expect(session.screen.text()).toContain('  Crews');
+      expect(session.screen.text()).toContain('› ▐••▌ Review crew');
+      expect(session.screen.lines.length).toBeLessThanOrEqual(9);
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Orglet test · Review crew');
+      expect(session.sent).toEqual([]);
+    } finally {
+      await session.stop();
+    }
+  });
+
   it('keeps a single product header and separates turns from the composer between two rules', async () => {
     const session = await terminal({ mode: 'truecolor' });
     try {
@@ -161,7 +206,7 @@ describe('terminal composer', () => {
     const session = await terminal();
     try {
       await session.key('\x1b[D');
-      expect(session.screen.text()).toContain('Open ›');
+      expect(session.screen.text()).toContain('› Search orglets or crews…');
       expect(session.screen.text()).not.toContain('Agents · Researcher');
       await session.key('\x1b');
       await session.key('hello');
@@ -172,7 +217,7 @@ describe('terminal composer', () => {
       await session.key('\r');
       expect(session.screen.text()).toContain('Answer: hellXo');
       await session.key('\x1b[D');
-      expect(session.screen.text()).toContain('Open ›');
+      expect(session.screen.text()).toContain('› Search orglets or crews…');
       expect(session.screen.text()).not.toContain('Answer: hellXo');
       await session.key('\x1b');
       expect(session.screen.text()).toContain('Answer: hellXo');
@@ -216,7 +261,7 @@ describe('terminal composer', () => {
     try {
       await session.key('keep my draft');
       await session.key('\x10');
-      expect(session.screen.text()).toContain('Open ›');
+      expect(session.screen.text()).toContain('› Search orglets or crews…');
       await session.key('\x1b');
       expect(session.screen.text()).toContain('› keep my draft');
       await session.key('\x10');
@@ -474,7 +519,7 @@ describe('terminal composer', () => {
       expect(session.screen.text()).toContain('› /list');
       expect(session.screen.text()).not.toContain('Tab/Enter fill');
       await session.key('\r');
-      expect(session.screen.text()).toContain('Open ›');
+      expect(session.screen.text()).toContain('› Search orglets or crews…');
       expect(session.screen.text()).toContain('Researcher');
       await session.key('\r');
       await session.key('/op');
@@ -596,7 +641,7 @@ describe('terminal composer', () => {
       expect(session.screen.text()).toContain('Ctrl+C again to exit');
       expect(session.input.isRaw).toBe(true);
       await session.key('\x1b');
-      expect(session.screen.text()).toContain('Open › Kế');
+      expect(session.screen.text()).toContain('› Kế');
       await session.key('\r');
       expect(session.screen.text()).toContain('Orglet test · Kế toán');
       expect(session.sent).toEqual([]);
@@ -654,7 +699,7 @@ describe('terminal composer', () => {
       expect(session.screen.text()).toContain('▐••▌ Researcher');
       expect(session.screen.text()).toContain('▐••▌ Writer');
       await session.key('\x1b[D');
-      expect(session.screen.text()).toContain('Open ›');
+      expect(session.screen.text()).toContain('› Search orglets or crews…');
       expect(session.screen.text()).not.toContain('Agents · Review crew');
       expect(session.sent).toEqual([]);
     } finally { await session.stop(); }
@@ -665,7 +710,7 @@ describe('terminal composer', () => {
     try {
       await session.key('\x1b[B');
       await session.key('\t');
-      expect(session.screen.text()).toContain('Open › Kế toán');
+      expect(session.screen.text()).toContain('› Kế toán');
       await session.key('\r');
       expect(session.screen.text()).toContain('Orglet test · Kế toán');
       expect(session.screen.text()).toContain('configured-model · codex');

@@ -212,20 +212,20 @@ describe('orglet chat picker', () => {
     expect(older.map(entry => entry.colors)).toEqual([[NEUTRAL_COLOR], [NEUTRAL_COLOR, NEUTRAL_COLOR]]);
   });
 
-  it('filters by name ignoring case and diacritics, best fit first, and moves and chooses', () => {
+  it('filters by name ignoring case and diacritics, ranks within each group, and moves and chooses', () => {
     let state = createPicker(entries);
     expect(visibleEntries(state)).toHaveLength(4);
     state = setFilter(state, 'ke');
     expect(visibleEntries(state).map(entry => entry.name)).toEqual(['Kế toán']);
     state = setFilter(state, 'r');
-    // Names starting with it first (Researcher, Review crew), then names containing it (Writer, Review crew's lead is not matched).
-    expect(visibleEntries(state).map(entry => entry.name)).toEqual(['Researcher', 'Review crew', 'Writer']);
+    // Best orglet fits first, then crews. A crew's lead is not matched.
+    expect(visibleEntries(state).map(entry => entry.name)).toEqual(['Researcher', 'Writer', 'Review crew']);
     state = moveSelection(state, 1);
-    expect(chosenEntry(state)?.name).toBe('Review crew');
+    expect(chosenEntry(state)?.name).toBe('Writer');
     state = moveSelection(state, 2);
     expect(chosenEntry(state)?.name).toBe('Researcher');
     state = moveSelection(state, -1);
-    expect(chosenEntry(state)?.name).toBe('Writer');
+    expect(chosenEntry(state)?.name).toBe('Review crew');
     state = setFilter(state, 'wri');
     expect(state.selected).toBe(0);
     expect(chosenEntry(state)?.name).toBe('Writer');
@@ -245,6 +245,17 @@ describe('orglet chat picker', () => {
     expect(lines[0]).toMatch(/^› Researcher\s+demo$/);
     expect(lines[2]).toContain('2 more');
     expect(renderPickerLines(setFilter(createPicker(entries), 'zzz'), { width: 80, mode: 'none', maxRows: 4 }).map(stripAnsi)[0]).toContain('Nothing matches "zzz"');
+  });
+
+  it('keeps every keyboard selection visible within the grouped line budget', () => {
+    for (let maxLines = 1; maxLines <= 10; maxLines += 1) {
+      for (let selected = 0; selected < entries.length; selected += 1) {
+        const lines = renderPickerLines({ ...createPicker(entries), selected }, { width: 80, mode: 'none', maxRows: 8, maxLines, grouped: true, showFaces: true });
+        expect(lines.length).toBeLessThanOrEqual(maxLines);
+        expect(lines.find(line => line.startsWith('› '))).toContain(entries[selected].name);
+        if (maxLines >= 2) expect(lines).toContain(`  ${entries[selected].kind === 'worker' ? 'Orglets' : 'Crews'}`);
+      }
+    }
   });
 });
 

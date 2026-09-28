@@ -116,7 +116,8 @@ class Session {
         detail: () => this.confirmingExit ? 'Runs already sent keep working in the app.' : this.chat && this.view === 'chat' ? `${this.chat.model ?? 'provider default'} · effort: provider default` : '',
         shortcut: action => this.shortcut(action),
         prompt: () => this.currentPrompt(),
-        rows: () => renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: this.pickerRows(), showFaces: true }),
+        placeholder: () => this.view === 'picker' ? 'Search orglets or crews…' : '',
+        rows: maxLines => renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: PICKER_MAX_ROWS, maxLines, grouped: true, showFaces: true }),
         status: () => this.composerStatus(),
         hint: () => {
           if (this.confirmingExit) return 'Esc stays · typing continues';
@@ -286,7 +287,7 @@ class Session {
   }
 
   private pickerPrompt(): string {
-    return `${paint('Open', { bold: true }, this.mode)} › `;
+    return this.terminal ? '› ' : `${paint('Open', { bold: true }, this.mode)} › `;
   }
 
   private currentPrompt(): string {
@@ -302,11 +303,6 @@ class Session {
   /** Replaces the draft when a picker fills or clears its filter. */
   private replaceLine(text: string): void {
     this.composer?.replace(text);
-  }
-
-  private pickerRows(): number {
-    const rows = this.options.output.rows ?? 24;
-    return Math.max(1, Math.min(PICKER_MAX_ROWS, this.entries.length, rows - 4));
   }
 
   private showPicker(filter: string, returnTo?: ChatEntry): void {
