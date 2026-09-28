@@ -5,6 +5,7 @@ import { StoppedError } from '../../apps/desktop/src/cli/client';
 import { type ChatClient } from '../../apps/desktop/src/cli/chat-client';
 import { displayWidth, stripAnsi, type ColorMode } from '../../apps/desktop/src/cli/terminal';
 import { type CliProgressFrame, type ListValue, type SendValue } from '../../apps/desktop/src/cli/protocol';
+import type { ManagementCatalog, ManagementClient } from '../../apps/desktop/src/cli/management';
 
 /** A terminal grid, so assertions see the final screen rather than text already erased by a redraw. */
 class Screen {
@@ -55,7 +56,7 @@ const response = (message: string): SendValue => ({
   waited: true, finished: true, answers: [{ name: 'Researcher', text: `Answer: ${message}`, createdAt: '1' }], errors: [],
 });
 
-async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: boolean; columns?: number; rows?: number; mode?: ColorMode; list?: ListValue; reply?: string } = {}) {
+async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: boolean; columns?: number; rows?: number; mode?: ColorMode; list?: ListValue; reply?: string; management?: ManagementClient } = {}) {
   const screen = new Screen();
   const input = Object.assign(new PassThrough(), { isTTY: true, isRaw: false, setRawMode(raw: boolean) { this.isRaw = raw; } });
   let transcript = '';
@@ -71,6 +72,7 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
   let failOpen: (() => void) | undefined;
   let updateProgress: ((frame: CliProgressFrame) => void) | undefined;
   const client: ChatClient = {
+    ...(options.management ? { management: options.management } : {}),
     list: async () => options.list ?? ({ orglets: [{ name: 'Researcher', provider: 'codex', model: 'configured-model', billing: 'CLI account', color: '#4f7fe0' }, { name: 'Kế toán', provider: 'codex', model: 'configured-model', color: '#64b282' }], crews: [] }),
     send: async (to, message, signal, progress) => {
       updateProgress = progress;
@@ -109,6 +111,206 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
 }
 
 describe('terminal composer', () => {
+  it('keeps the current chat when editing or deleting another entry and restores a canceled picker draft', async () => {
+    const workerId = '11111111-1111-4111-8111-111111111111';
+    const otherId = '22222222-2222-4222-8222-222222222222';
+    const skillId = '33333333-3333-4333-8333-333333333333';
+    const list: ListValue = { orglets: [{ name: 'Researcher', provider: 'codex' }, { name: 'Other', provider: 'codex' }], crews: [] };
+    const catalog: ManagementCatalog = {
+      orglets: [workerId, otherId].map((id, index) => ({ id, revision: 1, config: { name: list.orglets[index].name, provider: 'codex', skillId, instructions: 'Review' } })),
+      crews: [], skills: [], providers: [{ id: 'codex', name: 'Codex' }],
+    };
+    const session = await terminal({ list, management: {
+      catalog: async () => catalog,
+      saveOrglet: async config => {
+        list.orglets[1].name = config.name!;
+        catalog.orglets[1].config.name = config.name!;
+        catalog.orglets[1].revision += 1;
+        return { kind: 'worker', id: otherId, name: config.name!, revision: 2 };
+      }, saveCrew: async () => { throw new Error('Not a crew'); },
+      delete: async (kind, target, confirmName) => {
+        list.orglets.pop();
+        catalog.orglets.pop();
+        return { kind, id: target.id, name: confirmName, revision: target.revision, deleted: true };
+      },
+    } });
+    try {
+      await session.key('/edit Other'); await session.key('\r');
+      await session.key('Name'); await session.key('\r');
+      await session.key('\x15'); await session.key('Edited other'); await session.key('\r');
+      await session.key('Save'); await session.key('\r');
+      expect(session.screen.text()).toContain('Researcher');
+      await session.key('/delete Edited other'); await session.key('\r');
+      await session.key('Edited other'); await session.key('\r');
+      expect(session.screen.text()).toContain('Researcher');
+      expect(session.screen.text()).not.toContain('Search orglets');
+      await session.key('valuable draft');
+      await session.key('\x10');
+      await session.key('/new'); await session.key('\r');
+      await session.key('\x1b'); await session.key('\x1b');
+      expect(session.screen.text()).toContain('› valuable draft');
+      expect(session.sent).toEqual([]);
+    } finally { await session.stop(); }
+  });
+  it('updates a renamed current chat before resuming messages held behind its editor', async () => {
+    const workerId = '11111111-1111-4111-8111-111111111111';
+    const skillId = '22222222-2222-4222-8222-222222222222';
+    const list: ListValue = { orglets: [{ name: 'Researcher', provider: 'codex' }], crews: [] };
+    const session = await terminal({ slow: true, list, management: {
+      catalog: async () => ({ orglets: [{ id: workerId, revision: 1, config: { name: 'Researcher', provider: 'codex', skillId, instructions: 'Review' } }], crews: [], skills: [{ id: skillId, name: 'Research' }], providers: [{ id: 'codex', name: 'Codex' }] }),
+      saveOrglet: async config => {
+        list.orglets[0].name = config.name!;
+        return { kind: 'worker', id: workerId, name: config.name!, revision: 2 };
+      }, saveCrew: async () => { throw new Error('Not a crew'); }, delete: async () => { throw new Error('Not deleting'); },
+    } });
+    try {
+      await session.key('first message'); await session.key('\r');
+      await session.key('/edit'); await session.key('\r');
+      await session.key('held message'); await session.key('\r');
+      await session.resolve();
+      await session.key('Name'); await session.key('\r');
+      await session.key('\x15'); await session.key('Renamed'); await session.key('\r');
+      await session.key('Save'); await session.key('\r');
+      expect(session.sent).toEqual(['first message', 'held message']);
+      expect(session.sentTo).toEqual(['Researcher', 'Renamed']);
+      await session.resolve();
+      expect(session.screen.text()).toContain('Saved orglet Renamed.');
+    } finally { await session.stop(); }
+  });
+
+  it('keeps locally queued messages safe when the current chat is selected for deletion', async () => {
+    const workerId = '11111111-1111-4111-8111-111111111111';
+    const skillId = '22222222-2222-4222-8222-222222222222';
+    let deletes = 0;
+    const session = await terminal({ slow: true, management: {
+      catalog: async () => ({ orglets: [{ id: workerId, revision: 1, config: { name: 'Researcher', provider: 'codex', skillId, instructions: 'Review' } }], crews: [], skills: [], providers: [{ id: 'codex', name: 'Codex' }] }),
+      saveOrglet: async () => { throw new Error('Not saving'); }, saveCrew: async () => { throw new Error('Not saving'); },
+      delete: async () => { deletes += 1; return { kind: 'worker', id: workerId, name: 'Researcher', revision: 1, deleted: true }; },
+    } });
+    try {
+      await session.key('first message'); await session.key('\r');
+      await session.key('/delete'); await session.key('\r');
+      await session.key('held message'); await session.key('\r');
+      await session.resolve();
+      await session.key('Researcher'); await session.key('\r');
+      expect(deletes).toBe(0);
+      expect(session.screen.text()).toContain('This terminal has queued');
+      await session.key('\x1b');
+      expect(session.sentTo).toEqual(['Researcher', 'Researcher']);
+      await session.resolve();
+    } finally { await session.stop(); }
+  });
+
+  it('saves a crew through the raw keyboard form with members, lead and limits', async () => {
+    const workerId = '11111111-1111-4111-8111-111111111111';
+    const skillId = '22222222-2222-4222-8222-222222222222';
+    const crewId = '33333333-3333-4333-8333-333333333333';
+    const saved: unknown[] = [];
+    const list: ListValue = { orglets: [{ name: 'Researcher', provider: 'codex' }], crews: [] };
+    const session = await terminal({ picker: true, list, management: {
+      catalog: async () => ({ orglets: [{ id: workerId, revision: 1, config: { name: 'Researcher', provider: 'codex', skillId, instructions: 'Review' } }], crews: [], skills: [], providers: [{ id: 'codex', name: 'Codex' }] }),
+      saveOrglet: async () => { throw new Error('Not an orglet'); },
+      saveCrew: async config => {
+        saved.push(config);
+        list.crews.push({ name: config.name!, lead: 'Researcher', members: ['Researcher'] });
+        return { kind: 'team', id: crewId, name: config.name!, revision: 1 };
+      }, delete: async () => { throw new Error('Not deleting'); },
+    } });
+    try {
+      await session.key('/new crew'); await session.key('\r');
+      await session.key('Name'); await session.key('\r');
+      await session.key('Review crew'); await session.key('\r');
+      await session.key('Instructions'); await session.key('\r');
+      await session.key('Review together'); await session.key('\r');
+      await session.key('Members'); await session.key('\r');
+      await session.key('\r');
+      await session.key('Done'); await session.key('\r');
+      await session.key('Save'); await session.key('\r');
+      expect(saved).toEqual([{ name: 'Review crew', instructions: 'Review together', memberIds: [workerId], synthesizerId: workerId, workflow: 'parallel', monthlyBudgetMicros: 5_000_000 }]);
+      expect(session.sent).toEqual([]);
+      expect(session.screen.text()).toContain('Saved crew Review crew.');
+    } finally { await session.stop(); }
+  });
+
+  it('creates and edits in forms, never sends field values as messages, and cancels deletion with Esc', async () => {
+    const workerId = '11111111-1111-4111-8111-111111111111';
+    const skillId = '22222222-2222-4222-8222-222222222222';
+    const catalog: ManagementCatalog = {
+      orglets: [{ id: workerId, revision: 1, config: { name: 'Researcher', provider: 'codex', modelId: 'configured-model', instructions: 'Research the supplied work.', skillId } }],
+      crews: [], skills: [{ id: skillId, name: 'Research' }], providers: [{ id: 'codex', name: 'Codex' }],
+    };
+    const list: ListValue = { orglets: [{ name: 'Researcher', provider: 'codex', model: 'configured-model' }], crews: [] };
+    const saved: unknown[] = [];
+    const removed: unknown[] = [];
+    const session = await terminal({ picker: true, list, management: {
+      catalog: async () => catalog,
+      saveOrglet: async (config, target) => {
+        saved.push({ config, target });
+        list.orglets[0].name = config.name!;
+        catalog.orglets[0].config.name = config.name!;
+        catalog.orglets[0].revision += 1;
+        return { kind: 'worker', id: workerId, name: config.name!, revision: catalog.orglets[0].revision };
+      },
+      saveCrew: async () => { throw new Error('Unexpected crew save'); },
+      delete: async (kind, target, confirmName) => {
+        removed.push({ kind, target, confirmName });
+        return { kind, id: target.id, name: confirmName, revision: target.revision, deleted: true };
+      },
+    } });
+    try {
+      await session.key('/new orglet');
+      expect(session.screen.text()).toContain('Create an orglet or crew in this terminal');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Create orglet');
+      await session.key('Name');
+      await session.key('\r');
+      await session.key('Terminal worker');
+      await session.key('\r');
+      await session.key('Instructions');
+      await session.key('\r');
+      await session.key('Work on the supplied files.');
+      await session.key('\r');
+      await session.key('Save');
+      await session.key('\r');
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ config: { name: 'Terminal worker', provider: 'codex', instructions: 'Work on the supplied files.' } });
+      expect(session.sent).toEqual([]);
+      expect(session.screen.text()).toContain('Saved orglet Terminal worker.');
+      await session.key('/edit');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Edit orglet · Terminal worker');
+      await session.key('Connection');
+      await session.key('\r');
+      await session.key('\r');
+      await session.key('\x1b');
+      await session.key('/delete');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Type Terminal worker to delete');
+      await session.key('\r');
+      expect(removed).toEqual([]);
+      expect(session.screen.text()).toContain('name must match exactly');
+      await session.key('\x1b');
+      expect(session.screen.text()).not.toContain('Delete orglet');
+      expect(session.sent).toEqual([]);
+    } finally { await session.stop(); }
+  });
+
+  it.each([[80, 24], [32, 10]])('keeps the configuration selection and input visible at %s × %s', async (columns, rows) => {
+    const session = await terminal({ columns, rows, picker: true, management: {
+      catalog: async () => ({ orglets: [], crews: [], skills: [], providers: [{ id: 'codex', name: 'Codex' }] }),
+      saveOrglet: async () => { throw new Error('Not saved'); }, saveCrew: async () => { throw new Error('Not saved'); }, delete: async () => { throw new Error('Not deleted'); },
+    } });
+    try {
+      await session.key('/new crew');
+      await session.key('\r');
+      await session.key('Save');
+      expect(session.screen.text()).toContain('› Save');
+      expect(session.screen.lines.length).toBeLessThan(rows);
+      expect(session.screen.lines.every(line => line.length < columns)).toBe(true);
+      await session.key('\x1b');
+      expect(session.screen.text()).toContain('Orglets');
+    } finally { await session.stop(); }
+  });
   it('updates chronological steps above the draft, collapses finished details, and preserves the draft on disclosure and resize', async () => {
     const session = await terminal({ slow: true, mode: 'truecolor' });
     const startedAt = '2026-09-28T10:00:00.000Z';

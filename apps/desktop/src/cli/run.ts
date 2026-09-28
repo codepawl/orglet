@@ -1,7 +1,9 @@
 import { resolve } from 'node:path';
 import packageJson from '../../../../package.json';
-import { COMMAND_HELP, MAIN_HELP, parseArguments, UsageError, type ParsedCommand } from './arguments';
-import { appChatClient } from './chat-client';
+import { COMMAND_HELP, MAIN_HELP, parseArguments, UsageError, type ManagementCommand, type ParsedCommand } from './arguments';
+import { AppRefusal, appChatClient } from './chat-client';
+import { runManagementCommand } from './management-command';
+import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
 import { formatList, formatOpen, formatRead, formatRun, formatSend, formatStatus } from './output';
@@ -13,7 +15,7 @@ import { NO_WAITING, WaitingFace, type Waiting } from './waiting';
 
 /**
  * `orglet`, the terminal companion of the running app (COD-234), like VS Code's `code`. It never reads the
- * database, keys or files itself: every command is one request to the app over its local pipe.
+ * database or keys itself. JSON configuration files are local inputs; mutations go through the app's local pipe.
  */
 
 /** Standard error as a terminal that can show the waiting face (COD-236). */
@@ -48,12 +50,13 @@ export type RunExtras = {
 const TERMINAL_FAILURES = new Set(['failed', 'cancelled', 'interrupted']);
 const DEFAULT_COLUMNS = 80;
 
-type RequestCommand = Exclude<ParsedCommand, { kind: 'help' } | { kind: 'version' } | { kind: 'chat' }>;
+type RequestCommand = Exclude<ParsedCommand, { kind: 'help' } | { kind: 'version' } | { kind: 'chat' } | ManagementCommand>;
 
 function toRequest(command: RequestCommand, workingDirectory: string): CliRequestBody {
   switch (command.kind) {
     case 'status': return { op: 'status' };
     case 'list': return { op: 'list' };
+    case 'config': return { op: 'config' };
     case 'read': return { op: 'read', to: command.to };
     case 'open': return { op: 'open', ...(command.to ? { to: command.to } : {}) };
     case 'send': return {
@@ -113,6 +116,9 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
   if (command.json) printJson(output, value);
   const styled = layout.mode !== 'none';
   switch (command.kind) {
+    case 'config':
+      if (!command.json) printJson(output, value);
+      return EXIT_CODES.ok;
     case 'status': {
       const statusValue = value as StatusValue;
       if (!command.json) output.stdout(styled ? styledStatus(statusValue, layout.mode) : formatStatus(statusValue));
@@ -223,6 +229,22 @@ export async function runCli(argumentList: readonly string[], output: Output, en
     if (extras.terminal) return runChat(command.to, environment, extras.terminal);
     output.stderr('"orglet chat" needs a terminal. In a script, use "orglet send".');
     return EXIT_CODES.usage;
+  }
+  if (command.kind === 'create' || command.kind === 'edit' || command.kind === 'delete') {
+    try {
+      const client = appChatClient(resolveUserData(environment), appExecutable(environment)).management!;
+      const result = await runManagementCommand(command, client, workingDirectory);
+      if (command.json) printJson(output, result);
+      else output.stdout(t(result.deleted ? 'Đã xóa {0} {1}.' : 'Đã lưu {0} {1}.', result.kind === 'worker' ? 'orglet' : 'crew', result.name));
+      return EXIT_CODES.ok;
+    } catch (error) {
+      if (error instanceof AppRefusal) return reportFailure({ ok: false, code: error.code, error: error.message }, command.json, output);
+      const code = error instanceof UsageError ? EXIT_CODES.usage : error instanceof UnreachableError ? EXIT_CODES.unreachable : EXIT_CODES.failure;
+      const message = error instanceof Error ? error.message : String(error);
+      if (command.json) printJson(output, { ok: false, error: message });
+      else output.stderr(message);
+      return code;
+    }
   }
   const userData = resolveUserData(environment);
   const executable = appExecutable(environment);

@@ -1,6 +1,7 @@
 import { callStartingApp } from './client';
 import { DEFAULT_WAIT_SECONDS, type CliErrorCode, type CliRequestBody, type ListValue, type OpenValue, type ReadValue, type SendValue } from './protocol';
 import type { CliProgressFrame } from './protocol';
+import { ManagementCatalog, ManagementResult, type ManagementClient } from './management';
 
 /**
  * What `orglet chat` asks the app (COD-236), as one object the interactive session takes, so a test can hand it a fake
@@ -12,6 +13,7 @@ export type ChatClient = {
   send: (to: string, message: string, signal: AbortSignal, progress?: (frame: CliProgressFrame) => void) => Promise<SendValue>;
   read: (to: string) => Promise<ReadValue>;
   open: (to: string) => Promise<OpenValue>;
+  management?: ManagementClient;
 };
 
 /** The app answered but said no: an unknown name, a chat with no conversation yet, a refused request. */
@@ -41,5 +43,11 @@ export function appChatClient(userData: string, executable: string | undefined):
     },
     read: to => request<ReadValue>({ op: 'read', to }),
     open: to => request<OpenValue>({ op: 'open', to }),
+    management: {
+      catalog: async () => ManagementCatalog.parse(await request({ op: 'config' })),
+      saveOrglet: async (config, target) => ManagementResult.parse(await request({ op: 'save-orglet', config, ...(target ? { target } : {}) })),
+      saveCrew: async (config, target) => ManagementResult.parse(await request({ op: 'save-crew', config, ...(target ? { target } : {}) })),
+      delete: async (kind, target, confirmName) => ManagementResult.parse(await request({ op: 'delete-entity', kind, target, confirmName })),
+    },
   };
 }
