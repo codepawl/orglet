@@ -208,7 +208,10 @@ export const Finding = z.object({
   locations: z.array(SourceLocation).max(20).optional(),
   provenance: z.object({ findingId: Id, writerId: Id, runId: Id }).strict().optional(),
 });
-export const Report = z.object({
+/** Chat replies may contain a complete document; structured report summaries stay short. */
+export const MAX_CHAT_MESSAGE_CHARACTERS = 262_144;
+export const ChatMessage = z.string().min(1).max(MAX_CHAT_MESSAGE_CHARACTERS);
+export const StructuredReport = z.object({
   // 'chat' is a normal message to the user; missing or 'report' is a structured report (older artifacts have no format).
   format: z.enum(['chat', 'report']).optional(),
   title: z.string().min(1).max(300), summary: z.string().min(1).max(16000),
@@ -216,6 +219,10 @@ export const Report = z.object({
   limitations: z.array(z.string().min(1).max(2000)).max(100),
   review: Review.nullable().optional(),
 });
+export const Report = z.union([
+  StructuredReport.extend({ format: z.literal('chat'), summary: ChatMessage }),
+  StructuredReport.extend({ format: z.literal('report').optional() }),
+]);
 export type Report = z.infer<typeof Report>;
 export type Worker = WorkerInput & { id: string; revision: number };
 export type Skill = z.infer<typeof SkillInput> & { id: string; revision: number; package?: SkillPackage };

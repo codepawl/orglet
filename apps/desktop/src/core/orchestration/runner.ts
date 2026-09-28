@@ -1997,6 +1997,12 @@ export class Runner {
       }
       // Older harness prompts (and team reports) return the report object itself.
       const answer = needsReport(run) ? undefined : HarnessAnswer.safeParse(output);
+      if (answer?.success === false && output && typeof output === 'object' && Object.hasOwn(output, 'message') && !ModelReport.safeParse(output).success) {
+        const tooLong = answer.error.issues.some(issue => issue.path[0] === 'message' && issue.code === 'too_big');
+        throw new Error(tooLong
+          ? 'Câu trả lời quá dài; chưa được lưu. Hãy yêu cầu chia nội dung thành nhiều phần.'
+          : 'Câu trả lời thiếu phần bắt buộc hoặc có phần sai dạng; chưa được lưu.');
+      }
       // Every source the harness could read is content nobody vetted: with any attached, the run's proposals wait
       // for a click, the same hold the tool loop puts on a run that called read_source (COD-206).
       const untrustedInputs = given.length ? ['attached sources'] : [];
