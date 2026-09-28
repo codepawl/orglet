@@ -97,7 +97,7 @@ export type CliAnswer = { name: string; stage?: string; text: string; createdAt:
 
 export type StatusValue = { version: string; orglets: number; crews: number; running: number; colors?: string[] };
 export type ListValue = {
-  orglets: { name: string; provider: string; model?: string; color?: string }[];
+  orglets: { name: string; provider: string; providerId?: string; model?: string; color?: string; description?: string; billing?: string }[];
   crews: { name: string; lead: string; members: string[]; colors?: string[] }[];
 };
 export type SendValue = {

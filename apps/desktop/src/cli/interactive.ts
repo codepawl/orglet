@@ -1,13 +1,15 @@
 import { createInterface, type Interface } from 'node:readline';
 import { TerminalComposer } from './composer';
+import { agentDetails, terminalHeader } from './chat-layout';
+import { Transcript } from './transcript';
+import { renderMiniFaces } from './faces';
 import { AppRefusal, type ChatClient } from './chat-client';
 import { StoppedError, UnreachableError } from './client';
-import { renderMiniFaces } from './faces';
 import { chosenEntry, createPicker, entriesFromList, findChat, moveSelection, renderPickerLines, setFilter, type ChatEntry, type PickerState } from './picker';
 import { answerColor, chatHeader, renderAnswers, styledList } from './pretty';
 import { EXIT_CODES, type CliAnswer, type SendValue } from './protocol';
 import { completeSlash, isSlashCommand, parseSlash, SLASH_HELP, type SlashCommand } from './slash';
-import { ANSI, ERROR_COLOR, muted, MUTED_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
+import { ERROR_COLOR, muted, MUTED_COLOR, padEnd, paint, truncate, wrapSegments, type ColorMode, type Style } from './terminal';
 
 /**
  * `orglet chat` (COD-236): pick an orglet or crew, then talk to it from the terminal. Everything outside this module
@@ -29,15 +31,15 @@ export type InteractiveOptions = {
   to?: string;
   /** Raw keys and redraws. Defaults to whether both streams are terminals. */
   terminal?: boolean;
+  directory?: string;
 };
 
 const DEFAULT_COLUMNS = 80;
 const PICKER_MAX_ROWS = 8;
-/** The faces on the welcome line; more would wrap a narrow terminal. */
 const WELCOME_FACE_LIMIT = 12;
 const CHAT_HINT = 'Enter sends. Ctrl+J adds a line. Paste stays in the draft. /help lists commands. Ctrl+D leaves.';
 /** These controls do not change the chat or submit a turn, so they need not wait behind one. */
-const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help']);
+const IMMEDIATE_COMMANDS = new Set<SlashCommand['kind']>(['open', 'clear', 'queue', 'undo', 'help', 'details', 'agents']);
 
 type QueuedLine = { text: string };
 type View = 'picker' | 'chat';
@@ -62,6 +64,12 @@ class Session {
   private finish: (code: number) => void = () => undefined;
   private waitingStartedAt = 0;
   private waitingTimer: ReturnType<typeof setInterval> | undefined;
+  private transcript = new Transcript();
+  private readonly transcripts = new Map<string, Transcript>();
+  private readonly drafts = new Map<string, string>();
+  private agentsVisible = false;
+  private panel: 'queue' | 'help' | undefined;
+  private panelOffset = 0;
 
   constructor(private readonly options: InteractiveOptions) {
     this.terminal = options.terminal ?? Boolean(options.input.isTTY && options.output.isTTY);
@@ -103,10 +111,16 @@ class Session {
         input: this.options.input,
         output: this.options.output,
         mode: this.mode,
+        frame: (height, width) => this.frame(height, width),
+        detail: () => this.chat && this.view === 'chat' ? `${this.chat.model ?? 'provider default'} · effort: provider default` : '',
+        shortcut: action => this.shortcut(action),
         prompt: () => this.currentPrompt(),
-        rows: () => renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: this.pickerRows() }),
+        rows: () => renderPickerLines(this.picker, { width: this.textWidth(), mode: this.mode, maxRows: this.pickerRows(), showFaces: false }),
         status: () => this.composerStatus(),
-        hint: () => this.waitingController ? 'Enter queues · /queue · /undo · Ctrl+C stops waiting' : 'Enter send · Ctrl+J newline · / commands',
+        hint: () => {
+          if (this.panel || this.agentsVisible) return 'PgUp/PgDn scroll · Esc closes · Ctrl+P switch';
+          return this.waitingController ? 'Ctrl+Q queue · Ctrl+Z undo · Ctrl+C stop waiting' : 'Ctrl+J newline · Ctrl+O details · ← agents · /help';
+        },
         picker: () => this.view === 'picker',
         suggestions: text => completeSlash(text, this.entries.map(entry => entry.name))[0].map(candidate => ({
           text: candidate,
@@ -119,7 +133,11 @@ class Session {
           if (direction === 0) this.composer?.replace(chosenEntry(this.picker)?.name ?? '');
           else this.picker = moveSelection(this.picker, direction);
         },
-        escape: () => this.leavePicker(),
+        escape: () => {
+          this.agentsVisible = false;
+          this.panel = undefined;
+          this.leavePicker();
+        },
         submit: text => this.enqueue(text),
         interrupt: () => this.interrupt(),
         close: () => this.end(EXIT_CODES.ok),
@@ -145,7 +163,49 @@ class Session {
     const state = this.waitingController ? 'working' : 'ready';
     const queued = this.queue.length ? ` · ${this.queue.length} queued` : '';
     const elapsed = this.waitingController ? ` · ${Math.floor((Date.now() - this.waitingStartedAt) / 1000)}s` : '';
-    return `${state}${queued}${elapsed} · ${renderMiniFaces([this.chat.color], this.mode)} ${this.chat.name} · ${this.chat.detail}`;
+    return `${this.waitingController ? 'queue' : 'message'} · ${state}${queued}${elapsed} · Enter ${this.waitingController ? 'queues' : 'sends'}`;
+  }
+
+  private frame(height: number, width: number): string[] {
+    const directory = this.options.directory ?? process.cwd();
+    const chat = this.view === 'chat' ? this.chat : undefined;
+    const header = terminalHeader(chat, this.options.version, directory, width, this.options.output.rows ?? 24, this.mode);
+    const headerRows = Math.min(header.length, Math.max(1, height - 3));
+    const room = Math.max(0, height - headerRows - (height > 6 ? 1 : 0));
+    let panel: string[] | undefined;
+    if (this.panel) panel = this.panelRows(width);
+    else if (this.agentsVisible && this.chat) panel = agentDetails(this.chat, this.entries, directory, width, this.mode);
+    this.panelOffset = Math.max(0, Math.min(this.panelOffset, Math.max(0, (panel?.length ?? 0) - room)));
+    const content = panel ? panel.slice(this.panelOffset, this.panelOffset + room) : this.transcript.view(room, width, this.mode);
+    return [...header.slice(0, headerRows), ...(height > 6 ? [''] : []), ...content];
+  }
+
+  private panelRows(width: number): string[] {
+    if (this.panel === 'help') return SLASH_HELP.map(([usage, meaning]) => truncate(`${usage}  ${meaning}`, width));
+    if (!this.queue.length) return ['Nothing is waiting in this terminal.'];
+    return [`Waiting in this terminal (${this.queue.length})`, ...this.queue.map((item, index) => truncate(`${index + 1}. ${item.text.trim().replace(/\s+/gu, ' ')}`, width))];
+  }
+
+  private shortcut(action: 'agents' | 'details' | 'queue' | 'undo' | 'switch' | 'pageUp' | 'pageDown'): void {
+    if (action === 'pageUp' || action === 'pageDown') {
+      if (this.panel || this.agentsVisible) this.panelOffset += action === 'pageUp' ? -5 : 5;
+      else this.transcript.offset += action === 'pageUp' ? 5 : -5;
+      return;
+    }
+    if (this.view !== 'chat') return;
+    if (action === 'agents') {
+      this.panel = undefined;
+      this.panelOffset = 0;
+      this.agentsVisible = !this.agentsVisible;
+    }
+    if (action === 'details') {
+      this.panel = undefined;
+      this.agentsVisible = false;
+      this.transcript.expanded = !this.transcript.expanded;
+    }
+    if (action === 'queue') this.showQueue();
+    if (action === 'undo') this.undoQueued();
+    if (action === 'switch') this.enqueue('/to');
   }
 
   private openFirstView(): void {
@@ -176,6 +236,10 @@ class Session {
 
   private print(text = ''): void {
     if (this.finished) return;
+    if (this.terminal) {
+      this.transcript.append(text);
+      return;
+    }
     this.composer?.clear();
     this.write(`${text}${this.terminal ? '\r\n' : '\n'}`);
   }
@@ -185,6 +249,10 @@ class Session {
   }
 
   private printWrapped(text: string, style: Style): void {
+    if (this.terminal) {
+      this.transcript.append(text, style);
+      return;
+    }
     this.printLines(wrapSegments([{ text, style }], { width: this.textWidth(), mode: this.mode }));
   }
 
@@ -197,6 +265,7 @@ class Session {
   }
 
   private printWelcome(): void {
+    if (this.terminal) return;
     const title = `${paint('Orglet', { bold: true }, this.mode)} ${muted(this.options.version, this.mode)}`;
     if (this.mode === 'none') {
       this.print(title);
@@ -236,6 +305,7 @@ class Session {
   }
 
   private showPicker(filter: string, returnTo?: ChatEntry): void {
+    this.saveDraft();
     this.view = 'picker';
     this.picker = createPicker(this.entries, filter);
     this.pickerReturn = returnTo;
@@ -248,11 +318,19 @@ class Session {
   }
 
   private enterChat(entry: ChatEntry): void {
+    this.saveDraft();
     this.view = 'chat';
     this.chat = entry;
+    const key = `${entry.kind}:${entry.name}`;
+    if (!this.transcripts.has(key)) this.transcripts.set(key, new Transcript());
+    this.transcript = this.transcripts.get(key)!;
+    this.agentsVisible = false;
+    this.panel = undefined;
     this.pickerReturn = undefined;
-    this.printLines(chatHeader(entry, this.mode));
-    if (!this.shownHint) this.printMuted(CHAT_HINT);
+    if (this.terminal) this.replaceLine(this.drafts.get(key) ?? '');
+    if (!this.terminal) this.printLines(chatHeader(entry, this.mode));
+    if (!this.terminal && !this.shownHint) this.printMuted(CHAT_HINT);
+    if (this.terminal && this.usesDemo(entry)) this.printMuted('No real model selected. /open lets you connect this orglet in the desktop.');
     this.shownHint = true;
     this.print();
   }
@@ -263,8 +341,14 @@ class Session {
       this.view = 'chat';
       this.chat = back;
       this.pickerReturn = undefined;
-      this.replaceLine('');
+      this.replaceLine(this.drafts.get(`${back.kind}:${back.name}`) ?? '');
       this.showPrompt();
+    }
+  }
+
+  private saveDraft(): void {
+    if (this.view === 'chat' && this.chat && this.composer) {
+      this.drafts.set(`${this.chat.kind}:${this.chat.name}`, this.composer.text);
     }
   }
 
@@ -291,7 +375,6 @@ class Session {
     if (this.terminal && this.view === 'chat' && isSlashCommand(text)) {
       const command = parseSlash(text);
       if (IMMEDIATE_COMMANDS.has(command.kind)) {
-        this.echo({ text }, this.chatPrompt());
         void this.command(command).finally(() => this.showPrompt());
         return;
       }
@@ -321,7 +404,12 @@ class Session {
 
   /** Shows a line that was not echoed as it was typed: from a script, or typed while an answer was on its way. */
   private echo(line: QueuedLine, prompt: string): void {
-    this.print(`${prompt}${line.text}`);
+    if (!this.terminal) {
+      this.print(`${prompt}${line.text}`);
+      return;
+    }
+    this.print();
+    this.printWrapped(`${isSlashCommand(line.text) ? 'Command' : 'You'} › ${line.text}`, { bold: true });
   }
 
   private async handle(line: QueuedLine): Promise<void> {
@@ -329,7 +417,7 @@ class Session {
       this.choose(line);
       return;
     }
-    this.echo(line, this.chatPrompt());
+    if (!this.terminal || !isSlashCommand(line.text)) this.echo(line, this.chatPrompt());
     const text = line.text.trim();
     if (text === '') return;
     if (isSlashCommand(line.text)) {
@@ -340,7 +428,7 @@ class Session {
   }
 
   private choose(line: QueuedLine): void {
-    this.echo(line, this.pickerPrompt());
+    if (!this.terminal) this.echo(line, this.pickerPrompt());
     const entry = chosenEntry(setFilter(this.picker, line.text));
     if (entry) {
       this.enterChat(entry);
@@ -359,6 +447,8 @@ class Session {
       case 'clear': return this.clear();
       case 'queue': return this.showQueue();
       case 'undo': return this.undoQueued();
+      case 'details': return this.shortcut('details');
+      case 'agents': return this.shortcut('agents');
       case 'help': return this.help();
       case 'exit': return this.end(EXIT_CODES.ok);
       case 'unknown': return this.printMuted(`Unknown command ${command.command}. /help lists the commands.`);
@@ -383,6 +473,15 @@ class Session {
     try {
       const value = await this.options.client.list();
       this.entries = entriesFromList(value);
+      const currentChat = this.chat;
+      if (currentChat) {
+        const updated = this.entries.find(entry => entry.kind === currentChat.kind && entry.name === currentChat.name);
+        if (updated) this.chat = updated;
+      }
+      if (this.terminal) {
+        this.showPicker('', this.chat);
+        return;
+      }
       this.printLines(styledList(value, { mode: this.mode, width: this.textWidth() }).split('\n'));
       this.print();
     } catch (error) {
@@ -414,12 +513,22 @@ class Session {
   }
 
   private clear(): void {
-    if (this.terminal) this.write(ANSI.clearScreen);
+    if (this.terminal) {
+      this.transcript.clear();
+      this.panel = undefined;
+      this.agentsVisible = false;
+      return;
+    }
     this.printLines(chatHeader(this.chat!, this.mode));
     this.print();
   }
 
   private help(): void {
+    if (this.terminal) {
+      this.panel = 'help';
+      this.panelOffset = 0;
+      return;
+    }
     const width = Math.max(...SLASH_HELP.map(([usage]) => usage.length));
     for (const [usage, meaning] of SLASH_HELP) this.print(`  ${padEnd(usage, width)}  ${muted(meaning, this.mode)}`);
     this.printMuted('  Ctrl+J adds a line. Paste stays in the draft. / opens the command menu; Tab fills the choice.');
@@ -427,6 +536,11 @@ class Session {
   }
 
   private showQueue(): void {
+    if (this.terminal) {
+      this.panel = this.panel === 'queue' ? undefined : 'queue';
+      this.panelOffset = 0;
+      return;
+    }
     if (this.queue.length === 0) {
       this.printMuted('Nothing is waiting in this terminal.');
       return;
@@ -441,6 +555,7 @@ class Session {
   }
 
   private undoQueued(): void {
+    this.panel = undefined;
     if (!this.composer) {
       this.printMuted('/undo needs an interactive terminal.');
       return;
@@ -459,7 +574,12 @@ class Session {
   }
 
   private async send(text: string): Promise<void> {
+    this.panel = undefined;
     const chat = this.chat!;
+    if (this.terminal && this.usesDemo(chat)) {
+      this.printError('Nothing was sent: this chat uses Demo. /open lets you choose a real connection.');
+      return;
+    }
     const controller = new AbortController();
     const startedAt = Date.now();
     this.waitingController = controller;
@@ -485,11 +605,20 @@ class Session {
   private printAnswers(answers: readonly CliAnswer[], firstNote?: string): void {
     const fallbackColor = this.chat?.color;
     const colored = answers.map(answer => ({ ...answer, color: answerColor(answer, this.colorOf(answer.name) ?? fallbackColor) }));
+    if (this.terminal) {
+      this.transcript.answer(colored, firstNote);
+      return;
+    }
     this.printLines(renderAnswers(colored, { mode: this.mode, width: this.textWidth(), fallbackColor, firstNote }));
   }
 
   private colorOf(name: string): string | undefined {
     return this.entries.find(entry => entry.kind === 'worker' && entry.name === name)?.color;
+  }
+
+  private usesDemo(chat: ChatEntry): boolean {
+    if (chat.kind === 'worker') return chat.providerId === 'demo';
+    return (chat.members ?? []).some(name => this.entries.find(entry => entry.kind === 'worker' && entry.name === name)?.providerId === 'demo');
   }
 
   private printTurn(value: SendValue, seconds: number): void {

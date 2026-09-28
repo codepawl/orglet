@@ -22,6 +22,10 @@ type ComposerOptions = {
   submit: (text: string) => void;
   interrupt: () => void;
   close: () => void;
+  /** A fixed viewport above the draft; absent for callers using inline terminal output. */
+  frame?: (height: number, width: number) => string[];
+  detail?: () => string;
+  shortcut?: (action: 'agents' | 'details' | 'queue' | 'undo' | 'switch' | 'pageUp' | 'pageDown') => void;
 };
 
 const PASTE_START = '\x1b[200~';
@@ -64,6 +68,7 @@ export class TerminalComposer {
     this.options.output.on('resize', this.onResize);
     this.options.input.resume();
     this.options.output.write(`\x1b[?2004h${ANSI.showCursor}`);
+    if (this.options.frame) this.options.output.write('\x1b[?1049h\x1b[H');
   }
 
   stop(): void {
@@ -71,6 +76,7 @@ export class TerminalComposer {
     if (this.inputTimer) clearTimeout(this.inputTimer);
     this.clear();
     this.options.output.write(`\x1b[?2004l${ANSI.showCursor}`);
+    if (this.options.frame) this.options.output.write('\x1b[?1049l');
     this.options.input.removeListener('data', this.onData);
     this.options.input.removeListener('end', this.onEnd);
     this.options.output.removeListener('resize', this.onResize);
@@ -170,6 +176,22 @@ export class TerminalComposer {
     if (this.closed) return;
     if (key.ctrl && key.name === 'c') return this.options.interrupt();
     if (key.ctrl && key.name === 'd') return this.options.close();
+    const shortcuts = { g: 'agents', o: 'details', q: 'queue', z: 'undo', p: 'switch' } as const;
+    if (key.ctrl && key.name && key.name in shortcuts && this.options.shortcut) {
+      this.options.shortcut(shortcuts[key.name as keyof typeof shortcuts]);
+      this.draw();
+      return;
+    }
+    if ((key.name === 'pageup' || key.name === 'pagedown') && this.options.shortcut) {
+      this.options.shortcut(key.name === 'pageup' ? 'pageUp' : 'pageDown');
+      this.draw();
+      return;
+    }
+    if (key.name === 'left' && !this.text && !this.options.picker() && this.options.shortcut) {
+      this.options.shortcut('agents');
+      this.draw();
+      return;
+    }
     if ((key.ctrl && key.name === 'j') || ((key.name === 'return' || key.name === 'enter') && (key.shift || key.meta))) return this.insert('\n');
     const choices = this.suggestions();
     if (key.name === 'escape') {
@@ -254,7 +276,8 @@ export class TerminalComposer {
 
   clear(): void {
     if (!this.drawn) return;
-    this.options.output.write(`\r${ANSI.up(this.cursorRow)}${ANSI.clearBelow}`);
+    if (this.options.frame) this.options.output.write('\x1b[H');
+    else this.options.output.write(`\r${ANSI.up(this.cursorRow)}${ANSI.clearBelow}`);
     this.drawn = false;
   }
 
@@ -303,11 +326,14 @@ export class TerminalComposer {
     });
     const status = this.options.status();
     const hint = choices.length ? '↑↓ choose · Tab/Enter fill · Esc dismiss' : this.options.picker() ? '' : this.options.hint();
-    const height = Math.max(2, (this.options.output.rows ?? 24) - 1);
-    const footer = status ? [muted(truncate(status, width), this.options.mode)] : [];
-    if (hint && height > 3) footer.push(muted(truncate(hint, width), this.options.mode));
-    const extraRows = extras.slice(0, Math.max(0, height - footer.length - 1)).map(line => truncate(line, width));
-    const maxDraftRows = Math.max(1, Math.min(Math.floor(height / 2), height - extraRows.length - footer.length));
+    const height = Math.max(1, (this.options.output.rows ?? 24) - 1);
+    const footer = status && height > 3 ? [muted(truncate(status, width), this.options.mode)] : [];
+    if (hint && height > 4) footer.push(muted(truncate(hint, width), this.options.mode));
+    const rules = this.options.frame && height >= 3 ? 2 : 0;
+    const detail = height >= 14 ? this.options.detail?.() : undefined;
+    const detailRows = detail ? 1 : 0;
+    const extraRows = extras.slice(0, Math.max(0, height - footer.length - 1 - rules - detailRows - (this.options.frame ? 2 : 0))).map(line => truncate(line, width));
+    const maxDraftRows = Math.max(1, Math.min(Math.floor(height / 3), height - extraRows.length - footer.length - rules - detailRows));
     const startRow = Math.max(0, cursorRow - maxDraftRows + 1);
     const visible = lines.slice(startRow, startRow + maxDraftRows);
     cursorRow -= startRow;
@@ -315,7 +341,26 @@ export class TerminalComposer {
     const hiddenAfter = startRow + visible.length < lines.length;
     if (hiddenBefore || hiddenAfter) {
       const indicator = hiddenBefore && hiddenAfter ? '↕' : hiddenBefore ? '↑' : '↓';
-      visible[0] = muted(indicator, this.options.mode) + visible[0].slice(1);
+      const content = visible[0].slice(startRow === 0 ? prompt.length : prefixWidth);
+      visible[0] = muted(indicator, this.options.mode) + ' '.repeat(Math.max(0, prefixWidth - 1)) + content;
+    }
+    if (this.options.frame) {
+      const rule = muted('─'.repeat(width), this.options.mode);
+      if (rules) {
+        visible.unshift(rule);
+        cursorRow += 1;
+      }
+      if (detail) {
+        const metadata = truncate(detail, width);
+        visible.unshift(muted(`${' '.repeat(Math.max(0, width - displayWidth(metadata)))}${metadata}`, this.options.mode));
+        cursorRow += 1;
+      }
+      if (rules) visible.push(rule);
+      const remaining = Math.max(0, height - visible.length - extraRows.length - footer.length);
+      const frame = this.options.frame(remaining, width).slice(0, remaining).map(line => truncate(line, width));
+      while (frame.length < remaining) frame.push('');
+      visible.unshift(...frame);
+      cursorRow += frame.length;
     }
     visible.push(...extraRows, ...footer);
     const body = visible.map(line => `${ANSI.clearLine}${line}`).join('\r\n');

@@ -4,7 +4,7 @@ import { runInteractive } from '../../apps/desktop/src/cli/interactive';
 import { StoppedError } from '../../apps/desktop/src/cli/client';
 import { type ChatClient } from '../../apps/desktop/src/cli/chat-client';
 import { displayWidth, stripAnsi, type ColorMode } from '../../apps/desktop/src/cli/terminal';
-import { type SendValue } from '../../apps/desktop/src/cli/protocol';
+import { type ListValue, type SendValue } from '../../apps/desktop/src/cli/protocol';
 
 /** A terminal grid, so assertions see the final screen rather than text already erased by a redraw. */
 class Screen {
@@ -15,6 +15,11 @@ class Screen {
     for (const token of text.match(/\x1b\[[0-9;?]*[A-Za-z~]|[^\x1b]/gu) ?? []) {
       if (token.startsWith('\x1b')) {
         const amount = Number(token.slice(2, -1)) || 1;
+        if (token.endsWith('H')) {
+          const [row, column] = token.slice(2, -1).split(';').map(Number);
+          this.row = Math.max(0, (row || 1) - 1);
+          this.column = Math.max(0, (column || 1) - 1);
+        }
         if (token.endsWith('A')) this.row = Math.max(0, this.row - amount);
         if (token.endsWith('C')) this.column += amount;
         if (token.endsWith('K')) this.lines[this.row] = [];
@@ -50,7 +55,7 @@ const response = (message: string): SendValue => ({
   waited: true, finished: true, answers: [{ name: 'Researcher', text: `Answer: ${message}`, createdAt: '1' }], errors: [],
 });
 
-async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: boolean; columns?: number; rows?: number; mode?: ColorMode } = {}) {
+async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: boolean; columns?: number; rows?: number; mode?: ColorMode; list?: ListValue; reply?: string } = {}) {
   const screen = new Screen();
   const input = Object.assign(new PassThrough(), { isTTY: true, isRaw: false, setRawMode(raw: boolean) { this.isRaw = raw; } });
   let transcript = '';
@@ -65,7 +70,7 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
   let finishSend: (() => void) | undefined;
   let failOpen: (() => void) | undefined;
   const client: ChatClient = {
-    list: async () => ({ orglets: [{ name: 'Researcher', provider: 'demo', color: '#4f7fe0' }, { name: 'Kế toán', provider: 'demo', color: '#64b282' }], crews: [] }),
+    list: async () => options.list ?? ({ orglets: [{ name: 'Researcher', provider: 'codex', model: 'configured-model', billing: 'CLI account', color: '#4f7fe0' }, { name: 'Kế toán', provider: 'codex', model: 'configured-model', color: '#64b282' }], crews: [] }),
     send: async (to, message, signal) => {
       sent.push(message);
       sentTo.push(to);
@@ -73,7 +78,9 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
         finishSend = resolve;
         signal.addEventListener('abort', () => reject(new StoppedError()), { once: true });
       });
-      return response(message);
+      const value = response(message);
+      if (options.reply) value.answers[0].text = options.reply;
+      return value;
     },
     read: async () => ({ chat: response('').chat, taskId: 'task', status: 'completed', answers: response('earlier').answers }),
     open: async name => {
@@ -86,7 +93,7 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
       return { chat: response('').chat };
     },
   };
-  const running = runInteractive({ input, output, client, mode: options.mode ?? 'none', version: 'test', terminal: true, ...(options.picker ? {} : { to: 'Researcher' }) });
+  const running = runInteractive({ input, output, client, mode: options.mode ?? 'none', version: 'test', directory: 'C:/work/project', terminal: true, ...(options.picker ? {} : { to: 'Researcher' }) });
   await pause();
   return {
     screen, input, output, sent, sentTo, opened,
@@ -99,6 +106,163 @@ async function terminal(options: { picker?: boolean; slow?: boolean; slowOpen?: 
 }
 
 describe('terminal composer', () => {
+  it('keeps a single product header and separates turns from the composer between two rules', async () => {
+    const session = await terminal({ mode: 'truecolor' });
+    try {
+      await session.key('hello');
+      await session.key('\r');
+      const screen = session.screen.text();
+      expect(screen).toContain('Orglet test · Researcher');
+      expect(screen).toContain('configured-model · codex');
+      expect(screen).toContain('CLI account');
+      expect(screen).toContain('C:/work/project');
+      expect(screen).toContain('You › hello');
+      expect(screen).toContain('Researcher · 0s');
+      expect(screen).toContain('Answer: hello');
+      expect(screen.match(/─{20,}/g)).toHaveLength(2);
+      expect(screen).not.toContain('▐^^▌');
+      expect(screen.match(/Orglet test/g)).toHaveLength(1);
+      expect(session.screen.lines).toHaveLength(23);
+      expect(session.screen.text().split('\n').at(-2)).toContain('message · ready');
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('expands saved answer details, scrolls history and opens agents without losing the draft', async () => {
+    const reply = Array.from({ length: 24 }, (_, index) => `Detail ${index + 1}`).join('\n');
+    const session = await terminal({ reply });
+    try {
+      await session.key('long reply');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('more lines · Ctrl+O expands');
+      expect(session.screen.text()).not.toContain('Detail 24');
+      await session.key('unsent draft');
+      await session.key('\x0f');
+      expect(session.screen.text()).toContain('Detail 24');
+      expect(session.screen.text()).toContain('› unsent draft');
+      await session.key('\x1b[5~');
+      expect(session.screen.text()).not.toContain('Detail 24');
+      await session.key('\x07');
+      expect(session.screen.text()).toContain('Agents · Researcher');
+      expect(session.screen.text()).toContain('Plan tier: not reported');
+      expect(session.screen.text()).toContain('Thinking effort: provider default');
+      expect(session.screen.text()).toContain('› unsent draft');
+      await session.key('\x1b');
+      expect(session.screen.text()).not.toContain('Agents · Researcher');
+      expect(session.screen.text()).toContain('› unsent draft');
+      expect(session.sent).toEqual(['long reply']);
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('uses Left for agents only with an empty draft and keeps each chat transcript separate', async () => {
+    const session = await terminal();
+    try {
+      await session.key('\x1b[D');
+      expect(session.screen.text()).toContain('Agents · Researcher');
+      await session.key('\x1b');
+      await session.key('hello');
+      await session.key('\x1b[D');
+      await session.key('X');
+      expect(session.screen.text()).toContain('› hellXo');
+      expect(session.screen.text()).not.toContain('Agents · Researcher');
+      await session.key('\r');
+      await session.key('/to Kế toán');
+      await session.key('\r');
+      expect(session.screen.text()).not.toContain('Answer: hellXo');
+      await session.key('/to Researcher');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('Answer: hellXo');
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('uses queue and undo shortcuts during a wait and refuses to overwrite an unsent draft', async () => {
+    const session = await terminal({ slow: true });
+    try {
+      await session.key('active');
+      await session.key('\r');
+      await session.key('queued');
+      await session.key('\r');
+      await session.key('\x11');
+      expect(session.screen.text()).toContain('1. queued');
+      await session.key('keep this');
+      await session.key('\x1a');
+      expect(session.screen.text()).toContain('› keep this');
+      expect(session.screen.text()).toContain('1 queued');
+      await session.key('\x15');
+      await session.key('\x1a');
+      expect(session.screen.text()).toContain('› queued');
+      expect(session.sent).toEqual(['active']);
+      await session.resolve();
+      expect(session.sent).toEqual(['active']);
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it('keeps an unsent draft when the chat picker is dismissed or another chat is opened', async () => {
+    const session = await terminal();
+    try {
+      await session.key('keep my draft');
+      await session.key('\x10');
+      expect(session.screen.text()).toContain('Open ›');
+      await session.key('\x1b');
+      expect(session.screen.text()).toContain('› keep my draft');
+      await session.key('\x10');
+      await session.key('Kế toán');
+      await session.key('\r');
+      expect(session.screen.text()).not.toContain('keep my draft');
+      await session.key('\x10');
+      await session.key('Researcher');
+      await session.key('\r');
+      expect(session.screen.text()).toContain('› keep my draft');
+      expect(session.sent).toEqual([]);
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it.each([false, true])('refuses Demo sends, including a crew with a Demo member (%s)', async crew => {
+    const list: ListValue = {
+      orglets: [{ name: 'Researcher', provider: crew ? 'codex' : 'demo' }, { name: 'Sample', provider: 'demo' }],
+      crews: crew ? [{ name: 'Review', lead: 'Researcher', members: ['Sample'] }] : [],
+    };
+    const session = await terminal({ list });
+    try {
+      if (crew) {
+        await session.key('/to Review');
+        await session.key('\r');
+      }
+      await session.key('real answer please');
+      await session.key('\r');
+      expect(session.sent).toEqual([]);
+      expect(session.screen.text()).toContain('Nothing was sent: this chat uses Demo.');
+    } finally {
+      await session.stop();
+    }
+  });
+
+  it.each([4, 5, 6, 8, 10, 24])('bounds the coloured viewport and multiline cursor within %s rows after resize', async rows => {
+    const session = await terminal({ mode: 'truecolor', columns: 40, rows });
+    try {
+      await session.key('\x1b[200~' + 'Kế toán 日本\n'.repeat(20) + '\x1b[201~');
+      expect(session.screen.lines.length).toBeLessThan(rows);
+      expect(session.screen.row).toBeLessThan(rows);
+      expect(session.screen.text()).not.toContain('[38;');
+      session.output.columns = 32;
+      session.output.emit('resize');
+      expect(session.screen.lines.length).toBeLessThan(rows);
+      expect(session.screen.text()).not.toContain('[38;');
+      expect(session.sent).toEqual([]);
+    } finally {
+      await session.stop();
+    }
+  });
+
   it('shows the local queue and restores its last multiline item for editing without stopping the active turn', async () => {
     const session = await terminal({ slow: true });
     try {
@@ -222,7 +386,7 @@ describe('terminal composer', () => {
       await session.key('\r');
       await session.key('pending');
       await session.key('\r');
-      expect(session.screen.text()).toContain('working · 1 queued · 0s · ▐••▌');
+      expect(session.screen.text()).toContain('queue · working · 1 queued');
       expect(session.screen.text()).not.toContain('[38;');
       await session.resolve();
       await session.resolve();
@@ -303,7 +467,9 @@ describe('terminal composer', () => {
       expect(session.screen.text()).toContain('› /list');
       expect(session.screen.text()).not.toContain('Tab/Enter fill');
       await session.key('\r');
-      expect(session.screen.text()).toContain('Orglets');
+      expect(session.screen.text()).toContain('Open ›');
+      expect(session.screen.text()).toContain('Researcher');
+      await session.key('\r');
       await session.key('/op');
       await session.key('\r');
       expect(session.opened).toEqual([]);
@@ -359,11 +525,13 @@ describe('terminal composer', () => {
       await session.key('\t');
       expect(session.screen.text()).toContain('Open › Kế toán');
       await session.key('\r');
-      expect(session.screen.text()).toContain('ready · ▐••▌ Kế toán · demo');
+      expect(session.screen.text()).toContain('Orglet test · Kế toán');
+      expect(session.screen.text()).toContain('configured-model · codex');
       await session.key('/to');
       await session.key('\r');
       await session.key('\x1b');
-      expect(session.screen.text()).toContain('ready · ▐••▌ Kế toán · demo');
+      expect(session.screen.text()).toContain('Orglet test · Kế toán');
+      expect(session.screen.text()).toContain('message · ready');
     } finally { await session.stop(); }
   });
 

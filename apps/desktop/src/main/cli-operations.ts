@@ -2,7 +2,10 @@ import type { Routine, Source, Task, TaskDetail, TaskInput, TaskStatus, Team, Wo
 import { liveTeamTask, liveWorkerTask } from '../shared/live-task';
 import { defaultAvatarColor } from '../shared/mascot-suggest';
 import type { CliAnswer, CliChat, CliErrorCode, CliRequest, ListValue, OpenValue, ReadValue, RunValue, SendValue, StatusValue } from '../cli/protocol';
-import { findCustomConnection } from '../shared/custom-connections';
+import { connectionPricing, findCustomConnection } from '../shared/custom-connections';
+import { isHarness } from '../shared/harness';
+import { isLocalApi, isPlanApi } from '../shared/contracts';
+import { resolveWorkerModel } from '../core/models/resolve';
 
 /**
  * What each `orglet` command does inside the app (COD-234). Every step goes through the same core commands the
@@ -182,7 +185,10 @@ export class CliOperations {
     const orglets = workspace.workers.map(worker => ({
       name: worker.name,
       provider: providerOf(worker.provider),
-      ...(worker.modelId ? { model: worker.modelId } : {}),
+      providerId: worker.provider,
+      ...modelField(worker, workspace),
+      ...(worker.description ? { description: worker.description } : {}),
+      billing: billingLabel(worker, workspace),
       color: defaultAvatarColor(worker),
     }));
     const crews = workspace.teams.map(team => ({
@@ -276,4 +282,19 @@ export class CliOperations {
     await this.dependencies.open(chat);
     return { chat };
   }
+}
+
+function modelField(worker: Worker, workspace: Workspace): { model?: string } {
+  const model = resolveWorkerModel(worker, undefined, workspace.customConnections ?? []).id;
+  return model ? { model } : {};
+}
+
+function billingLabel(worker: Worker, workspace: Workspace): string {
+  if (worker.provider === 'demo') return 'sample replies';
+  if (isHarness(worker.provider)) return 'CLI account';
+  if (isLocalApi(worker.provider)) return 'local';
+  if (isPlanApi(worker.provider)) return 'provider plan';
+  const connection = findCustomConnection(workspace.customConnections ?? [], worker.provider);
+  if (connection) return connectionPricing(connection).kind === 'local' ? 'local' : 'provider billing';
+  return 'API billing';
 }
