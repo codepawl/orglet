@@ -8,7 +8,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-package-'));
-const env = { ...process.env, APPDATA: directory }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, APPDATA: directory, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 let closed = false;
 const launch = async data => {
   const instance = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${data}`], env });

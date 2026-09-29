@@ -9,7 +9,7 @@ import { useVietnamese, openThreadByBrief, archiveCurrentChat } from './smoke-la
 
 const data = await mkdtemp(join(tmpdir(), 'orglet-desktop-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
-const env = { ...process.env, ORGLET_DATA_DIR: data }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, ORGLET_DATA_DIR: data, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 const launch = () => electron.launch({ executablePath: electronPath, args: ['.'], env, timeout: 30_000 });
 let app;
 const errors = [];

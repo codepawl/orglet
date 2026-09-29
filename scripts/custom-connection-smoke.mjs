@@ -96,7 +96,7 @@ const baseUrl = `http://127.0.0.1:${port}/v1`;
 const directory = await mkdtemp(join(tmpdir(), 'orglet-custom-connection-'));
 const output = resolve('test-results');
 await mkdir(output, { recursive: true });
-const env = { ...process.env };
+const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' };
 delete env.ELECTRON_RUN_AS_NODE;
 const errors = [];
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env, timeout: 60_000 });

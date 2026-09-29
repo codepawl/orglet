@@ -15,7 +15,7 @@ for (let i = 0; i < 15; i++) for (const run of ['1', '2']) {
 }
 lines.push('s14,3,private,fixture-score,failed,0,timeout');
 await writeFile(csv, lines.join('\n')); await writeFile(invalid, 'id,score\n1,4\n');
-const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${join(directory, 'data')}`], env });
 let closed = false; app.once('close', () => { closed = true; });
 try {

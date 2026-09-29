@@ -9,7 +9,7 @@ import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-routine-ui-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
-const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 let closed = false;
 const launch = async () => {
   const instance = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });

@@ -65,6 +65,8 @@ export async function isolatedHarnessEnvironment(directory) {
     CLAUDE_CONFIG_DIR: await emptyFolder('claude-config'),
     CURSOR_CONFIG_DIR: await emptyFolder('cursor-config'),
     XDG_CONFIG_HOME: await emptyFolder('xdg-config'),
+    // The empty profile counts as a local install, so the first-run account question does not cover the app (COD-337).
+    ORGLET_SKIP_ACCOUNT_CHOICE: '1',
   };
   // Variables a CLI would treat as a sign-in on their own.
   const signInVariables = [

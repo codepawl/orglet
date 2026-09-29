@@ -11,7 +11,7 @@ import { packagedExecutable } from './packaged-executable.mjs';
 const directory = await mkdtemp(join(tmpdir(), 'orglet-finding-ui-')); const data = join(directory, 'data');
 const text = join(directory, 'evidence.txt'); const csv = join(directory, 'data.csv');
 await writeFile(text, 'Navigation fixture evidence.\nSecond line.'); await writeFile(csv, 'id,value\n1,2\n');
-const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 let closed = true;
 const launch = async () => { const instance = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${data}`], env }); closed = false; instance.once('close', () => { closed = true; }); return instance; };
 let app = await launch();
