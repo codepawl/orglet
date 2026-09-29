@@ -99,6 +99,16 @@ type TokenResponse = z.infer<typeof TokenResponse>;
 /** The token endpoint said no to this grant for good (RFC 6749 §5.2), as opposed to the network failing. */
 class GrantRefused extends Error {}
 
+/**
+ * The registered redirect is `com.codepawl.orglet:/auth/callback`, but the service sends the browser back to
+ * `com.codepawl.orglet://auth/callback`, where URL parsing reads `auth` as the host and `/callback` as the path.
+ * Both forms are the same callback.
+ */
+export function isCallbackPath(url: URL): boolean {
+  const location = `${url.host}${url.pathname}`.replace(/^\/+/, '');
+  return location === 'auth/callback';
+}
+
 type PendingSignIn = {
   state: string;
   verifier: string;
@@ -218,7 +228,7 @@ export class AccountService {
     } catch {
       return false;
     }
-    if (url.protocol.toLowerCase() !== `${ACCOUNT_SCHEME}:` || url.pathname.replace(/^\/+/, '/') !== '/auth/callback') return false;
+    if (url.protocol.toLowerCase() !== `${ACCOUNT_SCHEME}:` || !isCallbackPath(url)) return false;
     const parameters = url.searchParams;
     if (parameters.get('state') !== pending.state) return false;
     // RFC 9207: when the service names itself, it must be the issuer this sign-in went to.

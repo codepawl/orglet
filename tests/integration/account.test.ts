@@ -18,6 +18,7 @@ import {
   ACCOUNT_CLIENT_ID,
   ACCOUNT_REDIRECT_URI,
   ACCOUNT_RESOURCE,
+  ACCOUNT_SCHEME,
   accountsBaseUrl,
   DEFAULT_ACCOUNTS_URL,
   needsAccountChoice,
@@ -236,6 +237,17 @@ describe('starting a sign-in', () => {
     expect((await finished).status).toBe('signed_in');
     // The same link a second time spends nothing.
     expect(account.handleCallback(genuine.toString())).toBe(false);
+  });
+
+  it('finishes on the double-slash callback the real service sends back', async () => {
+    const account = service();
+    const finished = account.signIn();
+    await waitFor(() => opened.length > 0);
+    // accounts.codepawl.com answers with `com.codepawl.orglet://auth/callback`, which parses as host `auth`.
+    const callback = identity.approve(opened.at(-1)!).replace(`${ACCOUNT_SCHEME}:/auth/`, `${ACCOUNT_SCHEME}://auth/`);
+    expect(new URL(callback).host).toBe('auth');
+    expect(account.handleCallback(callback)).toBe(true);
+    expect(await finished).toMatchObject({ status: 'signed_in', email: 'an@example.com' });
   });
 
   it('ignores a callback when no sign-in is in progress', () => {
