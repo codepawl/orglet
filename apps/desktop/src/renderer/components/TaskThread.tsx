@@ -38,6 +38,8 @@ import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
 import type { MentionPerson } from '../../shared/mentions';
 import { teamProgress } from '../../shared/team-progress';
+import { crewPlanDiagram } from '../../shared/crew-plan';
+import { CrewPlanFlow } from './CrewPlanFlow';
 import { changeOutcomeOf, type WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { groupRecoveryAttempts } from '../../shared/recovery-attempts';
 import { AppProposalCards, type ProposalActions } from './AppProposals';
@@ -504,6 +506,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         const stoppedAfter = pausedCrewTurn ? pausedAfter(turn.runs, detail.events) : undefined;
         const pausedAuthor = pausedCrewTurn ? stoppedAfter ?? turn.runs.find(run => run.stage === 'plan') : undefined;
         const waitingAuthor = askingRun ?? pausedAuthor ?? turn.author;
+        // A crew turn's plan as a flow diagram (COD-331); it takes the place of the plain progress lines below.
+        const crewPlan = crewPlanDiagram(turn.runs, detail.artifacts);
         return <div className="chat-turn" key={turn.revision}>
           {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
@@ -574,7 +578,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             </div>}
             {latest && detail.task.status === 'waiting_input' && !pendingDecision && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
             {latest && detail.task.pendingStart && <p role="status">{t('Đã lưu yêu cầu mới. Đang dừng lượt cũ rồi sẽ bắt đầu.')}</p>}
-            {latest && detail.task.status !== 'completed' && <div className="team-progress" role="status">
+            {crewPlan && <CrewPlanFlow diagram={crewPlan} live={latest && busy} statusLabel={statusLabel} />}
+            {latest && detail.task.status !== 'completed' && !crewPlan && <div className="team-progress" role="status">
               {teamProgress(turn.runs, detail.artifacts).map(({ run, waitingFor }) => {
                 const brief = run.snapshot.assignment!.brief;
                 const characters = Array.from(brief.replace(/\s+/g, ' ').trim());
