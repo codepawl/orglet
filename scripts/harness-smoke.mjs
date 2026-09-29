@@ -1,24 +1,21 @@
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
-import { fakeHarnessPath } from './fake-harnesses.mjs';
+import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
 
 const pills = { not_installed: 'Chưa cài', detected: 'Chưa đăng nhập', signed_in_ready: 'Sẵn sàng', signed_in: 'Đã đăng nhập', auth_error: 'Lỗi đăng nhập' };
 const hint = { not_installed: name => `Cài và đăng nhập ${name} trên máy này`, detected: name => `Đăng nhập ${name} trên máy này`, auth_error: name => `Sửa đăng nhập ${name} trên máy này` };
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-harness-ui-'));
 await mkdir('test-results', { recursive: true });
-const bin = await fakeHarnessPath(directory);
-const geminiHome = join(directory, 'gemini-home');
-await mkdir(geminiHome, { recursive: true });
-const pathValue = `${bin}${delimiter}${process.env.PATH ?? process.env.Path ?? ''}`;
-const env = { ...process.env, PATH: pathValue, Path: pathValue, GEMINI_CLI_HOME: geminiHome }; delete env.ELECTRON_RUN_AS_NODE;
-// Variables Gemini CLI would treat as a sign-in on their own; without them the empty folder reads as signed out.
-for (const name of ['GEMINI_API_KEY', 'GOOGLE_GENAI_USE_GCA', 'GOOGLE_GENAI_USE_VERTEXAI', 'GOOGLE_GEMINI_BASE_URL', 'GEMINI_CLI_USE_COMPUTE_ADC', 'CLOUD_SHELL']) delete env[name];
+const { bin, env } = await isolatedHarnessEnvironment(directory);
+// On a developer machine a real, installed CLI can outrank its fake (COD-170). It then runs against an empty config
+// folder, so it must read as signed out, but the fake's own answers (a version, an unreadable login probe) do not apply.
+const usesFake = item => item.executable.toLowerCase().startsWith(bin.toLowerCase());
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
 let closed = false; app.once('close', () => { closed = true; });
 const noDemo = async page => {
@@ -36,18 +33,23 @@ try {
   // Found on PATH with no sign-in in its folder: detected, never ready.
   assert.equal(gemini.auth, 'logged_out');
   assert.equal(gemini.status, 'detected');
-  assert.equal(gemini.version, '0.61.0');
+  if (usesFake(gemini)) assert.equal(gemini.version, '0.61.0');
   // detect ≠ signed-in: fixture Claude Code is found on disk, not logged_in.
   assert.equal(claude.auth, 'logged_out');
   assert.equal(claude.status, 'detected');
-  assert.notEqual(claude.auth, 'logged_in');
   assert.match(claude.version, /\d+\.\d+/);
-  // auth-fail ≠ signed-in: fixture Codex login probe stays unknown, not logged_in.
-  assert.equal(codex.auth, 'unknown');
-  assert.equal(codex.status, 'auth_error');
-  assert.notEqual(codex.auth, 'logged_in');
+  if (usesFake(codex)) {
+    // auth-fail ≠ signed-in: fixture Codex login probe stays unknown, not logged_in.
+    assert.equal(codex.auth, 'unknown');
+    assert.equal(codex.status, 'auth_error');
+  } else {
+    assert.equal(codex.auth, 'logged_out');
+    assert.equal(codex.status, 'detected');
+  }
   assert.match(codex.version, /\d+\.\d+/);
   for (const item of detected) {
+    // The empty config folders leave no harness signed in, fake or real.
+    assert.notEqual(item.auth, 'logged_in', JSON.stringify(item));
     assert.ok(['not_installed', 'detected', 'signed_in', 'auth_error'].includes(item.status), JSON.stringify(item));
     assert.ok(typeof item.loginCommand === 'string' && item.loginCommand.length > 0, JSON.stringify(item));
     if (item.status !== 'not_installed') assert.ok(/\d+\.\d+/.test(item.version), JSON.stringify(item));
@@ -76,8 +78,10 @@ try {
   const codexRow = section.locator('.harness-row', { hasText: 'Codex' });
   await claudeRow.getByText('Chưa đăng nhập', { exact: true }).waitFor();
   assert.equal(await claudeRow.getByText(/^Đã đăng nhập/, { exact: false }).count(), 0);
-  await codexRow.getByText('Lỗi đăng nhập', { exact: true }).waitFor();
-  await codexRow.getByText('không chuyển sang Demo', { exact: false }).waitFor();
+  if (codex.status === 'auth_error') {
+    await codexRow.getByText('Lỗi đăng nhập', { exact: true }).waitFor();
+    await codexRow.getByText('không chuyển sang Demo', { exact: false }).waitFor();
+  }
   assert.equal(await codexRow.getByText(/^Đã đăng nhập/, { exact: false }).count(), 0);
   const geminiRow = section.locator('.harness-row', { hasText: 'Gemini CLI' });
   await geminiRow.getByText('Chưa đăng nhập', { exact: true }).waitFor();
@@ -131,19 +135,24 @@ try {
   await page.keyboard.press('Escape');
   if (await openSidebar.count()) await openSidebar.click();
 
-  const authFailModel = await editResearcher();
-  await authFailModel.click(); await page.getByRole('option', { name: /^Codex/ }).click();
-  await page.getByText('Chạy bằng Codex trên máy', { exact: false }).waitFor();
-  await page.getByRole('button', { name: 'Lưu Tí', exact: true }).click();
-  await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  await noDemo(page);
-  assert.equal(await page.getByText('Giới hạn task', { exact: false }).count(), 0);
-  assert.equal(await send.isDisabled(), true);
-  const authFailHint = hint.auth_error('Codex');
-  await page.getByRole('button', { name: authFailHint, exact: true }).waitFor();
-  await page.getByRole('button', { name: authFailHint, exact: true }).click();
-  await page.getByRole('tab', { name: 'Harness trên máy', exact: true }).waitFor();
-  await page.getByRole('region', { name: 'Harness trên máy' }).getByText('Codex', { exact: true }).waitFor();
+  // The login-probe failure path needs the fake Codex; a real one found first only reads as signed out.
+  if (codex.status === 'auth_error') {
+    const authFailModel = await editResearcher();
+    await authFailModel.click(); await page.getByRole('option', { name: /^Codex/ }).click();
+    await page.getByText('Chạy bằng Codex trên máy', { exact: false }).waitFor();
+    await page.getByRole('button', { name: 'Lưu Tí', exact: true }).click();
+    await page.getByRole('dialog').waitFor({ state: 'hidden' });
+    await noDemo(page);
+    assert.equal(await page.getByText('Giới hạn task', { exact: false }).count(), 0);
+    assert.equal(await send.isDisabled(), true);
+    const authFailHint = hint.auth_error('Codex');
+    await page.getByRole('button', { name: authFailHint, exact: true }).waitFor();
+    await page.getByRole('button', { name: authFailHint, exact: true }).click();
+    await page.getByRole('tab', { name: 'Harness trên máy', exact: true }).waitFor();
+    await page.getByRole('region', { name: 'Harness trên máy' }).getByText('Codex', { exact: true }).waitFor();
+  } else {
+    console.log(`Skipped the Codex login-probe failure path: a real Codex at ${codex.executable} outranks the fake.`);
+  }
 
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ directory, detected: detected.map(({ id, version, auth, status }) => ({ id, version, auth, status })), result: 'passed' }));
