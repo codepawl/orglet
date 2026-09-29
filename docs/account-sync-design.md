@@ -20,7 +20,7 @@ Local-first is the rule in both cases. The SQLite file on each computer stays th
 | **Identity** (one CodePawl account for every CodePawl product) | `accounts.codepawl.com`, a Worker | [Better Auth](https://github.com/better-auth/better-auth) 1.7.x (MIT) on D1 | Covers email + password, emailed codes, Google and GitHub. It can also act as the OAuth/OIDC provider for other CodePawl sites. Free. |
 | **Sync** | `sync.orglet.codepawl.com`, a Worker plus **one Durable Object per account** | Durable Object SQLite storage and hibernating WebSockets | Each account gets its own small, strongly consistent database. It pushes changes to open devices and costs nothing while idle. |
 | **Files** | R2 bucket | Content-addressed blobs, keyed by `sha256` | Keeps big bytes out of the account database. R2 has no egress fees. |
-| **Email** | Cloudflare Email Service, from `codepawl.com` | Already used by codepawl-web for Tacet's sign-in mail | Verification codes, password reset. |
+| **Email** | Resend's free plan while Orglet runs free, then Cloudflare Email Service, from `codepawl.com` | Email Service needs the paid plan; codepawl-web already used it for Tacet's sign-in mail | Verification codes, password reset. |
 | **Web app** (later) | `orglet.codepawl.com/app` | Orglet's renderer components and the shared Zod contracts | Reads and replies through the same sync API. |
 
 The sync server lives in this repository (`services/sync`, AGPL-3.0), so anyone can deploy their own with `wrangler`. The identity service is shared by all CodePawl products, so it lives in its own repository.
@@ -159,6 +159,60 @@ Three things keep it there:
 - **Few indexes on the account database.**
 
 Better Auth is free. Email includes 3,000 messages a month, then $0.35 per 1,000.
+
+## A lean protocol, and running free
+
+The table above assumes a chatty client. The protocol decides the bill more than any price does. These rules apply from phase 3 whatever plan the account is on:
+
+- **Batch pushes.** Collect outbox rows and push at most once every 30 seconds while changes keep coming. Several updates to the same row within a batch collapse into the last one.
+- **Pull only when poked** or when the window gains focus. No polling timer.
+- **Heartbeats cost nothing.** Answer pings with `setWebSocketAutoResponse`, which Cloudflare says neither wakes the object nor bills duration. Let the object hibernate between messages.
+- **Store a batch compactly.** Store a pushed batch as a few rows, not one row per index. Compact a run's activity lines (one `events` row per line today) into one row when the run ends; in-progress lines stay local.
+- **Nothing while the app is closed.** Sync runs only while Orglet is open.
+- **Files on demand.** A file downloads only when it is opened, and there is a per-account cap while free.
+
+Resulting estimate for an active account (assumptions, not measurements):
+
+- About 100 requests and 100 rows written a day.
+- About 5 MB of synced rows; files go to R2.
+
+### On Cloudflare's free plan
+
+Free plan limits, read 2026-09-29. They reset at 00:00 UTC. Past a limit, further operations of that kind fail until the reset.
+
+- **Requests:** Workers 100,000 a day, Durable Objects 100,000 a day.
+- **Durable Objects:** 13,000 GB-s a day, 100,000 rows written a day, 5 GB of SQLite storage in total.
+- **D1:** 100,000 rows written a day, 5 GB.
+- **R2:** 10 GB, 1M Class A and 10M Class B operations a month.
+- **CPU:** 10 ms per request.
+
+With the lean protocol that is room for **roughly 500 to 1,000 accounts active on the same day**. The first ceilings reached are:
+
+- requests and rows written a day;
+- the 5 GB storage total, which is about 5 MB of rows per account at 1,000 accounts.
+
+**Email is not free on Cloudflare**: Email Service sending needs the paid plan. While free, codes go through Resend's free plan (3,000 a month, 100 a day, read 2026-09-29). Codes are sent only for a new address and a sign-in from a new device. Google and GitHub sign-in send no email.
+
+**One risk to measure in phase 0:** password hashing is slow on purpose, and the free plan allows 10 ms of CPU per request. If Better Auth's hash does not fit, either passwords start on the paid plan or the free phase offers codes, Google and GitHub only.
+
+**Staying safe on the free plan:**
+
+- **A quota guard.** The Worker counts the day's requests and rows. Near a limit it tells clients to back off.
+- **Degrade gracefully.** The app keeps working locally and shows "Sync resumes later" instead of failing.
+- **Per-account caps** on synced rows and files.
+
+**Moving to Workers Paid ($5 a month)** comes when any of these happens:
+
+- more than about 400 accounts are active on a day;
+- storage passes 3.5 GB;
+- the email quota bites;
+- password hashing needs more CPU.
+
+With the lean protocol, the paid estimate becomes:
+
+| Active accounts | 1,000 | 10,000 |
+|---|---|---|
+| Estimated monthly cost, lean protocol | about $6 | about $40 |
 
 ## Phases
 
