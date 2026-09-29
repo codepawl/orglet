@@ -18,7 +18,7 @@ Read, in this order, only what the task needs:
 
 [docs/implementation_status.md](docs/implementation_status.md) is the ship/verify record. [docs/handoff.md](docs/handoff.md) and `.agents/plans/` are **historical session notes**, not current contracts — prefer `docs/product.md` and the code.
 
-Orglet is a **local Electron desktop app**: a small team of AI workers (**orglets**, grouped into **crews**) on the user's computer. No Orglet account or server. Chats, orglets and files live in SQLite. Windows is the public 0.2.x target and updates itself from GitHub Releases; macOS packaging exists; Linux is later.
+Orglet is a **local Electron desktop app**: a small team of AI workers (**orglets**, grouped into **crews**) on the user's computer. Today there is no Orglet account or server. Chats, orglets and files live in SQLite. An optional account that syncs between computers is planned (COD-329, [docs/product.md](docs/product.md)); until its design lands, build nothing that assumes it. Windows is the public 0.2.x target and updates itself from GitHub Releases; macOS packaging exists; Linux is later.
 
 ```
 apps/desktop/src/
@@ -118,7 +118,7 @@ Process detail is [CONTRIBUTING.md](CONTRIBUTING.md). Fill [.github/pull_request
 
 ## Do not
 
-- Expand into product.md **Not now** (cloud accounts, org-chart company sim, skill marketplace, scraping model lists).
+- Expand into product.md **Not now** (a cloud runner, account code ahead of the COD-329 design, org-chart company sim, skill marketplace, scraping model lists).
 - Commit `.env`, keys, certificates, or SQLite databases.
 - Claim you tested a live provider, installer, updater or notarized build unless you actually did.
 - "Clean up" unrelated files, regenerate lockfiles without a dependency change, or rephrase docs that are already clear.
