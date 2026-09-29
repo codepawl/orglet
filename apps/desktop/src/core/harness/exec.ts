@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { harnessNames, type HarnessId } from '../../shared/harness';
 import { cleanEnv, commandLine, harnessAccountEnv } from './detect';
 import { ClaudeStreamParser } from './claudeStream';
+import { claudeContextUse } from './context-use';
+import type { RunContextUse } from '../../shared/contracts';
 import { CodexStreamParser } from './codexStream';
 import { geminiArgs, geminiPrompt, geminiRunEnvironment, unescapeAtSigns, writeGeminiLockdown } from './gemini';
 import { GeminiStreamParser, geminiTokens, type GeminiStreamOutcome } from './geminiStream';
@@ -41,6 +43,8 @@ export type HarnessResult = {
   tokens?: { input: number; output: number };
   /** Something the user should know even though the run worked, such as a plan close to its limit. */
   notice?: string;
+  /** How full the context was on the call's last model request, when the CLI says (Claude Code; COD-326). */
+  context?: RunContextUse;
 };
 export type HarnessExecutor = (request: HarnessRequest) => Promise<HarnessResult>;
 export class HarnessError extends Error {}
@@ -175,6 +179,7 @@ export function parseClaudeOutput(stdout: string, rateLimit: ClaudeRateLimitInfo
 
   const costUsd = typeof data.total_cost_usd === 'number' ? data.total_cost_usd : null;
   const notice = claudeLimitWarning(rateLimit) ?? undefined;
+  const context = claudeContextUse(data);
 
   if (data.is_error) {
     const errorText = data.result ?? data.subtype ?? '';
@@ -185,9 +190,9 @@ export function parseClaudeOutput(stdout: string, rateLimit: ClaudeRateLimitInfo
     throw new HarnessError(`Claude Code báo lỗi: ${(errorText || 'không rõ').slice(0, 500)}`);
   }
 
-  if (data.structured_output !== undefined) return { output: data.structured_output, costUsd, notice };
+  if (data.structured_output !== undefined) return { output: data.structured_output, costUsd, notice, ...(context ? { context } : {}) };
   try {
-    return { output: JSON.parse(data.result ?? ''), costUsd, notice };
+    return { output: JSON.parse(data.result ?? ''), costUsd, notice, ...(context ? { context } : {}) };
   } catch {
     throw new HarnessError('Claude Code không trả về báo cáo đúng schema.');
   }

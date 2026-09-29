@@ -1,6 +1,6 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { Children, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { ArrowUp, ChevronRight, ChevronUp, MessageSquarePlus, Plug, Reply, Square, X } from 'lucide-react';
-import type { FolderIntake, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
+import type { FolderIntake, Run, Source, TaskDetail, Worker, Workspace } from '../../shared/contracts';
 import { addToNextMessage } from '../../shared/incoming';
 import { MessageBoxFocus, SourcePicker } from './SourcePicker';
 import { insertMention, mentionOptions, mentionQueryAt } from '../../shared/mentions';
@@ -15,13 +15,18 @@ import { taskWorkers } from '../assignees';
 import { demoWorkerToConnect } from '../chatSettings';
 import { orglet } from '../api';
 import { clearReplyTarget, useReplyTarget } from './messageMarks';
-import { IslandDock } from './islandDock';
+import { IslandDock, useDockedIsland } from './islandDock';
 import { RowMenu } from './RowMenu';
 import { toast } from './toast';
 import { canStartSideThread } from '../../shared/side-threads';
 import { keepDraft, readDraft, taskDraftKey } from '../drafts';
 import { overflowAttributes, useStripOverflow } from '../stripOverflow';
 import { ComposerPermissionHint, type PermissionHintControls } from '../permissionHints';
+import type { HarnessInfo } from '../../shared/harness';
+import { useComposerUsage } from '../planUsage';
+import { PlanUsageNote, UsageRing } from './PlanUsage';
+import { latestContextUse, usageRingFor } from '../../shared/composer-usage';
+import { Skeleton } from '@codepawl/orglet-ui';
 
 const SINGLE_LINE = 40;
 
@@ -309,6 +314,50 @@ export function DemoNote({ someOnDemo, preflight, onConnect }: { /** Only some o
   </div>;
 }
 
+/** What a message box's foot shows for plan usage and context (COD-326); see `usePlanUsageBar`. */
+export type UsageFoot = { ring?: ReactNode; note?: ReactNode; out: boolean };
+
+/**
+ * Plan usage and context under a message box (COD-326): the ring at the right end of the row under the bar, and the
+ * line in that row from 80% of a plan allowance on. Once the account is out, that line comes before a permission
+ * hint, since nothing would run; nearly out, it gives way to one. The island already says the account is out after a
+ * run stopped on it (COD-225), so the line waits while it does. Switching selects the other account, as Settings
+ * would; the next message runs on it. `runs` is the chat's, for the context window of its latest run.
+ */
+export function usePlanUsageBar({ providers, harnesses, running, runs, contextNamed, action, openSettings }: {
+  providers: readonly string[];
+  harnesses: readonly HarnessInfo[] | undefined;
+  running: boolean;
+  runs?: readonly Run[];
+  contextNamed?: boolean;
+  action: (fn: () => Promise<unknown>) => void;
+  openSettings: () => void;
+}): UsageFoot {
+  const { view: usage, loading } = useComposerUsage(providers, harnesses, running);
+  const island = useDockedIsland();
+  const context = runs ? latestContextUse(runs) : undefined;
+  const ring = usageRingFor(usage, context)
+    ? <UsageRing plans={usage} context={context} contextNamed={contextNamed} onOpenSettings={openSettings} />
+    : loading ? <span className="usage-ring-waiting" aria-hidden="true"><Skeleton shape="circle" width={16} height={16} /></span> : undefined;
+  if (!usage) return { ring, out: false };
+  const switchAccount = (harness: HarnessInfo, accountId: string) => action(() => orglet.call('selectHarnessAccount', { harness: harness.id, id: accountId }));
+  const out = usage.shown.tone === 'out';
+  const noteShown = usage.shown.tone !== 'normal' && !(out && island?.kind === 'account');
+  return { ring, note: noteShown ? <PlanUsageNote usage={usage} onSwitch={switchAccount} /> : undefined, out };
+}
+
+/**
+ * The row under a message box (COD-326): its one line in the middle (what to do first, a plan nearly out, a permission
+ * hint) and the usage ring at the right end, where the Claude app keeps it. An empty row takes no room.
+ */
+export function ComposerFoot({ ring, children }: { ring?: ReactNode; children?: ReactNode }) {
+  if (!ring && Children.toArray(children).length === 0) return null;
+  return <div className="composer-foot">
+    <div className="composer-foot-lines">{children}</div>
+    {ring}
+  </div>;
+}
+
 /**
  * Follow-up bar under a task: the next message of a chat that already has one. It carries the files the latest
  * message had, plus any added here with + (or sent from Explorer), which sit on the bar as cards the way an empty
@@ -317,7 +366,7 @@ export function DemoNote({ someOnDemo, preflight, onConnect }: { /** Only some o
  * `onPrefilled` lets the caller forget it once it is in. What is typed and added but not sent stays with the chat
  * across restarts (COD-257, `drafts.ts`), so leaving the chat and coming back finds it on the bar.
  */
-export function FollowUpComposer({ detail, workspace, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel, permissionHint }: { detail: TaskDetail; workspace: Workspace; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void; /** Offers a permission the message seems to need (COD-305), when Tacet is on this computer. */ permissionHint?: PermissionHintControls }) {
+export function FollowUpComposer({ detail, workspace, harnesses, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel, permissionHint }: { detail: TaskDetail; workspace: Workspace; /** Which account each harness runs, for the plan usage by the bar (COD-326). */ harnesses?: readonly HarnessInfo[]; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void; /** Offers a permission the message seems to need (COD-305), when Tacet is on this computer. */ permissionHint?: PermissionHintControls }) {
   const draftKey = taskDraftKey(detail.task.id);
   const [text, setText] = useState(() => readDraft(draftKey)?.text ?? '');
   // Files added for the next message, and what could not be added with the reason, as in the empty chat.
@@ -346,6 +395,7 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
   const reply = selectedReply?.taskId === detail.task.id ? selectedReply : undefined;
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0 || Boolean(readOnly);
+  const planUsage = usePlanUsageBar({ providers: workers.map(worker => worker.provider), harnesses, running: busy, runs: detail.runs, contextNamed: workers.length > 1, action, openSettings: () => openSettings('harness') });
   // An MCP approval card is answered with its buttons; typing sends a new message instead (COD-241).
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt && !request.approval);
   /**
@@ -456,10 +506,14 @@ export function FollowUpComposer({ detail, workspace, ready, openSettings, openC
       attachments={added.sources} onRemoveAttachment={removeFile}
       leading={<SourcePicker disabled={Boolean(readOnly)} onFiles={() => action(async () => addFiles({ sources: await orglet.pickSources(), skipped: [] }))} onFolder={() => action(async () => addFiles(await orglet.pickFolder()))} />} />
     <SkippedFiles items={added.skipped} />
+    <ComposerFoot ring={planUsage.ring}>
     {readOnly && <p className="composer-note" role="status">{readOnly.note}{readOnly.action && <button type="button" onClick={readOnly.action.onSelect}>{readOnly.action.label}</button>}</p>}
     {!busy && !readOnly && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
     {!readOnly && !blocked && demoWorker && onConnectModel && <DemoNote someOnDemo={providers.length > 0 ? demoWorker.name : undefined} preflight={providers.length === 0 && Boolean(team?.preflight)} onConnect={() => onConnectModel(demoWorker)} />}
     {/* One line under the bar at most: a note above says what to do first. */}
-    {permissionHint && <ComposerPermissionHint text={text} controls={{ ...permissionHint, enabled: permissionHint.enabled && !readOnly && !blocked && !demoWorker }} />}
+    {!readOnly && !blocked && !demoWorker && (planUsage.out || !permissionHint) && planUsage.note}
+    {permissionHint && !planUsage.out && <ComposerPermissionHint text={text} controls={{ ...permissionHint, enabled: permissionHint.enabled && !readOnly && !blocked && !demoWorker }}
+      fallback={!readOnly && !blocked && !demoWorker ? planUsage.note : undefined} />}
+    </ComposerFoot>
   </div>;
 }

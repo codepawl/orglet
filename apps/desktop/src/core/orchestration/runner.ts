@@ -11,7 +11,7 @@ import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
 import { assertToolCall, mcpToolOf, mcpToolsOffered, offeredToolNames, toolCallProblem, type ToolCallProblem, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, reactionsAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, REACTION_NUDGE, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
 import { z } from 'zod';
-import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type RunContextUse, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
 import { BudgetLedger, BudgetError, cost } from '../budgets/ledger';
 import { Sources, fingerprint, imageWithheldMessage, unreadableSourceMessage } from '../tools/sources';
@@ -22,7 +22,7 @@ import { harnessSeesImages, modelSeesImages } from '../models/image-input';
 import type { MessageImage, ModelAdapter, RunMessage } from '../adapters/openai';
 import { ProviderRequestError } from '../adapters/opencode';
 import { assertOpenCodeModel, isOpenCodePlan } from '../../shared/opencode';
-import { readModelListCache } from '../models/cache';
+import { modelContextTokens, readModelListCache } from '../models/cache';
 import { resolveWorkerModel } from '../models/resolve';
 import { ProfileArgs, type ProfileRecord } from '../../shared/profiles';
 import type { PreflightRecord } from '../../shared/preflight';
@@ -1091,6 +1091,7 @@ export class Runner {
             ...(harness.configDir ? { configDir: harness.configDir } : {}),
             ...(run.snapshot.model ? { model: run.snapshot.model } : {}) },
           onResult: result => {
+            if (result.context) run = { ...run, contextUse: result.context };
             checkpoint = result.costUsd === null
               ? { ...checkpoint, harnessCallsWithoutCost: (checkpoint.harnessCallsWithoutCost ?? 0) + 1 }
               : { ...checkpoint, harnessCostMicros: addHarnessCost(checkpoint.harnessCostMicros, result.costUsd) };
@@ -1240,6 +1241,7 @@ export class Runner {
               try {
                 reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation));
                 reply = sanitizeReportReply(run, reply);
+                if (reply.usage && !isHarness(run.snapshot.worker.provider) && run.snapshot.worker.provider !== 'demo') run = { ...run, contextUse: this.apiContextUse(run, reply.usage.input) };
                 if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
                 else ledger.unknown(reservation, 'missing_usage');
                 this.checkpoints.received(checkpoint, reply);
@@ -1691,6 +1693,15 @@ export class Runner {
    * The limitations the crew runner handed in, plus one line for each teammate whose result is what it had when its
    * steps ran out, so the crew's answer says so whatever the lead writes (COD-256). Only the combining step gets these.
    */
+  /**
+   * How full the context was on an API run's latest request (COD-326): the prompt tokens the provider billed, and the
+   * window when the provider's model list gives one (OpenRouter today). A window nobody reported stays unknown.
+   */
+  private apiContextUse(run: Run, promptTokens: number): RunContextUse {
+    const windowTokens = modelContextTokens(readModelListCache(this.store), run.snapshot.worker.provider, run.snapshot.model);
+    return { usedTokens: Math.max(0, Math.round(promptTokens)), ...(windowTokens ? { windowTokens } : {}) };
+  }
+
   private crewLimitations(run: Run, options: { upstream?: Artifact[]; limitations?: string[] }) {
     const given = options.limitations ?? [];
     if (run.stage !== 'synthesis') return given;
@@ -2013,6 +2024,7 @@ export class Runner {
       }
       for (const capability of run.snapshot.toolCapabilities ?? []) assertCapability(run, this.store.get<Task>('tasks', task.id), capability);
       if (result.notice) this.event(run.id, result.notice);
+      if (result.context) run = { ...run, contextUse: result.context };
       signal.throwIfAborted();
       this.event(run.id, harnessReplyLine(tool.name, result));
       const readIds = new Set([...given.map(item => item.sourceId), ...scope.checkedSourceIds]);

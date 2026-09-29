@@ -15,6 +15,13 @@ export function readModelListCache(store: Store): ModelListCache {
   return parsed.data;
 }
 
+/** The context window a provider's list gives for a model, by id or alias; undefined when the list does not say (COD-326). */
+export function modelContextTokens(cache: ModelListCache, provider: string, modelId: string | undefined): number | undefined {
+  if (!modelId) return undefined;
+  const row = cache.byProvider[provider as ModelListProvider];
+  return row?.models.find(entry => entry.id === modelId || entry.aliases?.includes(modelId))?.contextTokens;
+}
+
 export function writeModelListCache(store: Store, cache: ModelListCache) {
   store.setSetting(MODEL_LISTS_SETTING, cache);
 }

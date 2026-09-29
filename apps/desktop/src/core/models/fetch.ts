@@ -211,6 +211,12 @@ function openrouterText(architecture: unknown): boolean {
   return typeof rec.modality !== 'string' || rec.modality.includes('text');
 }
 
+/** OpenRouter's `context_length`: a whole number of tokens, or nothing (COD-326). */
+function openrouterContext(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0 || value > 100_000_000) return undefined;
+  return value;
+}
+
 function openrouterTenths(price: unknown): number | undefined {
   const n = typeof price === 'string' ? Number(price) : typeof price === 'number' ? price : NaN;
   if (!Number.isFinite(n) || n <= 0) return undefined;
@@ -225,7 +231,7 @@ export function parseOpenRouterModels(payload: unknown): ModelEntry[] {
   const seen = new Set<string>();
   for (const row of data) {
     if (!row || typeof row !== 'object') continue;
-    const rec = row as { id?: unknown; name?: unknown; pricing?: unknown; architecture?: unknown };
+    const rec = row as { id?: unknown; name?: unknown; pricing?: unknown; architecture?: unknown; context_length?: unknown };
     if (!openrouterText(rec.architecture)) continue;
     const id = pickId(rec.id);
     if (!id || seen.has(id)) continue;
@@ -234,6 +240,7 @@ export function parseOpenRouterModels(payload: unknown): ModelEntry[] {
     const pricing = rec.pricing && typeof rec.pricing === 'object' ? rec.pricing as { prompt?: unknown; completion?: unknown } : undefined;
     const inputTenths = pricing ? openrouterTenths(pricing.prompt) : undefined;
     const outputTenths = pricing ? openrouterTenths(pricing.completion) : undefined;
+    const contextTokens = openrouterContext(rec.context_length);
     models.push({
       provider: 'openrouter',
       id,
@@ -242,6 +249,7 @@ export function parseOpenRouterModels(payload: unknown): ModelEntry[] {
       ...(inputTenths !== undefined ? { inputTenths } : {}),
       ...(outputTenths !== undefined ? { outputTenths } : {}),
       ...(listsImageInput(rec) ? { imageInput: true as const } : {}),
+      ...(contextTokens ? { contextTokens } : {}),
     });
     if (models.length >= MODEL_LIST_MAX) break;
   }

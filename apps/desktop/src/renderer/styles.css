@@ -580,9 +580,40 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer-note button { border:0; background:transparent; color:var(--text); text-decoration:underline; margin-left:6px; }
 /* The Demo line under a message box (DemoNote, COD-293): the muted sentence and a small outline "Connect a model"
    centred on one line, wrapping under each other only when the column is too narrow for both. */
-.demo-note { margin:10px 0 0; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 10px; color:var(--muted); font-size:12px; }
-.demo-note p { margin:0; text-align:center; }
-.demo-note .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
+/* The row under a message box (ComposerFoot, COD-326): its one line centred under the bar, and the usage ring at the
+   right end, centred under the send button. The line's own top margin gives way to the row's. */
+.composer-foot { display:grid; grid-template-columns:28px minmax(0,1fr) 28px; column-gap:8px; align-items:center; min-height:28px; margin-top:6px; padding:0 10px; }
+.composer-foot-lines { grid-column:2; min-width:0; }
+.composer-foot-lines > .composer-note, .composer-foot-lines > .demo-note, .composer-foot-lines > .usage-note { margin:0; }
+.composer-foot > .usage-ring, .composer-foot > .usage-ring-waiting { grid-column:3; }
+/* The ring's place while the first usage read is on its way, so the bar does not move when it lands. */
+.usage-ring-waiting { display:grid; place-items:center; width:28px; height:28px; }
+/* The usage ring (UsageRing): a 16px ring filled as far as the closest limit, muted until 80%, then the warning
+   colour, then the error colour. It is a button that opens the details; hover darkens it, nothing else. */
+.usage-ring { display:grid; place-items:center; width:28px; height:28px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--muted); cursor:pointer; }
+.usage-ring:hover, .usage-ring[aria-expanded=true] { color:var(--text); }
+.usage-ring[data-tone=warning] { color:var(--warning); }
+.usage-ring[data-tone=out] { color:var(--error); }
+.usage-ring-glyph { display:block; }
+.usage-ring-track { fill:none; stroke:currentColor; stroke-width:2; opacity:.25; }
+.usage-ring-fill { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
+/* The details above the ring: the context window, each plan's allowances in Settings' rows, and the way to Settings.
+   Sections sit apart by spacing, never a line. */
+.usage-details { width:min(420px, calc(100vw - 24px)); padding:14px 16px; display:flex; flex-direction:column; gap:16px; color:var(--text); font-size:12px; }
+.usage-section { display:flex; flex-direction:column; gap:6px; }
+.usage-heading { margin:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; line-height:18px; }
+.usage-heading strong { font-size:13px; font-weight:600; }
+.usage-heading span { color:var(--muted); }
+.usage-figure { margin:0; font-variant-numeric:tabular-nums; line-height:16px; }
+.usage-muted { margin:0; color:var(--muted); line-height:16px; }
+.usage-section .plan-usage { margin:0; }
+.usage-details .usage-settings { align-self:flex-start; min-height:28px; padding:0 10px; font-size:12px; }
+/* The same line says when a harness account is nearly or wholly used, with the account that has room (PlanUsageNote, COD-326). */
+.demo-note, .usage-note { margin:10px 0 0; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 10px; color:var(--muted); font-size:12px; }
+.demo-note p, .usage-note p { margin:0; text-align:center; }
+.demo-note .org-button, .usage-note .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
+.usage-note[data-tone=warning] p { color:var(--warning); }
+.usage-note[data-tone=out] p { color:var(--error); }
 /* The permission a message seems to need (PermissionHint, COD-305): the control's own icon, the sentence, a link that
    takes the step, and a small ✕, centred on one line and wrapping only when the column is too narrow. */
 .composer-note.permission-hint { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px 6px; }

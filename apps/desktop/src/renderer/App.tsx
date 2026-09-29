@@ -24,7 +24,7 @@ import { ArchivedList, ArchivedRow, type ArchiveState } from './components/Sideb
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
-import { Composer, DemoNote, FollowUpComposer, SkippedFiles, restoreUnsent, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
+import { Composer, ComposerFoot, DemoNote, FollowUpComposer, SkippedFiles, restoreUnsent, usePlanUsageBar, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
@@ -681,6 +681,8 @@ export function App() {
   const groupWorkers = groupChat ? groupChat.workerIds.map(id => workspace?.workers.find(item => item.id === id)).filter((item): item is Worker => Boolean(item)) : [];
   const group = groupChat && groupWorkers.length === groupChat.workerIds.length ? groupChat : undefined;
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : group ? groupWorkers : worker ? [worker] : [];
+  // Plan usage by the empty chat's bar (COD-326); an open chat's bar reads its own through FollowUpComposer.
+  const emptyChatUsage = usePlanUsageBar({ providers: selected ? [] : executionWorkers.map(item => item.provider), harnesses, running: false, action, openSettings: () => openSettings('harness') });
   /**
    * An orglet's or crew's chat is its one live row. When that row starts somewhere other than this composer (the
    * `orglet` terminal command) while the empty chat is on screen, the view switches to it, so a question it asks,
@@ -1542,7 +1544,8 @@ export function App() {
     ? <p className="composer-note">{t('Cần kết nối trước khi gửi.')}<button onClick={() => openSettings(settingsTabFor(missingConnections))}>{missingConnections.map(provider => setupHint(provider, harnesses)).join(t(' và '))}</button></p>
     : emptyChatDemoWorker
       ? <DemoNote someOnDemo={isDemo ? undefined : emptyChatDemoWorker.name} preflight={isDemo && Boolean(team?.preflight)} onConnect={() => connectModel(emptyChatDemoWorker)} />
-      : emptyChatHint ? <ComposerPermissionHint text={brief} controls={emptyChatHint} /> : null;
+      : emptyChatUsage.out ? emptyChatUsage.note
+      : emptyChatHint ? <ComposerPermissionHint text={brief} controls={emptyChatHint} fallback={emptyChatUsage.note} /> : emptyChatUsage.note ?? null;
   return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsPane.width}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
@@ -1623,7 +1626,7 @@ export function App() {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
-      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} onConnectModel={connectModel} permissionHint={chatHint(detail)} /></> : <ThreadSkeleton />}</> : (team || group || worker) ? <div className="team-chat team-chat-fresh">
+      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} harnesses={harnesses} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} onConnectModel={connectModel} permissionHint={chatHint(detail)} /></> : <ThreadSkeleton />}</> : (team || group || worker) ? <div className="team-chat team-chat-fresh">
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">
@@ -1640,7 +1643,7 @@ export function App() {
           <h1 className="welcome">{t('Đang nhắn với {0}', [chatName])}</h1>
           <div className="thread-composer">
             {composerBar}
-            {composerHint}
+            <ComposerFoot ring={emptyChatUsage.ring}>{composerHint}</ComposerFoot>
             <SkippedFiles items={skippedSources} />
           </div>
           <Starters starters={starters} onPick={pickStarter}

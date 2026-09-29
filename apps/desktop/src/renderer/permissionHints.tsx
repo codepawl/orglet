@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { PermissionState } from '../shared/capability-status';
 import { hintKind, missingNeed, PERMISSION_NEEDS_MIN_CHARS, type PermissionHintKind, type PermissionNeed } from '../shared/permission-needs';
 import { orglet } from './api';
@@ -73,12 +73,15 @@ export type PermissionHintControls = {
   onApply: (need: PermissionNeed) => void;
 };
 
-/** The hint line for the text in a message box, or nothing. */
-export function ComposerPermissionHint({ text, controls }: { text: string; controls: PermissionHintControls }) {
+/**
+ * The hint line for the text in a message box, or `fallback` when there is no hint: a line that matters less than a
+ * permission the message is about to need, such as a plan nearly used up (COD-326).
+ */
+export function ComposerPermissionHint({ text, controls, fallback }: { text: string; controls: PermissionHintControls; fallback?: ReactNode }) {
   const needs = usePermissionNeeds(text, controls.enabled);
   const [dismissed, dismiss] = useDismissedHints(controls.chatKey);
   const need = missingNeed(needs, controls.permissions, dismissed);
-  if (!need) return null;
+  if (!need) return fallback ?? null;
   return <PermissionHint need={need} folder={controls.permissions.workspace} disabled={controls.busy}
     onApply={() => controls.onApply(need)} onDismiss={() => dismiss(hintKind(need))} />;
 }

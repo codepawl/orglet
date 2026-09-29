@@ -98,6 +98,7 @@ sunsetAt        ISO date only when native (`shutdown_date`)
 replacementId   optional (Codex `upgrade`)
 inputTenths     optional; xAI and OpenRouter native prices
 outputTenths    optional; same
+contextTokens   optional; OpenRouter's `context_length` (COD-326: the context window under the message box)
 source          native | alias | catalog-hint
 ```
 

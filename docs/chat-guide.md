@@ -1,6 +1,6 @@
 # In a chat
 
-What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, keep typing from the keyboard, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
+What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, keep typing from the keyboard, see how much of a plan and of the context is used, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
@@ -36,6 +36,22 @@ The names are GitHub's, which Slack and Discord mostly share. The menu only open
 - After you pick files or a folder with **+**, the cursor is back in the message box.
 - Opening **Details** moves the keyboard into the panel. Its close button or **Escape** puts you back where you were.
 - Closing Settings, a viewer or any other window with **Escape** puts you back on the button that opened it.
+
+## Usage and context
+
+Under the message box, at the right end, a small ring shows how close the chat is to a limit: the orglet's subscription plan (Claude Code or Codex) or the model's context window, whichever is closer. It stays grey until 80%, turns amber from 80%, and red at 100%.
+
+Click the ring to see what it is made of:
+
+- **Context window**: how many tokens the orglet's latest answer sent to the model, out of how many the model holds ("304.3k / 1M (30%)"), and how Orglet trims a long chat. Each message sends up to the last 10 turns word for word; older turns are folded into a short summary.
+- **Plan usage limits**: each allowance of the plan, with how much is used and when it resets, and which account it is. If Orglet could not read fresh numbers, for example because Claude Code's sign-in renews only when it runs, you see the last numbers with their time (**Figures as of 07:05**).
+- **View details** opens **Settings → Harness**.
+
+From 80% of a plan allowance, a line next to the ring says how much is used and when it resets. At 100%, the line says the plan ran out. If another account of the same app has room, the line offers it (**Use Work · 70% left**). Clicking it switches that app to the other account for every orglet, as **Settings → Harness** would. Nothing is sent until you send it.
+
+In a crew or group chat, the ring follows the account closest to its limit among the orglets in the chat, and the details list each app.
+
+The ring shows only what a provider reported. Codex does not report its context use, so a Codex chat shows its plan only. An API model shows the ring once it has answered and its model list gives a context window (OpenRouter today). Nothing shows for Demo, Cursor Agent or Gemini CLI.
 
 ## Side threads
 
