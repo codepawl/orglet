@@ -214,12 +214,30 @@ With the lean protocol, the paid estimate becomes:
 |---|---|---|
 | Estimated monthly cost, lean protocol | about $6 | about $40 |
 
+## Plans and billing
+
+The account is free, and Orglet stays free and open source. Paid things come later, in this order:
+
+1. The model router and a model subscription.
+2. Extras that cost real infrastructure: a cloud runner, phone push, files and history beyond the free caps.
+
+Commercial licenses for companies are sold outside the app.
+
+These go in from phase 1 so that turning something paid on later needs no migration:
+
+- **`plan` on the account** in the identity database: `free` today. Later values name what was bought, such as `router` or `plus`.
+- **`entitlements`**: a small list the sync server and the app read, such as `{ syncStorageMb, fileStorageMb, historyDays, devices, push, cloudRunner }`, together with the time they were computed. Limits are always read from entitlements and never hard-coded against a plan name, so a new plan is a data change.
+- **The app** receives entitlements with its access token. When a limit is reached it shows the limit in plain words. It never locks local data; only sync stops growing.
+- **A billing hook**: one webhook endpoint on `accounts.codepawl.com` that a payment provider calls. It updates `plan` and recomputes entitlements. Polar is the first candidate (codepawl-web used it for Tacet; whether it still accepts this seller needs re-checking). No card data ever touches CodePawl's servers.
+
+Free entitlements start at the caps the free Cloudflare plan allows (see above).
+
 ## Phases
 
 | Phase | What | Proves |
 |---|---|---|
 | **0. Spike** (a few days) | Better Auth on Workers + D1 with the Electron browser sign-in. One Durable Object doing push, pull and poke for a toy table between two computers. | The two riskiest parts: Better Auth has no first-party Workers guide, and DO sync under real latency. |
-| **1. Identity** | `accounts.codepawl.com`, the first-run chooser, sign in and out, the account page. No sync yet. | Accounts work end to end. |
+| **1. Identity** | `accounts.codepawl.com`, the first-run chooser, sign in and out, the account page, `plan` and `entitlements` (all `free`), the billing webhook stubbed. No sync yet. | Accounts work end to end. |
 | **2. Change log** | The schema changes above, HLC, outbox, local-only switches. Tested with two SQLite files merging, no server. | The merge rules are right before any network. |
 | **3. Sync** | `services/sync`, push/pull/poke, first upload, second-computer download, tombstones, R2 files, encryption at rest. | Two computers stay in step, offline included. |
 | **4. Account life** | Merge or replace on a second computer, delete account, conflict view in revisions, rate limits, audit log. | People can leave cleanly. |
