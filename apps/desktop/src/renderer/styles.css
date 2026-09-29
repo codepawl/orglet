@@ -720,6 +720,20 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .startup-copy .welcome { margin-bottom:0; }
 .startup-copy p { margin:0; max-width:40ch; color:var(--muted); text-wrap:balance; }
 .startup-copy .org-button { margin-top:6px; }
+/* The first-run account question (COD-337): one rounded panel on the window background, like the main pane, with a
+   centred column: the startup screen's orglet, a title, then each choice as a full-width button with its one sentence
+   directly under it. The choices sit apart by spacing only. */
+.account-choice-screen { box-sizing:border-box; display:grid; height:100dvh; padding:var(--shell-gap); background:var(--window); }
+.account-choice { min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; overflow:auto; padding:32px 16px; background:var(--bg); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); }
+.account-choice:focus { outline:none; }
+.account-choice-body { width:min(340px, 100%); display:flex; flex-direction:column; align-items:center; animation:turn-in var(--motion-base) var(--ease-out); }
+.account-choice .welcome { margin:0 0 28px; text-wrap:balance; }
+.account-choice-options { width:100%; display:flex; flex-direction:column; gap:22px; }
+.account-choice-option { display:flex; flex-direction:column; gap:8px; }
+.account-choice-option .org-button { width:100%; min-height:40px; }
+.account-choice-option p, .account-choice-waiting p { margin:0; color:var(--muted); font-size:13px; line-height:1.45; text-align:center; text-wrap:balance; }
+.account-choice-option p.error { color:var(--error); }
+.account-choice-waiting { display:flex; flex-direction:column; align-items:center; gap:16px; }
 .row-shape { display:flex; align-items:center; gap:8px; padding:7px 10px 7px 12px; font-size:13px; }
 .row-shape-face { width:22px; height:22px; border-radius:6px; flex-shrink:0; }
 /* The conversation on its way in: where the message and the answer are about to be, not a sentence about waiting. */
