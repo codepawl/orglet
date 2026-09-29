@@ -134,6 +134,23 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   // Each PDF is read in a worker thread built next to this file, so one slow or hostile file cannot stall the core.
 }, pdfTextInWorker(join(__dirname, 'pdf-text.js')), { readKey: requestSearchKey }, browserHost, desktopHelper, [basename(process.execPath).toLowerCase()]);
 core.runner.onProgress = update => port.postMessage({ type: 'progress', update });
+// Main draws the glow while an orglet controls a desktop app (COD-261); the core only says when and where. Main says
+// once it is on screen, which a borrow waits for before its first input; no answer means the helper shows its own notice.
+const overlayShown = new Map<string, () => void>();
+const OVERLAY_SHOWN_WAIT_MS = 1_500;
+if (desktopHelper) core.desktop.showOverlayWith(state => new Promise<boolean>(resolve => {
+  const overlayId = crypto.randomUUID();
+  const timer = setTimeout(() => {
+    overlayShown.delete(overlayId);
+    resolve(false);
+  }, OVERLAY_SHOWN_WAIT_MS);
+  overlayShown.set(overlayId, () => {
+    clearTimeout(timer);
+    overlayShown.delete(overlayId);
+    resolve(true);
+  });
+  port.postMessage({ type: 'desktopOverlay', id: overlayId, state });
+}));
 core.runner.onCliProgress = update => port.postMessage({ type: 'cliProgress', update });
 store.onActivity = activity => port.postMessage({ type: 'activity', activity });
 // Tacet (COD-303): downloaded only when the person asks, and run in its own worker thread built next to this file.
@@ -155,6 +172,7 @@ port.on('message', async ({ data }) => {
   if (!envelope.success) return;
   const { id, command, args } = envelope.data;
   if (command === 'profileReply') { pendingProfiles.get(id)?.(args); return; }
+  if (command === 'overlayShown') { overlayShown.get(String(args))?.(); return; }
   if (command === 'browserReply') {
     const complete = pendingBrowser.get(id);
     pendingBrowser.delete(id);
