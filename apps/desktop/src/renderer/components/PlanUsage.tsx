@@ -1,7 +1,11 @@
+import { useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
-import type { HarnessBankedResets, HarnessUsageWindow } from '../../shared/harness';
+import { contextPercent, usageRingFor, type ChatContextUse, type ComposerUsage, type HarnessPlan } from '../../shared/composer-usage';
+import { THREAD_VERBATIM_TURNS } from '../../shared/thread-limits';
+import { SYSTEM_ACCOUNT_ID, type HarnessBankedResets, type HarnessInfo, type HarnessUsageWindow } from '../../shared/harness';
 import { currentLocale, t } from '../i18n';
 import { Button } from './ui';
+import { AnchoredPopover } from './AnchoredPopover';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -82,6 +86,126 @@ export function BankedResets({ resets, claiming, onClaim }: { resets: HarnessBan
     <span>{bankedResetsLabel(resets)}</span>
     {onClaim && <Button type="button" variant="outline" disabled={claiming} onClick={onClaim}>
       <RotateCcw size={14} aria-hidden="true" />{claiming ? t('Đang dùng lượt reset…') : t('Dùng một lượt reset')}
+    </Button>}
+  </div>;
+}
+
+/** How the account picker names an account: its label, or the default account's name. */
+export function harnessAccountLabel(harness: Pick<HarnessInfo, 'accounts'>, accountId: string) {
+  if (accountId === SYSTEM_ACCOUNT_ID) return t('Tài khoản mặc định');
+  return harness.accounts.find(account => account.id === accountId)?.label ?? t('Tài khoản mặc định');
+}
+
+/** Whose plan it is, as one line: the account's name when there are several, and the address. */
+function planAccountLine(plan: HarnessPlan) {
+  const named = plan.harness.accounts.length > 0 ? harnessAccountLabel(plan.harness, plan.harness.accountId) : undefined;
+  return [named, plan.usage.email].filter(Boolean).join(' · ');
+}
+
+const RING_RADIUS = 6;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+
+/** A ring filled as far as the closest limit is used, drawn in the button's own colour. */
+function UsageRingGlyph({ percent }: { percent: number }) {
+  const filled = (Math.min(100, Math.max(0, percent)) / 100) * RING_LENGTH;
+  return <svg className="usage-ring-glyph" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <circle cx="8" cy="8" r={RING_RADIUS} className="usage-ring-track" />
+    <circle cx="8" cy="8" r={RING_RADIUS} className="usage-ring-fill" strokeDasharray={`${filled} ${RING_LENGTH}`} transform="rotate(-90 8 8)" />
+  </svg>;
+}
+
+/** Tokens the way people read them: 950, 33.4k, 1M. */
+export function formatTokens(tokens: number) {
+  const format = (value: number, suffix: string) => `${new Intl.NumberFormat(currentLocale(), { maximumFractionDigits: 1 }).format(value)}${suffix}`;
+  if (tokens >= 1_000_000) return format(tokens / 1_000_000, 'M');
+  if (tokens >= 1_000) return format(tokens / 1_000, 'k');
+  return format(tokens, '');
+}
+
+/** What Orglet sent of the chat on that run: the latest turns word for word, older ones as a summary (`core/context/thread.ts`). */
+function compactionLine(context: ChatContextUse) {
+  if (context.summarizedTurns > 0) return t('Lần gần nhất gửi nguyên văn {0} lượt; {1} lượt cũ hơn đã gộp thành tóm tắt.', [context.verbatimTurns ?? 0, context.summarizedTurns]);
+  return t('Mỗi tin nhắn gửi nguyên văn tối đa {0} lượt gần nhất; lượt cũ hơn được gộp thành tóm tắt.', [THREAD_VERBATIM_TURNS]);
+}
+
+function ContextSection({ context, named }: { context: ChatContextUse; named: boolean }) {
+  const percent = Math.round(contextPercent(context));
+  const title = named ? t('Cửa sổ ngữ cảnh · {0}', [context.workerName]) : t('Cửa sổ ngữ cảnh');
+  return <section className="usage-section" aria-label={title}>
+    <p className="usage-heading"><strong>{title}</strong></p>
+    <p className="usage-figure">{t('{0} / {1} ({2}%)', [formatTokens(context.usedTokens), formatTokens(context.windowTokens), percent])}</p>
+    <span className="plan-usage-bar" role="meter" aria-label={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={t('Đã dùng {0}%', [percent])}>
+      <span data-tone={usageTone(percent)} style={{ width: `${percent}%` }} />
+    </span>
+    <p className="usage-muted">{compactionLine(context)}</p>
+  </section>;
+}
+
+function PlanSection({ plan, now }: { plan: HarnessPlan; now?: Date }) {
+  const title = plan.usage.plan ? t('Hạn mức gói · {0}', [plan.usage.plan]) : t('Hạn mức gói');
+  const account = [plan.harness.name, planAccountLine(plan)].filter(Boolean).join(' · ');
+  return <section className="usage-section" aria-label={`${title} · ${plan.harness.name}`}>
+    <p className="usage-heading"><strong>{title}</strong><span>{account}</span></p>
+    <PlanUsage windows={plan.usage.windows} label={t('Hạn mức gói {0}', [plan.harness.name])} now={now} />
+    {plan.usage.asOf && <p className="usage-muted">{t('Số liệu lúc {0}', [usageReadingTime(plan.usage.asOf, now)])}</p>}
+  </section>;
+}
+
+/**
+ * The ring under the message box (COD-326, after the Claude app): how close the chat is to a limit, the tightest plan
+ * allowance or the model's context window, muted until 80%, then the warning colour, then the error colour at 100%.
+ * A click opens what it is made of: the context window with how Orglet trims the chat, each harness's plan allowances
+ * in Settings' rows, and a way to Settings → Harness.
+ */
+export function UsageRing({ plans, context, contextNamed = false, onOpenSettings, now }: {
+  plans?: ComposerUsage;
+  context?: ChatContextUse;
+  /** Name whose context it is: a crew or group chat has several orglets. */
+  contextNamed?: boolean;
+  onOpenSettings: () => void;
+  now?: Date;
+}) {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const ring = usageRingFor(plans, context);
+  if (!ring) return null;
+  const percent = Math.round(ring.percent);
+  const planList = plans ? [plans.shown, ...plans.others] : [];
+  const openSettings = () => {
+    setOpen(false);
+    onOpenSettings();
+  };
+  return <>
+    <button ref={trigger} type="button" className="usage-ring" data-tone={ring.tone} aria-haspopup="dialog" aria-expanded={open}
+      aria-label={t('Mức dùng: {0}%', [percent])} title={t('Mức dùng: {0}%', [percent])} onClick={() => setOpen(current => !current)}>
+      <UsageRingGlyph percent={ring.percent} />
+    </button>
+    <AnchoredPopover anchor={trigger} open={open} onClose={() => setOpen(false)} label={t('Mức dùng')} className="usage-details">
+      {context && <ContextSection context={context} named={contextNamed} />}
+      {planList.map(plan => <PlanSection key={plan.harness.id} plan={plan} now={now} />)}
+      {planList.length > 0 && <Button type="button" variant="outline" className="usage-settings" onClick={openSettings}>{t('Xem chi tiết')}</Button>}
+    </AnchoredPopover>
+  </>;
+}
+
+/**
+ * The line under the message box from 80% on (COD-326): how much the shown account has used and when it resets, and,
+ * once it is out, the account the island would offer when another one has room. Switching only selects that account;
+ * nothing runs.
+ */
+export function PlanUsageNote({ usage, busy, onSwitch }: { usage: ComposerUsage; busy?: boolean; onSwitch: (harness: HarnessInfo, accountId: string) => void }) {
+  const { shown, offer } = usage;
+  if (shown.tone === 'normal') return null;
+  const state = shown.tone === 'out'
+    ? t('{0} hết hạn mức', [shown.harness.name])
+    : t('{0} đã dùng {1}% hạn mức', [shown.harness.name, Math.round(shown.tightest.usedPercent)]);
+  const sentence = shown.resetsAt ? `${state} · ${usageResetLabel(shown.resetsAt)}` : state;
+  const target = shown.tone === 'out' && offer?.kind === 'switch' ? offer : undefined;
+  const targetLabel = target ? harnessAccountLabel(shown.harness, target.accountId) : '';
+  return <div className="usage-note" data-tone={shown.tone} role="status">
+    <p>{sentence}</p>
+    {target && <Button type="button" variant="outline" disabled={busy} onClick={() => onSwitch(shown.harness, target.accountId)}>
+      {t('Dùng {0} · còn {1}%', [targetLabel, 100 - Math.round(target.usedPercent)])}
     </Button>}
   </div>;
 }

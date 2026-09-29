@@ -18,7 +18,8 @@ import { DocumentCard, DocumentViewer } from './DocumentViewer';
 import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
-import { isHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../shared/harness';
+import { isHarness, type HarnessInfo } from '../../shared/harness';
+import { harnessAccountLabel } from './PlanUsage';
 import { accountSwitchFor, outOfPlanRun, type AccountSwitch } from '../../shared/account-switch';
 import { Markdown } from './Markdown';
 import { Attachment } from './Attachment';
@@ -138,12 +139,6 @@ function rememberDismissedLimitRun(taskId: string, runId: string) {
     const stored = JSON.parse(localStorage.getItem(dismissedLimitRunKey) || '{}') as Record<string, string>;
     localStorage.setItem(dismissedLimitRunKey, JSON.stringify({ ...stored, [taskId]: runId }));
   } catch { /* a blocked store brings the offer back next time, nothing worse */ }
-}
-
-/** How the account picker names an account: its label, or the default account's name. */
-function accountLabel(harness: HarnessInfo, accountId: string) {
-  if (accountId === SYSTEM_ACCOUNT_ID) return t('Tài khoản mặc định');
-  return harness.accounts.find(account => account.id === accountId)?.label ?? t('Tài khoản mặc định');
 }
 
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
@@ -286,7 +281,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     return () => { live = false; };
   }, [limitRun?.id, limitHarness, dismissedLimitRun]);
   const accountShown = !dockedIsland && limitRun && accountOffer?.runId === limitRun.id && dismissedLimitRun !== limitRun.id ? accountOffer : undefined;
-  const switchTarget = accountShown?.offer.kind === 'switch' ? { accountId: accountShown.offer.accountId, label: accountLabel(accountShown.harness, accountShown.offer.accountId), usedPercent: accountShown.offer.usedPercent } : undefined;
+  const switchTarget = accountShown?.offer.kind === 'switch' ? { accountId: accountShown.offer.accountId, label: harnessAccountLabel(accountShown.harness, accountShown.offer.accountId), usedPercent: accountShown.offer.usedPercent } : undefined;
   const switchResetsAt = accountShown?.offer.kind === 'wait' ? accountShown.offer.resetsAt : undefined;
   const accountActions = useRef({ switchAccount: () => {}, dismiss: () => {} });
   accountActions.current = {
