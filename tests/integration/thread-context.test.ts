@@ -71,6 +71,24 @@ it('retrieves older notes from this thread only', () => {
   expect(blob).not.toContain('OTHERTHREADSECRET');
 });
 
+const laterTurns = (count: number) => Array.from({ length: count }, (_, index) => `Later turn ${index + 1}`);
+
+it('does not retrieve an older turn that shares only stop words with the message (COD-335)', () => {
+  const briefs = ['What about the plan for this week, and what should we do there?', 'Được không, của mình thì làm như thế nào?', ...laterTurns(10)];
+  const { task, current } = seedTurns(briefs);
+  expect(compactThread(store.detail(task.id), current, 'What about this one, and what should we do?').snippets).toEqual([]);
+  expect(compactThread(store.detail(task.id), current, 'Của mình được không?').snippets).toEqual([]);
+});
+
+it('ranks an older turn with a rare shared word above turns sharing a common one (COD-335)', () => {
+  const briefs = ['weekly report draft', 'weekly report numbers', 'weekly report layout', 'zebracode notes', ...laterTurns(10)];
+  const { task, current } = seedTurns(briefs);
+  // Each older turn shares one word with the message. Counted plainly they would tie and the oldest would come first.
+  const snippets = compactThread(store.detail(task.id), current, 'the report and zebracode').snippets;
+  expect(snippets[0].text).toContain('zebracode');
+  expect(snippets.slice(0, 2).every(item => item.text.includes('zebracode'))).toBe(true);
+});
+
 it('folds extra verbatim turns then refuses when the prompt still cannot fit, without a model call', () => {
   const briefs = ['ALPHAUNIQUE first scoring note', ...Array.from({ length: 10 }, (_, index) => `Later turn ${index + 1} ${'padding '.repeat(40)}`)];
   const { task, current } = seedTurns(briefs);
