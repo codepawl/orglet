@@ -24,7 +24,7 @@ All four of these matter. When two conflict, the order below breaks the tie.
 
 1. **A team with roles.** Each worker has a name, avatar, instructions and a skill. You talk to one worker, a few of them, all of them, or a team, and they can see what the others said.
 2. **Your existing AI plan.** Workers can run through Claude Code or Codex using the account you are already logged in to, so there is no extra API bill. An API key is optional.
-3. **Private by default.** No Orglet account. Chats, workers and files live in a local database. A worker reads only the files you attach to that task.
+3. **Private if you want it.** Orglet works fully without an account: chats, workers and files live in a local database and nothing leaves the computer. An optional Orglet account (planned, [COD-329](https://linear.app/codepawl/issue/COD-329)) will sync workers, crews, chats and settings between your computers, and later to a phone. The person picks one or the other. Keys and harness sign-ins never sync. A worker reads only the files you attach to that task.
 4. **Repeat work runs itself.** Routines send the same request daily, on weekdays, weekly or every few hours (never more often than hourly) while the app is open, within a daily cost cap when one is set. If the machine was off, the schedule is still there: missed runs become one catch-up choice, not a vanished calendar.
 
 ## How it should feel
@@ -63,7 +63,8 @@ A worker's **Permissions** tab and the chat Details show its abilities as contro
 ## Not now
 
 - Company simulation, org charts or agents that run a business
-- Cloud sync, accounts or running while the computer is off
+- Running work while every computer is off (a cloud runner)
+- Building the Orglet account before its design in COD-329 is settled: what syncs, encryption, conflicts, offline use
 - A skill marketplace or running downloaded scripts
 - Promising that every provider or subscription works the same way
 - Scraping provider docs or using a third-party model aggregator as the source of truth for lists or sunset dates ([model-list-fetch.md](model-list-fetch.md))
