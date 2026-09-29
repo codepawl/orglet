@@ -419,8 +419,9 @@ describe('accounts', () => {
 describe('runner integration', () => {
   let store: Store; let core: CoreService; let sources: Source[]; let detected: HarnessInfo[];
   let requests: (HarnessRequest & { files: Record<string, string> })[]; let reply: (request: HarnessRequest) => Promise<unknown>;
+  let reportedContext: { usedTokens: number; windowTokens?: number } | undefined;
   beforeEach(async () => {
-    store = new Store(':memory:'); requests = [];
+    store = new Store(':memory:'); requests = []; reportedContext = undefined;
     detected = [
       fixture({ id: 'claude-code', executable: 'claude.exe', version: '2.1.270 (Claude Code)', auth: 'logged_in', authDetail: 'Đăng nhập qua claude.ai' }),
       fixture({ id: 'codex', executable: 'codex.exe', version: 'codex-cli 0.154.0', auth: 'logged_in', authDetail: 'Logged in using ChatGPT' }),
@@ -435,7 +436,7 @@ describe('runner integration', () => {
         for (const name of await readdir(join(request.cwd, 'sources'))) files[name] = await readFile(join(request.cwd, 'sources', name), 'utf8');
         requests.push({ ...request, files });
         const output = await reply(request);
-        return { output: request.harness === 'codex' ? { payload: JSON.stringify(output) } : output, costUsd: 0.003 };
+        return { output: request.harness === 'codex' ? { payload: JSON.stringify(output) } : output, costUsd: 0.003, ...(reportedContext ? { context: reportedContext } : {}) };
       },
     });
     const note = join(directory, 'note.txt'); await writeFile(note, 'line one\nline two: the answer is 42');
@@ -464,6 +465,13 @@ describe('runner integration', () => {
     expect(report).not.toHaveProperty('cwd');
     expect(detail.usage).toEqual({ chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 });
     expect(detail.events.map(event => event.message).join(' ')).toContain('$0.0030');
+  });
+
+  it('keeps how full the context was on the run, as the CLI reported it, and nothing when it did not (COD-326)', async () => {
+    reportedContext = { usedTokens: 33_436, windowTokens: 1_000_000 };
+    expect((await run('claude-code')).runs.at(-1)?.contextUse).toEqual({ usedTokens: 33_436, windowTokens: 1_000_000 });
+    reportedContext = undefined;
+    expect((await run('codex')).runs.at(-1)?.contextUse).toBeUndefined();
   });
 
   it.each(['claude-code', 'codex', 'gemini'] as const)('saves a full HTML chat answer from %s longer than the structured-report summary limit', async provider => {

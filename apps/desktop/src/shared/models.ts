@@ -23,6 +23,8 @@ export const ModelEntry = z.object({
   outputTenths: z.number().int().nonnegative().max(1_000_000).optional(),
   /** The provider's own list says this model takes images (xAI, OpenRouter, and servers that copy their fields; COD-260). */
   imageInput: z.literal(true).optional(),
+  /** How many tokens the model's context holds, from the provider's own list (OpenRouter's `context_length`; COD-326). */
+  contextTokens: z.number().int().positive().max(100_000_000).optional(),
   source: ModelSource,
 }).strict();
 export type ModelEntry = z.infer<typeof ModelEntry>;
