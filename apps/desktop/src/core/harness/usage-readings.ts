@@ -11,11 +11,17 @@ const StoredWindow = z.object({
   resetsAt: z.string().optional(),
 }).strict();
 
-/** What the vendor last reported for one account: who, which plan, the windows and when. Never a token. */
+const StoredResets = z.object({
+  count: z.number().int().min(1).max(1000),
+  expiresAt: z.string().optional(),
+}).strict();
+
+/** What the vendor last reported for one account: who, which plan, the windows, banked resets and when. Never a token. */
 const StoredReading = z.object({
   email: z.string().optional(),
   plan: z.string().optional(),
   windows: z.array(StoredWindow).max(20),
+  bankedResets: StoredResets.optional(),
   checkedAt: z.string(),
 }).strict();
 type StoredReading = z.infer<typeof StoredReading>;
@@ -32,7 +38,8 @@ export class UsageReadings {
   /**
    * One account's read, settled against the stored reading: a fresh read replaces it; an expired or failed one takes
    * its windows with `asOf`; signed out or a sign-in with no plan allowance forgets it, since whoever signs in next
-   * may be someone else. A stored window whose reset has passed is dropped: its percentage no longer says anything.
+   * may be someone else. A stored window whose reset has passed is dropped: its percentage no longer says anything, and
+   * so are banked resets past their end. The stored count is shown, never spent: a claim reads Claude again first.
    */
   settle(harness: HarnessCatalogId, row: HarnessAccountUsage, now: Date): HarnessAccountUsage {
     if (!row.unavailable) {
@@ -51,7 +58,9 @@ export class UsageReadings {
     if (!windows.length) return row;
     const email = row.email ?? stored.email;
     const plan = row.plan ?? stored.plan;
-    return { ...row, ...(email ? { email } : {}), ...(plan ? { plan } : {}), windows, asOf: stored.checkedAt };
+    const resets = stored.bankedResets;
+    const bankedResets = resets && (!resets.expiresAt || Date.parse(resets.expiresAt) > now.getTime()) ? resets : undefined;
+    return { ...row, ...(email ? { email } : {}), ...(plan ? { plan } : {}), windows, ...(bankedResets ? { bankedResets } : {}), asOf: stored.checkedAt };
   }
 
   /** Drops an account's reading, for an account that was removed. */
@@ -68,6 +77,7 @@ export class UsageReadings {
       ...(row.email ? { email: row.email } : {}),
       ...(row.plan ? { plan: row.plan } : {}),
       windows: row.windows.map(window => ({ ...window })),
+      ...(row.bankedResets ? { bankedResets: { ...row.bankedResets } } : {}),
       checkedAt: row.checkedAt,
     };
     const parsed = StoredReading.safeParse(reading);

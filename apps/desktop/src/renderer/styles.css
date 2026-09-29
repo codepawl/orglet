@@ -989,6 +989,10 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .plan-usage-value { text-align:right; font-variant-numeric:tabular-nums; color:var(--text); }
 .plan-usage-reset { white-space:nowrap; }
 .plan-usage .org-skeleton { grid-column:1 / -1; }
+/* A Claude plan's banked resets under its bars (COD-328): the count in the bars' muted size, and the action that spends
+   one as a compact outline button on the same centre line. */
+.plan-resets { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:2px 0; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.plan-resets .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
 /* Tacet's enable block (COD-303): a settings row whose text column carries the size or the state, and while bytes
    arrive a slim bar in the plan-usage bar's shape. The error takes the error colour, never a coloured border. */
 .tacet-setup-meta { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }

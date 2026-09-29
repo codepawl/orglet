@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { HarnessAccountUsage, HarnessCatalogId, HarnessUsageGap, HarnessUsageWindow } from '../../shared/harness';
+import type { HarnessAccountUsage, HarnessBankedResets, HarnessCatalogId, HarnessResetOutcome, HarnessUsageGap, HarnessUsageWindow } from '../../shared/harness';
 import { cleanEnv, commandLine, harnessAccountEnv, probe, type Probe } from './detect';
 import { geminiHome, readGeminiSignIn } from './gemini';
 
@@ -28,8 +28,19 @@ const WEEK_MINUTES = 7 * 24 * 60;
 const MONTH_MINUTES = 30 * 24 * 60;
 const APP_SERVER_TIMEOUT_MS = 30_000;
 const USAGE_REQUEST_TIMEOUT_MS = 10_000;
-/** The endpoint Claude Code's own `/usage` reads. The token only ever goes here, and never leaves the core. */
-const CLAUDE_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
+const CLAUDE_API_ORIGIN = 'https://api.anthropic.com';
+/**
+ * The endpoint Claude Code's own `/usage` reads, asking for the plan's banked resets too (COD-328). The token only
+ * ever goes to this origin, and never leaves the core.
+ */
+const CLAUDE_USAGE_URL = `${CLAUDE_API_ORIGIN}/api/oauth/usage?cedar_ember=1`;
+const CLAUDE_OAUTH_HEADERS = { 'anthropic-beta': 'oauth-2025-04-20' };
+/** Claude's name for the banked-reset program, sent with every claim. */
+const RESET_PROGRAM = 'cedar_ember';
+const RESET_CLAIM_TIMEOUT_MS = 25_000;
+/** Checked before a grant or organization id goes into a request, so a strange answer is never echoed into a URL. */
+const GRANT_ID_PATTERN = /^[a-z0-9_-]{1,40}$/;
+const ORGANIZATION_ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -88,6 +99,42 @@ export function claudeUsageWindows(answer: unknown): HarnessUsageWindow[] {
     windows.push({ kind, ...(model ? { model } : {}), usedPercent: clampPercent(window.utilization), ...(resetsAt ? { resetsAt } : {}) });
   }
   return windows;
+}
+
+/** One grant of the banked-reset block, when it is well formed. */
+type ResetGrant = { id: string; resetsLeft: number; expiresAt?: string; usable: boolean };
+
+function readResetGrant(value: unknown, now: Date): ResetGrant | undefined {
+  if (!isRecord(value) || typeof value.id !== 'string' || !GRANT_ID_PATTERN.test(value.id)) return undefined;
+  if (typeof value.resets_left !== 'number' || !Number.isInteger(value.resets_left) || value.resets_left < 0) return undefined;
+  // A grant without an end date keeps; one whose date does not parse is not trusted to be usable.
+  const hasEnd = value.ends_at !== undefined && value.ends_at !== null;
+  const expiresAt = hasEnd ? isoDate(value.ends_at) : undefined;
+  const current = !hasEnd || (expiresAt !== undefined && Date.parse(expiresAt) > now.getTime());
+  const usable = value.paused !== true && value.usable_now === true && current;
+  return { id: value.id, resetsLeft: value.resets_left, ...(expiresAt ? { expiresAt } : {}), usable };
+}
+
+/** The resets a claim can spend now: how many there are together, the grant Claude says goes next, and when it ends. */
+export type ClaudeBankedResets = HarnessBankedResets & { grantId: string };
+
+/**
+ * The banked resets in Claude's usage answer (its `cedar_ember` block, COD-328). Paused grants, grants not usable yet
+ * and grants past their end do not count, and without a usable next grant nothing can be claimed, so none is shown.
+ */
+export function claudeBankedResets(answer: unknown, now: Date): ClaudeBankedResets | undefined {
+  if (!isRecord(answer) || !isRecord(answer.cedar_ember)) return undefined;
+  const program = answer.cedar_ember;
+  if (program.eligible !== true || !Array.isArray(program.grants)) return undefined;
+  const usable: ResetGrant[] = [];
+  for (const value of program.grants) {
+    const grant = readResetGrant(value, now);
+    if (grant?.usable) usable.push(grant);
+  }
+  const next = usable.find(grant => grant.id === program.next_grant_id);
+  if (!next || next.resetsLeft < 1) return undefined;
+  const count = usable.reduce((total, grant) => total + grant.resetsLeft, 0);
+  return { count, grantId: next.id, ...(next.expiresAt ? { expiresAt: next.expiresAt } : {}) };
 }
 
 /** "max" with the tier "default_claude_max_20x" is Max 20x; a tier without a multiplier leaves the plan name alone. */
@@ -157,6 +204,17 @@ export function cursorAbout(output: string): AccountUsageRead {
   return gap('unsupported', { email, ...(plan ? { plan } : {}) });
 }
 
+/** The saved sign-in in one Claude Code folder: the token and whether it has expired. Never written to. */
+async function readClaudeToken(folder: string, runtime: UsageRuntime) {
+  const credentials = parseJson(await runtime.readText(join(folder, '.credentials.json')).catch(() => ''));
+  const oauth = isRecord(credentials) && isRecord(credentials.claudeAiOauth) ? credentials.claudeAiOauth : undefined;
+  const token = text(oauth?.accessToken);
+  const expired = typeof oauth?.expiresAt === 'number' && oauth.expiresAt <= runtime.now().getTime();
+  return { oauth, token, expired };
+}
+
+const claudeFolder = (configDir: string | undefined, runtime: UsageRuntime) => configDir ?? join(runtime.home, '.claude');
+
 async function readClaude(executable: string, configDir: string | undefined, runtime: UsageRuntime): Promise<AccountUsageRead> {
   const status = parseJson((await runtime.run(executable, ['auth', 'status'], harnessAccountEnv('claude-code', configDir))).stdout);
   if (!isRecord(status)) return gap('failed');
@@ -166,27 +224,111 @@ async function readClaude(executable: string, configDir: string | undefined, run
   // A key or a cloud provider has no plan allowance to report.
   if (status.authMethod !== 'claude.ai') return gap('unsupported', account);
 
-  const folder = configDir ?? join(runtime.home, '.claude');
-  const credentials = parseJson(await runtime.readText(join(folder, '.credentials.json')).catch(() => ''));
-  const oauth = isRecord(credentials) && isRecord(credentials.claudeAiOauth) ? credentials.claudeAiOauth : undefined;
+  const { oauth, token, expired } = await readClaudeToken(claudeFolder(configDir, runtime), runtime);
   const plan = claudePlanLabel(status.subscriptionType ?? oauth?.subscriptionType, oauth?.rateLimitTier);
   const signedIn = { ...account, ...(plan ? { plan } : {}) };
-  const token = text(oauth?.accessToken);
   // macOS keeps the sign-in in the Keychain rather than this file; the account is still named.
   if (!token) return gap('unsupported', signedIn);
   // Claude Code renews the token when it runs; Orglet never writes to its credentials.
-  if (typeof oauth?.expiresAt === 'number' && oauth.expiresAt <= runtime.now().getTime()) return gap('expired', signedIn);
+  if (expired) return gap('expired', signedIn);
 
   try {
-    const response = await runtime.fetch(CLAUDE_USAGE_URL, {
-      headers: { Authorization: `Bearer ${token}`, 'anthropic-beta': 'oauth-2025-04-20' },
-      signal: AbortSignal.timeout(USAGE_REQUEST_TIMEOUT_MS),
-    });
+    const response = await fetchClaudeUsage(token, runtime);
     if (response.status === 401) return gap('expired', signedIn);
     if (!response.ok) return gap('failed', signedIn);
-    return { ...signedIn, windows: claudeUsageWindows(await response.json()) };
+    const answer: unknown = await response.json();
+    const bankedResets = shownResets(claudeBankedResets(answer, runtime.now()));
+    return { ...signedIn, windows: claudeUsageWindows(answer), ...(bankedResets ? { bankedResets } : {}) };
   } catch {
     return gap('failed', signedIn);
+  }
+}
+
+/** What the window may see of the banked resets: the count and the end date, never the grant id. */
+function shownResets(resets: ClaudeBankedResets | undefined): HarnessBankedResets | undefined {
+  if (!resets) return undefined;
+  return { count: resets.count, ...(resets.expiresAt ? { expiresAt: resets.expiresAt } : {}) };
+}
+
+const fetchClaudeUsage = (token: string, runtime: UsageRuntime) => runtime.fetch(CLAUDE_USAGE_URL, {
+  headers: { Authorization: `Bearer ${token}`, ...CLAUDE_OAUTH_HEADERS },
+  signal: AbortSignal.timeout(USAGE_REQUEST_TIMEOUT_MS),
+});
+
+/**
+ * The organization a Claude Code sign-in belongs to, which a claim names. Claude Code keeps it in `.claude.json`: in
+ * the account folder when one is set, in the home folder for the system account.
+ */
+async function readClaudeOrganization(configDir: string | undefined, runtime: UsageRuntime): Promise<string | undefined> {
+  const file = configDir ? join(configDir, '.claude.json') : join(runtime.home, '.claude.json');
+  const account = parseJson(await runtime.readText(file).catch(() => ''));
+  const organization = isRecord(account) && isRecord(account.oauthAccount) ? text(account.oauthAccount.organizationUuid) : undefined;
+  return organization && ORGANIZATION_ID_PATTERN.test(organization) ? organization : undefined;
+}
+
+/** How Claude answered a claim it received, in Orglet's words. `unavailable` means it could not say whether it landed. */
+const CLAIM_ANSWERS: Record<string, HarnessResetOutcome> = {
+  reset: 'reset',
+  not_limited: 'not_limited',
+  already_used: 'already_used',
+  ineligible: 'none_left',
+  cooldown: 'cooling_down',
+  unavailable: 'unconfirmed',
+};
+
+/** Reads the grant a claim should spend now; an outcome instead when there is none or the read did not work. */
+async function nextResetGrant(token: string, runtime: UsageRuntime): Promise<{ grantId: string } | { outcome: HarnessResetOutcome }> {
+  try {
+    const usage = await fetchClaudeUsage(token, runtime);
+    if (usage.status === 401) return { outcome: 'expired' };
+    if (!usage.ok) return { outcome: 'failed' };
+    const resets = claudeBankedResets(await usage.json(), runtime.now());
+    return resets ? { grantId: resets.grantId } : { outcome: 'none_left' };
+  } catch {
+    return { outcome: 'failed' };
+  }
+}
+
+/** What Claude said about a claim it was sent. Anything that may have come after the claim landed is `no_answer`. */
+async function claimAnswer(response: Response): Promise<HarnessResetOutcome> {
+  if (response.status === 401 || response.status === 403) return 'expired';
+  if (response.status === 429) return 'rate_limited';
+  if (response.status >= 500) return 'no_answer';
+  // A refusal of the request itself spent nothing.
+  if (!response.ok) return 'failed';
+  try {
+    const answer: unknown = await response.json();
+    const result = isRecord(answer) && typeof answer.result === 'string' ? CLAIM_ANSWERS[answer.result] : undefined;
+    return result ?? 'no_answer';
+  } catch {
+    return 'no_answer';
+  }
+}
+
+/**
+ * Spends one banked reset of the Claude account in one folder (COD-328), only ever because the person confirmed it.
+ * The usage answer is read first, so the claim names the grant Claude says goes next, not one from an older reading.
+ * `requestId` makes the claim safe to send again: a retry with the same id is the same claim. An expired token is
+ * never sent, and nothing here renews it.
+ */
+export async function claimClaudeReset(configDir: string | undefined, requestId: string, runtime: UsageRuntime = localUsageRuntime()): Promise<HarnessResetOutcome> {
+  const { token, expired } = await readClaudeToken(claudeFolder(configDir, runtime), runtime);
+  if (!token) return 'unreadable';
+  if (expired) return 'expired';
+  const organization = await readClaudeOrganization(configDir, runtime);
+  if (!organization) return 'unreadable';
+  const next = await nextResetGrant(token, runtime);
+  if ('outcome' in next) return next.outcome;
+  try {
+    const response = await runtime.fetch(`${CLAUDE_API_ORIGIN}/api/organizations/${organization}/reset_rate_limits`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...CLAUDE_OAUTH_HEADERS },
+      body: JSON.stringify({ program: RESET_PROGRAM, grant_id: next.grantId, request_id: requestId }),
+      signal: AbortSignal.timeout(RESET_CLAIM_TIMEOUT_MS),
+    });
+    return await claimAnswer(response);
+  } catch {
+    return 'no_answer';
   }
 }
 

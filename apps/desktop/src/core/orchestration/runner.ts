@@ -48,7 +48,7 @@ import { ProviderSlots, type SlotWait } from './slots';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { harnessNames, isHarness, type HarnessCatalogId, type HarnessId, type HarnessInfo } from '../../shared/harness';
+import { harnessNames, isHarness, type HarnessCatalogId, type HarnessId, type HarnessInfo, type HarnessResetOutcome } from '../../shared/harness';
 import type { HarnessAccountMap } from '../harness/accounts';
 import type { AccountUsageRead } from '../harness/usage';
 import { HarnessBudgetError, HarnessLimitError, HarnessTerminationError, type HarnessExecutor, type HarnessResult } from '../harness/exec';
@@ -94,6 +94,8 @@ export type HarnessRuntime = {
   accountRoot?: string;
   /** Reads who is signed in to one account folder and how much of the plan is used. Absent, Settings shows no usage. */
   usage?: (harness: HarnessCatalogId, executable: string, configDir?: string) => Promise<AccountUsageRead>;
+  /** Spends one banked Claude reset of the account in `configDir` (COD-328). Absent, no reset can be spent. */
+  claimReset?: (configDir: string | undefined, requestId: string) => Promise<HarnessResetOutcome>;
 };
 
 const providerNames: Record<string, string> = { ...API_PROVIDER_NAMES, ...harnessNames };
