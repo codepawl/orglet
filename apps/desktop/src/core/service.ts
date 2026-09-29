@@ -37,11 +37,12 @@ import { randomUUID } from 'node:crypto';
 import type { RunningItem } from '../shared/running';
 import { KnowledgeBase } from './context/knowledge';
 import type { HarnessRuntime } from './orchestration/runner';
-import { harnessCatalog, SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessResetAnswer, type HarnessResetClaim, type HarnessResetOutcome, type HarnessUsage } from '../shared/harness';
+import { harnessCatalog, harnessLogoutArgs, harnessNames, harnessSignsInApp, SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessResetAnswer, type HarnessResetClaim, type HarnessResetOutcome, type HarnessUsage } from '../shared/harness';
 import { detectHarnesses, probe } from './harness/detect';
 import { claimClaudeReset, readHarnessUsage } from './harness/usage';
 import { HarnessAccounts } from './harness/accounts';
 import { UsageReadings } from './harness/usage-readings';
+import { HarnessSignIns, localSignInRuntime, type SignInEnd } from './harness/sign-in';
 import { executeHarness, type HarnessRequest, type HarnessResult } from './harness/exec';
 import { eraseEverything, eraseKnowledge, eraseMemory, eraseSources } from './storage/erase';
 import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../shared/erase';
@@ -85,14 +86,16 @@ import { TurnRouting } from './orchestration/turn-routing';
 
 /**
  * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
- * account; without it only the system account exists, which is what the tests want.
+ * account; without it only the system account exists, which is what the tests want. `openSignInPage` is main's
+ * browser opener; without it Settings keeps only the copied login command.
  */
-export const localHarnessRuntime = (accountRoot?: string): HarnessRuntime => ({
+export const localHarnessRuntime = (accountRoot?: string, openSignInPage?: (url: string) => void): HarnessRuntime => ({
   detect: (accounts, only) => detectHarnesses(process.env, process.platform, probe, accounts, only),
   execute: executeHarness,
   usage: (harness, executable, configDir) => readHarnessUsage(harness, executable, configDir),
   claimReset: (configDir, requestId) => claimClaudeReset(configDir, requestId),
   ...(accountRoot ? { accountRoot } : {}),
+  ...(openSignInPage ? { signIn: localSignInRuntime(openSignInPage) } : {}),
 });
 
 const RESET_ANSWERS: readonly HarnessResetOutcome[] = ['reset', 'not_limited', 'already_used', 'none_left'];
@@ -181,6 +184,8 @@ export class CoreService {
   /** The id of a claim Claude may have received without saying so; the next try sends it again as the same claim. */
   private pendingResetRequests = new Map<string, string>();
   readonly harnessAccounts: HarnessAccounts;
+  /** Sign-ins started from Settings (COD-327); quitting cancels them. */
+  readonly harnessSignIns: HarnessSignIns;
   private usageReadings: UsageReadings;
   private modelListMemory = emptyModelListCache();
   private modelListLoaded = false;
@@ -192,6 +197,7 @@ export class CoreService {
     this.knowledge = new KnowledgeBase(store);
     this.chatSearch = new ChatSearch(store);
     this.harnessAccounts = new HarnessAccounts(store, harness.accountRoot);
+    this.harnessSignIns = new HarnessSignIns((harnessId, end) => void this.signInEnded(harnessId, end));
     this.usageReadings = new UsageReadings(store);
     this.notify = () => { if (!this.store.db.isOpen) return; this.policy.captureHandoffs(); notify(); };
     this.sources = new Sources(store, profiler, pdfText);
@@ -789,27 +795,49 @@ export class CoreService {
         const item = this.knowledge.updateMemory(input.id, { text: input.text, pinned: input.pinned }); this.notify(); return item;
       }
       case 'deleteMemory': { this.knowledge.deleteMemory(commands.deleteMemory.parse(args).id); this.notify(); return; }
-      case 'harnesses': return this.harnesses(commands.harnesses.parse(args).refresh);
+      case 'harnesses': return this.withSignIns(this.harnesses(commands.harnesses.parse(args).refresh));
       case 'harnessUsage': return this.harnessUsage(commands.harnessUsage.parse(args).refresh);
       case 'claimHarnessReset': return this.claimHarnessReset(commands.claimHarnessReset.parse(args).accountId);
       case 'saveHarnessAccount': {
         const input = commands.saveHarnessAccount.parse(args);
         // A new name is a label only; a new account is selected, so that harness signs in from another folder.
-        if (input.id) return this.harnessAccount(input.harness, 'label', () => this.harnessAccounts.rename(input.harness, input.id!, input.label));
-        return this.harnessAccount(input.harness, 'sign-in', () => this.harnessAccounts.add(input.harness, input.label));
+        if (input.id) return this.withSignIns(this.harnessAccount(input.harness, 'label', () => this.harnessAccounts.rename(input.harness, input.id!, input.label)));
+        return this.withSignIns(this.harnessAccount(input.harness, 'sign-in', async () => {
+          // The new account is selected, so a sign-in waiting for the one before it no longer belongs on screen.
+          this.harnessSignIns.cancel(input.harness);
+          await this.harnessAccounts.add(input.harness, input.label);
+        }));
       }
       case 'removeHarnessAccount': {
         const input = commands.removeHarnessAccount.parse(args);
         // Removing the account in use hands the harness back to the default account; any other is a list change.
         const active = this.harnessAccounts.selection(input.harness).accountId === input.id;
-        return this.harnessAccount(input.harness, active ? 'sign-in' : 'label', async () => {
+        return this.withSignIns(this.harnessAccount(input.harness, active ? 'sign-in' : 'label', async () => {
+          // A sign-in into the folder being deleted would land nowhere.
+          if (active) this.harnessSignIns.cancel(input.harness);
           await this.harnessAccounts.remove(input.harness, input.id);
           this.usageReadings.forget(input.harness, input.id);
-        });
+        }));
       }
       case 'selectHarnessAccount': {
         const input = commands.selectHarnessAccount.parse(args);
-        return this.harnessAccount(input.harness, 'sign-in', () => this.harnessAccounts.select(input.harness, input.id));
+        return this.withSignIns(this.harnessAccount(input.harness, 'sign-in', () => {
+          if (this.harnessAccounts.selection(input.harness).accountId !== input.id) this.harnessSignIns.cancel(input.harness);
+          this.harnessAccounts.select(input.harness, input.id);
+        }));
+      }
+      case 'startHarnessSignIn': {
+        const input = commands.startHarnessSignIn.parse(args);
+        return this.startHarnessSignIn(input.harness, input.id);
+      }
+      case 'cancelHarnessSignIn': {
+        this.harnessSignIns.cancel(commands.cancelHarnessSignIn.parse(args).harness);
+        this.notify();
+        return this.withSignIns(this.harnesses(false));
+      }
+      case 'signOutHarness': {
+        const input = commands.signOutHarness.parse(args);
+        return this.signOutHarness(input.harness, input.id);
       }
       case 'eraseData': {
         const input = commands.eraseData.parse(args);
@@ -1217,6 +1245,55 @@ export class CoreService {
     const rows = detected.map(row => ({ ...row, accounts: accounts[row.id].accounts }));
     this.harnessCache = { at: this.harnessCache?.at ?? Date.now(), value: Promise.resolve(rows) };
     return rows;
+  }
+
+  /** The rows with the sign-in each shown account has on its way, or the reason the last one failed. */
+  private async withSignIns(rows: Promise<HarnessInfo[]>): Promise<HarnessInfo[]> {
+    return (await rows).map(row => {
+      const signIn = this.harnessSignIns.view(row.id, row.accountId);
+      return signIn ? { ...row, signIn } : row;
+    });
+  }
+
+  /** The installed CLI of one harness, for the selected account only: Settings signs in or out what it shows. */
+  private async signInTarget(harness: HarnessCatalogId, accountId: string) {
+    if (this.harnessAccounts.selection(harness).accountId !== accountId) throw new Error('Tài khoản này không còn được chọn. Mở lại Cài đặt rồi thử lại.');
+    const row = (await this.harnesses(false)).find(item => item.id === harness);
+    if (!row?.executable) throw new Error(`Chưa cài ${harnessNames[harness]} trên máy này. Cài xong bấm Dò lại.`);
+    return { executable: row.executable, configDir: this.harnessAccounts.configDir(harness, accountId) };
+  }
+
+  /**
+   * Starts the CLI's own sign-in for the selected account and returns at once; the row shows it waiting. The browser
+   * part can take minutes, far past a command's time, so the ending arrives through `signInEnded`.
+   */
+  private async startHarnessSignIn(harness: HarnessCatalogId, accountId: string): Promise<HarnessInfo[]> {
+    const signIn = this.harness.signIn;
+    if (!signIn || !harnessSignsInApp[harness]) throw new Error(`${harnessNames[harness]} chưa đăng nhập được từ Orglet. Dùng lệnh đăng nhập bên dưới.`);
+    const target = await this.signInTarget(harness, accountId);
+    if (!this.harnessSignIns.isRunning(harness)) this.harnessSignIns.begin(harness, accountId, signIn.start(harness, target.executable, target.configDir));
+    this.notify();
+    return this.withSignIns(this.harnesses(false));
+  }
+
+  /** A sign-in that ended by itself: whatever happened, the CLI is asked again rather than trusted, and usage is read afresh. */
+  private async signInEnded(harness: HarnessCatalogId, end: SignInEnd) {
+    if (end.outcome === 'cancelled') {
+      this.notify();
+      return;
+    }
+    await this.harnessAccount(harness, 'sign-in', () => {}).catch(() => this.notify());
+  }
+
+  /** Signs the selected account out with the CLI's own command, then detects it again. */
+  private async signOutHarness(harness: HarnessCatalogId, accountId: string): Promise<HarnessInfo[]> {
+    const signIn = this.harness.signIn;
+    if (!signIn || !harnessLogoutArgs[harness]) throw new Error(`${harnessNames[harness]} chỉ đăng xuất được trong cửa sổ của nó, bằng /logout.`);
+    const target = await this.signInTarget(harness, accountId);
+    this.harnessSignIns.cancel(harness);
+    await signIn.signOut(harness, target.executable, target.configDir);
+    this.usageReadings.forget(harness, accountId);
+    return this.withSignIns(this.harnessAccount(harness, 'sign-in', () => {}));
   }
 
   /** Detects one harness again, when it signs in from another folder, and keeps the other rows as they were. */

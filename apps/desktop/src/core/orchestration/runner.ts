@@ -51,6 +51,7 @@ import { dirname, join } from 'node:path';
 import { harnessNames, isHarness, type HarnessCatalogId, type HarnessId, type HarnessInfo, type HarnessResetOutcome } from '../../shared/harness';
 import type { HarnessAccountMap } from '../harness/accounts';
 import type { AccountUsageRead } from '../harness/usage';
+import type { HarnessSignInRuntime } from '../harness/sign-in';
 import { HarnessBudgetError, HarnessLimitError, HarnessTerminationError, type HarnessExecutor, type HarnessResult } from '../harness/exec';
 import { ProgressSender } from './progress';
 import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
@@ -96,6 +97,8 @@ export type HarnessRuntime = {
   usage?: (harness: HarnessCatalogId, executable: string, configDir?: string) => Promise<AccountUsageRead>;
   /** Spends one banked Claude reset of the account in `configDir` (COD-328). Absent, no reset can be spent. */
   claimReset?: (configDir: string | undefined, requestId: string) => Promise<HarnessResetOutcome>;
+  /** Signs one account folder in or out through the CLI's own commands (COD-327). Absent, Settings keeps only the copied command. */
+  signIn?: HarnessSignInRuntime;
 };
 
 const providerNames: Record<string, string> = { ...API_PROVIDER_NAMES, ...harnessNames };

@@ -1,13 +1,13 @@
 import { TabbedDialog } from '@codepawl/orglet-ui';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow } from 'lucide-react';
+import { Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow, LogIn, LogOut } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { currentAccentColor, DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, MAX_PROVIDER_CONCURRENCY, QUIET_PARALLEL_LIMIT, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
 import { CustomConnectionsSection } from './CustomConnections';
-import { harnessCatalog, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessBankedResets, type HarnessInfo, type HarnessResetAnswer, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
+import { harnessCatalog, harnessLogoutArgs, harnessSignInIsMachineWide, harnessSignsInApp, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessBankedResets, type HarnessCatalogId, type HarnessInfo, type HarnessResetAnswer, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
 import { BankedResets, PlanUsage, usageReadingTime } from './PlanUsage';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, INTERFACE_PREFERRED_FONTS, type FontRole } from '../../shared/fonts';
 import { Button } from './ui';
@@ -146,10 +146,42 @@ function unreportedUsageText(item: HarnessInfo): string {
   return t('Kiểu đăng nhập này không có hạn mức gói.');
 }
 
-/** What to do in the terminal once the login command runs. Gemini CLI has no login command, so it names the menu choice. */
+/**
+ * How to sign in from here. Most CLIs sign in from the button and the browser (COD-327); Gemini CLI has no login
+ * command, so it names the menu choice in its own window.
+ */
 function signInStep(item: HarnessInfo): string {
   if (item.id === 'gemini') return t('Chạy lệnh bên dưới, chọn Sign in with Google, đăng nhập xong gõ /quit rồi bấm Dò lại.');
+  if (harnessSignsInApp[item.id]) return t('Bấm Đăng nhập rồi làm tiếp trong trình duyệt.');
   return t('Chạy lệnh bên dưới trong terminal rồi bấm Dò lại.');
+}
+
+/**
+ * Signing in without a terminal (COD-327): one button that starts the CLI's own sign-in in the selected account's
+ * folder. While it waits for the browser, the button gives way to one plain line and Cancel, and the row detects
+ * again by itself once the CLI is done. A failure says the CLI's reason under the button.
+ *
+ * It is one button whose words change, so keyboard focus stays on it from Sign in to Cancel and back. While Settings
+ * is busy it is only `aria-disabled`: a disabled button that holds focus drops it to the page.
+ */
+function HarnessSignInControl({ item, busy, onStart, onCancel }: { item: HarnessInfo; busy: boolean; onStart: () => void; onCancel: () => void }) {
+  const waiting = item.signIn?.state === 'waiting';
+  const press = () => {
+    if (busy) return;
+    if (waiting) onCancel();
+    else onStart();
+  };
+  return <div className="harness-sign-in" aria-live="polite">
+    {waiting && <span className="harness-sign-in-waiting">{t('Đang chờ bạn đăng nhập trong trình duyệt…')}</span>}
+    <Button variant="outline" aria-disabled={busy || undefined} onClick={press}>{waiting ? <><X size={14} />{t('Hủy')}</> : <><LogIn size={14} />{t('Đăng nhập')}</>}</Button>
+    {item.signIn?.state === 'failed' && <span className="error">{t('Chưa đăng nhập được: {0}', [tMessage(item.signIn.message)])}</span>}
+  </div>;
+}
+
+/** The sign-out question. The default account and Cursor Agent share one sign-in across the computer, so it says so. */
+function signOutQuestion(item: HarnessInfo): string {
+  if (harnessSignInIsMachineWide(item.id, item.accountId)) return t('Đăng xuất {0} trên cả máy này, không chỉ trong Orglet?', [item.name]);
+  return t('Đăng xuất tài khoản này khỏi {0}?', [item.name]);
 }
 
 /**
@@ -158,9 +190,11 @@ function signInStep(item: HarnessInfo): string {
  * so the login command shown next is the one that signs into it. Each option names the address signed in to it
  * and how much of its plan is used, so switching to the one with room is a choice made on sight.
  */
-function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove }: {
+function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove, onSignOut }: {
   item: HarnessInfo; usage?: HarnessAccountUsage[]; busy: boolean;
   onSelect: (id: string) => void; onSave: (id: string | undefined, label: string) => void; onRemove: (id: string) => void;
+  /** Present only when the account shown is signed in and its CLI has a sign-out command. */
+  onSignOut?: () => void;
 }) {
   const summaryOf = (accountId: string) => accountSummary(usage?.find(row => row.accountId === accountId));
   const row = useRef<HTMLDivElement>(null);
@@ -188,6 +222,7 @@ function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove }:
     ]} />}
     <RowMenu label={t('Tài khoản {0}', [item.name])} items={[
       { label: t('Thêm tài khoản'), icon: UserPlus, onSelect: () => setEditing({ label: '' }) },
+      ...(onSignOut ? [{ label: t('Đăng xuất'), icon: LogOut, confirm: { question: signOutQuestion(item), label: t('Đăng xuất') }, onSelect: onSignOut }] : []),
       ...(active ? [
         { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing({ id: active.id, label: active.label }) },
         {
@@ -400,11 +435,40 @@ function LoginCommandCopy({ commands, label }: { commands: LoginCommand[]; label
   return <CommandCopy command={current.command} label={label} picker={picker || undefined} />;
 }
 
+/** The login command's label: the fallback beside the sign-in button, the only way otherwise. */
+function loginCommandLabel(item: HarnessInfo, signsInHere: boolean): string {
+  if (item.status === 'not_installed') return t('Sau khi cài, đăng nhập bằng');
+  if (signsInHere) return t('Hoặc chạy lệnh này trong terminal');
+  return t('Lệnh đăng nhập');
+}
+
 /** A command to paste, from the kit's `CommandBlock`, copied through the main process. */
 function CommandCopy({ command, label, picker }: { command: string; label: string; picker?: ReactNode }) {
   return <CommandBlock command={command} label={label} toolbar={picker} copyLabel={t('Sao chép lệnh')} copyIcon={<Copy size={14} />} onCopy={next => void copyCommand(next)} />;
 }
 
+
+/**
+ * While a sign-in started here waits for the browser, the core's change notice reads the rows again, so the row
+ * leaves its waiting line as soon as the CLI is done, even if Settings was closed meanwhile. A sign-in that ends
+ * signed in says so and reads usage afresh.
+ */
+function useSignInEndings(harnesses: HarnessInfo[] | undefined, onHarnesses: (next: HarnessInfo[]) => void, loadUsage: (refresh: boolean) => Promise<void>) {
+  const waiting = (harnesses ?? []).filter(item => item.signIn?.state === 'waiting').map(item => item.id).join(' ');
+  const waitedFor = useRef<HarnessCatalogId[]>([]);
+  useEffect(() => {
+    if (!waiting) return;
+    return orglet.onChange(() => void orglet.call('harnesses', { refresh: false }).then(onHarnesses).catch(() => {}));
+  }, [waiting, onHarnesses]);
+  useEffect(() => {
+    const before = waitedFor.current;
+    waitedFor.current = (harnesses ?? []).filter(item => item.signIn?.state === 'waiting').map(item => item.id);
+    const ended = (harnesses ?? []).filter(item => before.includes(item.id) && item.signIn?.state !== 'waiting');
+    if (!ended.length) return;
+    void loadUsage(false);
+    for (const item of ended) if (item.status === 'signed_in') toast(t('Đã đăng nhập {0}', [item.name]), 'success', item.name);
+  }, [harnesses, loadUsage]);
+}
 
 /** `harnesses` is undefined until the first detection lands, which runs each CLI and takes seconds on a cold start. */
 type Props = { open: boolean; tab: SettingsTab; onTab: (tab: SettingsTab) => void; onClose: () => void; workspace: Workspace; connections: Connections; onConnections: (next: Connections) => void; harnesses: HarnessInfo[] | undefined; onHarnesses: (next: HarnessInfo[]) => void };
@@ -460,6 +524,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   };
   const readsUsage = open && tab === 'harness' && harnesses !== undefined;
   useEffect(() => { if (readsUsage) void loadUsage(false); }, [readsUsage, loadUsage]);
+  useSignInEndings(harnesses, onHarnesses, loadUsage);
   const detectAgain = () => void act(async () => {
     setDetecting(true);
     try { onHarnesses(await orglet.call('harnesses', { refresh: true })); }
@@ -694,6 +759,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 {(harnesses ?? []).map(item => {
                   const pill = statusPill(item);
                   const showLogin = item.status !== 'signed_in';
+                  // Found but not signed in (or its status unreadable): the button signs in, the command stays as the fallback.
+                  const signsInHere = showLogin && item.status !== 'not_installed' && harnessSignsInApp[item.id];
                   const accountUsage = usage?.[item.id]?.find(row => row.accountId === item.accountId);
                   const signedInAs = !showLogin && accountUsage?.email ? accountLine(accountUsage) : undefined;
                   const usageGap = !showLogin && accountUsage ? usageGapText(item, accountUsage) : undefined;
@@ -735,15 +802,24 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         }, item.name)}
                         onSave={(id, label) => void act(async () => {
                           await changeAccount(() => orglet.call('saveHarnessAccount', { harness: item.id, ...(id ? { id } : {}), label }));
-                          return id ? t('Đã đổi tên tài khoản') : t('Đã thêm tài khoản {0}. Đăng nhập bằng lệnh bên dưới.', [label]);
+                          if (id) return t('Đã đổi tên tài khoản');
+                          if (harnessSignsInApp[item.id]) return t('Đã thêm tài khoản {0}. Bấm Đăng nhập bên dưới.', [label]);
+                          return t('Đã thêm tài khoản {0}. Đăng nhập bằng lệnh bên dưới.', [label]);
                         }, item.name)}
                         onRemove={id => void act(async () => {
                           await changeAccount(() => orglet.call('removeHarnessAccount', { harness: item.id, id }));
                           return t('Đã xóa tài khoản');
-                        }, item.name)} />}
+                        }, item.name)}
+                        onSignOut={item.status === 'signed_in' && harnessLogoutArgs[item.id] ? () => void act(async () => {
+                          await changeAccount(() => orglet.call('signOutHarness', { harness: item.id, id: item.accountId }));
+                          return t('Đã đăng xuất {0}', [item.name]);
+                        }, item.name) : undefined} />}
                       {((item.status === 'not_installed' && item.installCommand) || showLogin) && <div className="harness-commands">
                         {item.status === 'not_installed' && item.installCommand && <CommandCopy command={item.installCommand} label={t('Lệnh cài (tài liệu chính thức)')} />}
-                        {showLogin && <LoginCommandCopy commands={item.loginCommands} label={item.status === 'not_installed' ? t('Sau khi cài, đăng nhập bằng') : t('Lệnh đăng nhập')} />}
+                        {signsInHere && <HarnessSignInControl item={item} busy={busy}
+                          onStart={() => void act(async () => { onHarnesses(await orglet.call('startHarnessSignIn', { harness: item.id, id: item.accountId })); }, item.name)}
+                          onCancel={() => void act(async () => { onHarnesses(await orglet.call('cancelHarnessSignIn', { harness: item.id })); }, item.name)} />}
+                        {showLogin && <LoginCommandCopy commands={item.loginCommands} label={loginCommandLabel(item, signsInHere)} />}
                       </div>}
                     </div>
                   </div>;

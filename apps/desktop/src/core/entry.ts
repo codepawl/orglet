@@ -124,7 +124,7 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   if (provider === 'opencode-zen' || provider === 'opencode-go') return new OpenCodeAdapter(provider, key, model);
   if (provider === 'ollama') return new OpenAIAdapter(key, { baseURL: `${MODEL_LIST_ENDPOINTS.ollama}/v1`, model: model || CATALOG_HINT_IDS.ollama });
   return new OpenAIAdapter(key, { model });
-}, profile, undefined, localHarnessRuntime(join(process.argv[2], 'harness-accounts')), undefined, {
+}, profile, undefined, localHarnessRuntime(join(process.argv[2], 'harness-accounts'), url => port.postMessage({ type: 'openSignInPage', url })), undefined, {
   readKey: provider => requestKey(provider),
 }, workspaceRuntime, {
   readSecrets: requestMcpSecrets,
@@ -143,9 +143,10 @@ core.decisions = new Decisions({
   runtime: workerRuntime(join(__dirname, 'decisions.js')),
 });
 core.decisions.onState = state => port.postMessage({ type: 'decisionModel', state });
-/** What quitting stops besides this process: the MCP servers, the desktop helper and Tacet's worker. */
+/** What quitting stops besides this process: the MCP servers, the desktop helper, Tacet's worker and a harness sign-in. */
 async function shutdownHelpers() {
   desktopHelper?.stop();
+  core.harnessSignIns.cancelAll();
   await core.decisions.shutdown();
   await core.mcp.shutdown();
 }

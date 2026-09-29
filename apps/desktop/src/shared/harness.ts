@@ -25,6 +25,45 @@ export const harnessLoginArgs: Record<HarnessCatalogId, readonly string[]> = {
 };
 
 /**
+ * Harnesses Settings can sign in without a terminal (COD-327). Codex answers through its app server, which hands back
+ * the page to open; Claude Code and Cursor Agent run their own login, which opens the browser and finishes there
+ * without a pasted code. Gemini CLI signs in from its own menu, so it keeps the copied command.
+ */
+export const harnessSignsInApp: Record<HarnessCatalogId, boolean> = { 'claude-code': true, codex: true, cursor: true, gemini: false };
+
+/** Sign-out subcommands from each CLI's own help. Gemini CLI signs out only with `/logout` inside its own window. */
+export const harnessLogoutArgs: Record<HarnessCatalogId, readonly string[] | undefined> = {
+  'claude-code': ['auth', 'logout'],
+  codex: ['logout'],
+  cursor: ['logout'],
+  gemini: undefined,
+};
+
+/**
+ * Whether signing in or out reaches every account of this CLI on the computer. The default account is the CLI's own
+ * home folder. Cursor Agent keeps its sign-in in one place per computer (`%APPDATA%\Cursor\auth.json` on Windows, the
+ * Keychain on macOS) whatever CURSOR_CONFIG_DIR says, so its added accounts share it.
+ */
+export const harnessSignInIsMachineWide = (id: HarnessCatalogId, accountId: string) => accountId === SYSTEM_ACCOUNT_ID || id === 'cursor';
+
+/** A sign-in Settings started for one account: still waiting for the browser, or ended with the CLI's reason. */
+export type HarnessSignIn = { accountId: string; state: 'waiting' } | { accountId: string; state: 'failed'; message: string };
+
+/**
+ * The only pages main opens for a sign-in: Codex's app server names an OpenAI address. Claude Code and Cursor Agent
+ * open their own pages, so nothing else ever needs to pass here.
+ */
+export function signInPageAllowed(address: string): boolean {
+  try {
+    const url = new URL(address);
+    const host = url.hostname.toLowerCase();
+    return url.protocol === 'https:' && (host === 'auth.openai.com' || host === 'chatgpt.com' || host.endsWith('.openai.com'));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Folder each CLI keeps its own config and credentials in. Setting it per probe and per run is what lets one
  * machine hold several accounts of the same CLI: an account is a folder, nothing more.
  */
@@ -84,6 +123,8 @@ export type HarnessInfo = {
   accountId: string;
   accounts: HarnessAccount[];
   configDir?: string;
+  /** A sign-in Settings started for the account shown, while it waits or after it failed (COD-327). */
+  signIn?: HarnessSignIn;
 };
 
 /** One rolling allowance of a subscription plan, as the CLI's vendor reports it for the signed-in account. */

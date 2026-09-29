@@ -48,6 +48,7 @@ import { detectBrowser } from '../browser/detect';
 import { BrowserHostEvent, BrowserHostRequest } from '../shared/browser-host';
 import { BrowserInputEvent, type BrowserLiveEvent } from '../shared/browser-live';
 import { CLEAN_BROWSER_PROFILE, type BrowserState } from '../shared/browser';
+import { signInPageAllowed } from '../shared/harness';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -464,6 +465,11 @@ async function start() {
       if (message.type === 'activity') {
         const parsed = RunActivity.safeParse(message.activity);
         if (parsed.success) for (const observer of cliObservers) observer({ activity: parsed.data });
+        return;
+      }
+      // Only Codex's sign-in page, handed over by its app server (COD-327); any other address the core names is dropped.
+      if (message.type === 'openSignInPage') {
+        if (typeof message.url === 'string' && signInPageAllowed(message.url)) void shell.openExternal(message.url);
         return;
       }
       if (message.type === 'decisionModel') {
