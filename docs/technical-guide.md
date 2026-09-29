@@ -286,6 +286,19 @@ Builds 0.2.3 and earlier have no updater and never learn about a newer version; 
 
 The same tab has the row for the `orglet` terminal command. The main process listens on a named pipe (Windows) or a `cli.sock` socket in the data folder (macOS, Linux), checks a token it writes to `cli-token` on every start, and answers only `status`, `list`, `send`, `read` and `open`; `send` runs the composer's own `createTask` or `reviseTask`. The packaged build ships the script as `resources/orglet-cli.cjs` with `resources/bin/orglet.cmd` and `resources/bin/orglet`, which run it with the app's executable as Node. On a packaged Windows build **Thêm vào PATH** writes `%LOCALAPPDATA%\Orglet\bin\orglet.cmd`, rewritten on every start of the copy it points at so it follows updates (another copy never rewrites it, COD-296), and adds that folder to the user Path; macOS shows the `export PATH` line instead. From source, `pnpm orglet` runs the script `pnpm dev` builds. Details: [cli.md](cli.md).
 
+## CodePawl account
+
+The optional account (COD-337, user page [account.md](account.md), design [account-sync-design.md](account-sync-design.md)) lives in the main process, `main/account.ts`, which imports nothing from Electron so the tests drive it against a fake identity server.
+
+- **Service.** `https://accounts.codepawl.com` by default. `ORGLET_ACCOUNTS_URL` points a run at another one, such as a local service at `http://localhost:8787`; only https, or http on this computer, is accepted. The issuer is `<base>/api/auth`, with `oauth2/authorize`, `oauth2/token` and `oauth2/revoke` under it, and `GET <base>/me` answers who is signed in.
+- **Sign-in.** OAuth 2.1 authorization code with PKCE (S256) and a random `state`, client `orglet-desktop`, scopes `openid profile email offline_access`, resource `https://sync.orglet.codepawl.com`. The system browser opens the authorize page; it comes back through `com.codepawl.orglet:/auth/callback` (RFC 8252), which reaches the running app as a second instance's argument on Windows or as `open-url` on macOS. A callback whose `state` or `iss` does not match the sign-in in progress is dropped and the sign-in keeps waiting; after 10 minutes it stops.
+- **Tokens.** The refresh token, with the profile last read, is one `safeStorage`-encrypted file, `account.credential`, beside the API keys. The access token (15 minutes) stays in memory. Refreshes are single-flight: the service rotates refresh tokens and treats a rotated-out one sent again as theft, revoking every device, so two callers share one request and the new token is saved before anything else runs. A refused refresh (`invalid_grant`) turns the account `expired` and keeps the profile; a network failure leaves it signed in.
+- **Sign-out** deletes the file first, then asks the service to revoke the refresh token, best effort.
+- **The window** gets only `AccountState` (`status`, email, name, plan, entitlements), parsed strictly on the way out, through `accountState`, `accountSignIn`, `accountCancelSignIn`, `accountSignOut` and the `orglet:account` event.
+- **The first-run choice** is the `accountChoice` setting in SQLite. Only a database created by this build starts undecided; one from an older build has no record and reads as local, never asked. The choice is not in a backup.
+
+A development run (`pnpm dev`) and a ZIP copy do not register the scheme, so the browser cannot hand the sign-in back to them; a Setup install registers it on every start.
+
 ## Deleting data
 
 **Cài đặt → Dữ liệu** removes what the app has kept. Every deletion refuses while a task, routine or checker is running, runs in one transaction, and reports what it actually removed.

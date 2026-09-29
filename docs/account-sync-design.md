@@ -268,7 +268,7 @@ Free entitlements start small enough that the account stays inside Workers Paid'
 | Phase | What | Proves |
 |---|---|---|
 | **0. Spike** (done 2026-09-29, [COD-336](https://linear.app/codepawl/issue/COD-336)) | Better Auth on Workers + D1 with the desktop browser sign-in. One Durable Object doing push, pull and poke for a toy table between two computers. | Both work; identity needs Workers Paid. See [Phase 0 results](#phase-0-results-measured-2026-09-29). |
-| **1. Identity** | `accounts.codepawl.com`, the first-run chooser, sign in and out, the account page, `plan` and `entitlements` (all `free`), the billing webhook stubbed. No sync yet. | Accounts work end to end. |
+| **1. Identity** | `accounts.codepawl.com`, the first-run chooser, sign in and out, the account page, `plan` and `entitlements` (all `free`), the billing webhook stubbed. No sync yet. The desktop side is [COD-337](https://linear.app/codepawl/issue/COD-337), described in [account.md](account.md). | Accounts work end to end. |
 | **2. Change log** | The schema changes above, HLC, outbox, local-only switches. Tested with two SQLite files merging, no server. | The merge rules are right before any network. |
 | **3. Sync** | `services/sync`, push/pull/poke, first upload, second-computer download, tombstones, R2 files, encryption at rest. | Two computers stay in step, offline included. |
 | **4. Account life** | Merge or replace on a second computer, delete account, conflict view in revisions, rate limits, audit log. | People can leave cleanly. |

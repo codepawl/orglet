@@ -1,6 +1,6 @@
 # Settings
 
-**Settings** is the last button in the sidebar footer. Nine tabs, each a few rows.
+**Settings** is the last button in the sidebar footer. Eleven tabs, each a few rows.
 
 Part of the [user guide](user-guide.md).
 
@@ -78,6 +78,10 @@ Each row refuses while a run, schedule or check is in progress, and reports what
 | **Erase all data** | Everything. Asks you to type `Orglet`. The workspace comes back as a fresh install with the Researcher. Browser profiles are kept, like API keys; delete them in **Settings → Browser**. |
 
 Where the data lives: `%APPDATA%\orglet\orglet.sqlite` on Windows, `~/Library/Application Support/Orglet/orglet.sqlite` on macOS. Opening the workspace with a newer build first saves a copy of the database; how to roll back is in [recovery.md](recovery.md).
+
+## CodePawl account
+
+Sign in to the optional CodePawl account, see whose account and which plan, or sign out. Nothing syncs yet. See [CodePawl account](account.md).
 
 ## About
 

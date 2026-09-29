@@ -18,7 +18,7 @@ Read, in this order, only what the task needs:
 
 [docs/implementation_status.md](docs/implementation_status.md) is the ship/verify record. [docs/handoff.md](docs/handoff.md) and `.agents/plans/` are **historical session notes**, not current contracts — prefer `docs/product.md` and the code.
 
-Orglet is a **local Electron desktop app**: a small team of AI workers (**orglets**, grouped into **crews**) on the user's computer. Today there is no Orglet account or server. Chats, orglets and files live in SQLite. An optional account that syncs between computers is planned (COD-329, [docs/product.md](docs/product.md)); until its design lands, build nothing that assumes it. Windows is the public 0.2.x target and updates itself from GitHub Releases; macOS packaging exists; Linux is later.
+Orglet is a **local Electron desktop app**: a small team of AI workers (**orglets**, grouped into **crews**) on the user's computer. Chats, orglets and files live in SQLite, and no Orglet server holds them. An optional CodePawl account exists (COD-337, [docs/account.md](docs/account.md)): main signs in through the system browser and keeps the tokens, and nothing syncs yet. Sync follows [docs/account-sync-design.md](docs/account-sync-design.md) (COD-329); the app must keep working fully without an account. Windows is the public 0.2.x target and updates itself from GitHub Releases; macOS packaging exists; Linux is later.
 
 ```
 apps/desktop/src/
@@ -62,6 +62,7 @@ Renderer talks to core through `preload` → typed `Bridge` / `commands` in `app
 | The Running view: every run and the queue across chats | [docs/chat-guide.md](docs/chat-guide.md#what-is-running), [docs/technical-guide.md](docs/technical-guide.md#what-is-running-and-the-queue) | `core/orchestration/running.ts`, `core/orchestration/slots.ts`, `renderer/components/RunningCentre.tsx` |
 | The `orglet` terminal command, its pipe and the PATH shim | [docs/cli.md](docs/cli.md) | `cli/`, `main/cli-server.ts`, `main/cli-operations.ts`, `main/cli-path.ts` |
 | Explorer's Send to menu and `orglet://` links | [docs/integrations.md](docs/integrations.md) | `main/launch-requests.ts`, `main/send-to.ts`, `renderer/components/SendToPicker.tsx` |
+| The optional CodePawl account: first-run choice, browser sign-in, tokens in main, Settings → CodePawl account | [docs/account.md](docs/account.md), [docs/account-sync-design.md](docs/account-sync-design.md) | `main/account.ts`, `shared/account.ts`, `renderer/components/AccountChooser.tsx`, `renderer/components/AccountSettings.tsx` |
 | User-facing pages | [docs/user-guide.md](docs/user-guide.md) and its pages | — |
 
 ## Commands

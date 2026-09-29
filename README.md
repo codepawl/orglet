@@ -27,7 +27,7 @@
 Orglet is a desktop app where you keep a few AI workers, each with a name, a role and their own instructions, and give them work in a normal chat.
 
 - **Use the AI plan you already pay for.** Workers can run on the Claude Code, Codex, Cursor Agent or Gemini CLI account you are signed in to, so there is no extra API bill.
-- **Keep your data on your computer.** No Orglet account, no Orglet server. Chats, workers and files live in a local database.
+- **Keep your data on your computer.** No Orglet server holds your work. Chats, workers and files live in a local database. A free CodePawl account is optional, and nothing syncs yet ([account](docs/account.md)).
 - **Made for one person.** Freelancers, solo founders and anyone who uses ChatGPT or Claude every day and wants a bit more structure.
 
 Click a **team** or **worker** in the sidebar to open that chat. One live conversation each; a new message is a turn, not a new task. Team chats plan, run members as hidden jobs, and bring one report back. Internal jobs stay under **Details**. In a group chat of several orglets, a message that tags nobody goes to everyone, or, with Tacet downloaded, to the one orglet it clearly fits, which the message then names ([how](docs/decisions.md#who-answers-in-a-group-chat)). [How it works](docs/team-chat.md).
@@ -98,7 +98,7 @@ On Windows you can also select files in File Explorer and choose **Send to → O
 
 API keys are encrypted with your system's secure storage and never reach the app's interface.
 
-Orglet has no account and no server of its own. Requests go only to the provider or local tool you choose for a worker, using attached files and workspace folders you explicitly grant. If a worker submits a malformed report, Details shows the invalid field and Orglet allows one report-only correction without repeating completed file operations.
+Orglet needs no account, and no server of its own sees your work. Signing in to the optional CodePawl account stores the sign-in encrypted on this computer and syncs nothing yet ([account](docs/account.md)). Requests go only to the provider or local tool you choose for a worker, using attached files and workspace folders you explicitly grant. If a worker submits a malformed report, Details shows the invalid field and Orglet allows one report-only correction without repeating completed file operations.
 
 Start here: the [user guide](docs/user-guide.md), one short page per part of the app, or the [getting started](docs/getting-started.md) walk-through. The [docs map](docs/README.md) lists how-it-works pages, product decisions, and ship records. Product fit is [product.md](docs/product.md). How to run and test is [technical-guide.md](docs/technical-guide.md). How a worker's reads, searches, edits and commands appear in the chat, and where the diff of what it changed lives, is [worker-actions.md](docs/worker-actions.md).
 
