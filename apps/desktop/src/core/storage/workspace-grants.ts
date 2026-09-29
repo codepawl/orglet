@@ -7,13 +7,38 @@ import type { Task } from '../../shared/contracts';
 import { newChatKey, newChatKeyNames } from '../../shared/live-task';
 import { Store, id } from './database';
 
+/**
+ * The folder's birth time in nanoseconds, where the file system reports one; absent on older rows (COD-300). Path,
+ * volume and file id alone cannot tell a folder from one made again at the same path on Linux, where ext4 and tmpfs
+ * hand a freed inode number straight back; the birth time can. NTFS and APFS report one too, and Node on Linux reads
+ * it through statx (kernels without statx report the change time instead, which a rename also moves).
+ */
+const Birth = z.string().regex(/^[1-9][0-9]*$/).optional();
+
 /** A folder as the picker resolved it: its canonical path and the identity that detects a swap at the same path. */
-const ResolvedDirectory = z.object({ directory: z.string().min(1), device: z.string(), inode: z.string(), name: z.string().min(1) }).strict();
+const ResolvedDirectory = z.object({ directory: z.string().min(1), device: z.string(), inode: z.string(), birth: Birth, name: z.string().min(1) }).strict();
 export type ResolvedDirectory = z.infer<typeof ResolvedDirectory>;
 
 const StoredGrant = WorkspaceGrantView.extend({
-  directory: z.string().min(1), device: z.string(), inode: z.string(),
+  directory: z.string().min(1), device: z.string(), inode: z.string(), birth: Birth,
 }).strict();
+
+type FolderIdentity = { directory: string; device: string; inode: string; birth?: string };
+
+/** The birth time Node read, or undefined where the platform reports none (Node gives 0 then). */
+export function birthOf(identity: { birthtimeNs: bigint }): string | undefined {
+  return identity.birthtimeNs > 0n ? identity.birthtimeNs.toString() : undefined;
+}
+
+/**
+ * Whether two records name the same folder: the same canonical path, volume and file id, and the same birth time when
+ * both know one. A record without a birth time (made before COD-300, or on a file system with none) cannot be told
+ * from a folder made again at its path, which is the gap it had before.
+ */
+export function sameFolder(first: FolderIdentity, second: FolderIdentity): boolean {
+  if (first.directory !== second.directory || first.device !== second.device || first.inode !== second.inode) return false;
+  return !first.birth || !second.birth || first.birth === second.birth;
+}
 
 /** The folder chosen for a chat before its first message, waiting under the worker or team (COD-186). */
 const PendingWorkspace = ResolvedDirectory.extend({ permissions: WorkspacePermissions }).strict();
@@ -57,7 +82,7 @@ export class WorkspaceGrants {
     this.assertTask(taskId);
     const grant = this.current(taskId);
     if (!grant) return null;
-    const { directory: _directory, device: _device, inode: _inode, ...view } = grant;
+    const { directory: _directory, device: _device, inode: _inode, birth: _birth, ...view } = grant;
     return WorkspaceGrantView.parse(view);
   }
 
@@ -73,7 +98,8 @@ export class WorkspaceGrants {
     const directory = await realpath(picked);
     const identity = await stat(directory, { bigint: true });
     if (!identity.isDirectory()) throw new Error(FOLDER_ERROR);
-    return { directory, device: identity.dev.toString(), inode: identity.ino.toString(), name: basename(directory) || directory };
+    const birth = birthOf(identity);
+    return { directory, device: identity.dev.toString(), inode: identity.ino.toString(), ...(birth ? { birth } : {}), name: basename(directory) || directory };
   }
 
   /**
@@ -91,15 +117,16 @@ export class WorkspaceGrants {
   applyInsideTransaction(taskId: string, resolved: ResolvedDirectory, permissions: WorkspacePermission[]): WorkspaceGrantView {
     this.assertTask(taskId);
     const previous = this.current(taskId);
-    const sameFolder = !!previous && !previous.revoked && previous.directory === resolved.directory
-      && previous.device === resolved.device && previous.inode === resolved.inode;
-    const widened = sameFolder && previous.permissions.every(permission => permissions.includes(permission));
+    const keepsFolder = !!previous && !previous.revoked && sameFolder(previous, resolved);
+    const widened = keepsFolder && previous.permissions.every(permission => permissions.includes(permission));
+    // A grant made before COD-300 learns its folder's birth time the next time the same folder is applied.
+    const birth = previous?.birth ?? resolved.birth;
     let grant: z.infer<typeof StoredGrant>;
-    if (widened) grant = StoredGrant.parse({ ...previous, permissions });
-    else if (sameFolder) grant = StoredGrant.parse({ ...previous, revision: previous.revision + 1, permissions });
+    if (widened) grant = StoredGrant.parse({ ...previous, permissions, ...(birth ? { birth } : {}) });
+    else if (keepsFolder) grant = StoredGrant.parse({ ...previous, revision: previous.revision + 1, permissions, ...(birth ? { birth } : {}) });
     else {
       grant = StoredGrant.parse({ id: id(), taskId, revision: (previous?.revision ?? 0) + 1, permissions, name: resolved.name, revoked: false,
-        directory: resolved.directory, device: resolved.device, inode: resolved.inode });
+        directory: resolved.directory, device: resolved.device, inode: resolved.inode, ...(resolved.birth ? { birth: resolved.birth } : {}) });
     }
     this.store.db.prepare(`INSERT INTO workspace_grants(task_id,data) VALUES(?,?)
       ON CONFLICT(task_id) DO UPDATE SET data=excluded.data`).run(taskId, JSON.stringify(grant));
@@ -165,8 +192,8 @@ export class WorkspaceGrants {
       const side = this.current(sideTaskId);
       if (!side || side.revoked) return false;
       const main = this.current(mainTaskId);
-      const sameFolder = !!main && !main.revoked && main.directory === side.directory && main.device === side.device && main.inode === side.inode;
-      const kept = sameFolder ? side.permissions.filter(permission => main.permissions.includes(permission)) : [];
+      const keepsFolder = !!main && !main.revoked && sameFolder(main, side);
+      const kept = keepsFolder ? side.permissions.filter(permission => main.permissions.includes(permission)) : [];
       if (kept.length === side.permissions.length) return false;
       const next = kept.length
         ? StoredGrant.parse({ ...side, revision: side.revision + 1, permissions: kept })
@@ -216,7 +243,7 @@ export class WorkspaceGrants {
   }
 
   /** A kept folder resolved again: it must still exist and be the same directory, not one replaced at the same path. */
-  private async confirmSame(kept: Omit<ResolvedDirectory, 'name'>, name?: string): Promise<ResolvedDirectory> {
+  private async confirmSame(kept: FolderIdentity, name?: string): Promise<ResolvedDirectory> {
     let resolved: ResolvedDirectory;
     try {
       resolved = await this.resolve(kept.directory);
@@ -225,7 +252,7 @@ export class WorkspaceGrants {
       if (name) throw new Error(`Thư mục làm việc ${name} không còn trên máy. Chọn lại thư mục trong Chi tiết.`);
       throw new Error('Thư mục không còn trên máy.');
     }
-    if (resolved.directory !== kept.directory || resolved.device !== kept.device || resolved.inode !== kept.inode) {
+    if (!sameFolder(kept, resolved)) {
       throw new Error('Thư mục workspace đã bị thay thế. Chọn lại thư mục trước khi tiếp tục.');
     }
     return resolved;
@@ -275,8 +302,8 @@ export class WorkspaceGrants {
     });
     const identity = await stat(directory, { bigint: true });
     this.assert(snapshot, permission);
-    if (canonical !== directory || !identity.isDirectory() || identity.dev.toString() !== current.device
-      || identity.ino.toString() !== current.inode) {
+    const onDisk = { directory: canonical, device: identity.dev.toString(), inode: identity.ino.toString(), birth: birthOf(identity) };
+    if (!identity.isDirectory() || !sameFolder(current, onDisk)) {
       throw new Error('Thư mục workspace đã bị thay thế. Chọn lại thư mục trước khi tiếp tục.');
     }
     return directory;

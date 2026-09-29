@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { mkdir, mkdtemp, realpath, rename, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
-import { WorkspaceGrants } from '../../apps/desktop/src/core/storage/workspace-grants';
+import { WorkspaceGrants, sameFolder } from '../../apps/desktop/src/core/storage/workspace-grants';
+import { FOLDER_UNAVAILABLE, RoutineFolders } from '../../apps/desktop/src/core/storage/routine-folders';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import { commands, type Run, type Skill, type Task, type Worker } from '../../apps/desktop/src/shared/contracts';
@@ -80,6 +81,61 @@ it('rejects a directory replaced at the same pathname', async () => {
   await rename(workspace, join(directory, 'original'));
   await mkdir(workspace);
   await expect(grants.directory(snapshot, 'read')).rejects.toThrow('bị thay thế');
+});
+
+/** Rewrites the stored grant, the way a folder made again at the same path looks on Linux or an older row looks. */
+function editStoredGrant(change: (grant: Record<string, unknown>) => Record<string, unknown>) {
+  const row = store.db.prepare('SELECT data FROM workspace_grants WHERE task_id=?').get(task.id)!;
+  store.db.prepare('UPDATE workspace_grants SET data=? WHERE task_id=?').run(JSON.stringify(change(JSON.parse(String(row.data)))), task.id);
+}
+
+it('tells a folder from one made again at the same path and file id by its birth time (COD-300)', async () => {
+  // Linux can hand a new folder the deleted one's inode; the birth time is what differs. Made deterministic here by
+  // giving the stored grant another birth time while the path, volume and file id still match.
+  await grants.grant({ taskId: task.id, directory: workspace, permissions: ['read'] });
+  const snapshot = grants.snapshot(task.id)!;
+  const onDisk = await stat(workspace, { bigint: true });
+  const stored = JSON.parse(String(store.db.prepare('SELECT data FROM workspace_grants WHERE task_id=?').get(task.id)!.data));
+  editStoredGrant(grant => ({ ...grant, birth: '1' }));
+  if (onDisk.birthtimeNs === 0n) {
+    // A file system that reports no birth time cannot tell them apart: the documented limit, asserted, not skipped.
+    expect(await grants.directory(snapshot, 'read')).toBe(workspace);
+    return;
+  }
+  expect(stored.birth).toBe(onDisk.birthtimeNs.toString());
+  await expect(grants.directory(snapshot, 'read')).rejects.toThrow('bị thay thế');
+  await expect(grants.changeLevel(task.id, ['read', 'write'])).rejects.toThrow('bị thay thế');
+});
+
+it('keeps accepting a grant stored before birth times, and learns the birth time the next time it is applied', async () => {
+  await grants.grant({ taskId: task.id, directory: workspace, permissions: ['read'] });
+  editStoredGrant(({ birth: _birth, ...grant }) => grant);
+  const snapshot = grants.snapshot(task.id)!;
+  expect(await grants.directory(snapshot, 'read')).toBe(workspace);
+  const widened = await grants.changeLevel(task.id, ['read', 'write']);
+  expect(widened).toMatchObject({ id: snapshot.id, revision: snapshot.revision });
+  const onDisk = await stat(workspace, { bigint: true });
+  const stored = JSON.parse(String(store.db.prepare('SELECT data FROM workspace_grants WHERE task_id=?').get(task.id)!.data));
+  if (onDisk.birthtimeNs > 0n) expect(stored.birth).toBe(onDisk.birthtimeNs.toString());
+});
+
+it('compares birth times only when both records know one', () => {
+  const folder = { directory: '/work', device: '1', inode: '2' };
+  expect(sameFolder({ ...folder, birth: '5' }, { ...folder, birth: '5' })).toBe(true);
+  expect(sameFolder({ ...folder, birth: '5' }, { ...folder, birth: '6' })).toBe(false);
+  expect(sameFolder(folder, { ...folder, birth: '6' })).toBe(true);
+  expect(sameFolder({ ...folder, birth: '5' }, { ...folder, inode: '3', birth: '5' })).toBe(false);
+});
+
+it('refuses a watched folder made again at the same path and file id (COD-300)', async () => {
+  const folders = new RoutineFolders(store);
+  const view = folders.add(await grants.resolve(workspace));
+  expect(await folders.directory(view.folderId)).toBe(workspace);
+  const row = store.db.prepare('SELECT data FROM routine_folders WHERE id=?').get(view.folderId)!;
+  store.db.prepare('UPDATE routine_folders SET data=? WHERE id=?').run(JSON.stringify({ ...JSON.parse(String(row.data)), birth: '1' }), view.folderId);
+  const onDisk = await stat(workspace, { bigint: true });
+  if (onDisk.birthtimeNs === 0n) expect(await folders.directory(view.folderId)).toBe(workspace);
+  else await expect(folders.directory(view.folderId)).rejects.toThrow(FOLDER_UNAVAILABLE);
 });
 
 it('says the working folder is gone, by its name and without its path, when it was deleted', async () => {
