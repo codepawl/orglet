@@ -7,6 +7,7 @@ import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, MAX_PROVIDER_CONCURRENCY, QUIET_PARALLEL_LIMIT, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
 import { CustomConnectionsSection } from './CustomConnections';
+import type { OpenCodeGoUsage } from '../../shared/opencode';
 import { harnessCatalog, harnessLogoutArgs, harnessSignInIsMachineWide, harnessSignsInApp, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessBankedResets, type HarnessCatalogId, type HarnessInfo, type HarnessResetAnswer, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
 import { BankedResets, PlanUsage, usageReadingTime } from './PlanUsage';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, INTERFACE_PREFERRED_FONTS, type FontRole } from '../../shared/fonts';
@@ -139,11 +140,25 @@ function resetAnswerNotice(outcome: HarnessResetAnswer): [string, ToastTone] {
   return [t('Tài khoản này không còn lượt reset nào.'), 'info'];
 }
 
-/** Cursor Agent and Gemini CLI never report a plan allowance; for the others it depends on how they signed in. */
+/**
+ * Whether there is an allowance to show depends on how the CLI signed in, and for Cursor and Gemini CLI also on the plan
+ * (a team plan's spend, an account the CLI has not set up yet).
+ */
 function unreportedUsageText(item: HarnessInfo): string {
-  if (item.id === 'cursor') return t('Cursor Agent không cho biết gói đã dùng bao nhiêu.');
-  if (item.id === 'gemini') return t('Gemini CLI không cho biết gói đã dùng bao nhiêu.');
+  if (item.id === 'cursor') return t('Cursor không báo hạn mức cho kiểu đăng nhập hoặc gói này.');
+  if (item.id === 'gemini') return t('Gemini CLI không báo hạn mức cho kiểu đăng nhập hoặc gói này.');
   return t('Kiểu đăng nhập này không có hạn mức gói.');
+}
+
+/**
+ * The saved Go key's five-hour, weekly and monthly allowances, the way a harness row shows its plan: the bars, or one
+ * line saying why there are none. Nothing is estimated.
+ */
+function OpenCodeGoPlanUsage({ usage, name }: { usage: OpenCodeGoUsage | undefined; name: string }) {
+  if (!usage) return <SkeletonGroup label={t('Đang đọc hạn mức gói…')}><div className="plan-usage"><Skeleton width="70%" /></div></SkeletonGroup>;
+  if (usage.unavailable === 'unsupported') return <span className="setting-description">{t('Key này chưa có gói OpenCode Go.')}</span>;
+  if (usage.unavailable === 'failed') return <span className="setting-description">{t('Chưa đọc được hạn mức lúc này.')}</span>;
+  return <PlanUsage windows={usage.windows} label={t('Hạn mức gói {0}', [name])} />;
 }
 
 /**
@@ -535,8 +550,27 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     modelLists.invalidate();
     return t('Đã dò lại harness');
   }, t('Harness trên máy'));
-  /** A connection that changed makes the session's model lists for it wrong; the core already dropped its own. */
-  const changeConnections = (next: Connections) => { modelLists.invalidate(); onConnections(next); };
+  /** How much of its allowances the saved OpenCode Go key has used; read only while Kết nối API is open and a key is saved. */
+  const [goUsage, setGoUsage] = useState<OpenCodeGoUsage>();
+  const loadGoUsage = useCallback(async (refresh: boolean) => {
+    try {
+      setGoUsage(await orglet.call('openCodeGoUsage', { refresh }));
+    } catch {
+      setGoUsage(undefined);
+    }
+  }, []);
+  const readsGoUsage = open && tab === 'connections' && Boolean(connections['opencode-go']);
+  useEffect(() => { if (readsGoUsage) void loadGoUsage(false); }, [readsGoUsage, loadGoUsage]);
+  /**
+   * A connection that changed makes the session's model lists for it wrong; the core already dropped its own. A new or
+   * removed Go key also makes its usage someone else's, so it is read again or dropped.
+   */
+  const changeConnections = (next: Connections) => {
+    modelLists.invalidate();
+    onConnections(next);
+    if (next['opencode-go']) void loadGoUsage(true);
+    else setGoUsage(undefined);
+  };
   const [keyDrafts, setKeyDrafts] = useState<Partial<Record<ApiProvider, string>>>({});
   /** Providers the user opened for editing before a key is saved. Saved connections stay “on” from `connections`. */
   const [editing, setEditing] = useState<Partial<Record<ApiProvider, boolean>>>({});
@@ -718,6 +752,9 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       }
                     }} />
                   </div>
+                  {/* The bars take a line of their own under the text, so the mark and the switch stay centred on the
+                      title and its description instead of dropping to the middle of the bars. */}
+                  {provider === 'opencode-go' && connections[provider] && <div className="setting-connection-usage"><OpenCodeGoPlanUsage usage={goUsage} name={name} /></div>}
                   {/* A key is long and this row is narrow, so the field takes a line of its own below the
                       switch rather than sharing the text column with it (user, 2026-09-20). */}
                     {active && !local && <form className="setting-key-form" onSubmit={event => {

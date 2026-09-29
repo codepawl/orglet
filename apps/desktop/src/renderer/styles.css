@@ -854,6 +854,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
    switch: a key is long, and in a 460px row it had 254px left after the file and save buttons (user, 2026-09-20). */
 .setting-connection { flex-wrap:wrap; }
 .setting-connection > .setting-key-form { flex:1 0 100%; order:1; margin-top:8px; }
+/* OpenCode Go's plan usage: a line of its own under the text, starting where the text starts (the 26px mark and the
+   row's 12px gap), and as close to the description as the text column's own gap. */
+.setting-connection > .setting-connection-usage { flex:1 0 100%; order:1; min-width:0; padding-left:38px; margin-top:-4px; }
+.setting-connection-usage .plan-usage { margin:0; }
 .setting-key-form { display:flex; flex-wrap:nowrap; align-items:center; gap:6px; margin-top:2px; max-width:100%; }
 .setting-key-form .setting-key-file {
   width:34px; height:34px; min-height:34px; padding:0; border-radius:50%; color:var(--muted); flex-shrink:0;

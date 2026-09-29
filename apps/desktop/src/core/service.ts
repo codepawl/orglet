@@ -17,6 +17,7 @@ import { Sources } from './tools/sources';
 import type { PdfTextExtractor } from './tools/pdf-text';
 import { Runner } from './orchestration/runner';
 import type { ModelAdapter } from './adapters/openai';
+import { readOpenCodeGoUsage } from './adapters/opencode';
 import { TeamRunner } from './orchestration/team';
 import templates from '../../../../templates/catalog.json';
 import type { ProfileExecutor, ProfileRecord } from '../shared/profiles';
@@ -54,7 +55,7 @@ import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './mod
 import { canStoreModelListRow, dropProviderRow, readModelListCache, writeModelListCache } from './models/cache';
 import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
 import { mentionedPeople, parseMentions } from '../shared/mentions';
-import { assertOpenCodeModel, isOpenCodePlan } from '../shared/opencode';
+import { assertOpenCodeModel, isOpenCodePlan, type OpenCodeGoUsage } from '../shared/opencode';
 import { MessageInteractions, type MessageTarget } from './orchestration/message-interactions';
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
@@ -177,6 +178,7 @@ export class CoreService {
   readonly turnRouting: TurnRouting;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
+  private openCodeGoUsageCache?: { at: number; value: Promise<OpenCodeGoUsage> };
   /** Set while a read started by a Claude Code run is on, so a run of many steps starts one read, not one per step. */
   private usageReadAfterRun = false;
   /** The reset claim running for each Claude Code account, so a second click joins it instead of spending another. */
@@ -798,6 +800,7 @@ export class CoreService {
       case 'harnesses': return this.withSignIns(this.harnesses(commands.harnesses.parse(args).refresh));
       case 'harnessUsage': return this.harnessUsage(commands.harnessUsage.parse(args).refresh);
       case 'claimHarnessReset': return this.claimHarnessReset(commands.claimHarnessReset.parse(args).accountId);
+      case 'openCodeGoUsage': return this.openCodeGoUsage(commands.openCodeGoUsage.parse(args).refresh);
       case 'saveHarnessAccount': {
         const input = commands.saveHarnessAccount.parse(args);
         // A new name is a label only; a new account is selected, so that harness signs in from another folder.
@@ -1146,6 +1149,26 @@ export class CoreService {
     return this.harnessUsageCache.value;
   }
 
+  /**
+   * How much of its OpenCode Go allowances the saved Go key has used. The key is read from main for this request only
+   * and goes nowhere but OpenCode Go; the answer carries no key. Reused for a minute, like harness usage.
+   */
+  openCodeGoUsage(refresh: boolean): Promise<OpenCodeGoUsage> {
+    if (refresh || !this.openCodeGoUsageCache || Date.now() - this.openCodeGoUsageCache.at > 60_000) {
+      const value = this.readOpenCodeGoUsage();
+      this.openCodeGoUsageCache = { at: Date.now(), value };
+    }
+    return this.openCodeGoUsageCache.value;
+  }
+
+  private async readOpenCodeGoUsage(): Promise<OpenCodeGoUsage> {
+    const checkedAt = this.clock().toISOString();
+    const key = await this.modelListRuntime.readKey?.('opencode-go').catch(() => null);
+    if (!key) return { windows: [], unavailable: 'signed_out', checkedAt };
+    const found = await readOpenCodeGoUsage(key, this.modelListRuntime.fetch ?? fetch);
+    return { ...found, checkedAt };
+  }
+
   /** Reads against the detection already cached: Dò lại has just refreshed it, and a second pass would spawn every CLI again. */
   private async readHarnessUsage(): Promise<HarnessUsage> {
     const read = this.harness.usage;
@@ -1192,27 +1215,28 @@ export class CoreService {
     throw new Error(resetClaimFailures[outcome]);
   }
 
-  /** Runs one harness call for the runner; a Claude Code call may have renewed that account's saved sign-in. */
+  /** Runs one harness call for the runner; the call may have renewed that account's saved sign-in. */
   private async executeHarness(request: HarnessRequest): Promise<HarnessResult> {
     try {
       return await this.harness.execute(request);
     } finally {
-      if (request.harness === 'claude-code') this.claudeCodeRan(request.configDir);
+      this.harnessRan(request.harness, request.configDir);
     }
   }
 
   /**
-   * Claude Code renews its own saved sign-in when it runs, and Orglet never does (COD-301). When the usage on hand found
-   * that account's token expired, the call that just ended has renewed it, so the numbers are read again now and the
-   * window is told. Any other state reads nothing: a run of many steps must not start a read per step.
+   * Claude Code, Cursor Agent and Gemini CLI renew their own saved sign-in when they run, and Orglet never does
+   * (COD-301). When the usage on hand found that account's token expired, the call that just ended has renewed it, so the
+   * numbers are read again now and the window is told. Any other state reads nothing: a run of many steps must not start
+   * a read per step.
    */
-  private claudeCodeRan(configDir: string | undefined) {
+  private harnessRan(harness: HarnessCatalogId, configDir: string | undefined) {
     const cached = this.harnessUsageCache;
     if (!cached || this.usageReadAfterRun) return;
     void cached.value.then(usage => {
       if (this.harnessUsageCache !== cached || this.usageReadAfterRun) return;
-      const rows = usage['claude-code'] ?? [];
-      const ranAccount = rows.find(row => this.harnessAccounts.configDir('claude-code', row.accountId) === configDir);
+      const rows = usage[harness] ?? [];
+      const ranAccount = rows.find(row => this.harnessAccounts.configDir(harness, row.accountId) === configDir);
       if (ranAccount?.unavailable !== 'expired') return;
       this.usageReadAfterRun = true;
       void this.harnessUsage(true).finally(() => {

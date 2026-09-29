@@ -6,9 +6,11 @@ import { Button } from './ui';
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
+/** The allowance's length, then the model or pool it is limited to: "Week · Opus", "Month · Auto", "Day · gemini-2.5-pro". */
 export function usageWindowLabel(window: HarnessUsageWindow): string {
   if (window.kind === 'session') return t('Phiên hiện tại');
-  if (window.kind === 'monthly') return t('Tháng');
+  if (window.kind === 'daily') return window.model ? t('Ngày · {0}', [window.model]) : t('Trong ngày');
+  if (window.kind === 'monthly') return window.model ? t('Tháng · {0}', [window.model]) : t('Tháng');
   return window.model ? t('Tuần · {0}', [window.model]) : t('Tuần');
 }
 
