@@ -1,11 +1,11 @@
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import * as rules from './alignment/rules.ts';
 import { en } from '../apps/desktop/src/shared/locales/en.ts';
 import { packagedExecutable } from './packaged-executable.mjs';
-import { fakeHarnessPath } from './fake-harnesses.mjs';
+import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
 
 // Measures alignment on the packaged app's main screens instead of trusting a screenshot (COD-333). It seeds a
 // throwaway workspace on Demo (no provider is called), visits each screen at two window sizes in both themes, and
@@ -170,25 +170,8 @@ function printFinding(pass, finding) {
 const outputFolder = options.out ?? await mkdtemp(join(tmpdir(), 'orglet-alignment-'));
 await mkdir(outputFolder, { recursive: true });
 const dataFolder = await mkdtemp(join(tmpdir(), 'orglet-alignment-data-'));
-// The Harness tab must never read this machine's sign-ins or ask a vendor for plan usage. Logged-out stand-ins for
-// Claude Code, Codex and Gemini CLI go first on PATH; LOCALAPPDATA hides the CLIs the Claude and Codex desktop apps
-// bundle; and every CLI's own config folder points at an empty one, so a real CLI still found under the home folder
-// (USERPROFILE stays real: Electron cannot start without it) reports itself signed out.
-const bin = await fakeHarnessPath(dataFolder);
-const emptyFolder = name => join(dataFolder, name);
-for (const name of ['local-app-data', 'gemini-home', 'codex-home', 'claude-config']) await mkdir(emptyFolder(name), { recursive: true });
-const pathValue = `${bin}${delimiter}${process.env.PATH ?? process.env.Path ?? ''}`;
-const env = {
-  ...process.env,
-  APPDATA: dataFolder,
-  LOCALAPPDATA: emptyFolder('local-app-data'),
-  PATH: pathValue,
-  Path: pathValue,
-  GEMINI_CLI_HOME: emptyFolder('gemini-home'),
-  CODEX_HOME: emptyFolder('codex-home'),
-  CLAUDE_CONFIG_DIR: emptyFolder('claude-config'),
-};
-for (const name of ['ELECTRON_RUN_AS_NODE', 'GEMINI_API_KEY', 'CURSOR_API_KEY', 'CURSOR_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']) delete env[name];
+// The Harness tab must never read this machine's sign-ins or ask a vendor for plan usage.
+const { env } = await isolatedHarnessEnvironment(dataFolder);
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${dataFolder}`], env });
 let closed = false;
 app.once('close', () => { closed = true; });

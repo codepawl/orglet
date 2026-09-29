@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 
 // Puts three fake CLIs in `<directory>/bin` so a smoke always sees a logged-out Claude Code, an unreadable Codex login
 // probe and a Gemini CLI whose empty config folder (GEMINI_CLI_HOME, set by the caller) holds no sign-in. Cursor stays
@@ -39,4 +39,47 @@ export async function fakeHarnessPath(directory) {
     process.exit(1);
   `);
   return bin;
+}
+
+// A packaged app launched with this environment never reads this machine's sign-ins or asks a vendor for plan usage.
+// The fake CLIs go first on PATH, but a real executable found anywhere outranks a .cmd shim (COD-170), so every CLI's
+// own config folder also points at an empty one: a real CLI still found under the home folder reports itself signed
+// out. APPDATA and LOCALAPPDATA hide the npm installs, the CLIs the Claude, Codex and Cursor apps bundle, and Cursor
+// Agent's sign-in. USERPROFILE stays real: Electron cannot start without it.
+export async function isolatedHarnessEnvironment(directory) {
+  const bin = await fakeHarnessPath(directory);
+  const emptyFolder = async name => {
+    const folder = join(directory, name);
+    await mkdir(folder, { recursive: true });
+    return folder;
+  };
+  const pathValue = `${bin}${delimiter}${process.env.PATH ?? process.env.Path ?? ''}`;
+  const env = {
+    ...process.env,
+    APPDATA: directory,
+    LOCALAPPDATA: await emptyFolder('local-app-data'),
+    PATH: pathValue,
+    Path: pathValue,
+    GEMINI_CLI_HOME: await emptyFolder('gemini-home'),
+    CODEX_HOME: await emptyFolder('codex-home'),
+    CLAUDE_CONFIG_DIR: await emptyFolder('claude-config'),
+    CURSOR_CONFIG_DIR: await emptyFolder('cursor-config'),
+    XDG_CONFIG_HOME: await emptyFolder('xdg-config'),
+  };
+  // Variables a CLI would treat as a sign-in on their own.
+  const signInVariables = [
+    'ELECTRON_RUN_AS_NODE',
+    'ANTHROPIC_API_KEY',
+    'OPENAI_API_KEY',
+    'CURSOR_API_KEY',
+    'CURSOR_AUTH_TOKEN',
+    'GEMINI_API_KEY',
+    'GOOGLE_GENAI_USE_GCA',
+    'GOOGLE_GENAI_USE_VERTEXAI',
+    'GOOGLE_GEMINI_BASE_URL',
+    'GEMINI_CLI_USE_COMPUTE_ADC',
+    'CLOUD_SHELL',
+  ];
+  for (const name of signInVariables) delete env[name];
+  return { bin, env };
 }
