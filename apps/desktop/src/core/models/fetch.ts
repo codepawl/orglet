@@ -13,9 +13,13 @@ import {
   type ModelSource,
 } from '../../shared/models';
 import { modelCatalog, type CatalogProvider } from '../adapters/catalog';
-import { cleanEnv, commandLine, type Probe } from '../harness/detect';
+import { cleanEnv, commandLine, harnessAccountEnv, type Probe } from '../harness/detect';
+import { claudeAccessToken, codexAppServer, type CodexAppServer } from '../harness/usage';
 import { harnessNames, type HarnessInfo } from '../../shared/harness';
 import { OPENCODE_BASE_URLS, type OpenCodePlan } from '../../shared/opencode';
+import { CLAUDE_CODE_ALIASES, claudeCodeEntries, claudeStartProbe, type ClaudeStartProbe } from './claudeCode';
+
+export { CLAUDE_CODE_ALIASES };
 
 export const MODEL_LIST_ENDPOINTS = {
   openai: 'https://api.openai.com/v1',
@@ -26,13 +30,6 @@ export const MODEL_LIST_ENDPOINTS = {
   'opencode-go': OPENCODE_BASE_URLS['opencode-go'],
   ollama: 'http://127.0.0.1:11434',
 } as const;
-
-export const CLAUDE_CODE_ALIASES: ReadonlyArray<{ id: string; displayName: string }> = [
-  { id: 'sonnet', displayName: 'Sonnet' },
-  { id: 'opus', displayName: 'Opus' },
-  { id: 'haiku', displayName: 'Haiku' },
-  { id: 'fable', displayName: 'Fable' },
-];
 
 /**
  * The model aliases Gemini CLI documents for `-m` (docs/cli/cli-reference.md, "Model aliases", checked against 0.61.0).
@@ -56,6 +53,16 @@ export type ModelListFetchOptions = {
   harnesses: () => Promise<HarnessInfo[]>;
   timeoutMs?: number;
   now: () => Date;
+} & HarnessListRuntime;
+
+/** How the harness lists are read; tests put fakes here, the app uses the real CLIs. */
+type HarnessListRuntime = {
+  /** Which model Claude Code picks with an alias, or with none (its start line). */
+  claudeStart?: ClaudeStartProbe;
+  /** The account's Claude Code token, for the Models API names. */
+  claudeToken?: (configDir: string | undefined) => Promise<string | undefined>;
+  /** `codex app-server`, asked `model/list`. */
+  appServer?: CodexAppServer;
 };
 
 /** Injected from core/entry (key IPC) and tests (HTTP/CLI fixtures). */
@@ -65,7 +72,7 @@ export type ModelListRuntime = {
   endpoints?: Partial<Record<keyof typeof MODEL_LIST_ENDPOINTS, string>>;
   probe?: Probe;
   timeoutMs?: number;
-};
+} & HarnessListRuntime;
 
 const shapeError = 'Danh sách model không đúng định dạng. Vẫn có thể gõ ID tùy chỉnh.';
 const timeoutError = 'Hết thời gian tải danh sách model. Vẫn có thể gõ ID tùy chỉnh.';
@@ -327,6 +334,8 @@ export function parseCodexModels(text: string): ModelEntry[] {
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
     const rec = row as Record<string, unknown>;
+    // Models the CLI keeps out of its own picker (an internal reviewer, a reserve model) stay out of Orglet's too.
+    if (rec.visibility === 'hide') continue;
     const id = pickId(rec.id) ?? pickId(rec.slug) ?? pickId(rec.model);
     if (!id) continue;
     const displayName = typeof rec.display_name === 'string' ? rec.display_name.trim().slice(0, 200)
@@ -349,22 +358,75 @@ export function parseCodexModels(text: string): ModelEntry[] {
   return models;
 }
 
+/**
+ * `codex app-server`'s `model/list` answer (checked against codex-cli 0.157.0's generated protocol, `v2/Model.ts`):
+ * the models its own picker shows, each with `displayName`, `upgrade` and `isDefault`, the catalog's default. That
+ * default ignores the person's config.toml, as Orglet's runs do (`--ignore-user-config`).
+ */
+export function parseCodexModelList(answer: unknown): ModelEntry[] {
+  const data = answer && typeof answer === 'object' ? (answer as { data?: unknown }).data : undefined;
+  if (!Array.isArray(data)) throw new Error(shapeError);
+  const models: ModelEntry[] = [];
+  const seen = new Set<string>();
+  for (const row of data) {
+    if (!row || typeof row !== 'object') continue;
+    const rec = row as { id?: unknown; model?: unknown; displayName?: unknown; upgrade?: unknown; hidden?: unknown; isDefault?: unknown };
+    if (rec.hidden === true) continue;
+    const id = pickId(rec.model) ?? pickId(rec.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const displayName = typeof rec.displayName === 'string' ? rec.displayName.trim().slice(0, 200) : '';
+    const replacementId = pickId(rec.upgrade);
+    models.push({
+      provider: 'codex',
+      id,
+      source: 'native',
+      ...(displayName ? { displayName } : {}),
+      ...(replacementId && replacementId !== id ? { replacementId } : {}),
+      ...(rec.isDefault === true ? { isDefault: true as const } : {}),
+    });
+    if (models.length >= MODEL_LIST_MAX) break;
+  }
+  if (data.length > 0 && models.length === 0) throw new Error(shapeError);
+  return models;
+}
+
+/** The colour codes Cursor Agent writes around each ID when its output looks like a terminal. */
+const ANSI_COLOUR = /\u001b\[[0-9;]*m/g;
+const CURSOR_LINE = /^(\S+)(?:\s+-\s+(.+?))?(?:\s+\(([a-z, ]+)\))?$/;
+const CURSOR_MARKS = new Set(['current', 'default']);
+
+/**
+ * `agent --list-models` prints `id - Display Name`, then `(current, default)` after the model the CLI is set to and the
+ * account's default (read from Cursor Agent 2026.09.18's own printer). A run without `--model` takes the current one,
+ * so that row carries `isDefault`; the account's default does only when nothing is current.
+ */
 export function parseCursorModels(text: string): ModelEntry[] {
   if (/<!DOCTYPE/i.test(text) || /^\s*</.test(text.trim())) throw new Error(shapeError);
   const models: ModelEntry[] = [];
   const seen = new Set<string>();
-  for (const line of text.split(/\r?\n/)) {
-    const match = line.trim().match(/^(\S+)\s+-\s+(.+)$/);
+  let current: string | undefined;
+  let accountDefault: string | undefined;
+  for (const line of text.replace(ANSI_COLOUR, '').split(/\r?\n/)) {
+    const match = line.trim().match(CURSOR_LINE);
     if (!match) continue;
+    const marks = match[3]?.split(',').map(mark => mark.trim()) ?? [];
+    const marked = marks.length > 0 && marks.every(mark => CURSOR_MARKS.has(mark));
+    // A model line has a name after " - ", or the CLI's own marks after a bare ID.
+    if (!match[2] && !marked) continue;
+    const name = marked ? match[2] : [match[2], match[3] ? `(${match[3]})` : ''].filter(Boolean).join(' ');
     const id = pickId(match[1]);
-    const displayName = match[2].trim().slice(0, 200);
+    const displayName = name?.trim().slice(0, 200);
     if (!id || seen.has(id)) continue;
     seen.add(id);
+    if (marks.includes('current') && marked) current = id;
+    if (marks.includes('default') && marked) accountDefault = id;
     models.push({ provider: 'cursor', id, source: 'native', ...(displayName ? { displayName } : {}) });
     if (models.length >= MODEL_LIST_MAX) break;
   }
   if (!models.length) throw new Error(shapeError);
-  return models;
+  const runsWith = current ?? accountDefault;
+  return models.map(entry => entry.id === runsWith ? { ...entry, isDefault: true as const } : entry);
 }
 
 export function claudeCodeModels(): ModelEntry[] {
@@ -435,10 +497,15 @@ async function fetchOpenAI(options: ModelListFetchOptions): Promise<Pick<ModelLi
 async function fetchAnthropic(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
   const key = await options.readKey('anthropic');
   if (!key) return withCatalogHint('anthropic', [], 'native', missingKey(apiName('anthropic')));
+  const models = await readAnthropicModels({ 'x-api-key': key, 'anthropic-version': '2023-06-01' }, options);
+  return withCatalogHint('anthropic', models, 'native');
+}
+
+/** Every page of Anthropic's `GET /v1/models`, with the key or token the caller put in the headers. */
+async function readAnthropicModels(headers: Record<string, string>, options: ModelListFetchOptions): Promise<ModelEntry[]> {
   const base = options.endpoints?.anthropic ?? MODEL_LIST_ENDPOINTS.anthropic;
   const http = options.fetch ?? fetch;
   const timeoutMs = options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS;
-  const headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01' };
   const models: ModelEntry[] = [];
   let after: string | undefined;
   for (let page = 0; page < 20 && models.length < MODEL_LIST_MAX; page++) {
@@ -450,7 +517,7 @@ async function fetchAnthropic(options: ModelListFetchOptions): Promise<Pick<Mode
     if (!parsed.hasMore || !parsed.after) break;
     after = parsed.after;
   }
-  return withCatalogHint('anthropic', models, 'native');
+  return models;
 }
 
 async function fetchXai(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
@@ -505,11 +572,57 @@ function harnessOf(list: HarnessInfo[], id: 'claude-code' | 'codex' | 'cursor') 
   return list.find(item => item.id === id);
 }
 
+/** The header Claude Code's own calls send with its sign-in token (the same one `usage.ts` sends to read the plan). */
+const CLAUDE_OAUTH_BETA = 'oauth-2025-04-20';
+
+/** The models the Claude Code account may use, with Anthropic's display names; undefined without a readable token. */
+async function readClaudeCodeNames(configDir: string | undefined, options: ModelListFetchOptions): Promise<ModelEntry[] | undefined> {
+  const token = await (options.claudeToken ?? claudeAccessToken)(configDir);
+  if (!token) return undefined;
+  const headers = { Authorization: `Bearer ${token}`, 'anthropic-beta': CLAUDE_OAUTH_BETA, 'anthropic-version': '2023-06-01' };
+  return readAnthropicModels(headers, options);
+}
+
+/**
+ * Claude Code has no command that lists models. The CLI names the model each alias and its own default stand for
+ * when it starts (`claudeStartProbe`), and the Models API, called with the account's own sign-in, names each model
+ * ("Claude Opus 5.5") and lists the rest. Without a sign-in, or when both fail, the aliases stay as they were.
+ */
+async function fetchClaudeCode(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+  const info = harnessOf(await options.harnesses(), 'claude-code');
+  if (!info || info.auth !== 'logged_in' || !info.executable) return withCatalogHint('claude-code', claudeCodeModels(), 'alias');
+  const start = options.claudeStart ?? claudeStartProbe;
+  const env = harnessAccountEnv('claude-code', info.configDir);
+  const asked = [undefined, ...CLAUDE_CODE_ALIASES.map(alias => alias.id)];
+  const [started, named] = await Promise.all([
+    Promise.all(asked.map(alias => start(info.executable, env, alias).catch(() => undefined))),
+    readClaudeCodeNames(info.configDir, options).catch(() => undefined),
+  ]);
+  const [defaultModel, ...resolved] = started;
+  const aliases = Object.fromEntries(CLAUDE_CODE_ALIASES.map((alias, index) => [alias.id, resolved[index]]));
+  return withCatalogHint('claude-code', claudeCodeEntries({ defaultModel, aliases, named }), 'alias');
+}
+
+/** `model/list` from `codex app-server`, the list with names and the default; undefined when it did not answer. */
+async function readCodexModelList(info: HarnessInfo, options: ModelListFetchOptions): Promise<ModelEntry[] | undefined> {
+  const appServer = options.appServer ?? codexAppServer;
+  const [answer] = await appServer(info.executable, harnessAccountEnv('codex', info.configDir), [{ method: 'model/list', params: { limit: 100 } }]);
+  try {
+    const models = parseCodexModelList(answer);
+    return models.length ? models : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function fetchCodex(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
   const info = harnessOf(await options.harnesses(), 'codex');
   const name = harnessNames.codex;
   if (!info || info.auth === 'missing' || !info.executable) return withCatalogHint('codex', [], 'native', missingHarness(name));
   if (info.auth !== 'logged_in') return withCatalogHint('codex', [], 'native', signedOut(name));
+  const listed = await readCodexModelList(info, options).catch(() => undefined);
+  if (listed) return withCatalogHint('codex', listed, 'native');
+  // An older CLI without `model/list`: the debug JSON has names but no default.
   const probe = options.probe ?? probeWithTimeout(options.timeoutMs ?? MODEL_LIST_TIMEOUT_MS);
   const remote = await probe(info.executable, ['debug', 'models']);
   try {
@@ -538,7 +651,7 @@ export async function fetchProviderList(provider: ModelListProvider, options: Mo
   if (provider === 'openrouter') return { fetchedAt, ...await fetchOpenRouter(options) };
   if (provider === 'opencode-zen' || provider === 'opencode-go') return { fetchedAt, ...await fetchOpenCode(provider, options) };
   if (provider === 'ollama') return { fetchedAt, ...await fetchOllama(options) };
-  if (provider === 'claude-code') return { fetchedAt, ...withCatalogHint('claude-code', claudeCodeModels(), 'alias') };
+  if (provider === 'claude-code') return { fetchedAt, ...await fetchClaudeCode(options) };
   if (provider === 'gemini') return { fetchedAt, ...withCatalogHint('gemini', geminiCliModels(), 'alias') };
   if (isCustomProvider(provider)) return { fetchedAt, ...await fetchCustomConnection(provider, options) };
   if (provider === 'codex') return { fetchedAt, ...await fetchCodex(options) };

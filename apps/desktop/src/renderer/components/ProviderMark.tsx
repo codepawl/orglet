@@ -1,5 +1,6 @@
 import type { BuiltInProviderId, ProviderId } from '../../shared/contracts';
 import type { HarnessCatalogId } from '../../shared/harness';
+import type { ModelVendor } from '../../shared/modelChoices';
 import { customConnectionName } from '../customConnections';
 
   // Official marks from Simple Icons 15.22.0 (CC0-1.0, https://simpleicons.org). Trademarks belong to their owners;
@@ -50,6 +51,36 @@ function markOf(provider: ProviderId | HarnessCatalogId): Mark {
 export function ProviderMark({ provider, size = 'default', decorative = false }: { provider: ProviderId | HarnessCatalogId; size?: 'default' | 'small'; decorative?: boolean }) {
   const mark = markOf(provider);
   return <span className={`provider-mark ${size}`} {...(decorative ? { 'aria-hidden': true } : { title: mark.name, 'aria-label': mark.name, role: 'img' })}>
-    {mark.path ? <svg viewBox="0 0 24 24" aria-hidden="true" style={mark.color ? { color: mark.color } : undefined}><path d={mark.path} fill="currentColor" fillRule={mark.shade ? 'evenodd' : undefined} />{mark.shade && <path d={mark.shade} fill="currentColor" opacity={0.35} />}</svg> : (mark.letter ?? mark.name[0])}
+    {mark.path ? <MarkGlyph mark={mark} /> : (mark.letter ?? mark.name[0])}
+  </span>;
+}
+
+function MarkGlyph({ mark }: { mark: Mark }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" style={mark.color ? { color: mark.color } : undefined}>
+    <path d={mark.path} fill="currentColor" fillRule={mark.shade ? 'evenodd' : undefined} />
+    {mark.shade && <path d={mark.shade} fill="currentColor" opacity={0.35} />}
+  </svg>;
+}
+
+/** Whose model a picker row is (COD-332): the same marks, keyed by the model's maker rather than the connection. */
+const vendorMarks: Record<ModelVendor, Mark> = {
+  claude: marks['claude-code'],
+  openai: marks.openai,
+  gemini: marks.gemini,
+  grok: marks.xai,
+  cursor: marks.cursor,
+  ollama: marks.ollama,
+  openrouter: marks.openrouter,
+  opencode: marks['opencode-zen'],
+};
+
+/**
+ * The bare mark of a model's maker in a picker row, no tile, always beside the model's name (so it is decorative). A
+ * model whose maker is unknown wears its connection's mark.
+ */
+export function ModelMark({ vendor, provider }: { vendor: ModelVendor | undefined; provider: ProviderId | HarnessCatalogId }) {
+  const mark = vendor ? vendorMarks[vendor] : markOf(provider);
+  return <span className="model-mark" aria-hidden="true">
+    {mark.path ? <MarkGlyph mark={mark} /> : <span className="model-mark-letter">{mark.letter ?? mark.name[0]}</span>}
   </span>;
 }

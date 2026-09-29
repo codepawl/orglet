@@ -7,12 +7,14 @@ import { deprecationNotice, formatSunsetDay, pickerListedModel } from '../../sha
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Button, FieldLabel } from './ui';
-import { ProviderMark } from './ProviderMark';
+import { ModelMark } from './ProviderMark';
 import { modelRunnable, openCodeModelIssue } from './openCodeModel';
+import { checkedChoiceValue, modelChoices, type ModelChoice } from '../../shared/modelChoices';
+import { choiceBadge, choiceLabel, shownChoices } from './modelRows';
 import { isOpenCodePlan } from '../../shared/opencode';
 import { Input, Skeleton } from '@codepawl/orglet-ui';
 import { modelLists } from '../caches';
-import { startingModelId } from './workerModel';
+import { modelIdRequired, startingModelId } from './workerModel';
 import { useCached } from '../prefetch';
 
 function deprecationChipLabel(sunsetAt?: string) {
@@ -27,14 +29,21 @@ const emptyList = (error?: string): ModelListResult => ({
   models: [], fetchedAt: new Date().toISOString(), stale: false, customIdOk: true, source: 'catalog-hint', ...(error ? { error } : {}),
 });
 
-function filterModels(models: ModelEntry[], query: string) {
-  const q = query.trim().toLowerCase();
-  if (!q || models.some(entry => entry.id === query)) return models;
-  return models.filter(entry =>
-    entry.id.toLowerCase().includes(q)
-    || entry.displayName?.toLowerCase().includes(q)
-    || entry.aliases?.some(alias => alias.toLowerCase().includes(q)));
+/** Whether the typed text narrows the list: something typed that is not already a listed ID. */
+function filtering(models: readonly ModelEntry[], query: string) {
+  return Boolean(query.trim()) && !models.some(entry => entry.id === query);
 }
+
+function matches(entry: ModelEntry | undefined, query: string) {
+  const q = query.trim().toLowerCase();
+  if (!entry) return false;
+  return entry.id.toLowerCase().includes(q)
+    || Boolean(entry.displayName?.toLowerCase().includes(q))
+    || Boolean(entry.aliases?.some(alias => alias.toLowerCase().includes(q)));
+}
+
+/** One row of the open list: a model, or the More models row that reveals the older ones. */
+type Row = { kind: 'choice'; choice: ModelChoice } | { kind: 'more' };
 
 /**
  * Searchable list plus an always-on typed ID. Catalog rows are suggestions, never a lock. An empty field is filled
@@ -57,16 +66,30 @@ export function ModelPicker({ provider, value, onChange, invalid, flash, require
   const list = kept ?? (failed?.provider === provider ? failed.list : undefined);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [placement, setPlacement] = useState<Placement>();
   const input = useRef<HTMLInputElement>(null);
   const menu = useRef<HTMLUListElement>(null);
   const hint = Object.hasOwn(CATALOG_HINT_IDS, provider) ? CATALOG_HINT_IDS[provider as keyof typeof CATALOG_HINT_IDS] : undefined;
   const models = list?.models ?? [];
-  const runnable = (entry: ModelEntry) => modelRunnable(provider, entry.id);
+  const runnable = (row: Row | undefined) => row?.kind === 'more' || (row?.kind === 'choice' && (!row.choice.entry || modelRunnable(provider, row.choice.entry.id)));
+  // Rows as the composer shows them (COD-332): the maker's mark and versioned name, Default on the model that runs
+  // when the field is empty (choosing it empties the field), and older models under More models. Typing narrows the
+  // whole list instead.
+  const choices = modelChoices(provider, models, !modelIdRequired(provider));
+  const checked = checkedChoiceValue(choices, value.trim());
+  const shown = shownChoices(choices, checked, moreOpen);
+  const listed: Row[] = filtering(models, value)
+    ? choices.filter(choice => matches(choice.entry, value)).map(choice => ({ kind: 'choice', choice }))
+    : [
+      ...shown.main.map((choice): Row => ({ kind: 'choice', choice })),
+      ...(shown.moreRow ? [{ kind: 'more' } as const] : []),
+      ...shown.more.map((choice): Row => ({ kind: 'choice', choice })),
+    ];
   // Models this plan offers but Orglet cannot call stay listed, after the ones it can, so the gap is visible.
-  const matching = filterModels(models, value);
-  const options = [...matching.filter(runnable), ...matching.filter(entry => !runnable(entry))];
+  const options = [...listed.filter(row => runnable(row)), ...listed.filter(row => !runnable(row))];
+  const defaultChoice = choices.find(choice => choice.value === '' && choice.label);
   const modelIssue = openCodeModelIssue(provider, value);
   const failOpen = t('Gõ ID model. Danh sách chưa tải được.');
 
@@ -102,10 +125,12 @@ export function ModelPicker({ provider, value, onChange, invalid, flash, require
   }, [provider, list, value]);
 
   const close = () => { setOpen(false); setPlacement(undefined); };
-  const openList = () => { setActive(Math.max(0, options.findIndex(entry => entry.id === value))); setOpen(true); };
+  const openList = () => { setActive(Math.max(0, options.findIndex(row => row.kind === 'choice' && row.choice.value === checked))); setOpen(true); };
   const choose = (index: number) => {
     const option = options[index]; if (!option || !runnable(option)) return;
-    if (option.id !== value) onChange(option.id);
+    if (option.kind === 'more') { setMoreOpen(true); return; }
+    if (option.choice.value !== value) onChange(option.choice.value);
+    setMoreOpen(false);
     close(); input.current?.focus();
   };
   const container = () => (input.current?.closest('[role=dialog]') as HTMLElement | null) ?? document.body;
@@ -160,7 +185,8 @@ export function ModelPicker({ provider, value, onChange, invalid, flash, require
 
   const defaultNote = isOpenCodePlan(provider)
     ? t('Chọn model trong gói hoặc gõ ID; mục Chưa hỗ trợ thì Orglet chưa gọi được.')
-    : t('Gõ ID model hoặc chọn từ danh sách. Tên mặc định chỉ là gợi ý.');
+    : defaultChoice ? t('Gõ ID model hoặc chọn từ danh sách. Để trống thì chạy model Mặc định.')
+      : t('Gõ ID model hoặc chọn từ danh sách. Tên mặc định chỉ là gợi ý.');
   const note = pending ? <Skeleton width="60%" />
     // The core's reason comes as a Vietnamese source string, like every core message.
     : modelIssue || (list?.error ? tMessage(list.error) : undefined) || (!models.length && !busy ? failOpen : undefined)
@@ -180,7 +206,7 @@ export function ModelPicker({ provider, value, onChange, invalid, flash, require
     <div className="model-picker">
       <div className="model-picker-field">
       <Input ref={input} data-field="modelId" value={value} maxLength={200} autoComplete="off" autoCorrect="off" spellCheck={false}
-        placeholder={hint ?? t('Gõ ID model')}
+        placeholder={defaultChoice ? t('Mặc định · {0}', [choiceLabel(defaultChoice)]) : hint ?? t('Gõ ID model')}
         aria-labelledby={labelId} aria-describedby={describedBy} aria-invalid={invalid || undefined} data-flash={invalid ? flash : undefined}
         role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={open ? listId : undefined}
         aria-activedescendant={open && options[active] ? `${id}-option-${active}` : undefined}
@@ -210,23 +236,35 @@ export function ModelPicker({ provider, value, onChange, invalid, flash, require
     <p id={noteId} className="muted model-picker-note">{note}</p>
     {open && options.length > 0 && createPortal(<ul ref={menu} id={listId} role="listbox" aria-labelledby={labelId}
       className={`org-select-menu ${placement?.above ? 'org-select-menu-above' : ''}`} style={placement?.style ?? { position: 'fixed', visibility: 'hidden', left: 0, top: 0 }}>
-      {options.map((option, index) => (
-        <li key={option.id} id={`${id}-option-${index}`} data-index={index} role="option" aria-selected={option.id === value}
+      {options.map((option, index) => {
+        const rowClass = `org-select-option${index === active ? ' org-select-option-active' : ''}`;
+        const pointer = {
+          onPointerMove: () => { if (index !== active) setActive(index); },
+          onPointerDown: (event: { preventDefault: () => void }) => event.preventDefault(),
+          onClick: () => choose(index),
+        };
+        if (option.kind === 'more') {
+          return <li key="more" id={`${id}-option-${index}`} data-index={index} role="option" aria-selected={false}
+            className={`${rowClass} org-select-option-spaced org-select-option-action`} {...pointer}>
+            <span className="org-select-icon"><ChevronDown size={16} aria-hidden="true" /></span>
+            <span className="org-select-option-text"><span>{t('Thêm model')}</span></span>
+            <Check size={16} className="org-select-check" aria-hidden="true" />
+          </li>;
+        }
+        const { choice } = option;
+        const badge = choiceBadge(choice, runnable(option));
+        const previous = options[index - 1];
+        const firstOlder = choice.more && previous?.kind === 'choice' && !previous.choice.more;
+        return <li key={choice.value || 'default'} id={`${id}-option-${index}`} data-index={index} role="option" aria-selected={choice.value === checked}
           aria-disabled={runnable(option) ? undefined : true}
-          className={`org-select-option${index === active ? ' org-select-option-active' : ''}`}
-          onPointerMove={() => { if (index !== active) setActive(index); }} onPointerDown={event => event.preventDefault()} onClick={() => choose(index)}>
-          {/* The provider is the same for every row, but without its mark a list of bare slugs says nothing about
-              what it belongs to (user, 2026-09-19). */}
-          <ProviderMark provider={provider} size="small" decorative />
-          <span className="org-select-option-text">
-            <span>{option.displayName ?? option.id}</span>
-            {option.displayName ? <span className="org-select-detail">{option.id}</span> : option.source === 'catalog-hint' ? <span className="org-select-detail">{t('Gợi ý')}</span> : null}
-          </span>
-          {option.deprecated && <span className="org-select-option-badge model-deprecation-chip">{t('Sắp ngừng')}</span>}
-          {!runnable(option) && <span className="org-select-option-badge">{t('Chưa hỗ trợ')}</span>}
+          className={`${rowClass}${firstOlder ? ' org-select-option-spaced' : ''}`} {...pointer}>
+          {/* The maker's mark: without it a list of names says nothing about whose models they are (user, 2026-09-19). */}
+          <span className="org-select-icon"><ModelMark vendor={choice.vendor} provider={provider} /></span>
+          <span className="org-select-option-text"><span>{choiceLabel(choice)}</span></span>
+          {badge && <span className={`org-select-option-badge${choice.entry?.deprecated && !choice.isDefault ? ' model-deprecation-chip' : ''}`}>{badge}</span>}
           <Check size={16} className="org-select-check" aria-hidden="true" />
-        </li>
-      ))}
+        </li>;
+      })}
     </ul>, container())}
   </div>;
 }
