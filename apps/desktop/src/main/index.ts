@@ -50,6 +50,8 @@ import { BrowserHostEvent, BrowserHostRequest } from '../shared/browser-host';
 import { BrowserInputEvent, type BrowserLiveEvent } from '../shared/browser-live';
 import { CLEAN_BROWSER_PROFILE, type BrowserState } from '../shared/browser';
 import { signInPageAllowed } from '../shared/harness';
+import { ACCOUNT_SCHEME, accountsBaseUrl } from '../shared/account';
+import { AccountFile, AccountService, accountPayload } from './account';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -78,6 +80,8 @@ const devServer = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV
 let core: Electron.UtilityProcess;
 let credentials: Credentials;
 let mcpSecrets: McpSecretStore;
+/** The optional CodePawl account (COD-337): its tokens stay here, the window hears only `AccountState`. */
+let account: AccountService;
 let webSearchKeys: WebSearchKeys;
 /** The MCP server processes the core reports running, so they stop even when the core cannot stop them (COD-241). */
 let mcpProcesses: ProcessIdentity[] = [];
@@ -287,10 +291,13 @@ const LINK_ARGUMENTS = ['--'];
 async function registerLinks(): Promise<void> {
   if (!updateEnvironment.squirrelUpdater || updateTestBuild) return;
   app.setAsDefaultProtocolClient(LINK_SCHEME, launcherPath(), LINK_ARGUMENTS);
+  // The browser comes back from a CodePawl sign-in through its own scheme (COD-337), registered the same way.
+  app.setAsDefaultProtocolClient(ACCOUNT_SCHEME, launcherPath(), LINK_ARGUMENTS);
 }
 async function unregisterLinks(): Promise<void> {
   if (!updateEnvironment.squirrelUpdater || updateTestBuild) return;
   app.removeAsDefaultProtocolClient(LINK_SCHEME, launcherPath(), LINK_ARGUMENTS);
+  app.removeAsDefaultProtocolClient(ACCOUNT_SCHEME, launcherPath(), LINK_ARGUMENTS);
 }
 const sentFiles = new SentFilesHandOff();
 /** What came from outside and waits for the window to take it. Links open in order; a newer Send to replaces an older one. */
@@ -304,7 +311,7 @@ function queueIncoming(item: Incoming) {
   incomingQueue = [...withoutOlderFiles, item].slice(-INCOMING_QUEUE_LIMIT);
   if (window && !window.isDestroyed()) window.webContents.send('orglet:incoming');
 }
-async function incomingFor(launch: LaunchRequest): Promise<Incoming> {
+async function incomingFor(launch: Exclude<LaunchRequest, { kind: 'account' }>): Promise<Incoming> {
   if (launch.kind === 'send-to') return sentFiles.offer(launch.paths);
   if (launch.kind === 'refused') return { kind: 'notice', message: launch.message };
   const workspace = await request('workspace', {}) as Workspace;
@@ -319,6 +326,11 @@ async function receiveLaunch(argv: readonly string[], bringForward: boolean) {
   const launch = parseLaunchArguments(argv);
   if (bringForward && !argv.includes(CLI_BACKGROUND_FLAG)) await showWindow();
   if (!launch) return;
+  // A sign-in callback goes to the account module, which drops any that does not match the sign-in in progress.
+  if (launch.kind === 'account') {
+    account.handleCallback(launch.url);
+    return;
+  }
   try {
     queueIncoming(await incomingFor(launch));
   } catch (error) {
@@ -446,6 +458,13 @@ async function start() {
   credentials = new Credentials(directory);
   mcpSecrets = new McpSecretStore(directory, safeStorage);
   webSearchKeys = new WebSearchKeys(directory, safeStorage);
+  account = new AccountService({
+    baseUrl: accountsBaseUrl(process.env.ORGLET_ACCOUNTS_URL),
+    store: new AccountFile(directory, safeStorage),
+    openExternal: address => shell.openExternal(address),
+    onChange: state => { if (window && !window.isDestroyed()) window.webContents.send('orglet:account', accountPayload(state)); },
+  });
+  await account.load();
   browserProfiles = new BrowserProfiles(join(directory, 'browser'));
   browserHost = new BrowserHostProcess(browserProfiles.profilesRoot, relayBrowserEvent);
   const workspaceRuntimePaths = app.isPackaged ? {
@@ -598,6 +617,12 @@ async function start() {
     return result;
   });
   handle('orglet:about', async () => aboutInfo());
+  // The CodePawl account (COD-337). Nothing the window sends can name an address or carry a token; what it gets back
+  // is `AccountState`, parsed strictly on the way out.
+  handle('orglet:account-state', async () => accountPayload(account.state()));
+  handle('orglet:account-sign-in', async () => accountPayload(await account.signIn()));
+  handle('orglet:account-cancel-sign-in', async () => accountPayload(account.cancelSignIn()));
+  handle('orglet:account-sign-out', async () => accountPayload(await account.signOut()));
   // Settings → Browser (COD-261). The window names profiles by id; their folders stay here and in the host.
   handle('orglet:browser-state', async () => browserState());
   handle('orglet:browser-create', async raw => { await browserProfiles.create(raw); return browserState(); });
@@ -911,6 +936,8 @@ async function start() {
   void cliInstaller()?.refresh().catch(() => undefined);
   void sendToInstaller()?.refresh().catch(() => undefined);
   void registerLinks().catch(() => undefined);
+  // A saved sign-in is checked, and the plan read again, once the window is up; offline it simply stays as saved.
+  void account.refreshProfile().catch(() => undefined);
   // Cold-start and second-instance requests use the same queue, even before the desktop exists.
   started = true;
   await receiveLaunch(process.argv, false);
@@ -963,6 +990,16 @@ else {
       return;
     }
     void receiveLaunch(forwarded, true);
+  });
+  // macOS hands a scheme link to the running app as an event instead of a second instance's arguments.
+  app.on('open-url', (event, address) => {
+    event.preventDefault();
+    const argv = [process.execPath, address];
+    if (!started) {
+      launchesBeforeStart.push(argv);
+      return;
+    }
+    void receiveLaunch(argv, true);
   });
   app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
   app.on('activate', () => { if (started) void showWindow(); });

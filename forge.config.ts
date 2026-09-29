@@ -77,6 +77,8 @@ const config: ForgeConfig = {
     asar: { unpack: '**/*.{node,dll,dylib,so}' },
     executableName: 'Orglet',
     appBundleId: 'com.codepawl.orglet',
+    // macOS only: the browser hands a CodePawl sign-in back through this scheme (COD-337); Windows registers it at run time.
+    protocols: [{ name: 'Orglet sign-in', schemes: ['com.codepawl.orglet'] }],
     // Developer ID sign when APPLE_SIGNING_ENABLED=true (CI after P12 import).
     // Notarize only when Apple ID or App Store Connect API key env is complete.
     osxSign: resolveOsxSign(),
