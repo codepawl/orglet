@@ -212,19 +212,25 @@ describe('signing out', () => {
       calls.push({ executable, args, env });
       return answer;
     };
-    await signOutHarness('claude-code', 'claude.exe', 'C:\\accounts\\claude\\work', run);
-    await signOutHarness('codex', 'codex.exe', undefined, run);
-    await signOutHarness('cursor', 'agent.cmd', 'C:\\accounts\\cursor\\work', run);
+    await signOutHarness('claude-code', 'claude.exe', 'C:\\accounts\\claude\\work', run, 'win32');
+    await signOutHarness('codex', 'codex.exe', undefined, run, 'win32');
+    // COD-330: Cursor Agent's sign-in sits under APPDATA (Windows) or XDG_CONFIG_HOME (Linux), so the sign-out of an
+    // added account points those at its folder too and leaves the computer's own sign-in alone.
+    await signOutHarness('cursor', 'agent.cmd', 'C:\\accounts\\cursor\\work', run, 'win32');
+    await signOutHarness('cursor', 'agent', '/accounts/cursor/work', run, 'linux');
+    await signOutHarness('cursor', 'agent.cmd', undefined, run, 'win32');
     expect(calls).toEqual([
       { executable: 'claude.exe', args: ['auth', 'logout'], env: { CLAUDE_CONFIG_DIR: 'C:\\accounts\\claude\\work' } },
       { executable: 'codex.exe', args: ['logout'], env: {} },
-      { executable: 'agent.cmd', args: ['logout'], env: { CURSOR_CONFIG_DIR: 'C:\\accounts\\cursor\\work' } },
+      { executable: 'agent.cmd', args: ['logout'], env: { CURSOR_CONFIG_DIR: 'C:\\accounts\\cursor\\work', APPDATA: 'C:\\accounts\\cursor\\work' } },
+      { executable: 'agent', args: ['logout'], env: { CURSOR_CONFIG_DIR: '/accounts/cursor/work', XDG_CONFIG_HOME: '/accounts/cursor/work' } },
+      { executable: 'agent.cmd', args: ['logout'], env: {} },
     ]);
 
     answer = { code: 1, stdout: '', stderr: 'Error: keychain locked\n' };
     await expect(signOutHarness('codex', 'codex.exe', undefined, run)).rejects.toThrow('Không đăng xuất được Codex: Error: keychain locked');
     await expect(signOutHarness('gemini', 'gemini.cmd', undefined, run)).rejects.toThrow('/logout');
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(6);
   });
 });
 

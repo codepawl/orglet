@@ -426,12 +426,14 @@ async function readCodex(executable: string, configDir: string | undefined, runt
  * makes, with the access token Cursor Agent saved.
  */
 async function readCursor(executable: string, configDir: string | undefined, runtime: UsageRuntime): Promise<AccountUsageRead> {
-  const result = await runtime.run(executable, ['about', '--format', 'json'], harnessAccountEnv('cursor', configDir));
+  // The same variables the CLI gets, so `about` and the token both come from this account's own sign-in.
+  const accountEnv = harnessAccountEnv('cursor', configDir, runtime.platform ?? process.platform);
+  const result = await runtime.run(executable, ['about', '--format', 'json'], accountEnv);
   const about = cursorAbout(result.stdout);
   // Anything but a named account (signed out, unreadable) is already the answer.
   if (about.unavailable !== 'unsupported') return about;
   const signedIn = { ...(about.email ? { email: about.email } : {}), ...(about.plan ? { plan: about.plan } : {}) };
-  const found = await cursorAccessToken(runtime);
+  const found = await cursorAccessToken(runtime, { ...runtime.env, ...accountEnv });
   if ('gap' in found) return gap(found.gap, signedIn);
   // Cursor Agent renews its token when it runs; Orglet never writes its credentials.
   const expiry = tokenExpiry(found.token);
@@ -455,9 +457,9 @@ type CursorToken = { token: string } | { gap: HarnessUsageGap };
  * The access token Cursor Agent signs in with, from the same places it reads (Cursor Agent 2026.09.18): the
  * CURSOR_AUTH_TOKEN variable, else its credential store. On macOS that is the Keychain unless
  * AGENT_CLI_CREDENTIAL_STORE=file; elsewhere, and with that setting, it is `auth.json` (`cursorAuthFile`).
+ * `environment` is the one the CLI runs with for this account.
  */
-async function cursorAccessToken(runtime: UsageRuntime): Promise<CursorToken> {
-  const environment = runtime.env ?? {};
+async function cursorAccessToken(runtime: UsageRuntime, environment: NodeJS.ProcessEnv): Promise<CursorToken> {
   const given = text(environment.CURSOR_AUTH_TOKEN);
   if (given) return { token: given };
   // An API key signs in without a plan allowance; a sign-in kept only in memory is nowhere Orglet can read.
@@ -477,8 +479,8 @@ async function cursorAccessToken(runtime: UsageRuntime): Promise<CursorToken> {
 }
 
 /**
- * Where Cursor Agent keeps its sign-in outside the Keychain. CURSOR_CONFIG_DIR does not move it, so every account
- * folder reads the same file, as Cursor Agent itself does.
+ * Where Cursor Agent keeps its sign-in outside the Keychain, as its `getAuthFilePath` builds it. CURSOR_CONFIG_DIR does
+ * not move it; APPDATA (Windows) and XDG_CONFIG_HOME (Linux) do, and an added account sets them to its own folder.
  */
 export function cursorAuthFile(platform: NodeJS.Platform, environment: NodeJS.ProcessEnv, home: string): string {
   if (platform === 'win32') return join(environment.APPDATA || join(home, 'AppData', 'Roaming'), 'Cursor', 'auth.json');

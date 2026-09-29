@@ -40,11 +40,20 @@ export const harnessLogoutArgs: Record<HarnessCatalogId, readonly string[] | und
 };
 
 /**
- * Whether signing in or out reaches every account of this CLI on the computer. The default account is the CLI's own
- * home folder. Cursor Agent keeps its sign-in in one place per computer (`%APPDATA%\Cursor\auth.json` on Windows, the
- * Keychain on macOS) whatever CURSOR_CONFIG_DIR says, so its added accounts share it.
+ * Whether an added account of this CLI keeps a sign-in of its own on this platform. Cursor Agent on macOS keeps its
+ * sign-in in one Keychain item per computer (`cursor-access-token`), which no variable moves, so there it cannot.
  */
-export const harnessSignInIsMachineWide = (id: HarnessCatalogId, accountId: string) => accountId === SYSTEM_ACCOUNT_ID || id === 'cursor';
+export const harnessAccountsSignInApart = (id: HarnessCatalogId, platform: NodeJS.Platform) => !(id === 'cursor' && platform === 'darwin');
+
+/** Why Settings offers no added Cursor Agent account on macOS; also the core's answer to an attempt to add one. */
+export const CURSOR_ONE_SIGN_IN_ON_MAC = 'Trên macOS, Cursor Agent giữ một lần đăng nhập cho cả máy trong Keychain, nên chỉ dùng được tài khoản mặc định.';
+
+/**
+ * Whether signing in or out reaches every account of this CLI on the computer: the default account, which is the
+ * CLI's own home folder, and any account of a CLI whose added accounts share one sign-in on this platform.
+ */
+export const harnessSignInIsMachineWide = (item: Pick<HarnessInfo, 'accountId' | 'accountsSignInApart'>) =>
+  item.accountId === SYSTEM_ACCOUNT_ID || !item.accountsSignInApart;
 
 /** A sign-in Settings started for one account: still waiting for the browser, or ended with the CLI's reason. */
 export type HarnessSignIn = { accountId: string; state: 'waiting' } | { accountId: string; state: 'failed'; message: string };
@@ -74,6 +83,24 @@ export const harnessConfigDirVariable: Record<HarnessCatalogId, string> = {
   // Gemini CLI keeps its `.gemini` folder inside this one, so an account folder holds `<folder>/.gemini`.
   gemini: 'GEMINI_CLI_HOME',
 };
+
+/**
+ * The variables a CLI reads for where its sign-in lives, when that is not its config folder, pointed at the account's
+ * folder. Cursor Agent 2026.09.18 keeps `auth.json` outside CURSOR_CONFIG_DIR: `getAuthFilePath` in its bundled
+ * cli-credentials module joins `%APPDATA%\Cursor` on Windows and `$XDG_CONFIG_HOME/cursor` on Linux. So an added
+ * account sets that folder too and signs in to `<account>\Cursor\auth.json`. macOS has no such variable (the Keychain).
+ */
+function signInFolderVariables(id: HarnessCatalogId, configDir: string, platform: NodeJS.Platform): Record<string, string> {
+  if (id !== 'cursor') return {};
+  if (platform === 'win32') return { APPDATA: configDir };
+  if (platform === 'darwin') return {};
+  return { XDG_CONFIG_HOME: configDir };
+}
+
+/** Every variable that points a CLI at one account's folder: its config folder, and its sign-in when that lives apart. */
+export function harnessAccountVariables(id: HarnessCatalogId, configDir: string, platform: NodeJS.Platform): Record<string, string> {
+  return { [harnessConfigDirVariable[id]]: configDir, ...signInFolderVariables(id, configDir, platform) };
+}
 
 /** The account that is the CLI's own home folder: what every install starts with, and what Orglet used before accounts existed. */
 export const SYSTEM_ACCOUNT_ID = 'system';
@@ -123,6 +150,8 @@ export type HarnessInfo = {
   accountId: string;
   accounts: HarnessAccount[];
   configDir?: string;
+  /** False where this CLI's added accounts would share one sign-in, so Settings offers no new one (`harnessAccountsSignInApart`). */
+  accountsSignInApart: boolean;
   /** A sign-in Settings started for the account shown, while it waits or after it failed (COD-327). */
   signIn?: HarnessSignIn;
 };
@@ -230,25 +259,38 @@ function withArguments(program: string, args: readonly string[]): string {
 }
 
 /**
- * The line one terminal needs to sign in. With an account folder it sets that CLI's config-dir variable first, so
- * the sign-in lands in the selected account instead of the CLI's own home folder. Every form is run in its real
+ * The line one terminal needs to sign in. With an account folder it sets that CLI's variables first, so the sign-in
+ * lands in the selected account instead of the CLI's own home folder. In PowerShell and Command Prompt an assignment
+ * outlives the line, so APPDATA, which every other program in that terminal reads too, is put back after the CLI
+ * exits; Git Bash and POSIX shells set the variables for the one program only. Every Windows form is run in its real
  * shell by tests/integration/login-commands.test.ts.
  */
-export function loginCommandFor(shell: LoginShell, id: HarnessCatalogId, executable: string | undefined, configDir?: string): string {
+export function loginCommandFor(shell: LoginShell, id: HarnessCatalogId, executable: string | undefined, configDir?: string, platform: NodeJS.Platform = shell === 'sh' ? 'linux' : 'win32'): string {
   const program = loginProgram(shell, id, executable);
   if (!configDir) return program;
-  const variable = harnessConfigDirVariable[id];
-  if (shell === 'powershell') return `$env:${variable} = "${configDir.replaceAll('"', '`"')}"; ${program}`;
-  // The quotes round the whole assignment keep a trailing space out of the value.
-  if (shell === 'cmd') return `set "${variable}=${configDir}" && ${program}`;
+  const variables = Object.entries(harnessAccountVariables(id, configDir, platform));
+  const movesAppData = variables.some(([name]) => name === 'APPDATA');
+  if (shell === 'powershell') {
+    const assignments = variables.map(([name, value]) => `$env:${name} = "${value.replaceAll('"', '`"')}"`);
+    // The folder Windows itself names for APPDATA, which is where the variable pointed before the line.
+    const restore = movesAppData ? [`$env:APPDATA = [Environment]::GetFolderPath('ApplicationData')`] : [];
+    return [...assignments, program, ...restore].join('; ');
+  }
+  if (shell === 'cmd') {
+    // The quotes round the whole assignment keep a trailing space out of the value.
+    const assignments = variables.map(([name, value]) => `set "${name}=${value}" && `).join('');
+    // Command Prompt expands %APPDATA% when it reads the line, before the first `set` runs, so this is the old value.
+    const restore = movesAppData ? ' & set "APPDATA=%APPDATA%"' : '';
+    return `${assignments}${program}${restore}`;
+  }
   // The folder stays a Windows path: the CLI is a Windows program, and Git Bash hands it the value as written.
-  if (shell === 'bash') return `${variable}=${posixQuote(configDir)} ${program}`;
-  return `${variable}="${configDir.replace(/(["\\$`])/g, '\\$1')}" ${program}`;
+  if (shell === 'bash') return [...variables.map(([name, value]) => `${name}=${posixQuote(value)}`), program].join(' ');
+  return [...variables.map(([name, value]) => `${name}="${value.replace(/(["\\$`])/g, '\\$1')}"`), program].join(' ');
 }
 
 /** The login line for every terminal of this platform, the default one first. */
 export function loginCommands(id: HarnessCatalogId, executable: string | undefined, platform: NodeJS.Platform, configDir?: string): LoginCommand[] {
-  return loginShells(platform).map(shell => ({ shell, command: loginCommandFor(shell, id, executable, configDir) }));
+  return loginShells(platform).map(shell => ({ shell, command: loginCommandFor(shell, id, executable, configDir, platform) }));
 }
 
 /** The default terminal's login line: PowerShell on Windows, the POSIX line elsewhere. */
@@ -284,5 +326,6 @@ export function missingHarness(id: HarnessCatalogId, platform: NodeJS.Platform, 
     accountId: selection.accountId,
     accounts: selection.accounts,
     ...(selection.configDir ? { configDir: selection.configDir } : {}),
+    accountsSignInApart: harnessAccountsSignInApart(id, platform),
   };
 }

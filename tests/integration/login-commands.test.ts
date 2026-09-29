@@ -46,6 +46,24 @@ describe('login lines as text', () => {
     expect(loginCommands('gemini', undefined, 'darwin')).toEqual([{ shell: 'sh', command: 'gemini' }]);
   });
 
+  // COD-330: Cursor Agent's sign-in follows APPDATA (Windows) or XDG_CONFIG_HOME (Linux), not CURSOR_CONFIG_DIR.
+  it('points Cursor Agent sign-in at the account folder, and puts APPDATA back where the terminal keeps it', () => {
+    const agent = 'C:\\Users\\An Nguyen\\AppData\\Local\\cursor-agent\\agent.cmd';
+    const account = 'C:\\Users\\An Nguyen\\AppData\\Roaming\\Orglet\\harness-accounts\\cursor\\work';
+    expect(loginCommands('cursor', agent, 'win32', account)).toEqual([
+      { shell: 'powershell', command: `$env:CURSOR_CONFIG_DIR = "${account}"; $env:APPDATA = "${account}"; & "${agent}" login; $env:APPDATA = [Environment]::GetFolderPath('ApplicationData')` },
+      { shell: 'cmd', command: `set "CURSOR_CONFIG_DIR=${account}" && set "APPDATA=${account}" && "${agent}" login & set "APPDATA=%APPDATA%"` },
+      { shell: 'bash', command: `CURSOR_CONFIG_DIR='${account}' APPDATA='${account}' '/c/Users/An Nguyen/AppData/Local/cursor-agent/agent.cmd' login` },
+    ]);
+    expect(loginCommands('cursor', '/home/an/.local/bin/agent', 'linux', '/home/an/.config/Orglet/a b')).toEqual([
+      { shell: 'sh', command: 'CURSOR_CONFIG_DIR="/home/an/.config/Orglet/a b" XDG_CONFIG_HOME="/home/an/.config/Orglet/a b" /home/an/.local/bin/agent login' },
+    ]);
+    // macOS keeps one Keychain sign-in, so nothing but the config folder moves there.
+    expect(loginCommands('cursor', '/Users/an/.local/bin/agent', 'darwin', '/Users/an/Orglet')).toEqual([
+      { shell: 'sh', command: 'CURSOR_CONFIG_DIR="/Users/an/Orglet" /Users/an/.local/bin/agent login' },
+    ]);
+  });
+
   it('quotes a single quote inside a Git Bash path', () => {
     expect(loginCommandFor('bash', 'claude-code', "C:\\Users\\O'Brien\\claude.exe")).toBe(`'/c/Users/O'\\''Brien/claude.exe' auth login`);
   });
@@ -93,5 +111,46 @@ describe.runIf(windows)('login lines run in their real shells', () => {
 
   it.runIf(windows && existsSync(gitBash))('Git Bash', () => {
     expect(execFileSync(gitBash, ['-c', line('bash')], { encoding: 'utf8', windowsHide: true }).trim()).toBe(expected());
+  });
+});
+
+describe.runIf(windows)('Cursor Agent login lines run in their real shells (COD-330)', () => {
+  let directory: string;
+  let executable: string;
+  let folder: string;
+  // The folder Windows names for APPDATA; each shell below starts with it, and must end with it again.
+  const roaming = process.env.APPDATA ?? '';
+  beforeAll(async () => {
+    directory = await mkdtemp(join(tmpdir(), 'orglet cursor login shells '));
+    executable = join(directory, 'agent bin', 'agent.cmd');
+    folder = join(directory, 'harness accounts', 'work one');
+    await mkdir(join(directory, 'agent bin'), { recursive: true });
+    await mkdir(folder, { recursive: true });
+    // What the real launcher would receive: both folders the line set, and the arguments.
+    await writeFile(executable, '@echo off\r\necho CONFIG=[%CURSOR_CONFIG_DIR%] APPDATA=[%APPDATA%] ARGS=[%*]\r\n');
+  });
+  afterAll(async () => { await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
+
+  const reached = () => `CONFIG=[${folder}] APPDATA=[${folder}] ARGS=[login]`;
+  const line = (shell: LoginShell) => loginCommandFor(shell, 'cursor', executable, folder, 'win32');
+  const shellEnvironment = { ...process.env, APPDATA: roaming };
+
+  it.runIf(windows && available('pwsh', ['-NoProfile', '-Command', 'exit 0']))('PowerShell 7 signs in to the account and gives APPDATA back', () => {
+    const output = execFileSync('pwsh', ['-NoProfile', '-Command', `${line('powershell')}; "AFTER=[$env:APPDATA]"`], { encoding: 'utf8', windowsHide: true, env: shellEnvironment });
+    expect(output.trim().split(/\r?\n/)).toEqual([reached(), `AFTER=[${roaming}]`]);
+  });
+
+  it.runIf(windows)('Command Prompt signs in to the account and gives APPDATA back', () => {
+    // Typed lines, as a paste is: a batch file would hand control to agent.cmd for good and never read the next line.
+    const typed = `${line('cmd')}\r\necho AFTER=[%APPDATA%]\r\nexit\r\n`;
+    const output = execFileSync('cmd.exe', ['/d', '/q'], { encoding: 'utf8', windowsHide: true, env: shellEnvironment, input: typed });
+    // Each answer follows the prompt on its line; only the answers are compared.
+    const answers = output.split(/\r?\n/).map(printed => /(CONFIG=\[.*|AFTER=\[.*)$/.exec(printed)?.[1]).filter(Boolean);
+    expect(answers).toEqual([reached(), `AFTER=[${roaming}]`]);
+  });
+
+  it.runIf(windows && existsSync(gitBash))('Git Bash sets both for the one program', () => {
+    const output = execFileSync(gitBash, ['-c', `${line('bash')}; echo "AFTER=[$APPDATA]"`], { encoding: 'utf8', windowsHide: true, env: shellEnvironment });
+    expect(output.trim().split(/\r?\n/)).toEqual([reached(), `AFTER=[${roaming}]`]);
   });
 });

@@ -2011,6 +2011,8 @@ export const en: Dictionary = {
   'Orglet chưa có thư mục dữ liệu để tạo tài khoản harness.': 'Orglet has no data folder to create a harness account in.',
   'Thêm tài khoản': 'Add account',
   'Thư mục đăng nhập': 'Sign-in folder',
+  'Tài khoản': 'Accounts',
+  'Trên macOS, Cursor Agent giữ một lần đăng nhập cho cả máy trong Keychain, nên chỉ dùng được tài khoản mặc định.': 'On macOS, Cursor Agent keeps one sign-in for the whole computer in the Keychain, so only the default account works.',
   'Tài khoản mặc định': 'Default account',
   'Tài khoản {0}': '{0} account',
   'Tên tài khoản': 'Account name',
