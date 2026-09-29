@@ -79,7 +79,7 @@ jobs:
           }
       - name: Cache the SimplySign Desktop installer
         if: steps.signing.outputs.enabled == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: SimplySignDesktop.msi
           key: simplysign-msi-${{ env.SIMPLYSIGN_URL }}
@@ -140,7 +140,7 @@ jobs:
           if (-not (Test-Path $package)) { Write-Host "::error::$package is missing"; exit 1 }
           if (-not (Select-String -Path $releases -Pattern "orglet-$version-full.nupkg" -Quiet)) { Write-Host "::error::RELEASES does not list orglet-$version-full.nupkg"; exit 1 }
           Get-Content $releases
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: orglet-windows-${{ steps.signing.outputs.enabled == 'true' && 'signed' || 'unsigned' }}-setup
           # Setup for people, RELEASES and the .nupkg for the updater: all three go on the GitHub Release.
@@ -150,7 +150,7 @@ jobs:
             out/make/squirrel.windows/x64/*.nupkg
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: orglet-windows-${{ steps.signing.outputs.enabled == 'true' && 'signed' || 'unsigned' }}-zip
           path: out/make/zip/win32/**/*.zip

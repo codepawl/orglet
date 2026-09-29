@@ -87,7 +87,7 @@ jobs:
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: orglet-macos-${{ steps.signing.outputs.enabled == 'true' && 'signed' || 'unsigned' }}-zip
           path: out/make/zip/darwin/**/*.zip
