@@ -4,6 +4,7 @@ import { fingerprint } from '../tools/sources';
 import { turnMessageId } from '../../shared/message-interactions';
 import type { ChatQuote } from '../../shared/side-threads';
 import { THREAD_VERBATIM_TURNS } from '../../shared/thread-limits';
+import { meaningfulKeywordsOf, rarityScores } from './keywords';
 
 export const HISTORY_TURNS = THREAD_VERBATIM_TURNS;
 export const HISTORY_TURN_CHARS = 4_000;
@@ -19,7 +20,6 @@ export const MAIN_CHAT_TURNS = 6;
 export const MAIN_CHAT_CHARS = 12_000;
 
 const bytes = (text: string) => Buffer.byteLength(text, 'utf8');
-const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []);
 
 export class ContextRefuseError extends Error {
   constructor(message = 'Hội thoại vẫn vượt giới hạn 200 KB sau khi tóm tắt. Rút gọn tin nhắn, bỏ nguồn, hoặc bắt đầu cuộc trò chuyện mới.') {
@@ -155,10 +155,14 @@ function extractive(turns: ThreadTurn[]): { summary: string | null; omitted: Omi
   return { summary: summary || null, omitted };
 }
 
+/**
+ * Older turns that share words with this message, best first. Stop words do not count and rarer shared words weigh
+ * more, the same way unpinned notes are matched (COD-335, after COD-307).
+ */
 function retrieve(turns: ThreadTurn[], brief: string): ThreadMemory[] {
-  const briefWords = words(brief);
+  const scores = rarityScores(meaningfulKeywordsOf(brief), turns.map(turn => meaningfulKeywordsOf(turn.text)));
   const ranked = turns
-    .map(turn => ({ turn, score: [...words(turn.text)].filter(word => briefWords.has(word)).length }))
+    .map((turn, index) => ({ turn, score: scores[index] }))
     .filter(item => item.score > 0)
     .sort((a, b) => b.score - a.score || a.turn.revision - b.turn.revision);
   const snippets: ThreadMemory[] = [];

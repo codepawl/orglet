@@ -78,7 +78,7 @@ A later COD may add a billed LLM summary as its own job under the same turn cap.
 |---|---|---|
 | Full transcript (`artifacts` + user briefs) | User, always | Only the verbatim window + this turn |
 | Rolling summary | User in Chi tiết; model as one block | Always, when non-empty |
-| Thread memory snippets | Model only (optional: show “used N older notes” in Chi tiết) | Keyword overlap with this brief, like unpinned knowledge |
+| Thread memory snippets | Model only (optional: show “used N older notes” in Chi tiết) | Keyword overlap with this brief, like unpinned knowledge: stop words such as "the" or "của" do not count, and rarer shared words rank a turn higher (COD-335) |
 | Approved Knowledge library | User in Thư viện; model if selected | Existing compiler; user-reviewed; cross-task |
 
 Do **not** build embeddings, search other threads, or auto-promote snippets to Knowledge. Model `knowledgeProposals` stay proposed until the user approves.
