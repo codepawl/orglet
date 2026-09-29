@@ -70,7 +70,8 @@ try {
   assert.equal(revised.filter(run => run.stage === 'synthesis').length, 1);
   for (const run of revised) assert.deepEqual(run.snapshot.input.sourceIds, after.task.currentInput.sourceIds);
   // Both messages stay in one thread; only the latest report can be accepted.
-  await page.getByText('Review supplemented evidence from UI', { exact: true }).waitFor();
+  // The person's own message; the crew plan's boxes repeat the brief as each member's part (COD-331).
+  await page.locator('.user-message').getByText('Review supplemented evidence from UI', { exact: true }).waitFor();
   assert.equal(await page.locator('.report-file', { hasText: 'Báo cáo mẫu' }).count(), 2);
   // Only the latest report can be accepted.
   await page.locator('.report-file').first().click();
