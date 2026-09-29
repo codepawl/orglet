@@ -157,7 +157,7 @@ describe('reading one account', () => {
     expect(read).toEqual({ email: 'an@example.com', plan: 'Max 20x', windows: claudeUsageWindows(claudeAnswer) });
     expect(fake.probes[0].env).toEqual({ CLAUDE_CONFIG_DIR: folder });
     expect(fake.reads).toEqual([join(folder, '.credentials.json')]);
-    expect(fake.fetches).toEqual([{ url: 'https://api.anthropic.com/api/oauth/usage', authorization: 'Bearer token-value' }]);
+    expect(fake.fetches).toEqual([{ url: 'https://api.anthropic.com/api/oauth/usage?cedar_ember=1', authorization: 'Bearer token-value' }]);
     expect(JSON.stringify(read)).not.toContain('token-value');
   });
 

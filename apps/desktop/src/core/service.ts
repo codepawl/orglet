@@ -33,12 +33,13 @@ import { RoutineFolders, folderBirth } from './storage/routine-folders';
 import type { WatchFolderView } from '../shared/routine-triggers';
 import { WorkPolicy } from './orchestration/work-policy';
 import { runningView } from './orchestration/running';
+import { randomUUID } from 'node:crypto';
 import type { RunningItem } from '../shared/running';
 import { KnowledgeBase } from './context/knowledge';
 import type { HarnessRuntime } from './orchestration/runner';
-import { harnessCatalog, SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessUsage } from '../shared/harness';
+import { harnessCatalog, SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessResetAnswer, type HarnessResetClaim, type HarnessResetOutcome, type HarnessUsage } from '../shared/harness';
 import { detectHarnesses, probe } from './harness/detect';
-import { readHarnessUsage } from './harness/usage';
+import { claimClaudeReset, readHarnessUsage } from './harness/usage';
 import { HarnessAccounts } from './harness/accounts';
 import { UsageReadings } from './harness/usage-readings';
 import { executeHarness, type HarnessRequest, type HarnessResult } from './harness/exec';
@@ -90,8 +91,23 @@ export const localHarnessRuntime = (accountRoot?: string): HarnessRuntime => ({
   detect: (accounts, only) => detectHarnesses(process.env, process.platform, probe, accounts, only),
   execute: executeHarness,
   usage: (harness, executable, configDir) => readHarnessUsage(harness, executable, configDir),
+  claimReset: (configDir, requestId) => claimClaudeReset(configDir, requestId),
   ...(accountRoot ? { accountRoot } : {}),
 });
+
+const RESET_ANSWERS: readonly HarnessResetOutcome[] = ['reset', 'not_limited', 'already_used', 'none_left'];
+const isResetAnswer = (outcome: HarnessResetOutcome): outcome is HarnessResetAnswer => RESET_ANSWERS.includes(outcome);
+
+/** Why a reset was not spent, or why Orglet cannot tell; the window shows these through `tMessage`. */
+const resetClaimFailures: Record<Exclude<HarnessResetOutcome, HarnessResetAnswer>, string> = {
+  expired: 'Phiên đăng nhập Claude Code đã hết hạn nên chưa dùng lượt reset nào. Claude Code tự làm mới ở lần chạy tới.',
+  unreadable: 'Orglet không đọc được phiên đăng nhập Claude Code của tài khoản này nên chưa dùng lượt reset nào.',
+  rate_limited: 'Claude đang giới hạn số lần reset nên chưa dùng lượt nào. Thử lại sau ít phút.',
+  cooling_down: 'Claude chưa cho dùng lượt reset lúc này. Chưa lượt nào bị dùng.',
+  failed: 'Không dùng được lượt reset lúc này. Chưa lượt nào bị dùng.',
+  unconfirmed: 'Claude chưa xác nhận lượt reset. Nếu phiên vẫn chạm trần sau ít phút, thử lại: lần sau gửi lại đúng yêu cầu này, không tốn thêm lượt.',
+  no_answer: 'Claude không trả lời yêu cầu reset. Thử lại: lần sau gửi lại đúng yêu cầu này, không tốn thêm lượt.',
+};
 
 /** The Limit per task of a chat whose orglet or crew never set one, as the composer and the terminal command use. */
 const DEFAULT_TASK_BUDGET_MICROS = 500_000;
@@ -160,6 +176,10 @@ export class CoreService {
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
   /** Set while a read started by a Claude Code run is on, so a run of many steps starts one read, not one per step. */
   private usageReadAfterRun = false;
+  /** The reset claim running for each Claude Code account, so a second click joins it instead of spending another. */
+  private resetClaims = new Map<string, Promise<HarnessResetClaim>>();
+  /** The id of a claim Claude may have received without saying so; the next try sends it again as the same claim. */
+  private pendingResetRequests = new Map<string, string>();
   readonly harnessAccounts: HarnessAccounts;
   private usageReadings: UsageReadings;
   private modelListMemory = emptyModelListCache();
@@ -771,6 +791,7 @@ export class CoreService {
       case 'deleteMemory': { this.knowledge.deleteMemory(commands.deleteMemory.parse(args).id); this.notify(); return; }
       case 'harnesses': return this.harnesses(commands.harnesses.parse(args).refresh);
       case 'harnessUsage': return this.harnessUsage(commands.harnessUsage.parse(args).refresh);
+      case 'claimHarnessReset': return this.claimHarnessReset(commands.claimHarnessReset.parse(args).accountId);
       case 'saveHarnessAccount': {
         const input = commands.saveHarnessAccount.parse(args);
         // A new name is a label only; a new account is selected, so that harness signs in from another folder.
@@ -1114,6 +1135,33 @@ export class CoreService {
       return [item.id, rows] as const;
     }));
     return Object.fromEntries(perHarness);
+  }
+
+  /**
+   * Spends one banked reset of a Claude Code account because the person confirmed it in Settings (COD-328); nothing
+   * else calls this. Usage is read again whatever Claude answered, and anything other than an answer is an error.
+   */
+  claimHarnessReset(accountId: string): Promise<HarnessResetClaim> {
+    const claim = this.harness.claimReset;
+    if (!claim) return Promise.reject(new Error('Orglet không dùng được lượt reset ở đây.'));
+    const known = accountId === SYSTEM_ACCOUNT_ID || this.harnessAccounts.selection('claude-code').accounts.some(account => account.id === accountId);
+    if (!known) return Promise.reject(new Error('Không còn tài khoản này.'));
+    const running = this.resetClaims.get(accountId);
+    if (running) return running;
+    const started = this.runResetClaim(claim, accountId).finally(() => this.resetClaims.delete(accountId));
+    this.resetClaims.set(accountId, started);
+    return started;
+  }
+
+  private async runResetClaim(claim: NonNullable<HarnessRuntime['claimReset']>, accountId: string): Promise<HarnessResetClaim> {
+    const requestId = this.pendingResetRequests.get(accountId) ?? randomUUID();
+    this.pendingResetRequests.set(accountId, requestId);
+    const outcome = await claim(this.harnessAccounts.configDir('claude-code', accountId), requestId);
+    if (outcome !== 'unconfirmed' && outcome !== 'no_answer') this.pendingResetRequests.delete(accountId);
+    const usage = await this.harnessUsage(true);
+    this.notify();
+    if (isResetAnswer(outcome)) return { outcome, usage };
+    throw new Error(resetClaimFailures[outcome]);
   }
 
   /** Runs one harness call for the runner; a Claude Code call may have renewed that account's saved sign-in. */

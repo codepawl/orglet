@@ -102,12 +102,33 @@ export type HarnessUsageWindow = {
  */
 export type HarnessUsageGap = 'unsupported' | 'signed_out' | 'expired' | 'failed';
 
+/**
+ * Resets of the session allowance a Claude plan holds in the bank (COD-328): how many can be spent now, and when the
+ * one spent next runs out, when Claude says. Present only when there is at least one.
+ */
+export type HarnessBankedResets = { count: number; expiresAt?: string };
+
+/**
+ * What became of a request to spend one banked reset. The first four are Claude's answer to a claim; the rest mean
+ * nothing was spent (`expired`, `unreadable`, `rate_limited`, `cooling_down`, `failed`) or Claude could not say
+ * whether it was (`unconfirmed`, `no_answer`), in which case a retry sends the same claim again.
+ */
+export type HarnessResetOutcome = 'reset' | 'not_limited' | 'already_used' | 'none_left'
+  | 'expired' | 'unreadable' | 'rate_limited' | 'cooling_down' | 'failed' | 'unconfirmed' | 'no_answer';
+
+/** The answers to a claim that Claude gave, which the window words; every other outcome is an error. */
+export type HarnessResetAnswer = Extract<HarnessResetOutcome, 'reset' | 'not_limited' | 'already_used' | 'none_left'>;
+
+/** A claim Claude answered, with the plan usage read again after it. */
+export type HarnessResetClaim = { outcome: HarnessResetAnswer; usage: HarnessUsage };
+
 /** What the vendor says about one account: who is signed in, on which plan, and how much of it is used. */
 export type HarnessAccountUsage = {
   accountId: string;
   email?: string;
   plan?: string;
   windows: HarnessUsageWindow[];
+  bankedResets?: HarnessBankedResets;
   unavailable?: HarnessUsageGap;
   checkedAt: string;
   /**

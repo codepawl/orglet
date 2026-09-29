@@ -1,5 +1,7 @@
-import type { HarnessUsageWindow } from '../../shared/harness';
+import { RotateCcw } from 'lucide-react';
+import type { HarnessBankedResets, HarnessUsageWindow } from '../../shared/harness';
 import { currentLocale, t } from '../i18n';
+import { Button } from './ui';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -57,5 +59,27 @@ export function PlanUsage({ windows, label, now }: { windows: HarnessUsageWindow
         <span className="plan-usage-reset">{window.resetsAt ? usageResetLabel(window.resetsAt, now) : ''}</span>
       </div>;
     })}
+  </div>;
+}
+
+/** "3 banked resets · next one ends 22/10": how many the plan holds and when the one spent next runs out (COD-328). */
+export function bankedResetsLabel(resets: HarnessBankedResets): string {
+  const count = resets.count === 1 ? t('Còn 1 lượt reset') : t('Còn {0} lượt reset', [resets.count]);
+  if (!resets.expiresAt) return count;
+  const day = new Date(resets.expiresAt).toLocaleDateString(currentLocale(), { day: 'numeric', month: 'numeric' });
+  const ends = resets.count === 1 ? t('hết hạn {0}', [day]) : t('lượt tới hết hạn {0}', [day]);
+  return `${count} · ${ends}`;
+}
+
+/**
+ * A Claude plan's banked resets under its usage bars: the count, when the next ends, and the action that spends one.
+ * The caller leaves the action out when the reading is not fresh, and asks before spending.
+ */
+export function BankedResets({ resets, claiming, onClaim }: { resets: HarnessBankedResets; claiming?: boolean; onClaim?: () => void }) {
+  return <div className="plan-resets">
+    <span>{bankedResetsLabel(resets)}</span>
+    {onClaim && <Button type="button" variant="outline" disabled={claiming} onClick={onClaim}>
+      <RotateCcw size={14} aria-hidden="true" />{claiming ? t('Đang dùng lượt reset…') : t('Dùng một lượt reset')}
+    </Button>}
   </div>;
 }

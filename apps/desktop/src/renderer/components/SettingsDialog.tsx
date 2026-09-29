@@ -7,8 +7,8 @@ import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, MAX_PROVIDER_CONCURRENCY, QUIET_PARALLEL_LIMIT, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
 import { CustomConnectionsSection } from './CustomConnections';
-import { harnessCatalog, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
-import { PlanUsage, usageReadingTime } from './PlanUsage';
+import { harnessCatalog, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessBankedResets, type HarnessInfo, type HarnessResetAnswer, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
+import { BankedResets, PlanUsage, usageReadingTime } from './PlanUsage';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, INTERFACE_PREFERRED_FONTS, type FontRole } from '../../shared/fonts';
 import { Button } from './ui';
 import { Select } from './Select';
@@ -29,6 +29,7 @@ import { AboutSettings } from './AboutSettings';
 import { McpHeadingActions, McpSettings, type McpEditing } from './McpSettings';
 import { WebSearchSettings } from './WebSearchSettings';
 import type { WebSearchProvider } from '../../shared/web-tools';
+import type { ToastTone } from '@codepawl/orglet-ui';
 import { BrowserHeadingActions, BrowserProfilesSettings } from './BrowserSettings';
 import { t, tMessage, translated } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
@@ -119,6 +120,23 @@ function usageGapText(item: HarnessInfo, usage: HarnessAccountUsage): string | u
   if (usage.unavailable === 'failed' && usage.asOf) return t('Chưa đọc được hạn mức lúc này. Số liệu lúc {0}.', [usageReadingTime(usage.asOf)]);
   if (usage.unavailable === 'failed') return t('Chưa đọc được hạn mức lúc này.');
   return undefined;
+}
+
+/**
+ * What spending a banked reset does, asked before anything is sent (COD-328). A reset clears the five-hour session
+ * allowance only; the weekly one stays where it is.
+ */
+function resetQuestion(account: string, resets: HarnessBankedResets): string {
+  if (resets.count === 1) return t('Claude đặt lại hạn mức phiên hiện tại (5 giờ) của {0}; hạn mức tuần giữ nguyên. Việc này dùng lượt reset cuối cùng và không hoàn tác được.', [account]);
+  return t('Claude đặt lại hạn mức phiên hiện tại (5 giờ) của {0}; hạn mức tuần giữ nguyên. Việc này dùng 1 trong {1} lượt reset và không hoàn tác được.', [account, resets.count]);
+}
+
+/** Claude's answer to a claim, in words. Only `reset` spent anything. */
+function resetAnswerNotice(outcome: HarnessResetAnswer): [string, ToastTone] {
+  if (outcome === 'reset') return [t('Đã dùng một lượt reset: hạn mức phiên đã được đặt lại.'), 'success'];
+  if (outcome === 'not_limited') return [t('Phiên hiện tại chưa chạm trần nên Claude chưa dùng lượt reset nào.'), 'info'];
+  if (outcome === 'already_used') return [t('Lượt reset này đã được dùng trước đó.'), 'info'];
+  return [t('Tài khoản này không còn lượt reset nào.'), 'info'];
 }
 
 /** Cursor Agent and Gemini CLI never report a plan allowance; for the others it depends on how they signed in. */
@@ -417,6 +435,29 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
       setUsage({});
     }
   }, []);
+  /** The Claude Code account whose banked reset is being spent, so its button waits and a second click does nothing. */
+  const [claimingReset, setClaimingReset] = useState<string>();
+  const claimReset = async (item: HarnessInfo, account: HarnessAccountUsage, resets: HarnessBankedResets) => {
+    const confirmed = await confirmAction({
+      title: t('Dùng một lượt reset?'),
+      description: resetQuestion(account.email ?? t('tài khoản này'), resets),
+      confirmLabel: t('Dùng lượt reset'),
+    });
+    if (!confirmed) return;
+    setClaimingReset(account.accountId);
+    try {
+      const claim = await orglet.call('claimHarnessReset', { accountId: account.accountId });
+      setUsage(claim.usage);
+      const [text, tone] = resetAnswerNotice(claim.outcome);
+      toast(text, tone, item.name);
+    } catch (error) {
+      toast((error as Error).message, 'error', item.name);
+      // The core read usage again after the attempt; this picks up that reading.
+      void loadUsage(false);
+    } finally {
+      setClaimingReset(undefined);
+    }
+  };
   const readsUsage = open && tab === 'harness' && harnesses !== undefined;
   useEffect(() => { if (readsUsage) void loadUsage(false); }, [readsUsage, loadUsage]);
   const detectAgain = () => void act(async () => {
@@ -656,6 +697,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                   const accountUsage = usage?.[item.id]?.find(row => row.accountId === item.accountId);
                   const signedInAs = !showLogin && accountUsage?.email ? accountLine(accountUsage) : undefined;
                   const usageGap = !showLogin && accountUsage ? usageGapText(item, accountUsage) : undefined;
+                  const bankedResets = !showLogin ? accountUsage?.bankedResets : undefined;
                   /** An account change re-detects in the core and drops its usage copy; the bars are read again after. */
                   const changeAccount = async (change: () => Promise<HarnessInfo[]>) => {
                     onHarnesses(await change());
@@ -678,6 +720,11 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         <div className="plan-usage"><Skeleton width="70%" /></div>
                       </SkeletonGroup>}
                       {!showLogin && accountUsage && <PlanUsage windows={accountUsage.windows} label={t('Hạn mức gói {0}', [item.name])} />}
+                      {/* Only a fresh reading offers the action. An expired sign-in waits for Claude Code's next run, which
+                          the line under the bars already says (COD-328). */}
+                      {accountUsage && bankedResets && <BankedResets resets={bankedResets}
+                        claiming={claimingReset === accountUsage.accountId}
+                        onClaim={accountUsage.unavailable ? undefined : () => void claimReset(item, accountUsage, bankedResets)} />}
                       {usageGap && <span className="setting-description">{usageGap}</span>}
                       {/* A harness that cannot hold accounts still shows where it lives; the others keep it behind the "i". */}
                       {item.executable && !item.runnable ? <span className="setting-path" title={item.executable}>{item.executable}</span> : null}
