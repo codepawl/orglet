@@ -168,6 +168,7 @@ jobs:
       - run: pnpm test:harness
       - run: pnpm test:sidebar
       - run: pnpm test:i18n
+      - run: pnpm test:alignment
   # Branch protection requires this exact check name. It is green only when both
   # Windows jobs succeeded, so packaged smokes stay required without a ruleset change.
   test:
