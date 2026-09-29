@@ -20,7 +20,7 @@ Local-first is the rule in both cases. The SQLite file on each computer stays th
 | **Identity** (one CodePawl account for every CodePawl product) | `accounts.codepawl.com`, a Worker | [Better Auth](https://github.com/better-auth/better-auth) 1.7.x (MIT) on D1 | Covers email + password, emailed codes, Google and GitHub. It can also act as the OAuth/OIDC provider for other CodePawl sites. Free. |
 | **Sync** | `sync.orglet.codepawl.com`, a Worker plus **one Durable Object per account** | Durable Object SQLite storage and hibernating WebSockets | Each account gets its own small, strongly consistent database. It pushes changes to open devices and costs nothing while idle. |
 | **Files** | R2 bucket | Content-addressed blobs, keyed by `sha256` | Keeps big bytes out of the account database. R2 has no egress fees. |
-| **Email** | Resend's free plan while Orglet runs free, then Cloudflare Email Service, from `codepawl.com` | Email Service needs the paid plan; codepawl-web already used it for Tacet's sign-in mail | Verification codes, password reset. |
+| **Email** | Cloudflare Email Service, from `codepawl.com` | Included with Workers Paid (3,000 a month), which identity needs anyway (see phase 0 results); codepawl-web already used it for Tacet's sign-in mail | Verification codes, password reset. |
 | **Web app** (later) | `orglet.codepawl.com/app` | Orglet's renderer components and the shared Zod contracts | Reads and replies through the same sync API. |
 
 The sync server lives in this repository (`services/sync`, AGPL-3.0), so anyone can deploy their own with `wrangler`. The identity service is shared by all CodePawl products, so it lives in its own repository.
@@ -41,11 +41,22 @@ A small op-log is not much code, because every write in Orglet already goes thro
 
 1. **First run.** A new install shows one screen with two choices: **Sign in** as the filled button, and **Use without an account**. There is no "recommended" label. Someone already using Orglet can sign in later from Settings, and their local data is uploaded then (see [Moving between local and account](#moving-between-local-and-account)).
 2. **Sign in in the browser.** Pressing Sign in opens the system browser at `accounts.codepawl.com`, using OAuth 2.1 with PKCE, as RFC 8252 asks of desktop apps. There the person uses email + password (a 6-digit code confirms a new address and any sign-in from a new device), Google or GitHub.
-3. **Back to the app.** The browser returns to the app through the `orglet://` link Orglet already registers ([integrations.md](integrations.md)). Better Auth's Electron plugin implements exactly this flow.
+3. **Back to the app.** The browser returns to the app through a custom link. Better Auth's `oauth-provider` plugin implements this flow; it was measured in phase 0.
+   - **The link.** Better Auth rejects `orglet://auth/callback` when a client registers. It requires the RFC 8252 form, a reverse-domain scheme such as `com.codepawl.orglet:/auth/callback`, so Orglet registers that scheme next to the `orglet://` link it already has ([integrations.md](integrations.md)).
+   - **Why not the Electron plugin.** Its source shows it hands the app an ordinary session token: no refresh token, no JWT, no audience. The `oauth-provider` plugin gives OAuth 2.1 instead, with short-lived Ed25519 JWT access tokens that the sync Worker checks against JWKS without a database read. It adds rotating refresh tokens, a revoke endpoint, and the same sign-in for other CodePawl sites.
 4. **Tokens.** Main stores the refresh token with `safeStorage`, like API keys today. The renderer never sees it. Core gets a short-lived access token from main for each sync connection.
 5. **Signing out** keeps the local SQLite file and stops syncing. The person can also **Remove this computer's copy**, which erases it.
 
-Passwords are hashed by Better Auth (scrypt by default). Codes last 5 minutes and allow 3 tries. Sign-in attempts are rate-limited per address and per IP.
+Passwords are hashed by Better Auth: scrypt, N=16384, r=16, p=1. Codes last 5 minutes and allow 3 tries. Sign-in attempts are rate-limited per address and per IP.
+
+Learned in phase 0 (measured on a deployed Worker):
+
+- **Build Better Auth for each request.** An instance kept across requests hung every Better Auth route on deployed Workers. Its lazily built context is a promise tied to the first request, and Workers never resolves I/O across requests. Local `wrangler dev` did not show this.
+- **One stale refresh token signs out every computer.** When a rotated-out refresh token is presented, Better Auth revokes all refresh tokens for that user and client. Phase 1 needs three things:
+  - `refreshTokenReuseInterval` above 0;
+  - one refresh at a time per device;
+  - deleting the local token before revoking it.
+- **Sign-out is not instant.** The last access token keeps working until it expires (15 minutes). The sync Worker either accepts that or checks revocation.
 
 ## What syncs and what never does
 
@@ -186,33 +197,53 @@ Free plan limits, read 2026-09-29. They reset at 00:00 UTC. Past a limit, furthe
 - **R2:** 10 GB, 1M Class A and 10M Class B operations a month.
 - **CPU:** 10 ms per request.
 
-With the lean protocol that is room for **roughly 500 to 1,000 accounts active on the same day**. The first ceilings reached are:
+### Phase 0 results (measured 2026-09-29)
 
-- requests and rows written a day;
-- the 5 GB storage total, which is about 5 MB of rows per account at 1,000 accounts.
+The spike ran on deployed Workers from Vietnam. The code is throwaway, outside this repository; the Workers and the D1 database were deleted after measuring.
 
-**Email is not free on Cloudflare**: Email Service sending needs the paid plan. While free, codes go through Resend's free plan (3,000 a month, 100 a day, read 2026-09-29). Codes are sent only for a new address and a sign-in from a new device. Google and GitHub sign-in send no email.
+**Identity does not fit the free plan.** CPU time per request, from `wrangler tail`:
 
-**One risk to measure in phase 0:** password hashing is slow on purpose, and the free plan allows 10 ms of CPU per request. If Better Auth's hash does not fit, either passwords start on the paid plan or the free phase offers codes, Google and GitHub only.
+| Request | CPU |
+|---|---|
+| Sign-up (one scrypt hash, D1 writes) | 95–130 ms |
+| Sign-in | 84–112 ms |
+| `GET /api/auth/jwks`, the lightest Better Auth route | 14 ms |
 
-**Staying safe on the free plan:**
+- The free plan allows 10 ms. Even the lightest route is over it, so the cost is not only the password hash.
+- The hash alone is about 51 ms. Only scrypt N=2^12 fits under 10 ms, and that is about twenty times weaker than OWASP's minimum.
 
-- **A quota guard.** The Worker counts the day's requests and rows. Near a limit it tells clients to back off.
-- **Degrade gracefully.** The app keeps working locally and shows "Sync resumes later" instead of failing.
-- **Per-account caps** on synced rows and files.
+**Sync fits easily.** A push, including encryption, costs 4 ms of CPU; a pull 0–1 ms. Scenario tests: 14/14 locally and 13/14 on the deployed Worker. The failure is a timing assumption in the test: over real latency, the second computer got the row from its pull on connect instead of from the poke.
 
-**Moving to Workers Paid ($5 a month)** comes when any of these happens:
+**A measured day for one active person:** 3 app opens, 20 turns, 3 new chats, 5 orglet edits.
 
-- more than about 400 accounts are active on a day;
-- storage passes 3.5 GB;
-- the email quota bites;
-- password hashing needs more CPU.
+| Setup | Requests | Rows written | Rows read |
+|---|---|---|---|
+| 1 computer, 60 s push | 27 | 183 | 32 |
+| 1 computer, 30 s push | 47 | 263 | 72 |
+| 2 computers, 30 s push | 94 | 263 | 208 |
+| 2 computers, inline pokes | 54 | 263 | 78 |
 
-With the lean protocol, the paid estimate becomes:
+- Requests came in under the estimate. Rows written came in about twice over it: each change writes the row plus its `seq` index entry.
+- Heartbeats sent: 86 to 183. None reached the object.
+- Storage after the day: 76 KB of encrypted payload in a 176 KB database.
 
-| Active accounts | 1,000 | 10,000 |
-|---|---|---|
-| Estimated monthly cost, lean protocol | about $6 | about $40 |
+**What this means for cost.** Workers Paid is one plan for the whole Cloudflare account, so identity puts everything on it: **$5 a month from phase 1**. With that plan:
+
+- Email Service is included (3,000 messages a month), so Resend is not needed.
+- **Up to about 3,000 active accounts costs about $5–10 a month at first.**
+  - Workers requests hit their included 10M a month first, at about 94 a day per account.
+  - Rows written stay inside the included 50M until about 6,000 accounts.
+  - Durable Object requests past the included 1M cost about $1 at 3,000 accounts.
+- **Storage is what grows the bill over time.** One measured day added 176 KB, so roughly 5 MB per active account a month. At $0.20 per GB-month past the included 5 GB, that is about $3 more each month at 3,000 accounts, compounding. History caps in the entitlements keep it in check.
+- **Sync alone would fit the free plan** at about 380–550 active accounts a day. Rows written are the first ceiling. That is useful for a self-hosted sync server.
+
+Still worth doing:
+
+- Store a push as a few rows.
+- Make 60 s the default push interval.
+- Keep inline pokes.
+
+The quota guard and graceful "Sync resumes later" behaviour stay, for the paid plan's limits and for self-hosters on the free plan.
 
 ## Plans and billing
 
@@ -230,13 +261,13 @@ These go in from phase 1 so that turning something paid on later needs no migrat
 - **The app** receives entitlements with its access token. When a limit is reached it shows the limit in plain words. It never locks local data; only sync stops growing.
 - **A billing hook**: one webhook endpoint on `accounts.codepawl.com` that a payment provider calls. It updates `plan` and recomputes entitlements. Polar is the first candidate (codepawl-web used it for Tacet; whether it still accepts this seller needs re-checking). No card data ever touches CodePawl's servers.
 
-Free entitlements start at the caps the free Cloudflare plan allows (see above).
+Free entitlements start small enough that the account stays inside Workers Paid's included usage (see phase 0 results).
 
 ## Phases
 
 | Phase | What | Proves |
 |---|---|---|
-| **0. Spike** (a few days) | Better Auth on Workers + D1 with the Electron browser sign-in. One Durable Object doing push, pull and poke for a toy table between two computers. | The two riskiest parts: Better Auth has no first-party Workers guide, and DO sync under real latency. |
+| **0. Spike** (done 2026-09-29, [COD-336](https://linear.app/codepawl/issue/COD-336)) | Better Auth on Workers + D1 with the desktop browser sign-in. One Durable Object doing push, pull and poke for a toy table between two computers. | Both work; identity needs Workers Paid. See [Phase 0 results](#phase-0-results-measured-2026-09-29). |
 | **1. Identity** | `accounts.codepawl.com`, the first-run chooser, sign in and out, the account page, `plan` and `entitlements` (all `free`), the billing webhook stubbed. No sync yet. | Accounts work end to end. |
 | **2. Change log** | The schema changes above, HLC, outbox, local-only switches. Tested with two SQLite files merging, no server. | The merge rules are right before any network. |
 | **3. Sync** | `services/sync`, push/pull/poke, first upload, second-computer download, tombstones, R2 files, encryption at rest. | Two computers stay in step, offline included. |
@@ -244,8 +275,9 @@ Free entitlements start at the caps the free Cloudflare plan allows (see above).
 | **5. Web** | Read and reply on `orglet.codepawl.com/app`, the relay to a desktop. | The ecosystem piece. |
 | Later | Phone app and push, then the model router. | |
 
-## Open, to settle during phase 0
+## Open
 
-- Whether a paid Workers plan and the Email Service daily quota for a new sender are enough for a public launch. Cloudflare does not publish the quota.
+- Whether the Email Service daily quota for a new sender is enough for a public launch. Cloudflare does not publish the quota.
+- The WebSocket close in the spike used code 1006, which a server may not send (it threw once per disconnect). Use 1000 or 1001.
 - Self-hosting: whether the desktop app gets a "sync server" setting in phase 3, or later.
 - The attachment size cap (25 MB is a starting guess).
