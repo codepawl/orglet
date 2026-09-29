@@ -950,6 +950,11 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .harness-account-form { display:flex; align-items:center; gap:6px; padding:10px; }
 .harness-account-form input { min-width:220px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
 .harness-commands { display:flex; flex-direction:column; gap:12px; margin-top:10px; }
+/* Signing in from the row (COD-327): the button, or while the browser is open one plain line with Cancel beside it. */
+.harness-sign-in { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; }
+.harness-sign-in-waiting { font-size:13px; color:var(--text); }
+/* Busy looks like disabled, but stays focusable so the keyboard does not lose its place. */
+.harness-sign-in button[aria-disabled=true] { cursor:default; opacity:.5; }
 
 /* Custom OpenAI-compatible connections (COD-242): a titled group under the built-in APIs, each row's menu shown on
    hover or a visible focus like other rows, and the add/edit form floating beside its trigger. */

@@ -94,7 +94,7 @@ On Windows you can also select files in File Explorer and choose **Send to → O
 
 **Settings → Data** backs the workspace up, restores it, and deletes what you no longer want kept: the chat history, the knowledge your workers built up, what they remembered, the sources you imported, or everything at once. Nothing there touches your API keys or your own files. Restoring a backup after deleting the chat history brings those chats back, and on a new computer you pick each attached file again, since a backup holds no file contents. Details: [technical guide](docs/technical-guide.md#deleting-data).
 
-**Settings → Local harnesses** always shows Claude Code, Codex, Cursor Agent and Gemini CLI as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. If sign-in fails, the screen gives the CLI login command to copy; Orglet does not switch to Demo.
+**Settings → Local harnesses** always shows Claude Code, Codex, Cursor Agent and Gemini CLI as **not installed**, **found on disk**, **signed in (ready)** or **sign-in error**. Found on disk is not ready to run. A row that is not signed in has **Sign in**, which runs the CLI's own sign-in in your browser (Claude Code, Codex, Cursor Agent), and the CLI login command to copy; a signed-in account can **Sign out** from its menu. Orglet does not switch to Demo.
 
 API keys are encrypted with your system's secure storage and never reach the app's interface.
 
