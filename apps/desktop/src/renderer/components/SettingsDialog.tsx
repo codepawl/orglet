@@ -727,7 +727,6 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       : active
                         ? (connections[provider] ? t('Đã lưu API key') : t('Nhập key để kích hoạt'))
                         : t('Tắt · bật công tắc để nhập key')} · <button type="button" className="text-link" disabled={busy} onClick={() => void act(async () => { await orglet.openPricing(provider); }, name)}>{local ? t('Tài liệu') : provider === 'opencode-go' ? t('Giá và hạn mức gói') : t('Bảng giá')}<ExternalLink size={12} aria-hidden="true" /></button></span>
-                    {provider === 'opencode-go' && connections[provider] && <OpenCodeGoPlanUsage usage={goUsage} name={name} />}
                   </div>
                   <div className="setting-control">
                     <Switch checked={active} disabled={busy} labelledBy={titleId} onChange={on => {
@@ -753,6 +752,9 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       }
                     }} />
                   </div>
+                  {/* The bars take a line of their own under the text, so the mark and the switch stay centred on the
+                      title and its description instead of dropping to the middle of the bars. */}
+                  {provider === 'opencode-go' && connections[provider] && <div className="setting-connection-usage"><OpenCodeGoPlanUsage usage={goUsage} name={name} /></div>}
                   {/* A key is long and this row is narrow, so the field takes a line of its own below the
                       switch rather than sharing the text column with it (user, 2026-09-20). */}
                     {active && !local && <form className="setting-key-form" onSubmit={event => {
