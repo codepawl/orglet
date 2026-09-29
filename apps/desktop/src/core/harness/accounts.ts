@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
+  CURSOR_ONE_SIGN_IN_ON_MAC,
   HarnessAccountState,
   SYSTEM_ACCOUNT_ID,
+  harnessAccountsSignInApart,
   harnessCatalog,
   type HarnessAccount,
   type HarnessAccountSelection,
@@ -24,7 +26,7 @@ export type HarnessAccountMap = Record<HarnessCatalogId, HarnessAccountSelection
  * `root` is where those folders live. Without one — a core built for tests — only the system account exists.
  */
 export class HarnessAccounts {
-  constructor(private store: Store, private root?: string) {}
+  constructor(private store: Store, private root?: string, private platform: NodeJS.Platform = process.platform) {}
 
   /** Every harness with its accounts and the folder the active one runs in. */
   map(): HarnessAccountMap {
@@ -41,6 +43,8 @@ export class HarnessAccounts {
   /** Adds an account and makes it the active one, so the login command shown next belongs to it. */
   async add(harness: HarnessCatalogId, label: string): Promise<HarnessAccount> {
     if (!this.root) throw new Error('Orglet chưa có thư mục dữ liệu để tạo tài khoản harness.');
+    // A second folder would still sign in to the same Keychain item, so it would only look like another account.
+    if (!harnessAccountsSignInApart(harness, this.platform)) throw new Error(CURSOR_ONE_SIGN_IN_ON_MAC);
     const state = this.state(harness);
     if (state.accounts.length >= MAX_ACCOUNTS) throw new Error(`Mỗi harness giữ tối đa ${MAX_ACCOUNTS} tài khoản.`);
     const account: HarnessAccount = { id: randomUUID(), label };

@@ -259,24 +259,48 @@ describe('reading one account', () => {
     expect(await readHarnessUsage('codex', 'codex.exe', undefined, noServer.runtime)).toEqual({ windows: [], unavailable: 'failed' });
   });
 
-  it('reads the Cursor account from about in that account folder, and its usage with the token Cursor Agent saved', async () => {
+  it('reads the Cursor account from about in that account folder, and its usage with the token Cursor Agent saved there', async () => {
     const roaming = join('home', 'person', 'AppData', 'Roaming');
+    const folder = join('accounts', 'cursor', 'one');
     const token = cursorToken(Date.parse('2026-10-24T00:00:00Z'));
+    const systemToken = cursorToken(Date.parse('2026-10-25T00:00:00Z'));
     const fake = fakeRuntime({
       about: { userEmail: 'an@example.com', subscriptionTier: 'pro' },
       env: { APPDATA: roaming },
-      files: { [join(roaming, 'Cursor', 'auth.json')]: { accessToken: token, refreshToken: 'refresh-value' } },
+      files: {
+        [join(folder, 'Cursor', 'auth.json')]: { accessToken: token, refreshToken: 'refresh-value' },
+        [join(roaming, 'Cursor', 'auth.json')]: { accessToken: systemToken },
+      },
       answers: { [CURSOR_URL]: { status: 200, body: cursorAnswer } },
     });
-    const folder = join('accounts', 'cursor', 'one');
     const read = await readHarnessUsage('cursor', 'agent.exe', folder, fake.runtime);
     expect(read).toEqual({ email: 'an@example.com', plan: 'Pro', windows: cursorUsageWindows(cursorAnswer) });
-    expect(fake.probes[0]).toEqual({ args: ['about', '--format', 'json'], env: { CURSOR_CONFIG_DIR: folder } });
-    // CURSOR_CONFIG_DIR does not move Cursor Agent's sign-in, so the account folder reads the same file it does.
-    expect(fake.reads).toEqual([join(roaming, 'Cursor', 'auth.json')]);
+    // COD-330: CURSOR_CONFIG_DIR alone does not move Cursor Agent's sign-in; APPDATA does, so the account keeps its own.
+    expect(fake.probes[0]).toEqual({ args: ['about', '--format', 'json'], env: { CURSOR_CONFIG_DIR: folder, APPDATA: folder } });
+    expect(fake.reads).toEqual([join(folder, 'Cursor', 'auth.json')]);
     expect(fake.fetches).toEqual([{ url: CURSOR_URL, authorization: `Bearer ${token}`, method: 'POST', body: {} }]);
     expect(JSON.stringify(read)).not.toContain(token);
     expect(JSON.stringify(read)).not.toContain('refresh-value');
+
+    // The default account still reads the sign-in Cursor Agent keeps for the computer.
+    await readHarnessUsage('cursor', 'agent.exe', undefined, fake.runtime);
+    expect(fake.reads.at(-1)).toBe(join(roaming, 'Cursor', 'auth.json'));
+    expect(fake.fetches.at(-1)?.authorization).toBe(`Bearer ${systemToken}`);
+  });
+
+  it("reads an added Linux account's Cursor sign-in under its own XDG_CONFIG_HOME", async () => {
+    const folder = join('accounts', 'cursor', 'linux');
+    const token = cursorToken(Date.parse('2026-10-24T00:00:00Z'));
+    const fake = fakeRuntime({
+      about: { userEmail: 'an@example.com', subscriptionTier: 'pro' },
+      platform: 'linux',
+      env: { XDG_CONFIG_HOME: join('home', 'person', '.config') },
+      files: { [join(folder, 'cursor', 'auth.json')]: { accessToken: token } },
+      answers: { [CURSOR_URL]: { status: 200, body: cursorAnswer } },
+    });
+    expect((await readHarnessUsage('cursor', 'agent', folder, fake.runtime)).windows).toHaveLength(3);
+    expect(fake.probes[0].env).toEqual({ CURSOR_CONFIG_DIR: folder, XDG_CONFIG_HOME: folder });
+    expect(fake.reads).toEqual([join(folder, 'cursor', 'auth.json')]);
   });
 
   it('never sends an expired Cursor token, and says why a Cursor account has no usage', async () => {

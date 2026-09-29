@@ -6,9 +6,10 @@ import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../../apps/desktop/src/core/harness/detect';
-import { HarnessAccounts } from '../../apps/desktop/src/core/harness/accounts';
+import { HarnessAccounts, type HarnessAccountMap } from '../../apps/desktop/src/core/harness/accounts';
+import { cursorAuthFile } from '../../apps/desktop/src/core/harness/usage';
 import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
-import { harnessNames, harnessReady, harnessStatus, loginCommand, loginCommands, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
+import { CURSOR_ONE_SIGN_IN_ON_MAC, harnessAccountsSignInApart, harnessNames, harnessReady, harnessSignInIsMachineWide, harnessStatus, loginCommand, loginCommands, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import { MAX_CHAT_MESSAGE_CHARACTERS, type Source, type Task, type Worker } from '../../apps/desktop/src/shared/contracts';
 import { invoicePdf } from './pdf-fixture';
 
@@ -319,6 +320,7 @@ const fixture = (item: Pick<HarnessInfo, 'id' | 'executable' | 'version' | 'auth
   status: harnessStatus(item.auth),
   accountId: SYSTEM_ACCOUNT_ID,
   accounts: [],
+  accountsSignInApart: true,
   loginCommand: loginCommand(item.id, item.executable || undefined, 'win32'),
   loginCommands: loginCommands(item.id, item.executable || undefined, 'win32'),
   runnable: true,
@@ -390,12 +392,57 @@ describe('accounts', () => {
   });
 
   it('names the folder variable each CLI reads', () => {
-    expect(harnessAccountEnv('claude-code', '/a')).toEqual({ CLAUDE_CONFIG_DIR: '/a' });
-    expect(harnessAccountEnv('codex', '/b')).toEqual({ CODEX_HOME: '/b' });
-    expect(harnessAccountEnv('cursor', '/c')).toEqual({ CURSOR_CONFIG_DIR: '/c' });
-    expect(harnessAccountEnv('gemini', '/d')).toEqual({ GEMINI_CLI_HOME: '/d' });
+    expect(harnessAccountEnv('claude-code', '/a', 'win32')).toEqual({ CLAUDE_CONFIG_DIR: '/a' });
+    expect(harnessAccountEnv('codex', '/b', 'linux')).toEqual({ CODEX_HOME: '/b' });
+    expect(harnessAccountEnv('gemini', '/d', 'darwin')).toEqual({ GEMINI_CLI_HOME: '/d' });
     // The system account runs the CLI exactly as installed.
     expect(harnessAccountEnv('claude-code', undefined)).toEqual({});
+    expect(harnessAccountEnv('cursor', undefined, 'win32')).toEqual({});
+  });
+
+  // COD-330: Cursor Agent 2026.09.18's `getAuthFilePath` keeps auth.json under %APPDATA%\Cursor on Windows and
+  // $XDG_CONFIG_HOME/cursor on Linux, whatever CURSOR_CONFIG_DIR says, so an added account moves that folder too.
+  it("moves Cursor Agent's sign-in into the account folder where a variable can", () => {
+    expect(harnessAccountEnv('cursor', 'C:\\accounts\\cursor\\work', 'win32')).toEqual({ CURSOR_CONFIG_DIR: 'C:\\accounts\\cursor\\work', APPDATA: 'C:\\accounts\\cursor\\work' });
+    expect(harnessAccountEnv('cursor', '/accounts/cursor/work', 'linux')).toEqual({ CURSOR_CONFIG_DIR: '/accounts/cursor/work', XDG_CONFIG_HOME: '/accounts/cursor/work' });
+    // macOS keeps it in one Keychain item, which nothing moves.
+    expect(harnessAccountEnv('cursor', '/accounts/cursor/work', 'darwin')).toEqual({ CURSOR_CONFIG_DIR: '/accounts/cursor/work' });
+    expect(cursorAuthFile('win32', harnessAccountEnv('cursor', 'C:\\accounts\\cursor\\work', 'win32'), 'C:\\Users\\an')).toBe(join('C:\\accounts\\cursor\\work', 'Cursor', 'auth.json'));
+  });
+
+  it('offers no added Cursor Agent account on macOS, where every one would share the Keychain sign-in', async () => {
+    const root = join(directory, 'mac-accounts');
+    const onMac = new HarnessAccounts(new Store(':memory:'), root, 'darwin');
+    await expect(onMac.add('cursor', 'Work')).rejects.toThrow(CURSOR_ONE_SIGN_IN_ON_MAC);
+    expect(existsSync(join(root, 'cursor'))).toBe(false);
+    // Other CLIs on macOS, and Cursor Agent elsewhere, still take added accounts.
+    await expect(onMac.add('claude-code', 'Work')).resolves.toEqual(expect.objectContaining({ label: 'Work' }));
+    await expect(new HarnessAccounts(new Store(':memory:'), join(directory, 'windows-accounts'), 'win32').add('cursor', 'Work')).resolves.toEqual(expect.objectContaining({ label: 'Work' }));
+
+    expect(harnessAccountsSignInApart('cursor', 'darwin')).toBe(false);
+    expect(harnessAccountsSignInApart('cursor', 'win32')).toBe(true);
+    expect(harnessAccountsSignInApart('claude-code', 'darwin')).toBe(true);
+    // So the sign-out question on macOS says it reaches the whole computer, and elsewhere only this account.
+    expect(harnessSignInIsMachineWide({ accountId: 'work', accountsSignInApart: false })).toBe(true);
+    expect(harnessSignInIsMachineWide({ accountId: 'work', accountsSignInApart: true })).toBe(false);
+    expect(harnessSignInIsMachineWide({ accountId: SYSTEM_ACCOUNT_ID, accountsSignInApart: true })).toBe(true);
+  });
+
+  it('describes each Cursor Agent account as signed in to its own folder', async () => {
+    const executable = join(directory, 'cursor-bin', 'agent.exe');
+    await touch(executable);
+    const probed: { args: string[]; env: NodeJS.ProcessEnv }[] = [];
+    const record: Probe = (_executable, args, overrides) => {
+      probed.push({ args, env: overrides ?? {} });
+      return Promise.resolve(args[0] === '--version' ? { code: 0, stdout: '2026.09.18-9a7762b', stderr: '' } : { code: 0, stdout: JSON.stringify({ isAuthenticated: true }), stderr: '' });
+    };
+    const folder = join(directory, 'cursor-work');
+    const selection = { accountId: 'work', accounts: [{ id: 'work', label: 'Công ty' }], configDir: folder };
+    const [onWindows] = await detectHarnesses({ PATH: join(directory, 'cursor-bin') }, 'win32', record, { cursor: selection } as HarnessAccountMap, ['cursor']);
+    expect(probed.map(call => call.env)).toEqual(probed.map(() => ({ CURSOR_CONFIG_DIR: folder, APPDATA: folder })));
+    expect(onWindows).toEqual(expect.objectContaining({ accountId: 'work', auth: 'logged_in', accountsSignInApart: true }));
+    const [onMac] = await detectHarnesses({ PATH: join(directory, 'cursor-bin') }, 'darwin', record, { cursor: selection } as HarnessAccountMap, ['cursor']);
+    expect(onMac.accountsSignInApart).toBe(false);
   });
 
   it.runIf(process.platform === 'win32')('runs the CLI inside the account folder', async () => {

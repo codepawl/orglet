@@ -3,9 +3,10 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import {
+  harnessAccountsSignInApart,
+  harnessAccountVariables,
   harnessBinaries,
   harnessCatalog,
-  harnessConfigDirVariable,
   systemAccountSelection,
   harnessNames,
   harnessRunnable,
@@ -23,9 +24,12 @@ import { geminiHome, readGeminiSignIn, type GeminiSignIn } from './gemini';
 
 export type Probe = (executable: string, args: string[], overrides?: NodeJS.ProcessEnv) => Promise<{ code: number; stdout: string; stderr: string }>;
 
-/** Variables that point a CLI at one account's folder. Empty for the system account, which runs the CLI as installed. */
-export const harnessAccountEnv = (id: HarnessCatalogId, configDir?: string): NodeJS.ProcessEnv =>
-  configDir ? { [harnessConfigDirVariable[id]]: configDir } : {};
+/**
+ * Variables that point a CLI at one account's folder (`harnessAccountVariables`). Empty for the system account, which
+ * runs the CLI as installed.
+ */
+export const harnessAccountEnv = (id: HarnessCatalogId, configDir?: string, platform: NodeJS.Platform = process.platform): NodeJS.ProcessEnv =>
+  configDir ? harnessAccountVariables(id, configDir, platform) : {};
 
 const isFile = async (path: string) => { try { return (await stat(path)).isFile(); } catch { return false; } };
 const children = async (path: string) => { try { return await readdir(path); } catch { return []; } };
@@ -135,12 +139,13 @@ function describeAuth(id: HarnessCatalogId, executable: string, platform: NodeJS
     accountId: selection.accountId,
     accounts: selection.accounts,
     ...(selection.configDir ? { configDir: selection.configDir } : {}),
+    accountsSignInApart: harnessAccountsSignInApart(id, platform),
   };
 }
 
 async function inspect(id: HarnessCatalogId, executable: string, run: Probe, platform: NodeJS.Platform, selection: HarnessAccountSelection, env: NodeJS.ProcessEnv): Promise<HarnessInfo | null> {
   // Every probe reads the selected account's folder, so the version, the sign-in and the login command all describe it.
-  const accountEnv = harnessAccountEnv(id, selection.configDir);
+  const accountEnv = harnessAccountEnv(id, selection.configDir, platform);
   const describe = (auth: HarnessInfo['auth'], detail: string) => describeAuth(id, executable, platform, auth, detail, selection);
   const versionResult = await run(executable, ['--version'], accountEnv);
   // Keep only the number: "2.1.280 (Claude Code)" and "codex-cli 0.155.0" otherwise repeat the name the picker already shows.
@@ -230,11 +235,11 @@ export const isDesktopAppBuild = (path: string) =>
  * command the person pastes should outlive the app's next update, so a working install of their own (PATH, npm) is
  * named when there is one, and the app's build only when nothing else answers (COD-224).
  */
-async function loginExecutable(id: HarnessCatalogId, running: string, installs: string[], run: Probe, selection: HarnessAccountSelection): Promise<string> {
+async function loginExecutable(id: HarnessCatalogId, running: string, installs: string[], run: Probe, selection: HarnessAccountSelection, platform: NodeJS.Platform): Promise<string> {
   if (!isDesktopAppBuild(running)) return running;
   for (const path of installs) {
     if (isDesktopAppBuild(path)) continue;
-    const version = await run(path, ['--version'], harnessAccountEnv(id, selection.configDir));
+    const version = await run(path, ['--version'], harnessAccountEnv(id, selection.configDir, platform));
     if (version.code === 0) return path;
   }
   return running;
@@ -255,7 +260,7 @@ export async function detectHarnesses(env: NodeJS.ProcessEnv = process.env, plat
       if (found) break;
     }
     if (found) {
-      const loginPath = await loginExecutable(id, found.executable, installs, run, selection);
+      const loginPath = await loginExecutable(id, found.executable, installs, run, selection, platform);
       found = { ...found, loginCommand: loginCommand(id, loginPath, platform, selection.configDir), loginCommands: loginCommands(id, loginPath, platform, selection.configDir) };
     }
     result.push(found ?? missingHarness(id, platform, selection));

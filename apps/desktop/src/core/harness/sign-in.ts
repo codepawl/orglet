@@ -199,12 +199,15 @@ export function startSignIn(harness: HarnessCatalogId, executable: string, env: 
   return commandSignIn(harness, executable, env, processes);
 }
 
-/** Runs the CLI's own sign-out in one account folder. Orglet never deletes a credential file itself. */
-export async function signOutHarness(harness: HarnessCatalogId, executable: string, configDir: string | undefined, run: Probe): Promise<void> {
+/**
+ * Runs the CLI's own sign-out in one account folder, with the same variables its runs get, so it signs out the
+ * account's own sign-in. Orglet never deletes a credential file itself.
+ */
+export async function signOutHarness(harness: HarnessCatalogId, executable: string, configDir: string | undefined, run: Probe, platform: NodeJS.Platform = process.platform): Promise<void> {
   const name = harnessNames[harness];
   const args = harnessLogoutArgs[harness];
   if (!args) throw new Error(`${name} chỉ đăng xuất được trong cửa sổ của nó, bằng /logout.`);
-  const result = await run(executable, [...args], harnessAccountEnv(harness, configDir));
+  const result = await run(executable, [...args], harnessAccountEnv(harness, configDir, platform));
   if (result.code === 0) return;
   const reason = `${result.stderr}\n${result.stdout}`.split(/\r?\n/).map(shownLine).find(Boolean);
   throw new Error(reason ? `Không đăng xuất được ${name}: ${reason}` : `Không đăng xuất được ${name}.`);

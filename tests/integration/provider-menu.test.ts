@@ -9,7 +9,7 @@ import { t } from '../../apps/desktop/src/renderer/i18n';
 const harness = (id: HarnessInfo['id'], signedIn: boolean): HarnessInfo => ({
   id, name: id, executable: `${id}.exe`, version: '1.0.0', auth: signedIn ? 'logged_in' : 'logged_out',
   status: signedIn ? 'signed_in' : 'detected', authDetail: '', loginCommand: `${id} login`, loginCommands: [],
-  runnable: true, accountId: 'system', accounts: [],
+  runnable: true, accountId: 'system', accounts: [], accountsSignInApart: true,
 });
 
 /**

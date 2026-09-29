@@ -8,7 +8,7 @@ import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, MAX_PROVIDER_CONCURRENCY, QUIET_PARALLEL_LIMIT, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
 import { CustomConnectionsSection } from './CustomConnections';
 import type { OpenCodeGoUsage } from '../../shared/opencode';
-import { harnessCatalog, harnessLogoutArgs, harnessSignInIsMachineWide, harnessSignsInApp, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessBankedResets, type HarnessCatalogId, type HarnessInfo, type HarnessResetAnswer, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
+import { CURSOR_ONE_SIGN_IN_ON_MAC, harnessCatalog, harnessLogoutArgs, harnessSignInIsMachineWide, harnessSignsInApp, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessBankedResets, type HarnessCatalogId, type HarnessInfo, type HarnessResetAnswer, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
 import { BankedResets, PlanUsage, usageReadingTime } from './PlanUsage';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, INTERFACE_PREFERRED_FONTS, type FontRole } from '../../shared/fonts';
 import { Button } from './ui';
@@ -193,9 +193,12 @@ function HarnessSignInControl({ item, busy, onStart, onCancel }: { item: Harness
   </div>;
 }
 
-/** The sign-out question. The default account and Cursor Agent share one sign-in across the computer, so it says so. */
+/**
+ * The sign-out question. The default account, and Cursor Agent on macOS, share one sign-in across the computer, so it
+ * says so.
+ */
 function signOutQuestion(item: HarnessInfo): string {
-  if (harnessSignInIsMachineWide(item.id, item.accountId)) return t('Đăng xuất {0} trên cả máy này, không chỉ trong Orglet?', [item.name]);
+  if (harnessSignInIsMachineWide(item)) return t('Đăng xuất {0} trên cả máy này, không chỉ trong Orglet?', [item.name]);
   return t('Đăng xuất tài khoản này khỏi {0}?', [item.name]);
 }
 
@@ -230,13 +233,15 @@ function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove, o
         { value: SYSTEM_ACCOUNT_ID, label: t('Tài khoản mặc định'), detail: summaryOf(SYSTEM_ACCOUNT_ID) ?? t('Đã đăng nhập sẵn'), icon: <Laptop size={16} /> },
         ...item.accounts.map(account => ({ value: account.id, label: account.label, detail: summaryOf(account.id), icon: <UserRound size={16} /> })),
       ]} />
-    {/* Where the CLI lives and which folder this account signs in from: detail behind the "i", not a line in the row. */}
-    {(item.executable || item.configDir) && <InfoTip label={t('Chi tiết tài khoản')} rows={[
+    {/* Where the CLI lives, which folder this account signs in from, and why no account can be added where the CLI
+        keeps one sign-in per computer: detail behind the "i", not a line in the row. */}
+    {(item.executable || item.configDir || !item.accountsSignInApart) && <InfoTip label={t('Chi tiết tài khoản')} rows={[
       ...(item.executable ? [{ label: t('Chương trình'), value: item.executable, mono: true, onCopy: () => void copyText(item.executable) }] : []),
       ...(item.configDir ? [{ label: t('Thư mục đăng nhập'), value: item.configDir, mono: true, onCopy: () => void copyText(item.configDir!) }] : []),
+      ...(item.accountsSignInApart ? [] : [{ label: t('Tài khoản'), value: t(CURSOR_ONE_SIGN_IN_ON_MAC) }]),
     ]} />}
     <RowMenu label={t('Tài khoản {0}', [item.name])} items={[
-      { label: t('Thêm tài khoản'), icon: UserPlus, onSelect: () => setEditing({ label: '' }) },
+      ...(item.accountsSignInApart ? [{ label: t('Thêm tài khoản'), icon: UserPlus, onSelect: () => setEditing({ label: '' }) }] : []),
       ...(onSignOut ? [{ label: t('Đăng xuất'), icon: LogOut, confirm: { question: signOutQuestion(item), label: t('Đăng xuất') }, onSelect: onSignOut }] : []),
       ...(active ? [
         { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing({ id: active.id, label: active.label }) },
