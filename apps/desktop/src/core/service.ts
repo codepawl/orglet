@@ -921,6 +921,10 @@ export class CoreService {
         this.applySettings(commands.settings.parse(args));
         this.notify(); return;
       }
+      case 'accountChoice': {
+        this.store.setSetting('accountChoice', { choice: commands.accountChoice.parse(args).choice, asked: true });
+        this.notify(); return;
+      }
     }
   }
   /** Creates a worker or a new revision of one, validated the way the worker dialog is. */

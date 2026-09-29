@@ -14,7 +14,7 @@ import { packagedExecutable } from './packaged-executable.mjs';
 
 const executable = packagedExecutable();
 const directory = await mkdtemp(join(tmpdir(), 'orglet-cli-'));
-const appEnvironment = { ...process.env, APPDATA: directory };
+const appEnvironment = { ...process.env, APPDATA: directory, ORGLET_SKIP_ACCOUNT_CHOICE: '1' };
 delete appEnvironment.ELECTRON_RUN_AS_NODE;
 
 /** resources/bin next to the packaged executable, where the launchers ship. */

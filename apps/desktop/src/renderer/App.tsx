@@ -29,6 +29,9 @@ import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
 import { Startup } from './components/Startup';
+import { AccountChooser } from './components/AccountChooser';
+import { useAccount } from './account';
+import { needsAccountChoice } from '../shared/account';
 import { Starters } from './components/Starters';
 import { DetailsPanel } from './components/DetailsPanel';
 import type { FolderChoice } from './components/PermissionControls';
@@ -163,6 +166,7 @@ export function App() {
   const [workspace, setWorkspace] = useState<Workspace>(); const [connections, setConnections] = useState<Connections>(emptyConnections());
   // Undefined until the first detection finishes: it runs each CLI and takes about three seconds cold, so nothing waits on it.
   const [harnesses, setHarnesses] = useState<HarnessInfo[]>();
+  const account = useAccount();
   const [selected, setSelected] = useState<string | null>(null); const [detail, setDetail] = useState<TaskDetail>();
   // Chats opened this session keep their last detail in `taskDetails`, and a sidebar row prefetches its chat while
   // the pointer rests on it (COD-198, COD-218), so opening shows the kept copy at once instead of a blank pane
@@ -1188,6 +1192,12 @@ export function App() {
   // The shell is drawn before the workspace arrives (COD-218): the same frame, the same sidebar width, the lists
   // and the chat filled in as skeletons, so the window never opens on a blank page or a centred wait.
   if (!workspace) return <Startup error={error} onRetry={window.orglet ? () => void refresh() : undefined} sidebar={sidebar} sidebarWidth={sidebarWidth} />;
+  // A new install asks once, before the app, whether to sign in or stay local (COD-337); the answer is kept and the
+  // workspace it comes back in drops this screen. Anyone who already has chats, or updated from an older build, never sees it.
+  if (needsAccountChoice(workspace, account)) return <>
+    <AccountChooser account={account} onChoose={async choice => { await orglet.call('accountChoice', { choice }); await refresh(); }} />
+    <Toaster />
+  </>;
   /** A worker row resting under the pointer fetches its live chat and its model list ahead of the click. */
   const dwellWorker = (item: Worker) => (resting: boolean) => {
     const live = liveWorkerTask(workspace.tasks, item.id);
@@ -1718,6 +1728,6 @@ export function App() {
     <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} workspace={workspace} onOpenChat={openChatAt} onOpenOrglet={openWorker} onOpenCrew={openTeam} onDwellTask={dwellChat} />
     <ForwardPicker request={forwarding} options={forwarding ? forwardOptions(workspace, forwarding.taskId, workers => recipientReady(workers.map(item => item.provider))) : []} sending={forwardSending} onSend={choice => void sendForward(choice)} onClose={() => setForwarding(undefined)} />
     <SendToPicker open={Boolean(sentFiles)} count={sentFiles?.count ?? 0} names={sentFiles?.names ?? []} options={sentFiles ? sendToOptions(workspace) : []} onChoose={option => void sendFilesTo(option)} onClose={closeSendTo} />
-    <SettingsDialog open={panel === 'settings'} tab={settingsTab} onTab={setSettingsTab} onClose={close} workspace={workspace} connections={connections} onConnections={setConnections} harnesses={harnesses} onHarnesses={setHarnesses} />
+    <SettingsDialog open={panel === 'settings'} tab={settingsTab} onTab={setSettingsTab} onClose={close} workspace={workspace} connections={connections} onConnections={setConnections} harnesses={harnesses} onHarnesses={setHarnesses} account={account} />
   </div>;
 }

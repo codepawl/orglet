@@ -28,7 +28,7 @@ function launchTarget() {
 
 async function launchApp() {
   const dataFolder = await mkdtemp(join(tmpdir(), 'orglet-readme-'));
-  const environment = { ...process.env, ORGLET_DATA_DIR: dataFolder };
+  const environment = { ...process.env, ORGLET_DATA_DIR: dataFolder, ORGLET_SKIP_ACCOUNT_CHOICE: '1' };
   delete environment.ELECTRON_RUN_AS_NODE;
   const target = launchTarget();
   return electron.launch({ executablePath: target.executablePath, args: [...target.args, `--user-data-dir=${dataFolder}`], env: environment });

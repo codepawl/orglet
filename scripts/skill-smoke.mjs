@@ -12,7 +12,7 @@ await mkdir(join(skillPath, 'references'), { recursive: true }); await mkdir(joi
 await writeFile(join(skillPath, 'SKILL.md'), '---\nname: review-kit\ndescription: Review selected evidence with a checklist.\nallowed-tools: read_source read_skill_resource submit_report\n---\nRead references/checks.md when needed.');
 await writeFile(join(skillPath, 'references/checks.md'), 'Check each claim against a selected source.');
 await writeFile(join(skillPath, 'scripts/helper.py'), 'raise Exception("DO NOT RUN")');
-const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${join(directory, 'data')}`], env });
 let closed = false; app.once('close', () => { closed = true; });
 try {

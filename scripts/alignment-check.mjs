@@ -148,7 +148,40 @@ const SCREENS = [
   { name: 'settings-harness', open: page => openSettingsTab(page, 'Harness trên máy') },
   { name: 'settings-connections', open: page => openSettingsTab(page, 'Kết nối API') },
   { name: 'settings-costs', open: page => openSettingsTab(page, 'Chi phí & giới hạn') },
+  { name: 'settings-account', open: page => openSettingsTab(page, 'Tài khoản CodePawl') },
 ];
+
+/** Records one measured pass: the findings, printed, and an outlined screenshot when there are any. */
+async function record(page, screen, size, theme) {
+  const findings = await measure(page);
+  const pass = { screen, width: size.width, height: size.height, theme, findings };
+  if (findings.length > 0 || options.allScreenshots) {
+    pass.screenshot = join(outputFolder, `${screen}-${size.width}x${size.height}-${theme}.png`);
+    await screenshotWithOutlines(page, findings, pass.screenshot);
+  }
+  passes.push(pass);
+  console.log(`${screen} ${size.width}x${size.height} ${theme}: ${findings.length === 0 ? 'clean' : `${findings.length} finding${findings.length === 1 ? '' : 's'}`}`);
+  for (const finding of findings) printFinding(pass, finding);
+}
+
+async function resize(page, size) {
+  await app.evaluate(({ BrowserWindow }, { width, height }) => BrowserWindow.getAllWindows()[0].setContentSize(width, height), size);
+  await page.waitForFunction(({ width, height }) => innerWidth === width && innerHeight === height, size);
+}
+
+/** The first-run question a new install shows before the app (COD-337), measured before the seed replaces it. */
+async function measureFirstRun(page) {
+  await page.waitForFunction(() => window.orglet !== undefined);
+  await page.locator('.account-choice').waitFor();
+  for (const theme of THEMES) {
+    await setAppearance(page, theme);
+    for (const size of SIZES) {
+      await resize(page, size);
+      await settle(page);
+      await record(page, 'first-run', size, theme);
+    }
+  }
+}
 
 async function measure(page) {
   const installed = await page.evaluate(() => window.__orgletAlignment !== undefined);
@@ -172,6 +205,8 @@ await mkdir(outputFolder, { recursive: true });
 const dataFolder = await mkdtemp(join(tmpdir(), 'orglet-alignment-data-'));
 // The Harness tab must never read this machine's sign-ins or ask a vendor for plan usage.
 const { env } = await isolatedHarnessEnvironment(dataFolder);
+// This check measures the first-run account question too (COD-337), so its empty profile is a new install.
+delete env.ORGLET_SKIP_ACCOUNT_CHOICE;
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${dataFolder}`], env });
 let closed = false;
 app.once('close', () => { closed = true; });
@@ -179,26 +214,18 @@ const passes = [];
 try {
   const page = await app.firstWindow();
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  if (!options.only || options.only.includes('first-run')) await measureFirstRun(page);
   const context = await seedWorkspace(page);
   const screens = SCREENS.filter(screen => !options.only || options.only.includes(screen.name));
   for (const theme of THEMES) {
     await setAppearance(page, theme);
     for (const size of SIZES) {
-      await app.evaluate(({ BrowserWindow }, { width, height }) => BrowserWindow.getAllWindows()[0].setContentSize(width, height), size);
-      await page.waitForFunction(({ width, height }) => innerWidth === width && innerHeight === height, size);
+      await resize(page, size);
       for (const screen of screens) {
         await reset(page, context);
         await screen.open(page, context);
         await settle(page);
-        const findings = await measure(page);
-        const pass = { screen: screen.name, width: size.width, height: size.height, theme, findings };
-        if (findings.length > 0 || options.allScreenshots) {
-          pass.screenshot = join(outputFolder, `${screen.name}-${size.width}x${size.height}-${theme}.png`);
-          await screenshotWithOutlines(page, findings, pass.screenshot);
-        }
-        passes.push(pass);
-        console.log(`${screen.name} ${size.width}x${size.height} ${theme}: ${findings.length === 0 ? 'clean' : `${findings.length} finding${findings.length === 1 ? '' : 's'}`}`);
-        for (const finding of findings) printFinding(pass, finding);
+        await record(page, screen.name, size, theme);
       }
     }
   }

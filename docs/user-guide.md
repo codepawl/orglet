@@ -1,6 +1,6 @@
 # User guide
 
-Orglet is a desktop app where you keep a small team of AI workers, called **orglets**, and give them work in a normal chat. Orglets can be grouped into **crews**. There is no Orglet account and no Orglet server: chats, orglets and files stay on this computer, and each orglet runs on a connection you choose, such as the Claude Code or Codex account you are already signed in to, an API key, or a local Ollama.
+Orglet is a desktop app where you keep a small team of AI workers, called **orglets**, and give them work in a normal chat. Orglets can be grouped into **crews**. Chats, orglets and files stay on this computer, with no Orglet server in between; a free CodePawl account is optional and syncs nothing yet ([CodePawl account](account.md)), and each orglet runs on a connection you choose, such as the Claude Code or Codex account you are already signed in to, an API key, or a local Ollama.
 
 This page is the front door. It covers what Orglet is, how to install it, and your first chat, then points at one short page per part of the app.
 
@@ -15,6 +15,7 @@ Orglet is early. Expect rough edges, and check answers against your own sources 
 | [In a chat](chat-guide.md) | Attaching files, reports as documents, the trace of what an orglet did, diffs, Details, schedules, notifications |
 | [Permissions and learning](permissions-and-learning.md) | The permission switches and the working folder, memory, knowledge and the Library, self-improvement, app-change proposals |
 | [Settings](settings.md) | Every settings tab, including backup, erasing data, and updates |
+| [CodePawl account](account.md) | The optional account: the first-start choice, signing in and out, what is stored where; nothing syncs yet |
 | [Troubleshooting](troubleshooting.md) | Sign-in errors, SmartScreen, a harness that is not found, commands that cannot reach `localhost` |
 
 The step-by-step first walk-through with screenshots is [Getting started](getting-started.md). The full [docs map](README.md) also lists the how-it-works pages and the product decisions behind them.
@@ -23,7 +24,7 @@ The step-by-step first walk-through with screenshots is [Getting started](gettin
 
 - **A team with roles.** Each orglet has a name, a face, instructions and a skill. You talk to one orglet, a few of them, or a crew.
 - **Your existing AI plan.** An orglet can run through Claude Code, Codex, Cursor Agent or Gemini CLI using the account you are already logged in to. An API key is optional.
-- **Private by default.** No account, no server. An orglet reads only the files you attach to that chat or the folder you grant it.
+- **Private by default.** No account needed, no server. The optional CodePawl account syncs nothing yet. An orglet reads only the files you attach to that chat or the folder you grant it.
 - **Repeat work runs itself.** Schedules send the same request daily, on weekdays, weekly or every few hours while the app is open.
 
 What Orglet is not, and what it will not become for now, is in [product.md](product.md).

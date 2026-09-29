@@ -8,6 +8,7 @@ import type { PreflightRecord } from '../../shared/preflight';
 import { WorkspaceReadEvidence } from '../../shared/workspace-evidence';
 import { AppProposal } from '../../shared/app-proposals';
 import { usdCurrency } from '../../shared/currency';
+import { AccountChoiceRecord, EXISTING_INSTALL_CHOICE, NEW_INSTALL_CHOICE } from '../../shared/account';
 import type { ToolCapability } from '../../shared/tool-policy';
 import type { WorkspacePermission } from '../../shared/workspace-access';
 import { readCustomConnections } from './custom-connections';
@@ -27,6 +28,15 @@ export function seedWorker(workerId: string, skillId: string): Worker {
 }
 
 export const SCHEMA_VERSION = 19;
+
+/**
+ * What a new database records for the first-run account question (COD-337). The packaged smokes and screenshot
+ * scripts start from an empty profile to test the app behind the question, so they set `ORGLET_SKIP_ACCOUNT_CHOICE=1`
+ * and the new install counts as local, the way an older install does.
+ */
+function firstRunChoice(): AccountChoiceRecord {
+  return process.env.ORGLET_SKIP_ACCOUNT_CHOICE === '1' ? EXISTING_INSTALL_CHOICE : NEW_INSTALL_CHOICE;
+}
 export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export class Store {
@@ -54,7 +64,9 @@ export class Store {
       this.db.close(); throw new Error('SQLite requires the WAL-reset fix (3.51.3 or newer).');
     }
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-    if (this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='migrations'").get()) {
+    // A database with no schema yet is a new install; only that one asks the first-run account question (COD-337).
+    const newInstall = !this.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='migrations'").get();
+    if (!newInstall) {
       const version = Number(this.db.prepare('SELECT COALESCE(MAX(version),0) AS version FROM migrations').get()!.version);
       if (version > SCHEMA_VERSION) { this.db.close(); throw new Error('Workspace thuộc phiên bản Orglet mới hơn. Mở bằng phiên bản tương ứng.'); }
       // Keep a consistent pre-upgrade copy so an older Orglet build can be restored (docs/recovery.md).
@@ -237,6 +249,7 @@ export class Store {
         SELECT id,'legacy',? FROM reservations WHERE state='unknown'`).run(now());
     });
     this.seedDefaults();
+    if (newInstall) this.setSetting('accountChoice', firstRunChoice());
     this.recover();
   }
   /** The worker and skill a new workspace starts with; run again after the workspace is erased. */
@@ -330,6 +343,10 @@ export class Store {
     const row = this.db.prepare('SELECT data FROM settings WHERE id=?').get(key);
     return row ? JSON.parse(String(row.data)) as T : fallback;
   }
+  /** The first-run account answer; an install from before the account has none and reads as local, never asked. */
+  accountChoice(): AccountChoiceRecord {
+    return AccountChoiceRecord.catch(EXISTING_INSTALL_CHOICE).parse(this.setting<unknown>('accountChoice', EXISTING_INSTALL_CHOICE));
+  }
   setSetting(key: string, value: unknown) { this.db.prepare('INSERT INTO settings VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(key, JSON.stringify(value)); }
   /** Where `web_search` sends queries. No row, or a value this build does not know, is Exa, for new and existing workspaces alike (COD-266). */
   webSearchProvider(): WebSearchProvider {
@@ -350,7 +367,7 @@ export class Store {
     const archived = <T extends { id: string }>(kind: 'workers' | 'teams', items: T[]) => items.flatMap(item => state[kind][item.id]?.archivedAt && !state[kind][item.id]?.deletedAt ? [{ ...item, archivedAt: state[kind][item.id].archivedAt! }] : []);
     // Items the user never placed keep their creation order after the placed ones.
     const ordered = <T extends { id: string }>(items: T[], ids: string[] = []) => items.map((item, index) => ({ item, rank: ids.includes(item.id) ? ids.indexOf(item.id) : ids.length + index })).sort((a, b) => a.rank - b.rank).map(entry => entry.item);
-    return { knowledge: this.all('knowledge'), workers: live('workers', ordered(this.all<Worker>('workers'), order.workers)), teams: live('teams', ordered(this.all<Team>('teams'), order.teams)), archivedWorkers: archived('workers', this.all<Worker>('workers')), archivedTeams: archived('teams', this.all<Team>('teams')), skills: this.all('skills'), tasks: this.all<Task>('tasks').reverse().filter(task => !task.deletedAt).map(task => titles[task.id] ? { ...task, title: titles[task.id] } : task), routines: this.all('routines'), heldForReview: this.heldForReview(), usage: this.usage(), budgetReservations: this.budgetReservations(), language: this.setting('language', DEFAULT_LANGUAGE), autoTitles: this.setting('autoTitles', true), copyFormat: this.setting('copyFormat', 'ask'), downloadFormat: this.setting('downloadFormat', 'ask'), confirmOpenTask: this.setting('confirmOpenTask', true), archiveRetentionDays: this.setting('archiveRetentionDays', 30), avatarColors: this.setting<string[]>('avatarColors', []), accentColor: currentAccentColor(this.setting('accentColor', this.setting('mentionColor', DEFAULT_ACCENT_COLOR))), logoColor: this.setting('logoColor', 'mono'), interfaceFont: this.setting<string | undefined>('interfaceFont', undefined), codeFont: this.setting<string | undefined>('codeFont', undefined), autoUpdate: this.setting('autoUpdate', true), backgroundNotifications: this.setting('backgroundNotifications', true), theme: this.setting('theme', 'system'), connectionLimitMicros: this.setting('connectionLimitMicros', 5_000_000), providerConcurrency: this.setting('providerConcurrency', 2), providerConsent: this.setting('providerConsent', []), customConnections: readCustomConnections(this), currency: this.setting('currency', usdCurrency), sqliteVersion: this.sqliteVersion, newChatCapabilities: this.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}), newChatWorkspace: this.newChatWorkspace(), recentAppChanges: this.recentAppChanges(), mcpServers: this.mcpServerViews(), webSearchProvider: this.webSearchProvider() };
+    return { knowledge: this.all('knowledge'), workers: live('workers', ordered(this.all<Worker>('workers'), order.workers)), teams: live('teams', ordered(this.all<Team>('teams'), order.teams)), archivedWorkers: archived('workers', this.all<Worker>('workers')), archivedTeams: archived('teams', this.all<Team>('teams')), skills: this.all('skills'), tasks: this.all<Task>('tasks').reverse().filter(task => !task.deletedAt).map(task => titles[task.id] ? { ...task, title: titles[task.id] } : task), routines: this.all('routines'), heldForReview: this.heldForReview(), usage: this.usage(), budgetReservations: this.budgetReservations(), language: this.setting('language', DEFAULT_LANGUAGE), autoTitles: this.setting('autoTitles', true), copyFormat: this.setting('copyFormat', 'ask'), downloadFormat: this.setting('downloadFormat', 'ask'), confirmOpenTask: this.setting('confirmOpenTask', true), archiveRetentionDays: this.setting('archiveRetentionDays', 30), avatarColors: this.setting<string[]>('avatarColors', []), accentColor: currentAccentColor(this.setting('accentColor', this.setting('mentionColor', DEFAULT_ACCENT_COLOR))), logoColor: this.setting('logoColor', 'mono'), interfaceFont: this.setting<string | undefined>('interfaceFont', undefined), codeFont: this.setting<string | undefined>('codeFont', undefined), autoUpdate: this.setting('autoUpdate', true), backgroundNotifications: this.setting('backgroundNotifications', true), theme: this.setting('theme', 'system'), connectionLimitMicros: this.setting('connectionLimitMicros', 5_000_000), providerConcurrency: this.setting('providerConcurrency', 2), providerConsent: this.setting('providerConsent', []), customConnections: readCustomConnections(this), currency: this.setting('currency', usdCurrency), sqliteVersion: this.sqliteVersion, newChatCapabilities: this.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}), newChatWorkspace: this.newChatWorkspace(), recentAppChanges: this.recentAppChanges(), mcpServers: this.mcpServerViews(), webSearchProvider: this.webSearchProvider(), accountChoice: this.accountChoice() };
   }
   /** MCP servers as saved, before the core overlays whether each one is running; see `McpServers.views`. */
   private mcpServerViews(): McpServerView[] {

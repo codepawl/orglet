@@ -5,6 +5,7 @@ import type { UpdateState } from '../shared/updates';
 import type { OpenChatTarget } from '../shared/cli';
 import type { OverlayBridge, OverlayView } from '../shared/desktop-overlay';
 import type { DecisionModelState } from '../shared/decisions';
+import type { AccountState } from '../shared/account';
 
 async function invoke<T>(channel: string, args?: unknown): Promise<T> {
   const reply: Reply<T> = await ipcRenderer.invoke(channel, args);
@@ -36,6 +37,15 @@ const bridge: Bridge = {
   backup: () => invoke('orglet:backup'),
   restore: () => invoke('orglet:restore'),
   about: () => invoke('orglet:about'),
+  accountState: () => invoke('orglet:account-state'),
+  accountSignIn: () => invoke('orglet:account-sign-in'),
+  accountCancelSignIn: () => invoke('orglet:account-cancel-sign-in'),
+  accountSignOut: () => invoke('orglet:account-sign-out'),
+  onAccount: callback => {
+    const listener = (_event: Electron.IpcRendererEvent, state: AccountState) => callback(state);
+    ipcRenderer.on('orglet:account', listener);
+    return () => ipcRenderer.removeListener('orglet:account', listener);
+  },
   openLink: link => invoke('orglet:open-link', link),
   changelog: (refresh = false) => invoke('orglet:changelog', refresh),
   updateState: () => invoke('orglet:update-state'),

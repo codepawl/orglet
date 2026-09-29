@@ -1,5 +1,6 @@
 import type { CliChat } from '../cli/protocol';
 import { CliFailure, matchChat } from './cli-operations';
+import { ACCOUNT_SCHEME } from '../shared/account';
 
 /**
  * What a start of Orglet.exe asks for beyond opening the window (COD-246): files from Explorer's Send to menu, or an
@@ -31,6 +32,8 @@ export type OrgletLink =
 export type LaunchRequest =
   | { kind: 'send-to'; paths: string[] }
   | { kind: 'link'; link: OrgletLink }
+  /** The browser coming back from a CodePawl sign-in (COD-337); main's account module checks it, never the window. */
+  | { kind: 'account'; url: string }
   /** A link that cannot be followed; `message` is a Vietnamese source string for a calm notice. */
   | { kind: 'refused'; message: string };
 
@@ -53,6 +56,10 @@ function isLinkArgument(argument: string): boolean {
   return argument.toLowerCase().startsWith(`${LINK_SCHEME}:`);
 }
 
+function isAccountArgument(argument: string): boolean {
+  return argument.toLowerCase().startsWith(`${ACCOUNT_SCHEME}:`);
+}
+
 /**
  * The paths after the Send to flag. Anything that looks like a switch is dropped: Chromium adds some of its own to a
  * second instance's arguments, and the `--` the shortcut puts before the paths is one too.
@@ -71,6 +78,8 @@ export function parseLaunchArguments(argv: readonly string[]): LaunchRequest | u
     if (paths.length === 0) return undefined;
     return { kind: 'send-to', paths };
   }
+  const callback = argv.find((argument, index) => index > 0 && isAccountArgument(argument));
+  if (callback) return callback.length > MAX_LINK_LENGTH ? { kind: 'refused', message: LINK_TOO_LONG } : { kind: 'account', url: callback };
   const link = argv.find((argument, index) => index > 0 && isLinkArgument(argument));
   if (!link) return undefined;
   const parsed = parseOrgletLink(link);

@@ -8,7 +8,7 @@ import { packagedExecutable } from './packaged-executable.mjs';
 
 // Language setting: switch to English, check UI text, a translated core error and persistence, then switch back.
 const directory = await mkdtemp(join(tmpdir(), 'orglet-i18n-'));
-const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 const launch = () => electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
 const errors = [];
 // Records the title of the next native open dialog without showing it.

@@ -5,7 +5,7 @@
   <img src="images/orglets/getting-started-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-Orglet is a desktop app. You keep a few AI workers, each with a name and a role, and you talk to them in a normal chat. There is no Orglet account and no Orglet server. Chats, workers and files stay on this computer.
+Orglet is a desktop app. You keep a few AI workers, each with a name and a role, and you talk to them in a normal chat. There is no Orglet server. Chats, workers and files stay on this computer. A free CodePawl account is optional and syncs nothing yet.
 
 This page is the first walk-through. The [user guide](user-guide.md) is the map of everything else, one short page per part of the app. How teams work in detail: [team-chat.md](team-chat.md). How to run tests and connect providers in depth: [technical-guide.md](technical-guide.md).
 
@@ -15,7 +15,7 @@ Orglet is early. Expect rough edges, and check answers against your own sources 
 
 ## 1. Get the app
 
-Use **Windows** or **macOS** (Apple silicon). An experimental Linux x64 ZIP is also available. You do not need an Orglet login.
+Use **Windows** or **macOS** (Apple silicon). An experimental Linux x64 ZIP is also available. You do not need an account. The first start asks whether to sign in to a CodePawl account or use Orglet without one; either works, and nothing syncs yet ([CodePawl account](account.md)).
 
 ### From a GitHub Release
 

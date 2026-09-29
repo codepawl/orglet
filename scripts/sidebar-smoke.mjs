@@ -8,7 +8,7 @@ import { packagedExecutable } from './packaged-executable.mjs';
 
 // Sidebar: worker click opens chat, press-and-hold reorder, keyboard reorder, persistence across restarts.
 const directory = await mkdtemp(join(tmpdir(), 'orglet-sidebar-'));
-const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+const env = { ...process.env, ORGLET_SKIP_ACCOUNT_CHOICE: '1' }; delete env.ELECTRON_RUN_AS_NODE;
 const launch = () => electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${directory}`], env });
 const workspace = page => page.evaluate(() => window.orglet.call('workspace', {}));
 const waitFor = async (check, label) => { for (let i = 0; i < 50; i++) { if (await check()) return; await new Promise(r => setTimeout(r, 100)); } throw new Error(`Timed out: ${label}`); };
