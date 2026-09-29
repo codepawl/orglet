@@ -1247,7 +1247,6 @@ export const en: Dictionary = {
   'Gemini CLI báo lỗi: {0}': 'Gemini CLI reported an error: {0}',
   'Gemini CLI không trả về báo cáo đúng schema.': 'Gemini CLI did not return a report matching the schema.',
   'Gemini CLI đòi dùng tool riêng của nó ({0}) dù Orglet đã tắt; lượt chạy đã dừng để không thao tác nào chạy ngoài quyền của Orglet.': 'Gemini CLI asked to use one of its own tools ({0}) although Orglet turned them off; the run was stopped so nothing ran outside Orglet\'s permissions.',
-  'Gemini CLI không cho biết gói đã dùng bao nhiêu.': 'Gemini CLI does not report how much of the plan is used.',
   'Chạy lệnh bên dưới, chọn Sign in with Google, đăng nhập xong gõ /quit rồi bấm Dò lại.': 'Run the command below, choose Sign in with Google, type /quit once you are signed in, then choose Rescan.',
   'Chạy bằng {0} {1} trên máy này. Nội dung nguồn văn bản được gửi trực tiếp trong prompt; Gemini CLI không có tool đọc tệp hay chạy lệnh.': 'Ran with {0} {1} on this computer. Text source content is sent directly in the prompt; Gemini CLI has no tools to read files or run commands.',
   '{0} đã trả lời; không báo chi phí, dùng {1} token vào và {2} token ra.': '{0} replied; no cost reported, {1} tokens in and {2} tokens out.',
@@ -2048,8 +2047,11 @@ export const en: Dictionary = {
   // Plan usage per harness account (COD-223).
   'đã dùng {0}%': '{0}% used',
   'Đã dùng {0}%': '{0}% used',
-  'Cursor Agent không cho biết gói đã dùng bao nhiêu.': 'Cursor Agent does not report how much of the plan is used.',
+  'Cursor không báo hạn mức cho kiểu đăng nhập hoặc gói này.': 'Cursor reports no plan allowance for this sign-in or plan.',
+  'Gemini CLI không báo hạn mức cho kiểu đăng nhập hoặc gói này.': 'Gemini CLI reports no plan allowance for this sign-in or plan.',
   'Kiểu đăng nhập này không có hạn mức gói.': 'This kind of sign-in has no plan allowance.',
+  // OpenCode Go usage under its connection (COD-325).
+  'Key này chưa có gói OpenCode Go.': 'This key has no OpenCode Go subscription.',
   // An expired saved Claude Code sign-in is renewed by Claude Code's next run, not by the person (COD-301).
   'Số liệu lúc {0}. {1} tự làm mới phiên đăng nhập ở lần chạy tới, rồi Orglet đọc lại.': 'Figures as of {0}. {1} renews its sign-in the next time it runs, and Orglet reads them again after that.',
   'Chưa có số liệu mới: {0} tự làm mới phiên đăng nhập ở lần chạy tới, rồi Orglet đọc lại.': 'No figures yet. {0} renews its sign-in the next time it runs, and Orglet reads them again after that.',
@@ -2085,6 +2087,9 @@ export const en: Dictionary = {
   'Tuần': 'Week',
   'Tuần · {0}': 'Week · {0}',
   'Tháng': 'Month',
+  'Tháng · {0}': 'Month · {0}',
+  'Trong ngày': 'Day',
+  'Ngày · {0}': 'Day · {0}',
   'Đã đặt lại': 'Reset',
   'Đặt lại sau {0} phút': 'Resets in {0} min',
   'Đặt lại sau {0} giờ': 'Resets in {0} h',

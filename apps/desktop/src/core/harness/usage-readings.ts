@@ -5,7 +5,7 @@ import type { Store } from '../storage/database';
 const SETTING = 'harnessUsageReadings';
 
 const StoredWindow = z.object({
-  kind: z.enum(['session', 'weekly', 'monthly']),
+  kind: z.enum(['session', 'daily', 'weekly', 'monthly']),
   model: z.string().optional(),
   usedPercent: z.number().min(0).max(100),
   resetsAt: z.string().optional(),

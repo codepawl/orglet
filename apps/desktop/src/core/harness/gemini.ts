@@ -119,7 +119,7 @@ export function geminiPrompt(prompt: string, schema: object): string {
 }
 
 /** The value the CLI stores for "Sign in with Google". */
-const GOOGLE_SIGN_IN = 'oauth-personal';
+export const GEMINI_GOOGLE_SIGN_IN = 'oauth-personal';
 
 export type GeminiSignIn = {
   state: 'signed_in' | 'signed_out' | 'unreadable';
@@ -147,7 +147,7 @@ export async function readGeminiSignIn(home: string, environment: NodeJS.Process
     if (!method) return { state: 'signed_out' };
     const email = await activeGoogleAccount(folder, readText);
     const account = email ? { email } : {};
-    if (method !== GOOGLE_SIGN_IN) return { state: 'signed_in', method, ...account };
+    if (method !== GEMINI_GOOGLE_SIGN_IN) return { state: 'signed_in', method, ...account };
     if (await hasGoogleCredentials(folder, environment, readText)) return { state: 'signed_in', method, ...account };
     return { state: 'signed_out', method };
   } catch {
@@ -163,7 +163,7 @@ function selectedAuthType(settings: string): string | undefined {
 
 /** The same order the CLI itself checks when its settings name no method. */
 function authTypeFromEnvironment(environment: NodeJS.ProcessEnv): string | undefined {
-  if (environment.GOOGLE_GENAI_USE_GCA === 'true') return GOOGLE_SIGN_IN;
+  if (environment.GOOGLE_GENAI_USE_GCA === 'true') return GEMINI_GOOGLE_SIGN_IN;
   if (environment.GOOGLE_GENAI_USE_VERTEXAI === 'true') return 'vertex-ai';
   if (environment.GOOGLE_GEMINI_BASE_URL) return 'gateway';
   if (environment.GEMINI_API_KEY) return 'gemini-api-key';

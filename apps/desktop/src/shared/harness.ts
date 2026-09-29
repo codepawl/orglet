@@ -129,8 +129,11 @@ export type HarnessInfo = {
 
 /** One rolling allowance of a subscription plan, as the CLI's vendor reports it for the signed-in account. */
 export type HarnessUsageWindow = {
-  kind: 'session' | 'weekly' | 'monthly';
-  /** The model this allowance is limited to, when it is not the whole plan (Claude's weekly allowance for one model). */
+  kind: 'session' | 'daily' | 'weekly' | 'monthly';
+  /**
+   * The model or pool this allowance is limited to, when it is not the whole plan: Claude's weekly allowance for one
+   * model, Cursor's Auto and API pools, Gemini CLI's daily allowance for one model.
+   */
   model?: string;
   /** 0 to 100. */
   usedPercent: number;
@@ -138,7 +141,7 @@ export type HarnessUsageWindow = {
 };
 
 /**
- * Why an account shows no allowance: the CLI reports none (Cursor Agent, Gemini CLI, an API-key sign-in), the account is
+ * Why an account shows no allowance: its sign-in has none to report (an API key, a plan without one), the account is
  * signed out, its saved sign-in has expired until the CLI runs again, or the read failed this time.
  */
 export type HarnessUsageGap = 'unsupported' | 'signed_out' | 'expired' | 'failed';

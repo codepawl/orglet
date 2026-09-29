@@ -312,7 +312,7 @@ describe('tool loop, model list and usage', () => {
     expect(list.models.map(model => model.id)).toEqual(['auto', 'pro', 'flash', 'flash-lite']);
   });
 
-  it('names the signed-in Google account but no plan allowance, and reports a signed-out folder', async () => {
+  it('names the signed-in Google account, sends no token that needs renewing, and reports a signed-out folder', async () => {
     const folder = join(directory, 'accounts', 'gemini', 'one');
     const runtime = (home: string): UsageRuntime => ({
       run: async () => ({ code: 1, stdout: '', stderr: '' }),
@@ -329,6 +329,7 @@ describe('tool loop, model list and usage', () => {
       'oauth_creds.json': JSON.stringify({ refresh_token: 'fixture-refresh' }),
       'google_accounts.json': JSON.stringify({ active: 'an@example.com' }),
     });
-    expect(await readHarnessUsage('gemini', executable, folder, runtime(directory))).toEqual({ email: 'an@example.com', windows: [], unavailable: 'unsupported' });
+    // Only a refresh token is saved: Gemini CLI renews the access token when it runs, and Orglet never does (COD-325).
+    expect(await readHarnessUsage('gemini', executable, folder, runtime(directory))).toEqual({ email: 'an@example.com', windows: [], unavailable: 'expired' });
   });
 });
