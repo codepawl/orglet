@@ -3507,6 +3507,14 @@ export const en: Dictionary = {
   ' · chưa rõ kết quả': ' · outcome unknown',
   ' · đang chờ': ' · waiting',
   ' · đã dừng': ' · stopped',
+  'Các bước của hội': 'The crew’s steps',
+  'Kế hoạch của hội: {0} Tí làm cùng lúc': 'Crew plan: {0} orglets at the same time',
+  'Kế hoạch của hội: {0} Tí làm lần lượt': 'Crew plan: {0} orglets one after another',
+  'Kế hoạch của hội: {0} Tí qua {1} bước': 'Crew plan: {0} orglets in {1} stages',
+  'Chia việc cho {0} Tí': 'Splits the work between {0} orglets',
+  'Gộp kết quả thành câu trả lời': 'Combines the results into one answer',
+  'Làm cùng lúc': 'At the same time',
+  '{0}/{1} phần việc đã xong': '{0} of {1} parts done',
 
 };
 

@@ -182,6 +182,27 @@ User message (inputRevision)
 
 Cancel aborts the whole turn (plan + members + synthesis). Partial success stays `partial`, never silent `completed`. Worker chat is one run with no `stage`.
 
+### The plan as a flow
+
+Once the lead has saved its plan, the crew's answer shows it as a flow diagram ([COD-331](https://linear.app/codepawl/issue/COD-331)): the lead's box, an arrow down, the members' boxes, then the lead's box again for combining the results. Members that can work at the same time sit side by side, with the lines fanning out to them and joining again below. A member that needs another member's result sits in a row under it. In a sequential crew every member has its own row, in the order the crew takes them.
+
+It sits under the name at the top of the crew's answer, folded behind one line such as **Crew plan: 3 orglets at the same time** (or **one after another**, or **in 2 stages** when the rows mix both). It is open while the turn runs, so it updates as each member starts and finishes, and it stays with the turn afterwards as a record. An older turn opens folded.
+
+Each box shows the orglet's face and name, its status mark, and its part in two lines: the task the lead gave it, the lead's note on the plan, or the lead's notes for the final answer. A box whose part is longer than two lines opens to the whole text when clicked. The mark says where that step stands:
+
+| Mark | Meaning |
+|---|---|
+| Dotted ring | Waiting: for the plan, for a teammate's result, or for one of the crew's two member slots. A screen reader hears which teammates it waits for. |
+| Turning ring | Working now. The box's border takes the working colour. |
+| Tick | Done. |
+| `!` | Did not finish (failed or interrupted), or waits for your answer. The box's border turns the error colour. |
+| Two bars | Paused, or waiting for budget. |
+| Faint dotted ring | Cancelled. |
+
+**Where it comes from.** Nothing in the diagram is asked of a model. `crewPlanDiagram` in `apps/desktop/src/shared/crew-plan.ts` reads the turn's saved runs: the plan run's `snapshot.plan` (assignments with `brief` and `dependsOn`, `note`, `synthesisBrief`) and `snapshot.team` (member order and workflow), the latest member run for each assignment (so a part the lead reassigned shows the orglet that took it over), and the synthesis run. The rows follow the same rules as the team runner: a parallel crew places each assignment by its longest chain of `dependsOn`, and a sequential crew takes the first member in crew order whose dependencies have run. A member counts as delivered only when its run completed with a saved result. With more boxes in a row than fit, each shrinks to about 160px and the row then scrolls sideways inside the answer, fading at the edge that has more.
+
+Nothing is drawn while the lead is still planning, when the plan failed, for a plan with one assignment, for an older turn without a saved plan, or in a group chat. Those turns keep the plain progress lines under the name.
+
 While a turn runs, the **Running** view in the footer lists each job: the members at work, and the queued ones with what they wait for (the plan, a teammate's result, one of the two member slots, or the members before the combining step). Stopping any of them is this same Cancel ([What is running](chat-guide.md#what-is-running)).
 
 ## @mentions
@@ -207,7 +228,8 @@ Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết
 - Transcript layers: `apps/desktop/src/core/context/thread.ts`
 - Plan tool / Demo routing: `apps/desktop/src/core/orchestration/runner.ts` (`submit_plan`, `completePlan`)
 - Forwarding: `forwardMessage` in `apps/desktop/src/core/service.ts`, `apps/desktop/src/core/orchestration/forwards.ts`, `apps/desktop/src/shared/forward.ts`, the picker in `apps/desktop/src/renderer/components/ForwardPicker.tsx` and `apps/desktop/src/renderer/forward.ts`
-- Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`, `tests/integration/thread-context.test.ts`, `tests/integration/mentions.test.ts`, `tests/integration/side-threads.test.ts`, `tests/integration/forward.test.ts`
+- Plan flow diagram: `apps/desktop/src/shared/crew-plan.ts`, `apps/desktop/src/renderer/components/CrewPlanFlow.tsx`
+- Tests: `tests/integration/crew-plan.test.ts`, `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`, `tests/integration/thread-context.test.ts`, `tests/integration/mentions.test.ts`, `tests/integration/side-threads.test.ts`, `tests/integration/forward.test.ts`
 ## Worker messages
 
 Every saved user turn, completed answer and team message has a stable ID. Reply chooses one of those messages in the current chat; core resolves the ID when the next turn starts and supplies a short, attributed excerpt to the worker. A reply never broadens the worker's sources, workspace access or team assignment. The user can react to any saved message without starting a run. Each person, the user or a worker, has at most one reaction per message: repeating the same request is harmless, adding a different emoji replaces the earlier one, and adding the current one again with `active: false` takes it off (COD-219). The user's reaction on the latest answer is also explained when the next turn starts: the core adds it as a note of its own (`previousAnswerReaction`, with the meaning the reaction's button shows), and the person's message stays exactly as they typed it. A worker may use `react_to_message` only during its assigned run and only for a committed message it can see; this tool does not send a team message or start another worker. Team message bodies and interactions appear in Details.
@@ -228,4 +250,4 @@ Unanswered questions and blockers keep the final task partial. The lead receives
 
 Message-interaction integration fixtures cover API tool calls, reply context, duplicate reactions, wrong-chat and unfinished targets, and backup restoration. The CLI tool bridge advertises the same tool catalog; this does not prove a live signed-in CLI session or its native tool containment. The renderer and packaged app still need manual interaction checks for keyboard and screen-reader behavior.
 
-Chat progress includes each assignment's brief beside its worker and status. Long briefs use a native disclosure: the short description stays visible, and opening it shows the full text. The disclosure works with the keyboard as well as the pointer.
+Chat progress includes each assignment's brief beside its worker and status: in the [flow diagram](#the-plan-as-a-flow) when the turn has a saved plan of two or more parts, otherwise as plain lines. Long briefs open to their full text in both, with the keyboard as well as the pointer.

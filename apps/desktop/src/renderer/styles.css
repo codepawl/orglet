@@ -2392,6 +2392,54 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .trace-link { padding:0; border:0; background:none; font:inherit; font-size:12px; color:var(--muted); text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
 .trace-link:hover { color:var(--text); }
 @keyframes thinking-pulse { 50% { opacity:.45; } }
+/* A crew turn as a flow diagram (COD-331, `CrewPlanFlow`): folded like the trace, open it is the lead's box, an arrow
+   down, the members' rows, and the lead combining. Boxes are bordered cards on the page colour with the orglet's face,
+   name and status mark on one centre line and its part in two lines under them. The connectors are thin lines in a
+   muted mix, part of the drawing rather than dividers: an arrow into every box, and in a row of several a bar drawn by
+   each cell, so the fan stays joined when the row scrolls sideways. Single boxes share one width; a row's cells shrink
+   to 162px, room for a name of about twelve letters, before the row scrolls, with its ends fading and the scrollbar's lane bridged by the fan's own line. */
+.crew-plan { --flow-line:color-mix(in srgb, var(--muted) 60%, var(--bg)); --flow-stub:12px; --flow-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 6'%3E%3Cpath d='M0 0h9L4.5 6z'/%3E%3C/svg%3E");
+  margin:0 0 6px -4px; padding-left:35px; font-size:13px; color:var(--muted); }
+.crew-plan > summary { list-style:none; cursor:pointer; }
+.crew-plan > summary::-webkit-details-marker { display:none; }
+.crew-plan[open] > summary .activity-chevron { transform:rotate(90deg); }
+.crew-flow { display:flex; flex-direction:column; align-items:center; width:fit-content; max-width:calc(100% - 4px); margin:6px 0 4px 4px; padding:0; list-style:none; }
+.crew-step { display:flex; width:260px; max-width:100%; }
+.crew-step > .crew-node { flex:1; }
+.crew-link { flex-shrink:0; width:9px; height:10px; background:var(--flow-line); -webkit-mask:linear-gradient(#000 0 0) center / 1px 100% no-repeat; mask:linear-gradient(#000 0 0) center / 1px 100% no-repeat; }
+.crew-link-arrow { height:22px; -webkit-mask:var(--flow-arrow) center bottom / 9px 6px no-repeat, linear-gradient(#000 0 0) center top / 1px calc(100% - 5px) no-repeat;
+  mask:var(--flow-arrow) center bottom / 9px 6px no-repeat, linear-gradient(#000 0 0) center top / 1px calc(100% - 5px) no-repeat; }
+.crew-fan { position:relative; display:flex; justify-content:center; align-self:stretch; min-width:0; }
+.crew-fan::after { content:""; position:absolute; left:50%; bottom:0; width:1px; height:var(--fan-lane, 0px); background:var(--flow-line); pointer-events:none; }
+.crew-fan-row { --strip-fade-start:0px; --strip-fade-end:0px; display:flex; max-width:100%; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain;
+  mask-image:linear-gradient(to right, transparent 0, #000 var(--strip-fade-start), #000 calc(100% - var(--strip-fade-end)), transparent 100%);
+  scrollbar-width:thin; scrollbar-color:transparent transparent; }
+.crew-fan-row:hover, .crew-fan-row:focus-within { scrollbar-color:color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
+.crew-fan-row[data-more-start] { --strip-fade-start:32px; }
+.crew-fan-row[data-more-end] { --strip-fade-end:32px; }
+.crew-cell { position:relative; display:flex; flex:1 1 0; min-width:162px; max-width:200px; padding:var(--flow-stub) 5px; }
+.crew-cell > .crew-node { flex:1; }
+.crew-cell::before, .crew-cell::after { content:""; position:absolute; left:0; right:0; height:1px; background:var(--flow-line); }
+.crew-cell::before { top:0; }
+.crew-cell::after { bottom:0; }
+.crew-cell:first-child::before, .crew-cell:first-child::after { left:50%; }
+.crew-cell:last-child::before, .crew-cell:last-child::after { right:50%; }
+.crew-cell > .crew-node::before, .crew-cell > .crew-node::after { content:""; position:absolute; left:calc(50% - 4.5px); width:9px; height:var(--flow-stub); background:var(--flow-line); }
+.crew-cell > .crew-node::before { bottom:calc(100% + 1px); -webkit-mask:var(--flow-arrow) center bottom / 9px 6px no-repeat, linear-gradient(#000 0 0) center top / 1px calc(100% - 5px) no-repeat;
+  mask:var(--flow-arrow) center bottom / 9px 6px no-repeat, linear-gradient(#000 0 0) center top / 1px calc(100% - 5px) no-repeat; }
+.crew-cell > .crew-node::after { top:calc(100% + 1px); -webkit-mask:linear-gradient(#000 0 0) center / 1px 100% no-repeat; mask:linear-gradient(#000 0 0) center / 1px 100% no-repeat; }
+.crew-node { position:relative; display:flex; flex-direction:column; gap:4px; min-width:0; margin:0; padding:8px 9px 9px; border:1px solid var(--border); border-radius:12px; background:var(--bg); color:var(--text); font:inherit; text-align:left; transition:border-color var(--motion-base) var(--ease-out); }
+button.crew-node { cursor:pointer; }
+button.crew-node:hover { background:var(--row-hover); }
+.crew-node-head { display:flex; align-items:center; gap:6px; min-width:0; height:20px; }
+.crew-node-name { flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; font-weight:600; line-height:20px; }
+.crew-node-summary { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; font-size:12px; line-height:17px; color:var(--muted); overflow-wrap:anywhere; }
+.crew-node-summary.expanded { display:block; -webkit-line-clamp:unset; }
+.crew-node-working { border-color:color-mix(in srgb, var(--working) 50%, var(--border)); }
+.crew-node-failed, .crew-node-needs_you { border-color:color-mix(in srgb, var(--error) 40%, var(--border)); }
+.crew-node-stopped .crew-node-name { color:var(--muted); }
+@media (prefers-reduced-motion: reduce) { .crew-node { transition:none; } }
+@media(max-width:1000px) { .crew-plan { padding-left:0; } }
 /* The working line under an orglet's name: muted words with a brighter band sweeping across them, left to right. */
 .run-status-line { margin:0; padding-left:39px; min-height:28px; line-height:28px; font-size:14px; color:transparent; background:linear-gradient(90deg, var(--muted) 0%, var(--muted) 38%, var(--text) 50%, var(--muted) 62%, var(--muted) 100%) 0 0 / 250% 100%; -webkit-background-clip:text; background-clip:text; animation:status-sweep 2.2s linear infinite; }
 @keyframes status-sweep { from { background-position:100% 0; } to { background-position:0% 0; } }
