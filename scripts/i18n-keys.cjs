@@ -31,8 +31,11 @@ const src = path.join(__dirname, '..', 'apps', 'desktop', 'src');
 const vietnamese = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ]/;
 const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)]);
 
+// Vietnamese words the app matches text against and never shows, so they have no English entry.
+const matchedNeverShown = [path.join(src, 'core', 'context', 'stop-words.ts')];
+
 const keys = new Set();
-for (const file of walk(src).filter(file => /\.tsx?$/.test(file) && !file.includes(`${path.sep}locales${path.sep}`))) {
+for (const file of walk(src).filter(file => /\.tsx?$/.test(file) && !file.includes(`${path.sep}locales${path.sep}`) && !matchedNeverShown.includes(file))) {
   const source = fs.readFileSync(file, 'utf8');
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   // Labels shown through t() at render time may have no diacritics ("Chung"), so collect them by where they live.

@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Store, SCHEMA_VERSION } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { compileContext, KNOWLEDGE_ITEM_LIMIT } from '../../apps/desktop/src/core/context/compiler';
+import { compileContext, keywordScore, KNOWLEDGE_ITEM_LIMIT } from '../../apps/desktop/src/core/context/compiler';
 import type { Knowledge } from '../../apps/desktop/src/shared/knowledge';
 import type { Team, Worker, Skill, Task } from '../../apps/desktop/src/shared/contracts';
 import { isPlanRequest, planReply } from './team-plan';
@@ -97,6 +97,54 @@ it('deduplicates repeated instructions and knowledge, and records omissions agai
   expect(context.manifest.omitted.filter(entry => entry.reason === 'context_limit')).toHaveLength(3);
   expect(context.knowledge).toHaveLength(KNOWLEDGE_ITEM_LIMIT);
   expect(context.knowledge.map(entry => entry.id)).not.toContain(item(92).id);
+});
+
+describe('which unpinned notes a message loads (COD-307)', () => {
+  const note = (index: number, overrides: Partial<Knowledge> = {}) => ({ id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`, revision: 1, title: `Note ${index}`, content: `Text ${index}`, tags: [], hash: 'a'.repeat(64), scope: { type: 'workspace' as const }, pinned: false, ...overrides });
+  const compile = (brief: string, candidates: ReturnType<typeof note>[]) => {
+    const [worker] = store.workspace().workers;
+    return compileContext({ worker, skill: store.get<Skill>('skills', worker.skillId), brief, candidates }).context;
+  };
+  const loadedIds = (context: ReturnType<typeof compile>) => context.knowledge.map(entry => entry.id);
+
+  it('loads no note that shares only stop words with the message, in English or Vietnamese', () => {
+    const english = note(1, { title: 'Invoice format', content: 'What the numbers are for, and how each client gets them.' });
+    const vietnamese = note(2, { title: 'Sao lưu dữ liệu', content: 'Dữ liệu của khách hàng được lưu trong ổ cứng này, không phải trên mạng.' });
+    const context = compile('What are the plans for this week, and how are they going? Kế hoạch của tuần này được gửi trong nhóm không?', [english, vietnamese]);
+    expect(loadedIds(context)).toEqual([]);
+    expect(context.manifest.omitted).toContainEqual(expect.objectContaining({ id: english.id, reason: 'not_relevant' }));
+    expect(context.manifest.omitted).toContainEqual(expect.objectContaining({ id: vietnamese.id, reason: 'not_relevant' }));
+    expect(keywordScore('Ổ cứng của tôi hư rồi', vietnamese)).toBe(1);
+    // Vietnamese typed as decomposed characters matches the same words.
+    expect(keywordScore('Ổ cứng của tôi hư rồi'.normalize('NFD'), vietnamese)).toBe(1);
+  });
+
+  it('ranks a note sharing a rare word above notes sharing a common one, so it gets room under the limit', () => {
+    const common = Array.from({ length: KNOWLEDGE_ITEM_LIMIT }, (_, index) => note(10 + index, { content: `Weekly report layout ${index}` }));
+    const rare = note(99, { title: 'Leakage check', content: 'Compare train and test identifiers.' });
+    const context = compile('Review the report for leakage', [...common, rare]);
+    expect(loadedIds(context)[0]).toBe(rare.id);
+    expect(context.knowledge).toHaveLength(KNOWLEDGE_ITEM_LIMIT);
+    expect(context.manifest.omitted).toContainEqual(expect.objectContaining({ id: common.at(-1)!.id, reason: 'context_limit' }));
+  });
+
+  it('still loads pinned notes and notes whose tag the message names, even when the tag is a common word', () => {
+    const pinned = note(1, { pinned: true, title: 'House rule', content: 'Unrelated gardening tip' });
+    const tagged = note(2, { title: 'Export steps', content: 'Open the menu and pick a format.', tags: ['how'] });
+    const tagMatch = note(3, { title: 'Invoice numbers', content: 'Numbered INV-YYYY-NNN.', tags: ['billing'] });
+    const context = compile('How do I sort out billing?', [pinned, tagged, tagMatch]);
+    expect(loadedIds(context)).toEqual([pinned.id, tagged.id, tagMatch.id]);
+    expect(context.manifest.loaded.filter(entry => entry.kind === 'knowledge').map(entry => entry.because)).toEqual(['pinned', 'keywords', 'keywords']);
+  });
+
+  it('keeps the notes left out on the frozen manifest after each step compiles the context again', async () => {
+    const unrelated = await core.command('saveKnowledge', { title: 'Gardening', content: 'Water the tomatoes weekly.', tags: [], pinned: false, scope: { type: 'workspace' } }) as Knowledge;
+    const matching = await core.command('saveKnowledge', { title: 'Metric direction', content: 'Confirm scoring metric direction.', tags: [], pinned: false, scope: { type: 'workspace' } }) as Knowledge;
+    const { taskId } = await standalone();
+    const manifest = store.detail(taskId).runs[0].snapshot.context!.manifest;
+    expect(manifest.loaded).toContainEqual(expect.objectContaining({ kind: 'knowledge', id: matching.id, because: 'keywords' }));
+    expect(manifest.omitted).toContainEqual({ kind: 'knowledge', id: unrelated.id, revision: unrelated.revision, reason: 'not_relevant' });
+  });
 });
 
 it('searches approved and proposed notes by keyword and tag, ignoring archived notes and FTS syntax', async () => {

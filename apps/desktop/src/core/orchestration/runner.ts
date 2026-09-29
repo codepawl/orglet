@@ -40,7 +40,7 @@ import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
 import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUnsupportedProcessChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
-import { compileContext, frozenTacetFits, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
+import { compileContext, frozenTacetFits, keepFrozenOmissions, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
 import type { NoteCandidate } from '../decisions/knowledge-fit';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
 import { applyThreadManifest, compactThread, fitThread, mainChatTurns, threadMessages, type ThreadExtras } from '../context/thread';
@@ -542,7 +542,7 @@ export class Runner {
     this.slots.onChange = () => this.notify();
   }
   /**
-   * Tacet's picks among the notes that would not load today: unpinned, and sharing no word with the message. Pinned and
+   * Tacet's picks among the notes that would not load today: unpinned, and sharing no keyword with the message. Pinned and
    * matching notes load as before, so Tacet can only add to them (COD-306).
    */
   private async fitUnmatchedKnowledge(brief: string, candidates: readonly { id: string; title: string; content: string; tags: string[]; pinned: boolean }[]): Promise<Map<string, number> | undefined> {
@@ -850,7 +850,8 @@ export class Runner {
       if (this.appProposals && run.snapshot.improvement === undefined && !task.routineId && (run.stage === undefined || run.stage === 'group') && run.snapshot.worker.provider !== 'demo') {
         run = { ...run, snapshot: { ...run.snapshot, improvement: this.appProposals.improvementSignals(run) } };
       }
-      const compiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories, tacetFits: frozenTacetFits(context) });
+      const recompiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories, tacetFits: frozenTacetFits(context) });
+      const compiled = keepFrozenOmissions(recompiled, context);
       run = { ...run, status: 'running' };
       this.store.update('runs', run);
       if (!options.keepTaskOpen) this.store.status(task.id, run.id, 'running');

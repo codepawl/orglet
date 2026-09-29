@@ -44,17 +44,23 @@ Above the answer, since the memories are loaded before the worker writes ([COD-2
 
 ## Which notes load, and why
 
-Notes are not memories, but they are frozen at the same moment. A pinned note loads whenever there is room. An unpinned note loads when the message shares a word of three letters or more with its title, text or tags. That misses a note worded differently from the message: "bill Acme for May" never loads **Invoice format**, and "ổ cứng hư thì tính thế nào?" never loads **Sao lưu dữ liệu**.
+Notes are not memories, but they are frozen at the same moment. A pinned note loads whenever there is room. An unpinned note loads when the message shares a keyword with it: a word of three letters or more from its title, text or tags.
+
+- **Stop words do not count** (COD-307). Words such as "the", "and", "for", "what", "của", "được" or "không" appear in almost every message and note, so a note that shares only those with the message stays out. The lists are in `core/context/stop-words.ts`.
+- **Tags always count.** A tag is your own label for the note, so a message naming it loads the note even when the tag is a common word.
+- **Rarer words weigh more.** Matching notes are ranked by their shared keywords, each weighted by how few of the run's notes contain it. A message about "leakage in the report" puts the one note about leakage ahead of the twelve that mention reports, so it gets room under the limit of 12 notes and 16 KB before they do.
+
+Keywords still miss a note worded differently from the message: "bill Acme for May" never loads **Invoice format**, and "ổ cứng hư thì tính thế nào?" never loads **Sao lưu dữ liệu**.
 
 When [Tacet](decisions.md) is on this computer, it gets one look at the notes that would not load (COD-306):
 
-1. Only unpinned notes that share no word with the message are asked about, up to 30, in scope for the run like any other note.
+1. Only unpinned notes that share no keyword with the message are asked about, up to 30, in scope for the run like any other note.
 2. Tacet reads the message and answers one question, **What is this message about?**, the way it routes a ticket to a team: each note is an option named by its title and described by its tags, beside **other**. The same options go in twice, in opposite orders, in one request, and each note's two probabilities are averaged, since on the measured cases where a note sat in the list moved its probability a lot.
 3. A note loads when its averaged probability is at least 4.2 times an even share (0.20 with twenty notes, 0.60 with six, never more than 0.75) and beats **other**.
 4. Tacet can only add. Pinned and matching notes load first, and Tacet's picks fill the room left under the same limit of 12 notes and 16 KB, so one never pushes a matching note out.
 5. The run waits at most 1.5 seconds. When Tacet is not downloaded, fails or is late, the run loads what the words matched, as before Tacet. A model that has been quiet for two minutes takes a few seconds to load, so the first message after a pause usually goes without it and the next one gets it.
 
-**Details → Context loaded** says why each note loaded: *always loaded*, *matched keywords*, or *picked by Tacet* with the probability it gave. In the chat, a note Tacet picked carries *picked by Tacet* in the answer's trace. Both are frozen with the run (`because` and `fit` on the manifest's knowledge rows).
+**Details → Context loaded** says why each note loaded: *always loaded*, *matched keywords*, or *picked by Tacet* with the probability it gave. In the chat, a note Tacet picked carries *picked by Tacet* in the answer's trace. Both are frozen with the run (`because` and `fit` on the manifest's knowledge rows). Under *Not loaded* the same view names every note left out and why: *does not match the request*, *duplicates loaded content* or *exceeds the context limit*. Each step of a run compiles its frozen notes again, and that record of omissions stays on the manifest through every step and a resume.
 
 The threshold is deliberately strict. On 48 pairs of a short message and a note that share no word (`scripts/tacet/knowledge_cases.json`, English and Vietnamese, half of them the right note), measured with `scripts/tacet/eval_uses.ts`, Tacet loaded 6 of the 24 right notes and none of the 24 wrong ones in a workspace of twenty notes, the same on the tune half and the held-out half; in workspaces of six notes it loaded 4 right notes and 1 wrong one ("which hex codes go on our banner?" took **Social media**). It found more of the English messages (4 of 11) than the Vietnamese ones (2 of 13). Asking about each note on its own (yes/no, a score, or a two-way choice) did no better than chance, which is why the notes are options of one question. On a busy six-core desktop the question over twenty notes took 0.4 seconds at the median and 0.7 at the 95th percentile once the model was loaded.
 
