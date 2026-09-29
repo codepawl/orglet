@@ -1348,6 +1348,9 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-meta li > svg,.routine-brief svg { color:var(--muted); flex-shrink:0; }
 /* The orglet's own face in its own colour, where the other lines have an icon (COD-258). */
 .routine-meta li > :is(.avatar, .composer-to-avatars) { flex-shrink:0; }
+/* A 14px icon sits centred in a 16px slot, the width of that face, so every line's text starts at the same x
+   (COD-333: the orglet's line started 2px right of the icon lines above and below it). The brief keeps the slot too. */
+.routine-meta li > svg,.routine-brief > svg { margin-inline:1px; }
 .routine-brief { display:flex; gap:8px; font-size:13px; color:var(--muted); }
 .routine-brief svg { margin-top:3px; }
 .routine-brief span { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }

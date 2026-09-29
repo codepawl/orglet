@@ -387,6 +387,7 @@ pnpm test:revisions
 pnpm test:knowledge
 pnpm test:harness
 pnpm test:cli
+pnpm test:alignment
 ```
 
 `pnpm test` also runs the UI kit's tests (`packages/orglet-ui/test`, in jsdom with Testing Library and axe). The kit's build is tsdown: one ES module per component with its stylesheet copied beside it, type declarations and `tokens.css` in `packages/orglet-ui/dist`, which publint and Are the Types Wrong then check. The app never reads that build; it compiles the kit's source through an alias.
@@ -406,6 +407,26 @@ The routine smoke uses the packaged app and real clock for one scheduled demo, t
 The skill smoke checks directory import, review gating, resource preview, export, unsupported capabilities and a narrow drawer. `node scripts/skill-smoke.mjs --inspect-ui` leaves the isolated package review open for computer use.
 
 The run-audit smoke checks structured log errors, direction selection, repeat/failure summaries and public/private rank changes. `node scripts/run-audit-smoke.mjs --inspect-ui` leaves the result open for computer use.
+
+### Alignment check
+
+`pnpm test:alignment` (COD-333) checks alignment by measuring instead of by eye. It launches the packaged app on a temporary data folder, seeds orglets, a crew with an answered turn, a chat with an answer and four schedules (one per orglet, one per crew, one off, one hourly), all on Demo, and visits the chat, its menus, the crew chat, the sidebar row menu, Schedules and the schedule editor, an empty chat, the orglet dialog (General, Permissions) and Settings (General, Local harnesses, API connections, Costs & limits). Each screen is measured at 1200×820 and 740×600, light and dark, with reduced motion. Logged-out fixture CLIs and empty CLI config folders keep the harness tab from reading this machine's sign-ins or asking a vendor for plan usage.
+
+The measurements live in `scripts/alignment/rules.ts` (unit tests in `tests/integration/alignment-rules.test.ts`) and run in the window:
+
+| Finding | What it measures | Flagged when |
+|---|---|---|
+| `centre-line` | In a flex row, an icon, avatar, switch or icon button against the text beside it: its first line, the whole block, or the top of a text of two or more lines | the closest of those is more than 1px off |
+| `column-start` | Items of one kind stacked in one column, across containers of the same kind (the meta grids of every schedule card form one set of columns): where their text starts | more than 1px apart |
+| `icon-slot` | The same columns: the horizontal centre of each item's leading mark | more than 1px apart |
+| `uneven-gap` | Siblings of one kind in a flex row or column | a gap differs from the usual one by more than 2px (a much larger gap is a deliberate push and is skipped) |
+| `wrap` | Short labels meant for one line (buttons, tabs, menu items, options, switches, badges, headings, labels; 40 characters and five words at most) | the label takes two lines |
+| `clip` | One-line text (`nowrap`) | cut by its box with no ellipsis |
+| `overflow` | The page, any panel that scrolls, and anything free to spill | the page or a panel scrolls sideways, or something sticks out past the window's right edge |
+
+Stacked faces (a crew) are compared only with other stacks: they are wider than one face by design. Hidden, zero-size and visually hidden elements are skipped, and so is decorative text inside an `aria-hidden` layer. Where a difference is intentional, put `data-align-ignore` on the element or a parent, either empty (every check) or with the kinds to skip (`data-align-ignore="uneven-gap"`), and say why in a comment next to it.
+
+The check prints each finding with its screen, size, theme, selector path and measured offset, writes `alignment-report.json` and one screenshot per screen with findings, the offending boxes outlined, to a temporary folder, and exits 1 on any finding. Options: `--report-only` (exit 0), `--only schedules,settings-general`, `--language en` (Vietnamese by default), `--all-screenshots`, `--out <folder>`. CI runs it on Windows after the other packaged smokes.
 
 `pnpm build` produces `out/Orglet-win32-x64/Orglet.exe` on Windows, or `out/Orglet-darwin-<arch>/Orglet.app` on a Mac. `pnpm make` writes makers under `out/make`: ZIP + Squirrel Setup on Windows; a ZIP of `Orglet.app` on macOS; a Linux ZIP on Linux. The [latest public release](https://github.com/codepawl/orglet/releases/latest) carries Windows Setup and ZIP. Public Windows 0.2.x installers are unsigned by decision; see [windows-release-gates.md](windows-release-gates.md). macOS CI Developer ID signs when P12 secrets exist and notarizes only when Apple ID or App Store Connect API key credentials exist; see [macos-packaging.md](macos-packaging.md). Linux CI makes a ZIP and starts the packaged app headlessly; it does not prove use on a real Linux desktop. Both workflows are separate from the required Windows `test` aggregator; see [linux-packaging.md](linux-packaging.md).
 
