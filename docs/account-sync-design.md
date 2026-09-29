@@ -139,7 +139,7 @@ Each is a normal migration (`SCHEMA_VERSION` 19 → 20+), tested without any ser
 
 ## Cost
 
-Assumptions (estimates, not measurements), per active account:
+A chatty client, as a worst case (estimates, not measurements; the lean protocol below cuts this sharply), per active account:
 
 - 2,000 sync requests a day, a fifth of them writes of about 5 rows.
 - 50 MB in R2, and a WebSocket open 8 hours a day with hibernation.
