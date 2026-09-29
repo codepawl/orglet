@@ -145,7 +145,8 @@
   white-space: nowrap;
 }
 .org-select-option.org-select-option-dimmed .org-select-option-badge,
-.org-select-option[aria-disabled=true] .org-select-option-badge { background: var(--org-bg, #fff); }
+.org-select-option[aria-disabled=true] .org-select-option-badge,
+.org-select-option.org-select-option-active .org-select-option-badge { background: var(--org-bg, #fff); }
 .org-select-check {
   flex-shrink: 0;
   visibility: hidden;
@@ -172,3 +173,9 @@
   .org-select-menu,
   .org-select-trigger[aria-invalid=true][data-flash] { animation: none; }
 }
+
+/* A row that starts a new stretch of the list without a title, apart by the same gap a group takes. */
+.org-select-menu .org-select-option.org-select-option-spaced { margin-top: 10px; }
+/* An action row (More) reads quieter than the choices around it. */
+.org-select-option.org-select-option-action { color: var(--org-muted, #666); }
+.org-select-option.org-select-option-action.org-select-option-active { color: var(--org-text, #171717); }

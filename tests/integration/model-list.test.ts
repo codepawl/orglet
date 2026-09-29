@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
-import { acceptCustomModelId, hiddenOpenAIModel, MODEL_LISTS_SETTING } from '../../apps/desktop/src/shared/models';
+import { acceptCustomModelId, hiddenOpenAIModel, MODEL_LIST_CACHE_VERSION, MODEL_LISTS_SETTING } from '../../apps/desktop/src/shared/models';
 import { canStoreModelListRow } from '../../apps/desktop/src/core/models/cache';
 import { catalogHint, parseCodexModels, parseCursorModels, parseOllamaTags, parseOpenAIModels, parseOpenRouterModels } from '../../apps/desktop/src/core/models/fetch';
 import { modelCatalog } from '../../apps/desktop/src/core/adapters/catalog';
@@ -196,17 +196,97 @@ describe('model list fetch adapters', () => {
     } finally { server.close(); }
   });
 
-  it('ships Claude Code aliases with no network and still accepts a custom ID', async () => {
+  it('keeps the bare Claude Code aliases, with no probe and no network, while Claude Code is not signed in', async () => {
     let hits = 0;
+    const started: string[] = [];
     const server = await listen((_request, response) => { hits++; response.writeHead(500); response.end(); });
     try {
-      const core = coreFor(store(), { readKey: async () => 'must-not-use', endpoints: { anthropic: server.url } });
+      const core = coreFor(store(), {
+        readKey: async () => 'must-not-use',
+        endpoints: { anthropic: server.url },
+        claudeStart: async (_executable, _env, alias) => { started.push(alias ?? 'default'); return 'claude-opus-5-5'; },
+        claudeToken: async () => 'must-not-use',
+      }, undefined, { detect: async () => [], execute: async () => { throw new Error('no exec'); } });
       const list = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
       expect(list.source).toBe('alias');
-      expect(list.models.map(model => model.id)).toEqual(['sonnet', 'opus', 'haiku', 'fable']);
+      expect(list.models.map(model => [model.id, model.displayName])).toEqual([['sonnet', 'Sonnet'], ['opus', 'Opus'], ['haiku', 'Haiku'], ['fable', 'Fable']]);
+      expect(started).toEqual([]);
       expect(hits).toBe(0);
       expect(acceptCustomModelId('claude-opus-4-6')).toBe('claude-opus-4-6');
     } finally { server.close(); }
+  });
+
+  it('names Claude Code aliases by the model the CLI starts with, marks its default and lists the rest to pin', async () => {
+    const seen: { authorization?: string; beta?: string; apiKey?: string } = {};
+    const server = await listen((request, response) => {
+      seen.authorization = request.headers.authorization;
+      seen.beta = String(request.headers['anthropic-beta'] ?? '');
+      seen.apiKey = request.headers['x-api-key'] as string | undefined;
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ data: [
+        { id: 'claude-sonnet-5-5', display_name: 'Claude Sonnet 5.5' },
+        { id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5' },
+        { id: 'claude-fable-5-1', display_name: 'Claude Fable 5.1' },
+        { id: 'claude-sonnet-5', display_name: 'Claude Sonnet 5' },
+        { id: 'claude-haiku-4-5-20251001', display_name: 'Claude Haiku 4.5' },
+      ], has_more: false }));
+    });
+    const resolved: Record<string, string> = { default: 'claude-opus-5-5', sonnet: 'claude-sonnet-5', opus: 'claude-opus-5-5', haiku: 'claude-haiku-4-5-20251001', fable: 'claude-fable-5-1' };
+    const starts: { alias: string; env: NodeJS.ProcessEnv }[] = [];
+    try {
+      const core = coreFor(store(), {
+        endpoints: { anthropic: server.url },
+        claudeStart: async (_executable, env, alias) => { starts.push({ alias: alias ?? 'default', env }); return resolved[alias ?? 'default']; },
+        claudeToken: async () => 'oauth-token',
+      }, undefined, { detect: async () => [{ ...signedIn('claude-code', '/bin/claude'), configDir: '/accounts/work' }], execute: async () => { throw new Error('no exec'); } });
+      const list = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+      expect(starts.map(start => start.alias)).toEqual(['default', 'sonnet', 'opus', 'haiku', 'fable']);
+      expect(starts.every(start => start.env.CLAUDE_CONFIG_DIR === '/accounts/work')).toBe(true);
+      expect(seen).toEqual({ authorization: 'Bearer oauth-token', beta: 'oauth-2025-04-20', apiKey: undefined });
+      expect(list.models.map(model => [model.id, model.displayName, model.resolvedId, model.isDefault ?? false, model.source])).toEqual([
+        ['sonnet', 'Sonnet 5', 'claude-sonnet-5', false, 'alias'],
+        ['opus', 'Opus 5.5', 'claude-opus-5-5', true, 'alias'],
+        ['haiku', 'Haiku 4.5', 'claude-haiku-4-5-20251001', false, 'alias'],
+        ['fable', 'Fable 5.1', 'claude-fable-5-1', false, 'alias'],
+        ['claude-sonnet-5-5', 'Sonnet 5.5', undefined, false, 'native'],
+      ]);
+    } finally { server.close(); }
+  });
+
+  it('falls back to the alias name for any alias the CLI or the Models API did not name', async () => {
+    const core = coreFor(store(), {
+      claudeStart: async (_executable, _env, alias) => alias === 'opus' ? 'claude-opus-5-5' : undefined,
+      claudeToken: async () => undefined,
+    }, undefined, { detect: async () => [signedIn('claude-code', '/bin/claude')], execute: async () => { throw new Error('no exec'); } });
+    const list = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+    expect(list.models.map(model => [model.id, model.displayName, model.resolvedId, model.isDefault])).toEqual([
+      ['sonnet', 'Sonnet', undefined, undefined],
+      ['opus', 'Opus', 'claude-opus-5-5', undefined],
+      ['haiku', 'Haiku', undefined, undefined],
+      ['fable', 'Fable', undefined, undefined],
+    ]);
+  });
+
+  it('reads Codex names and its default from app-server model/list, without hidden models', async () => {
+    const asked: unknown[] = [];
+    const probe: Probe = async () => { throw new Error('the debug JSON must not be needed'); };
+    const core = coreFor(store(), {
+      probe,
+      appServer: async (_executable, _env, requests) => {
+        asked.push(...requests);
+        return [{ data: [
+          { id: 'gpt-6-astra', model: 'gpt-6-astra', displayName: 'GPT-6-Astra', hidden: false, isDefault: true, upgrade: null },
+          { id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5', hidden: false, isDefault: false, upgrade: 'gpt-5.6-sol' },
+          { id: 'codex-auto-review', model: 'codex-auto-review', displayName: 'Codex Auto Review', hidden: true, isDefault: false, upgrade: null },
+        ], nextCursor: null }];
+      },
+    }, undefined, { detect: async () => [signedIn('codex', '/bin/codex')], execute: async () => { throw new Error('no exec'); } });
+    const list = await core.command('modelList', { provider: 'codex' }) as ModelListResult;
+    expect(asked).toEqual([{ method: 'model/list', params: { limit: 100 } }]);
+    expect(list.models).toEqual([
+      { provider: 'codex', id: 'gpt-6-astra', displayName: 'GPT-6-Astra', isDefault: true, source: 'native' },
+      { provider: 'codex', id: 'gpt-5.5', displayName: 'GPT-5.5', replacementId: 'gpt-5.6-sol', source: 'native' },
+    ]);
   });
 
   it('parses Codex JSON and falls back to --bundled, mapping upgrade to replacementId', async () => {
@@ -218,7 +298,8 @@ describe('model list fetch adapters', () => {
       }
       return { code: 1, stdout: 'not-json', stderr: 'refresh failed' };
     };
-    const core = coreFor(store(), { probe }, undefined, {
+    // An older Codex without model/list answers nothing there.
+    const core = coreFor(store(), { probe, appServer: async () => [undefined] }, undefined, {
       detect: async () => [signedIn('codex', '/bin/codex')],
       execute: async () => { throw new Error('no exec'); },
     });
@@ -234,6 +315,30 @@ describe('model list fetch adapters', () => {
     ]);
     expect(() => parseCursorModels('<html><h1>Models</h1></html>')).toThrow('định dạng');
     expect(() => parseCodexModels('<!DOCTYPE html><html>docs</html>')).toThrow('định dạng');
+  });
+
+  it('reads Cursor Agent marks: the current model runs without --model, else the account default', () => {
+    const colour = (code: number, text: string) => `\u001b[${code}m${text}\u001b[39m`;
+    const printed = [
+      colour(2, 'Available models'),
+      '',
+      `${colour(32, 'auto')} ${colour(2, '- Auto')}${colour(2, ' (current)')}`,
+      `${colour(36, 'sonnet-4.5')} ${colour(2, '- Claude 4.5 Sonnet (Thinking)')}${colour(2, ' (default)')}`,
+      `${colour(36, 'gpt-5')} ${colour(2, '- GPT-5')}`,
+      '',
+      colour(2, 'Tip: use --model <id> (or /model <id> in interactive mode) to switch.'),
+    ].join('\n');
+    expect(parseCursorModels(printed)).toEqual([
+      { provider: 'cursor', id: 'auto', displayName: 'Auto', isDefault: true, source: 'native' },
+      { provider: 'cursor', id: 'sonnet-4.5', displayName: 'Claude 4.5 Sonnet (Thinking)', source: 'native' },
+      { provider: 'cursor', id: 'gpt-5', displayName: 'GPT-5', source: 'native' },
+    ]);
+    expect(parseCursorModels('gpt-5 - GPT-5\nsonnet-4.5 - Claude 4.5 Sonnet (default)\n').find(entry => entry.isDefault)?.id).toBe('sonnet-4.5');
+  });
+
+  it('keeps models Codex hides from its own picker out of the debug JSON fallback', () => {
+    const text = JSON.stringify({ models: [{ slug: 'gpt-6-sol', display_name: 'GPT-6-Sol', visibility: 'list' }, { slug: 'gpt-reserve', display_name: 'GPT-Reserve', visibility: 'hide' }] });
+    expect(parseCodexModels(text).map(entry => entry.id)).toEqual(['gpt-6-sol']);
   });
 
   it('returns catalog-hint and customIdOk when Cursor output is not list lines', async () => {
@@ -292,6 +397,7 @@ describe('model list cache TTL and invalidation', () => {
       const core = coreFor(db, {
         readKey: async () => 'sk',
         endpoints: { openai: server.url },
+        appServer: async () => [undefined],
         probe: async (_executable, args) => {
           probeCalls.push(args.join(' '));
           return { code: 0, stdout: JSON.stringify({ models: [{ slug: `codex-${probeCalls.length}` }] }), stderr: '' };
@@ -381,7 +487,7 @@ describe('model list cache TTL and invalidation', () => {
 
   it('does not export modelLists in a backup', () => {
     const db = store();
-    db.setSetting(MODEL_LISTS_SETTING, { version: 1, byProvider: { openai: { fetchedAt: new Date().toISOString(), source: 'native', models: [{ provider: 'openai', id: 'secret-model-id', source: 'native' }] } } });
+    db.setSetting(MODEL_LISTS_SETTING, { version: MODEL_LIST_CACHE_VERSION, byProvider: { openai: { fetchedAt: new Date().toISOString(), source: 'native', models: [{ provider: 'openai', id: 'secret-model-id', source: 'native' }] } } });
     const text = new Backups(db, () => false, () => {}).export();
     expect(text).not.toContain('secret-model-id');
     expect(text).not.toContain('modelLists');

@@ -4,7 +4,9 @@ What you can do inside a chat once an orglet or crew is set up: attach files, ty
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
-In an orglet's chat, the model picker in the message box shows the selected model's name. Open it to see the exact model IDs and choose another model for that orglet.
+In an orglet's chat, the model picker in the message box shows the selected model's name. Open it to choose another model for that orglet. Each row shows the maker's logo and the model's name with its version, such as Opus 5.5, as the CLI or provider reports it. When the version is not known, the row shows the short name, such as Opus.
+
+The row marked **Default** is the model that runs when you have not picked one. Choosing it saves no model, so the orglet follows the CLI if its default changes later. The newest model of each family is listed first. Older ones, and models only reachable by their full ID, are under **More models**. The same list appears in the orglet's settings under **Model**, where you can still type any model ID.
 
 ## Attach files
 

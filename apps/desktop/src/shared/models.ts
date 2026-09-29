@@ -25,6 +25,10 @@ export const ModelEntry = z.object({
   imageInput: z.literal(true).optional(),
   /** How many tokens the model's context holds, from the provider's own list (OpenRouter's `context_length`; COD-326). */
   contextTokens: z.number().int().positive().max(100_000_000).optional(),
+  /** The CLI itself says it runs this model when none is named (Codex `isDefault`, Claude Code's start line, Cursor Agent's current model; COD-332). */
+  isDefault: z.literal(true).optional(),
+  /** The model an alias stands for right now, as the CLI itself reported it (Claude Code; COD-332). */
+  resolvedId: CustomModelId.optional(),
   source: ModelSource,
 }).strict();
 export type ModelEntry = z.infer<typeof ModelEntry>;
@@ -37,8 +41,11 @@ export const ModelListRow = z.object({
 }).strict();
 export type ModelListRow = z.infer<typeof ModelListRow>;
 
+export const MODEL_LIST_CACHE_VERSION = 2;
+
 export const ModelListCache = z.object({
-  version: z.literal(1),
+  // Version 2 (COD-332) added versioned names and the CLI's default, so a list kept from before is fetched again.
+  version: z.literal(MODEL_LIST_CACHE_VERSION),
   // One row per connection; a key that is neither a built-in list nor `custom:<id>` fails the whole cache.
   byProvider: z.partialRecord(ModelListProvider, ModelListRow),
 }).strict();
@@ -63,7 +70,6 @@ export const CATALOG_HINT_IDS = {
   ollama: 'llama3.2',
 } as const;
 
-export const MODEL_LIST_CACHE_VERSION = 1;
 export const MODEL_LISTS_SETTING = 'modelLists';
 export const MODEL_LIST_TTL_MS = 24 * 60 * 60 * 1000;
 export const MODEL_LIST_MAX = 500;

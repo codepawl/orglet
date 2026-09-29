@@ -256,6 +256,15 @@ async function readClaudeToken(configDir: string | undefined, runtime: UsageRunt
   return { oauth, token, expired };
 }
 
+/**
+ * The account's Claude Code access token while it is still valid, for a read-only call to api.anthropic.com (the model
+ * list, COD-332); undefined for a key or cloud sign-in, a missing file or an expired token. Orglet never renews it.
+ */
+export async function claudeAccessToken(configDir: string | undefined, runtime: UsageRuntime = localUsageRuntime()): Promise<string | undefined> {
+  const { token, expired } = await readClaudeToken(configDir, runtime);
+  return expired ? undefined : token;
+}
+
 async function readClaude(executable: string, configDir: string | undefined, runtime: UsageRuntime): Promise<AccountUsageRead> {
   const status = parseJson((await runtime.run(executable, ['auth', 'status'], harnessAccountEnv('claude-code', configDir))).stdout);
   if (!isRecord(status)) return gap('failed');

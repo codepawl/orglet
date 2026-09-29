@@ -13,6 +13,8 @@ Plan for [COD-29](https://linear.app/codepawl/issue/COD-29) under epic [COD-27](
 
 **Shipped (COD-30):** The worker model picker chips a selected or suggested model when cached `deprecated` is true. The sunset day is shown only from native `sunsetAt` (OpenAI `shutdown_date`). Anthropic, xAI and harness HTML dates are not scraped or guessed. Codex `replacementId` is plain “prefer” text, not an auto-switch. No toast on dialog open.
 
+**Shipped (COD-332):** Picker rows show the maker's mark and a versioned name ("Opus 5.5", "GPT-6-Astra") from the CLI or the provider's own list, never a hand-kept table. The model that runs when none is set wears a **Default** badge and saves no model, so an orglet keeps following the CLI's default. Older models sit under **More models**. Claude Code aliases are named by what the CLI itself starts with, Codex reads `model/list` from `codex app-server`, and Cursor Agent's `(current, default)` marks are read. See [Versions and the default](#versions-and-the-default-cod-332).
+
 It does not add feature UI, scrape HTML, or change signing / [COD-19](https://linear.app/codepawl/issue/COD-19) / [COD-20](https://linear.app/codepawl/issue/COD-20). Team chat ([COD-24](https://linear.app/codepawl/issue/COD-24)) is unrelated.
 
 ## Decision in one paragraph
@@ -47,9 +49,9 @@ Checked against official docs on 2026-09-18. Revalidate URLs before COD-31 lands
 | **OpenCode Go API** | Native `GET https://opencode.ai/zen/go/v1/models` with the saved Go key ([docs](https://opencode.ai/docs/go/)). Never falls back to the Zen key or list. | The Go plan's own list. IDs only. | **None.** |
 | **Ollama** | Native `GET http://127.0.0.1:11434/api/tags` after the Settings toggle. | Local tags already pulled on this machine. | **None.** |
 | **Custom connection** (`custom:<id>`, COD-242) | That server's own `GET {baseUrl}/models`, with its key when one is saved and no `Authorization` header when not. Parsed like OpenAI's list, with the same display filter. | The only list that server has. No price is read or trusted from it. | **None.** |
-| **Claude Code** | No list command. Ship the documented `--model` **aliases** (`sonnet`, `opus`, `haiku`, `fable`) plus custom ID. | Official CLI has `--model` but no `claude model list` ([feature request](https://github.com/anthropics/claude-code/issues/12612)). `/model` is interactive. Anthropic Models API **rejects** Claude Code OAuth. | **None.** Aliases are not versions and have no sunset. |
-| **Codex** | Native `codex debug models` JSON on the detected executable (logged-in). Fall back to `codex debug models --bundled` if the remote catalog refresh fails. | Official CLI JSON. Do **not** start Codex app-server (`model/list`) — [capabilities.md](capabilities.md) already keeps app-server off. | No sunset date. Optional **`upgrade`** (replacement slug) and `visibility` if present. Map `upgrade` as `replacementId` for COD-30 copy, not as a date. |
-| **Cursor Agent** | Native `agent --list-models` (same as `agent models`) on the detected executable. Prefer the flag so older builds do not treat `models` as a prompt. | Official CLI. Account-specific. | **None.** Text rows `id - display name` only. |
+| **Claude Code** | No list command. The documented `--model` **aliases** (`sonnet`, `opus`, `haiku`, `fable`) plus custom ID, each named by the model the CLI itself starts with (its `system`/`init` line), and every other model the account may use from Anthropic's `GET /v1/models` with the CLI's own sign-in (COD-332). Signed out, or both reads failing: the bare aliases. | Official CLI has `--model` but no `claude model list` ([feature request](https://github.com/anthropics/claude-code/issues/12612)). `/model` is interactive. The Models API answers the Claude Code OAuth token when the request carries `anthropic-beta: oauth-2025-04-20` (checked 2026-09-29), and returns `display_name`. | **None.** An alias's model changes when the CLI or its vendor moves it. |
+| **Codex** | `codex app-server`, asked `model/list` in the account's `CODEX_HOME` (COD-332): `displayName`, `upgrade`, `hidden`, `isDefault`. When it does not answer (an older CLI), `codex debug models` JSON, then `codex debug models --bundled`. | The CLI's own picker list. App-server already reads the plan's usage and signs accounts in; runs still use `codex exec` ([capabilities.md](capabilities.md)). | No sunset date. Optional **`upgrade`** (replacement slug). Map `upgrade` as `replacementId` for COD-30 copy, not as a date. Hidden models (`hidden`, or `visibility: "hide"` in the debug JSON) are left out. |
+| **Cursor Agent** | Native `agent --list-models` (same as `agent models`) on the detected executable. Prefer the flag so older builds do not treat `models` as a prompt. | Official CLI. Account-specific. | **None.** Text rows `id - display name`, with `(current, default)` after the model the CLI is set to and the account's default. |
 | **Gemini CLI** | No list command (checked against 0.61.0: `--help` has none, `/model` is interactive). Ship the `-m` **aliases** its CLI reference documents (`auto`, `pro`, `flash`, `flash-lite`) plus custom ID for a full model name such as `gemini-2.5-pro`. Nothing is probed. | Same shape as Claude Code. The Gemini API's own model list needs an API key, and most people sign the CLI in with Google instead. | **None.** Aliases are not versions and have no sunset. |
 | **Demo** | No fetch. | Demo calls no API. | n/a |
 
@@ -73,6 +75,28 @@ Both plans serve models on several endpoints, and `/models` does not say which. 
 
 models.dev also publishes per-model packages for both plans, but it disagrees with the Go docs (for example `qwen3.7-max`), so it is not used.
 
+## Versions and the default (COD-332)
+
+A picker row reads like the model's name, not its slug: the maker's mark, then a versioned name, a **Default** badge on the model that runs when none is set, and older models under **More models**. Every word of it comes from the CLI or the provider's own list. Nothing is scraped, and no table of versions is kept in Orglet. When a version cannot be learned, the row keeps the short alias name ("Opus"), never a guess.
+
+| Connection | Names and versions | Default |
+|---|---|---|
+| **Claude Code** | Each alias is started once with the flags Orglet's runs use (`-p /cost --output-format stream-json --verbose --restricted --safe-mode --strict-mcp-config --no-session-persistence [--model <alias>]`), in the system temp folder and the account's `CLAUDE_CONFIG_DIR`. The first `system`/`init` line names the model (`claude-opus-5-5`), and the process is stopped there. `/cost` is answered by the CLI itself: 0 tokens, checked 2026-09-29 on 2.1.283. `--disable-slash-commands` is left off on purpose, or `/cost` would reach the model as a prompt. The names come from `GET /v1/models` with the account's token, the leading "Claude " dropped because every row wears Claude's mark. Five starts run at once and took about 16 s together; the list is cached like any other, so that happens at most once a day per account. | The start with no `--model`. `--restricted` ignores the person's settings file, so this is the default an Orglet run gets, not the one their terminal gets. |
+| **Codex** | `model/list` `displayName`. | `isDefault`, the catalog's default. It ignores `config.toml` (checked 2026-09-29: config said `gpt-6-sol`, `isDefault` was `gpt-6-astra`), as Orglet's runs do with `--ignore-user-config`. |
+| **Cursor Agent** | `id - Display Name` from `--list-models`. | The row marked `current` (what a run without `--model` takes), else the one marked `default`. Read from the installed CLI's own printer; not yet seen on a signed-in account. |
+| **Gemini CLI** | Aliases only (no list command). | Unknown: the picker shows a plain **Default** row, as before. |
+| **API providers** | The provider's own names (`display_name`, OpenRouter `name`); OpenAI and xAI list IDs only. | Orglet's own suggestion (`CATALOG_HINT_IDS`), which is what an API orglet with no model runs. |
+
+**Default follows the CLI.** The row that runs by default saves an empty model ID, exactly as the old **Default** row did. An orglet left on it keeps following the CLI when the CLI's default moves; the badge moves with it on the next list refresh. An orglet saved with the alias (`opus`) or the model it resolves to shows its tick on the Default row, and choosing that row clears the saved ID. OpenCode plans and custom connections have no default and get no such row.
+
+**More models** (`shared/modelChoices.ts`). A model goes under it when:
+
+1. the list has aliases (Claude Code) and the row is a full ID: the aliases are what the CLI means by each name;
+2. the vendor names a replacement for it (Codex `upgrade`); or
+3. another listed model has the same family and a higher version, both read from the vendor's display name ("GPT-5.6-Sol" is version 5.6 of "gpt sol"). IDs and dates are never parsed, so a list with no display names (OpenAI, xAI) stays flat.
+
+The default row never goes under it. Typing in the orglet dialog's ID field searches the whole list, More models included. The mark is read from the model's ID and name (Claude, GPT, Gemini, Grok, Composer), so Cursor Agent and OpenRouter rows wear each maker's mark; anything else wears its connection's.
+
 ### Aggregators considered and rejected
 
 | Aggregator | Why not |
@@ -92,6 +116,8 @@ Normalize every source into one object. Unknown fields stay omitted, never inven
 provider        openai | anthropic | xai | openrouter | opencode-zen | opencode-go | ollama | claude-code | codex | cursor | gemini | custom:<id>
 id              exact slug sent to the API or `--model`
 displayName     optional (Anthropic, Codex, Cursor, OpenRouter, Ollama, Claude Code and Gemini CLI aliases)
+isDefault       true only when the CLI says it runs this model with none named (Codex, Claude Code, Cursor)
+resolvedId      optional (Claude Code: the model an alias stands for, from the CLI's start line)
 aliases         optional (xAI, Claude Code, Gemini CLI)
 deprecated      true only when the native payload says so
 sunsetAt        ISO date only when native (`shutdown_date`)
@@ -112,7 +138,7 @@ Reuse the existing `settings` table (`id TEXT PRIMARY KEY, data TEXT NOT NULL` i
 
 ```
 {
-  version: 1,
+  version: 2,
   byProvider: {
     openai: { fetchedAt, source, models, error? },
     …
@@ -149,7 +175,7 @@ COD-31 stores whatever the native source actually has. COD-30 renders a chip onl
 | OpenAI | `shutdown_date != null` | `shutdown_date` | No “deprecated but no date yet” flag. Legacy vs deprecated is HTML-only. |
 | Anthropic | omit | omit | Dates exist only on [model deprecations](https://platform.claude.com/docs/en/about-claude/model-deprecations). Chip cannot show a sunset until Anthropic puts it on `GET /v1/models`. |
 | xAI | omit | omit | Retirement redirects (e.g. grok-3 → grok-4.3) are HTML. A still-listed slug may already be a redirect; we will not infer that. |
-| Claude Code | omit | omit | Aliases have no version lifecycle. |
+| Claude Code | omit | omit | Aliases have no version lifecycle; the model behind one is read again with the list. |
 | Gemini CLI | omit | omit | Same: aliases only. |
 | Codex | omit (unless JSON later adds it) | omit | `upgrade` → `replacementId` only. `visibility` is picker hygiene, not deprecation. |
 | Cursor | omit | omit | List text has no dates. |

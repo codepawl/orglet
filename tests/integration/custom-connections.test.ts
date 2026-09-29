@@ -21,7 +21,7 @@ import {
   BASE_URL_ERRORS, checkBaseUrl, CustomConnectionInput, customProviderId, MAX_CUSTOM_CONNECTIONS,
   connectionPricing, type CustomConnection, type CustomConnectionPrice, type CustomProviderId,
 } from '../../apps/desktop/src/shared/custom-connections';
-import { ModelListCache } from '../../apps/desktop/src/shared/models';
+import { MODEL_LIST_CACHE_VERSION, ModelListCache } from '../../apps/desktop/src/shared/models';
 import { ERASE_CONFIRMATION } from '../../apps/desktop/src/shared/erase';
 import { CustomConnectionsSection } from '../../apps/desktop/src/renderer/components/CustomConnections';
 import { rememberCustomConnections } from '../../apps/desktop/src/renderer/customConnections';
@@ -212,8 +212,8 @@ describe('schemas', () => {
   it('keeps model lists of custom connections in the one cache, and refuses a key that is neither', () => {
     const provider = customProviderId('0b8e7a52-2a0b-4c1e-9c6a-0d3d6f1e2a11');
     const row = { fetchedAt: now(), source: 'native' as const, models: [] };
-    expect(ModelListCache.safeParse({ version: 1, byProvider: { openai: row, [provider]: row } }).success).toBe(true);
-    expect(ModelListCache.safeParse({ version: 1, byProvider: { mystery: row } }).success).toBe(false);
+    expect(ModelListCache.safeParse({ version: MODEL_LIST_CACHE_VERSION, byProvider: { openai: row, [provider]: row } }).success).toBe(true);
+    expect(ModelListCache.safeParse({ version: MODEL_LIST_CACHE_VERSION, byProvider: { mystery: row } }).success).toBe(false);
   });
 });
 

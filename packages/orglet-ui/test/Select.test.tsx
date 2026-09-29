@@ -79,6 +79,36 @@ describe('Select', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('runs an action row without choosing it, keeps the list open and never types onto it', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    function Revealing() {
+      const [value, setValue] = useState('apple');
+      const [more, setMore] = useState(false);
+      const options: SelectOption[] = [
+        { value: 'apple', label: 'Apple' },
+        ...(more
+          ? [{ value: 'banana', label: 'Banana', spaced: true }]
+          : [{ value: 'more', label: 'More fruit', spaced: true, onSelect: () => setMore(true) }]),
+      ];
+      return <Select value={value} options={options} ariaLabel="Fruit" onChange={next => { setValue(next); onChange(next); }} />;
+    }
+    render(<Revealing />);
+    const trigger = screen.getByRole('combobox', { name: 'Fruit' });
+    trigger.focus();
+    await user.keyboard('m');
+    expect(onChange).not.toHaveBeenCalled();
+    await user.click(trigger);
+    const more = screen.getByRole('option', { name: 'More fruit' });
+    expect(more.getAttribute('aria-selected')).toBe('false');
+    expect(more.className).toContain('org-select-option-spaced');
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('listbox', { name: 'Fruit' })).toBeTruthy();
+    await user.keyboard('{Enter}');
+    expect(onChange).toHaveBeenCalledWith('banana');
+  });
+
   it('marks an invalid choice for assistive technology', () => {
     render(<Select value="" options={fruits} ariaLabel="Fruit" invalid flash={1} onChange={() => {}} />);
     expect(screen.getByRole('combobox', { name: 'Fruit' }).getAttribute('aria-invalid')).toBe('true');
