@@ -1,53 +1,14 @@
 import { _electron as electron } from 'playwright';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import assert from 'node:assert/strict';
 import { useVietnamese } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
+import { fakeHarnessPath } from './fake-harnesses.mjs';
 
 const pills = { not_installed: 'Chưa cài', detected: 'Chưa đăng nhập', signed_in_ready: 'Sẵn sàng', signed_in: 'Đã đăng nhập', auth_error: 'Lỗi đăng nhập' };
 const hint = { not_installed: name => `Cài và đăng nhập ${name} trên máy này`, detected: name => `Đăng nhập ${name} trên máy này`, auth_error: name => `Sửa đăng nhập ${name} trên máy này` };
-
-// Puts three fake CLIs first on PATH so CI always has a logged-out Claude Code, an unreadable Codex login probe and
-// a Gemini CLI whose empty config folder (GEMINI_CLI_HOME below) holds no sign-in. Cursor stays whatever the machine
-// has (usually not installed). The smoke never starts a harness run and never calls a provider.
-async function fakeHarnessPath(directory) {
-  const bin = join(directory, 'bin');
-  await mkdir(bin, { recursive: true });
-  const node = process.execPath;
-  const shim = async (name, source) => {
-    const script = join(bin, `${name}.mjs`);
-    await writeFile(script, source);
-    await writeFile(join(bin, `${name}.cmd`), `@echo off\r\n"${node}" "${script}" %*\r\n`);
-    await writeFile(join(bin, name), `#!/bin/sh\nexec "${node}" "${script}" "$@"\n`, { mode: 0o755 });
-  };
-  await shim('claude', `
-    const args = process.argv.slice(2);
-    if (args[0] === '--version') { process.stdout.write('2.1.10 (Claude Code)\\n'); process.exit(0); }
-    if (args[0] === 'auth' && args[1] === 'status') {
-      process.stdout.write(JSON.stringify({ loggedIn: false, authMethod: 'none' }));
-      process.exit(0);
-    }
-    process.exit(1);
-  `);
-  await shim('codex', `
-    const args = process.argv.slice(2);
-    if (args[0] === '--version') { process.stdout.write('codex-cli 0.154.0\\n'); process.exit(0); }
-    if (args[0] === 'login' && args[1] === 'status') {
-      process.stderr.write('Error checking login status\\n');
-      process.exit(2);
-    }
-    process.exit(1);
-  `);
-  // Gemini CLI has no status command; Orglet reads its sign-in from GEMINI_CLI_HOME, which the smoke leaves empty.
-  await shim('gemini', `
-    const args = process.argv.slice(2);
-    if (args[0] === '--version') { process.stdout.write('0.61.0\\n'); process.exit(0); }
-    process.exit(1);
-  `);
-  return bin;
-}
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-harness-ui-'));
 await mkdir('test-results', { recursive: true });
