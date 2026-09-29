@@ -11,7 +11,7 @@ The original workspace contained only `plans/orglet_mvp_plan_vi.md` and its codi
 
 ## Current milestone
 
-**Windows 0.7.x:** public releases are signed with Certum, and the release feed carries the Setup, ZIP and Squirrel update files. The updater has an end-to-end local trial (COD-304). Windows, macOS and Linux build in CI; Windows is the public release target. Clean-machine installation and full live-provider coverage remain separate verification work. See [Signed Windows release verification](#signed-windows-release-verification) and [capabilities.md](capabilities.md) for the scope of the evidence.
+**Windows 0.8.x:** public releases are signed with Certum, and the release feed carries the Setup, ZIP and Squirrel update files. The updater has an end-to-end local trial (COD-304). Windows, macOS and Linux build in CI; Windows is the public release target. Clean-machine installation and full live-provider coverage remain separate verification work. See [Signed Windows release verification](#signed-windows-release-verification) and [capabilities.md](capabilities.md) for the scope of the evidence.
 
 ## Decisions
 
