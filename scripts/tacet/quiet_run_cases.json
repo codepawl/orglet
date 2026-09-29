@@ -1,0 +1,198 @@
+[
+ {
+  "split": "tune",
+  "schedule": "Competitor prices",
+  "request": "Check the three competitor pricing pages and tell me if anything changed.",
+  "answer": "I checked all three pricing pages. Prices are the same as in the last run: Basic $9, Pro $29, Team $79. Nothing changed.",
+  "noteworthy": false
+ },
+ {
+  "split": "tune",
+  "schedule": "Competitor prices",
+  "request": "Check the three competitor pricing pages and tell me if anything changed.",
+  "answer": "Acme raised its Pro plan from $29 to $39 a month and removed the free tier. The other two pages are unchanged.",
+  "noteworthy": true
+ },
+ {
+  "split": "tune",
+  "schedule": "Repo tests",
+  "request": "Run the test suite in the project folder and report the result.",
+  "answer": "All 412 tests passed in 38 seconds. No new warnings.",
+  "noteworthy": false
+ },
+ {
+  "split": "tune",
+  "schedule": "Repo tests",
+  "request": "Run the test suite in the project folder and report the result.",
+  "answer": "3 tests failed in payments/refund.test.ts after the last commit: the refund total is off by one cent. The rest passed.",
+  "noteworthy": true
+ },
+ {
+  "split": "tune",
+  "schedule": "Inbox watch",
+  "request": "Look at the support inbox export and flag anything urgent.",
+  "answer": "No new messages since the last check.",
+  "noteworthy": false
+ },
+ {
+  "split": "tune",
+  "schedule": "Inbox watch",
+  "request": "Look at the support inbox export and flag anything urgent.",
+  "answer": "A customer reports being charged twice for order #4411 and asks for a refund today. Two other messages are routine questions about shipping.",
+  "noteworthy": true
+ },
+ {
+  "split": "tune",
+  "schedule": "Server status",
+  "request": "Check the status page of our hosting provider.",
+  "answer": "All systems operational. No incidents reported in the last hour.",
+  "noteworthy": false
+ },
+ {
+  "split": "tune",
+  "schedule": "Server status",
+  "request": "Check the status page of our hosting provider.",
+  "answer": "The provider reports a major outage in the Singapore region since 14:05; our database is hosted there.",
+  "noteworthy": true
+ },
+ {
+  "split": "tune",
+  "schedule": "Giá đối thủ",
+  "request": "Kiểm tra trang giá của ba đối thủ và báo nếu có thay đổi.",
+  "answer": "Đã kiểm tra cả ba trang giá. Giá giữ nguyên như lần trước: Cơ bản 99.000đ, Pro 299.000đ. Không có gì thay đổi.",
+  "noteworthy": false
+ },
+ {
+  "split": "tune",
+  "schedule": "Giá đối thủ",
+  "request": "Kiểm tra trang giá của ba đối thủ và báo nếu có thay đổi.",
+  "answer": "Đối thủ A vừa giảm giá gói Pro từ 299.000đ xuống 199.000đ và thêm gói miễn phí. Hai trang còn lại không đổi.",
+  "noteworthy": true
+ },
+ {
+  "split": "tune",
+  "schedule": "Kiểm thử repo",
+  "request": "Chạy bộ kiểm thử trong thư mục dự án và báo kết quả.",
+  "answer": "Tất cả 412 bài kiểm thử đều đạt trong 38 giây. Không có cảnh báo mới.",
+  "noteworthy": false
+ },
+ {
+  "split": "tune",
+  "schedule": "Kiểm thử repo",
+  "request": "Chạy bộ kiểm thử trong thư mục dự án và báo kết quả.",
+  "answer": "Có 3 bài kiểm thử thất bại ở phần thanh toán sau lần commit gần nhất. Cần sửa trước khi phát hành.",
+  "noteworthy": true
+ },
+ {
+  "split": "tune",
+  "schedule": "Hộp thư hỗ trợ",
+  "request": "Xem hộp thư hỗ trợ và báo những gì khẩn cấp.",
+  "answer": "Không có tin nhắn mới kể từ lần kiểm tra trước.",
+  "noteworthy": false
+ },
+ {
+  "split": "tune",
+  "schedule": "Hộp thư hỗ trợ",
+  "request": "Xem hộp thư hỗ trợ và báo những gì khẩn cấp.",
+  "answer": "Một khách hàng bị trừ tiền hai lần cho đơn #4411 và yêu cầu hoàn tiền ngay hôm nay.",
+  "noteworthy": true
+ },
+ {
+  "split": "tune",
+  "schedule": "Tin tức ngành",
+  "request": "Tóm tắt tin mới về đối thủ trong giờ qua.",
+  "answer": "Không có tin mới nào về các đối thủ trong giờ qua.",
+  "noteworthy": false
+ },
+ {
+  "split": "tune",
+  "schedule": "Tin tức ngành",
+  "request": "Tóm tắt tin mới về đối thủ trong giờ qua.",
+  "answer": "Đối thủ B vừa công bố gọi vốn 20 triệu USD và ra mắt tính năng giống sản phẩm của mình.",
+  "noteworthy": true
+ },
+ {
+  "split": "held-out",
+  "schedule": "Backup check",
+  "request": "Check last night's backup log.",
+  "answer": "The backup finished at 02:14. 18.2 GB copied, checksums match.",
+  "noteworthy": false
+ },
+ {
+  "split": "held-out",
+  "schedule": "Backup check",
+  "request": "Check last night's backup log.",
+  "answer": "The backup stopped at 02:03 with 'disk full'. Nothing was copied after the photos folder.",
+  "noteworthy": true
+ },
+ {
+  "split": "held-out",
+  "schedule": "Invoices",
+  "request": "Look for new invoices in the shared folder and total them.",
+  "answer": "No new invoices arrived this hour.",
+  "noteworthy": false
+ },
+ {
+  "split": "held-out",
+  "schedule": "Invoices",
+  "request": "Look for new invoices in the shared folder and total them.",
+  "answer": "Two new invoices arrived, one of them is overdue by 12 days: Hoang Logistics, 14,500,000 VND.",
+  "noteworthy": true
+ },
+ {
+  "split": "held-out",
+  "schedule": "Uptime",
+  "request": "Ping the website and report its response time.",
+  "answer": "The site answered in 210 ms, same as usual.",
+  "noteworthy": false
+ },
+ {
+  "split": "held-out",
+  "schedule": "Uptime",
+  "request": "Ping the website and report its response time.",
+  "answer": "The site returned HTTP 503 on three tries in a row.",
+  "noteworthy": true
+ },
+ {
+  "split": "held-out",
+  "schedule": "Sao lưu",
+  "request": "Kiểm tra nhật ký sao lưu đêm qua.",
+  "answer": "Sao lưu hoàn tất lúc 02:14, dữ liệu khớp, không có lỗi.",
+  "noteworthy": false
+ },
+ {
+  "split": "held-out",
+  "schedule": "Sao lưu",
+  "request": "Kiểm tra nhật ký sao lưu đêm qua.",
+  "answer": "Sao lưu dừng lúc 02:03 vì ổ đĩa đầy, phần lớn dữ liệu chưa được chép.",
+  "noteworthy": true
+ },
+ {
+  "split": "held-out",
+  "schedule": "Đơn hàng",
+  "request": "Xem đơn hàng mới trên cửa hàng.",
+  "answer": "Không có đơn hàng mới trong giờ qua.",
+  "noteworthy": false
+ },
+ {
+  "split": "held-out",
+  "schedule": "Đơn hàng",
+  "request": "Xem đơn hàng mới trên cửa hàng.",
+  "answer": "Có 12 đơn mới, trong đó một đơn 45 triệu cần xác nhận thủ công.",
+  "noteworthy": true
+ },
+ {
+  "split": "held-out",
+  "schedule": "Website",
+  "request": "Kiểm tra website có hoạt động không.",
+  "answer": "Website vẫn chạy bình thường, thời gian phản hồi 180 ms.",
+  "noteworthy": false
+ },
+ {
+  "split": "held-out",
+  "schedule": "Website",
+  "request": "Kiểm tra website có hoạt động không.",
+  "answer": "Website không truy cập được, trả về lỗi 502 liên tục từ 9 giờ.",
+  "noteworthy": true
+ }
+]

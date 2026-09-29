@@ -1,19 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Routine, TaskInput, Worker, Workspace } from '../../shared/contracts';
+import type { Routine, Task, TaskInput, Worker, Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput, PanelHeading } from './ui';
 import { Attachment } from './Attachment';
-import { AppWindow, ShieldCheck, CalendarRange, Sun, Users, AlertTriangle, ArrowLeft, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Globe, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, UserRound, Wallet, Zap } from 'lucide-react';
+import { AppWindow, BellRing, Briefcase, ShieldCheck, CalendarRange, Sun, Users, ArrowLeft, CalendarX2, FileDiff, FolderX, CalendarClock, CalendarDays, Clock, Copy, FilePlus, FileText, Folder, FolderInput, FolderOpen, Gauge, Globe, History, MessageSquare, MessageSquareText, Pencil, Play, Repeat, SquareTerminal, Timer, UserRound, Wallet, Zap } from 'lucide-react';
 import { providerLabel } from './providers';
 import { formatMoney, toAmount, toMicros } from './money';
-import { TimeZone } from '../../shared/schedule';
+import { DAILY_CAP_REACHED, EVERY_HOURS_CHOICES, SKIPPED_WHILE_INACTIVE, TimeZone, nextOccurrence, runsPerDay, scheduleDay, type Schedule, type ScheduleFrequency } from '../../shared/schedule';
+import { cadenceInWords, everyHoursInWords, formatClockTime, keepTimeTogether } from '../scheduleWords';
+import { timeZoneChoices } from '../timeZones';
+import { RowMenu } from './RowMenu';
+import { EllipsisVertical, Trash } from './icons';
 import { Select } from './Select';
 import { t } from '../i18n';
-import { currentLanguage, currentLocale, translated, tMessage } from '../i18n';
+import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
 import { Switch, SwitchField } from './Switch';
-import { StatusMark } from './StatusMark';
+import { StatusMark, taskStatusMark, type StatusMarkState } from './StatusMark';
 import { CommandBlock, Input, Textarea } from '@codepawl/orglet-ui';
-import { triggerOf, type RoutineTrigger, type RoutineTriggerKind } from '../../shared/routine-triggers';
+import { triggerOf, type RoutineTrigger, type RoutineTriggerKind, type RoutineWorkspace } from '../../shared/routine-triggers';
+import { permissionsForLevel, workspaceLevelOf, workspaceLevels, type WorkspaceLevel } from '../../shared/capability-status';
+import { workspaceLevelNames } from './PermissionControls';
 import { toast } from './toast';
 import { Avatar, RosterAvatars } from './Avatar';
 import { teamRoster } from '../assignees';
@@ -22,8 +28,17 @@ import { browserLevelOf, capabilitiesWithBrowserLevel, defaultBrowserChoice, rou
 import { snapshotCapabilities, withCapability, type ToolCapability } from '../../shared/tool-policy';
 import { WEB_SEARCH_PROVIDER_NAMES } from '../../shared/web-tools';
 
+/** Read when shown, so it follows the interface language like every other message. */
+const INVALID_ZONE = () => t('Múi giờ không hợp lệ. Chọn một múi giờ trong danh sách.');
 const weekdays = translated(['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy']);
-export const formatRoutineTime = (iso: string, timeZone: string) => new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' });
+export const formatRoutineTime = (iso: string, timeZone: string) => keepTimeTogether(new Date(iso).toLocaleString(currentLocale(), { timeZone, dateStyle: 'short', timeStyle: 'short' }));
+export { formatClockTime };
+/** When Tacet flagged a run (COD-303): the time alone when that was today in the schedule's zone, so the card's line fits. */
+export function flaggedWhen(iso: string, timeZone: string, now = new Date()): string {
+  const at = new Date(iso);
+  if (scheduleDay(at, timeZone) !== scheduleDay(now, timeZone)) return formatRoutineTime(iso, timeZone);
+  return keepTimeTogether(at.toLocaleTimeString(currentLocale(), { timeZone, timeStyle: 'short' }));
+}
 /** The command that starts a routine from a terminal (COD-245); the name is quoted so spaces survive the shell. */
 export const runCommandOf = (name: string) => `orglet run "${name.replace(/"/g, '\\"')}"`;
 const TRIGGER_ICONS: Record<RoutineTriggerKind, typeof CalendarClock> = { schedule: CalendarClock, folder: FolderInput, called: SquareTerminal };
@@ -32,10 +47,40 @@ function triggerSummary(routine: Routine): string {
   const trigger = triggerOf(routine);
   if (trigger.kind === 'folder') return t('Khi có tệp mới trong {0}', [trigger.folderName]);
   if (trigger.kind === 'called') return t('Chỉ khi được gọi');
-  // Vietnamese writes the day in lower case mid-sentence ("Mỗi thứ hai"); English keeps "Every Monday".
-  const day = currentLanguage() === 'vi' ? weekdays[routine.schedule.weekday].toLowerCase() : weekdays[routine.schedule.weekday];
-  const cadence = routine.schedule.frequency === 'daily' ? t('Hằng ngày') : t('Mỗi {0}', [day]);
-  return t('{0} lúc {1}', [cadence, routine.schedule.time]);
+  return cadenceInWords(routine.schedule);
+}
+/**
+ * What a schedule may cost at most, said before saving (COD-288): "Up to 9 runs a day · up to $4.50 a day at $0.50 per
+ * run", or the daily cap when it is lower. Only a clock schedule knows how many runs a day it starts.
+ */
+export function costCeiling(schedule: Schedule, triggerKind: RoutineTriggerKind, budgetMicros: number, capMicros: number | undefined): string {
+  if (triggerKind !== 'schedule') {
+    if (capMicros === undefined) return t('Không giới hạn theo ngày; mỗi lần chạy tối đa {0}.', [formatMoney(budgetMicros)]);
+    return t('Tối đa {0} một ngày, dù chạy bao nhiêu lần.', [formatMoney(capMicros)]);
+  }
+  // A cap is never below one run's limit, so it cannot lower a weekly schedule's single run.
+  if (schedule.frequency === 'weekly') return t('Tối đa 1 lần một tuần · tối đa {0} một tuần.', [formatMoney(budgetMicros)]);
+  const runs = runsPerDay(schedule);
+  const ceilingMicros = runs * budgetMicros;
+  const runsText = runs === 1 ? t('Tối đa 1 lần một ngày') : t('Tối đa {0} lần một ngày', [runs]);
+  if (capMicros !== undefined && capMicros < ceilingMicros) return t('{0} · tối đa {1} một ngày theo giới hạn.', [runsText, formatMoney(capMicros)]);
+  if (runs === 1) return t('{0} · tối đa {1} một ngày.', [runsText, formatMoney(ceilingMicros)]);
+  return t('{0} · tối đa {1} một ngày, với {2} mỗi lần.', [runsText, formatMoney(ceilingMicros), formatMoney(budgetMicros)]);
+}
+/**
+ * The next time a run can start, for the card: once today's cap is reached the rest of today's times are skipped, so it
+ * is the first time on a later day (COD-288).
+ */
+export function nextRunAt(routine: Pick<Routine, 'nextDueAt' | 'notice' | 'schedule'>, today: string | undefined): string {
+  if (routine.notice?.reason !== DAILY_CAP_REACHED || !today) return routine.nextDueAt;
+  let next = routine.nextDueAt;
+  for (let step = 0; step < 48 && scheduleDay(new Date(next), routine.schedule.timeZone) === today; step++) next = nextOccurrence(routine.schedule, new Date(next));
+  return next;
+}
+/** Why a run was missed, in plain words when it is the usual reason (the app was closed or asleep). */
+function missedReason(reason: string): string {
+  if (reason === SKIPPED_WHILE_INACTIVE) return t('Lúc đó Orglet không mở hoặc máy đang ngủ, nên lịch chưa chạy.');
+  return tMessage(reason);
 }
 async function copyCommand(command: string) {
   try {
@@ -48,6 +93,25 @@ async function copyCommand(command: string) {
 /** An orglet's face at list size, the way the chat's recipient list shows it, instead of a generic person icon. */
 function WorkerFace({ worker, size }: { worker: Worker; size: 'xxs' | 'xs' }) {
   return <Avatar name={worker.name} seed={worker.id} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size={size} />;
+}
+/** What a schedule's card says about its newest run: its mark and a few words, the words in the mark's colour. */
+export type LastRunOutcome = { label: string; mark: StatusMarkState };
+
+/**
+ * What became of a schedule's newest run, for its card (COD-294). Before this the card only offered "Open latest run",
+ * so a run that failed at night looked the same as one that went well. Changes held for review count as waiting for
+ * the person, since the next run waits for them too.
+ */
+export function lastRunOutcome(task: Pick<Task, 'id' | 'status'>, heldForReview: readonly string[]): LastRunOutcome {
+  const mark = taskStatusMark(task.status, false);
+  if (task.status === 'queued' || task.status === 'running' || task.status === 'pausing') return { label: t('Đang chạy'), mark };
+  if (task.status === 'waiting_input' || task.status === 'waiting_budget') return { label: t('Đang chờ bạn'), mark };
+  if (task.status === 'failed' || task.status === 'interrupted') return { label: t('Cần xem lại'), mark };
+  if (task.status === 'paused') return { label: t('Đã tạm dừng'), mark };
+  if (task.status === 'cancelled') return { label: t('Đã dừng'), mark };
+  if (heldForReview.includes(task.id)) return { label: t('Thay đổi đang chờ bạn xem'), mark: { variant: 'dashed', tone: 'error' } };
+  if (task.status === 'partial') return { label: t('Xong một phần'), mark };
+  return { label: t('Đã xong'), mark };
 }
 /** Which screen of the Routines dialog is showing; the dialog title renders it as a breadcrumb. */
 export type RoutineView = { editing: false } | { editing: true; routine?: Routine };
@@ -65,6 +129,31 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
     const worker = workspace.workers.find(entry => entry.id === item.task.workerId);
     return worker ? <WorkerFace worker={worker} size="xxs" /> : <UserRound size={14} aria-hidden="true" />;
   };
+  /** The newest run's outcome, when that run is still a chat here. */
+  const lastRun = (item: Routine) => {
+    const task = item.lastTaskId ? workspace.tasks.find(entry => entry.id === item.lastTaskId) : undefined;
+    return task ? lastRunOutcome(task, workspace.heldForReview) : undefined;
+  };
+  /** An hourly schedule's runs so far today, in its own time zone (COD-288); other cadences run at most once a day. */
+  const runsToday = (item: Routine) => {
+    if (item.schedule.frequency !== 'hours' || triggerOf(item).kind !== 'schedule') return 0;
+    return workspace.routineToday?.[item.id]?.runs ?? 0;
+  };
+  const spentToday = (item: Routine) => workspace.routineToday?.[item.id]?.spentMicros ?? 0;
+  /** The newest quiet run Tacet announced (COD-303), so the card says why an hourly schedule spoke up. */
+  const lastAnnounced = (item: Routine) => {
+    let newest: Task | undefined;
+    for (const task of workspace.tasks) {
+      if (task.routineId !== item.id || !task.attention?.notified) continue;
+      if (!newest || task.attention.decidedAt > newest.attention!.decidedAt) newest = task;
+    }
+    return newest;
+  };
+  const shownOnCard = workspace.routines.some(item => item.notice && tMessage(item.notice.reason) === error);
+  const deleteSchedule = async (item: Routine) => {
+    await orglet.call('deleteRoutine', { id: item.id });
+    toast(t('Đã xóa lịch'), 'success', item.name);
+  };
   return <div className="form">
           {!workspace.routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p></div>}
     <div className="routine-list">
@@ -72,6 +161,7 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
         const trigger = triggerOf(item);
         const TriggerIcon = TRIGGER_ICONS[trigger.kind];
         const summary = triggerSummary(item);
+        const announced = lastAnnounced(item)?.attention;
         return <section key={item.id} className="routine-card" aria-label={t('Lịch {0}', [item.name])}>
         <div className="routine-head">
           <span className="routine-icon" aria-hidden="true"><TriggerIcon size={18} /></span>
@@ -89,37 +179,71 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
                 whichever way it is set, because the state is what aria-checked says. */}
             <Switch checked={item.enabled} disabled={busy} label={t('Bật lịch')}
               onChange={enabled => void action(() => orglet.call('saveRoutine', { id: item.id, name: item.name, enabled, schedule: item.schedule, ...(item.trigger ? { trigger: item.trigger } : {}), task: item.task }))} />
+            {/* Deleting asks inside the menu, beside the card, not in a centred dialog (COD-283). The past runs are
+                chats and stay, named after the schedule. */}
+            <RowMenu className="routine-menu" label={t('Tùy chọn lịch {0}', [item.name])} icon={EllipsisVertical} disabled={busy}
+              items={[{ label: t('Xóa lịch'), icon: Trash, danger: true, onSelect: () => void action(() => deleteSchedule(item)),
+                confirm: { question: t('Xóa lịch {0}? Các lần chạy trước vẫn là chat, tìm lại được trong Tìm kiếm.', [item.name]), label: t('Xóa') } }]} />
           </div>
         </div>
         <ul className="routine-meta">
           {trigger.kind === 'schedule' && <li><Globe size={14} aria-hidden="true" />{item.schedule.timeZone}</li>}
-          {trigger.kind === 'schedule' && item.enabled && <li><CalendarDays size={14} aria-hidden="true" />{t('Lần tới {0}', [formatRoutineTime(item.nextDueAt, item.schedule.timeZone)])}</li>}
+          {trigger.kind === 'schedule' && item.enabled && <li><CalendarDays size={14} aria-hidden="true" />{t('Lần tới {0}', [formatRoutineTime(nextRunAt(item, workspace.routineToday?.[item.id]?.day), item.schedule.timeZone)])}</li>}
           <li>{assigneeFace(item)}{assignee(item)}</li>
           <li><Wallet size={14} aria-hidden="true" />{t('{0} mỗi lần', [formatMoney(item.task.budgetMicros)])}</li>
+          {/* The day so far (COD-288): an hourly schedule's quiet runs collect here instead of a toast each, and a
+              cap shows what today's runs used of it. */}
+          {runsToday(item) > 0 && <li><History size={14} aria-hidden="true" />{runsToday(item) === 1 ? t('1 lần chạy hôm nay') : t('{0} lần chạy hôm nay', [runsToday(item)])}</li>}
+          {/* Why an hourly schedule spoke up (COD-303): when Tacet flagged a run, and its rating behind the line. */}
+          {announced && <li title={t('Lịch hằng giờ thường im lặng khi xong. Tacet chấm câu trả lời này {0}% đáng chú ý nên đã báo bạn.', [Math.round(announced.score * 100)])}><BellRing size={14} aria-hidden="true" />{t('Tacet đã báo {0}', [flaggedWhen(announced.decidedAt, item.schedule.timeZone)])}</li>}
+          {item.schedule.dailyCapMicros !== undefined && <li><Gauge size={14} aria-hidden="true" />{t('Hôm nay {0} / {1}', [formatMoney(spentToday(item)), formatMoney(item.schedule.dailyCapMicros)])}</li>}
           {/* A schedule with no sources says nothing about them, rather than "0 sources" (COD-258). */}
-          {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{t('{0} nguồn', [item.task.sourceIds.length])}</li>}
+          {item.task.sourceIds.length > 0 && <li><FileText size={14} aria-hidden="true" />{item.task.sourceIds.length === 1 ? t('1 nguồn') : t('{0} nguồn', [item.task.sourceIds.length])}</li>}
+          {item.workspace && <li title={workspaceLevelNames[workspaceLevelOf(item.workspace.permissions)]}><FolderOpen size={14} aria-hidden="true" /><span className="routine-meta-folder">{item.workspace.folderName}</span></li>}
         </ul>
         <p className="routine-brief"><MessageSquareText size={14} aria-hidden="true" /><span>{item.task.brief}</span></p>
-        {item.pending && <div className="routine-alert" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>
-          <h4>{t('Lần chạy bị lỡ')}</h4>
-          <p>{tMessage(item.pending.reason)}</p>
-          <p className="muted">{t('Lần bị lỡ {0}. Nhiều lần lỡ gộp thành một lần chạy bù.', [formatRoutineTime(item.pending.dueAt, item.schedule.timeZone)])}</p>
+        {/* A miss is news, not an error (COD-283): which run, when, why in plain words, and what catching up does. */}
+        {item.pending && <div className="routine-alert" role="status"><CalendarX2 size={16} aria-hidden="true" /><div>
+          <h4>{t('Lỡ lần chạy lúc {0}', [formatRoutineTime(item.pending.dueAt, item.schedule.timeZone)])}</h4>
+          <p>{missedReason(item.pending.reason)}</p>
+          <p className="muted">{item.enabled
+            ? t('Chạy bù chạy lịch một lần, dù lỡ bao nhiêu lần. Lần tới vẫn lúc {0}.', [formatRoutineTime(item.nextDueAt, item.schedule.timeZone)])
+            : t('Bật lịch để chạy bù một lần.')}</p>
           <div className="actions">
           <Button disabled={busy || !item.enabled} variant="primary" onClick={() => void action(async () => openTask(await orglet.call('catchUpRoutine', { id: item.id })))}>{t('Chạy bù một lần')}</Button>
           <Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Bỏ qua lần lỡ')}</Button>
         </div></div></div>}
-        {item.notice && <div className="routine-alert" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>
-          <h4>{t('Lịch chưa chạy')}</h4>
-          <p>{tMessage(item.notice.reason)}</p>
-          <p className="muted">{t('Lúc {0}. Tệp đến khi app tắt không được chạy lại.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])}</p>
+        {/* The day's cap reached is not a failure: it says what today used, and when runs start again (COD-288). */}
+        {item.notice?.reason === DAILY_CAP_REACHED && item.schedule.dailyCapMicros !== undefined && <div className="routine-alert" role="status"><Gauge size={16} aria-hidden="true" /><div>
+          <h4>{t('Đã chạm giới hạn chi phí hôm nay')}</h4>
+          <p>{t('Các lần chạy hôm nay đã dùng {0} trong giới hạn {1}, nên lịch bỏ qua các lần còn lại trong ngày.', [formatMoney(spentToday(item)), formatMoney(item.schedule.dailyCapMicros)])}</p>
+          <p className="muted">{t('Lịch chạy lại sau nửa đêm theo giờ {0}.', [item.schedule.timeZone])}</p>
           <div className="actions"><Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Ẩn thông báo')}</Button></div>
         </div></div>}
-        {item.lastTaskId && <Button className="routine-last" disabled={busy} onClick={() => openTask(item.lastTaskId!)}><MessageSquare size={15} />{t('Mở lần chạy gần nhất')}</Button>}
+        {item.notice && item.notice.reason !== DAILY_CAP_REACHED && <div className="routine-alert" role="status"><FolderX size={16} aria-hidden="true" /><div>
+          <h4>{t('Lịch chưa chạy')}</h4>
+          <p>{tMessage(item.notice.reason)}</p>
+          {/* The note keeps the time it first appeared; the same reason again is not written twice (COD-288). */}
+          <p className="muted">{trigger.kind === 'folder'
+            ? t('Lúc {0}. Tệp đến khi app tắt không được chạy lại.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])
+            : t('Từ {0}.', [formatRoutineTime(item.notice.at, item.schedule.timeZone)])}</p>
+          <div className="actions"><Button disabled={busy} onClick={() => void action(() => orglet.call('dismissRoutine', { id: item.id }))}>{t('Ẩn thông báo')}</Button></div>
+        </div></div>}
+        {lastRun(item) && <LastRunButton outcome={lastRun(item)!} disabled={busy} onOpen={() => openTask(item.lastTaskId!)} />}
       </section>;
       })}
     </div>
-    {error && <p role="alert" className="error">{error}</p>}
+    {/* A run that could not start because its folder is gone says so on its card (COD-294); not twice. */}
+    {error && !shownOnCard && <p role="alert" className="error">{error}</p>}
   </div>;
+}
+/** Opens a schedule's newest run and says what became of it, in the colour of its mark (COD-294). */
+function LastRunButton({ outcome, disabled, onOpen }: { outcome: LastRunOutcome; disabled: boolean; onOpen: () => void }) {
+  return <Button className="routine-last" disabled={disabled} onClick={onOpen}>
+    <StatusMark variant={outcome.mark.variant} tone={outcome.mark.tone} label={outcome.label} decorative />
+    <span>{t('Mở lần chạy gần nhất')}</span>
+    <span className="routine-last-outcome" data-tone={outcome.mark.tone}>{outcome.label}</span>
+  </Button>;
 }
 /**
  * The permissions a schedule's task carries: what it had (or the lead's defaults), with the browser reading or not and
@@ -139,10 +263,21 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const [target, setTarget] = useState(initial?.teamId ? `team:${initial.teamId}` : initial?.workerId ?? workspace.workers[0].id);
   const [sources, setSources] = useState<{ id: string; name: string; bytes?: number }[]>((initial?.sourceIds ?? []).map(id => ({ id, name: t('Nguồn {0}', [id.slice(0, 8)]) })));
   const [budget, setBudget] = useState(toAmount(initial?.budgetMicros ?? 500_000));
-  const [frequency, setFrequency] = useState(routine?.schedule.frequency ?? 'daily');
+  const [frequency, setFrequency] = useState<ScheduleFrequency>(routine?.schedule.frequency ?? 'daily');
   const [weekday, setWeekday] = useState(routine?.schedule.weekday ?? 1);
   const [time, setTime] = useState(routine?.schedule.time ?? '09:00');
-  const [timeZone, setTimeZone] = useState(routine?.schedule.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+  // An hourly schedule (COD-288): how many hours apart, an optional part of the day, and weekdays only.
+  const [everyHours, setEveryHours] = useState<number>(routine?.schedule.everyHours ?? 1);
+  const [windowOn, setWindowOn] = useState(routine?.schedule.window !== undefined);
+  const [windowFrom, setWindowFrom] = useState(routine?.schedule.window?.from ?? '09:00');
+  const [windowTo, setWindowTo] = useState(routine?.schedule.window?.to ?? '18:00');
+  const [weekdaysOnly, setWeekdaysOnly] = useState(routine?.schedule.weekdaysOnly === true);
+  // The most the schedule's runs may cost in one day, whatever starts them; empty is no cap (COD-288).
+  const [dailyCap, setDailyCap] = useState(routine?.schedule.dailyCapMicros !== undefined ? toAmount(routine.schedule.dailyCapMicros) : '');
+  const systemZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [timeZone, setTimeZone] = useState(routine?.schedule.timeZone ?? systemZone);
+  // Built once per editor: about four hundred zones, each with its offset now. The saved zone stays in the list.
+  const [zoneChoices] = useState(() => timeZoneChoices(systemZone, timeZone, new Date()));
   const [enabled, setEnabled] = useState(routine?.enabled ?? true);
   const initialTrigger = routine ? triggerOf(routine) : undefined;
   const [triggerKind, setTriggerKind] = useState<RoutineTriggerKind>(initialTrigger?.kind ?? 'schedule');
@@ -156,9 +291,16 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   // A weekly "check what changed on the web" needs web search as much as the browser; a search never asks anyone,
   // so an unattended run may use it like a chat can (dogfood, 2026-09-26).
   const [web, setWeb] = useState((initial?.toolCapabilities ?? []).includes('network.web'));
+  // The schedule's own working folder (COD-294): picked here at the level chosen here, and approved by saving.
+  // `workFolder.granted` is the widest level the picker was opened at, so a higher one asks for the folder again.
+  const savedWorkspace = routine?.workspace;
+  const [workFolder, setWorkFolder] = useState<{ folderId: string; name: string; granted: WorkspaceLevel } | undefined>(savedWorkspace
+    ? { folderId: savedWorkspace.folderId, name: savedWorkspace.folderName, granted: workspaceLevelOf(savedWorkspace.permissions) } : undefined);
+  const [workLevel, setWorkLevel] = useState<WorkspaceLevel>(savedWorkspace ? workspaceLevelOf(savedWorkspace.permissions) : 'none');
+  const [review, setReview] = useState(savedWorkspace?.review ?? true);
   const browser = useBrowserState();
-  const zoneInput = useRef<HTMLInputElement>(null);
-  const zoneError = error.startsWith('Timezone');
+  const nameInput = useRef<HTMLInputElement>(null);
+  const zoneError = error === INVALID_ZONE();
   const team = workspace.teams.find(team => `team:${team.id}` === target);
   useEffect(() => {
     let cancelled = false;
@@ -171,7 +313,18 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const providers = [...new Set(workers.map(worker => worker.provider).filter(provider => provider !== 'demo'))];
   const destination = providers.length ? t('đến {0}', [providers.map(providerLabel).join(t(' và '))]) : t('ở chế độ Demo');
   // Leaving asks for confirmation only when something differs from what the editor opened with.
-  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`), web]);
+  const snapshot = JSON.stringify([name, brief, target, sources.map(source => source.id), budget, frequency, weekday, time, timeZone, enabled, triggerKind, folder?.folderId, browserLevel, browserProfile, browserSites.map(entry => `${entry.decision}:${entry.site}`), web, workFolder?.folderId, workLevel, review, everyHours, windowOn, windowFrom, windowTo, weekdaysOnly, dailyCap]);
+  const budgetMicros = toMicros(budget);
+  const capMicros = dailyCap.trim() ? toMicros(dailyCap) : undefined;
+  // The schedule as it would be saved; the hourly fields go only with an hourly schedule.
+  const draftSchedule: Schedule = {
+    frequency, weekday, time, timeZone,
+    ...(frequency === 'hours' ? { everyHours: everyHours as Schedule['everyHours'], ...(windowOn ? { window: { from: windowFrom, to: windowTo } } : {}), ...(weekdaysOnly ? { weekdaysOnly: true } : {}) } : {}),
+    ...(capMicros !== undefined && Number.isSafeInteger(capMicros) ? { dailyCapMicros: capMicros } : {}),
+  };
+  const windowInvalid = frequency === 'hours' && windowOn && windowFrom >= windowTo;
+  const capInvalid = capMicros !== undefined && (!Number.isSafeInteger(capMicros) || capMicros < 1000 || (Number.isSafeInteger(budgetMicros) && capMicros < budgetMicros));
+  const ceiling = Number.isSafeInteger(budgetMicros) && budgetMicros > 0 && !windowInvalid ? costCeiling(draftSchedule, triggerKind, budgetMicros, draftSchedule.dailyCapMicros) : '';
   // The permissions the saved task carries: what it had, with the web and the browser as chosen here. A schedule
   // that never had either keeps carrying none, so saving it again changes nothing.
   const leadProvider = (workspace.workers.find(worker => worker.id === (team?.synthesizerId ?? target)) ?? workspace.workers[0]).provider;
@@ -179,6 +332,27 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
   const trigger: RoutineTrigger | undefined = triggerKind === 'folder'
     ? folder && { kind: 'folder', folderId: folder.folderId, folderName: folder.name }
     : { kind: triggerKind };
+  const workingFolder: RoutineWorkspace | null = workFolder && workLevel !== 'none'
+    ? { folderId: workFolder.folderId, folderName: workFolder.name, permissions: permissionsForLevel(workLevel), review: team ? false : review }
+    : null;
+  const editsFolder = workLevel === 'write' || workLevel === 'execute';
+  /**
+   * A level for the working folder, the way a chat's folder control works (COD-291): the first folder, or a level wider
+   * than the one it was picked at, opens the native picker at that level; a narrower one keeps the folder. Cancelling
+   * the picker leaves everything as it was.
+   */
+  const chooseWorkLevel = async (level: WorkspaceLevel, pickAgain = false) => {
+    if (level === 'none') { setWorkLevel('none'); return; }
+    const within = workFolder && workspaceLevels.indexOf(level) <= workspaceLevels.indexOf(workFolder.granted);
+    if (within && !pickAgain) { setWorkLevel(level); return; }
+    setBusy(true); setError('');
+    try {
+      const picked = await orglet.pickRoutineWorkspace(permissionsForLevel(level));
+      if (!picked) return;
+      setWorkFolder({ folderId: picked.folderId, name: picked.name, granted: level });
+      setWorkLevel(level);
+    } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
+  };
   const pickFolder = async () => {
     setBusy(true); setError('');
     try {
@@ -187,12 +361,21 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   };
   const initialSnapshot = useRef(snapshot);
+  // A new schedule starts at its name. Without this, focus stayed on the button the Create button turned into,
+  // "Back to schedules" (COD-283).
+  useEffect(() => { if (!routine) nameInput.current?.focus(); }, [routine]);
   useEffect(() => { onDirty(snapshot !== initialSnapshot.current); }, [snapshot, onDirty]);
   useEffect(() => () => onDirty(false), [onDirty]);
   return <form className="form routine-editor" onSubmit={async event => {
     event.preventDefault(); setError('');
-    if (triggerKind === 'schedule' && !TimeZone.safeParse(timeZone).success) { setError(t('Timezone không hợp lệ. Dùng tên như Asia/Ho_Chi_Minh hoặc UTC.')); zoneInput.current?.focus(); return; }
+    if (triggerKind === 'schedule' && !TimeZone.safeParse(timeZone).success) {
+      setError(INVALID_ZONE());
+      event.currentTarget.querySelector<HTMLElement>('[data-field="timeZone"]')?.focus();
+      return;
+    }
     if (!trigger) { setError(t('Chọn thư mục để lịch theo dõi.')); return; }
+    if (triggerKind === 'schedule' && windowInvalid) { setError(t('Giờ bắt đầu của khung giờ phải trước giờ kết thúc.')); return; }
+    if (capInvalid) { setError(t('Giới hạn mỗi ngày cần ít nhất bằng giới hạn mỗi lần chạy.')); return; }
     setBusy(true);
     try {
       // Saving is the permission (user, 2026-09-19). The tick that used to ask again said nothing the act of
@@ -201,15 +384,17 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       // the worker, skill, team or model has changed since, and a restored backup comes back off and unapproved.
       // An event trigger still carries the time fields, valid ones, so switching back to the clock keeps them.
       const zone = TimeZone.safeParse(timeZone).success ? timeZone : Intl.DateTimeFormat().resolvedOptions().timeZone;
-      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { frequency, weekday, time, timeZone: zone }, trigger, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers,
+      // An event trigger keeps an hourly schedule's valid fields too; a window that does not fit is dropped.
+      const schedule = windowInvalid ? { ...draftSchedule, window: undefined } : draftSchedule;
+      await orglet.call('saveRoutine', { ...(routine ? { id: routine.id } : {}), name, enabled, schedule: { ...schedule, timeZone: zone }, trigger, workspace: workingFolder, task: { workerId: team?.synthesizerId ?? target, ...(team ? { teamId: team.id } : {}), brief, sourceIds: sources.map(source => source.id), excludedSources: initial?.excludedSources ?? [], budgetMicros: toMicros(budget), consent: providers.length > 0, providerScopes: providers,
         ...(toolCapabilities ? { toolCapabilities } : {}), ...(browserLevel === 'read' ? { browser: { profileId: browserProfile, sites: browserSites } } : {}) } });
       saved();
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   }}>
 
     <section className="routine-group" aria-labelledby="routine-group-job">
-      <h4 id="routine-group-job">{t('Công việc')}</h4>
-      <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><Input value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
+      <h4 id="routine-group-job">{t('Việc cần làm')}</h4>
+      <label><FieldLabel icon={CalendarClock} required>{t('Tên lịch')}</FieldLabel><Input ref={nameInput} value={name} onChange={event => setName(event.target.value)} required maxLength={80} placeholder={t('Ví dụ: Review sáng thứ hai')} /></label>
       <label><FieldLabel icon={MessageSquare} required>{t('Brief lặp lại')}</FieldLabel><Textarea rows={4} value={brief} onChange={event => setBrief(event.target.value)} required maxLength={16000} /></label>
       <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={target} onChange={value => { setTarget(value); }} options={[...workspace.workers.map(worker => ({ value: worker.id, label: worker.name, group: t('Tí'), icon: <WorkerFace worker={worker} size="xs" /> })), ...workspace.teams.map(team => ({ value: `team:${team.id}`, label: team.name, group: t('Hội'), icon: <RosterAvatars workers={teamRoster(team, workspace.workers)} max={2} /> }))]} />
       <div className="routine-sources">
@@ -234,13 +419,38 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       ]} />
       {triggerKind === 'schedule' && <>
         <div className="field-grid">
-          <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as typeof frequency); }} options={[{ value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> }, { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> }]} />
+          <Select label={<FieldLabel icon={Repeat} required>{t('Tần suất')}</FieldLabel>} value={frequency} onChange={value => { setFrequency(value as ScheduleFrequency); }} options={[
+            { value: 'daily', label: t('Hằng ngày'), icon: <Sun size={16} /> },
+            { value: 'weekdays', label: t('Ngày thường (T2–T6)'), icon: <Briefcase size={16} /> },
+            { value: 'weekly', label: t('Hằng tuần'), icon: <CalendarRange size={16} /> },
+            { value: 'hours', label: t('Theo giờ'), icon: <Timer size={16} /> },
+          ]} />
           {frequency === 'weekly' && <Select label={<FieldLabel icon={CalendarDays} required>{t('Ngày trong tuần')}</FieldLabel>} value={String(weekday)} onChange={value => { setWeekday(Number(value)); }} options={weekdays.map((day, index) => ({ value: String(index), label: day }))} />}
-          <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><Input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>
-          <label><FieldLabel icon={Globe} required>Timezone</FieldLabel><Input ref={zoneInput} value={timeZone} onChange={event => { setTimeZone(event.target.value); if (zoneError) setError(''); }} required maxLength={100} placeholder="Asia/Ho_Chi_Minh" aria-invalid={zoneError || undefined} aria-describedby={zoneError ? 'routine-zone-error' : undefined} data-flash={zoneError ? 1 : undefined} /></label>
+          {frequency === 'hours'
+            ? <Select label={<FieldLabel icon={Timer} required>{t('Cách nhau')}</FieldLabel>} value={String(everyHours)} onChange={value => { setEveryHours(Number(value)); }} options={EVERY_HOURS_CHOICES.map(hours => ({ value: String(hours), label: everyHoursInWords(hours) }))} />
+            : <label><FieldLabel icon={Clock} required>{t('Giờ chạy')}</FieldLabel><Input type="time" value={time} onChange={event => setTime(event.target.value)} required /></label>}
+          <Select label={<FieldLabel icon={Globe} required>{t('Múi giờ')}</FieldLabel>} value={timeZone} field="timeZone" menuMinWidth={300} invalid={zoneError} describedBy={zoneError ? 'routine-zone-error' : undefined}
+            onChange={value => { setTimeZone(value); if (zoneError) setError(''); }}
+            options={zoneChoices.map(zone => ({ value: zone.value, label: zone.label, detail: zone.offset || undefined, group: zone.system ? t('Máy này') : zone.region || t('Khác') }))} inlineDetail />
         </div>
         {zoneError && <p id="routine-zone-error" role="alert" className="error">{error}</p>}
-        <p className="muted">{t('Chỉ chạy khi Orglet đang mở; các lần lỡ gộp thành một lần chạy bù.')}</p>
+        {/* An hourly schedule may keep to part of the day and to weekdays (COD-288). Each is on or off, so a switch. */}
+        {frequency === 'hours' && <div className="routine-hours">
+          <SwitchField checked={windowOn} onChange={setWindowOn}
+            description={windowOn ? t('Lần đầu lúc giờ bắt đầu, lần cuối trước giờ kết thúc.') : t('Chạy suốt ngày, từ nửa đêm.')}>
+            <FieldLabel icon={Clock}>{t('Chỉ trong khung giờ')}</FieldLabel>
+          </SwitchField>
+          {windowOn && <div className="field-grid">
+            <label><FieldLabel icon={Clock} required>{t('Từ')}</FieldLabel><Input type="time" value={windowFrom} onChange={event => setWindowFrom(event.target.value)} aria-invalid={windowInvalid || undefined} required /></label>
+            <label><FieldLabel icon={Clock} required>{t('Đến')}</FieldLabel><Input type="time" value={windowTo} onChange={event => setWindowTo(event.target.value)} aria-invalid={windowInvalid || undefined} required /></label>
+          </div>}
+          <SwitchField checked={weekdaysOnly} onChange={setWeekdaysOnly} description={t('Thứ hai đến thứ sáu.')}>
+            <FieldLabel icon={Briefcase}>{t('Chỉ ngày thường')}</FieldLabel>
+          </SwitchField>
+        </div>}
+        <p className="muted">{frequency === 'hours'
+          ? t('Chỉ chạy khi Orglet đang mở. Đến giờ mà lần trước chưa xong thì bỏ qua giờ đó.')
+          : t('Chỉ chạy khi Orglet đang mở; các lần lỡ gộp thành một lần chạy bù.')}</p>
       </>}
       {triggerKind === 'folder' && <div className="routine-folder">
         <PanelHeading level={3} title={<FieldLabel icon={FolderOpen} required>{t('Thư mục theo dõi')}</FieldLabel>}>
@@ -258,6 +468,33 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
     <section className="routine-group" aria-labelledby="routine-group-limits">
       <h4 id="routine-group-limits">{t('Giới hạn & quyền')}</h4>
       <label><FieldLabel icon={Wallet} required>{t('Giới hạn mỗi lần chạy')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={budget} onChange={setBudget} required /></label>
+      {/* The ceiling is said before saving (COD-288), and a lower daily cap can be set under it. */}
+      <div className="routine-cap">
+        <label><FieldLabel icon={Gauge}>{t('Giới hạn mỗi ngày')}</FieldLabel><MoneyInput type="number" min="0" step="any" value={dailyCap} onChange={setDailyCap} placeholder={t('Không giới hạn')} invalid={capInvalid} aria-describedby="routine-cap-ceiling" /></label>
+        {ceiling && <p id="routine-cap-ceiling" className="muted">{ceiling}</p>}
+      </div>
+      {/* The schedule's own folder (COD-294): the chat's folder levels and native picker, saved and approved with the
+          schedule. Without it a scheduled run has no folder, whatever the orglet's chat was given. */}
+      <div className="routine-workspace">
+        <Select label={<FieldLabel icon={FolderOpen}>{t('Thư mục làm việc')}</FieldLabel>} value={workLevel} disabled={busy || !providers.length}
+          onChange={value => void chooseWorkLevel(value as WorkspaceLevel)}
+          options={workspaceLevels.map(level => ({ value: level, label: workspaceLevelNames[level] }))} />
+        {workFolder && workLevel !== 'none' && <p className="routine-folder-name"><Folder size={15} aria-hidden="true" /><span title={workFolder.name}>{workFolder.name}</span>
+          <button type="button" className="text-link" disabled={busy} aria-label={t('Đổi thư mục làm việc {0}', [workFolder.name])} onClick={() => void chooseWorkLevel(workLevel, true)}>{t('Đổi')}</button></p>}
+        <p className="muted">{workLevel === 'none'
+          ? t('Không có thư mục, mỗi lần chạy chỉ có brief và nguồn.')
+          : workLevel === 'execute'
+            ? t('Mỗi lần chạy làm trên bản sao riêng của thư mục. Lệnh chạy không có mạng.')
+            : t('Mỗi lần chạy làm trên bản sao riêng của thư mục.')}</p>
+        {editsFolder && <SwitchField checked={team ? false : review} onChange={setReview} disabled={busy || Boolean(team)}
+          description={team
+            ? t('Hội áp dụng thay đổi của từng Tí ngay khi Tí đó xong, vì Tí sau làm tiếp trên các tệp đó.')
+            : review
+              ? t('Thay đổi chờ trong chat của lần chạy đến khi bạn bấm Áp dụng. Lần chạy sau đợi đến lúc đó.')
+              : t('Thay đổi vào thư mục ngay khi lần chạy xong.')}>
+          <FieldLabel icon={FileDiff}>{t('Xem trước khi áp dụng')}</FieldLabel>
+        </SwitchField>}
+      </div>
       <SwitchField checked={web} onChange={setWeb} disabled={!providers.length}
         description={t('Tìm qua {0}, đọc trang web công khai.', [WEB_SEARCH_PROVIDER_NAMES[workspace.webSearchProvider]])}>
         <FieldLabel icon={Globe}>{t('Đọc và tìm kiếm web')}</FieldLabel>
@@ -276,7 +513,7 @@ function RoutineEditor({ routine, draft, workspace, saved, back, onDirty }: { ro
       {/* Where the data goes is worth saying; it just is not worth asking about twice, since saving is the
           permission (user, 2026-09-19). It stays as a plain line rather than a tick. */}
       {enabled && <p className="muted">{sources.length > 0
-        ? t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, destination])
+        ? sources.length === 1 ? t('Mỗi lần chạy gửi brief và nguồn này {0}, trong giới hạn trên.', [destination]) : t('Mỗi lần chạy gửi brief và {0} nguồn này {1}, trong giới hạn trên.', [sources.length, destination])
         : t('Mỗi lần chạy gửi brief này {0}, trong giới hạn trên.', [destination])}</p>}
       <p className="muted">{browserLevel === 'read' ? t('Đổi Tí, skill, hội, model, hồ sơ hay danh sách trang thì cần lưu lịch lại.') : t('Đổi Tí, skill, hội hay model thì cần lưu lịch lại.')}</p>
     </section>

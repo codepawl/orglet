@@ -44,6 +44,7 @@
 
   /* States. These carry meaning, so they stay distinguishable in both themes. */
   --org-error: #a82626;
+  --org-error-ink: #fff;
   --org-success: #2e7a32;
   --org-working: #9a7b2f;
   --org-warning: #9a6700;
@@ -87,6 +88,7 @@
   --org-primary: #ececec;
   --org-primary-text: #171717;
   --org-error: #ffaaaa;
+  --org-error-ink: #3a0d0d;
   --org-success: #8fd48a;
   --org-working: #d4b45a;
   --org-warning: #d4a72c;
@@ -109,6 +111,7 @@
     --org-primary: #ececec;
     --org-primary-text: #171717;
     --org-error: #ffaaaa;
+    --org-error-ink: #3a0d0d;
     --org-success: #8fd48a;
     --org-working: #d4b45a;
     --org-warning: #d4a72c;

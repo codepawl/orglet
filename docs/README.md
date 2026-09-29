@@ -26,6 +26,7 @@ One short page per part of the app, in the words on screen.
 | [orglets-and-crews.md](orglets-and-crews.md) | Create an orglet or a crew, how a crew turn runs, group chats, `@` tags, replies, reactions |
 | [connections.md](connections.md) | Claude Code, Codex, Cursor Agent and Gemini CLI on this computer, API keys, Ollama, Demo, model IDs, cost limits |
 | [chat-guide.md](chat-guide.md) | Attach files, reports as documents, the trace of what an orglet did, diffs, Details, schedules, what is running and queued, notifications |
+| [viewing-and-editing-files.md](viewing-and-editing-files.md) | Open a chat's files, edit text and code with find and replace, mark up images and PDFs, save an edit as a new version, Ask about this |
 | [permissions-and-learning.md](permissions-and-learning.md) | Permission switches and the working folder, memory, knowledge and the Library, self-improvement, app-change proposals |
 | [settings.md](settings.md) | Every settings tab: appearance, chat, connections, costs, backup and erase, About and updates |
 | [cli.md](cli.md) | The `orglet` terminal command: install, chat in the terminal, send and read from scripts, colours, exit codes, how it talks to the app |
@@ -46,6 +47,7 @@ What the app does today. Use the words on screen.
 | [memory.md](memory.md) | A worker remembers its chats: how it writes memory, what reaches a run, where you correct it |
 | [self-improvement.md](self-improvement.md) | A worker proposes one sentence for its own instructions after repeated feedback; the card, the click, Undo |
 | [routines.md](routines.md) | Schedules, missed runs, and catch-up (one pending, not a backlog) |
+| [decisions.md](decisions.md) | Tacet on this computer: the one-time download, how it runs, which quiet schedule runs it announces, the permission hints under the message box, and who answers in a group chat |
 | [recovery.md](recovery.md) | Where the database lives, upgrades, and rollback |
 | [technical-guide.md](technical-guide.md) | Run the app, connect providers and harnesses, limits, checks |
 

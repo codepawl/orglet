@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react';
 import { cn } from '../cn';
 import './Button.css';
 
-export type ButtonVariant = 'primary' | 'ghost' | 'outline';
+export type ButtonVariant = 'primary' | 'ghost' | 'outline' | 'danger';
 export type ButtonSize = 'default' | 'icon';
 
 /**

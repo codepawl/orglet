@@ -7,17 +7,24 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import type { Team, Worker } from '../../apps/desktop/src/shared/contracts';
 import { INVALID_PLAN_ERROR, MISSING_PLAN_ERROR, UNASSIGNED_PLAN_ERROR } from '../../apps/desktop/src/shared/contracts';
 import type { ModelAdapter } from '../../apps/desktop/src/core/adapters/openai';
+import { ProviderRequestError } from '../../apps/desktop/src/core/adapters/opencode';
 import { nextTeamMessage } from '../../apps/desktop/src/shared/live-task';
+import { translateMessage } from '../../apps/desktop/src/shared/i18n';
+import { en, enGB } from '../../apps/desktop/src/shared/locales/en';
 import { isPlanRequest, memberIdsFromPlanPrompt, planReply } from './team-plan';
+import { hasVietnamese } from './vietnamese';
 
 let directory: string; let store: Store; let core: CoreService;
 let failReviewer: boolean; let blockedFirstMember: boolean; let memberCalls: number;
+/** What the reviewer's provider throws when failReviewer is set. */
+let reviewerError: Error;
 let planMode: 'all' | 'first' | 'invalid' | 'fail' | 'dependent' | 'leadCombines' | 'leadOwnJob'; let calls: string[]; let planBodies: string[]; let bodies: string[]; let live: number; let peak: number;
 const COMBINING_BRIEF = 'Combine the others\' results into one short final answer with links';
 const LEAD_OWN_BRIEF = 'Read the attention paper yourself and summarise its method';
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orglet-team-')); store = new Store(join(directory, 'state.sqlite'));
   failReviewer = false; blockedFirstMember = false; memberCalls = 0;
+  reviewerError = new Error('Injected failure');
   planMode = 'all'; calls = []; planBodies = []; bodies = []; live = 0; peak = 0;
   const adapter: ModelAdapter = { async request(messages, tools) {
     if (isPlanRequest(tools)) {
@@ -50,7 +57,7 @@ beforeEach(async () => {
     bodies.push(messages.map(message => String(message.content)).join('\n'));
     try {
       await new Promise(resolve => setTimeout(resolve, 10));
-      if (failReviewer && system.includes('Check whether the source evidence')) throw new Error('Injected failure');
+      if (failReviewer && system.includes('Check whether the source evidence')) throw reviewerError;
       if (blockedFirstMember && memberCalls++ === 0) return { calls: [{ id: 'blocked-report', name: 'submit_report', arguments: JSON.stringify({
         title: 'Blocked', summary: 'Could not create the product brief.', findings: [], limitations: ['Required deliverable is missing.'], assignmentOutcome: 'blocked',
       }) }], usage: { input: 500, output: 100 } };
@@ -133,6 +140,43 @@ it('keeps a blocker report without unlocking a dependent assignment', async () =
   expect(members[1].status).toBe('interrupted');
   expect(detail.artifacts.some(artifact => artifact.runId === members[1].id)).toBe(false);
   expect(detail.task.status).not.toBe('completed');
+});
+/**
+ * Checks the crew answer's notes on unfinished roles the way the chat shows them: through tMessage, which is
+ * translateMessage with the active dictionary. Vietnamese stays as the core wrote it; English keeps no Vietnamese.
+ */
+function expectUnfinishedRoles(taskId: string, vietnamese: string[], english: string[]) {
+  const detail = store.detail(taskId);
+  const synthesis = detail.runs.find(run => run.stage === 'synthesis')!;
+  const limitations = detail.artifacts.find(artifact => artifact.runId === synthesis.id)!.report.limitations;
+  expect(limitations).toEqual(expect.arrayContaining(vietnamese));
+  expect(limitations.map(limitation => translateMessage(null, limitation))).toEqual(limitations);
+  for (const dictionary of [en, enGB]) {
+    const translated = limitations.map(limitation => translateMessage(dictionary, limitation));
+    expect(translated).toEqual(expect.arrayContaining(english));
+    expect(translated.filter(hasVietnamese)).toEqual([]);
+  }
+}
+it('says in English why a blocked role and the role waiting on it did not finish', async () => {
+  planMode = 'dependent';
+  blockedFirstMember = true;
+  const { taskId } = await setup();
+  expectUnfinishedRoles(taskId, [
+    'Role chưa hoàn tất: Source researcher: Phần việc bị chặn; xem báo cáo đã lưu.',
+    'Role chưa hoàn tất: Evidence reviewer: Phần việc đang chờ kết quả từ phần việc chưa hoàn tất.',
+  ], [
+    'Unfinished roles: Source researcher: Assignment blocked; see the saved report.',
+    'Unfinished roles: Evidence reviewer: This assignment is waiting for unfinished prerequisite work.',
+  ]);
+});
+it('says in English why a rate-limited role did not finish, including the provider it names', async () => {
+  failReviewer = true;
+  // A provider's own refusal, as a custom connection raises it; the runner words a rate limit with the provider's name.
+  reviewerError = new ProviderRequestError('429 Too Many Requests');
+  const { taskId } = await setup();
+  expectUnfinishedRoles(taskId,
+    ['Role chưa hoàn tất: Evidence reviewer: OpenAI đang tạm giới hạn vì có quá nhiều yêu cầu. Thử lại sau ít phút.'],
+    ['Unfinished roles: Evidence reviewer: OpenAI is limiting requests because too many were sent. Try again in a few minutes.']);
 });
 it('sequential members receive only already committed results from their task', async () => {
   const template = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;

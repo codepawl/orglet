@@ -3,7 +3,8 @@ import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import type { ModelAdapter } from '../../apps/desktop/src/core/adapters/openai';
 import type { Run, Task, Team, Workspace, Worker } from '../../apps/desktop/src/shared/contracts';
-import { runningCount, runningListsTask, type RunningItem } from '../../apps/desktop/src/shared/running';
+import { runningCount, runningListsTask, waitingForPersonCount, type RunningItem } from '../../apps/desktop/src/shared/running';
+import { pausedAfter } from '../../apps/desktop/src/shared/paused-turn';
 import { crewWaits } from '../../apps/desktop/src/core/orchestration/crew-waits';
 import { taskStatusMark } from '../../apps/desktop/src/renderer/components/StatusMark';
 import { isPlanRequest, planReply } from './team-plan';
@@ -88,7 +89,7 @@ function expectSidebarAgrees() {
   const listed = new Set(core.running().map(item => item.taskId));
   for (const task of store.all<Task>('tasks')) {
     const mark = taskStatusMark(task.status, true);
-    const drawnAsActive = mark.variant === 'busy' || (mark.variant === 'dashed' && mark.tone === 'muted');
+    const drawnAsActive = mark.variant === 'busy' || mark.variant === 'paused';
     if (task.status !== 'waiting_input') expect(drawnAsActive).toBe(listed.has(task.id));
     expect(runningListsTask(task)).toBe(listed.has(task.id));
   }
@@ -179,10 +180,10 @@ describe('provider queue', () => {
 });
 
 describe('crew queue', () => {
-  async function crewOfThree() {
+  async function crewOfThree(workflow: Team['workflow'] = 'parallel') {
     const template = await core.command('createTemplate', { templateId: 'research-review', provider: 'openai' }) as Team;
     // The lead works as a third member, so a parallel crew has one member more than its two member slots.
-    const team = await core.command('saveTeam', { ...template, workflow: 'parallel', memberIds: [...template.memberIds, template.synthesizerId] }) as Team;
+    const team = await core.command('saveTeam', { ...template, workflow, memberIds: [...template.memberIds, template.synthesizerId] }) as Team;
     await core.command('settings', { theme: 'system', connectionLimitMicros: 5_000_000, providerConcurrency: 4 });
     const taskId = await core.command('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Review', sourceIds: [], consent: true, budgetMicros: 1_000_000 }) as string;
     return { team, taskId };
@@ -220,6 +221,51 @@ describe('crew queue', () => {
     expect(core.running()).toEqual([]);
   });
 
+  it('says whose results each member of a sequential crew waits for (COD-257)', async () => {
+    const { team, taskId } = await crewOfThree('sequential');
+    openPlan();
+    await until(() => gates.length === 1);
+    const names = team.memberIds.map(workerId => store.get<Worker>('workers', workerId).name);
+    // One member at a time, and each works from the results of every member before it, so that is what it waits for.
+    const working = itemsOf(taskId);
+    expect(working.filter(item => item.state === 'running').map(item => item.worker.name)).toEqual([names[0]]);
+    expect(working.filter(item => item.state === 'queued').map(item => [item.worker.name, item.wait])).toEqual([
+      [names[1], { kind: 'teammates', names: [names[0]] }],
+      [names[2], { kind: 'teammates', names: [names[0], names[1]] }],
+      [store.get<Worker>('workers', team.synthesizerId).name, { kind: 'members' }],
+    ]);
+    openNextGate();
+    await until(() => gates.length === 1 && itemsOf(taskId).some(item => item.worker.name === names[1] && item.state === 'running'));
+    expect(itemsOf(taskId).filter(item => item.state === 'queued').map(item => [item.worker.name, item.wait])).toEqual([
+      [names[2], { kind: 'teammates', names: [names[1]] }],
+      [store.get<Worker>('workers', team.synthesizerId).name, { kind: 'members' }],
+    ]);
+    openNextGate();
+    await until(() => gates.length === 1 && itemsOf(taskId).some(item => item.worker.name === names[2] && item.state === 'running'));
+    openNextGate();
+    await until(() => gates.length === 1 && itemsOf(taskId).some(item => item.stage === 'synthesis' && item.state === 'running'));
+    openNextGate();
+    await until(() => !core.teams.isActive(taskId));
+    expect(statusOf(taskId)).toBe('completed');
+  });
+
+  it('names the member whose step came last when a crew pauses, not the next one waiting (COD-287)', async () => {
+    const { team, taskId } = await crewOfThree('sequential');
+    openPlan();
+    await until(() => gates.length === 1);
+    const names = team.memberIds.map(workerId => store.get<Worker>('workers', workerId).name);
+    await core.command('pause', { id: taskId });
+    openNextGate();
+    await until(() => statusOf(taskId) === 'paused' && !core.teams.isActive(taskId));
+    const detail = store.detail(taskId);
+    // The members after the first and the combining step never started, yet a pause marks them paused as well.
+    expect(detail.runs.filter(run => run.status === 'paused').length).toBeGreaterThanOrEqual(3);
+    expect(pausedAfter(detail.runs, detail.events)?.snapshot.worker.name).toBe(names[0]);
+    expect(itemsOf(taskId).map(item => [item.state, item.worker.name])).toEqual([['paused', names[0]]]);
+    expect(waitingForPersonCount(core.running())).toBe(1);
+    expectSidebarAgrees();
+  });
+
   it('cancels a crew turn whose members are still queued', async () => {
     const { taskId } = await crewOfThree();
     openPlan();
@@ -244,6 +290,9 @@ describe('crew queue', () => {
       ['Lead', { kind: 'members' }],
     ]);
     expect(crewWaits([{ workerId: 'b', dependsOn: ['a'] }], new Set(['a']), runs, synthesis, 5)[0].reason).toEqual({ kind: 'crew_slot', ahead: 0 });
+    // In a sequential crew the members before it count as teammates to wait for, until they deliver.
+    expect(crewWaits([{ workerId: 'c' }], new Set(['a']), runs, synthesis, 5, ['a', 'b', 'c'])[0].reason).toEqual({ kind: 'teammates', names: ['Reviewer'] });
+    expect(crewWaits([{ workerId: 'c' }], new Set(['a', 'b']), runs, synthesis, 5, ['a', 'b', 'c'])[0].reason).toEqual({ kind: 'crew_slot', ahead: 0 });
   });
 });
 

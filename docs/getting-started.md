@@ -15,16 +15,18 @@ Orglet is early. Expect rough edges, and check answers against your own sources 
 
 ## 1. Get the app
 
-You need **Windows** or **macOS**. Linux is later. You do not need an Orglet login.
+Use **Windows** or **macOS** (Apple silicon). An experimental Linux x64 ZIP is also available. You do not need an Orglet login.
 
 ### From a GitHub Release
 
-The [latest release](https://github.com/codepawl/orglet/releases/latest) carries a Windows **Setup.exe** (installs per user and updates itself) and a **ZIP** (unzip and run; does not update itself).
+The [latest release](https://github.com/codepawl/orglet/releases/latest) carries a Windows **Setup.exe** (installs per user and updates itself) and a **ZIP** (unzip and run; does not update itself). Release 0.7.2 also includes a signed, notarized Apple silicon macOS ZIP and an experimental Linux x64 ZIP.
 
 | If you use | Do this |
 |---|---|
-| Windows | Run Setup. SmartScreen may show **Windows protected your PC** while the signing certificate is new: check that it names **Nguyen Xuan An** as the publisher, then **More info** → **Run anyway**. Details: [user guide → Install](user-guide.md#install). |
-| macOS | Unzip `Orglet.app`. It is not a GitHub Release asset yet; use a CI ZIP or a local make. Gatekeeper may warn on an unsigned build: right-click → **Open**. Details: [macos-packaging.md](macos-packaging.md). |
+| Windows | Run Setup. SmartScreen may show **Windows protected your PC** while the signing certificate is new: check that it names **Open Source Developer Xuan An Nguyen** as the publisher, then **More info** → **Run anyway**. Details: [user guide → Install](user-guide.md#install). |
+| macOS | Download the Apple silicon ZIP from the release, unzip `Orglet.app` and move it to Applications. The 0.7.2 release is signed, notarized and stapled. There is no Intel Mac download yet. Details: [macos-packaging.md](macos-packaging.md). |
+
+| Linux x64 | Download the experimental ZIP, unzip it and run the `Orglet` binary. CI passed a desktop smoke on Ubuntu; daily desktop use is not verified. There are no automatic updates. See [linux-packaging.md](linux-packaging.md). |
 
 ### From source
 
@@ -59,7 +61,14 @@ The side buttons on a mouse, or Alt+Left and Alt+Right, go back and forward thro
 2. Type a short message in the box at the bottom.
 3. Send it.
 
-You get a labelled sample reply. Demo does not call a model and does not read files. That is enough to see the layout. The line under the message box says the chat is on Demo; its **Change model** link opens the orglet's settings on the **Model** field.
+You get a labelled sample reply. Demo does not call a model and does not read files. That is enough to see the layout. The line under the message box says the chat is on Demo, with a **Connect a model** button:
+
+- If nothing is connected yet, it opens **Settings** → **API connections**. Add a key or a custom connection there, then close Settings. The orglet's settings open next, with that connection already chosen.
+- If something is already connected (a signed-in harness, a saved key, a custom connection), it opens the orglet's settings straight away, with the first one that can run chosen.
+
+Check the **Model** and **Model ID** fields and choose **Save orglet**. The chat header shows the new connection at once.
+
+The orglet's settings are also in the chat's **⋯** menu, as **Orglet settings** (**Crew settings** in a crew's chat). **Chat settings** in the same menu renames the chat, changes who answers it and sets its cost limit.
 
 To start a new conversation later, open **⋯** next to **Details** and choose **Archive**. The next message on that worker starts a fresh chat. Search still finds the old one.
 
@@ -73,7 +82,7 @@ When you want real answers, pick one path. Do not paste keys into chat.
 2. Open **Settings** → **Local harnesses**.
 3. Check the row: **not installed**, **found on disk**, **signed in (ready)**, or **sign-in error**. **Found on disk is not ready.**
 4. If it is not signed in, copy the login command from that row and run it, then choose **Rescan**. Orglet does not switch to Demo when sign-in fails.
-5. Open Researcher (or create a worker with **+** next to **Workers**). In **Worker settings**, set **Model** to that harness. Choose **Save worker**.
+5. In Researcher's chat, choose **Connect a model** (or **⋯** → **Orglet settings**). Set **Model** to that harness if it is not the one already chosen. Choose **Save orglet**.
 
 Cost follows that tool's plan, not an Orglet API bill.
 
@@ -81,7 +90,7 @@ Cost follows that tool's plan, not an Orglet API bill.
 
 1. Open **Settings** → **API connections**.
 2. Turn on the provider. Paste the key and choose **Save key**, or choose **From file**.
-3. Open the worker. Set **Model** to that provider. Pick a model from the list or type an ID. Choose **Save worker**.
+3. Close Settings. If you started from **Connect a model**, the orglet's settings open with that provider chosen; otherwise open them from the chat's **⋯** → **Orglet settings** and set **Model** to that provider. Pick a model from the list or type an ID. Choose **Save orglet**.
 
 Keys are encrypted on this computer. The app's interface never reads a saved key back. Backups do not include keys.
 

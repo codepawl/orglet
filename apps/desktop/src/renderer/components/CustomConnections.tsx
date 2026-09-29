@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
-import { ArrowDownToLine, ArrowUpFromLine, KeyRound, Link2, Pencil, Plus, Tag, Trash2 } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, KeyRound, Link2, Pencil, Plus, RefreshCw, Tag, Trash2 } from 'lucide-react';
 import type { Connections } from '../../shared/contracts';
 import {
   baseUrlHost, checkBaseUrl, connectionPricing, customProviderId, MAX_CUSTOM_CONNECTIONS, MAX_PRICE_MICROS_PER_MILLION,
   type CustomConnection, type CustomConnectionPrice,
 } from '../../shared/custom-connections';
-import { pricingLabel } from '../customConnections';
+import { connectionTestOutcome, pricingLabel } from '../customConnections';
 import { toAmount, toMicros } from './money';
 import { Input } from '@codepawl/orglet-ui';
 import { AnchoredPopover } from './AnchoredPopover';
@@ -62,7 +62,7 @@ type Act = (action: () => Promise<string | void>, about?: string) => Promise<voi
 
 /**
  * Custom OpenAI-compatible connections in Settings → API connections (COD-242): one row per connection with its
- * address and whether a key is saved, a menu to edit, drop the key or delete it, and a small form beside the trigger
+ * address and whether a key is saved, a menu to test it (COD-292), edit it, drop the key or delete it, and a small form beside the trigger
  * to add or change one. The key goes to main only; this component never learns more than "a key is saved".
  */
 export function CustomConnectionsSection({ connections, keys, busy, act, onConnections }: {
@@ -105,6 +105,14 @@ function CustomConnectionRow({ connection, hasKey, busy, act, onConnections }: {
     modelLists.invalidate();
     return t('Đã xóa API key của {0}', [connection.name]);
   }, connection.name);
+  // Asks the server for its model list again: the same request a picker makes, so a pass means the orglet can reach it.
+  const test = () => void act(async () => {
+    const result = await orglet.call('modelList', { provider, refresh: true });
+    modelLists.set(provider, result);
+    const outcome = connectionTestOutcome(connection.name, result);
+    if (!outcome.ok) throw new Error(outcome.text);
+    return outcome.text;
+  }, connection.name);
   const remove = () => void act(async () => {
     await orglet.call('deleteCustomConnection', { id: connection.id });
     onConnections(await orglet.connections());
@@ -121,6 +129,7 @@ function CustomConnectionRow({ connection, hasKey, busy, act, onConnections }: {
     </div>
     <div className="setting-control">
       <RowMenu label={t('Kết nối {0}', [connection.name])} items={[
+        { label: t('Kiểm tra kết nối'), icon: RefreshCw, onSelect: test },
         { label: t('Chỉnh sửa'), icon: Pencil, onSelect: () => setEditing(true) },
         ...(hasKey ? [{ label: t('Xóa API key'), icon: KeyRound, onSelect: removeKey }] : []),
         { label: t('Xóa kết nối'), icon: Trash2, danger: true, onSelect: remove,

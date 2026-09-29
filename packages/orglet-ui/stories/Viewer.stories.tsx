@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Download, FileCode, FileText, X } from 'lucide-react';
-import { Button, Viewer } from '../src';
+import { ArrowUpRight, Download, FileCode, FileImage, FileText, Pen, Square, X } from 'lucide-react';
+import { Button, ToolbarToggleGroup, Viewer, type ToolbarToggleItem } from '../src';
 
 const meta = {
   title: 'Components/Viewer',
@@ -54,6 +54,31 @@ function DiffViewer() {
     </Viewer>
   </div>;
 }
+
+const markupTools: ToolbarToggleItem[] = [
+  { value: 'pen', label: 'Pen', icon: <Pen size={16} aria-hidden />, shortcut: 'P' },
+  { value: 'arrow', label: 'Arrow', icon: <ArrowUpRight size={16} aria-hidden />, shortcut: 'A' },
+  { value: 'rectangle', label: 'Rectangle', icon: <Square size={16} aria-hidden />, shortcut: 'R' },
+];
+
+function EditingViewer() {
+  const [open, setOpen] = useState(true);
+  const [tool, setTool] = useState('arrow');
+  return <div style={{ padding: 24 }}>
+    <Button type="button" variant="outline" onClick={() => setOpen(true)}>Mark up the picture</Button>
+    <Viewer open={open} onClose={() => setOpen(false)} title="screenshot.png" icon={<FileImage size={16} aria-hidden />}
+      meta="Image, 240 KB" closeLabel="Close" closeIcon={<X size={16} aria-hidden />}
+      actions={<Button type="button" variant="primary">Save as new version</Button>}
+      toolbar={<div role="toolbar" aria-label="Markup" style={{ display: 'contents' }}>
+        <ToolbarToggleGroup label="Tool" items={markupTools} value={tool} onValueChange={setTool} />
+      </div>}>
+      <div style={{ ...page, height: 320, display: 'grid', placeItems: 'center' }}>The picture being marked up</div>
+    </Viewer>
+  </div>;
+}
+
+/** An editing mode: the tools in their own row under the toolbar, which stays put while the content scrolls. */
+export const WithTools: Story = { render: () => <EditingViewer /> };
 
 /** Without meta or actions the toolbar keeps only the close button and the centred name. */
 export const TitleOnly: Story = { render: () => <DiffViewer /> };

@@ -6,12 +6,13 @@ import { Store, id } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import type { ModelAdapter, ModelReply } from '../../apps/desktop/src/core/adapters/openai';
-import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
+import type { Routine, Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 import { commands } from '../../apps/desktop/src/shared/contracts';
 import { liveWorkerTask } from '../../apps/desktop/src/shared/live-task';
 import { turnMessageId } from '../../apps/desktop/src/shared/message-interactions';
-import { FORWARD_TEXT_CHARS, forwardBrief, type ForwardResult } from '../../apps/desktop/src/shared/forward';
+import { chatHeadline, FORWARD_TEXT_CHARS, forwardBrief, type ForwardResult } from '../../apps/desktop/src/shared/forward';
 import { forwardOptions, forwardPreview, forwardSummary } from '../../apps/desktop/src/renderer/forward';
+import { sendToOptions } from '../../apps/desktop/src/renderer/sendTo';
 import { t } from '../../apps/desktop/src/renderer/i18n';
 
 /*
@@ -239,7 +240,51 @@ describe('forwarding a message', () => {
   });
 });
 
+describe('naming a chat that began with a forward (COD-285)', () => {
+  const titleOf = (taskId: string) => store.workspace().tasks.find(item => item.id === taskId)?.title;
+
+  it('goes by what was forwarded, never by the prompt text around it or the note', async () => {
+    const [researcher, lan] = await orglets();
+    const origin = await chat(researcher, 'Find the numbers');
+    // Dogfood round 5: the chat was titled `Forwarded from the chat "Writer", written by…`, or after the note.
+    const result = await forward({ taskId: origin, messageId: firstAnswer(origin).id, note: 'Please tighten this', targets: [{ kind: 'worker', id: lan.id }] });
+    const target = result.sent[0].taskId;
+    expect(chatHeadline(task(target))).toBe('The answer, with a detail worth passing on.');
+    await settled(target);
+    expect(titleOf(target)).toBe('The answer, with a detail worth passing on');
+  });
+
+  it('keeps that name with automatic titles off, also after the next message', async () => {
+    const [researcher, lan] = await orglets();
+    const origin = await chat(researcher, 'Find the numbers');
+    await core.command('settings', { ...store.workspace(), autoTitles: false });
+    const result = await forward({ taskId: origin, messageId: turnMessageId(origin, 0), targets: [{ kind: 'worker', id: lan.id }] });
+    const target = result.sent[0].taskId;
+    await settled(target);
+    expect(titleOf(target)).toBeUndefined();
+    expect(chatHeadline(task(target))).toBe('Find the numbers');
+    await core.command('reviseTask', { taskId: target, brief: 'Thanks', ...scope });
+    await settled(target);
+    expect(titleOf(target)).toBe('Find the numbers');
+    // An ordinary chat still goes by its first message.
+    expect(chatHeadline(task(origin))).toBe('Find the numbers');
+  });
+});
+
 describe('the forward picker’s places', () => {
+  it('tells a schedule’s runs apart by the schedule they came from (COD-285)', async () => {
+    const [researcher] = await orglets();
+    const first = await chat(researcher, 'Write today’s standup note');
+    const second = await chat(researcher, 'Write today’s standup note');
+    const workspace = store.workspace();
+    const routineId = id();
+    const tasks = workspace.tasks.map(item => item.id === first || item.id === second ? { ...item, routineId } : item);
+    const routines = [{ id: routineId, name: 'Daily note' } as Routine];
+    const rows = sendToOptions({ ...workspace, tasks, routines }, 5).filter(option => option.group === 'recent' && [first, second].includes(option.target.id));
+    expect(rows).toHaveLength(2);
+    expect(rows.every(option => option.detail === t('lịch · {0}', ['Daily note']))).toBe(true);
+  });
+
   it('leaves out the chat the message is in, joins an orglet with its main chat, and marks the ones that cannot take it', async () => {
     const [researcher, lan] = await orglets();
     const origin = await chat(researcher, 'Find the numbers');

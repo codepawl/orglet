@@ -46,7 +46,17 @@ Ctrl+N focuses the current worker or team chat (it does not create a new session
 
 Each section's header has an edit (pencil) button beside **+**. It turns that section's select mode on: every row shows a checkbox where its status mark was, clicking a row picks it instead of opening its chat, and the pencil becomes a check (Done). Outside select mode, Ctrl-click (Cmd on macOS) picks or unpicks a row and Shift-click selects exactly the rows from the last Ctrl-picked one to it, replacing what was picked before; a plain click still opens the chat, and drops the selection. A selection belongs to one section: picking an orglet drops any crews picked. Right-clicking an orglet or a crew opens its menu at the pointer.
 
-While anything is picked, a bar between the list and the footer shows the count with **Archive**, **Delete** (which asks first, naming the count) and a clear button. Archive and delete run the same commands as a row's menu, one row at a time, and end in one toast: the count that went through, or the names of the rows that did not. Esc clears the selection and leaves select mode. Nothing is stored: the selection is forgotten when the app restarts, and a row that leaves the list (archived, deleted, another workspace) leaves the selection.
+While anything is picked, a bar between the list and the footer shows the count with **Archive**, **Delete** (which asks first, naming the count) and a clear button. Archive and delete run the same commands as a row's menu, one row at a time, and end in one toast: the count that went through, or the names of the rows that did not; an archive toast carries **Undo**, which restores every row it archived. Esc clears the selection and leaves select mode. Nothing is stored: the selection is forgotten when the app restarts, and a row that leaves the list (archived, deleted, another workspace) leaves the selection.
+
+### Archiving from the sidebar
+
+A row menu's archive, restore and delete answer in a toast, never in the banner of the chat that happens to be open (COD-286). Archiving a chat, an orglet or a crew ends in a toast with **Undo**; Undo of a chat that was on screen brings it back on screen. Restoring a chat ends in a toast with **Open**.
+
+An orglet or crew that something still depends on is refused, and the toast says what to change first (`removalBlocker` in `apps/desktop/src/shared/removal.ts`, which the core's refusal and the renderer both read): every crew an orglet is in ("Remove Scout from the crews Launch crew and Quick crew first", three or more counted and listed), with **Open** for the first of those crews; otherwise the enabled schedule that still runs it, which the window catches before asking the core and names in a note with **View schedules** (COD-283); otherwise the last orglet, or work still running, with no action.
+
+Archived chats wait at the end of the section their row came from, in a collapsed **Archived chats (N)** list under the section's **Archived (N)** orglets or crews (`archivedChatsIn` in `apps/desktop/src/renderer/sidebarChats.ts`): a crew's main chat and schedule runs under Crews; an orglet's main chat, side threads and schedule runs under Orglets; group chats under Group chats, which then shows even with no open group chat. Most recently archived first. Each row has the face of whose chat it was, its name (a schedule run's is the schedule's), a tooltip with the whole name and what it was ("Side thread with Scout"), the same days-left pill as an archived orglet, and **Restore** and **Delete permanently**, which asks with that kind of chat's own question. One list per section rather than one under every orglet keeps the tree short, and it sits where archived orglets and crews already are. The rows do not open the chat; restore it first.
+
+A chat opened from search that sits past a list's **Show N more** opens that list and is marked as the chat on screen, and the sidebar scrolls to it. Side thread and schedule run rows carry their whole name in a tooltip.
 
 ### Group chat from a selection
 
@@ -77,6 +87,18 @@ There is no separate `threads` table.
 
 Find-or-create lives in `apps/desktop/src/shared/live-task.ts` (`liveWorkerTask`, `liveTeamTask`, `nextWorkerMessage`, `nextTeamMessage`). Every one of them skips a row with `sideOf`, so everything built on them (the worker row, the empty-chat composer, the worker dialog's Permissions tab, the `orglet` terminal command) keeps meaning the main chat. The renderer uses it when you click a worker or team and when you send from the empty composer. `createTask` itself is unchanged, so routines and explicit extra rows can still insert their own records. Group chats (`assignees`) stay reachable from search; they are not the primary sidebar, and are started from a selection as described above.
 
+### When the open chat closes
+
+A refresh reads the workspace and the connections, and beside them the open chat's own detail, folder grant and working-copy recovery. The chat's reads are settled one by one and never fail the refresh (COD-282): a chat archived, deleted or erased since refuses some of them, and the sidebar still has to follow. `openChatRefresh` in `apps/desktop/src/renderer/openChat.ts` sorts them against the fresh workspace:
+
+| The workspace says | The view |
+|---|---|
+| The chat is not listed (deleted, or erased with the chat history) | It closes to its crew's or orglet's main chat while that one is listed, otherwise the first orglet, then the first crew (`closedChatDestination`). The history entry is rewritten, not added to. No error is shown. |
+| The chat is archived | It stays open to read. Its grant counts as no folder, since `workspaceAccess` refuses a closed chat and that refusal is expected. |
+| Anything else | A read that failed is shown in the banner; the copy on screen stays. |
+
+A chat that is open but takes no new message is **read-only** (`chatClosure`): the chat itself is archived, or the one orglet or crew it belongs to was archived or deleted. The follow-up composer is turned off, the add-files button with it, and a line under it says why with **Restore** (the chat, or the orglet or crew) where restoring is possible; chat Details locks the permissions with the same sentence. The header keeps the orglet's or crew's name: an archived one from `archivedWorkers` / `archivedTeams`, a deleted one from the chat's own record (the crew it froze, the orglet its latest run used). A group chat has no single owner and is left to the core. The core refuses the same cases in `reviseTask` (`assertChatOpen`) with the same sentences, so a message from anywhere else (a forward, the `orglet` command) meets the same answer.
+
 ## Side threads
 
 A message sent with **Send in a new thread** (the menu beside Send, or Ctrl+Shift+Enter) from a worker's main chat becomes a side thread ([COD-247](https://linear.app/codepawl/issue/COD-247)). Only a worker's own open main chat can start one: `startSideThread` refuses a crew chat, a group chat, a scheduled run's row, an archived chat and a side thread. The option is not shown in those chats.
@@ -97,7 +119,7 @@ A message sent with **Send in a new thread** (the menu beside Send, or Ctrl+Shif
 
 **The empty chat.** When an orglet's empty chat is on screen, the view switches to a chat only when a new main chat appears (`liveChatToAdopt` in `live-task.ts`, the MCP "adopt a live chat" rule); a side-thread row never qualifies, so nothing typed or sent there follows it into a side thread.
 
-**Finishing.** When a side thread stops working while another chat is on screen, the renderer shows a toast with **Open** (`chatNotices.ts`), which the notice centre keeps and opens the thread from. The answer stays in the side thread.
+**Finishing.** When a side thread stops working while another chat is on screen, the renderer shows a toast with **Open** (`chatNotices.ts`), which the notice centre keeps and opens the thread from. The answer stays in the side thread. Two rules keep this quiet (COD-287). An answer that lands while the open chat is the thread's main chat or a sibling side thread (`besideSideThread`) sends no toast, since its row with the unread mark is right there. And one orglet's answers share a notice group (`sideThreadAnswersGroup`, keyed by the orglet): the new notice counts the answers the group's unread one already stood for, says the total and replaces it (`withNotice` in `notifications.tsx`), so fourteen answers from three orglets are three rows, not fourteen. A side thread that failed keeps its own notice.
 
 ## Forwarding
 
@@ -112,11 +134,11 @@ A message sent with **Send in a new thread** (the menu beside Send, or Ctrl+Shif
 - The window names only the chat and the message. The core reads the text, the author and the files from saved history, as it does for a reply target; `reviseTask` and `startSideThread` refuse a `forwarded` field, so no command can write a forward with made-up content.
 - Only the person forwards. There is no worker tool for it and the `orglet` terminal command has none either.
 
-**Data.** The turn's input (`currentInput`, then the run snapshot's `input`) carries `forwarded` (`ForwardedMessage` in `shared/forward.ts`): the chat and message it came from, that chat's name at the time (the orglet's or crew's name for a main chat, the schedule's for a scheduled run, otherwise the title), who wrote it (`person` or the orglet's name), the text (at most 10 000 characters, cut with a mark), the files it named, and the note. The turn's `brief` is `forwardBrief` of that record: the note, then `Forwarded from the chat "…", written by …:` and the text fenced in `"""`, then the files it named and whether each came along. Every reader of a brief (the model, the history, search, the chat's title) therefore sees the forward without a change of its own. Crew and group runs copy the record into their snapshot input too. A first message that is a forward keeps the record on `currentInput` at revision 0. Backups carry it and refuse a record whose carried file is not one of that turn's files. `@` tags are read from the note only (`ownWords`), so a name tagged inside a forwarded message never changes who answers in a crew or group chat.
+**Data.** The turn's input (`currentInput`, then the run snapshot's `input`) carries `forwarded` (`ForwardedMessage` in `shared/forward.ts`): the chat and message it came from, that chat's name at the time (the orglet's or crew's name for a main chat, the schedule's for a scheduled run, otherwise the title), who wrote it (`person` or the orglet's name), the text (at most 10 000 characters, cut with a mark), the files it named, and the note. The turn's `brief` is `forwardBrief` of that record: the note, then `Forwarded from the chat "…", written by …:` and the text fenced in `"""`, then the files it named and whether each came along. Every reader of a brief (the model, the history, search) therefore sees the forward without a change of its own. The chat's name is the exception ([COD-285](https://linear.app/codepawl/issue/COD-285)): a chat whose first message is a forward goes by the first line of what was forwarded (`chatHeadline`), never by the prompt text around it or by the note, both for the title its first answer gives and for the name shown before it has one. With automatic titles off, that line becomes the title when the next message arrives, so the chat keeps it. Crew and group runs copy the record into their snapshot input too. A first message that is a forward keeps the record on `currentInput` at revision 0. Backups carry it and refuse a record whose carried file is not one of that turn's files. `@` tags are read from the note only (`ownWords`), so a name tagged inside a forwarded message never changes who answers in a crew or group chat.
 
 **Files.** Files are granted per chat, so a forward never widens a chat by itself. The picker lists the files the message had (a person's turn: the files added with it) with a tick each, off by default. A ticked file is attached to the target chat as a new source row for the same file on disk (`Sources.copyFor`): the core first checks it is still there, unchanged and readable by the chat it came from, and the copy has its own id, so revoking it in one chat leaves the other alone. It then sits above the forwarded bubble like any attachment, next to the files the target chat already carries, up to 20 per message. An unticked file travels by name only: the bubble says **Not sent along: …** and the brief says the file was not shared with this chat. A side thread cannot take a carried file, because a side thread never holds a file its main chat does not; the picker turns the ticks off when a side thread is picked and the core refuses the place otherwise.
 
-**Side threads and group chats.** A side thread can be forwarded from and to like any chat, within the rule above; it then answers under its own permissions, never its main chat's wider ones. A group chat is a place under Recent: the forward is a group turn and every orglet answers, unless the note tags some. A forward to an orglet always means its main chat (`liveWorkerTask`), never a side thread; picking a side thread is picking it from Recent, where it says "side thread · <orglet>".
+**Side threads and group chats.** A side thread can be forwarded from and to like any chat, within the rule above; it then answers under its own permissions, never its main chat's wider ones. A group chat is a place under Recent: the forward is a group turn and every orglet answers, unless the note tags some. A forward to an orglet always means its main chat (`liveWorkerTask`), never a side thread; picking a side thread is picking it from Recent, where it says "side thread · <orglet>". A scheduled run says "schedule · <schedule>" there, since every run of a schedule starts with the same message.
 
 **Forward of a forward.** Forwarding a turn that is itself a forward sends the original: its first chat, author, text and file names, without the note that came with it the first time.
 
@@ -160,14 +182,35 @@ User message (inputRevision)
 
 Cancel aborts the whole turn (plan + members + synthesis). Partial success stays `partial`, never silent `completed`. Worker chat is one run with no `stage`.
 
+### The plan as a flow
+
+Once the lead has saved its plan, the crew's answer shows it as a flow diagram ([COD-331](https://linear.app/codepawl/issue/COD-331)): the lead's box, an arrow down, the members' boxes, then the lead's box again for combining the results. Members that can work at the same time sit side by side, with the lines fanning out to them and joining again below. A member that needs another member's result sits in a row under it. In a sequential crew every member has its own row, in the order the crew takes them.
+
+It sits under the name at the top of the crew's answer, folded behind one line such as **Crew plan: 3 orglets at the same time** (or **one after another**, or **in 2 stages** when the rows mix both). It is open while the turn runs, so it updates as each member starts and finishes, and it stays with the turn afterwards as a record. An older turn opens folded.
+
+Each box shows the orglet's face and name, its status mark, and its part in two lines: the task the lead gave it, the lead's note on the plan, or the lead's notes for the final answer. A box whose part is longer than two lines opens to the whole text when clicked. The mark says where that step stands:
+
+| Mark | Meaning |
+|---|---|
+| Dotted ring | Waiting: for the plan, for a teammate's result, or for one of the crew's two member slots. A screen reader hears which teammates it waits for. |
+| Turning ring | Working now. The box's border takes the working colour. |
+| Tick | Done. |
+| `!` | Did not finish (failed or interrupted), or waits for your answer. The box's border turns the error colour. |
+| Two bars | Paused, or waiting for budget. |
+| Faint dotted ring | Cancelled. |
+
+**Where it comes from.** Nothing in the diagram is asked of a model. `crewPlanDiagram` in `apps/desktop/src/shared/crew-plan.ts` reads the turn's saved runs: the plan run's `snapshot.plan` (assignments with `brief` and `dependsOn`, `note`, `synthesisBrief`) and `snapshot.team` (member order and workflow), the latest member run for each assignment (so a part the lead reassigned shows the orglet that took it over), and the synthesis run. The rows follow the same rules as the team runner: a parallel crew places each assignment by its longest chain of `dependsOn`, and a sequential crew takes the first member in crew order whose dependencies have run. A member counts as delivered only when its run completed with a saved result. With more boxes in a row than fit, each shrinks to about 160px and the row then scrolls sideways inside the answer, fading at the edge that has more.
+
+Nothing is drawn while the lead is still planning, when the plan failed, for a plan with one assignment, for an older turn without a saved plan, or in a group chat. Those turns keep the plain progress lines under the name.
+
 While a turn runs, the **Running** view in the footer lists each job: the members at work, and the queued ones with what they wait for (the plan, a teammate's result, one of the two member slots, or the members before the combining step). Stopping any of them is this same Cancel ([What is running](chat-guide.md#what-is-running)).
 
 ## @mentions
 
 In a **team** or **group** chat, type `@` in the composer to pick a worker or `@all`. Tagged names highlight in the message. The team's own name is not offered, because tagging it means what `@all` means; typed by hand it still works, so older messages keep their meaning.
 
-- **Group chat:** only tagged assignees answer that turn. `@all`, the team name, or no tag keeps everyone. A reply to one orglet's answer with no tag in it counts as tagging that orglet, so only it answers; any tag in the message (`@all` included) decides instead, so replying to Writer and asking `@Reviewer` gets Reviewer alone (`groupTurnWorkers` in `core/service.ts`, COD-257).
-- **Team chat:** Demo assigns the tagged members. A live planner is told who you tagged and may still assign others. Untagged messages still assign every member.
+- **Group chat:** only tagged assignees answer that turn. `@all`, the team name, or no tag keeps everyone. A reply to one orglet's answer with no tag in it counts as tagging that orglet, so only it answers; any tag in the message (`@all` included) decides instead, so replying to Writer and asking `@Reviewer` gets Reviewer alone (`groupTurnWorkers` in `core/service.ts`, COD-257). With Tacet downloaded, a message of your own with no tag and no reply is read against each orglet's name, description and instructions; an orglet it rates 0.65 or more answers alone, and anything less keeps everyone. The message then says **Tacet picked *name* to answer** where a reply names its message, the pick is kept on the chat for a retry or a resume, and `@all` asks everyone again. Forwards are never routed ([how it decides](decisions.md#who-answers-in-a-group-chat), COD-305).
+- **Team chat:** Demo assigns the tagged members. A live planner is told who you tagged and may still assign others. Untagged messages still assign every member. Tacet never routes a crew's message: its lead plans the turn.
 
 Unknown `@` text is left as typed and does not change who runs.
 
@@ -185,7 +228,8 @@ Refuse, budget and run errors stay on **this** thread (status copy, **Chi tiết
 - Transcript layers: `apps/desktop/src/core/context/thread.ts`
 - Plan tool / Demo routing: `apps/desktop/src/core/orchestration/runner.ts` (`submit_plan`, `completePlan`)
 - Forwarding: `forwardMessage` in `apps/desktop/src/core/service.ts`, `apps/desktop/src/core/orchestration/forwards.ts`, `apps/desktop/src/shared/forward.ts`, the picker in `apps/desktop/src/renderer/components/ForwardPicker.tsx` and `apps/desktop/src/renderer/forward.ts`
-- Tests: `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`, `tests/integration/thread-context.test.ts`, `tests/integration/mentions.test.ts`, `tests/integration/side-threads.test.ts`, `tests/integration/forward.test.ts`
+- Plan flow diagram: `apps/desktop/src/shared/crew-plan.ts`, `apps/desktop/src/renderer/components/CrewPlanFlow.tsx`
+- Tests: `tests/integration/crew-plan.test.ts`, `tests/integration/team.test.ts`, `tests/integration/live-task.test.ts`, `tests/integration/thread-context.test.ts`, `tests/integration/mentions.test.ts`, `tests/integration/side-threads.test.ts`, `tests/integration/forward.test.ts`
 ## Worker messages
 
 Every saved user turn, completed answer and team message has a stable ID. Reply chooses one of those messages in the current chat; core resolves the ID when the next turn starts and supplies a short, attributed excerpt to the worker. A reply never broadens the worker's sources, workspace access or team assignment. The user can react to any saved message without starting a run. Each person, the user or a worker, has at most one reaction per message: repeating the same request is harmless, adding a different emoji replaces the earlier one, and adding the current one again with `active: false` takes it off (COD-219). The user's reaction on the latest answer is also explained when the next turn starts: the core adds it as a note of its own (`previousAnswerReaction`, with the meaning the reaction's button shows), and the person's message stays exactly as they typed it. A worker may use `react_to_message` only during its assigned run and only for a committed message it can see; this tool does not send a team message or start another worker. Team message bodies and interactions appear in Details.
@@ -206,4 +250,4 @@ Unanswered questions and blockers keep the final task partial. The lead receives
 
 Message-interaction integration fixtures cover API tool calls, reply context, duplicate reactions, wrong-chat and unfinished targets, and backup restoration. The CLI tool bridge advertises the same tool catalog; this does not prove a live signed-in CLI session or its native tool containment. The renderer and packaged app still need manual interaction checks for keyboard and screen-reader behavior.
 
-Chat progress includes each assignment's brief beside its worker and status. Long briefs use a native disclosure: the short description stays visible, and opening it shows the full text. The disclosure works with the keyboard as well as the pointer.
+Chat progress includes each assignment's brief beside its worker and status: in the [flow diagram](#the-plan-as-a-flow) when the turn has a saved plan of two or more parts, otherwise as plain lines. Long briefs open to their full text in both, with the keyboard as well as the pointer.

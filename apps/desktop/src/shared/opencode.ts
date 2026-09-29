@@ -11,6 +11,8 @@
  * so the tables are kept per plan and never inferred from a model name.
  */
 
+import type { HarnessUsageWindow } from './harness';
+
 export type OpenCodePlan = 'opencode-zen' | 'opencode-go';
 export type OpenCodeProtocol = 'chat-completions' | 'responses' | 'messages' | 'google' | 'systemone';
 
@@ -109,6 +111,17 @@ const protocolNames: Record<Exclude<OpenCodeProtocol, 'chat-completions'>, strin
 export const OPENCODE_PLAN_NAMES: Record<OpenCodePlan, string> = {
   'opencode-zen': 'OpenCode Zen',
   'opencode-go': 'OpenCode Go',
+};
+
+/**
+ * How much of its OpenCode Go allowances the saved Go key has used: the five-hour, weekly and monthly limits the Go
+ * docs describe, as the service reports them. `unavailable` says why there are none: no key saved, a key without a Go
+ * subscription, or a read that failed.
+ */
+export type OpenCodeGoUsage = {
+  windows: HarnessUsageWindow[];
+  unavailable?: 'signed_out' | 'unsupported' | 'failed';
+  checkedAt: string;
 };
 
 /** Vietnamese source message for an unsupported model; the renderer translates it with `tMessage`. */

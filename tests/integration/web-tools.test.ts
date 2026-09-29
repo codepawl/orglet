@@ -9,6 +9,7 @@ import { assertToolCall } from '../../apps/desktop/src/core/tools/catalog';
 import { hasCapability } from '../../apps/desktop/src/core/tools/policy';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
+import { RESEARCH_STEP_LIMIT } from '../../apps/desktop/src/core/orchestration/runner';
 import type { Run, Skill, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
 const signal = () => new AbortController().signal;
@@ -316,7 +317,7 @@ describe('web execution permission', () => {
     } finally { store.close(); }
   });
 
-  it('tells a run that keeps calling tools to hand in before the step limit, and it ends with its answer', async () => {
+  it('tells a run that keeps calling tools to hand in once its steps are used, and it ends with its answer', async () => {
     const { store, task, run } = fixture();
     try {
       task.toolCapabilities = ['network.web'];
@@ -334,7 +335,8 @@ describe('web execution permission', () => {
       } }));
       await core.runner.run(task, run);
       expect(store.detail(task.id).task.status).toBe('completed');
-      expect(calls).toBe(15);
+      // Every one of the 24 steps reads a page (COD-257), then the hand-in step answers (COD-289).
+      expect(calls).toBe(RESEARCH_STEP_LIMIT + 1);
       expect(wrapUpToolNames.length).toBeGreaterThan(0);
       expect(wrapUpToolNames.every(name => ['reply', 'submit_report', 'submit_plan'].includes(name))).toBe(true);
       expect(store.detail(task.id).events.some(event => event.message.startsWith('Còn 2 bước'))).toBe(true);

@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { join, win32 } from 'node:path';
 import { z } from 'zod';
+import { RunActivity } from '../shared/run-activity';
+import { CrewPatch, ManagementTarget, OrgletPatch } from './management';
 
 /**
  * The line protocol between the `orglet` command and the running app (COD-234). One JSON request per line, one JSON
@@ -10,6 +12,8 @@ import { z } from 'zod';
 
 /** Written by main on every start, read by the CLI before each request. */
 export const CLI_TOKEN_FILE = 'cli-token';
+/** A terminal command starts only the local backend; `open` explicitly creates the desktop window. */
+export const CLI_BACKGROUND_FLAG = '--orglet-cli-background';
 /** The Unix socket inside the data folder on macOS and Linux. */
 export const CLI_SOCKET_FILE = 'cli.sock';
 /** A request line longer than this is refused and the connection closed. */
@@ -45,12 +49,17 @@ const ScheduleName = z.string().trim().min(1).max(80);
 
 /**
  * Everything the CLI may ask. Anything else, such as granting a folder, touching keys, connections, settings,
- * permissions or backups, or deleting and archiving, has no operation here and is refused. `run` starts a schedule
+ * permissions or backups, or archiving, has no operation here and is refused. Person-driven configuration changes
+ * use a whitelist and revision checks; deletion also requires the displayed full name. `run` starts a schedule
  * that already exists, is switched on and was approved as it is; it cannot create or change one (COD-245).
  */
 export const CliRequest = z.discriminatedUnion('op', [
   z.object({ op: z.literal('status'), token: CliToken }).strict(),
   z.object({ op: z.literal('list'), token: CliToken }).strict(),
+  z.object({ op: z.literal('config'), token: CliToken }).strict(),
+  z.object({ op: z.literal('save-orglet'), token: CliToken, config: OrgletPatch, target: ManagementTarget.optional() }).strict(),
+  z.object({ op: z.literal('save-crew'), token: CliToken, config: CrewPatch, target: ManagementTarget.optional() }).strict(),
+  z.object({ op: z.literal('delete-entity'), token: CliToken, kind: z.enum(['worker', 'team']), target: ManagementTarget, confirmName: ChatName }).strict(),
   z.object({
     op: z.literal('send'),
     token: CliToken,
@@ -58,6 +67,7 @@ export const CliRequest = z.discriminatedUnion('op', [
     message: z.string().trim().min(1).max(16000),
     files: z.array(z.string().min(1).max(32768)).max(MAX_FILES),
     wait: z.boolean(),
+    progress: z.boolean().optional(),
     timeoutSeconds: z.number().int().min(1).max(MAX_WAIT_SECONDS),
   }).strict(),
   z.object({ op: z.literal('read'), token: CliToken, to: ChatName }).strict(),
@@ -76,6 +86,20 @@ export type CliRequestBody = CliRequest extends infer Request ? Request extends 
 
 export type CliErrorCode = 'unauthorized' | 'invalid' | 'too_large' | 'busy' | 'not_found' | 'ambiguous' | 'failed';
 export type CliResponse<T = unknown> = { ok: true; value: T } | { ok: false; code: CliErrorCode; error: string };
+export const CliResponseFrame = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), value: z.unknown() }).strict(),
+  z.object({ ok: z.literal(false), code: z.enum(['unauthorized', 'invalid', 'too_large', 'busy', 'not_found', 'ambiguous', 'failed']), error: z.string() }).strict(),
+]);
+
+export const CliActivity = RunActivity.extend({ name: z.string().max(80), color: z.string().regex(/^#[a-f0-9]{6}$/i).optional() });
+export type CliActivity = z.infer<typeof CliActivity>;
+export const CliProgressFrame = z.object({
+  type: z.literal('progress'),
+  taskId: z.string().min(1).max(100),
+  steps: z.array(CliActivity).max(500),
+  omitted: z.number().int().nonnegative(),
+}).strict();
+export type CliProgressFrame = z.infer<typeof CliProgressFrame>;
 
 export type ChatKind = 'worker' | 'team';
 /**
@@ -95,7 +119,7 @@ export type CliAnswer = { name: string; stage?: string; text: string; createdAt:
 
 export type StatusValue = { version: string; orglets: number; crews: number; running: number; colors?: string[] };
 export type ListValue = {
-  orglets: { name: string; provider: string; model?: string; color?: string }[];
+  orglets: { name: string; provider: string; providerId?: string; model?: string; color?: string; description?: string; billing?: string }[];
   crews: { name: string; lead: string; members: string[]; colors?: string[] }[];
 };
 export type SendValue = {

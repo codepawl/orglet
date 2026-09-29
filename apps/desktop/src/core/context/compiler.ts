@@ -11,6 +11,21 @@ const bytes = (text: string) => Buffer.byteLength(text, 'utf8');
 const normalized = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
 const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []);
 
+/** The notes a frozen context loaded on Tacet's word, so compiling it again loads the same notes (COD-306). */
+export function frozenTacetFits(context: RunContext): Map<string, number> {
+  const fits = new Map<string, number>();
+  for (const entry of context.manifest.loaded) {
+    if (entry.kind === 'knowledge' && entry.because === 'tacet' && entry.id) fits.set(entry.id, entry.fit ?? 1);
+  }
+  return fits;
+}
+
+/** How many words of three letters or more a note shares with the request: 0 means an unpinned note does not load on its own. */
+export function keywordScore(brief: string, item: { title: string; content: string; tags: string[] }): number {
+  const briefWords = words(brief);
+  return [...words(`${item.title} ${item.content} ${item.tags.join(' ')}`)].filter(word => briefWords.has(word)).length;
+}
+
 type Block = { kind: 'team' | 'worker' | 'skill'; id: string; revision: number; heading: string; text: string };
 export type CompiledContext = { system: string; knowledgeMessage: string | null; memoryMessage: string | null; context: RunContext };
 /**
@@ -71,7 +86,7 @@ export function identitySection(input: IdentityInput): string {
  * Builds the provider-neutral prompt in the plan's precedence order and records exactly what was loaded.
  * `candidates` must already be approved and in scope; this function only ranks, deduplicates and bounds them.
  */
-export function compileContext(input: IdentityInput & { brief: string; candidates: RunContext['knowledge']; memories?: MemoryCandidate[] }): CompiledContext {
+export function compileContext(input: IdentityInput & { brief: string; candidates: RunContext['knowledge']; memories?: MemoryCandidate[]; tacetFits?: ReadonlyMap<string, number> }): CompiledContext {
   const identity = identitySection(input);
   const loaded: ContextManifest['loaded'] = [
     { kind: 'platform', hash: fingerprint(PLATFORM_POLICY), bytes: bytes(PLATFORM_POLICY) },
@@ -93,23 +108,25 @@ export function compileContext(input: IdentityInput & { brief: string; candidate
     loaded.push({ kind: block.kind, id: block.id, revision: block.revision, hash: fingerprint(block.text), bytes: bytes(block.text) });
   }
 
-  const briefWords = words(input.brief);
-  const relevance = (item: RunContext['knowledge'][number]) => [...words(`${item.title} ${item.content} ${item.tags.join(' ')}`)].filter(word => briefWords.has(word)).length;
+  // Pinned notes first, then keyword matches by how many words they share, then the notes Tacet said fit (COD-306) by
+  // how sure it was. Tacet's picks come last, so they only fill room the other two left and never push one out.
+  const tacetFits = input.tacetFits ?? new Map<string, number>();
   const ranked = input.candidates
-    .map(item => ({ item, score: relevance(item) }))
-    .sort((a, b) => Number(b.item.pinned) - Number(a.item.pinned) || b.score - a.score || a.item.id.localeCompare(b.item.id));
+    .map(item => ({ item, score: keywordScore(input.brief, item), fit: tacetFits.get(item.id) ?? 0 }))
+    .sort((a, b) => Number(b.item.pinned) - Number(a.item.pinned) || b.score - a.score || b.fit - a.fit || a.item.id.localeCompare(b.item.id));
   const knowledge: RunContext['knowledge'] = [];
   let knowledgeBytes = 0;
-  for (const { item, score } of ranked) {
+  for (const { item, score, fit } of ranked) {
     const skip = (reason: 'duplicate' | 'context_limit' | 'not_relevant') => omitted.push({ kind: 'knowledge', id: item.id, revision: item.revision, reason });
-    if (!item.pinned && score === 0) { skip('not_relevant'); continue; }
+    const because = item.pinned ? 'pinned' : score > 0 ? 'keywords' : fit > 0 ? 'tacet' : undefined;
+    if (!because) { skip('not_relevant'); continue; }
     const key = normalized(item.content);
     if (seen.has(key)) { skip('duplicate'); continue; }
     const size = bytes(item.title) + bytes(item.content);
     if (knowledge.length >= KNOWLEDGE_ITEM_LIMIT || knowledgeBytes + size > KNOWLEDGE_BYTE_LIMIT) { skip('context_limit'); continue; }
     seen.add(key); knowledgeBytes += size;
     knowledge.push({ id: item.id, revision: item.revision, title: item.title, content: item.content, tags: item.tags, hash: item.hash, scope: item.scope, pinned: item.pinned });
-    loaded.push({ kind: 'knowledge', id: item.id, revision: item.revision, hash: item.hash, bytes: size });
+    loaded.push({ kind: 'knowledge', id: item.id, revision: item.revision, hash: item.hash, bytes: size, because, ...(because === 'tacet' ? { fit: Math.round(fit * 1000) / 1000 } : {}) });
   }
 
   // Memories: pinned first, then newest, under a character budget; a line a note already said is not sent twice.

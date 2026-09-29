@@ -34,7 +34,7 @@ Connection readiness comes from stored API/Ollama settings or a detected signed-
 | Teams | Yes | Up to eight members, concurrency two for independent assignments, resource ownership, dependencies, mailbox, lead reassignment and synthesis |
 | Team chat + orchestrator | Yes ([COD-24](https://linear.app/codepawl/issue/COD-24) shell, [COD-25](https://linear.app/codepawl/issue/COD-25) plan→members→report, [COD-26](https://linear.app/codepawl/issue/COD-26) hide task pile; [team-chat.md](team-chat.md)) | Click worker or team → one live `tasks` row; later messages `reviseTask`; sidebar is workers/teams not a task list; synthesizer plans, assigned members run as hidden jobs, one synthesis in the transcript; fail-closed `partial` / named errors; Chi tiết keeps cost/retry/cancel |
 | Provider request concurrency | Yes | Workspace-wide per provider, 1–8 (default 2); queued steps hold no budget reservation |
-| Local dataset checker | Yes | CSV/JSONL/Parquet; schema, counts, ID checks, column-name/row-count/ID-set comparison for two files; fixed SQL, process deadline, retained provenance |
+| Local dataset checker | Yes | CSV/JSONL/Parquet; schema, counts, column kinds with values that do not fit, number ranges and negatives, dates that do not exist, identical rows and a repeated first-column label by row number, ID checks, column-name/row-count/ID-set comparison for two files; fixed SQL, process deadline, retained provenance; a checker process that ends without an answer shows the last lines it printed to stderr |
 | Reviewed knowledge | Yes | Workspace/team/worker scope, immutable revisions, FTS5 keyword search, pins; model proposals and template imports wait for review |
 | Context compiler | Yes | Platform → team → worker → skill → approved knowledge; duplicate removal, 12 items / 16 KB knowledge budget, frozen per-run manifest |
 | Folder intake | Yes | 20 files, 64 MB total, 8 levels, 1,000 entries; excluded-item list |
@@ -96,7 +96,7 @@ Decided in [COD-260](https://linear.app/codepawl/issue/COD-260). Video and audio
 | Any CLI in the core tool loop (folder, crew, web, dataset or MCP runs) | Text through `read_source` | No. Its native tools stay off in the loop, so it has nothing to open an image with |
 | Demo | No | No |
 
-A connection that is not shown an image gets a note in its source list and in any `read_source` answer that says why (this connection, the file type, or the size) and tells it not to guess. The activity line says the same.
+A connection that is not shown an image gets a note in its source list and in any `read_source` answer that says why (this connection, the file type, or the size) and tells it not to guess. The activity line says the same, and the chat's trace counts it next to the files read ("Read 2 files · 1 image not shown to the orglet"), so an answer that claims to have seen the image does not go unchallenged. The line is written when the orglet asks for the image; a run that never asks leaves none yet.
 
 **Why `view_image` stays off for Codex.** That tool opens whatever path the model names, inside the Codex process. The read-only sandbox is about writes; the Codex documentation reachable on 2026-09-26 does not say it confines reads, and a public report shows a read-only Codex reading files outside its folder (reported, not verified here). `--image` attaches exactly the copies Orglet checked, so Codex sees the chat's images and nothing else.
 

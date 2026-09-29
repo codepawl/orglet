@@ -16,6 +16,8 @@ import { orglet } from '../api';
 import { CommandBlock, Skeleton, SkeletonText } from '@codepawl/orglet-ui';
 import { aboutInfo, APP_KEY, changelogs, updateStates } from '../caches';
 import { useCached } from '../prefetch';
+import { restartIntoUpdate } from '../updateRestart';
+import { runningCount } from '../../shared/running';
 
 /** How the build got here, in the words the details line and the copied text use. */
 function installLabel(kind: InstallKind): string {
@@ -66,12 +68,26 @@ function shellWord(name: string): string {
   return /^[\p{L}\p{N}._-]+$/u.test(name) ? name : `"${name.replaceAll('"', '\\"')}"`;
 }
 
+/** A row's line when the shared entry starts another copy of Orglet (COD-296): what it says, then that copy's folder. */
+function otherCopyDescription(sentence: string, folder: string): ReactNode {
+  return <>{sentence} <span className="about-copy-path">{folder}</span></>;
+}
+
 /** What the command row says under its title, for each way this build can offer the command. */
-function commandLineDescription(state: CliInstallState): string {
+function commandLineDescription(state: CliInstallState): ReactNode {
   if (state.mode === 'dev') return t('Lệnh orglet chạy từ bản cài. Trong mã nguồn, thử bằng pnpm orglet khi pnpm dev đang chạy.');
   if (state.mode === 'manual') return t('Thêm thư mục của lệnh vào PATH bằng dòng dưới đây, trong tệp khởi động của shell như ~/.zprofile.');
   if (state.installed) return t('Đã có trong PATH. Mở terminal mới rồi thử lệnh dưới đây.');
+  if (state.otherCopy) return otherCopyDescription(t('Lệnh orglet đang mở một bản Orglet khác:'), state.otherCopy);
   return t('Gửi tin cho Tí và đọc câu trả lời từ terminal. Lệnh chỉ nói chuyện với app đang chạy trên máy này.');
+}
+
+/** The command row's button: take it off PATH, put it on, or point it at this copy instead of another one. */
+function commandLineButton(state: CliInstallState, busy: boolean, toggle: (enabled: boolean) => void): ReactNode {
+  if (state.mode !== 'windows') return null;
+  if (state.installed) return <Button variant="outline" disabled={busy} onClick={() => toggle(false)}><X size={14} />{t('Gỡ khỏi PATH')}</Button>;
+  if (state.otherCopy) return <Button variant="outline" disabled={busy} onClick={() => toggle(true)}>{t('Dùng bản này')}</Button>;
+  return <Button variant="outline" disabled={busy} onClick={() => toggle(true)}><Plus size={14} />{t('Thêm vào PATH')}</Button>;
 }
 
 function commandLineExample(state: CliInstallState, firstOrglet: string | undefined): string {
@@ -103,9 +119,7 @@ function CommandLineRow({ workspace, busy, act }: { workspace: Workspace; busy: 
   // The button centres on the title and description; the command card runs under both, in the text column.
   return <div className="about-command-line">
     <Row title={title} description={state ? commandLineDescription(state) : <Skeleton width="60%" />}>
-      {state?.mode === 'windows' && (state.installed
-        ? <Button variant="outline" disabled={busy} onClick={() => toggle(false)}><X size={14} />{t('Gỡ khỏi PATH')}</Button>
-        : <Button variant="outline" disabled={busy} onClick={() => toggle(true)}><Plus size={14} />{t('Thêm vào PATH')}</Button>)}
+      {state && commandLineButton(state, busy, toggle)}
     </Row>
     {state && <CommandBlock command={commandLineExample(state, workspace.workers[0]?.name)} copyLabel={t('Sao chép lệnh')} copyIcon={<Copy size={14} />} onCopy={copy} />}
   </div>;
@@ -128,6 +142,12 @@ function SendToRow({ busy, act }: { busy: boolean; act: (action: () => Promise<s
     setState(await orglet.setSendTo(enabled));
     return enabled ? t('Đã thêm Orglet vào menu Gửi tới.') : t('Đã gỡ Orglet khỏi menu Gửi tới.');
   }, title);
+  // Switching off here would take the entry from the copy that has it, so this copy only offers to take it over.
+  if (state.otherCopy) {
+    return <Row title={title} description={otherCopyDescription(t('Gửi tới → Orglet đang mở một bản Orglet khác:'), state.otherCopy)}>
+      <Button variant="outline" disabled={busy} onClick={() => toggle(true)}>{t('Dùng bản này')}</Button>
+    </Row>;
+  }
   return <Row id="send-to-label" title={title} description={t('Chọn tệp trong File Explorer, bấm chuột phải rồi chọn Gửi tới → Orglet. Trên Windows 11, mục này nằm trong Hiển thị thêm tùy chọn.')}>
     <Switch checked={state.installed} disabled={busy} labelledBy="send-to-label" onChange={toggle} />
   </Row>;
@@ -185,12 +205,10 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
   act: (action: () => Promise<string | void>, about?: string) => Promise<void>;
 }) {
   // The build, the updater's state and the release list are kept for the session (COD-218): resting on the way
-  // here fetches them, and the tab draws what it has at once. The updater keeps pushing its state; the newest
-  // push wins over the kept copy.
+  // here fetches them, and the tab draws what it has at once. The app keeps the updater's pushes in the same cache
+  // (COD-304), so this row and the button beside Settings always say the same thing.
   const about = useCached(aboutInfo, APP_KEY);
-  const keptUpdate = useCached(updateStates, APP_KEY);
-  const [pushedUpdate, setPushedUpdate] = useState<UpdateState>();
-  const update = pushedUpdate ?? keptUpdate;
+  const update = useCached(updateStates, APP_KEY);
   const changelog = useCached(changelogs, APP_KEY);
   const [changelogBusy, setChangelogBusy] = useState(false);
   const [showOlder, setShowOlder] = useState(false);
@@ -202,13 +220,6 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
     catch (error) { changelogs.set(APP_KEY, { releases: [], fetchedAt: null, stale: true, error: (error as Error).message }); }
     finally { setChangelogBusy(false); }
   }, []);
-  const takeUpdate = (state: UpdateState) => { updateStates.set(APP_KEY, state); setPushedUpdate(state); };
-
-  useEffect(() => {
-    let live = true;
-    const stop = orglet.onUpdate(state => { if (live) takeUpdate(state); });
-    return () => { live = false; stop(); };
-  }, []);
 
   const unsupported = update?.status === 'unsupported';
   const openLink = (link: AboutLink) => void act(async () => { await orglet.openLink(link); }, section);
@@ -217,8 +228,8 @@ export function AboutSettings({ workspace, busy, onAutoUpdate, act }: {
     await orglet.copyText(aboutDetailsText(about, workspace.sqliteVersion, installLabel(about.install)));
     return t('Đã sao chép chi tiết bản cài');
   }, section);
-  const checkNow = () => void act(async () => { takeUpdate(await orglet.checkForUpdates()); }, section);
-  const restart = () => void act(async () => { await orglet.installUpdate(); }, section);
+  const checkNow = () => void act(async () => { updateStates.set(APP_KEY, await orglet.checkForUpdates()); }, section);
+  const restart = () => void act(async () => { await restartIntoUpdate(runningCount(workspace.running ?? [])); }, section);
 
   const detailsLine = about
     ? [`Electron ${about.electron}`, `Chromium ${about.chromium}`, `Node ${about.node}`, `SQLite ${workspace.sqliteVersion}`, `${osName(about.platform)} ${about.osRelease} ${about.arch}`, installLabel(about.install)].join(' · ')

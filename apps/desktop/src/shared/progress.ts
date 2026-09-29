@@ -12,6 +12,8 @@ export type ActivityStep = {
   /** File name, search pattern or tool name. Empty until the harness has sent the step's input. */
   target: string;
   done: boolean;
+  /** The harness explicitly reported a tool error; no result content is carried. */
+  failed?: boolean;
 };
 
 export type HarnessProgress = {

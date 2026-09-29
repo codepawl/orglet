@@ -1,6 +1,7 @@
 import type { Task, Worker, Workspace } from '../shared/contracts';
 import { taskWorkers, teamRoster } from './assignees';
 import { t } from './i18n';
+import { chatHeadline } from '../shared/forward';
 
 /**
  * The places files sent from Explorer can go (COD-246): the most recent chats first, then every orglet and every
@@ -51,18 +52,22 @@ function sideThreadLabel(orgletName: string | undefined): string {
 }
 
 /** `recentCount` recent chats lead the list; the forward picker asks for a few more (COD-257). */
-export function sendToOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | 'teams'>, recentCount = RECENT_CHAT_COUNT): SendToOption[] {
+export function sendToOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | 'teams'> & Partial<Pick<Workspace, 'routines'>>, recentCount = RECENT_CHAT_COUNT): SendToOption[] {
   const recent = recentChats(workspace, recentCount).map((task): SendToOption => {
     const faces = taskWorkers(task, workspace);
-    return {
+    const option: SendToOption = {
       key: `task:${task.id}`,
       group: 'recent',
       target: { kind: 'task', id: task.id },
-      name: task.title?.trim() || task.brief,
+      name: task.title?.trim() || chatHeadline(task),
       faces,
       when: lastTouched(task),
-      ...(task.sideOf ? { sideThread: true as const, detail: sideThreadLabel(faces[0]?.name) } : {}),
     };
+    if (task.sideOf) return { ...option, sideThread: true, detail: sideThreadLabel(faces[0]?.name) };
+    // A schedule's runs share one message, so each says which schedule it came from (COD-285).
+    const routine = task.routineId ? workspace.routines?.find(item => item.id === task.routineId) : undefined;
+    if (routine) return { ...option, detail: t('lịch · {0}', [routine.name]) };
+    return option;
   });
   const orglets = workspace.workers.map((worker): SendToOption => ({
     key: `worker:${worker.id}`,

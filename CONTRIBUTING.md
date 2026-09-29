@@ -42,7 +42,8 @@ The packaged smokes drive a real Electron window and are CI's job after typechec
 | `pnpm build` then `pnpm test:desktop` | A real window, renderer isolation, sources, export, keyboard, history after restart |
 | `pnpm make` then `pnpm test:packaged` | The packaged executable, DuckDB, a crew template with checks, backup and restore |
 | `pnpm test:harness` | Settings → Local harnesses with fixture CLIs; never starts a harness run |
-| `pnpm build` then `pnpm test:cli` | The shipped `orglet` command against the packaged app: send and read with Demo, JSON, a refused token and operation, starting the app; never edits PATH |
+| `pnpm build` then `pnpm test:cli` | The shipped `orglet` command against the packaged app: send and read with Demo, JSON, a refused token and operation, background startup without windows, explicit desktop open and normal app launch; never edits PATH |
+| `pnpm build` then `pnpm test:alignment` | Measures alignment on the main screens at 1200×820 and 740×600 in both themes: icon and text centre lines, text starts in a column, gaps, wrapped or clipped labels, sideways scroll. Run it after any UI change; see the [technical guide](docs/technical-guide.md#alignment-check) |
 | `pnpm test:isolation` (`--packaged` after `pnpm build`) | The Windows sandbox for workspace files and commands; needs a supported Windows host |
 | `pnpm test:routines`, `pnpm test:skills`, `pnpm test:knowledge`, `pnpm test:run-audit`, `pnpm test:findings`, `pnpm test:revisions`, `pnpm test:sidebar`, `pnpm test:i18n`, `pnpm test:custom-connections` | One packaged flow each; see the [technical guide](docs/technical-guide.md#checks-and-packaging) |
 

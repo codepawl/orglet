@@ -1,8 +1,12 @@
 # In a chat
 
-What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
+What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, keep typing from the keyboard, see how much of a plan and of the context is used, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
+
+In an orglet's chat, the model picker in the message box shows the selected model's name. Open it to choose another model for that orglet. Each row shows the maker's logo and the model's name with its version, such as Opus 5.5, as the CLI or provider reports it. When the version is not known, the row shows the short name, such as Opus.
+
+The row marked **Default** is the model that runs when you have not picked one. Choosing it saves no model, so the orglet follows the CLI if its default changes later. The newest model of each family is listed first. Older ones, and models only reachable by their full ID, are under **More models**. The same list appears in the orglet's settings under **Model**, where you can still type any model ID.
 
 ## Attach files
 
@@ -12,7 +16,7 @@ An orglet reads only what you attach to **that** chat, or what is inside the wor
 2. Pick **Files**, or **Folder** for up to 20 supported files from one folder (hidden and generated files are skipped, and the chat lists what was left out).
 3. Write what you want done, then send.
 
-Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed under **Details → Sources**. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages.
+Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed under **Details → Sources**. Files and words you have not sent yet stay on that chat's message box when you open another chat and come back, until you send or remove them; each chat, and each orglet's or crew's new chat, keeps its own. They are still there after Orglet restarts, for example to install an update, and Orglet opens the chat you were in when it closed; erasing chats, sources or everything in **Settings → Data** clears them. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. In the viewer you can edit a text or code file, mark up an image, or mark up a PDF and type notes on it; saving adds a new version to the chat and leaves your file as it was ([Viewing and editing files](viewing-and-editing-files.md)).
 
 What the orglet gets from each kind:
 
@@ -20,13 +24,36 @@ What the orglet gets from each kind:
 - **Images (PNG, JPEG, GIF, WebP, up to 5 MB):** shown to the orglet when its connection can see images. Claude, most OpenAI models, Claude Code and Codex can. When the connection cannot, the orglet tells you instead of guessing. SVG and BMP are never shown. [Which connections see images](capabilities.md#pdfs-and-images).
 - **Video and audio:** preview only. The orglet is told they are there but cannot read them.
 
-Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. A PDF's text is held to the same 256 KB per file: a longer PDF is cut after the last page that fits, and the orglet is told where it stops. CSV, JSONL and Parquet files can also be checked locally under **Details → Sources**: schema, row counts, duplicate and missing IDs, and, for two files, an exact-match accuracy. Demo cannot analyze files; switch **Model** off Demo first.
+Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. A PDF's text is held to the same 256 KB per file: a longer PDF is cut after the last page that fits, and the orglet is told where it stops. CSV, JSONL and Parquet files can also be checked on this computer under **Chat sources → Check data**: rows, columns and empty cells, what each column holds (number, date or text) and its range, identical rows, negative numbers, cells that do not fit their column and dates that do not exist, each named by row number; with an ID column, repeated or missing IDs too. The result opens under the button when the check finishes. Comparing a file with an answer key and the run-log check are under **More checks**. Demo cannot analyze files; switch **Model** off Demo first.
 
 ## Emoji
 
 Type a colon and at least two letters of an emoji's name, such as `:sk`, and a small menu lists the emoji that fit. Arrow keys move through it, Enter or Tab inserts the one highlighted, Escape closes it. A full name such as `:skull:` becomes 💀 as soon as you type the closing colon.
 
 The names are GitHub's, which Slack and Discord mostly share. The menu only opens at the start of the message or after a space or bracket, and only when an emoji matches, so times like `10:30` and links stay as you typed them.
+
+## Keyboard
+
+- After you send, the message box stays ready, so you can type the next message straight away. If a message cannot be sent, it comes back in the box, in front of anything you typed since.
+- After you pick files or a folder with **+**, the cursor is back in the message box.
+- Opening **Details** moves the keyboard into the panel. Its close button or **Escape** puts you back where you were.
+- Closing Settings, a viewer or any other window with **Escape** puts you back on the button that opened it.
+
+## Usage and context
+
+Under the message box, at the right end, a small ring shows how close the chat is to a limit: the orglet's subscription plan (Claude Code or Codex) or the model's context window, whichever is closer. It stays grey until 80%, turns amber from 80%, and red at 100%.
+
+Click the ring to see what it is made of:
+
+- **Context window**: how many tokens the orglet's latest answer sent to the model, out of how many the model holds ("304.3k / 1M (30%)"), and how Orglet trims a long chat. Each message sends up to the last 10 turns word for word; older turns are folded into a short summary.
+- **Plan usage limits**: each allowance of the plan, with how much is used and when it resets, and which account it is. If Orglet could not read fresh numbers, for example because Claude Code's sign-in renews only when it runs, you see the last numbers with their time (**Figures as of 07:05**).
+- **View details** opens **Settings → Harness**.
+
+From 80% of a plan allowance, a line next to the ring says how much is used and when it resets. At 100%, the line says the plan ran out. If another account of the same app has room, the line offers it (**Use Work · 70% left**). Clicking it switches that app to the other account for every orglet, as **Settings → Harness** would. Nothing is sent until you send it.
+
+In a crew or group chat, the ring follows the account closest to its limit among the orglets in the chat, and the details list each app.
+
+The ring shows only what a provider reported. Codex does not report its context use, so a Codex chat shows its plan only. An API model shows the ring once it has answered and its model list gives a context window (OpenRouter today). Nothing shows for Demo, Cursor Agent or Gemini CLI.
 
 ## Side threads
 
@@ -36,7 +63,7 @@ Each orglet has one main chat. Clicking the orglet always opens it. When you wan
 2. Press **Ctrl+Shift+Enter** (Cmd+Shift+Enter on macOS), or click the small arrow next to Send and choose **Send in a new thread**.
 3. You stay in the main chat. A short message says the side thread started; click **Open** to go there, or open it later.
 
-Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. When a side thread answers while you are somewhere else, a message says so with **Open**, and it is also kept in Notifications.
+Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. When a side thread answers while you are away from that orglet's chats, a message says so with **Open**, and it is also kept in Notifications, where one orglet's answers share one row ([Notifications](#notifications)).
 
 What a side thread knows and can do:
 
@@ -45,7 +72,7 @@ What a side thread knows and can do:
 - It has the main chat's permissions: the same switches, the same working folder at the same level, and the same MCP tools allowed. It never gets more. If you turn something off in the main chat, its side threads lose it at once. A side thread that was working with a switch or the folder you turned off stops; an MCP tool you took back asks again the next time it is used. To change permissions, change them in the main chat. An MCP tool that asks in a side thread can only be allowed once there.
 - It counts as its own chat for the **Limit per task**, and it shares the orglet's connection and slots with the main chat.
 
-To use an answer in the main chat, click **Bring into main chat** (the return arrow under the answer). The answer appears in the main chat as a quote, marked with the side thread it came from. Nothing runs when you do this; the orglet reads the quote with the next message you send in the main chat.
+To use an answer in the main chat, click **Bring into main chat** (the quote icon under the answer). The answer appears in the main chat as a quote, marked with the side thread it came from. Nothing runs when you do this; the orglet reads the quote with the next message you send in the main chat.
 
 Side threads are for single orglets. A crew chat and a group chat do not have them yet. Group chats you started by picking several orglets are listed in the sidebar under **Group chats**, newest first, so you can get back to one after opening another chat.
 
@@ -72,6 +99,8 @@ Orglets never forward anything themselves. How it works: [team-chat.md](team-cha
 
 ## Reports as documents
 
+Orglet saves chat answers up to 262,144 characters, including complete HTML or code documents, without cutting them. Structured report summaries still have a 16,000-character limit. HTML in a chat is text; it does not run inside Orglet.
+
 Ask for a report and it arrives as a card, not a wall of text. Open it to read it; **Copy** puts it on the clipboard and **Download** saves it. Whether copy and download give plain text or Markdown is set in **Settings → Chat**. A download of one answer carries its message ID, reply link and reactions; to move a whole conversation, use a backup.
 
 ## What the orglet did
@@ -87,11 +116,21 @@ While an orglet works, a tab docks onto the message box: the faces of the orglet
 
 Afterwards the answer keeps a folded line of the steps ("Read 2 files · Searched 1 time"); open it for the targets. Above it, **Memories used: N** opens the memories the orglet was given ([Memory](memory.md)). An orglet's thinking shows only inside the folded control, only when the model shares it, and is not saved.
 
+While the orglet waits for you, for example on a card asking to click a button on a page, the line under its name in the chat says so ("Waiting for your OK…") and holds still, instead of the step it stopped on.
+
+The chat stays on its newest message while you are there: new text, a card, a window resize or opening **Details** keep the end in view. Scroll up and it stays where you left it; scroll back to the last lines and it follows again. A card that needs you (an approval, a question, a failure or a blocked hand-in) is brought into view once when it appears if you were less than a screen up. Further up, the tab on the message box tells you instead. Sending a message always goes back to the end.
+
+A message that got no answer keeps what happened to it after newer messages, on one line under the orglet's name: "This turn didn’t finish: …" with the error, "This turn was stopped before it answered.", "This turn stopped while it waited for you." Hover the line for a long error in full.
+
 Commands the orglet ran in the latest turn are summed in **Details**, under the goal it worked from, last command first: "Last command exited 0 · earlier: 1 failed." A turn that ran a failing test, fixed the code and ran it again reads that way instead of "1 exited 0, 1 failed". Their full output is in the same panel. Exit 0 means that command finished; it does not mean the task passed.
+
+### When the orglet runs out of steps
+
+Each reply gets a fixed number of steps, where a step is one thing the orglet does, such as a search or a page read: from 6 for a chat with only its files, plus one for each attached file, up to 40 for one with a working folder. Web search and MCP tools get 24. When an orglet has used all its steps and is still working, it gets two more to stop looking things up and write its best answer from what it has. Only that answer reads **Ran out of steps before finishing; this is what it got done.** In a chat with one orglet and no working folder, **Continue** sits next to it while it is the latest message. Continue sends "Continue from where you stopped." as your next message, and the orglet picks up with everything it already searched and read, so it does not read the same pages again. Every step still counts against the chat's spending limit. Crews have no Continue: the crew's answer names the member that ran out of steps instead.
 
 ## Diffs
 
-When a run changed files in its working copy, a line under the answer says **Files changed: 3 · +42 −7**; moves and deletions get their own count, as in **Files changed: 6 · 5 moved or renamed · 1 deleted**. Click it for the diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a folder that is not a Git repository the diff lists what happened to each file (new, changed, moved, renamed, deleted) and the folders created or removed, without lines. In a crew turn each member has its own line, because each works in its own copy.
+When a run changed files in its working copy, a line under the answer says **Changed 3 files · +42 −7** and ends with what happened to them: **Applied**, **Not in your folder yet**, or **Discarded, folder unchanged**. Moves and deletions get their own count, as in **Changed 6 files · 5 moved or renamed · 1 deleted**. Click it for the diff: each changed file with its hunks, the old and new line numbers side by side, and removed and added lines in colour. In a folder that is not a Git repository the diff lists what happened to each file (new, changed, moved, renamed, deleted) and the folders created or removed, without lines. In a crew turn each member has its own line, **Writer changed 1 file · +3 · Applied**, because each works in its own copy. A diff keeps opening after you change the folder's level; once you remove the folder or point the chat at another one, it says it can no longer be opened.
 
 The diff has line-by-line hunks only when the working folder is a Git repository, because the comparison is against the snapshot the copy started from; a plain folder says so instead. Keeping your current files and file conflicts are handled in **Details → Files and processes**. Details: [worker-actions.md](worker-actions.md#where-a-diff-lives).
 
@@ -99,23 +138,23 @@ The diff has line-by-line hunks only when the working folder is a Git repository
 
 An orglet never edits your folder directly. It works in a private copy, and by default its changes wait for you when it finishes:
 
-1. The answer arrives as usual. The line under it reads **Files changed: 3 · +42 −7 · Not in your folder yet · Review**.
+1. The answer arrives as usual. The line under it reads **Changed 3 files · +42 −7 · Not in your folder yet · Review**.
 2. Click the line. The diff opens with **Discard changes** and **Apply** at the top.
-3. To leave some files out, untick them in the list at the top of the diff. **Apply** then reads **Apply 2 of 3**.
+3. To leave some files out, untick them in the list at the top of the diff. **Apply** then reads **Apply 2 of 3**. A new folder follows the files in it: untick its only file and the folder is not made either. A folder the orglet made empty on purpose has its own tick.
 4. Click **Apply**. The line then ends with **Applied**, or **Applied, 1 skipped**. **Discard changes** asks once, then the line ends with **Discarded, folder unchanged**.
 
 Nothing reaches your folder until you click **Apply**. If you edited, moved or deleted a file yourself in the meantime, Apply stops at that file instead of overwriting it; settle it in **Details → Files and processes** with **Keep current files**.
 
 Changes that wait are kept when you close the app. If you send another message before deciding, the orglet goes on in the same copy, so it sees what it did last turn. The earlier line then says **Carried into the next turn**, and the new answer's line covers the changes from both turns.
 
-To have changes applied as soon as a run finishes, turn off **Review before applying** under the working folder, in the chat's **Details → Tool permissions** or the orglet's **Permissions** tab. The switch appears once the folder level allows editing. A side thread follows its main chat. Crews and group chats apply each orglet's changes as it finishes, because the next orglet in the turn works from those files, so their switch is off and cannot be changed. A schedule's runs also apply as they finish, since nobody is there to review them.
+To have changes applied as soon as a run finishes, turn off **Review before applying** under the working folder, in the chat's **Details → Tool permissions** or the orglet's **Permissions** tab. The switch appears once the folder level allows editing. A side thread follows its main chat. Crews and group chats apply each orglet's changes as it finishes, because the next orglet in the turn works from those files, so their switch is off and cannot be changed. A schedule's runs wait for review in their own chat too, unless you turn **Review before applying** off in the schedule ([Schedules](#schedules)).
 
 ## Details
 
 **Details** at the top of a chat opens the panel that holds everything the chat does not show inline:
 
 - **Tool permissions** and the working folder for this chat ([Permissions](permissions-and-learning.md#permissions)).
-- Cost so far, and for each internal job (a crew's plan, members and combining step) its status, retry and cancel. **Pause after this step** and **Continue from checkpoint** let you stop a long run and pick it up later; **Retry with current settings** starts a new run for what did not finish.
+- Cost so far, and how long the orglets worked, such as **30s of work**: each run's own time added up, so the gaps between your messages do not count, and crew members working at the same time count once. Each internal job (a crew's plan, members and combining step) shows its status, retry and cancel. **Pause after this step** and **Continue from checkpoint** let you stop a long run and pick it up later; **Retry with current settings** starts a new run for what did not finish.
 - **What happened**: the run's activity, the sources it cited, and **Loaded context**, the exact instructions, skill, knowledge and memory the run started with.
 - **Chat decisions**: questions an orglet paused to ask you, with your answers. **Turn goal**: how an orglet understood the request, its assumptions, and the checks it planned (planned is not done).
 - **Files and processes**: every attempt that changed files, with its outcome, its commands and their output. An attempt whose outcome is unknown after a crash or cancel blocks the chat until you check your files and choose **Keep current files**. See [Reviewing an interrupted attempt](agent-tools.md#reviewing-an-interrupted-attempt).
@@ -125,21 +164,29 @@ If the app closes while an orglet works, that turn stops where it was and is not
 
 ## Schedules
 
-A schedule sends the same request to an orglet or crew daily or weekly, while Orglet is open.
+A schedule sends the same request to an orglet or crew daily, on weekdays, weekly or every few hours, while Orglet is open.
 
 1. Click **Schedules** in the footer, then **New schedule**.
-2. Name it, write the repeating brief, choose the orglet or crew, the frequency, the weekday and run time, the time zone, and a limit per run. Under **Limits & permissions**, turn on **Read and search the web** if each run should look things up, and set **Browser** to **Read pages** if it should open pages in Orglet's browser. Attach sources if the request needs them.
+2. Name it, write the repeating brief, choose the orglet or crew, the frequency, the weekday and run time, the time zone (picked from a list, this computer's first), a limit per run and, if you want one, a daily cap. Under **Limits & permissions**, set **Working folder** if each run should work in a folder (below), turn on **Read and search the web** if each run should look things up, and set **Browser** to **Read pages** if it should open pages in Orglet's browser. Attach sources if the request needs them.
 3. Choose **Enable schedule**. Enabling is your approval for that content and connection; a later change to the orglet, crew, model or sources turns the schedule off until you review and save it again.
 
-Orglet checks schedules only while it is open. If the computer was off or asleep at the time, the missed run becomes one **Run once to catch up** choice, or **Skip missed run**; missed days are never queued up, and the next time stays on the calendar. Scheduled runs cannot write memory, react, or propose app changes, since nobody is watching. There are at most 100 schedules. Policy detail: [routines.md](routines.md).
+**Every few hours.** Choose **Every few hours** as the frequency and pick the interval: every hour, or every 2, 3, 4, 6, 8 or 12 hours. Nothing runs more often than once an hour. Turn on **Only between set hours** to keep it to part of the day: "every hour from 09:00 until 18:00" runs at 09:00, 10:00 and so on up to 17:00. Turn on **Weekdays only** to skip Saturday and Sunday. If a run is still going when the next hour comes, that hour is skipped and the card says so; it runs again at the next time after the run ends. A run that simply finishes does not send a message every hour: the card counts today's runs instead, and you still hear about a run that fails, waits for you or has changes to review. **Weekdays (Mon–Fri)** runs once a day at the time, Monday to Friday.
+
+**A daily cap.** Under the limit per run, the editor says what the schedule may cost at most, such as "Up to 9 runs a day · up to $4.50 a day at $0.50 per run". Set **Daily cap** to a lower amount to spend less; it has to be at least the limit per run. A run only starts when its whole limit still fits under what today's runs have left, so a day never goes over the cap. Once it would, the rest of the day's runs are skipped, the card shows **Reached today's cost cap**, and you get one message about it. The cap starts over at midnight in the schedule's time zone. **Run now** counts too. Runs on Claude Code, Codex or Cursor Agent are billed to that plan, not counted here.
+
+**A folder for the schedule.** A scheduled run is its own chat, so it does not get the folder you gave the orglet's chat. To have a schedule check a repository or tidy a folder, choose a level in **Working folder**: **Read files only**, **Read and edit files**, or **Read, edit files and run commands**. Orglet opens the folder picker at that level; pick the folder. Each run works in its own copy of it, and commands run without network access. A lower level keeps the folder; a higher one asks for the folder again, and **Change** picks another. With an editing level, **Review before applying** is on: a run's changes wait in that run's chat until you open it and click **Apply** or **Discard changes**, and the schedule's next run waits until you have. Turn it off to have changes reach the folder as each run finishes. A crew's schedule always applies as each orglet finishes. If the folder is moved, deleted or replaced, the schedule does not run and its card says so; pick the folder again and save.
+
+Orglet checks schedules only while it is open. If the computer was off or asleep at the time, the card says which run it missed and when, with one **Run once to catch up** choice, or **Skip missed run**; missed days are never queued up, and the next time stays on the calendar. Scheduled runs cannot write memory, react, or propose app changes, since nobody is watching. There are at most 100 schedules.
+
+To delete a schedule, open the **⋮** menu on its card and choose **Delete schedule**; the menu asks once more before it deletes. Its past runs stay as chats: they keep the schedule's name, say it was deleted, and are still in Search. An orglet or crew with a schedule switched on cannot be archived or deleted; Orglet names the schedule and offers **View schedules**, where you can turn it off or delete it. Policy detail: [routines.md](routines.md).
 
 Each run is its own chat, apart from the orglet's main chat. You find it three ways:
 
 - **In the sidebar**, under the orglet or crew it ran for, next to the side threads: one row per schedule, named after it with a small calendar mark, showing its newest run and that run's status mark. The row's menu opens the schedule, archives the run or deletes it.
-- **In Notifications.** When a run finishes, stops with a problem or waits for you, a message names the schedule ("Daily standup note is ready", "Daily standup note needs you") with **Open**, and stays unread in Notifications until you look.
-- **In Schedules**, where each card has **Open latest run**.
+- **In Notifications.** When a run finishes, stops with a problem or waits for you, a message names the schedule ("Daily standup note is ready", "Daily standup note needs you", "Daily repo check is ready; its changes wait for your review") with **Open**, and stays unread in Notifications until you look. A run that failed or waits for you is listed under **Problems** even when you were looking at it. A schedule that could not start at all ("Daily repo check did not run") is a problem too, with the reason and **View schedules**. Runs that come back with a restored backup are history and send no message.
+- **In Schedules**, where each card's **Open latest run** says what became of that run: **Done**, **Needs attention**, **Needs you**, **Running** or **Changes wait for your review**. An hourly schedule's card also says how many times it ran today, and a card with a daily cap shows what today's runs used of it.
 
-To try a schedule without waiting for its time, click **Run now** (the play button) on its card. It runs the same way a scheduled run does, with the same checks, and opens the run; the next scheduled time does not move. A schedule that is switched off, changed since you saved it, or still busy with its previous run does not start, and Schedules says why. A switched-off schedule's button stays greyed out.
+To try a schedule without waiting for its time, click **Run now** (the play button) on its card. It runs the same way a scheduled run does, with the same checks, and opens the run; the next scheduled time does not move. A schedule that is switched off, changed since you saved it, still busy with its previous run, or at its daily cap does not start, and Schedules says why. A switched-off schedule's button stays greyed out.
 
 The run's header shows the schedule's name with the same calendar mark, and the top of the chat says which schedule it is and who ran it, with **Open schedule**.
 
@@ -147,13 +194,13 @@ You can also ask an orglet, in its chat, to schedule something ("run this every 
 
 ## What is running
 
-Click **Running** in the footer to see every turn that is working or waiting, across all chats. The button shows a count while anything runs or waits its turn.
+Click **Running** in the footer to see every turn that is working or waiting, across all chats. The button shows a grey count while anything runs or waits its turn, and beside it a count in the accent colour with a pause sign for chats that wait for you: paused, stopped at their limit, or waiting for your answer. Hover a count to see which is which.
 
 The list has up to three parts:
 
 - **Running**: each orglet at work, with its face, its name, the chat or crew it works for, what it is doing now ("Reading invoice.xlsx…"), how long it has run, what it has cost so far, and its provider. A cost Orglet does not know yet says **Cost unknown** (a harness before it reports, or a custom connection with no price), and one with a request of unknown cost says **At least**, rather than showing $0.
-- **Queued**: turns that have not started, with the reason and their place in line: "Waiting for Claude Code · 2 ahead" when the provider already has as many requests as **Settings → requests at once per provider** allows, "Waiting for a crew slot" or "Waiting for results from Lan" inside a crew, "Waiting for its turn to answer" in a group chat, and "Waiting for budget" for a chat that stopped at its **Limit per task**.
-- **Waiting for you**: chats stopped at a checkpoint, including a crew paused at the end of its work hours, and chats waiting for your answer: an MCP tool the orglet wants to use ("Waiting for you to allow the MCP tool: search · Docs") or a question it asked. Answer in the chat and the same run goes on.
+- **Queued**: turns that have not started, with the reason and their place in line: "Waiting for Claude Code · 2 ahead" when the provider already has as many requests as **Settings → requests at once per provider** allows, "Waiting for a crew slot" or "Waiting for results from Lan" inside a crew (in a crew that works one member after another, each member waits for the results of the ones before it), and "Waiting for its turn to answer" in a group chat.
+- **Waiting for you**: chats stopped at a checkpoint, including a crew paused at the end of its work hours, chats stopped at their **Limit per task** ("Waiting for budget"), and chats waiting for your answer: an MCP tool the orglet wants to use ("Waiting for you to allow the MCP tool: search · Docs") or a question it asked. Answer in the chat and the same run goes on. A paused crew is listed under the member whose step came last, and its chat says so: "Paused after Scout's step, waiting for you to continue."
 
 Each row has its controls on the right:
 
@@ -161,7 +208,7 @@ Each row has its controls on the right:
 2. **Resume** for a paused chat, or for one waiting for budget after you raise its limit.
 3. **Open chat** to go to that conversation. A chat waiting for your answer offers only this, because the answer card is in the chat.
 
-The controls act on the whole turn of that chat. In a crew, stopping one member's row stops the crew's turn, the same as **Stop** in the chat. The list follows the sidebar: a chat whose mark shows it working or waiting is always in it. With nothing running, the view says so in one line. How the queue is kept: [technical guide](technical-guide.md#what-is-running-and-the-queue).
+The controls act on the whole turn of that chat. In a crew, stopping one member's row stops the crew's turn, the same as **Stop** in the chat. The list follows the sidebar: a chat whose mark shows it working (a turning ring) or paused (two bars on a soft tint) is always in it. With nothing running, the view says so in one line. How the queue is kept: [technical guide](technical-guide.md#what-is-running-and-the-queue).
 
 ## Search
 
@@ -180,9 +227,21 @@ A chat where your words appear together, in the order you typed them, comes befo
 
 Archived chats are found too; deleted chats are not. A crew's chat is found by its combined answer, not by the reports its members handed in. Search runs on this computer only. After an update from a version that searched only first messages, Orglet adds your existing chats in the background once it has started; until then the search window says a few results may be missing. How it works: [technical guide](technical-guide.md#search).
 
+### Archived and deleted chats
+
+An archived chat opens from search like any other, to read. Its message box is turned off, and a line under it says the chat is archived, with **Restore** next to it; restoring puts it back in the sidebar and you can write again. The same happens when the orglet or crew the chat belongs to was archived: the line names it, and **Restore** brings the orglet or crew back. When that orglet or crew was deleted, the chat stays readable with its name in the header, and nothing can be sent there.
+
+When the chat you have open is deleted, from its menu or with **Settings → Data → Delete chat history**, Orglet moves to the orglet's or crew's main chat, or to the first orglet when that one is gone too. Nothing is reported as a problem.
+
 ## Notifications
 
-Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked. A confirmation of something you just did (saved, created, copied, archived) is listed but does not count, since you saw it as it happened. Problems count, and so does news that arrived on its own: an answer in a side thread, a schedule's run that finished or needs you, a downloaded update, a change an orglet applied by itself.
+Every message the app shows as a passing toast is also kept: click **Notifications** in the footer. A dot and a count on the button mean new ones since you last looked. A confirmation of something you just did (saved, created, copied, archived) is listed but does not count, since you saw it as it happened. Problems count, and so does news that arrived on its own: an answer in a side thread, a schedule's run that finished or needs you, a downloaded update, a change an orglet applied by itself. A downloaded update's notice has a **Restart now** button while that update still waits.
+
+A few rules keep the list short:
+
+- A side thread that answers while you are in its orglet's main chat, or in another of that orglet's side threads, sends no message. Its row is right there under the orglet, with its unread mark.
+- Answers from one orglet's side threads wait as one row: "Scout answered in 3 side threads", which opens the newest. Once you have opened Notifications, the next answer starts a new row. A side thread that failed keeps a row of its own.
+- A problem that is already waiting unread, with the same words about the same thing, is not listed again. A refresh that keeps failing shows its banner each time but adds one row, not one per try. After you have looked, a new failure is listed again.
 
 What counts as new since you last looked comes first, under **New**; the rest follows newest first, grouped by day. Filter it by **All**, **Problems**, **Done** or **Info**. Each row says what happened and what it was about (the setting, the orglet, the chat, the command); a run of identical notices is one row with a count. A row about a chat, such as a side thread's answer or a schedule's run, opens that chat when you click it, as long as the chat still exists. Every app change an orglet makes through a proposal is announced here too. **Clear all** empties the list.
 

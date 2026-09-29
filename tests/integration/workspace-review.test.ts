@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createElement } from 'react';
@@ -10,7 +10,8 @@ import { WorkspaceGrants } from '../../apps/desktop/src/core/storage/workspace-g
 import { WorkspaceRuntime } from '../../apps/desktop/src/core/tools/workspace-runtime';
 import type { WorkspaceIntegration } from '../../apps/desktop/src/core/tools/workspace-integration';
 import { executeWorkspaceOperation } from '../../apps/desktop/src/core/tools/workspace-files';
-import { selectSteps, type IntegrationStep } from '../../apps/desktop/src/core/tools/workspace-plan';
+import { countChanges, selectSteps, type IntegrationStep } from '../../apps/desktop/src/core/tools/workspace-plan';
+import { OTHER_FOLDER } from '../../apps/desktop/src/core/storage/workspace-grants';
 import { toolsFor } from '../../apps/desktop/src/core/tools/catalog';
 import { WorkspaceManifest } from '../../apps/desktop/src/shared/workspace-tools';
 import { commands, type Run, type Skill, type Task, type Worker } from '../../apps/desktop/src/shared/contracts';
@@ -20,7 +21,7 @@ import { CoreService } from '../../apps/desktop/src/core/service';
 import type { ModelAdapter } from '../../apps/desktop/src/core/adapters/openai';
 import { WorkspaceRecovery } from '../../apps/desktop/src/core/storage/workspace-recovery';
 import { TaskThread } from '../../apps/desktop/src/renderer/components/TaskThread';
-import { DiffBody } from '../../apps/desktop/src/renderer/components/DiffViewer';
+import { DiffBody, standaloneFolders } from '../../apps/desktop/src/renderer/components/DiffViewer';
 import { PermissionControls } from '../../apps/desktop/src/renderer/components/PermissionControls';
 import type { WorkspaceDiff } from '../../apps/desktop/src/shared/workspace-diff';
 
@@ -194,6 +195,42 @@ describe('a solo run with review on (the default)', () => {
     expect(store.detail(task.id).events.map(event => event.message)).toContain('Người dùng đã xem và áp dụng 1 thay đổi, bỏ qua 1.');
   });
 
+  it('leaves out a new folder whose only file was unticked, even when the folder is sent, and counts files not steps', async () => {
+    // COD-291: the viewer sent every listed folder, so unticking docs/usage.md still made an empty docs/ and the
+    // events said "applied 3 changes and skipped 1" for Apply 2 of 3.
+    const service = core(model([
+      write('CHANGELOG.md', '# Changelog\n', null),
+      write('note.txt', 'edited', sha('original')),
+      write('docs/usage.md', '# Usage\n', null),
+      reply('Added a changelog and usage notes.'),
+    ]));
+    await service.runner.run(task, run);
+    expect(copyOf(run.id).changes.map((change: { kind: string; path: string }) => `${change.kind}:${change.path}`)).toContain('folder:docs');
+    await service.command('applyWorkspaceReview', { taskId: task.id, runId: run.id, paths: ['CHANGELOG.md', 'note.txt', 'docs'] });
+    expect(integrated.sort()).toEqual(['CHANGELOG.md', 'note.txt']);
+    await expect(stat(join(source, 'docs'))).rejects.toThrow();
+    expect(copyOf(run.id).review).toMatchObject({ state: 'applied', applied: 2, skipped: 1 });
+    expect(store.detail(task.id).events.map(event => event.message)).toContain('Người dùng đã xem và áp dụng 2 thay đổi, bỏ qua 1.');
+  });
+
+  it('makes the new folder a kept file needs, and counts it with its file', async () => {
+    const service = core(model([write('note.txt', 'edited', sha('original')), write('docs/usage.md', '# Usage\n', null), reply('Added usage notes.')]));
+    await service.runner.run(task, run);
+    await service.command('applyWorkspaceReview', { taskId: task.id, runId: run.id, paths: ['docs/usage.md'] });
+    expect(integrated).toEqual(['docs', 'docs/usage.md']);
+    expect(copyOf(run.id).review).toMatchObject({ applied: 1, skipped: 1 });
+  });
+
+  it('decides an empty folder the orglet made on purpose by its own tick', async () => {
+    const createFolder = (path: string): Call => ({ name: 'workspace_create_folder', arguments: { path } });
+    const service = core(model([createFolder('logs'), write('a.txt', 'a', null), reply('Made logs/ and a.txt.')]));
+    await service.runner.run(task, run);
+    await service.command('applyWorkspaceReview', { taskId: task.id, runId: run.id, paths: ['a.txt'] });
+    await expect(stat(join(source, 'logs'))).rejects.toThrow();
+    expect(copyOf(run.id).review).toMatchObject({ applied: 1, skipped: 1 });
+    expect(integrated).toEqual(['a.txt']);
+  });
+
   it('stops at a file the person changed meanwhile, and the attempt can then be kept in Details', async () => {
     const service = await heldRun();
     await writeFile(join(source, 'note.txt'), 'the person edited this');
@@ -290,11 +327,20 @@ describe('what hands in at once', () => {
     expect(copyOf(run.id).review).toBeUndefined();
   });
 
-  it("a schedule's run, which nobody is there to review", async () => {
+  it("a schedule's run whose schedule turned review off (COD-294)", async () => {
+    task = { ...task, routineId: id(), toolCapabilities: REVIEW_OFF };
+    store.put('tasks', task);
+    run = newRun({}, { toolCapabilities: REVIEW_OFF });
+    await core().runner.run(task, run);
+    expect(integrated).toEqual(['note.txt']);
+  });
+
+  it("but not a schedule's run with review on, which waits in its own chat (COD-294)", async () => {
     task = { ...task, routineId: id() };
     store.put('tasks', task);
     await core().runner.run(task, run);
-    expect(integrated).toEqual(['note.txt']);
+    expect(integrated).toEqual([]);
+    expect(copyOf(run.id).review.state).toBe('pending');
   });
 
   it('turning review on during a run stops nothing and holds that run\'s hand-in', async () => {
@@ -347,6 +393,87 @@ describe('picking files to apply', () => {
       .toEqual(['delete:trash/one.txt', 'delete:trash/two.txt', 'remove_folder:trash']);
     expect(selectSteps(steps, ['readme.md']).skipped).toHaveLength(5);
   });
+
+  it('lets a folder follow what is inside it, whatever tick was sent for it (COD-291)', () => {
+    // A ticked folder whose contents were all left out stays as it is; so does a removal with something left inside.
+    expect(kinds(selectSteps(steps, ['readme.md', 'docs', 'trash']).kept)).toEqual(['write:readme.md']);
+    // A removal goes once everything inside it goes, even with no tick of its own.
+    expect(kinds(selectSteps(steps, ['trash/one.txt', 'trash/two.txt']).kept)).toContain('remove_folder:trash');
+    const nested: IntegrationStep[] = [
+      { kind: 'folder', path: 'docs' },
+      { kind: 'folder', path: 'docs/guides' },
+      { kind: 'write', path: 'docs/guides/start.md', hash: 'e'.repeat(64), bytes: 1, expectedHash: null },
+    ];
+    expect(kinds(selectSteps(nested, ['docs/guides/start.md']).kept)).toEqual(['folder:docs', 'folder:docs/guides', 'write:docs/guides/start.md']);
+    expect(selectSteps(nested, ['docs', 'docs/guides']).kept).toEqual([]);
+  });
+
+  it('decides a folder with nothing else inside it by its own tick, and counts changes as the viewer lists them', () => {
+    const empty: IntegrationStep[] = [
+      { kind: 'folder', path: 'logs' },
+      { kind: 'folder', path: 'logs/today' },
+      { kind: 'write', path: 'a.txt', hash: 'f'.repeat(64), bytes: 1, expectedHash: null },
+      { kind: 'remove_folder', path: 'old' },
+    ];
+    expect(kinds(selectSteps(empty, ['a.txt']).kept)).toEqual(['write:a.txt']);
+    // logs holds logs/today, so it follows that folder's tick; old was removed empty and goes when ticked.
+    expect(kinds(selectSteps(empty, ['a.txt', 'logs/today', 'old']).kept)).toEqual(['folder:logs', 'folder:logs/today', 'write:a.txt', 'remove_folder:old']);
+    expect(kinds(selectSteps(empty, ['logs']).kept)).toEqual([]);
+    const { kept, skipped } = selectSteps(steps, ['old.txt', 'readme.md']);
+    // docs/ follows the moved file, so the move counts once; the trash folder follows its two files.
+    expect(countChanges(steps, kept)).toBe(2);
+    expect(countChanges(steps, skipped)).toBe(2);
+    expect(countChanges(empty, empty)).toBe(3);
+  });
+});
+
+describe('changing the folder level (COD-291)', () => {
+  it('keeps the folder without the picker, so old diffs keep opening and held changes can still be applied', async () => {
+    const service = await heldRun();
+    const before = grants.view(task.id)!;
+    await service.command('setWorkspaceLevel', { taskId: task.id, permissions: ['read', 'write', 'execute'] });
+    // Widening keeps the grant as it was.
+    expect(grants.view(task.id)).toMatchObject({ id: before.id, revision: before.revision, permissions: ['read', 'write', 'execute'], name: 'source' });
+    const diff = await service.command('workspaceDiff', { taskId: task.id, runId: run.id }) as WorkspaceDiff;
+    expect(diff.files.map(file => file.path)).toEqual(['note.txt']);
+    await service.command('applyWorkspaceReview', { taskId: task.id, runId: run.id });
+    expect(await folderNote()).toBe('edited');
+    await service.command('setWorkspaceLevel', { taskId: task.id, permissions: ['read'] });
+    // Narrowing keeps the folder's id and takes a new revision, so a run that froze the wider grant is stopped.
+    expect(grants.view(task.id)).toMatchObject({ id: before.id, revision: before.revision + 1, permissions: ['read'] });
+    // History: the diff of an applied run still opens at a read-only level.
+    await expect(service.command('workspaceDiff', { taskId: task.id, runId: run.id })).resolves.toMatchObject({ runId: run.id });
+  });
+
+  it('opens held changes after a narrowing but applies them only under the grant they were made with', async () => {
+    const service = await heldRun();
+    await service.command('setWorkspaceLevel', { taskId: task.id, permissions: ['read'] });
+    await expect(service.command('workspaceDiff', { taskId: task.id, runId: run.id })).resolves.toMatchObject({ runId: run.id });
+    await expect(service.command('applyWorkspaceReview', { taskId: task.id, runId: run.id })).rejects.toThrow('Quyền sửa thư mục đã bị thu hồi hoặc thay đổi');
+  });
+
+  it('says plainly why an old diff cannot open once the folder was removed or swapped', async () => {
+    const service = await heldRun();
+    grants.revoke(task.id);
+    await expect(service.command('workspaceDiff', { taskId: task.id, runId: run.id })).rejects.toThrow(OTHER_FOLDER);
+    const other = join(directory, 'other');
+    await mkdir(other);
+    await grants.grant({ taskId: task.id, directory: other, permissions: ['read', 'write'] });
+    await expect(service.command('workspaceDiff', { taskId: task.id, runId: run.id })).rejects.toThrow(OTHER_FOLDER);
+    await expect(service.command('setWorkspaceLevel', { taskId: task.id, permissions: ['read'] })).resolves.toBeUndefined();
+    expect(grants.view(task.id)).toMatchObject({ name: 'other', permissions: ['read'] });
+  });
+
+  it('refuses a level change for a chat with no folder, and changes the level of a folder waiting for a first message', async () => {
+    const service = core();
+    grants.revoke(task.id);
+    await expect(service.command('setWorkspaceLevel', { taskId: task.id, permissions: ['read'] })).rejects.toThrow('chưa có thư mục làm việc');
+    await service.grantWorkspace({ workerId: worker.id, permissions: ['read'], directory: source });
+    await service.command('setWorkspaceLevel', { workerId: worker.id, permissions: ['read', 'write'] });
+    expect(grants.pending({ workerId: worker.id })).toMatchObject({ name: 'source', permissions: ['read', 'write'] });
+    // The command carries no path: a folder can only come from main's picker.
+    expect(() => commands.setWorkspaceLevel.parse({ taskId: task.id, permissions: ['read'], directory: source })).toThrow();
+  });
 });
 
 describe('on screen', () => {
@@ -363,9 +490,9 @@ describe('on screen', () => {
     const service = await heldRun();
     const held = renderThread();
     expect(held).toContain(ANSWER);
-    expect(held).toMatch(/class="activity-summary changed-files changed-files-review"[^>]*>.*Files changed: 1.*Not in your folder yet.*Review/s);
+    expect(held).toMatch(/class="activity-summary changed-files changed-files-review"[^>]*>.*Changed 1 file.*Not in your folder yet.*Review/s);
     await service.command('applyWorkspaceReview', { taskId: task.id, runId: run.id });
-    expect(renderThread()).toMatch(/Files changed: 1.*· Applied</s);
+    expect(renderThread()).toMatch(/Changed 1 file.*· Applied</s);
   });
 
   it('never says applied while an apply is stopped at a conflict', async () => {
@@ -375,6 +502,29 @@ describe('on screen', () => {
     const html = renderThread();
     expect(html).toContain('Stopped at a conflict, see Details');
     expect(html).not.toMatch(/· Applied</);
+  });
+
+  it('says Applied when the changes handed in at once, with review off (COD-291)', async () => {
+    task = { ...task, toolCapabilities: REVIEW_OFF };
+    store.put('tasks', task);
+    run = newRun({}, { toolCapabilities: REVIEW_OFF });
+    await core().runner.run(task, run);
+    const line = renderThread().replace(/<[^>]+>/g, '');
+    expect(line).toContain('Changed 1 file · Applied');
+    expect(line).not.toContain('Not in your folder yet');
+  });
+
+  it('dims a new folder with the files it follows and ticks an empty one on its own in the viewer', () => {
+    const file = (path: string) => ({ path, status: 'added' as const, binary: false, additions: 1, deletions: 0, truncated: false, hunks: [] });
+    const diff: WorkspaceDiff = { runId: run.id, additions: 2, deletions: 0, truncated: false,
+      files: [file('CHANGELOG.md'), file('docs/usage.md')], folders: [{ path: 'docs', status: 'added' }, { path: 'logs', status: 'added' }] };
+    expect(standaloneFolders(diff).map(folder => folder.path)).toEqual(['logs']);
+    const html = renderToStaticMarkup(createElement(DiffBody, { diff, selection: { isTicked: path => path !== 'docs/usage.md', toggle: () => {} } }));
+    // Two files and the empty folder have ticks, in the list and (files only) in their headers; docs/ has none.
+    expect(html).toContain('Apply logs/');
+    expect(html).not.toContain('Apply docs/<');
+    expect(html).toMatch(/<li class="skipped">(?:(?!<\/li>).)*diff-path-name">docs\/<\/span>/s);
+    expect(html).not.toMatch(/<li class="skipped">(?:(?!<\/li>).)*diff-path-name">logs\/<\/span>/s);
   });
 
   it('says so when the changes were discarded', async () => {
@@ -393,7 +543,7 @@ describe('on screen', () => {
     const earlier = html.slice(0, html.indexOf('Added CHANGELOG.md.'));
     const later = html.slice(html.indexOf('Added CHANGELOG.md.'));
     expect(earlier).toMatch(/<p class="activity-summary changed-files changed-files-carried">.*Carried into the next turn/s);
-    expect(later).toMatch(/Files changed: 2.*Not in your folder yet/s);
+    expect(later).toMatch(/Changed 2 files.*Not in your folder yet/s);
   });
 
   it('draws a tick per changed file in the viewer while changes wait', () => {

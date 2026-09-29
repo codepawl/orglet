@@ -6,10 +6,17 @@ import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { detectHarnesses, type Probe } from '../../apps/desktop/src/core/harness/detect';
 import {
-  claudePlanLabel, claudeUsageWindows, codexPlanLabel, codexUsageWindows, cursorAbout, readHarnessUsage,
-  type AccountUsageRead, type UsageRuntime,
+  claudeKeychainService, claudePlanLabel, claudeUsageWindows, codexPlanLabel, codexUsageWindows, cursorAbout, cursorUsageWindows,
+  geminiTier, geminiUsageWindows, readHarnessUsage, tokenExpiry, type AccountUsageRead, type UsageRuntime,
 } from '../../apps/desktop/src/core/harness/usage';
-import { missingHarness, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessCatalogId, type HarnessInfo, type HarnessUsage } from '../../apps/desktop/src/shared/harness';
+import { UsageReadings } from '../../apps/desktop/src/core/harness/usage-readings';
+import { openCodeGoUsageWindows, readOpenCodeGoUsage } from '../../apps/desktop/src/core/adapters/opencode';
+import { missingHarness, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessUsage } from '../../apps/desktop/src/shared/harness';
+import type { OpenCodeGoUsage } from '../../apps/desktop/src/shared/opencode';
+import { accountSwitchFor } from '../../apps/desktop/src/shared/account-switch';
+import type { Task, Worker } from '../../apps/desktop/src/shared/contracts';
+import { usageReadingTime, usageResetLabel, usageWindowLabel } from '../../apps/desktop/src/renderer/components/PlanUsage';
+import { currentLocale } from '../../apps/desktop/src/renderer/i18n';
 
 // Shapes copied from the real CLIs and endpoint on 2026-09-24 (Claude Code 2.1, codex-cli 0.155, Cursor Agent 2026.09).
 const claudeAnswer = {
@@ -28,8 +35,45 @@ const codexLimits = {
     planType: 'prolite', rateLimitReachedType: null,
   },
 };
+// GetCurrentPeriodUsageResponse as Connect JSON, from the message definitions in Cursor Agent 2026.09.18: the cycle
+// bounds are 64-bit milliseconds (sent as strings), spend is in cents, the percentages are doubles.
+const CURSOR_URL = 'https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage';
+const cursorAnswer = {
+  billingCycleStart: '1790000000000',
+  billingCycleEnd: '1792592000000',
+  planUsage: { totalSpend: 1450, includedSpend: 1200, bonusSpend: 0, remaining: 800, limit: 2000, autoPercentUsed: 12.5, apiPercentUsed: 71, totalPercentUsed: 60 },
+  spendLimitUsage: { totalSpend: 250, individualUsed: 250, individualRemaining: 0, limitType: 'user' },
+  enabled: true,
+  displayMessage: '',
+};
+/** A token shaped like Cursor's (a JWT); only its `exp` claim is read. */
+const cursorToken = (expiresAt: number) => {
+  const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${part({ alg: 'HS256', typ: 'JWT' })}.${part({ sub: 'user', exp: Math.floor(expiresAt / 1000) })}.signature`;
+};
 
 describe('reading what each vendor reports', () => {
+  it('reads Cursor’s included usage and its Auto and API pools for the billing cycle, the way Cursor Agent’s /usage does', () => {
+    const resetsAt = new Date(1792592000000).toISOString();
+    expect(cursorUsageWindows(cursorAnswer)).toEqual([
+      { kind: 'monthly', usedPercent: 60, resetsAt },
+      { kind: 'monthly', model: 'Auto', usedPercent: 12.5, resetsAt },
+      { kind: 'monthly', model: 'API', usedPercent: 71, resetsAt },
+    ]);
+    // Without Cursor's own percentage, the included spend against the included limit; without bounds, no reset.
+    expect(cursorUsageWindows({ planUsage: { includedSpend: 500, limit: 2000 } })).toEqual([{ kind: 'monthly', usedPercent: 25 }]);
+    expect(cursorUsageWindows({ billingCycleEnd: '1792592000000', enabled: true })).toEqual([]);
+    expect(tokenExpiry(cursorToken(Date.parse('2026-10-24T00:00:00Z')))).toBe(Date.parse('2026-10-24T00:00:00Z'));
+    expect(tokenExpiry('not-a-jwt')).toBeUndefined();
+  });
+
+  it('names the day, week and month allowances with the model or pool they are limited to', () => {
+    expect(usageWindowLabel({ kind: 'daily', model: 'gemini-2.5-pro', usedPercent: 1 })).toBe('Day · gemini-2.5-pro');
+    expect(usageWindowLabel({ kind: 'monthly', model: 'Auto', usedPercent: 1 })).toBe('Month · Auto');
+    expect(usageWindowLabel({ kind: 'monthly', usedPercent: 1 })).toBe('Month');
+    expect(usageWindowLabel({ kind: 'weekly', model: 'Opus', usedPercent: 1 })).toBe('Week · Opus');
+  });
+
   it('reads Claude allowances from the limits list, including a weekly allowance limited to one model', () => {
     expect(claudeUsageWindows(claudeAnswer)).toEqual([
       { kind: 'session', usedPercent: 100, resetsAt: '2026-09-24T11:50:00.107Z' },
@@ -65,6 +109,29 @@ describe('reading what each vendor reports', () => {
     expect(codexUsageWindows({ rateLimits: { limitId: 'codex_spark', primary: { usedPercent: 90 } } })).toEqual([]);
   });
 
+  it('reads the Codex session window when the service reports one, and only the weekly one when it does not (COD-301)', () => {
+    // codex-cli 0.157.0 `account/rateLimits/read` for a ChatGPT Pro 5x account on 2026-09-27: the service sends one
+    // window, a week long, in the first position. Codex passes the service's primary_window and secondary_window
+    // through as they come (codex-rs/backend-client), so a plan without a five-hour window shows none.
+    const proLite = {
+      ordinaryUsageAllowed: true,
+      rateLimits: {
+        limitId: 'codex', limitName: null, normalModelSlug: null,
+        primary: { usedPercent: 0, windowDurationMins: 10080, resetsAt: 1791078865 }, secondary: null,
+        credits: { hasCredits: false, unlimited: false, balance: '0' }, individualLimit: null, spendControlReached: false,
+        planType: 'prolite', rateLimitReachedType: null,
+      },
+      rateLimitResetCredits: { availableCount: 0, credits: [] },
+      rateLimitUpsell: null,
+    };
+    expect(codexUsageWindows(proLite)).toEqual([{ kind: 'weekly', usedPercent: 0, resetsAt: new Date(1791078865 * 1000).toISOString() }]);
+    const withSession = { rateLimits: { ...proLite.rateLimits, primary: { usedPercent: 35, windowDurationMins: 300, resetsAt: 1790560000 }, secondary: { usedPercent: 8, windowDurationMins: 10080, resetsAt: 1791078865 } } };
+    expect(codexUsageWindows(withSession)).toEqual([
+      { kind: 'session', usedPercent: 35, resetsAt: new Date(1790560000 * 1000).toISOString() },
+      { kind: 'weekly', usedPercent: 8, resetsAt: new Date(1791078865 * 1000).toISOString() },
+    ]);
+  });
+
   it('reads the Cursor account without inventing an allowance', () => {
     expect(cursorAbout(JSON.stringify({ userEmail: 'dev@example.com', subscriptionTier: 'pro' }))).toEqual({ email: 'dev@example.com', plan: 'Pro', windows: [], unavailable: 'unsupported' });
     expect(cursorAbout(JSON.stringify({ userEmail: null, subscriptionTier: null }))).toEqual({ windows: [], unavailable: 'signed_out' });
@@ -77,19 +144,29 @@ describe('reading what each vendor reports', () => {
   });
 });
 
-type FetchCall = { url: string; authorization: string | null };
+type FetchCall = { url: string; authorization: string | null; method?: string; body?: unknown };
+type FakeAnswer = { status: number; body?: unknown };
 
 function fakeRuntime(options: {
   status?: unknown;
+  /** Returned for every file read, when `files` is not given. */
   credentials?: unknown;
-  usage?: { status: number; body?: unknown };
+  /** Files by path; a path not listed does not exist. */
+  files?: Record<string, unknown>;
+  usage?: FakeAnswer;
+  /** Answers by URL, for a read that makes more than one request. */
+  answers?: Record<string, FakeAnswer>;
   appServer?: unknown[];
   about?: unknown;
   now?: Date;
+  platform?: NodeJS.Platform;
+  env?: NodeJS.ProcessEnv;
+  keychain?: Record<string, string>;
 }) {
   const fetches: FetchCall[] = [];
   const probes: { args: string[]; env?: NodeJS.ProcessEnv }[] = [];
   const reads: string[] = [];
+  const keychainReads: string[] = [];
   const appServers: NodeJS.ProcessEnv[] = [];
   const runtime: UsageRuntime = {
     run: async (_executable, args, env) => {
@@ -103,19 +180,27 @@ function fakeRuntime(options: {
       return options.appServer ?? [];
     },
     fetch: async (input, init) => {
-      fetches.push({ url: String(input), authorization: new Headers(init?.headers).get('authorization') });
-      const answer = options.usage ?? { status: 200, body: claudeAnswer };
+      const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
+      fetches.push({ url: String(input), authorization: new Headers(init?.headers).get('authorization'), ...(init?.method ? { method: init.method } : {}), ...(body !== undefined ? { body } : {}) });
+      const answer = options.answers?.[String(input)] ?? options.usage ?? { status: 200, body: claudeAnswer };
       return new Response(JSON.stringify(answer.body ?? {}), { status: answer.status });
     },
     readText: async path => {
       reads.push(path);
-      if (options.credentials === undefined) throw new Error('ENOENT');
-      return JSON.stringify(options.credentials);
+      const content = options.files ? options.files[path] : options.credentials;
+      if (content === undefined) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      return typeof content === 'string' ? content : JSON.stringify(content);
     },
     home: join('home', 'person'),
     now: () => options.now ?? new Date('2026-09-24T11:30:00Z'),
+    platform: options.platform ?? 'win32',
+    env: options.env ?? {},
+    readKeychain: async service => {
+      keychainReads.push(service);
+      return options.keychain?.[service];
+    },
   };
-  return { runtime, fetches, probes, reads, appServers };
+  return { runtime, fetches, probes, reads, keychainReads, appServers };
 }
 
 const signedInClaude = { loggedIn: true, authMethod: 'claude.ai', email: 'an@example.com', subscriptionType: 'max' };
@@ -129,7 +214,7 @@ describe('reading one account', () => {
     expect(read).toEqual({ email: 'an@example.com', plan: 'Max 20x', windows: claudeUsageWindows(claudeAnswer) });
     expect(fake.probes[0].env).toEqual({ CLAUDE_CONFIG_DIR: folder });
     expect(fake.reads).toEqual([join(folder, '.credentials.json')]);
-    expect(fake.fetches).toEqual([{ url: 'https://api.anthropic.com/api/oauth/usage', authorization: 'Bearer token-value' }]);
+    expect(fake.fetches).toEqual([{ url: 'https://api.anthropic.com/api/oauth/usage?cedar_ember=1', authorization: 'Bearer token-value' }]);
     expect(JSON.stringify(read)).not.toContain('token-value');
   });
 
@@ -174,11 +259,219 @@ describe('reading one account', () => {
     expect(await readHarnessUsage('codex', 'codex.exe', undefined, noServer.runtime)).toEqual({ windows: [], unavailable: 'failed' });
   });
 
-  it('reads the Cursor account from about in that account folder', async () => {
-    const fake = fakeRuntime({ about: { userEmail: 'an@example.com', subscriptionTier: 'pro' } });
+  it('reads the Cursor account from about in that account folder, and its usage with the token Cursor Agent saved', async () => {
+    const roaming = join('home', 'person', 'AppData', 'Roaming');
+    const token = cursorToken(Date.parse('2026-10-24T00:00:00Z'));
+    const fake = fakeRuntime({
+      about: { userEmail: 'an@example.com', subscriptionTier: 'pro' },
+      env: { APPDATA: roaming },
+      files: { [join(roaming, 'Cursor', 'auth.json')]: { accessToken: token, refreshToken: 'refresh-value' } },
+      answers: { [CURSOR_URL]: { status: 200, body: cursorAnswer } },
+    });
     const folder = join('accounts', 'cursor', 'one');
-    expect(await readHarnessUsage('cursor', 'agent.exe', folder, fake.runtime)).toEqual({ email: 'an@example.com', plan: 'Pro', windows: [], unavailable: 'unsupported' });
+    const read = await readHarnessUsage('cursor', 'agent.exe', folder, fake.runtime);
+    expect(read).toEqual({ email: 'an@example.com', plan: 'Pro', windows: cursorUsageWindows(cursorAnswer) });
     expect(fake.probes[0]).toEqual({ args: ['about', '--format', 'json'], env: { CURSOR_CONFIG_DIR: folder } });
+    // CURSOR_CONFIG_DIR does not move Cursor Agent's sign-in, so the account folder reads the same file it does.
+    expect(fake.reads).toEqual([join(roaming, 'Cursor', 'auth.json')]);
+    expect(fake.fetches).toEqual([{ url: CURSOR_URL, authorization: `Bearer ${token}`, method: 'POST', body: {} }]);
+    expect(JSON.stringify(read)).not.toContain(token);
+    expect(JSON.stringify(read)).not.toContain('refresh-value');
+  });
+
+  it('never sends an expired Cursor token, and says why a Cursor account has no usage', async () => {
+    const about = { userEmail: 'an@example.com', subscriptionTier: 'pro' };
+    const roaming = join('home', 'person', 'AppData', 'Roaming');
+    const authFile = join(roaming, 'Cursor', 'auth.json');
+    const withAuth = (saved: unknown, answer: FakeAnswer = { status: 200, body: cursorAnswer }) =>
+      fakeRuntime({ about, env: { APPDATA: roaming }, files: { [authFile]: saved }, answers: { [CURSOR_URL]: answer } });
+
+    const expired = withAuth({ accessToken: cursorToken(Date.parse('2026-09-24T11:00:00Z')) });
+    expect(await readHarnessUsage('cursor', 'agent.exe', undefined, expired.runtime)).toEqual({ email: 'an@example.com', plan: 'Pro', windows: [], unavailable: 'expired' });
+    expect(expired.fetches).toEqual([]);
+
+    const apiKey = withAuth({ apiKey: 'key-value' });
+    expect(await readHarnessUsage('cursor', 'agent.exe', undefined, apiKey.runtime)).toEqual(expect.objectContaining({ unavailable: 'unsupported' }));
+    const refused = withAuth({ accessToken: cursorToken(Date.parse('2026-10-24T00:00:00Z')) }, { status: 401 });
+    expect(await readHarnessUsage('cursor', 'agent.exe', undefined, refused.runtime)).toEqual(expect.objectContaining({ unavailable: 'expired' }));
+    // A team plan answers with spend and no included usage; Cursor Agent's own /usage has nothing to show either.
+    const teamPlan = withAuth({ accessToken: cursorToken(Date.parse('2026-10-24T00:00:00Z')) }, { status: 200, body: { billingCycleEnd: '1792540800000', enabled: true } });
+    expect(await readHarnessUsage('cursor', 'agent.exe', undefined, teamPlan.runtime)).toEqual(expect.objectContaining({ unavailable: 'unsupported', email: 'an@example.com' }));
+    const missing = fakeRuntime({ about, env: { APPDATA: roaming }, files: {} });
+    expect(await readHarnessUsage('cursor', 'agent.exe', undefined, missing.runtime)).toEqual(expect.objectContaining({ unavailable: 'failed' }));
+
+    const signedOut = fakeRuntime({ about: { userEmail: null, subscriptionTier: null } });
+    expect(await readHarnessUsage('cursor', 'agent.exe', undefined, signedOut.runtime)).toEqual({ windows: [], unavailable: 'signed_out' });
+    expect(signedOut.reads).toEqual([]);
+  });
+
+  it('reads Cursor Agent’s token from the macOS Keychain, from CURSOR_AUTH_TOKEN, or from auth.json on Linux', async () => {
+    const about = { userEmail: 'an@example.com', subscriptionTier: 'pro' };
+    const token = cursorToken(Date.parse('2026-10-24T00:00:00Z'));
+    const answers = { [CURSOR_URL]: { status: 200, body: cursorAnswer } };
+
+    const mac = fakeRuntime({ about, platform: 'darwin', keychain: { 'cursor-access-token': token }, answers });
+    expect((await readHarnessUsage('cursor', 'agent', undefined, mac.runtime)).windows).toHaveLength(3);
+    expect(mac.keychainReads).toEqual(['cursor-access-token']);
+    expect(mac.reads).toEqual([]);
+
+    const macFile = fakeRuntime({ about, platform: 'darwin', env: { AGENT_CLI_CREDENTIAL_STORE: 'file' }, files: { [join('home', 'person', '.cursor', 'auth.json')]: { accessToken: token } }, answers });
+    expect((await readHarnessUsage('cursor', 'agent', undefined, macFile.runtime)).windows).toHaveLength(3);
+    expect(macFile.keychainReads).toEqual([]);
+
+    const linux = fakeRuntime({ about, platform: 'linux', env: { XDG_CONFIG_HOME: join('home', 'person', 'config') }, files: { [join('home', 'person', 'config', 'cursor', 'auth.json')]: { accessToken: token } }, answers });
+    expect((await readHarnessUsage('cursor', 'agent', undefined, linux.runtime)).windows).toHaveLength(3);
+
+    const given = fakeRuntime({ about, env: { CURSOR_AUTH_TOKEN: token }, files: {}, answers });
+    expect((await readHarnessUsage('cursor', 'agent.exe', undefined, given.runtime)).windows).toHaveLength(3);
+    expect(given.reads).toEqual([]);
+
+    const apiKey = fakeRuntime({ about, env: { CURSOR_API_KEY: 'key-value' }, files: {}, answers });
+    expect(await readHarnessUsage('cursor', 'agent.exe', undefined, apiKey.runtime)).toEqual(expect.objectContaining({ unavailable: 'unsupported' }));
+    expect(apiKey.fetches).toEqual([]);
+  });
+
+  it('reads Claude Code’s sign-in from the macOS Keychain when the file holds no token, per account folder', async () => {
+    const keychainCredentials = JSON.stringify(claudeCredentials(Date.parse('2026-09-24T16:00:00Z')));
+    const folder = '/Users/an/Library/Application Support/Orglet/harness-accounts/claude-code/work';
+    const mac = fakeRuntime({
+      status: signedInClaude,
+      platform: 'darwin',
+      keychain: { 'Claude Code-credentials': keychainCredentials, 'Claude Code-credentials-59058fe9': keychainCredentials },
+    });
+    expect(await readHarnessUsage('claude-code', 'claude', undefined, mac.runtime)).toEqual({ email: 'an@example.com', plan: 'Max 20x', windows: claudeUsageWindows(claudeAnswer) });
+    await readHarnessUsage('claude-code', 'claude', folder, mac.runtime);
+    expect(mac.keychainReads).toEqual(['Claude Code-credentials', 'Claude Code-credentials-59058fe9']);
+    expect(mac.fetches.map(call => call.authorization)).toEqual(['Bearer token-value', 'Bearer token-value']);
+    expect(claudeKeychainService(folder)).toBe('Claude Code-credentials-59058fe9');
+
+    // Windows and Linux keep the sign-in in the file only.
+    const windows = fakeRuntime({ status: signedInClaude, keychain: { 'Claude Code-credentials': keychainCredentials } });
+    expect(await readHarnessUsage('claude-code', 'claude.exe', undefined, windows.runtime)).toEqual(expect.objectContaining({ unavailable: 'unsupported' }));
+    expect(windows.keychainReads).toEqual([]);
+  });
+});
+
+describe('Gemini CLI quota', () => {
+  const geminiFolder = join('home', 'person', '.gemini');
+  const signedInFiles = (credentials: unknown) => ({
+    [join(geminiFolder, 'settings.json')]: { security: { auth: { selectedType: 'oauth-personal' } } },
+    [join(geminiFolder, 'google_accounts.json')]: { active: 'an@example.com' },
+    [join(geminiFolder, 'oauth_creds.json')]: credentials,
+  });
+  const loadUrl = 'https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist';
+  const quotaUrl = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota';
+  // Field names from gemini-cli's code_assist/types.ts (LoadCodeAssistResponse, RetrieveUserQuotaResponse).
+  const loaded = { currentTier: { id: 'free-tier', name: 'Gemini Code Assist for individuals' }, cloudaicompanionProject: 'project-123' };
+  const quota = {
+    buckets: [
+      { modelId: 'gemini-2.5-pro', remainingFraction: 0.75, resetTime: '2026-09-25T07:00:00Z', tokenType: 'REQUESTS' },
+      { modelId: 'gemini-2.5-flash', remainingFraction: 1, resetTime: '2026-09-25T07:00:00Z', tokenType: 'REQUESTS' },
+      { modelId: 'gemini-2.5-flash', remainingFraction: 0.9, tokenType: 'TOKENS' },
+      { remainingFraction: 0.1 },
+    ],
+  };
+
+  it('reads each model’s daily allowance with the saved token, and sends it only to Code Assist', async () => {
+    const fake = fakeRuntime({
+      files: signedInFiles({ access_token: 'google-token', refresh_token: 'google-refresh', expiry_date: Date.parse('2026-09-24T12:00:00Z') }),
+      answers: { [loadUrl]: { status: 200, body: loaded }, [quotaUrl]: { status: 200, body: quota } },
+    });
+    const read = await readHarnessUsage('gemini', 'gemini.cmd', undefined, fake.runtime);
+    expect(read).toEqual({
+      email: 'an@example.com',
+      plan: 'Gemini Code Assist for individuals',
+      windows: [
+        { kind: 'daily', model: 'gemini-2.5-pro', usedPercent: 25, resetsAt: '2026-09-25T07:00:00.000Z' },
+        { kind: 'daily', model: 'gemini-2.5-flash', usedPercent: expect.closeTo(10, 5) },
+      ],
+    });
+    expect(fake.fetches.map(call => [call.url, call.authorization])).toEqual([[loadUrl, 'Bearer google-token'], [quotaUrl, 'Bearer google-token']]);
+    expect(fake.fetches[1].body).toEqual({ project: 'project-123' });
+    expect(JSON.stringify(read)).not.toMatch(/google-token|google-refresh/);
+  });
+
+  it('leaves an expired token to Gemini CLI, and an account it has not set up yet alone', async () => {
+    const expired = fakeRuntime({ files: signedInFiles({ access_token: 'google-token', expiry_date: Date.parse('2026-09-24T11:00:00Z') }) });
+    expect(await readHarnessUsage('gemini', 'gemini.cmd', undefined, expired.runtime)).toEqual({ email: 'an@example.com', windows: [], unavailable: 'expired' });
+    expect(expired.fetches).toEqual([]);
+
+    const refreshOnly = fakeRuntime({ files: signedInFiles({ refresh_token: 'google-refresh' }) });
+    expect(await readHarnessUsage('gemini', 'gemini.cmd', undefined, refreshOnly.runtime)).toEqual(expect.objectContaining({ unavailable: 'expired' }));
+
+    const notSetUp = fakeRuntime({
+      files: signedInFiles({ access_token: 'google-token', expiry_date: Date.parse('2026-09-24T12:00:00Z') }),
+      answers: { [loadUrl]: { status: 200, body: { allowedTiers: [{ id: 'free-tier', isDefault: true }] } } },
+    });
+    expect(await readHarnessUsage('gemini', 'gemini.cmd', undefined, notSetUp.runtime)).toEqual({ email: 'an@example.com', windows: [], unavailable: 'unsupported' });
+    expect(notSetUp.fetches.map(call => call.url)).toEqual([loadUrl]);
+
+    const apiKey = fakeRuntime({ files: { [join(geminiFolder, 'settings.json')]: { security: { auth: { selectedType: 'gemini-api-key' } } } } });
+    expect(await readHarnessUsage('gemini', 'gemini.cmd', undefined, apiKey.runtime)).toEqual({ windows: [], unavailable: 'unsupported' });
+    expect(apiKey.fetches).toEqual([]);
+  });
+
+  it('names the plan from the paid tier and keeps the project Gemini CLI was told to use', () => {
+    expect(geminiTier({ currentTier: { name: 'Standard' }, paidTier: { name: 'Google AI Pro' } }, 'my-project')).toEqual({ project: 'my-project', plan: 'Google AI Pro' });
+    expect(geminiTier({ allowedTiers: [] }, 'my-project')).toEqual({});
+    expect(geminiUsageWindows({ buckets: 'nope' })).toEqual([]);
+  });
+});
+
+describe('OpenCode Go usage', () => {
+  // The body `GET /zen/go/v1/usage` sends (packages/console/app/src/routes/zen/go/v1/usage.ts in the opencode repo).
+  const goAnswer = {
+    usage: {
+      rolling: { status: 'ok', percent: 12, resetsAt: '2026-09-24T15:00:00.000Z' },
+      weekly: { status: 'ok', percent: 40, resetsAt: '2026-09-28T00:00:00.000Z' },
+      monthly: { status: 'rate-limited', percent: 100, resetsAt: '2026-10-10T00:00:00.000Z' },
+    },
+  };
+
+  it('names the five-hour, weekly and monthly allowances by their length', () => {
+    expect(openCodeGoUsageWindows(goAnswer)).toEqual([
+      { kind: 'session', usedPercent: 12, resetsAt: '2026-09-24T15:00:00.000Z' },
+      { kind: 'weekly', usedPercent: 40, resetsAt: '2026-09-28T00:00:00.000Z' },
+      { kind: 'monthly', usedPercent: 100, resetsAt: '2026-10-10T00:00:00.000Z' },
+    ]);
+    expect(openCodeGoUsageWindows({ type: 'error' })).toEqual([]);
+  });
+
+  it('reads with the saved Go key, sends it only to OpenCode Go, and says when the key has no Go plan', async () => {
+    const store = new Store(':memory:');
+    try {
+      const calls: { url: string; authorization: string | null }[] = [];
+      let status = 200;
+      const request: typeof fetch = async (input, init) => {
+        calls.push({ url: String(input), authorization: new Headers(init?.headers).get('authorization') });
+        return new Response(JSON.stringify(status === 200 ? goAnswer : { type: 'error' }), { status });
+      };
+      let key: string | null = 'go-key-value';
+      const core = new CoreService(store, () => {}, async () => { throw new Error('unused'); }, undefined, () => new Date('2026-09-24T12:00:00Z'), {
+        detect: async () => [], execute: async () => { throw new Error('unused'); },
+      }, undefined, { readKey: async provider => provider === 'opencode-go' ? key : null, fetch: request });
+
+      const found = await core.command('openCodeGoUsage', { refresh: true }) as OpenCodeGoUsage;
+      expect(found).toEqual({ windows: openCodeGoUsageWindows(goAnswer), checkedAt: '2026-09-24T12:00:00.000Z' });
+      expect(calls).toEqual([{ url: 'https://opencode.ai/zen/go/v1/usage', authorization: 'Bearer go-key-value' }]);
+      expect(JSON.stringify(found)).not.toContain('go-key-value');
+      await core.command('openCodeGoUsage', { refresh: false });
+      expect(calls).toHaveLength(1);
+
+      status = 403;
+      expect(await core.command('openCodeGoUsage', { refresh: true })).toEqual(expect.objectContaining({ windows: [], unavailable: 'unsupported' }));
+      status = 500;
+      expect(await core.command('openCodeGoUsage', { refresh: true })).toEqual(expect.objectContaining({ unavailable: 'failed' }));
+      key = null;
+      expect(await core.command('openCodeGoUsage', { refresh: true })).toEqual(expect.objectContaining({ unavailable: 'signed_out' }));
+      expect(calls).toHaveLength(3);
+    } finally {
+      store.close();
+    }
+  });
+
+  it('reads as failed when OpenCode Go cannot be reached', async () => {
+    expect(await readOpenCodeGoUsage('go-key-value', async () => { throw new Error('offline'); })).toEqual({ windows: [], unavailable: 'failed' });
   });
 });
 
@@ -293,5 +586,153 @@ describe('usage in Settings', () => {
       detect: async () => [], execute: async () => { throw new Error('unused'); },
     });
     expect(await core.command('harnessUsage', { refresh: true })).toEqual({});
+  });
+});
+
+describe('the last good reading (COD-301)', () => {
+  let directory: string;
+  let store: Store;
+  beforeEach(async () => {
+    directory = await mkdtemp(join(tmpdir(), 'orglet-usage-readings-'));
+    store = new Store(':memory:');
+  });
+  afterEach(async () => {
+    store.close();
+    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  });
+
+  const fresh: HarnessAccountUsage = {
+    accountId: SYSTEM_ACCOUNT_ID, email: 'an@example.com', plan: 'Max 20x', checkedAt: '2026-09-27T00:05:00.000Z',
+    windows: [
+      { kind: 'session', usedPercent: 12, resetsAt: '2026-09-27T02:00:00.000Z' },
+      { kind: 'weekly', usedPercent: 40, resetsAt: '2026-10-01T04:00:00.000Z' },
+    ],
+  };
+  const expired = (checkedAt: string, email = 'an@example.com'): HarnessAccountUsage =>
+    ({ accountId: SYSTEM_ACCOUNT_ID, email, plan: 'Max 20x', windows: [], unavailable: 'expired', checkedAt });
+
+  it('shows the last good numbers with their time when the saved sign-in has expired, and never keeps a token', () => {
+    const readings = new UsageReadings(store);
+    expect(readings.settle('claude-code', fresh, new Date('2026-09-27T00:05:00Z'))).toEqual(fresh);
+    const later = readings.settle('claude-code', expired('2026-09-27T01:30:00.000Z'), new Date('2026-09-27T01:30:00Z'));
+    expect(later).toEqual({ ...expired('2026-09-27T01:30:00.000Z'), windows: fresh.windows, asOf: '2026-09-27T00:05:00.000Z' });
+    // A failed request shows them the same way; the reason stays on the row.
+    expect(readings.settle('claude-code', { ...expired('2026-09-27T01:31:00.000Z'), unavailable: 'failed' }, new Date('2026-09-27T01:31:00Z')))
+      .toEqual(expect.objectContaining({ unavailable: 'failed', asOf: '2026-09-27T00:05:00.000Z' }));
+    expect(JSON.stringify(store.setting('harnessUsageReadings', {}))).not.toMatch(/token|Bearer/i);
+  });
+
+  it('keeps a Gemini CLI daily reading for when its token has expired', () => {
+    const readings = new UsageReadings(store);
+    const daily: HarnessAccountUsage = { ...fresh, plan: undefined, windows: [{ kind: 'daily', model: 'gemini-2.5-pro', usedPercent: 25, resetsAt: '2026-09-28T07:00:00.000Z' }] };
+    readings.settle('gemini', daily, new Date('2026-09-27T00:05:00Z'));
+    const later = readings.settle('gemini', { ...expired('2026-09-27T02:00:00.000Z'), plan: undefined }, new Date('2026-09-27T02:00:00Z'));
+    expect(later).toEqual(expect.objectContaining({ unavailable: 'expired', windows: daily.windows, asOf: fresh.checkedAt }));
+  });
+
+  it('drops a window whose reset has passed, and the whole reading once none is left', () => {
+    const readings = new UsageReadings(store);
+    readings.settle('claude-code', fresh, new Date('2026-09-27T00:05:00Z'));
+    const afterSession = readings.settle('claude-code', expired('2026-09-27T03:00:00.000Z'), new Date('2026-09-27T03:00:00Z'));
+    expect(afterSession.windows).toEqual([fresh.windows[1]]);
+    const afterWeek = readings.settle('claude-code', expired('2026-10-02T00:00:00.000Z'), new Date('2026-10-02T00:00:00Z'));
+    expect(afterWeek).toEqual(expired('2026-10-02T00:00:00.000Z'));
+  });
+
+  it('keeps one account’s numbers off another: a new address, a sign-out or a removed account clears them', () => {
+    const readings = new UsageReadings(store);
+    readings.settle('claude-code', fresh, new Date('2026-09-27T00:05:00Z'));
+    const now = new Date('2026-09-27T01:00:00Z');
+    expect(readings.settle('claude-code', expired(now.toISOString(), 'someone@example.com'), now).asOf).toBeUndefined();
+    expect(readings.settle('codex', expired(now.toISOString()), now).asOf).toBeUndefined();
+    readings.settle('claude-code', { ...expired(now.toISOString()), unavailable: 'signed_out' }, now);
+    expect(readings.settle('claude-code', expired(now.toISOString()), now).asOf).toBeUndefined();
+    readings.settle('claude-code', fresh, now);
+    readings.forget('claude-code', SYSTEM_ACCOUNT_ID);
+    expect(readings.settle('claude-code', expired(now.toISOString()), now).asOf).toBeUndefined();
+  });
+
+  it('is never offered as an account with room: its numbers are not fresh', () => {
+    const readings = new UsageReadings(store);
+    readings.settle('claude-code', { ...fresh, accountId: 'work' }, new Date('2026-09-27T00:05:00Z'));
+    const stale = readings.settle('claude-code', { ...expired('2026-09-27T01:00:00.000Z'), accountId: 'work' }, new Date('2026-09-27T01:00:00Z'));
+    expect(stale.asOf).toBeDefined();
+    const offer = accountSwitchFor({ accountId: SYSTEM_ACCOUNT_ID, accounts: [{ id: 'work', label: 'Work' }] }, [stale]);
+    expect(offer).toEqual({ kind: 'wait' });
+  });
+
+  it('reads Claude Code usage again after an Orglet run renewed an expired sign-in, and not after other runs', async () => {
+    let clock = new Date('2026-09-27T00:05:00Z');
+    let answer: AccountUsageRead = { email: 'an@example.com', plan: 'Max 20x', windows: [{ kind: 'weekly', usedPercent: 40 }] };
+    const reads: HarnessCatalogId[] = [];
+    let notified = 0;
+    const core = new CoreService(store, () => { notified += 1; }, async () => { throw new Error('Native adapter must not be used'); }, undefined, () => clock, {
+      detect: async () => [
+        { ...missingHarness('claude-code', 'win32'), executable: 'claude.exe', auth: 'logged_in', status: 'signed_in' },
+        { ...missingHarness('codex', 'win32'), executable: 'codex.exe', auth: 'logged_in', status: 'signed_in' },
+      ],
+      usage: async harness => {
+        reads.push(harness);
+        return harness === 'claude-code' ? answer : { windows: [{ kind: 'weekly', usedPercent: 0 }] };
+      },
+      execute: async () => { throw new Error('The run itself does not matter here'); },
+    });
+    const note = join(directory, 'note.txt');
+    await writeFile(note, 'the answer is 42');
+    const sources = await core.sources.import([note]);
+    const runWith = async (provider: 'claude-code' | 'codex') => {
+      const worker = await core.command('saveWorker', { ...store.all<Worker>('workers')[0], provider }) as Worker;
+      await core.command('createTask', { workerId: worker.id, brief: 'Find the answer', sourceIds: sources.map(source => source.id), consent: true, providerScopes: [provider], budgetMicros: 500_000 });
+      for (let tries = 0; tries < 300 && store.all<Task>('tasks').some(task => core.runner.isActive(task.id)); tries += 1) await new Promise(resolve => setTimeout(resolve, 10));
+    };
+
+    // The first read is good and is kept; the next finds the saved sign-in expired and shows it with its time.
+    await core.command('harnessUsage', { refresh: true });
+    clock = new Date('2026-09-27T01:30:00Z');
+    answer = { email: 'an@example.com', plan: 'Max 20x', windows: [], unavailable: 'expired' };
+    const stale = await core.command('harnessUsage', { refresh: true }) as HarnessUsage;
+    expect(stale['claude-code']?.[0]).toEqual(expect.objectContaining({ unavailable: 'expired', asOf: '2026-09-27T00:05:00.000Z', windows: [{ kind: 'weekly', usedPercent: 40 }] }));
+
+    // A Codex run renews nothing of Claude Code's.
+    const before = reads.length;
+    await runWith('codex');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(reads.length).toBe(before);
+
+    // A Claude Code run renews its sign-in, so the numbers are read again and the window is told.
+    answer = { email: 'an@example.com', plan: 'Max 20x', windows: [{ kind: 'weekly', usedPercent: 41 }] };
+    const notifiedBefore = notified;
+    await runWith('claude-code');
+    for (let tries = 0; tries < 100 && reads.length === before; tries += 1) await new Promise(resolve => setTimeout(resolve, 10));
+    expect(reads.length).toBeGreaterThan(before);
+    for (let tries = 0; tries < 100 && notified === notifiedBefore; tries += 1) await new Promise(resolve => setTimeout(resolve, 10));
+    const renewed = await core.command('harnessUsage', { refresh: false }) as HarnessUsage;
+    expect(renewed['claude-code']?.[0]).toEqual(expect.objectContaining({ windows: [{ kind: 'weekly', usedPercent: 41 }] }));
+    expect(renewed['claude-code']?.[0].asOf).toBeUndefined();
+  });
+
+  it('words reset and reading times without a sixty-minute remainder', () => {
+    const now = new Date('2026-09-27T02:08:35Z');
+    expect(usageResetLabel(new Date(now.getTime() + 119.7 * 60_000).toISOString(), now)).toBe('Resets in 2 h');
+    expect(usageResetLabel(new Date(now.getTime() + 90 * 60_000).toISOString(), now)).toBe('Resets in 1 h 30 min');
+    const earlierToday = new Date(now.getTime() - 95 * 60_000);
+    expect(usageReadingTime(earlierToday.toISOString(), now)).toBe(earlierToday.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }));
+  });
+
+  it('forgets a removed account’s reading', async () => {
+    const accountRoot = join(directory, 'harness-accounts');
+    let core: CoreService | undefined;
+    core = new CoreService(store, () => {}, async () => { throw new Error('unused'); }, undefined, () => new Date('2026-09-27T00:05:00Z'), {
+      detect: async () => [{ ...missingHarness('claude-code', 'win32', core?.harnessAccounts.selection('claude-code')), executable: 'claude.exe', auth: 'logged_in', status: 'signed_in' }],
+      usage: async () => ({ email: 'an@example.com', windows: [{ kind: 'weekly', usedPercent: 5 }] }),
+      accountRoot,
+      execute: async () => { throw new Error('unused'); },
+    });
+    await core.command('saveHarnessAccount', { harness: 'claude-code', label: 'Work' });
+    const [work] = core.harnessAccounts.selection('claude-code').accounts;
+    await core.command('harnessUsage', { refresh: true });
+    expect(Object.keys(store.setting('harnessUsageReadings', {}))).toContain(`claude-code:${work.id}`);
+    await core.command('removeHarnessAccount', { harness: 'claude-code', id: work.id });
+    expect(Object.keys(store.setting('harnessUsageReadings', {}))).not.toContain(`claude-code:${work.id}`);
   });
 });

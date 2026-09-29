@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AppWindow, Ban, Blocks, BookOpen, Brain, Camera, ChevronRight, FileDiff, FileText, FolderInput, FolderPlus, FolderSearch, Globe, Hourglass, Keyboard, Lightbulb, ListChecks, MonitorSmartphone, Mouse, MousePointerClick, MoveVertical, ScanSearch, Search, ShieldCheck, Table2, Terminal, TextCursorInput, Trash2, UserRound, Wrench, type LucideIcon } from 'lucide-react';
+import { AppWindow, Ban, Blocks, BookOpen, Brain, Camera, ChevronRight, FileDiff, FileText, FolderInput, FolderPlus, FolderSearch, Globe, Hourglass, ImageOff, Keyboard, Lightbulb, ListChecks, MonitorSmartphone, Mouse, MousePointerClick, MoveVertical, ScanSearch, Search, ShieldCheck, Table2, Terminal, TextCursorInput, Trash2, UserRound, Wrench, type LucideIcon } from 'lucide-react';
 import { t, tMessage } from '../i18n';
 import { traceSummary, type TraceEntry, type TraceKind } from '../turnTrace';
 
@@ -32,7 +32,7 @@ export function TurnTrace({ entries, onOpenMemories, children }: { entries: read
 const traceIcons: Record<TraceKind, LucideIcon> = {
   memory: Brain, knowledge: BookOpen, read: FileText, search: Search, list: FolderSearch, skill: BookOpen,
   web_search: Globe, web_read: Globe, dataset: Table2, edit: FileDiff, folder: FolderPlus, move: FolderInput, delete: Trash2, command: Terminal, handoff: UserRound,
-  remembered: Brain, proposal: Lightbulb, failed: Ban, other: Wrench, mcp: Blocks,
+  remembered: Brain, proposal: Lightbulb, withheld: ImageOff, failed: Ban, other: Wrench, mcp: Blocks,
   browser_open: AppWindow, browser_read: AppWindow, browser_find: ScanSearch, browser_screenshot: Camera, browser_scroll: MoveVertical,
   browser_click: MousePointerClick, browser_type: TextCursorInput, browser_select: ListChecks, browser_press: Keyboard, browser_wait: Hourglass, browser_asked: ShieldCheck,
   desktop_read: MonitorSmartphone, desktop_find: ScanSearch, desktop_screenshot: Camera, desktop_act: MousePointerClick, desktop_asked: ShieldCheck, desktop_borrow: Mouse,
@@ -76,6 +76,7 @@ function traceVerb(kind: TraceKind): string {
     case 'handoff': return t('Giao việc cho');
     case 'remembered': return t('Ghi nhớ thêm');
     case 'proposal': return t('Đề xuất');
+    case 'withheld': return t('Không gửi ảnh');
     case 'failed': return t('Không thành');
     case 'other': return t('Dùng công cụ');
   }
@@ -86,7 +87,7 @@ const proseKinds: readonly TraceKind[] = ['memory', 'knowledge'];
 
 function TraceRow({ entry }: { entry: TraceEntry }) {
   const Icon = traceIcons[entry.kind];
-  const classes = ['trace-row', entry.kind === 'failed' ? 'trace-row-muted' : '', entry.running ? 'running' : ''].filter(Boolean).join(' ');
+  const classes = ['trace-row', entry.kind === 'failed' || entry.kind === 'withheld' ? 'trace-row-muted' : '', entry.running ? 'running' : ''].filter(Boolean).join(' ');
   return <li className={classes}>
     <Icon size={14} aria-hidden="true" />
     {entry.note
@@ -94,6 +95,7 @@ function TraceRow({ entry }: { entry: TraceEntry }) {
       : <>
         <span className="trace-verb">{traceVerb(entry.kind)}</span>
         {entry.target && <span className={proseKinds.includes(entry.kind) ? 'trace-text' : 'trace-target'}>{entry.target}</span>}
+        {entry.why && <span className="trace-why">{entry.why}</span>}
       </>}
   </li>;
 }

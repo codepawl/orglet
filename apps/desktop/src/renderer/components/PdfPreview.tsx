@@ -3,7 +3,8 @@ import { Button } from './ui';
 import { t } from '../i18n';
 
 const PAGE_BATCH = 10;
-const RENDER_WIDTH = 720;
+/** How wide a page is shown, in the viewer and while marking it up. */
+export const PDF_PAGE_WIDTH = 720;
 
 type PdfModule = typeof import('pdfjs-dist');
 type PdfDocument = import('pdfjs-dist').PDFDocumentProxy;
@@ -14,7 +15,7 @@ let pdfModule: Promise<PdfModule> | undefined;
  * when the window cannot start a Worker from it (a `file:` page cannot), pdf.js falls back to running the same
  * module on the main thread, which is what the packaged app does.
  */
-function loadPdf(): Promise<PdfModule> {
+export function loadPdf(): Promise<PdfModule> {
   if (!pdfModule) {
     pdfModule = import('pdfjs-dist').then(module => {
       module.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).href;
@@ -33,7 +34,7 @@ function PdfPage({ document, pageNumber }: { document: PdfDocument; pageNumber: 
     void document.getPage(pageNumber).then(page => {
       if (cancelled || !canvas.current) return;
       const base = page.getViewport({ scale: 1 });
-      const scale = RENDER_WIDTH / base.width;
+      const scale = PDF_PAGE_WIDTH / base.width;
       const ratio = window.devicePixelRatio || 1;
       const viewport = page.getViewport({ scale: scale * ratio });
       const element = canvas.current;
@@ -80,8 +81,8 @@ export function PdfPreview({ bytes, name, fallback }: { bytes: Uint8Array; name:
       {Array.from({ length: visible }, (_, index) => <PdfPage key={index + 1} document={document} pageNumber={index + 1} />)}
     </div>
     <p className="preview-note">
-      {visible < total ? t('Đang hiện {0} trong {1} trang.', [visible, total]) : t('{0} trang', [total])}
-      {visible < total && <Button variant="outline" onClick={() => setShown(current => current + PAGE_BATCH)}>{t('Thêm {0} trang', [Math.min(PAGE_BATCH, total - visible)])}</Button>}
+      {visible < total ? t('Đang hiện {0} trong {1} trang.', [visible, total]) : total === 1 ? t('1 trang') : t('{0} trang', [total])}
+      {visible < total && <Button variant="outline" onClick={() => setShown(current => current + PAGE_BATCH)}>{total - visible === 1 ? t('Thêm 1 trang') : t('Thêm {0} trang', [Math.min(PAGE_BATCH, total - visible)])}</Button>}
     </p>
   </div>;
 }

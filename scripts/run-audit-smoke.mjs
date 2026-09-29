@@ -34,6 +34,10 @@ try {
   await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
   await page.getByRole('button', { name: 'Xem nguồn', exact: true }).click();
   await page.getByRole('dialog', { name: 'Nguồn của cuộc trò chuyện' }).waitFor();
+  // The run-log check sits under "Kiểm tra khác" since COD-292; the files are still ticked in the data check above it.
+  const moreChecks = page.locator('details.more-checks');
+  assert.equal(await moreChecks.evaluate(element => element.open), false);
+  await moreChecks.locator('summary').click();
   await page.getByRole('checkbox', { name: 'runs.csv', exact: true }).check();
   assert.equal(await page.getByRole('button', { name: 'Kiểm tra run-log local', exact: true }).isEnabled(), false);
   await page.getByRole('combobox', { name: 'Chiều tối ưu của metric', exact: true }).click(); await page.getByRole('option', { name: 'Điểm cao hơn tốt hơn', exact: true }).click();
@@ -45,7 +49,10 @@ try {
   await page.getByRole('checkbox', { name: 'invalid.csv', exact: true }).uncheck();
   await page.getByRole('checkbox', { name: 'runs.csv', exact: true }).check();
   await page.getByRole('button', { name: 'Kiểm tra run-log local', exact: true }).click();
-  await page.locator('summary').filter({ hasText: /^Run-log ·/ }).click();
+  // The result the check just saved opens by itself under the data check (COD-292).
+  const savedResult = page.locator('details.check-result').filter({ has: page.locator('summary', { hasText: /^Kết quả run-log ·/ }) });
+  await savedResult.waitFor();
+  assert.equal(await savedResult.evaluate(element => element.open), true);
   await page.getByRole('heading', { name: 'Run-log · Cần xem lại failure', exact: true }).waitFor();
   await page.getByText(/60 completed · 1 failed · 0 cancelled/).waitFor();
   await page.getByText('Mã lỗi và trạng thái không hoàn tất', { exact: true }).click();

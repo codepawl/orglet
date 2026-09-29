@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route } from 'lucide-react';
+import { routeOfTurn, type TurnRoute } from '../../shared/turn-routing';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
 import { formatMoney } from './money';
@@ -12,18 +13,20 @@ import { Avatar } from './Avatar';
 import { toast } from './toast';
 import { t } from '../i18n';
 import { filesAddedWith } from '../turnFiles';
+import { pausedAfter } from '../../shared/paused-turn';
 import { DocumentCard, DocumentViewer } from './DocumentViewer';
 import { FormatAction } from './FormatAction';
 import { currentLocale, translated, tMessage } from '../i18n';
 import { orglet } from '../api';
-import { isHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../shared/harness';
+import { isHarness, type HarnessInfo } from '../../shared/harness';
+import { harnessAccountLabel } from './PlanUsage';
 import { accountSwitchFor, outOfPlanRun, type AccountSwitch } from '../../shared/account-switch';
 import { Markdown } from './Markdown';
 import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
+import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, waitingStepLine, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
 import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
 import { DesktopApprovalCard } from './DesktopApps';
@@ -35,7 +38,9 @@ import { UNASSIGNED_PLAN_ERROR } from '../../shared/contracts';
 import { MentionText } from './mentions';
 import type { MentionPerson } from '../../shared/mentions';
 import { teamProgress } from '../../shared/team-progress';
-import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
+import { crewPlanDiagram } from '../../shared/crew-plan';
+import { CrewPlanFlow } from './CrewPlanFlow';
+import { changeOutcomeOf, type WorkspaceRecoveryView } from '../../shared/workspace-recovery';
 import { groupRecoveryAttempts } from '../../shared/recovery-attempts';
 import { AppProposalCards, type ProposalActions } from './AppProposals';
 import { ChangedFilesLine, DiffDialog, type DiffReview, type ReviewStatus } from './DiffViewer';
@@ -43,40 +48,57 @@ import { confirmAction } from './confirm';
 import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
 import type { AppProposal } from '../../shared/app-proposals';
 import type { ChatQuote } from '../../shared/side-threads';
-import type { ForwardedMessage } from '../../shared/forward';
+import { chatHeadline, type ForwardedMessage } from '../../shared/forward';
+import { overflowAttributes, useStripOverflow } from '../stripOverflow';
 import type { ForwardRequest } from '../forward';
 import { McpApprovalCard } from './McpApproval';
 import { turnNotices } from './turnNotices';
 import { withoutSourceIds } from '../../shared/source-mentions';
 import { BlockedCommandLine, CommandOutputDialog, askToFixText } from './BlockedHandIn';
 import type { BlockingCommand } from '../../shared/blocked-hand-in';
+import { canContinueRun } from '../../shared/out-of-steps';
+import { needsPersonKey, useThreadFollow } from '../threadFollow';
+import { unansweredTurnLine } from '../turnOutcome';
 
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
 type TurnNotices = ReturnType<typeof turnNotices>;
 
+type ChangedFilesLineOf = { run: Run; summary: WorkspaceDiffSummary; review?: ReviewStatus; restored?: true };
+
 /**
  * The runs of a turn that changed files or folders in their working copy, with the counts the core kept (COD-163)
- * and, for changes held for review, where they stand (COD-279).
+ * and where the changes stand (COD-279, COD-291): every line says it, whether the changes waited for review or were
+ * handed in at once. A run whose working copy is not on this computer after a restore gets the line the backup kept
+ * (COD-299), marked `restored`.
  */
-export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecoveryView | undefined): { run: Run; summary: WorkspaceDiffSummary; review?: ReviewStatus }[] {
+export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecoveryView | undefined): ChangedFilesLineOf[] {
   if (!recovery) return [];
   return runs.flatMap(run => {
     const copy = recovery.copies.find(item => item.runId === run.id);
-    const summary = copy?.diff;
-    if (!copy || !summary || (summary.files === 0 && (summary.folders ?? 0) === 0)) return [];
-    const review = reviewStatusOf(copy);
-    return [review ? { run, summary, review } : { run, summary }];
+    if (copy) return lineOf(run, copy.diff, changeOutcomeOf(copy));
+    const kept = recovery.restored?.find(item => item.runId === run.id);
+    if (kept) return lineOf(run, kept.diff, restoredOutcome(kept.outcome), true);
+    return [];
   });
 }
 
-function reviewStatusOf(copy: WorkspaceRecoveryView['copies'][number]): ReviewStatus | undefined {
-  if (copy.carried || copy.review?.state === 'carried') return { state: 'carried' };
-  // The review is settled before the first step runs, so the copy says how far the apply got.
-  if (copy.review?.state === 'applied' && copy.state === 'integrating') return { state: 'applying' };
-  if (copy.review?.state === 'applied' && (copy.state === 'conflict' || copy.state === 'uncertain')) return { state: 'stopped' };
-  if (copy.review?.state === 'applied') return { state: 'applied', skipped: copy.review.skipped ?? 0 };
-  if (copy.review?.state === 'pending' || copy.review?.state === 'discarded') return { state: copy.review.state };
-  return undefined;
+function lineOf(run: Run, summary: WorkspaceDiffSummary | undefined, review: ReviewStatus | undefined, restored = false): ChangedFilesLineOf[] {
+  if (!summary || (summary.files === 0 && (summary.folders ?? 0) === 0)) return [];
+  const line: ChangedFilesLineOf = { run, summary };
+  if (review) line.review = review;
+  if (restored) line.restored = true;
+  return [line];
+}
+
+/**
+ * Where restored changes stand once their working copy is gone: changes that waited for review can no longer be
+ * applied, so they read as never applied, and an apply that was under way or stopped midway says nothing it cannot
+ * show.
+ */
+function restoredOutcome(outcome: ReviewStatus | undefined): ReviewStatus | undefined {
+  if (outcome?.state === 'pending') return { state: 'unapplied' };
+  if (outcome?.state === 'applying' || outcome?.state === 'stopped') return undefined;
+  return outcome;
 }
 
 /**
@@ -121,12 +143,6 @@ function rememberDismissedLimitRun(taskId: string, runId: string) {
   } catch { /* a blocked store brings the offer back next time, nothing worse */ }
 }
 
-/** How the account picker names an account: its label, or the default account's name. */
-function accountLabel(harness: HarnessInfo, accountId: string) {
-  if (accountId === SYSTEM_ACCOUNT_ID) return t('Tài khoản mặc định');
-  return harness.accounts.find(account => account.id === accountId)?.label ?? t('Tài khoản mặc định');
-}
-
 export const statusLabel: Record<TaskStatus, string> = translated({ queued: 'Đang chờ', running: 'Đang làm', pausing: 'Đang tạm dừng', paused: 'Đã tạm dừng', completed: 'Hoàn tất', partial: 'Kết quả một phần', failed: 'Cần xem lại', cancelled: 'Đã hủy', interrupted: 'Bị gián đoạn', waiting_budget: 'Đang chờ ngân sách', waiting_input: 'Chờ bổ sung bằng chứng' });
 
 type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; replyTo?: string; forwarded?: ForwardedMessage; sources: TaskDetail['sources']; artifact?: Artifact; author?: Run; replies: { run: Run; artifact: Artifact }[] };
@@ -140,10 +156,11 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
 export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
   /** Opens another chat: the side thread a quote came from, or the main chat an answer was brought into (COD-247). */ openChat?: (taskId: string) => void;
   /** Opens an orglet's main chat from one of its side threads. */ openMainChat?: (workerId: string) => void;
-  /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule: () => void };
+  /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule?: () => void };
   /** Puts a reply in this chat's composer without sending it: "Nhờ sửa" on a blocked hand-in (COD-270). */ askToFix?: (text: string) => void;
   /** Opens the forward picker for one message of this chat (COD-257). */ forward?: (request: ForwardRequest) => void }) {
-  const viewport = useRef<HTMLDivElement>(null); const atBottom = useRef(true);
+  const viewport = useRef<HTMLDivElement>(null);
+  const threadContent = useRef<HTMLDivElement>(null);
   const [answeringDecision, setAnsweringDecision] = useState(false);
   // A consequential browser step waiting on the person, answered from the card in the latest turn (COD-261).
   const browserApproval = detail.browser?.approval;
@@ -158,6 +175,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   // A command that blocked a hand-in, its output open in the viewer, and whether "Vẫn áp dụng" is on its way (COD-270).
   const [outputCommand, setOutputCommand] = useState<BlockingCommand>();
   const [applyingHandIn, setApplyingHandIn] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   // A member's saved report open in the document viewer from the card that says to see it (COD-256).
   const [savedReportId, setSavedReportId] = useState<string>();
   const savedReport = savedReportId ? detail.artifacts.find(artifact => artifact.id === savedReportId) : undefined;
@@ -185,33 +203,24 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
    * actually worked from (user, 2026-09-20). Nothing new is recorded for this — a run carries the revision of
    * the message it was given, so the highest one a worker has run is exactly how far they have read.
    */
-  const readersByRevision = new Map<number, Run[]>();
-  const furthest = new Map<string, Run>();
-  for (const run of detail.runs) {
-    const revision = run.snapshot.inputRevision ?? 0;
-    const known = furthest.get(run.snapshot.worker.id);
-    if (!known || (known.snapshot.inputRevision ?? 0) < revision) furthest.set(run.snapshot.worker.id, run);
-  }
-  for (const run of furthest.values()) {
-    const revision = run.snapshot.inputRevision ?? 0;
-    readersByRevision.set(revision, [...(readersByRevision.get(revision) ?? []), run]);
-  }
+  const readersByRevision = readersByTurn(detail);
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   // Side threads (COD-247): which answers were already brought into a main chat, and what the threads are called.
   const broughtIn = new Set(workspace.tasks.flatMap(task => (task.quotes ?? []).map(quote => quote.artifactId)));
   const threadName = (taskId: string) => {
     const thread = workspace.tasks.find(task => task.id === taskId && !task.deletedAt);
-    return thread ? thread.title || thread.brief.split('\n')[0].trim() : undefined;
+    return thread ? thread.title || chatHeadline(thread) : undefined;
   };
   const sideThreadOrglet = detail.runs[0]?.snapshot.worker.name ?? workspace.workers.find(worker => worker.id === detail.task.workerId)?.name ?? 'Orglet';
   const liveRuns = useRunProgress(detail.task.id);
-  // Changes whenever streamed text or steps grow, so the view keeps following the newest output.
-  const liveLength = Object.values(liveRuns).reduce((total, update) => total + (update.progress ? update.progress.preamble.length + update.progress.answer.length + update.progress.activity.length : 0), 0);
-  useEffect(() => { if (atBottom.current && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight; }, [detail.events.length, detail.artifacts.length, turns.length, liveLength]);
 
   // What the worker is doing now, shown as the island on the prompt bar (COD-167) rather than in the thread: the
   // latest turn's streaming run, or the run the core's own events describe before anything has streamed.
   const latestTurn = turns.find(turn => turn.revision === current);
+  // The thread keeps to its end while the reader is there, and brings what needs the person into view (COD-290).
+  const waitingDecision = detail.task.status === 'waiting_input' ? pendingDecision?.id : undefined;
+  const needKey = needsPersonKey({ status: detail.task.status, turn: current, lastRunId: latestTurn?.runs.at(-1)?.id, waitingIds: [browserApproval?.id, desktopApproval?.id, waitingDecision] });
+  useThreadFollow(viewport, threadContent, { needKey, turnCount: turns.length });
   const latestLive = busy && latestTurn ? liveRunOf(latestTurn.runs, liveRuns) : undefined;
   const latestActiveRun = latestTurn ? latestTurn.runs.find(item => item.status === 'running') ?? latestTurn.runs.find(item => item.status === 'queued') : undefined;
   const dockedRun = busy ? latestLive?.run ?? latestActiveRun : undefined;
@@ -229,9 +238,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing,
         site: browsingSiteOf(detail.events.filter(event => event.runId === dockedRun.id).map(event => event.message)) })
     : heldRun ? islandBeforeStreaming({ workers: [heldRun.snapshot.worker], pausing: true }) : undefined;
-  // The same state as one line in the chat, until the answer's text starts arriving.
+  // The same state as one line in the chat, until the answer's text starts arriving; while a card waits for the
+  // person, or they hold the browser, it says that instead of the step the run stopped on (COD-290).
+  const waitingLine = waitingStepLine(detail.browser, detail.desktop);
   const runStatus = dockedRun && !latestLive?.update.progress?.answer
-    ? runStepLine({ progress: latestLive?.update.progress, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
+    ? waitingLine ?? runStepLine({ progress: latestLive?.update.progress, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
     : undefined;
   // While a run uses Orglet's browser the island carries Watch, and Hand back once taken over, and waits with the card
   // (COD-261). Watch opens the live view, where the person takes the browser over.
@@ -272,7 +283,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     return () => { live = false; };
   }, [limitRun?.id, limitHarness, dismissedLimitRun]);
   const accountShown = !dockedIsland && limitRun && accountOffer?.runId === limitRun.id && dismissedLimitRun !== limitRun.id ? accountOffer : undefined;
-  const switchTarget = accountShown?.offer.kind === 'switch' ? { accountId: accountShown.offer.accountId, label: accountLabel(accountShown.harness, accountShown.offer.accountId), usedPercent: accountShown.offer.usedPercent } : undefined;
+  const switchTarget = accountShown?.offer.kind === 'switch' ? { accountId: accountShown.offer.accountId, label: harnessAccountLabel(accountShown.harness, accountShown.offer.accountId), usedPercent: accountShown.offer.usedPercent } : undefined;
   const switchResetsAt = accountShown?.offer.kind === 'wait' ? accountShown.offer.resetsAt : undefined;
   const accountActions = useRef({ switchAccount: () => {}, dismiss: () => {} });
   accountActions.current = {
@@ -312,8 +323,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
 
   // One line per run of the turn that changed files in its working copy (COD-163); `named` says whose line carries
   // the worker's name. Each opens the diff viewer.
-  const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary, review }) =>
-    <ChangedFilesLine key={run.id} summary={summary} review={review} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => setDiffRun(run)} />);
+  const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary, review, restored }) =>
+    <ChangedFilesLine key={run.id} summary={summary} review={review} restored={restored} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => setDiffRun(run)} />);
   // Apply and Discard in the viewer, while the open run's changes still wait for review (COD-279).
   const diffWaiting = diffRun ? changedFilesOf([diffRun], recovery)[0]?.review?.state === 'pending' : false;
   const diffReview: DiffReview | undefined = diffRun && diffWaiting ? {
@@ -332,7 +343,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     onDiscard: () => {
       if (deciding) return;
       void confirmAction({ title: t('Bỏ các thay đổi này?'), description: t('Thư mục của bạn không bị sửa, và không áp dụng lại được.'),
-        confirmLabel: t('Bỏ thay đổi'), cancelLabel: t('Giữ lại') }).then(confirmed => {
+        confirmLabel: t('Bỏ thay đổi'), cancelLabel: t('Giữ lại'), tone: 'danger' }).then(confirmed => {
         if (!confirmed) return;
         setDeciding(true);
         action(async () => {
@@ -367,8 +378,12 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     const replyText = withoutSourceIds(tMessage(artifact.report.summary), detail.sources);
     const trace = traceOf({ memories: artifact.usedMemories, context: author?.snapshot.context, runId: artifact.runId, events: detail.events, crew: author?.stage === 'synthesis' ? runs : [] });
     const workerId = author?.snapshot.worker.id;
+    const canContinue = latest && !busy && !detail.task.pendingStart && author !== undefined && canContinueRun(author);
     const notices = turnNotices({
       trace: trace.length > 0 ? <TurnTrace key="trace" entries={trace} onOpenMemories={openMemories && workerId ? () => openMemories(workerId) : undefined} /> : undefined,
+      outOfSteps: author?.outOfSteps && author.stage === undefined
+        ? <OutOfStepsLine key="out-of-steps" busy={continuing} onContinue={canContinue ? () => continueRun(author) : undefined} />
+        : undefined,
       // A crew's answer names each member whose changes a failed command kept out of the folder (COD-270).
       handIn: author?.stage === 'synthesis' ? blockedLinesOf(runs) : undefined,
       changes: changedFilesLines(runs, run => run.id !== artifact.runId),
@@ -408,6 +423,23 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     });
     return <HeldReply runId={run.id} title={held.report.format === 'report' ? tMessage(held.report.title) : undefined} text={text} limitations={held.report.limitations} notices={notices} />;
   };
+  /**
+   * Continue under an answer cut short by the step limit (COD-257): the next message, carrying the chat's files, whose
+   * run starts from this run's calls and results. The core checks again that this is still the latest turn.
+   */
+  const continueRun = (run: Run) => {
+    if (continuing) return;
+    setContinuing(true);
+    const input = detail.task.currentInput ?? detail.task;
+    const sourceIds = input.sourceIds.filter(sourceId => !detail.sources.find(source => source.id === sourceId)?.revoked);
+    const provider = workspace.workers.find(worker => worker.id === detail.task.workerId)?.provider ?? run.snapshot.worker.provider;
+    action(async () => {
+      try {
+        await orglet.call('reviseTask', { taskId: detail.task.id, brief: t('Tiếp tục từ chỗ đã dừng.'), continueFrom: run.id, sourceIds, excludedSources: input.excludedSources,
+          consent: true, providerScopes: provider === 'demo' ? [] : [provider], budgetMicros: detail.task.budgetMicros });
+      } finally { setContinuing(false); }
+    });
+  };
   const applyHandIn = (run: Run) => {
     if (applyingHandIn) return;
     setApplyingHandIn(true);
@@ -417,15 +449,19 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     });
   };
 
-  return <div className="thread-scroll" ref={viewport} onScroll={() => { const el = viewport.current!; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
-    <div className="thread-content">
+  return <div className="thread-scroll" ref={viewport}>
+    <div className="thread-content" ref={threadContent}>
       {detail.task.sideOf && <p className="side-thread-origin">
-        <span>{t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
+        {/* Once an answer was brought in, the main chat did change; the line then says only what this chat is. */}
+        <span>{detail.artifacts.some(artifact => broughtIn.has(artifact.id)) ? t('Chat phụ với {0}.', [sideThreadOrglet]) : t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
         {openMainChat && <button type="button" onClick={() => openMainChat(detail.task.workerId)}>{t('Mở chat chính')}</button>}
       </p>}
       {scheduleRun && <p className="side-thread-origin">
-        <span>{t('Lần chạy của lịch {0}, do {1} làm.', [scheduleRun.name, scheduleRun.owner])}</span>
-        <button type="button" onClick={scheduleRun.openSchedule}>{t('Mở lịch')}</button>
+        {/* A deleted schedule has nothing to open; its runs say so and keep its name (COD-283). */}
+        <span>{scheduleRun.openSchedule
+          ? t('Lần chạy của lịch {0}, do {1} làm.', [scheduleRun.name, scheduleRun.owner])
+          : t('Lần chạy của lịch {0} đã xóa, do {1} làm.', [scheduleRun.name, scheduleRun.owner])}</span>
+        {scheduleRun.openSchedule && <button type="button" onClick={scheduleRun.openSchedule}>{t('Mở lịch')}</button>}
       </p>}
       {turns.map((turn, index) => {
         const latest = turn.revision === current;
@@ -464,14 +500,19 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         const askingRun = latest && detail.task.status === 'waiting_input' && pendingDecision
           ? detail.runs.find(run => run.id === pendingDecision.runId)
           : undefined;
-        const waitingAuthor = askingRun ?? turn.author;
+        // A paused crew turn is signed by whoever took the last step before the pause, not by the combining step
+        // that has not started (COD-287); before anyone started, by the lead who hands out the work.
+        const pausedCrewTurn = latest && detail.task.status === 'paused' && turn.runs.some(run => run.snapshot.team);
+        const stoppedAfter = pausedCrewTurn ? pausedAfter(turn.runs, detail.events) : undefined;
+        const pausedAuthor = pausedCrewTurn ? stoppedAfter ?? turn.runs.find(run => run.stage === 'plan') : undefined;
+        const waitingAuthor = askingRun ?? pausedAuthor ?? turn.author;
+        // A crew turn's plan as a flow diagram (COD-331); it takes the place of the plain progress lines below.
+        const crewPlan = crewPlanDiagram(turn.runs, detail.artifacts);
         return <div className="chat-turn" key={turn.revision}>
           {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
           {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
               of the text, rather than stacking one per line inside it (user, 2026-09-21). */}
-          {addedFiles.length > 0 && <ul className="message-files" aria-label={t('Tệp đính kèm')}>
-            {addedFiles.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} onOpen={() => showSources({ type: 'source', id: item.id })} />)}
-          </ul>}
+          {addedFiles.length > 0 && <MessageFiles files={addedFiles} onOpen={sourceId => showSources({ type: 'source', id: sourceId })} />}
           {turn.forwarded
             ? <ForwardedTurn forwarded={turn.forwarded} elementId={`message-${turnMessageId(detail.task.id, turn.revision)}`} mentionPeople={mentionPeople} mentionAllNames={mentionAllNames}
               openOrigin={openChat && workspace.tasks.some(task => task.id === turn.forwarded!.fromTaskId) ? () => openChat(turn.forwarded!.fromTaskId) : undefined}
@@ -480,6 +521,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
               {turn.replyTo && <button type="button" className="message-reply-context" onClick={() => openMessage(turn.replyTo!)}>
                 <Reply size={13} aria-hidden="true" />{t('Mở tin gốc: {0}', [replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')])}
               </button>}
+              <RoutedLine route={routeOfTurn(detail.task.routedTurns, turn.revision)} nameOf={workerId => workspace.workers.find(worker => worker.id === workerId)?.name
+                ?? detail.runs.find(run => run.snapshot.worker.id === workerId)?.snapshot.worker.name} />
               <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
               {/* On the bubble's start corner: the bubble is right-aligned, so that corner faces the thread. */}
               <MessageBadges taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="start" />
@@ -535,7 +578,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             </div>}
             {latest && detail.task.status === 'waiting_input' && !pendingDecision && <p role="status">{t('Chờ bổ sung bằng chứng. Đính kèm thêm nguồn để kiểm tra lại, hoặc chấp nhận báo cáo cùng các giới hạn đã nêu.')}</p>}
             {latest && detail.task.pendingStart && <p role="status">{t('Đã lưu yêu cầu mới. Đang dừng lượt cũ rồi sẽ bắt đầu.')}</p>}
-            {latest && detail.task.status !== 'completed' && <div className="team-progress" role="status">
+            {crewPlan && <CrewPlanFlow diagram={crewPlan} live={latest && busy} statusLabel={statusLabel} />}
+            {latest && detail.task.status !== 'completed' && !crewPlan && <div className="team-progress" role="status">
               {teamProgress(turn.runs, detail.artifacts).map(({ run, waitingFor }) => {
                 const brief = run.snapshot.assignment!.brief;
                 const characters = Array.from(brief.replace(/\s+/g, ' ').trim());
@@ -548,12 +592,16 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
                 </details> : <p className="muted" key={run.id}>{status} · {description}</p>;
               })}
             </div>}
-            {latest && busy && runStatus && <RunStatusLine line={runStatus} />}
+            {latest && busy && runStatus && <RunStatusLine line={runStatus} waiting={runStatus === waitingLine} />}
             {latest && busy && liveUpdate && <LiveRun update={liveUpdate} memories={live?.run.snapshot.context?.memories} />}
-            {latest && detail.task.status === 'paused' && <p role="status">{t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
+            {latest && detail.task.status === 'paused' && <p role="status">{stoppedAfter
+              ? t('Đã tạm dừng sau bước của {0}, chờ bạn tiếp tục. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.', [stoppedAfter.snapshot.worker.name])
+              : t('Đã tạm dừng. Tiếp tục giữ nguyên thiết lập của lần chạy này; thử lại tạo lần chạy mới.')}</p>}
             {latest && detail.task.handoff && <details><summary>{t('Bàn giao cuối ca')}</summary><p>{t('{0} báo cáo đã lưu · đã đối soát {1} · giữ chỗ {2}', [detail.task.handoff.artifactIds.length, formatMoney(detail.task.handoff.chargedMicros), formatMoney(detail.task.handoff.reservedMicros)])}</p><ul>{detail.task.handoff.artifactIds.map(id => <li key={id}>{detail.artifacts.find(artifact => artifact.id === id)?.report.title ?? id}</li>)}</ul>{detail.task.handoff.blockers.length > 0 && <><h3>{t('Điểm đang chờ')}</h3><ul>{detail.task.handoff.blockers.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></>}<h3>{t('Bước tiếp theo')}</h3><ul>{detail.task.handoff.nextSteps.map((text, index) => <li key={index}>{tMessage(text)}</li>)}</ul></details>}
             {latest && detail.task.status === 'partial' && <p className="run-error">{failedNames.length ? t('{0} chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.', [failedNames.join(', ')]) : t('Một số role chưa hoàn tất. Kết quả đã lưu vẫn được giữ; thử lại để tiếp tục phần thiếu.')}</p>}
-            {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && <p className="muted">{turn.runs.some(run => run.status === 'interrupted') ? t('Lượt này dừng giữa chừng vì app đã đóng.') : t('Chưa có câu trả lời cho tin nhắn này.')}</p>}
+            {/* A turn that ended without an answer keeps what became of it, also once newer messages follow (COD-290);
+                the latest turn's pause already says so in its own line. */}
+            {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && !(latest && detail.task.status === 'paused') && <TurnOutcomeLine outcome={unansweredTurnLine(turn.runs, headline)} />}
             {answered
               ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest)
               : heldRun
@@ -565,10 +613,11 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
             {unresolvedError?.error && !heldRun && <div className="run-error" role="status"><h3>{statusLabel[detail.task.status]}</h3>
               {/* A run refused by the unknown-outcome guard (COD-191) says what to do, not which guard fired: the
                   attempt to review sits in Details, and the button below opens it there. */}
+              {/* A plain stop on a connection that never charges says only what the heading already says. */}
               {blockedCommands
                 ? <div className="run-error-commands">{blockedCommands.map(command => <BlockedCommandLine key={command.processId} command={command}
                   workerName={unresolvedError.stage ? unresolvedError.snapshot.worker.name : undefined} onOpen={() => setOutputCommand(command)} />)}</div>
-                : <p>{unresolvedError.errorCode === 'unresolved_attempt' ? t('Một thay đổi file trước đó chưa rõ kết quả. Kiểm tra trong Chi tiết rồi giữ file hiện tại, sau đó Tí mới ghi tiếp được.')
+                : unresolvedError.error === 'Đã hủy.' ? null : <p>{unresolvedError.errorCode === 'unresolved_attempt' ? t('Một thay đổi file trước đó chưa rõ kết quả. Kiểm tra trong Chi tiết rồi giữ file hiện tại, sau đó Tí mới ghi tiếp được.')
                   : unresolvedError.stage === 'plan' ? t('Trưởng phòng: {0}', [tMessage(unresolvedError.error)]) : tMessage(unresolvedError.error)}</p>}
             </div>}
             {latest && <div className="actions">
@@ -591,6 +640,22 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     {savedReport && <ReportDocument artifact={savedReport} author={detail.runs.find(run => run.id === savedReport.runId)} detail={detail} open onClose={() => setSavedReportId(undefined)} busy={busy} action={action} showSources={showSources}
       actions={<ArtifactActions artifactId={savedReport.id} about={tMessage(savedReport.report.title)} action={action} />} />}
     <BrowserLiveViewer detail={detail} />
+  </div>;
+}
+
+/** What became of a turn without an answer, one muted line; a long error is cut and kept whole in the tooltip. */
+function TurnOutcomeLine({ outcome }: { outcome: ReturnType<typeof unansweredTurnLine> }) {
+  return <p className="muted turn-outcome" title={outcome.detail ? outcome.text : undefined}>{outcome.text}</p>;
+}
+
+/**
+ * Under an answer the orglet handed in because its steps ran out (COD-257): says so, and on the latest turn offers
+ * Continue, which sends the next message and starts its run from this run's calls and results.
+ */
+function OutOfStepsLine({ busy, onContinue }: { busy: boolean; onContinue?: () => void }) {
+  return <div className="out-of-steps">
+    <p><Hourglass size={14} aria-hidden="true" />{t('Hết số bước trước khi xong; đây là phần đã làm được.')}</p>
+    {onContinue && <Button type="button" variant="outline" disabled={busy} onClick={onContinue}><StepForward size={16} />{t('Tiếp tục')}</Button>}
   </div>;
 }
 
@@ -639,10 +704,27 @@ function forwardedAuthor(forwarded: ForwardedMessage): string {
  * exists), then the note, if any, as the person's own bubble. Files that were not sent along are named under the
  * text; the ones that were are this turn's files and sit above it like any attachment.
  */
+/**
+ * Who answers a group-chat message that tagged nobody, when Tacet picked one orglet for it (COD-305). It sits where a
+ * reply names the message it answers, so a narrower turn is never silent; the tooltip says why and how to ask everyone.
+ */
+export function RoutedLine({ route, nameOf }: { route?: TurnRoute; nameOf: (workerId: string) => string | undefined }) {
+  if (!route) return null;
+  const names = route.workerIds.map(workerId => nameOf(workerId)).filter((name): name is string => Boolean(name));
+  if (!names.length) return null;
+  const why = t('Tin nhắn không gắn thẻ ai, nên Tacet chọn Tí hợp nhất để trả lời (chắc {0}%). Gắn @all để hỏi cả nhóm.', [Math.round(route.probability * 100)]);
+  return <p className="message-reply-context message-routed" title={why}>
+    <Route size={13} aria-hidden="true" />{t('Tacet chọn {0} trả lời', [names.join(', ')])}
+  </p>;
+}
+
 function ForwardedTurn({ forwarded, elementId, badges, openOrigin, mentionPeople, mentionAllNames }: { forwarded: ForwardedMessage; elementId: string; badges: ReactNode; openOrigin?: () => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const author = forwardedAuthor(forwarded);
   const sameName = forwarded.authorKind === 'orglet' && author === forwarded.from;
-  const origin = sameName ? t('Chuyển tiếp từ {0}', [forwarded.from]) : t('Chuyển tiếp từ {0} · {1} viết', [forwarded.from, author]);
+  let origin = t('Chuyển tiếp từ {0} · {1} viết', [forwarded.from, author]);
+  if (sameName) origin = t('Chuyển tiếp từ {0}', [forwarded.from]);
+  // "You" starts a sentence elsewhere; mid-line it reads "written by you".
+  else if (forwarded.authorKind === 'person') origin = t('Chuyển tiếp từ {0} · bạn viết', [forwarded.from]);
   const unshared = forwarded.files.filter(file => !file.sourceId).map(file => file.name);
   return <>
     <div className="user-message forwarded-message" id={elementId} tabIndex={-1}>
@@ -680,6 +762,43 @@ function BringIntoMainChat({ artifactId, brought, about, action, openChat }: { a
     toast(t('Đã đưa vào chat chính'), 'success', about, openChat ? { action: { label: t('Mở'), onSelect: () => openChat(mainTaskId) } } : {});
   });
   return <Button size="icon" aria-label={label} title={label} disabled={brought} onClick={bring}>{brought ? <Check size={15} /> : <MessageSquareQuote size={15} />}</Button>;
+}
+
+/**
+ * The orglets to show as having read each turn, by the turn's revision. A run carries the revision of the message it
+ * was given, so the highest one an orglet has run is how far it has read. An orglet whose answer ends that turn has
+ * shown it read it; its face under its own answer only repeated that (dogfood round 5, COD-287), so faces stay for
+ * readers with no answer there yet: working, stopped or failed. A crew's lead plans in one run and answers in another,
+ * so the check is per orglet and turn, not per run.
+ */
+export function readersByTurn(detail: Pick<TaskDetail, 'runs' | 'artifacts'>): Map<number, Run[]> {
+  const readersByRevision = new Map<number, Run[]>();
+  const furthest = new Map<string, Run>();
+  for (const run of detail.runs) {
+    const revision = run.snapshot.inputRevision ?? 0;
+    const known = furthest.get(run.snapshot.worker.id);
+    if (!known || (known.snapshot.inputRevision ?? 0) < revision) furthest.set(run.snapshot.worker.id, run);
+  }
+  const answeredRuns = new Set(detail.artifacts.map(artifact => artifact.runId));
+  const answered = new Set(detail.runs.filter(run => answeredRuns.has(run.id)).map(run => `${run.snapshot.worker.id}:${run.snapshot.inputRevision ?? 0}`));
+  for (const run of furthest.values()) {
+    const revision = run.snapshot.inputRevision ?? 0;
+    if (answered.has(`${run.snapshot.worker.id}:${revision}`)) continue;
+    readersByRevision.set(revision, [...(readersByRevision.get(revision) ?? []), run]);
+  }
+  return readersByRevision;
+}
+
+/**
+ * A sent message's files, as the same sideways strip the composer uses: an end with cards scrolled past it fades out, so
+ * a card cut at the edge reads as "there is more this way" (dogfood round 7, COD-295).
+ */
+function MessageFiles({ files, onOpen }: { files: TaskDetail['sources']; onOpen: (sourceId: string) => void }) {
+  const strip = useRef<HTMLUListElement>(null);
+  const overflow = useStripOverflow(strip, files.length);
+  return <ul className="message-files" ref={strip} aria-label={t('Tệp đính kèm')} {...overflowAttributes(overflow)}>
+    {files.map(item => <Attachment key={item.id} name={item.name} bytes={item.bytes} revoked={item.revoked} onOpen={() => onOpen(item.id)} />)}
+  </ul>;
 }
 
 /**

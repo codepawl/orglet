@@ -19,16 +19,19 @@ import { readBoundedText, writeAtomicText } from './files';
 import { readSkillDirectory, writeSkillDirectory } from './skill-files';
 import { isViteDevRequest, preferLoopbackIpv4 } from './vite-dev-url';
 import { executeProfile, cancelProfile, stopProfiles } from './profiler';
-import { Updater } from './updater';
+import { Updater, updaterLogWriter } from './updater';
 import { ChangelogFeed } from './changelog';
 import { ABOUT_LINKS, AboutLink, installKind, updateFeedUrl, type AboutInfo, type UpdateEnvironment } from '../shared/updates';
 import type { BackupSummary } from '../core/storage/backup';
 import { translateMessage } from '../shared/i18n';
-import type { CliInstallState, OpenChatTarget } from '../shared/cli';
-import { cliEndpoint, type CliChat } from '../cli/protocol';
+import type { CliInstallState } from '../shared/cli';
+import { CLI_BACKGROUND_FLAG, cliEndpoint, type CliChat } from '../cli/protocol';
 import { CliServer, createCliToken, writeCliToken } from './cli-server';
 import { chatsOf, CliOperations } from './cli-operations';
+import type { CliObserver } from './cli-activity';
+import { RunActivity } from '../shared/run-activity';
 import { CliPathInstaller, isKeptOffPath, keepOffPath } from './cli-path';
+import type { InstallCopy } from './install-copy';
 import { runSquirrelEvent, runUpdateExecutable, squirrelEventOf, type SquirrelEvent } from './squirrel-events';
 import { McpSecretStore, stopProcessTrees } from './mcp-secrets';
 import { WebSearchKeys } from './web-search-keys';
@@ -46,16 +49,32 @@ import { detectBrowser } from '../browser/detect';
 import { BrowserHostEvent, BrowserHostRequest } from '../shared/browser-host';
 import { BrowserInputEvent, type BrowserLiveEvent } from '../shared/browser-live';
 import { CLEAN_BROWSER_PROFILE, type BrowserState } from '../shared/browser';
+import { signInPageAllowed } from '../shared/harness';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 /** Set by vite.main.config.ts from the macOS signing flag at make time. */
 declare const ORGLET_MACOS_SIGNED: boolean;
+/**
+ * Set by vite.main.config.ts when `ORGLET_UPDATE_TEST_BUILD=1` at make time, and false in every other build (COD-304).
+ * A test build proves the updater end to end on a maintainer's machine: it keeps its own data folder, touches none of
+ * the entries an installed Orglet shares (Start menu, `orglet` command, Send to, `orglet://` links), and reads its
+ * update feed from `ORGLET_UPDATE_FEED_URL`, so it can update from a local folder instead of GitHub.
+ */
+declare const ORGLET_UPDATE_TEST_BUILD: boolean;
+const updateTestBuild = typeof ORGLET_UPDATE_TEST_BUILD === 'boolean' && ORGLET_UPDATE_TEST_BUILD;
+if (updateTestBuild) app.setPath('userData', join(app.getPath('appData'), 'Orglet Update Test'));
 if (process.env.ORGLET_DATA_DIR && !app.isPackaged) app.setPath('userData', process.env.ORGLET_DATA_DIR);
 // scripts/dev.ps1 points USERPROFILE at a flag folder for Forge; give the app and its child CLIs the real home back.
 if (process.env.ORGLET_USERPROFILE && !app.isPackaged) { process.env.USERPROFILE = process.env.ORGLET_USERPROFILE; delete process.env.ORGLET_USERPROFILE; }
 const pending = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }>();
 let window: BrowserWindow;
+/** Concurrent `open` requests share the first renderer load. Closing the desktop still quits the app. */
+let desktopReady: Promise<void> | undefined;
+const rendererRoot = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
+const url = MAIN_WINDOW_VITE_DEV_SERVER_URL ? preferLoopbackIpv4(MAIN_WINDOW_VITE_DEV_SERVER_URL) : pathToFileURL(join(rendererRoot, 'index.html')).href;
+const expected = new URL(url);
+const devServer = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL) : undefined;
 let core: Electron.UtilityProcess;
 let credentials: Credentials;
 let mcpSecrets: McpSecretStore;
@@ -83,6 +102,11 @@ const updateEnvironment: UpdateEnvironment = {
   squirrelUpdater: app.isPackaged && process.platform === 'win32' && existsSync(resolve(process.execPath, '..', '..', 'Update.exe')),
   macosSigned: typeof ORGLET_MACOS_SIGNED === 'boolean' && ORGLET_MACOS_SIGNED,
 };
+/** Only an update test build reads its feed from the environment; every other build ignores the variable. */
+function testFeedUrl(): string | undefined {
+  if (!updateTestBuild) return undefined;
+  return process.env.ORGLET_UPDATE_FEED_URL || undefined;
+}
 function aboutInfo(): AboutInfo {
   return {
     version: app.getVersion(),
@@ -108,18 +132,38 @@ let language: Language = DEFAULT_LANGUAGE;
 const activeDictionary = () => language === 'en' ? en : language === 'en-GB' ? enGB : null;
 const tr = (key: string, params?: readonly unknown[]) => translate(activeDictionary(), key, params);
 let cliServer: CliServer | undefined;
+const cliObservers = new Set<CliObserver>();
 /**
  * Brings the window forward for `orglet open`, and with a chat asks the renderer to show it. Windows may only flash
  * the taskbar button instead: it does not let a background process take the foreground.
  */
-function showWindow(chat?: CliChat) {
+/** What the folder picker's title says: what the folder is for, and the level the person is granting. */
+function workspacePickerTitle(input: PickWorkspace): string {
+  if ('watch' in input) return tr('Chọn thư mục để lịch theo dõi: chỉ đọc');
+  const runsCommands = input.permissions.includes('execute');
+  const edits = input.permissions.includes('write');
+  // A routine's own working folder says it is for the schedule (COD-294).
+  if ('routine' in input) {
+    if (runsCommands) return tr('Chọn thư mục làm việc cho lịch: đọc, sửa file và chạy lệnh');
+    if (edits) return tr('Chọn thư mục làm việc cho lịch: đọc và sửa file');
+    return tr('Chọn thư mục làm việc cho lịch: chỉ đọc');
+  }
+  if (runsCommands) return tr('Chọn workspace: đọc, sửa file và chạy lệnh');
+  if (edits) return tr('Chọn workspace: đọc và sửa file');
+  return tr('Chọn workspace: chỉ đọc');
+}
+async function showWindow(chat?: CliChat) {
+  // The page takes this queue after mounting, including the first open from a terminal-only start.
+  if (chat) queueIncoming({ kind: 'chat', chat: { kind: chat.kind, id: chat.id } });
+  desktopReady ??= createDesktopWindow();
+  await desktopReady;
   if (!window || window.isDestroyed()) return;
   if (window.isMinimized()) window.restore();
   window.show();
   window.moveTop();
   window.focus();
-  if (chat) window.webContents.send('orglet:open-chat', { kind: chat.kind, id: chat.id } satisfies OpenChatTarget);
 }
+
 /**
  * System notifications still on screen or in the notification centre. Electron drops the click handler of one
  * that is garbage collected, so each is held until it is clicked; only the newest few are kept.
@@ -138,7 +182,7 @@ function notifyInBackground(notice: BackgroundNotice): boolean {
   const forget = () => { shownNotifications = shownNotifications.filter(item => item !== notification); };
   notification.on('click', () => {
     forget();
-    showWindow();
+    void showWindow();
     if (window && !window.isDestroyed()) window.webContents.send('orglet:open-task', notice.taskId);
   });
   notification.on('failed', forget);
@@ -151,30 +195,46 @@ async function startCliServer(directory: string) {
   const token = createCliToken();
   await writeCliToken(directory, token);
   const translateForCli = (message: string) => translateMessage(activeDictionary(), message);
-  const operations = new CliOperations({ request, version: () => app.getVersion(), open: showWindow, translate: translateForCli });
+  const operations = new CliOperations({ request, version: () => app.getVersion(), open: showWindow, translate: translateForCli,
+    observe: observer => {
+      cliObservers.add(observer);
+      return () => cliObservers.delete(observer);
+    },
+  });
   cliServer = new CliServer({
     endpoint: cliEndpoint(directory),
     token,
-    handle: (cliRequest, signal) => operations.run(cliRequest, signal),
+    handle: (cliRequest, signal, progress) => operations.run(cliRequest, signal, progress),
     translate: translateForCli,
   });
   await cliServer.start();
 }
+/**
+ * This copy of Orglet, so the shared `orglet` command and Send to entry are rewritten only by the copy they start
+ * (COD-296). A Setup install is its folder above `app-x.y.z`, which updates keep; a ZIP copy is its own Orglet.exe.
+ */
+function thisCopy(): InstallCopy {
+  if (!updateEnvironment.squirrelUpdater) return { executable: process.execPath };
+  return { executable: process.execPath, setupFolder: resolve(process.execPath, '..', '..') };
+}
 /** Only a packaged Windows build edits PATH; the shim sits in a folder that survives updates. */
 function cliInstaller(): CliPathInstaller | undefined {
-  if (!app.isPackaged || process.platform !== 'win32') return undefined;
+  if (!app.isPackaged || process.platform !== 'win32' || updateTestBuild) return undefined;
   const localAppData = process.env.LOCALAPPDATA ?? join(app.getPath('home'), 'AppData', 'Local');
-  return new CliPathInstaller(join(localAppData, 'Orglet', 'bin'), {
+  const target = {
     executable: process.execPath,
     cliScript: join(process.resourcesPath, 'orglet-cli.cjs'),
     userData: app.getPath('userData'),
-  });
+  };
+  return new CliPathInstaller(join(localAppData, 'Orglet', 'bin'), target, thisCopy());
 }
-function cliState(): CliInstallState {
+async function cliState(): Promise<CliInstallState> {
   if (!app.isPackaged) return { mode: 'dev' };
   const installer = cliInstaller();
-  if (installer) return { mode: 'windows', installed: installer.isInstalled() };
-  return { mode: 'manual', command: `export PATH="$PATH:${join(process.resourcesPath, 'bin')}"` };
+  if (!installer) return { mode: 'manual', command: `export PATH="$PATH:${join(process.resourcesPath, 'bin')}"` };
+  const owner = await installer.owner();
+  if (owner.kind === 'other') return { mode: 'windows', installed: false, otherCopy: owner.copy };
+  return { mode: 'windows', installed: owner.kind === 'this' };
 }
 /**
  * What Explorer's Send to menu and `orglet://` links start (COD-246). A Setup install has the Squirrel stub one folder
@@ -206,14 +266,16 @@ const electronShortcuts: ShortcutFiles = {
 };
 /** Only a packaged Windows build adds itself to Send to, in the person's own SendTo folder. */
 function sendToInstaller(): SendToInstaller | undefined {
-  if (!app.isPackaged || process.platform !== 'win32') return undefined;
+  if (!app.isPackaged || process.platform !== 'win32' || updateTestBuild) return undefined;
   const sendToFolder = join(app.getPath('appData'), 'Microsoft', 'Windows', 'SendTo');
-  return new SendToInstaller(sendToFolder, launcherPath(), electronShortcuts);
+  return new SendToInstaller(sendToFolder, launcherPath(), electronShortcuts, thisCopy());
 }
 function sendToState(): SendToState {
   const installer = sendToInstaller();
   if (!installer) return { mode: 'unavailable' };
-  return { mode: 'windows', installed: installer.isInstalled() };
+  const owner = installer.owner();
+  if (owner.kind === 'other') return { mode: 'windows', installed: false, otherCopy: owner.copy };
+  return { mode: 'windows', installed: owner.kind === 'this' };
 }
 /**
  * The command Windows runs for a link is `"<stub>" -- "%1"`. The `--` ends Chromium's switches, so nothing in a link
@@ -223,11 +285,11 @@ function sendToState(): SendToState {
  */
 const LINK_ARGUMENTS = ['--'];
 async function registerLinks(): Promise<void> {
-  if (!updateEnvironment.squirrelUpdater) return;
+  if (!updateEnvironment.squirrelUpdater || updateTestBuild) return;
   app.setAsDefaultProtocolClient(LINK_SCHEME, launcherPath(), LINK_ARGUMENTS);
 }
 async function unregisterLinks(): Promise<void> {
-  if (!updateEnvironment.squirrelUpdater) return;
+  if (!updateEnvironment.squirrelUpdater || updateTestBuild) return;
   app.removeAsDefaultProtocolClient(LINK_SCHEME, launcherPath(), LINK_ARGUMENTS);
 }
 const sentFiles = new SentFilesHandOff();
@@ -255,7 +317,7 @@ async function incomingFor(launch: LaunchRequest): Promise<Incoming> {
 /** Files from Send to or a link, from a cold start or a second instance. */
 async function receiveLaunch(argv: readonly string[], bringForward: boolean) {
   const launch = parseLaunchArguments(argv);
-  if (bringForward) showWindow();
+  if (bringForward && !argv.includes(CLI_BACKGROUND_FLAG)) await showWindow();
   if (!launch) return;
   try {
     queueIncoming(await incomingFor(launch));
@@ -342,6 +404,43 @@ function relayBrowserEvent(raw: unknown) {
     : event;
   window.webContents.send('orglet:browser-live', live);
 }
+async function createDesktopWindow() {
+  window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // The desktop glow is its own window on Windows (COD-261); it goes with the main window so it never keeps the app open.
+  if (process.platform === 'win32') desktopOverlay = new DesktopOverlayWindow(url, join(__dirname, 'preload.js'), taskId => request('cancel', { id: taskId }));
+  window.on('closed', () => {
+    desktopOverlay?.destroy();
+    desktopOverlay = undefined;
+  });
+  // A mouse's side button over the page reaches the renderer as a mouse event; over the window frame, or from a
+  // driver that sends the command itself, it arrives here as an app command instead (COD-202). Windows and Linux only.
+  window.on('app-command', (_event, command) => {
+    if (command !== 'browser-backward' && command !== 'browser-forward') return;
+    if (window && !window.isDestroyed()) window.webContents.send('orglet:navigate', command === 'browser-backward' ? 'back' : 'forward');
+  });
+  window.webContents.on('will-navigate', event => {
+    try {
+      const target = new URL(event.url);
+      if (expected.protocol === 'file:') { if (target.href === expected.href) return; }
+      else if (devServer ? isViteDevRequest(target, devServer) : target.origin === expected.origin) return;
+    } catch { /* deny */ }
+    event.preventDefault();
+  });
+  if (devServer) {
+    // Forge can start Electron before Vite finishes the first renderer build, which leaves a blank window.
+    for (let attempt = 0; attempt < 60; attempt++) {
+      try { if ((await fetch(url)).ok) break; } catch { /* dev server not listening yet */ }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    window.webContents.on('did-fail-load', (_event, _code, _description, _url, isMainFrame) => { if (isMainFrame) setTimeout(() => { if (!window.isDestroyed()) void window.loadURL(url); }, 500); });
+  }
+  try { await window.loadURL(url); }
+  catch (error) {
+    // Chromium reports ERR_ABORTED when a loopback alias is cancelled; did-fail-load retries the same URL.
+    if (!devServer || !/ERR_ABORTED|-3/.test(error instanceof Error ? error.message : '')) throw error;
+  }
+}
 async function start() {
   const directory = app.getPath('userData'); await mkdir(directory, { recursive: true });
   credentials = new Credentials(directory);
@@ -367,8 +466,23 @@ async function start() {
     core.on('message', async message => {
       if (message.type === 'ready') { ready = true; clearTimeout(timer); resolve(); return; }
       if (message.type === 'changed') { if (window && !window.isDestroyed()) window.webContents.send('orglet:changed'); return; }
-      if (message.type === 'progress') {
-        if (window && !window.isDestroyed()) window.webContents.send('orglet:progress', message.update);
+      if (message.type === 'progress' || message.type === 'cliProgress') {
+        if (message.type === 'progress' && window && !window.isDestroyed()) window.webContents.send('orglet:progress', message.update);
+        for (const observer of cliObservers) observer({ progress: message.update });
+        return;
+      }
+      if (message.type === 'activity') {
+        const parsed = RunActivity.safeParse(message.activity);
+        if (parsed.success) for (const observer of cliObservers) observer({ activity: parsed.data });
+        return;
+      }
+      // Only Codex's sign-in page, handed over by its app server (COD-327); any other address the core names is dropped.
+      if (message.type === 'openSignInPage') {
+        if (typeof message.url === 'string' && signInPageAllowed(message.url)) void shell.openExternal(message.url);
+        return;
+      }
+      if (message.type === 'decisionModel') {
+        if (window && !window.isDestroyed()) window.webContents.send('orglet:decision-model', message.state);
         return;
       }
       if (message.type === 'key') {
@@ -423,35 +537,13 @@ async function start() {
   updater = new Updater({
     engine: autoUpdater,
     environment: updateEnvironment,
-    feedUrl: updateFeedUrl(process.platform, process.arch, app.getVersion()),
+    feedUrl: testFeedUrl() ?? updateFeedUrl(process.platform, process.arch, app.getVersion()),
     firstRun: process.argv.includes('--squirrel-firstrun'),
     automatic: startupSettings.autoUpdate ?? true,
     onChange: state => { if (window && !window.isDestroyed()) window.webContents.send('orglet:update', state); },
+    log: updaterLogWriter(join(directory, 'updater.log')),
   });
   changelog = new ChangelogFeed({ cacheFile: join(directory, 'changelog-cache.json') });
-  const rendererRoot = join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
-  const url = MAIN_WINDOW_VITE_DEV_SERVER_URL ? preferLoopbackIpv4(MAIN_WINDOW_VITE_DEV_SERVER_URL) : pathToFileURL(join(rendererRoot, 'index.html')).href;
-  const expected = new URL(url);
-  const devServer = MAIN_WINDOW_VITE_DEV_SERVER_URL ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL) : undefined;
-  window = new BrowserWindow({ width: 1200, height: 820, minWidth: 740, minHeight: 600, title: 'Orglet', backgroundColor: '#ffffff', autoHideMenuBar: true, ...(app.isPackaged ? {} : { icon: join(process.cwd(), 'apps', 'desktop', 'assets', 'icon.ico') }), webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  // The desktop glow is its own window on Windows (COD-261); it goes with the main window so it never keeps the app open.
-  if (process.platform === 'win32') desktopOverlay = new DesktopOverlayWindow(url, join(__dirname, 'preload.js'), taskId => request('cancel', { id: taskId }));
-  window.on('closed', () => desktopOverlay?.destroy());
-  // A mouse's side button over the page reaches the renderer as a mouse event; over the window frame, or from a
-  // driver that sends the command itself, it arrives here as an app command instead (COD-202). Windows and Linux only.
-  window.on('app-command', (_event, command) => {
-    if (command !== 'browser-backward' && command !== 'browser-forward') return;
-    if (window && !window.isDestroyed()) window.webContents.send('orglet:navigate', command === 'browser-backward' ? 'back' : 'forward');
-  });
-  window.webContents.on('will-navigate', event => {
-    try {
-      const target = new URL(event.url);
-      if (expected.protocol === 'file:') { if (target.href === expected.href) return; }
-      else if (devServer ? isViteDevRequest(target, devServer) : target.origin === expected.origin) return;
-    } catch { /* deny */ }
-    event.preventDefault();
-  });
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     try {
@@ -465,6 +557,7 @@ async function start() {
     } catch { callback({ cancel: true }); }
   });
   const authorized = (event: Electron.IpcMainInvokeEvent) => {
+    if (!window || window.isDestroyed()) throw new Error('IPC sender không được phép.');
     // The dev server URL has no trailing slash while the loaded page does, so compare origins; file: pages
     // share the opaque "null" origin, so the packaged build also pins the exact renderer file path.
     const frame = event.senderFrame ? new URL(event.senderFrame.url) : undefined;
@@ -563,6 +656,13 @@ async function start() {
     const failure = await shell.openPath(path);
     if (failure) throw new Error('Không mở được tệp bằng ứng dụng mặc định.');
   });
+  // A source a backup restored without its file: the person picks the file here and the core checks it is the same bytes.
+  handle('orglet:relink-source', async raw => {
+    const input = z.object({ taskId: Id, id: Id }).strict().parse(raw);
+    const result = await dialog.showOpenDialog(window, { title: tr('Chọn lại tệp đã đính kèm'), properties: ['openFile'] });
+    if (result.canceled) return null;
+    return request('relinkSource', { taskId: input.taskId, sourceId: input.id, path: result.filePaths[0] });
+  });
   /** Which API and web search keys are saved, never the keys. */
   const connectionStatus = async (): Promise<Connections> => ({ ...await credentials.status(), search: await webSearchKeys.status() });
   handle('orglet:connections', async () => connectionStatus());
@@ -572,9 +672,7 @@ async function start() {
     if ('taskId' in input) await request('workspaceAccess', { taskId: input.taskId });
     // A routine's watched folder is read-only and says what it is for (COD-245); the core keeps its path.
     const watching = 'watch' in input;
-    const title = watching ? tr('Chọn thư mục để lịch theo dõi: chỉ đọc')
-      : input.permissions.includes('execute') ? tr('Chọn workspace: đọc, sửa file và chạy lệnh')
-      : input.permissions.includes('write') ? tr('Chọn workspace: đọc và sửa file') : tr('Chọn workspace: chỉ đọc');
+    const title = workspacePickerTitle(input);
     const result = await dialog.showOpenDialog(window, {
       title, properties: ['openDirectory'],
       buttonLabel: watching ? tr('Theo dõi thư mục này') : tr('Cấp quyền workspace'),
@@ -696,14 +794,32 @@ async function start() {
     } as const;
     await shell.openExternal(pricing[ApiProvider.parse(raw)]);
   });
+  // A restore that fails says so in a dialog over the window the person clicked in, and that nothing changed (COD-281).
+  const showRestoreFailure = async (error: unknown) => {
+    const reason = translateMessage(activeDictionary(), error instanceof Error ? error.message : String(error));
+    await dialog.showMessageBox(window, { type: 'error', title: tr('Khôi phục bản sao lưu'), message: tr('Không khôi phục được bản sao lưu này'),
+      detail: tr('Chưa có gì trong Orglet bị thay đổi.\n\nLý do: {0}', [reason]), buttons: [tr('Đóng')], noLink: true });
+  };
   handle('orglet:restore', async () => {
     const result = await dialog.showOpenDialog(window, { title: tr('Chọn bản sao lưu Orglet'), properties: ['openFile'], filters: [{ name: 'Orglet backup', extensions: ['json'] }] });
     if (result.canceled) return false;
-    const content = await readBoundedText(result.filePaths[0], 50 * 1024 * 1024);
-    const summary = await request('backupPreview', content) as BackupSummary;
-    const confirmation = await dialog.showMessageBox(window, { type: 'question', title: tr('Khôi phục bản sao lưu'), message: tr('Bổ sung các mục còn thiếu?'), detail: tr('Bản sao lưu chứa {0} Tí, {1} hội, {2} công việc và {3} báo cáo.\nDữ liệu, cài đặt và chi phí hiện tại được giữ lại. Nguồn khôi phục không được cấp quyền đọc; công việc đang chạy trong bản sao lưu sẽ chuyển sang gián đoạn.', [summary.workers, summary.teams, summary.tasks, summary.reports]), buttons: [tr('Hủy'), tr('Khôi phục')], defaultId: 0, cancelId: 0, noLink: true });
+    let summary: BackupSummary;
+    try {
+      const content = await readBoundedText(result.filePaths[0], 50 * 1024 * 1024);
+      summary = await request('backupPreview', content) as BackupSummary;
+    } catch (error) {
+      await showRestoreFailure(error);
+      return false;
+    }
+    const confirmation = await dialog.showMessageBox(window, { type: 'question', title: tr('Khôi phục bản sao lưu'), message: tr('Bổ sung các mục còn thiếu?'), detail: tr('Bản sao lưu chứa {0} Tí, {1} hội, {2} công việc và {3} báo cáo.\nDữ liệu, cài đặt và chi phí hiện tại được giữ lại. Tệp đính kèm không nằm trong bản sao lưu: mở tệp và chọn lại đúng tệp đó trên máy này; công việc đang chạy trong bản sao lưu sẽ chuyển sang gián đoạn.', [summary.workers, summary.teams, summary.tasks, summary.reports]), buttons: [tr('Hủy'), tr('Khôi phục')], defaultId: 0, cancelId: 0, noLink: true });
     if (confirmation.response !== 1) return false;
-    await request('backupRestore', summary.token); return true;
+    try {
+      await request('backupRestore', summary.token);
+    } catch (error) {
+      await showRestoreFailure(error);
+      return false;
+    }
+    return true;
   });
   handle('orglet:template-export', async raw => {
     const template = await request('templateExport', Id.parse(raw));
@@ -789,48 +905,46 @@ async function start() {
     else await installer.remove();
     return sendToState();
   });
+  if (!process.argv.includes(CLI_BACKGROUND_FLAG)) await showWindow();
   // The app works without its command line, so a pipe that cannot open does not stop the start.
   await startCliServer(directory).catch(error => console.warn('orglet CLI server did not start:', error instanceof Error ? error.message : error));
   void cliInstaller()?.refresh().catch(() => undefined);
   void sendToInstaller()?.refresh().catch(() => undefined);
   void registerLinks().catch(() => undefined);
-  // Queued before the page loads: the window takes the queue as soon as it mounts.
+  // Cold-start and second-instance requests use the same queue, even before the desktop exists.
   started = true;
   await receiveLaunch(process.argv, false);
   for (const argv of launchesBeforeStart.splice(0)) await receiveLaunch(argv, true);
-  if (devServer) {
-    // Forge can start Electron before Vite finishes the first renderer build, which leaves a blank window.
-    for (let attempt = 0; attempt < 60; attempt++) {
-      try { if ((await fetch(url)).ok) break; } catch { /* dev server not listening yet */ }
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    window.webContents.on('did-fail-load', (_event, _code, _description, _url, isMainFrame) => { if (isMainFrame) setTimeout(() => { if (!window.isDestroyed()) void window.loadURL(url); }, 500); });
-  }
-  try { await window.loadURL(url); }
-  catch (error) {
-    // Chromium reports ERR_ABORTED when a loopback alias is cancelled; did-fail-load retries the same URL.
-    if (!devServer || !/ERR_ABORTED|-3/.test(error instanceof Error ? error.message : '')) throw error;
-  }
   updater.start();
 }
 /**
  * Setup's install, update and uninstall steps (COD-235): the Start menu shortcuts, as before, the `orglet` command on
  * the user PATH and Orglet in Explorer's Send to menu, unless the person took either off in Settings, and the
- * `orglet://` links (COD-246). No window opens for these.
+ * `orglet://` links (COD-246). No window opens for these. Running Setup chooses this install for the command and Send
+ * to; an update or an uninstall leaves them alone while they start another copy the person chose (COD-296).
  */
 function handleSquirrelEvent(event: SquirrelEvent) {
   const shortcutTarget = basename(process.execPath);
   const installer = cliInstaller();
   const sendTo = sendToInstaller();
   const userData = app.getPath('userData');
+  const freshInstall = event === 'install';
+  // An update test build shares the executable's name with the real app, so its shortcut would replace Orglet's.
+  const noShortcuts = async () => undefined;
   const work = runSquirrelEvent(event, {
-    createShortcuts: () => runUpdateExecutable(process.execPath, [`--createShortcut=${shortcutTarget}`]),
-    removeShortcuts: () => runUpdateExecutable(process.execPath, [`--removeShortcut=${shortcutTarget}`]),
-    putOnPath: async () => { await installer?.install(); },
-    takeOffPath: async () => { await installer?.remove(); },
+    createShortcuts: updateTestBuild ? noShortcuts : () => runUpdateExecutable(process.execPath, [`--createShortcut=${shortcutTarget}`]),
+    removeShortcuts: updateTestBuild ? noShortcuts : () => runUpdateExecutable(process.execPath, [`--removeShortcut=${shortcutTarget}`]),
+    putOnPath: async () => {
+      if (freshInstall) await installer?.install();
+      else await installer?.installUnlessTaken();
+    },
+    takeOffPath: async () => { await installer?.removeUnlessTaken(); },
     keptOffPath: () => isKeptOffPath(userData),
-    addSendTo: async () => { await sendTo?.install(); },
-    removeSendTo: async () => { await sendTo?.remove(); },
+    addSendTo: async () => {
+      if (freshInstall) await sendTo?.install();
+      else await sendTo?.installUnlessTaken();
+    },
+    removeSendTo: async () => { await sendTo?.removeUnlessTaken(); },
     keptOffSendTo: () => isKeptOffSendTo(userData),
     registerLinks,
     unregisterLinks,
@@ -851,6 +965,7 @@ else {
     void receiveLaunch(forwarded, true);
   });
   app.whenReady().then(start).catch(error => { dialog.showErrorBox('Orglet không thể khởi động', error instanceof Error ? error.message : 'Lỗi khởi động.'); app.quit(); });
+  app.on('activate', () => { if (started) void showWindow(); });
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', event => {
     // The browser's windows close first, so no Chrome or Edge window Orglet drove outlives the app (COD-261).

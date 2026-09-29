@@ -40,10 +40,12 @@ it('warns when Claude Code says the plan is almost used up, without failing the 
 });
 
 it('tells the user when Codex is out of usage', () => {
+  // codex-cli 0.157.0 prints the turn's error twice: as the `error` line and inside `turn.failed`, which is what counts.
+  const message = 'You’ve hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 9:15 AM.';
   const jsonl = [
     JSON.stringify({ type: 'thread.started' }),
-    JSON.stringify({ type: 'error', message: "You've hit your usage limit. Visit chatgpt.com/codex/settings/usage to purchase more credits or try again at 9:15 AM." }),
-    JSON.stringify({ type: 'turn.failed', error: { message: 'usage limit' } }),
+    JSON.stringify({ type: 'error', message }),
+    JSON.stringify({ type: 'turn.failed', error: { message } }),
   ].join('\n');
   expect(() => parseCodexOutput(jsonl, null)).toThrow(/^Codex đã hết lượt dùng của gói, làm mới lúc /);
 });

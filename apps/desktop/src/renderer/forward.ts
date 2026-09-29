@@ -43,7 +43,7 @@ function isBusy(task: Task): boolean {
  * Every place, less the chat the message is in. A chat at work cannot be picked, because a message arriving there
  * would stop that work, and neither can one whose orglets have no working connection.
  */
-export function forwardOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | 'teams'>, originTaskId: string, ready: (workers: readonly Worker[]) => boolean): ForwardOption[] {
+export function forwardOptions(workspace: Pick<Workspace, 'tasks' | 'workers' | 'teams'> & Partial<Pick<Workspace, 'routines'>>, originTaskId: string, ready: (workers: readonly Worker[]) => boolean): ForwardOption[] {
   const options = sendToOptions(workspace, FORWARD_RECENT_COUNT + 1);
   const resolved = options.map((option): ForwardOption & { chat?: Task } => {
     const target = option.target;
@@ -68,5 +68,6 @@ export function forwardSummary(sent: number, failed: readonly { name: string; er
   if (!failed.length) return sent === 1 ? t('Đã chuyển tiếp') : t('Đã chuyển tiếp tới {0} chat', [sent]);
   const reasons = failed.map(item => t('{0}: {1}', [item.name, tMessage(item.error)])).join(' ');
   if (!sent) return t('Chưa chuyển tiếp được. {0}', [reasons]);
+  if (sent === 1) return t('Đã chuyển tiếp tới 1 chat. Chưa gửi được: {0}', [reasons]);
   return t('Đã chuyển tiếp tới {0} chat. Chưa gửi được: {1}', [sent, reasons]);
 }

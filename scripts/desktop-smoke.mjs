@@ -136,7 +136,11 @@ try {
   await page.getByRole('button', { name: 'Research Review', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Research Review', exact: true }).click();
   await page.getByRole('heading', { name: 'Đang nhắn với Research Review' }).waitFor();
-  await page.getByRole('button', { name: 'Thiết lập hội', exact: true }).click();
+  // A crew on Demo offers the way to a real model under its message box (COD-293); its own settings lead the
+  // header's menu.
+  await page.locator('.demo-note').getByRole('button', { name: 'Kết nối model', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Thiết lập hội', exact: true }).click();
   await page.getByRole('dialog', { name: 'Thiết lập hội' }).waitFor();
   assert.equal(await page.getByLabel('Tên hội', { exact: true }).inputValue(), 'Research Review');
   await page.keyboard.press('Escape');
@@ -189,10 +193,10 @@ try {
   await page.getByRole('dialog', { name: 'Nguồn của cuộc trò chuyện' }).waitFor();
   await page.getByRole('checkbox', { name: 'dataset.csv', exact: true }).check();
   await page.getByLabel('Cột ID (không bắt buộc)').fill('id');
-  await page.getByRole('button', { name: 'Chạy checker local', exact: true }).click();
-  await page.locator('summary').filter({ hasText: 'Kết quả checker' }).click({ timeout: 25_000 });
-  await page.getByText('3 dòng · 2 cột', { exact: true }).waitFor();
-  await page.getByText('ID id: 0 null, 1 dòng trùng ID không null.', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Kiểm tra dữ liệu', exact: true }).click();
+  // The newest result opens by itself under the button once the check finishes (COD-292).
+  await page.getByText('3 dòng · 2 cột', { exact: true }).waitFor({ timeout: 25_000 });
+  await page.getByText('Cột mã id: ô trống 0 · dòng trùng mã 1.', { exact: true }).waitFor();
   await page.screenshot({ path: join(output, 'desktop-checker.png') });
   const checkedTask = (await page.evaluate(() => window.orglet.call('workspace', {}))).tasks[0];
   const checkedDetail = await page.evaluate(id => window.orglet.call('task', { id }), checkedTask.id);
@@ -206,7 +210,7 @@ try {
     await page.getByRole('button', { name: 'Thêm nguồn', exact: true }).click(); await page.getByRole('menuitem', { name: /^Thư mục/ }).click();
     await page.getByText(`${name}.txt`, { exact: true }).waitFor();
   }
-  await page.getByText('2 mục không được thêm vào task', { exact: true }).waitFor();
+  await page.getByText('2 mục không được thêm vào chat', { exact: true }).waitFor();
   await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: two folders');
   await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();

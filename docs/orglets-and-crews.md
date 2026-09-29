@@ -33,6 +33,10 @@ You can send a changed request while the orglet is still working. Orglet saves i
 
 Open the row's menu (right-click, or the **⋯** on the row) to edit, archive or delete an orglet. To act on several, click the pencil next to the section title and tick rows, or Ctrl-click (Cmd on macOS) and Shift-click. A bar above the footer then offers **Archive** and **Delete**; delete asks first and names the count.
 
+After you archive something, the toast has **Undo**. An orglet that is still in a crew cannot be archived or deleted: the toast names every crew it is in and has a button that opens the crew, so you can take it out. The same goes for a schedule that still runs it.
+
+Archived orglets and crews are listed at the end of their section under **Archived**. Archived chats are listed just below, under **Archived chats**: side threads and schedule runs with the orglets, a crew's chats with the crews, group chats with the group chats. When archived items delete themselves after a while (**Settings → Chat**), each row shows the days it has left. Its menu has **Restore** and **Delete permanently**.
+
 ## Crews
 
 ### Create one
@@ -68,6 +72,8 @@ A group chat is a few orglets in one conversation without a lead: each one answe
 3. The chat opens empty, with the orglets' faces above the message box. Nothing is created until your first message.
 
 A group chat is its own conversation. It does not become any orglet's live chat, and search finds it later. Permissions and a working folder set in **Details** before the first message apply to it the same way as for an orglet or crew.
+
+If you downloaded Tacet in **Settings → Chat**, a message that tags nobody and replies to no one can go to just the orglet it clearly fits, going by each orglet's name, description and instructions. Your message then says **Tacet picked *name* to answer**. When Tacet is not sure, everyone answers, as without it. Tag `@all` to ask everyone anyway. See [how Tacet decides](decisions.md#who-answers-in-a-group-chat).
 
 ## Reply to a message
 

@@ -1,15 +1,17 @@
-import { ownWords } from '../../shared/forward';
+import { chatHeadline, ownWords } from '../../shared/forward';
+import { canContinueRun } from '../../shared/out-of-steps';
 import { WorkspaceRuntime } from '../tools/workspace-runtime';
-import { PERMISSIONS_OFF_INSTRUCTION, permissionsOff } from './permission-hints';
+import { MAX_REFUSED_CALLS_IN_A_ROW, PERMISSIONS_OFF_INSTRUCTION, permissionsOff, refusedCallsInARow, toolCallRefusal } from './permission-hints';
+import { withoutCopyPaths } from '../tools/workspace-files-runtime';
 import { DEFAULT_LANGUAGE, type Language } from '../../shared/i18n';
 import { WebTools } from '../tools/web-tools';
 import { webNetwork } from '../tools/web-network';
 import type { WebSearchSettings } from '../tools/web-search';
 import { snapshotCapabilities } from '../../shared/tool-policy';
 import { assertCapability, executeReadTool, hasCapability } from '../tools/policy';
-import { assertToolCall, mcpToolOf, mcpToolsOffered, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, reactionsAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, REACTION_NUDGE, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
+import { assertToolCall, mcpToolOf, mcpToolsOffered, offeredToolNames, toolCallProblem, type ToolCallProblem, toolDefinitions, toolsFor, needsReport, ModelReport, ModelReportSchema, NO_SOURCES_INSTRUCTION, SUBMIT_REPORT_DESCRIPTION, ChatReply, HarnessAnswer, harnessAnswerSchema, proposalsAllowed, memoriesAllowed, selfImprovementAllowed, reactionsAllowed, REMEMBER_DESCRIPTION, SELF_IMPROVEMENT_DESCRIPTION, REACTION_NUDGE, ReadArgs, SkillResourceArgs, Proposals } from '../tools/catalog';
 import { z } from 'zod';
-import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
+import { API_PROVIDER_NAMES, isLocalApi, isPlanApi, Report, RunInput, TeamPlan, type Run, type RunContextUse, type Task, type Artifact, type Source, type Team, type Worker } from '../../shared/contracts';
 import { Store, id, now } from '../storage/database';
 import { BudgetLedger, BudgetError, cost } from '../budgets/ledger';
 import { Sources, fingerprint, imageWithheldMessage, unreadableSourceMessage } from '../tools/sources';
@@ -20,7 +22,7 @@ import { harnessSeesImages, modelSeesImages } from '../models/image-input';
 import type { MessageImage, ModelAdapter, RunMessage } from '../adapters/openai';
 import { ProviderRequestError } from '../adapters/opencode';
 import { assertOpenCodeModel, isOpenCodePlan } from '../../shared/opencode';
-import { readModelListCache } from '../models/cache';
+import { modelContextTokens, readModelListCache } from '../models/cache';
 import { resolveWorkerModel } from '../models/resolve';
 import { ProfileArgs, type ProfileRecord } from '../../shared/profiles';
 import type { PreflightRecord } from '../../shared/preflight';
@@ -38,16 +40,18 @@ import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
 import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUnsupportedProcessChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
-import { compileContext, memoryCandidate, type Colleague } from '../context/compiler';
+import { compileContext, frozenTacetFits, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
+import type { NoteCandidate } from '../decisions/knowledge-fit';
 import { AnswerMemories, MAX_ANSWER_MEMORIES, RememberModelArgs } from '../../shared/knowledge';
 import { applyThreadManifest, compactThread, fitThread, mainChatTurns, threadMessages, type ThreadExtras } from '../context/thread';
 import { ProviderSlots, type SlotWait } from './slots';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { harnessNames, isHarness, type HarnessCatalogId, type HarnessId, type HarnessInfo } from '../../shared/harness';
+import { harnessNames, isHarness, type HarnessCatalogId, type HarnessId, type HarnessInfo, type HarnessResetOutcome } from '../../shared/harness';
 import type { HarnessAccountMap } from '../harness/accounts';
 import type { AccountUsageRead } from '../harness/usage';
+import type { HarnessSignInRuntime } from '../harness/sign-in';
 import { HarnessBudgetError, HarnessLimitError, HarnessTerminationError, type HarnessExecutor, type HarnessResult } from '../harness/exec';
 import { ProgressSender } from './progress';
 import type { HarnessProgress, RunProgressUpdate } from '../../shared/progress';
@@ -91,6 +95,10 @@ export type HarnessRuntime = {
   accountRoot?: string;
   /** Reads who is signed in to one account folder and how much of the plan is used. Absent, Settings shows no usage. */
   usage?: (harness: HarnessCatalogId, executable: string, configDir?: string) => Promise<AccountUsageRead>;
+  /** Spends one banked Claude reset of the account in `configDir` (COD-328). Absent, no reset can be spent. */
+  claimReset?: (configDir: string | undefined, requestId: string) => Promise<HarnessResetOutcome>;
+  /** Signs one account folder in or out through the CLI's own commands (COD-327). Absent, Settings keeps only the copied command. */
+  signIn?: HarnessSignInRuntime;
 };
 
 const providerNames: Record<string, string> = { ...API_PROVIDER_NAMES, ...harnessNames };
@@ -191,20 +199,37 @@ function memoryEventLine(result: RememberResult, workerName: string) {
   return 'Đã ghi nhớ một điều cho các cuộc trò chuyện sau.';
 }
 
-/** Search, read a few pages and write the report does not fit in the six steps a sources-only run gets. */
-function stepLimit(run: Run) {
+/**
+ * Search, read a few pages and write the report does not fit in the six steps a sources-only run gets. Research gets
+ * 24 (COD-257): in the dogfood crew, looking up three competitors' prices took one search and thirteen page reads (two
+ * of them failed) and was still reading when 16 steps told it to hand in.
+ */
+export const RESEARCH_STEP_LIMIT = 24;
+/** The steps a run with only its attached sources gets before the one step each of those files takes to read. */
+export const BASE_STEP_LIMIT = 6;
+/**
+ * The steps a run may work before it is told to hand in. Reading an attached file is one step each (COD-289): with
+ * four files a chat spent four of its six steps reading, so its answer at step five was taken for one cut short.
+ */
+export function stepLimit(run: Run, attachedSources: number) {
   // Coding is many small tool calls: every file read, write and command is a step (COD-187).
   if (run.snapshot.workspaceGrant) return 40;
-  if (run.snapshot.toolCapabilities?.includes('network.web')) return 16;
+  if (run.snapshot.toolCapabilities?.includes('network.web')) return RESEARCH_STEP_LIMIT;
   // An MCP server is another service to look things up in, so it gets the same room as the web (COD-241).
-  if (run.snapshot.mcpTools?.length) return 16;
+  if (run.snapshot.mcpTools?.length) return RESEARCH_STEP_LIMIT;
   // Acting on a page is a read, a step and a read again each time, so it gets the room coding does not need (COD-261).
   // Using a desktop app works the same way (COD-261, phase 2a).
   if (run.snapshot.browser && run.snapshot.toolCapabilities?.includes('browser.act')) return 24;
   if (run.snapshot.desktop && run.snapshot.toolCapabilities?.includes('desktop.act')) return 24;
   // Opening, reading and finding on a few pages is several steps each, like the web tools (COD-261); so is reading windows.
   if (run.snapshot.browser || run.snapshot.desktop) return 16;
-  return 6;
+  return Math.min(RESEARCH_STEP_LIMIT, BASE_STEP_LIMIT + attachedSources);
+}
+
+/** The status line of one model request; the hand-in steps after the limit are counted on their own. */
+function modelStepLine(step: number, maxSteps: number) {
+  if (step < maxSteps) return `Đang gọi model · bước ${step + 1}/${maxSteps}`;
+  return `Đang gọi model · bước nộp kết quả ${step - maxSteps + 1}/${WRAP_UP_STEPS}`;
 }
 
 /**
@@ -291,6 +316,8 @@ const WRAP_UP_INSTRUCTION = 'You are almost out of steps. Stop using tools and h
 const MEMBER_WRAP_UP_INSTRUCTION = 'What you found so far is your result for this assignment: hand it in with submit_report, set assignmentOutcome to completed and list what is not finished in limitations. Use blocked only when you have nothing to hand in or a file change the assignment requires is missing.';
 /** The limitation on a member's report when it handed in because its steps ran out (COD-256). */
 export const OUT_OF_STEPS_LIMITATION = 'Hết số bước trước khi xong phần việc; đây là phần đã làm được.';
+/** What a Continue turn is told before the calls and results of the turn that ran out of steps (COD-257). */
+const CONTINUE_INSTRUCTION = 'Your previous answer in this chat was cut short: you ran out of steps before finishing, and the person asked you to continue. The tool calls you made in that turn follow, with their results as they were then (older web pages shortened). Do not repeat them. Carry on with what was not finished, then answer with the whole result, including what you had found before.';
 const FINISHING_TOOL_NAMES = ['reply', 'submit_report', 'submit_plan'];
 
 /** The tools that end a run, so a worker told to hand in cannot keep working instead. */
@@ -480,17 +507,26 @@ export function harnessPrompt(messages: RunMessage[], files: { sourceId: string;
 }
 
 class Paused extends Error {}
+/**
+ * What a stopped run says. Demo and a local Ollama model never charge, so the warning about requests already sent is
+ * only for connections that can; a custom connection counts as one, since Orglet knows no price for it (COD-287).
+ */
+export function cancelledMessage(provider: string): string {
+  if (provider === 'demo' || isLocalApi(provider)) return 'Đã hủy.';
+  return 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.';
+}
 /** A chat reply stored in the report shape, so history, export and search keep working. */
 const chatReport = (message: string): Report => ({ format: 'chat', title: message.trim().split('\n')[0].replace(/^#+\s*/, '').slice(0, 120) || 'Trả lời', summary: message.trim(), findings: [], limitations: [] });
 /**
  * Name for a task after its first answer: the model's suggestion, else a requested report's own title, else the first
- * line of the message shortened at a word. Returns nothing when that would only repeat the message.
+ * line of the message shortened at a word. Returns nothing when that would only repeat the message. `headline` is the
+ * line a chat goes by (`chatHeadline`): for a chat that began with a forward, what was forwarded (COD-285).
  */
-export function taskTitle(suggested: string | null, report: Report, brief: string) {
+export function taskTitle(suggested: string | null, report: Report, brief: string, headline = brief) {
   const cleaned = suggested?.replace(/^["'“”\s]+|["'“”.\s]+$/g, '').slice(0, 80);
   if (cleaned) return cleaned;
   if (report.format !== 'chat' && report.title !== 'Báo cáo mẫu') return report.title.slice(0, 80);
-  const line = brief.trim().split('\n')[0].replace(/\s+/g, ' ').replace(/[.:;,!?…]+$/, '');
+  const line = headline.trim().split('\n')[0].replace(/\s+/g, ' ').replace(/[.:;,!?…]+$/, '');
   const short = line.length <= 48 ? line : `${line.slice(0, 48).replace(/\s+\S*$/, '')}…`;
   return short && short !== brief.trim() ? short : undefined;
 }
@@ -500,8 +536,29 @@ export class Runner {
   private slots = new ProviderSlots(() => this.store.setting('providerConcurrency', DEFAULT_PROVIDER_CONCURRENCY));
   /** Receives live progress from streaming harnesses; the core process forwards it to the window. */
   onProgress: (update: RunProgressUpdate) => void = () => {};
+  /** Tool-loop progress has no desktop answer stream; only authenticated CLI waits observe it. */
+  onCliProgress: (update: RunProgressUpdate) => void = () => {};
+  /**
+   * Asks Tacet which notes fit a message their words do not match (COD-306), or answers undefined when Tacet is not
+   * on this computer, fails or is late. Unset in tests that do not need it.
+   */
+  knowledgeFit?: (message: string, notes: NoteCandidate[]) => Promise<Map<string, number> | undefined>;
   constructor(private store: Store, private sources: Sources, private notify: () => void, private adapter: (provider: string, model?: string) => Promise<ModelAdapter>, private canDispatch: (task: Task) => boolean = () => true, private harness: HarnessRuntime = { detect: async () => [], execute: async () => { throw new Error('Harness runtime chưa được cấu hình.'); } }, private workspace?: WorkspaceRuntime, private appProposals?: AppProposals, private mcp?: McpServers, private webSearch: () => WebSearchSettings = () => ({ provider: store.webSearchProvider() }), private browser?: BrowserTools, private desktop?: DesktopTools) {
     this.slots.onChange = () => this.notify();
+  }
+  /**
+   * Tacet's picks among the notes that would not load today: unpinned, and sharing no word with the message. Pinned and
+   * matching notes load as before, so Tacet can only add to them (COD-306).
+   */
+  private async fitUnmatchedKnowledge(brief: string, candidates: readonly { id: string; title: string; content: string; tags: string[]; pinned: boolean }[]): Promise<Map<string, number> | undefined> {
+    if (!this.knowledgeFit) return undefined;
+    const unmatched = candidates.filter(item => !item.pinned && keywordScore(brief, item) === 0);
+    if (!unmatched.length) return undefined;
+    try {
+      return await this.knowledgeFit(brief, unmatched.map(item => ({ id: item.id, title: item.title, tags: item.tags })));
+    } catch {
+      return undefined;
+    }
   }
   isActive(taskId: string) { return [...this.active.values()].some(item => item.taskId === taskId); }
   /** A run this runner is working on now: when it started here and whether a pause was asked for (COD-244). */
@@ -630,6 +687,35 @@ export class Runner {
     return [];
   }
   private event(runId: string, message: string) { this.store.event(runId, message); this.notify(); }
+
+  private async modelActivity<Result>(run: Run, requestId: string, signal: AbortSignal, perform: () => Promise<Result>): Promise<Result> {
+    const startedAt = now();
+    const activity = { id: `model:${requestId}:${startedAt}`, runId: run.id, taskId: run.taskId, kind: 'model' as const, label: 'model', startedAt };
+    this.store.activity({ ...activity, state: 'running', updatedAt: startedAt });
+    try {
+      const result = await perform();
+      this.store.activity({ ...activity, state: 'completed', updatedAt: now() });
+      return result;
+    } catch (error) {
+      this.store.activity({ ...activity, state: signal.aborted ? 'stopped' : 'failed', updatedAt: now() });
+      throw error;
+    }
+  }
+  /**
+   * Says in the turn's steps which attached images this run cannot see, as the run starts (COD-292). Before, the line
+   * appeared only when the orglet asked for the image, so an orglet that never asked answered as if it had seen every
+   * file. Each image is announced once per chat, and a later request for it adds no second line.
+   */
+  private announceWithheldImages(run: Run, task: Task, manifest: readonly Source[], seesImages: boolean) {
+    const said = new Set(this.store.detail(task.id).events.map(event => event.message));
+    for (const source of manifest) {
+      if (source.media !== 'image' || !withheldSourceNote(source, seesImages)) continue;
+      const line = withheldEventLine(source, seesImages);
+      if (said.has(line)) continue;
+      this.event(run.id, line);
+      said.add(line);
+    }
+  }
   /**
    * The messages as the next request sends them, with each image's bytes added (COD-260). Every image is read again
    * through the permission, revoke and hash checks, so an image removed from the chat since cannot go out; the
@@ -680,7 +766,24 @@ export class Runner {
     const main = this.store.detail(task.sideOf.taskId);
     return { mainChat: mainChatTurns(main, task.sideOf.throughRevision, run.snapshot.worker.id) };
   }
-  private startPermissions(task: Task, run: Run): Pick<Run['snapshot'], 'toolCapabilities' | 'workspaceGrant' | 'browser' | 'desktop'> {
+  /**
+   * What a Continue turn starts from (COD-257): the calls and results of the run it continues, when that run belongs
+   * to this chat and still kept them. Whatever an older turn kept is dropped here, since only the latest can continue.
+   */
+  private carriedSteps(task: Task, run: Run, input: RunInput): ReturnType<Checkpoints['carried']> {
+    this.checkpoints.dropFinished(task.id, input.continueFrom);
+    if (!input.continueFrom || run.stage !== undefined) return undefined;
+    const row = this.store.db.prepare('SELECT task_id FROM runs WHERE id=?').get(input.continueFrom);
+    const carried = row?.task_id === task.id ? this.checkpoints.carried(input.continueFrom) : undefined;
+    if (!carried) {
+      this.event(run.id, 'Không còn các bước của lượt trước; tiếp tục từ câu trả lời đã lưu.');
+      return undefined;
+    }
+    const results = carried.messages.filter(message => message.role === 'tool').length;
+    this.event(run.id, `Tiếp tục từ ${results} bước của lượt trước.`);
+    return carried;
+  }
+  private startPermissions(task: Task, run: Run):Pick<Run['snapshot'], 'toolCapabilities' | 'workspaceGrant' | 'browser' | 'desktop'> {
     const fresh = !run.snapshot.context && !run.snapshot.reassignment;
     if (!fresh) {
       return { toolCapabilities: run.snapshot.toolCapabilities ?? snapshotCapabilities(run.snapshot.worker.provider, task.toolCapabilities), workspaceGrant: run.snapshot.workspaceGrant, browser: run.snapshot.browser, desktop: run.snapshot.desktop };
@@ -700,7 +803,7 @@ export class Runner {
   private recordSteps(runId: string, progress: HarnessProgress | null) {
     if (!progress) return;
     for (const step of progress.activity) {
-      if (!step.target) continue;
+      if (!step.target || !step.done || step.failed) continue;
       if (step.kind === 'read') this.store.event(runId, `Đã đọc ${step.target}`);
       if (step.kind === 'search') this.store.event(runId, `Đã tìm ${step.target}`);
       if (step.kind === 'list') this.store.event(runId, `Đã liệt kê tệp ${step.target}`);
@@ -740,14 +843,19 @@ export class Runner {
       }
       // Freeze knowledge and transcript layers before any dispatch; later edits only affect new runs.
       const knowledgeBase = new KnowledgeBase(this.store);
-      const context = run.snapshot.context ?? compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: knowledgeBase.candidates(run.snapshot.worker.id, run.snapshot.team?.id), memories: knowledgeBase.memoryCandidates(run.snapshot.worker.id, run.snapshot.team?.id).map(memoryCandidate) }).context;
+      let context = run.snapshot.context;
+      if (!context) {
+        const candidates = knowledgeBase.candidates(run.snapshot.worker.id, run.snapshot.team?.id);
+        const tacetFits = await this.fitUnmatchedKnowledge(input.brief, candidates);
+        context = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates, memories: knowledgeBase.memoryCandidates(run.snapshot.worker.id, run.snapshot.team?.id).map(memoryCandidate), tacetFits }).context;
+      }
       run = { ...run, snapshot: { ...run.snapshot, context } };
       // Repeated feedback on this worker's earlier work, frozen with the context so a resume sees the same evidence and
       // the tool policy can read it off the snapshot (COD-162). Only a chat run may act on it, never a scheduled one.
       if (this.appProposals && run.snapshot.improvement === undefined && !task.routineId && (run.stage === undefined || run.stage === 'group') && run.snapshot.worker.provider !== 'demo') {
         run = { ...run, snapshot: { ...run.snapshot, improvement: this.appProposals.improvementSignals(run) } };
       }
-      const compiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories });
+      const compiled = compileContext({ worker: run.snapshot.worker, skill: run.snapshot.skill, team: run.snapshot.team, colleagues: this.colleaguesOf(task, run), stage: run.stage, brief: input.brief, candidates: context.knowledge, memories: context.memories, tacetFits: frozenTacetFits(context) });
       run = { ...run, status: 'running' };
       this.store.update('runs', run);
       if (!options.keepTaskOpen) this.store.status(task.id, run.id, 'running');
@@ -804,11 +912,12 @@ export class Runner {
         }
         if (!needsReport(run)) {
           this.event(run.id, 'Demo: đang trả lời mẫu, không gọi model.');
-          this.commit(task, run, chatReport('Mình là Tí demo nên chưa đọc tệp hay gọi model thật. Chọn OpenAI, Anthropic hoặc harness trên máy (Claude Code, Codex) trong thiết lập Tí để trò chuyện và làm việc thật nhé.'), options.keepTaskOpen);
+          // Plain words and the name of the button under the message box (COD-293): "harness" meant nothing to a newcomer.
+          this.commit(task, run, chatReport('Mình là Tí demo nên chưa đọc tệp hay gọi model thật. Bấm Kết nối model dưới khung chat để chọn một model thật, rồi mình trò chuyện và làm việc thật nhé.'), options.keepTaskOpen);
           return;
         }
         this.event(run.id, 'Demo: đang tạo báo cáo mẫu, không gọi model.');
-        this.commit(task, run, { title: 'Báo cáo mẫu', summary: 'Đây là dữ liệu demo để thử giao việc, lịch sử và xuất báo cáo. Chưa có phân tích từ model.', findings: [], limitations: ['Báo cáo mẫu không chứa phân tích từ model. Kết quả checker local, nếu có, được hiển thị riêng.', 'Chọn OpenAI, Anthropic hoặc harness trên máy (Claude Code, Codex) trong thiết lập Tí để chạy phân tích bằng model.', ...preflightLimits, ...(options.limitations ?? [])] }, options.keepTaskOpen);
+        this.commit(task, run, { title: 'Báo cáo mẫu', summary: 'Đây là dữ liệu demo để thử giao việc, lịch sử và xuất báo cáo. Chưa có phân tích từ model.', findings: [], limitations: ['Báo cáo mẫu không chứa phân tích từ model. Kết quả checker local, nếu có, được hiển thị riêng.', 'Bấm Kết nối model dưới khung chat để chạy phân tích bằng một model thật.', ...preflightLimits, ...(options.limitations ?? [])] }, options.keepTaskOpen);
         return;
       }
       if (!task.consent || !(task.providerScopes ?? ['openai']).includes(run.snapshot.worker.provider)) throw new Error('Task chưa có quyền gửi dữ liệu đến provider này. Tạo task mới và xác nhận provider đã chọn.');
@@ -824,6 +933,7 @@ export class Runner {
       const seesImages = isHarness(run.snapshot.worker.provider)
         ? oneShotHarness && harnessSeesImages(run.snapshot.worker.provider)
         : modelSeesImages(run.snapshot.worker.provider, run.snapshot.model, readModelListCache(this.store));
+      if (!resume) this.announceWithheldImages(run, task, manifest, seesImages);
       const assemble = (layer: ReturnType<typeof compactThread>) => {
         const next: RunMessage[] = [{ role: 'system', content: compiled.system }];
         if (compiled.knowledgeMessage) next.push({ role: 'user', content: compiled.knowledgeMessage });
@@ -933,9 +1043,14 @@ export class Runner {
         return next;
       };
       let messages: RunMessage[];
+      let carried: ReturnType<Checkpoints['carried']>;
       if (!resume?.messages.length) {
         const compacted = fitThread(this.store.detail(task.id), run, input.brief, assemble, tools, undefined, extras);
         messages = assemble(compacted);
+        // Continue after a turn ran out of steps (COD-257): that run's calls and results come after this turn's own
+        // messages, so the orglet carries on without reading the same pages again.
+        carried = this.carriedSteps(task, run, input);
+        if (carried) messages.push({ role: 'user', content: JSON.stringify({ continuing: true, instruction: CONTINUE_INSTRUCTION }) }, ...carried.messages);
         run = { ...run, snapshot: { ...run.snapshot, context: applyThreadManifest(compiled.context, compacted) } };
         this.store.update('runs', run);
       } else {
@@ -945,7 +1060,9 @@ export class Runner {
         await this.runHarness(run.snapshot.worker.provider, task, run, messages, { manifest, preflight, preflightLimits, checkedSourceIds: checkedProfiles.flatMap(profile => Object.keys(profile.sourceHashes)) }, options, control, signal);
         return;
       }
-      let checkpoint: Checkpoint = this.checkpoints.get(run.id) ?? { id: run.id, step: 0, phase: 'ready', messages, readIds: [...new Set(checkedProfiles.flatMap(profile => Object.keys(profile.sourceHashes)))] };
+      let checkpoint: Checkpoint = this.checkpoints.get(run.id) ?? { id: run.id, step: 0, phase: 'ready', messages,
+        readIds: [...new Set([...checkedProfiles.flatMap(profile => Object.keys(profile.sourceHashes)), ...(carried?.readIds ?? [])])],
+        ...(carried?.untrustedInputs.length ? { untrustedInputs: carried.untrustedInputs } : {}) };
       let harnessRemainingUsd: number | undefined = 0;
       let model: ModelAdapter;
       if (isHarness(run.snapshot.worker.provider)) {
@@ -960,11 +1077,17 @@ export class Runner {
           // nothing there and has no native tools to read it with, and its working directory is part of the fixed prompt
           // it sends the provider, so one directory per run keeps that prompt identical from step to step (COD-183).
           const callDirectory = provider === 'claude-code' ? harnessDirectory! : await mkdtemp(join(harnessDirectory!, 'call-'));
-          try { return await this.harness.execute({ ...request, cwd: callDirectory, maxBudgetUsd: harnessRemainingUsd }); }
+          const progress = new ProgressSender(task.id, run.id, update => this.onCliProgress(update));
+          try {
+            return await this.harness.execute({ ...request, cwd: callDirectory, maxBudgetUsd: harnessRemainingUsd,
+              onProgress: update => progress.update(update),
+            });
+          }
           catch (error) {
             if (error instanceof HarnessTerminationError) retainHarnessDirectory = true;
             throw error;
           } finally {
+            progress.close();
             if (!retainHarnessDirectory && callDirectory !== harnessDirectory) await rm(callDirectory, { recursive: true, force: true });
           }
         },
@@ -973,6 +1096,7 @@ export class Runner {
             ...(harness.configDir ? { configDir: harness.configDir } : {}),
             ...(run.snapshot.model ? { model: run.snapshot.model } : {}) },
           onResult: result => {
+            if (result.context) run = { ...run, contextUse: result.context };
             checkpoint = result.costUsd === null
               ? { ...checkpoint, harnessCallsWithoutCost: (checkpoint.harnessCallsWithoutCost ?? 0) + 1 }
               : { ...checkpoint, harnessCostMicros: addHarnessCost(checkpoint.harnessCostMicros, result.costUsd) };
@@ -1007,8 +1131,10 @@ export class Runner {
         checkpoint = { ...checkpoint, messages, pendingApproval: undefined };
       }
       this.checkpoints.save(checkpoint);
-      const maxSteps = stepLimit(run);
-      for (let step = checkpoint.step; step < maxSteps; step++) {
+      const maxSteps = stepLimit(run, manifest.length);
+      // The limit counts the steps a run may work. Only a run that used them all without an answer is told to hand in,
+      // with WRAP_UP_STEPS more to do it, so an answer marked out of steps really was cut short (COD-289).
+      for (let step = checkpoint.step; step < maxSteps + WRAP_UP_STEPS; step++) {
         signal.throwIfAborted();
         if (control.paused || !this.canDispatch(task)) throw new Paused();
         // Cached content is still subject to live permission revocation before every dispatch.
@@ -1019,12 +1145,13 @@ export class Runner {
         }
         for (const sourceId of readIds) if (this.store.get<Source>('sources', sourceId).revoked) throw new Error('Quyền nguồn đã bị thu hồi; dừng gửi context.');
         // UTF-8 byte count bounds byte-fallback tokens; extra allowance covers chat framing/schema overhead.
-        if (!checkpoint.wrappingUp && !checkpoint.reportCorrections && step >= maxSteps - WRAP_UP_STEPS) {
+        if (!checkpoint.wrappingUp && !checkpoint.reportCorrections && step >= maxSteps) {
+          const stepsLeft = maxSteps + WRAP_UP_STEPS - step;
           const wrapUpInstruction = run.stage === 'member' ? `${WRAP_UP_INSTRUCTION} ${MEMBER_WRAP_UP_INSTRUCTION}` : WRAP_UP_INSTRUCTION;
-          messages.push({ role: 'user', content: JSON.stringify({ stepsLeft: maxSteps - step, instruction: wrapUpInstruction }) });
+          messages.push({ role: 'user', content: JSON.stringify({ stepsLeft, instruction: wrapUpInstruction }) });
           checkpoint = { ...checkpoint, messages, wrappingUp: true };
           this.checkpoints.save(checkpoint);
-          this.event(run.id, `Còn ${maxSteps - step} bước; yêu cầu nộp kết quả với phần đã làm.`);
+          this.event(run.id, `Còn ${stepsLeft} bước; yêu cầu nộp kết quả với phần đã làm.`);
         }
         const requestTools = checkpoint.reportCorrections
           ? tools.filter(tool => tool.type === 'function' && tool.function.name === 'submit_report')
@@ -1066,7 +1193,7 @@ export class Runner {
               }
               this.checkpoints.save({ ...checkpoint, phase: 'requesting' });
               try {
-                reply = await model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(900000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(900000)]), () => this.event(run.id, 'Model đang trả kết quả…')));
               } catch (error) {
                 // The CLI answered with a budget stop, so what it spent is known and the step can run again once the
                 // limit is raised; an unknown in-flight request would stay at 'requesting'.
@@ -1082,9 +1209,9 @@ export class Runner {
               reply = sanitizeReportReply(run, reply);
               this.checkpoints.received(checkpoint, reply);
             } else if (isLocalApi(provider)) {
-              this.event(run.id, `Đang gọi model · bước ${step + 1}/${maxSteps}`);
+              this.event(run.id, modelStepLine(step, maxSteps));
               try {
-                reply = await model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…')));
                 reply = sanitizeReportReply(run, reply);
                 this.checkpoints.received(checkpoint, reply);
               } catch {
@@ -1093,9 +1220,9 @@ export class Runner {
             } else if (isPlanApi(provider)) {
               // OpenCode bills these requests (Zen balance, Go subscription) and enforces its own limits; Orglet has no
               // verified price to reserve against, so a multi-call task and a retry run straight through.
-              this.event(run.id, `Đang gọi model · bước ${step + 1}/${maxSteps}`);
+              this.event(run.id, modelStepLine(step, maxSteps));
               try {
-                reply = await model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'));
+                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…')));
                 reply = sanitizeReportReply(run, reply);
                 this.checkpoints.received(checkpoint, reply);
               } catch (error) {
@@ -1115,15 +1242,19 @@ export class Runner {
               const reservation = resolved.rates && hold === 0
                 ? ledger.reserveAtZeroPrice(run.id, task.id, provider, journal)
                 : ledger.reserve(run.id, task.id, provider, hold, task.budgetMicros, this.store.setting('connectionLimitMicros', 5_000_000), teamBudget, journal);
-              this.event(run.id, `Đang gọi model · bước ${step + 1}/${maxSteps}`);
+              this.event(run.id, modelStepLine(step, maxSteps));
               try {
-                reply = await model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation);
+                reply = await this.modelActivity(run, String(step), signal, () => model.request(outgoing, requestTools, AbortSignal.any([signal, AbortSignal.timeout(90_000)]), () => this.event(run.id, 'Model đang trả kết quả…'), reservation));
                 reply = sanitizeReportReply(run, reply);
+                if (reply.usage && !isHarness(run.snapshot.worker.provider) && run.snapshot.worker.provider !== 'demo') run = { ...run, contextUse: this.apiContextUse(run, reply.usage.input) };
                 if (reply.usage && resolved.rates) ledger.settle(reservation, reply.usage.input, reply.usage.output, resolved.rates);
                 else ledger.unknown(reservation, 'missing_usage');
                 this.checkpoints.received(checkpoint, reply);
               } catch (error) {
-                ledger.unknown(reservation, 'request_failed');
+                // A known price of zero costs nothing whatever became of the request (stopped, refused, cut off), so a
+                // free local connection leaves no charge to reconcile (dogfood round 7, COD-295).
+                if (resolved.rates && hold === 0) ledger.settle(reservation, 0, 0, resolved.rates);
+                else ledger.unknown(reservation, 'request_failed');
                 // A custom connection words its own refusal (a wrong key, a stopped local server); keep that and, when
                 // money is held, still say the unknown cost stays held. A free connection holds nothing to say it about.
                 if (error instanceof ProviderRequestError && hold === 0) throw error;
@@ -1149,7 +1280,20 @@ export class Runner {
         if (reply.calls.length !== 1) throw new Error('Model không trả về đúng một tool call hợp lệ.');
         const call = reply.calls[0];
         if (checkpoint.reportCorrections && call.name !== 'submit_report') throw new Error('Lần sửa báo cáo chỉ được nộp submit_report.');
-        assertToolCall(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
+        const problem = toolCallProblem(run, this.store.get<Task>('tasks', task.id), call.name, call.arguments);
+        if (problem) {
+          // A call the worker can correct is the tool's answer, not a failed run (COD-289); nothing was run.
+          const refusal = this.refuseToolCall(run, task, problem);
+          messages.push({ role: 'assistant', ...(reply.notes ? { content: reply.notes } : {}), tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
+          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(refusal.result) });
+          this.event(run.id, refusal.event);
+          // A worker that keeps calling what it cannot use is stuck; the run stops with the line that says why.
+          if (refusedCallsInARow(messages) >= MAX_REFUSED_CALLS_IN_A_ROW) throw new Error(refusal.event);
+          checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] };
+          this.checkpoints.committed(checkpoint);
+          this.notify();
+          continue;
+        }
         // Notes the model kept beside the call travel with it, so what it read survives when older pages are cut (COD-264).
         messages.push({ role: 'assistant', ...(reply.notes ? { content: reply.notes } : {}), tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }] });
         if (call.name === 'record_work_frame') {
@@ -1436,7 +1580,8 @@ export class Runner {
           const answer: HeldAnswer = { report: { ...chatReport(message), limitations: this.crewLimitations(run, options) },
             knowledgeProposals, title, untrustedInputs: [...untrustedInputs] };
           const workspaceLimitations = await this.finishWorkspace(run, answer);
-          this.commit(task, run, { ...answer.report, limitations: [...answer.report.limitations, ...workspaceLimitations] }, options.keepTaskOpen, knowledgeProposals, title, false, answer.untrustedInputs); return;
+          if (checkpoint.wrappingUp) run = { ...run, outOfSteps: true };
+          this.commit(task, run,{ ...answer.report, limitations: [...answer.report.limitations, ...workspaceLimitations] }, options.keepTaskOpen, knowledgeProposals, title, false, answer.untrustedInputs); return;
         }
         if (call.name === 'submit_plan') {
           if (run.stage !== 'plan') throw new Error('Tool không được policy cho phép.');
@@ -1474,7 +1619,9 @@ export class Runner {
         const withheld = requested ? withheldSourceNote(requested, seesImages) : null;
         if (requested && withheld) {
           // A worker asking for a file it cannot take in is not a failed run: it is told plainly, and the turn goes on.
-          this.event(run.id, withheldEventLine(requested, seesImages));
+          // An image was already announced when the run started; anything else gets its line now.
+          const line = withheldEventLine(requested, seesImages);
+          if (!this.store.detail(task.id).events.some(event => event.message === line)) this.event(run.id, line);
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ sourceId, error: withheld, readable: false }) });
           checkpoint = { ...checkpoint, id: run.id, step: step + 1, phase: 'ready', messages, readIds: [...readIds] }; this.checkpoints.committed(checkpoint);
           continue;
@@ -1519,7 +1666,8 @@ export class Runner {
       throw new Error(run.snapshot.workspaceGrant ? `Đã chạm giới hạn ${maxSteps} bước mà chưa hoàn tất công việc.` : `Đã chạm giới hạn ${maxSteps} bước mà chưa có báo cáo hợp lệ.`);
     } catch (error) {
       if (error instanceof HarnessBudgetError) this.event(run.id, harnessCostLine(harnessNames[run.snapshot.worker.provider as HarnessId] ?? run.snapshot.worker.provider, error.costUsd, true, harnessRunTotal));
-      const message = error instanceof HarnessTerminationError ? error.message : signal.aborted ? 'Đã hủy. Request đã gửi có thể vẫn bị tính phí.' : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error, readCustomConnections(this.store)) : 'Lần chạy gặp lỗi.';
+      // A file-system error names the private copy's full path; the person reads only the path inside it (COD-289).
+      const message = withoutCopyPaths(error instanceof HarnessTerminationError ? error.message : signal.aborted ? cancelledMessage(run.snapshot.worker.provider) : error instanceof Paused ? 'Đã lưu checkpoint. Có thể tiếp tục với snapshot cũ.' : error instanceof HarnessBudgetError ? harnessBudgetMessage(run, this.store.get<Task>('tasks', task.id).budgetMicros) : error instanceof z.ZodError || error instanceof SyntaxError ? 'Kết quả không đúng schema; không lưu thành báo cáo hoàn tất.' : error instanceof Error ? failureMessage(run, error, readCustomConnections(this.store)) : 'Lần chạy gặp lỗi.');
       const status = error instanceof HarnessTerminationError ? 'failed' : signal.aborted ? 'cancelled' : error instanceof Paused ? 'paused' : error instanceof BudgetError || error instanceof HarnessBudgetError ? 'waiting_budget' : 'failed';
       // A harness account out of plan usage is marked, so the chat can offer an account that still has room (COD-225).
       const handInBlocked = error instanceof HandInBlockedError && !signal.aborted ? error : undefined;
@@ -1555,6 +1703,15 @@ export class Runner {
    * The limitations the crew runner handed in, plus one line for each teammate whose result is what it had when its
    * steps ran out, so the crew's answer says so whatever the lead writes (COD-256). Only the combining step gets these.
    */
+  /**
+   * How full the context was on an API run's latest request (COD-326): the prompt tokens the provider billed, and the
+   * window when the provider's model list gives one (OpenRouter today). A window nobody reported stays unknown.
+   */
+  private apiContextUse(run: Run, promptTokens: number): RunContextUse {
+    const windowTokens = modelContextTokens(readModelListCache(this.store), run.snapshot.worker.provider, run.snapshot.model);
+    return { usedTokens: Math.max(0, Math.round(promptTokens)), ...(windowTokens ? { windowTokens } : {}) };
+  }
+
   private crewLimitations(run: Run, options: { upstream?: Artifact[]; limitations?: string[] }) {
     const given = options.limitations ?? [];
     if (run.stage !== 'synthesis') return given;
@@ -1588,13 +1745,15 @@ export class Runner {
 
   /**
    * Whether a finished run's changes wait for the person before they reach the folder (COD-279): a solo chat's run,
-   * main chat or side thread, whose permissions (frozen and current alike) do not include `workspace.apply`. A crew
-   * member or a group reply hands in as it finishes, because the next orglet in the turn works from those files, and a
-   * schedule's run has nobody there to review it.
+   * main chat, side thread or a schedule's run, whose permissions (frozen and current alike) do not include
+   * `workspace.apply`. A crew member or a group reply hands in as it finishes, because the next orglet in the turn works
+   * from those files. A schedule's run holds its changes in its own chat unless the schedule turned review off, which
+   * gives the run `workspace.apply` (COD-294): nobody is there when it finishes, so by default nothing reaches the folder
+   * until the person has looked.
    */
   private holdsForReview(run: Run): boolean {
     const task = this.store.get<Task>('tasks', run.taskId);
-    if (run.stage !== undefined || run.snapshot.team || task.routineId) return false;
+    if (run.stage !== undefined || run.snapshot.team) return false;
     return !hasCapability(run, task, 'workspace.apply');
   }
 
@@ -1760,7 +1919,8 @@ export class Runner {
     const blockedByWorker = assignmentOutcome === 'blocked' && !handedInWhatItFound;
     const blockedByFiles = expectedFileChanges && (assignmentOutcome !== 'completed' || missingFileChanges);
     const memberBlocked = run.stage === 'member' && (blockedByWorker || blockedByFiles);
-    this.commit(task, run, report, options.keepTaskOpen, knowledgeProposals, null, memberBlocked, options.untrustedInputs ?? []);
+    if (options.ranOutOfSteps) run = { ...run, outOfSteps: true };
+    this.commit(task, run,report, options.keepTaskOpen, knowledgeProposals, null, memberBlocked, options.untrustedInputs ?? []);
   }
   /**
    * Runs a locally installed agent CLI as one opaque step over a throwaway copy of the selected sources.
@@ -1854,7 +2014,7 @@ export class Runner {
       let result: Awaited<ReturnType<HarnessRuntime['execute']>>;
       try {
         for (const capability of run.snapshot.toolCapabilities ?? []) assertCapability(run, this.store.get<Task>('tasks', task.id), capability);
-        result = await this.harness.execute({
+        result = await this.modelActivity(run, 'harness', signal, () => this.harness.execute({
           harness: provider,
           executable: tool.executable,
           ...(tool.configDir ? { configDir: tool.configDir } : {}),
@@ -1867,13 +2027,14 @@ export class Runner {
           ...(run.snapshot.model ? { model: run.snapshot.model } : {}),
           ...(attachedImages.length ? { images: attachedImages } : {}),
           onProgress: update => progress.update(showSourceNames(update)),
-        });
+        }));
       } finally {
         progress.close();
         this.recordSteps(run.id, progress.lastProgress);
       }
       for (const capability of run.snapshot.toolCapabilities ?? []) assertCapability(run, this.store.get<Task>('tasks', task.id), capability);
       if (result.notice) this.event(run.id, result.notice);
+      if (result.context) run = { ...run, contextUse: result.context };
       signal.throwIfAborted();
       this.event(run.id, harnessReplyLine(tool.name, result));
       const readIds = new Set([...given.map(item => item.sourceId), ...scope.checkedSourceIds]);
@@ -1885,6 +2046,12 @@ export class Runner {
       }
       // Older harness prompts (and team reports) return the report object itself.
       const answer = needsReport(run) ? undefined : HarnessAnswer.safeParse(output);
+      if (answer?.success === false && output && typeof output === 'object' && Object.hasOwn(output, 'message') && !ModelReport.safeParse(output).success) {
+        const tooLong = answer.error.issues.some(issue => issue.path[0] === 'message' && issue.code === 'too_big');
+        throw new Error(tooLong
+          ? 'Câu trả lời quá dài; chưa được lưu. Hãy yêu cầu chia nội dung thành nhiều phần.'
+          : 'Câu trả lời thiếu phần bắt buộc hoặc có phần sai dạng; chưa được lưu.');
+      }
       // Every source the harness could read is content nobody vetted: with any attached, the run's proposals wait
       // for a click, the same hold the tool loop puts on a run that called read_source (COD-206).
       const untrustedInputs = given.length ? ['attached sources'] : [];
@@ -2033,6 +2200,18 @@ export class Runner {
    * asking the person to do the work by hand (COD-257). Demo has no tools and a crew member answers to its lead, so
    * neither gets it.
    */
+  /** The answer to a call the worker can correct, worded for this chat: its language, and the main chat for a side thread. */
+  private refuseToolCall(run: Run, task: Task, problem: ToolCallProblem) {
+    const current = this.store.get<Task>('tasks', task.id);
+    return toolCallRefusal({
+      problem,
+      offered: offeredToolNames(run, current),
+      workspacePermissions: run.snapshot.workspaceGrant?.permissions,
+      language: this.store.setting<Language>('language', DEFAULT_LANGUAGE),
+      sideThread: Boolean(current.sideOf),
+      schedule: Boolean(current.routineId),
+    });
+  }
   private permissionsOffHint(run: Run, task: Task): { permissionsOff?: { names: string[]; where: string }; permissionsOffInstruction?: string } {
     // A run from before capabilities were frozen has no list; guessing it would name switches that are on.
     if (run.snapshot.worker.provider === 'demo' || !run.snapshot.toolCapabilities) return {};
@@ -2087,7 +2266,8 @@ export class Runner {
       new ChatSearch(this.store).indexAnswer(artifact, run);
       if (proposals.length) new KnowledgeBase(this.store).propose(run, artifact.id, proposals);
       if (this.wantsTitle(task, run)) {
-        const title = taskTitle(suggestedTitle, report, this.store.get<Task>('tasks', task.id).brief);
+        const current = this.store.get<Task>('tasks', task.id);
+        const title = taskTitle(suggestedTitle, report, current.brief, chatHeadline(current));
         if (title) this.store.setSetting('taskTitles', { ...this.store.setting<Record<string, string>>('taskTitles', {}), [task.id]: title });
       }
       const missing = report.review?.checks.filter(check => check.status === 'not_assessed').map(check => check.name) ?? [];
@@ -2101,9 +2281,12 @@ export class Runner {
         lastArtifactId: artifact.id,
         ...(!keepTaskOpen ? { status: (missing.length ? 'waiting_input' : 'completed') as Task['status'] } : {}),
       });
-      this.store.put('runs', { ...run, status: memberBlocked ? 'failed' : 'completed', error: memberBlocked ? 'Phần việc bị chặn; xem báo cáo đã lưu.' : null }, { column: 'task_id', value: task.id });
+      const saved: Run = { ...run, status: memberBlocked ? 'failed' : 'completed', error: memberBlocked ? 'Phần việc bị chặn; xem báo cáo đã lưu.' : null };
+      this.store.put('runs', saved, { column: 'task_id', value: task.id });
       this.store.event(run.id, memberBlocked ? 'Đã lưu báo cáo blocker; phần việc chưa hoàn tất.' : report.format === 'chat' ? 'Đã lưu câu trả lời.' : 'Đã lưu báo cáo và nguồn tham chiếu.');
-      this.store.db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);
+      // A run cut short by its step limit keeps its conversation, so Continue picks up from it (COD-257).
+      if (canContinueRun(saved)) this.checkpoints.keepFinished(run.id);
+      else this.store.db.prepare('DELETE FROM checkpoints WHERE id=?').run(run.id);
       this.store.db.prepare("UPDATE step_attempts SET state='committed' WHERE run_id=? AND state='received'").run(run.id);
     });
     // The run is over, so its app-change proposals settle now: held if the run read unvetted content, applied at

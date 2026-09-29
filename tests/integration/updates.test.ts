@@ -3,8 +3,8 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ABOUT_LINKS, AboutLink, aboutDetailsText, CHANGELOG_URL, installKind, parseReleases, updateFeedUrl, updateSupport, type UpdateEnvironment, type UpdateState } from '../../apps/desktop/src/shared/updates';
-import { CHECK_INTERVAL_MS, STARTUP_CHECK_DELAY_MS, Updater, type UpdaterEngine } from '../../apps/desktop/src/main/updater';
+import { ABOUT_LINKS, AboutLink, aboutDetailsText, becameReady, CHANGELOG_URL, installKind, parseReleases, updateErrorReason, updateFeedUrl, updateIndicator, updateSupport, type UpdateEnvironment, type UpdateState } from '../../apps/desktop/src/shared/updates';
+import { CHECK_INTERVAL_MS, describeState, STARTUP_CHECK_DELAY_MS, Updater, UPDATER_LOG_LIMIT_BYTES, updaterLogWriter, type UpdaterEngine } from '../../apps/desktop/src/main/updater';
 import { CHANGELOG_MAX_AGE_MS, ChangelogFeed } from '../../apps/desktop/src/main/changelog';
 import { version } from '../../package.json';
 
@@ -23,12 +23,14 @@ const squirrel: UpdateEnvironment = { packaged: true, platform: 'win32', squirre
 function updater(overrides: Partial<{ environment: UpdateEnvironment; firstRun: boolean; automatic: boolean }> = {}) {
   const engine = new FakeEngine();
   const states: UpdateState[] = [];
+  const logged: string[] = [];
   const instance = new Updater({
     engine, environment: overrides.environment ?? squirrel, feedUrl: updateFeedUrl('win32', 'x64', version),
     firstRun: overrides.firstRun ?? false, automatic: overrides.automatic ?? true,
     onChange: state => states.push(state), clock: () => new Date('2026-09-23T10:00:00.000Z'),
+    log: line => logged.push(line),
   });
-  return { engine, states, instance };
+  return { engine, states, instance, logged };
 }
 
 describe('update feed and support', () => {
@@ -90,6 +92,16 @@ describe('the updater state machine', () => {
     expect(engine.checks).toBe(0);
     expect(states).toEqual([]);
     expect(() => instance.install()).toThrow('Chưa có bản cập nhật');
+  });
+
+  it('stays unsupported when automatic updates are switched on in a build that cannot update', () => {
+    const { engine, instance, states } = updater({ environment: { ...squirrel, squirrelUpdater: false }, automatic: false });
+    instance.start();
+    instance.setAutomatic(true);
+    vi.advanceTimersByTime(CHECK_INTERVAL_MS * 2);
+    expect(engine.checks).toBe(0);
+    expect(states).toEqual([]);
+    expect(instance.state).toEqual({ status: 'unsupported', reason: 'portable' });
   });
 
   it('checks shortly after start and then on the interval while automatic updates are on', () => {
@@ -251,5 +263,128 @@ describe('changelog cache', () => {
     await writeFile(join(directory, 'changelog-cache.json'), '{"releases": "nope"}');
     responses.push([gitHubRelease('v0.2.3', '2026-09-20T00:00:00Z')]);
     expect((await feed().read()).releases[0].version).toBe('0.2.3');
+  });
+});
+
+describe('what the main screen shows about an update (COD-304)', () => {
+  it('shows a mark only while a new version downloads or waits for a restart', () => {
+    expect(updateIndicator(undefined)).toBeNull();
+    expect(updateIndicator({ status: 'idle' })).toBeNull();
+    expect(updateIndicator({ status: 'checking' })).toBeNull();
+    expect(updateIndicator({ status: 'up-to-date', checkedAt: '2026-09-27T10:00:00.000Z' })).toBeNull();
+    expect(updateIndicator({ status: 'error', message: 'offline', checkedAt: '2026-09-27T10:00:00.000Z' })).toBeNull();
+    expect(updateIndicator({ status: 'unsupported', reason: 'portable' })).toBeNull();
+    expect(updateIndicator({ status: 'downloading' })).toEqual({ kind: 'downloading' });
+    expect(updateIndicator({ status: 'ready', version: '0.6.2' })).toEqual({ kind: 'ready', version: '0.6.2' });
+    expect(updateIndicator({ status: 'ready', version: null })).toEqual({ kind: 'ready', version: null });
+  });
+
+  it('announces a ready update once: on the step into ready, never on a repeat', () => {
+    expect(becameReady({ status: 'downloading' }, { status: 'ready', version: '0.6.2' })).toBe(true);
+    expect(becameReady(undefined, { status: 'ready', version: '0.6.2' })).toBe(true);
+    expect(becameReady({ status: 'ready', version: '0.6.2' }, { status: 'ready', version: '0.6.2' })).toBe(false);
+    expect(becameReady({ status: 'checking' }, { status: 'downloading' })).toBe(false);
+  });
+});
+
+describe('the updater log (COD-304)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('says when it will check, why each check ran and what came of it', () => {
+    const { engine, instance, logged } = updater();
+    instance.start();
+    vi.advanceTimersByTime(STARTUP_CHECK_DELAY_MS);
+    engine.emit('checking-for-update');
+    engine.emit('update-available');
+    engine.emit('update-downloaded', {}, '', '0.6.2', new Date(), '');
+    instance.install();
+    expect(logged).toEqual([
+      `feed https://update.electronjs.org/codepawl/orglet/win32-x64/${version}`,
+      'automatic updates on: first check in 30 s, then every 4 h',
+      'check (startup)',
+      'checking',
+      'update found, downloading',
+      'downloaded 0.6.2, waiting for a restart',
+      'restarting into 0.6.2',
+    ]);
+    instance.stop();
+  });
+
+  it('pushes one checking state when the engine repeats the one the updater already announced', () => {
+    const { engine, instance, states } = updater({ automatic: false });
+    instance.check();
+    engine.emit('checking-for-update');
+    engine.emit('update-not-available');
+    expect(states.map(state => state.status)).toEqual(['checking', 'up-to-date']);
+  });
+
+  it('names the reason it never checks, the first run after Setup, and a switched-off schedule', () => {
+    expect(updater({ environment: { ...squirrel, squirrelUpdater: false } }).logged).toEqual(['not checking: portable build']);
+    const firstRun = updater({ firstRun: true });
+    firstRun.instance.start();
+    expect(firstRun.logged.at(-1)).toBe('automatic updates on: no startup check on the first run after Setup, then every 4 h');
+    firstRun.instance.stop();
+    const manual = updater({ automatic: false });
+    manual.instance.start();
+    expect(manual.logged.at(-1)).toBe('automatic updates are off: checking only when asked');
+  });
+
+  it('keeps a failure on one line, in the engine\'s words', () => {
+    const failure: UpdateState = { status: 'error', message: 'Command failed: 4294967295\n  at Update.exe', checkedAt: '2026-09-27T10:00:00.000Z' };
+    expect(describeState(failure)).toBe('failed: Command failed: 4294967295 at Update.exe');
+  });
+});
+
+describe('the updater log file (COD-304)', () => {
+  let directory: string;
+  beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-updater-log-')); });
+  afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
+
+  it('writes timestamped lines in order', async () => {
+    const file = join(directory, 'updater.log');
+    const write = updaterLogWriter(file, () => new Date('2026-09-27T10:00:00.000Z'));
+    write('check (manual)');
+    write('up to date');
+    await write.written();
+    expect(await readFile(file, 'utf8')).toBe('2026-09-27T10:00:00.000Z check (manual)\n2026-09-27T10:00:00.000Z up to date\n');
+  });
+
+  it('drops the older half once the file passes its limit, cutting at a line', async () => {
+    const file = join(directory, 'updater.log');
+    const oldLine = `${'x'.repeat(99)}\n`;
+    await writeFile(file, oldLine.repeat(Math.ceil(UPDATER_LOG_LIMIT_BYTES / oldLine.length)));
+    const write = updaterLogWriter(file, () => new Date('2026-09-27T10:00:00.000Z'));
+    write('check (interval)');
+    await write.written();
+    const text = await readFile(file, 'utf8');
+    expect(Buffer.byteLength(text)).toBeLessThan(UPDATER_LOG_LIMIT_BYTES);
+    expect(text.endsWith('2026-09-27T10:00:00.000Z check (interval)\n')).toBe(true);
+    expect(text.split('\n').slice(0, -2).every(line => line === 'x'.repeat(99))).toBe(true);
+  });
+});
+
+describe('a failed check in words a person can read (COD-304)', () => {
+  // What Electron's updater reported on this machine when the feed answered 404 (measured with the update test build).
+  const squirrelFailure = 'Command failed: 4294967295\nSystem.AggregateException: One or more errors occurred. ---> System.Net.WebException: The remote server returned an error: (404) Not Found.\n   at System.Net.HttpWebRequest.EndGetResponse(IAsyncResult asyncResult)\n   at Squirrel.Update.Program.main(String[] args)\n   --- End of inner exception stack trace ---';
+
+  it('keeps the message of the exception that says what went wrong, not the stack trace', () => {
+    expect(updateErrorReason(squirrelFailure)).toBe('The remote server returned an error: (404) Not Found.');
+    expect(updateErrorReason('System.Net.WebException: The remote name could not be resolved: \'update.electronjs.org\'\n   at System.Net.WebClient.DownloadString')).toBe('The remote name could not be resolved: \'update.electronjs.org\'');
+  });
+
+  it('keeps the first line of anything else, cut to a readable length', () => {
+    expect(updateErrorReason('Update URL is not set')).toBe('Update URL is not set');
+    expect(updateErrorReason('Command failed: 4294967295\n')).toBe('Command failed: 4294967295');
+    expect(updateErrorReason('x'.repeat(500))).toHaveLength(300);
+  });
+
+  it('shows the reason in the state and keeps the whole text in the log', () => {
+    const { engine, instance, logged } = updater({ automatic: false });
+    instance.check();
+    engine.emit('error', new Error(squirrelFailure));
+    expect(instance.state).toMatchObject({ status: 'error', message: 'The remote server returned an error: (404) Not Found.' });
+    expect(logged.at(-2)).toMatch(/^engine error: Command failed: 4294967295 System\.AggregateException: .* at Squirrel\.Update\.Program\.main/);
+    expect(logged.at(-1)).toBe('failed: The remote server returned an error: (404) Not Found.');
   });
 });

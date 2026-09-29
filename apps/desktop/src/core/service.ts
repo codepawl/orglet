@@ -1,10 +1,12 @@
-import { WorkspaceRecovery } from './storage/workspace-recovery';
+import { dirname, resolve } from 'node:path';
+import { WorkspaceRecovery, restoredChangesKey } from './storage/workspace-recovery';
 import type { WorkspaceRuntime } from './tools/workspace-runtime';
 import { removalStopsWork, snapshotCapabilities, type ToolCapability } from '../shared/tool-policy';
 import { liveTeamTask, liveWorkerTask, newChatKey, newChatKeyNames } from '../shared/live-task';
+import { leaveCrewsMessage, removalBlocker, stopScheduleMessage } from '../shared/removal';
 import { withoutSourceIds } from '../shared/source-mentions';
 import { WorkspaceGrants, replacesGrant, type PendingWorkspace, type ResolvedDirectory } from './storage/workspace-grants';
-import { GrantWorkspace, type NewChatTarget } from '../shared/workspace-access';
+import { GrantWorkspace, type NewChatTarget, type WorkspaceGrantView, type WorkspacePermission } from '../shared/workspace-access';
 import type { Knowledge } from '../shared/knowledge';
 import { z } from 'zod';
 import { commands, Id, type CredentialProvider, type Command, type Worker, type Skill, type Task, type Run, type Artifact, type Source, type Team, type TaskInput, type Routine } from '../shared/contracts';
@@ -15,10 +17,12 @@ import { Sources } from './tools/sources';
 import type { PdfTextExtractor } from './tools/pdf-text';
 import { Runner } from './orchestration/runner';
 import type { ModelAdapter } from './adapters/openai';
+import { readOpenCodeGoUsage } from './adapters/opencode';
 import { TeamRunner } from './orchestration/team';
 import templates from '../../../../templates/catalog.json';
 import type { ProfileExecutor, ProfileRecord } from '../shared/profiles';
 import { Backups } from './storage/backup';
+import { DELETED_CHAT_TEXT, deletedRunSnapshot } from './storage/deleted-chat';
 import { ChatSearch } from './storage/chat-search';
 import { ReviewPolicy } from '../shared/review';
 import { Preflight } from './orchestration/preflight';
@@ -26,18 +30,21 @@ import { PreflightPolicy, type PreflightRecord } from '../shared/preflight';
 import { TeamTemplates } from './storage/templates';
 import { Routines, SCHEDULE_NEVER_ACTS, SCHEDULE_NO_DESKTOP } from './orchestration/routines';
 import { FolderTriggers } from './orchestration/folder-triggers';
-import { RoutineFolders } from './storage/routine-folders';
+import { RoutineFolders, folderBirth } from './storage/routine-folders';
 import type { WatchFolderView } from '../shared/routine-triggers';
 import { WorkPolicy } from './orchestration/work-policy';
 import { runningView } from './orchestration/running';
+import { randomUUID } from 'node:crypto';
 import type { RunningItem } from '../shared/running';
 import { KnowledgeBase } from './context/knowledge';
 import type { HarnessRuntime } from './orchestration/runner';
-import { harnessCatalog, SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessUsage } from '../shared/harness';
+import { harnessCatalog, harnessLogoutArgs, harnessNames, harnessSignsInApp, SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessCatalogId, type HarnessInfo, type HarnessResetAnswer, type HarnessResetClaim, type HarnessResetOutcome, type HarnessUsage } from '../shared/harness';
 import { detectHarnesses, probe } from './harness/detect';
-import { readHarnessUsage } from './harness/usage';
+import { claimClaudeReset, readHarnessUsage } from './harness/usage';
 import { HarnessAccounts } from './harness/accounts';
-import { executeHarness } from './harness/exec';
+import { UsageReadings } from './harness/usage-readings';
+import { HarnessSignIns, localSignInRuntime, type SignInEnd } from './harness/sign-in';
+import { executeHarness, type HarnessRequest, type HarnessResult } from './harness/exec';
 import { eraseEverything, eraseKnowledge, eraseMemory, eraseSources } from './storage/erase';
 import { ERASE_CONFIRMATION, type EraseScope, type EraseSummary } from '../shared/erase';
 import { fetchUsdRate, RATE_MAX_AGE_MS, type RateFetcher } from './currency';
@@ -48,12 +55,13 @@ import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './mod
 import { canStoreModelListRow, dropProviderRow, readModelListCache, writeModelListCache } from './models/cache';
 import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
 import { mentionedPeople, parseMentions } from '../shared/mentions';
-import { assertOpenCodeModel, isOpenCodePlan } from '../shared/opencode';
+import { assertOpenCodeModel, isOpenCodePlan, type OpenCodeGoUsage } from '../shared/opencode';
 import { MessageInteractions, type MessageTarget } from './orchestration/message-interactions';
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
-import { ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
+import { chatHeadline, ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
+import { canContinueRun } from '../shared/out-of-steps';
 import type { Args } from '../shared/contracts';
 import { customProviderId, findCustomConnection, isCustomProvider } from '../shared/custom-connections';
 import { deleteCustomConnection, readCustomConnections, requireCustomConnection, saveCustomConnection } from './storage/custom-connections';
@@ -68,22 +76,52 @@ import { DesktopTools } from './tools/desktop-tools';
 import type { DesktopHost } from '../shared/desktop-host';
 import { neverDesktopProgram } from '../shared/desktop';
 import type { BrowserHost } from '../shared/browser-host';
+import { runBy } from '../shared/schedule-runs';
+import { Decisions } from './decisions/service';
+import { decisionsDirectory } from './decisions/manifest';
+import { QuietRunReview } from './orchestration/quiet-runs';
+import { askKnowledgeFit } from './decisions/knowledge-fit';
+import { actionRiskOpinion } from './decisions/action-risk';
+import { PermissionSuggestions } from './orchestration/permission-suggestions';
+import { TurnRouting } from './orchestration/turn-routing';
 
 /**
  * The harness runtime a real Orglet runs on. `accountRoot` is the folder holding one subfolder per harness
- * account; without it only the system account exists, which is what the tests want.
+ * account; without it only the system account exists, which is what the tests want. `openSignInPage` is main's
+ * browser opener; without it Settings keeps only the copied login command.
  */
-export const localHarnessRuntime = (accountRoot?: string): HarnessRuntime => ({
+export const localHarnessRuntime = (accountRoot?: string, openSignInPage?: (url: string) => void): HarnessRuntime => ({
   detect: (accounts, only) => detectHarnesses(process.env, process.platform, probe, accounts, only),
   execute: executeHarness,
   usage: (harness, executable, configDir) => readHarnessUsage(harness, executable, configDir),
+  claimReset: (configDir, requestId) => claimClaudeReset(configDir, requestId),
   ...(accountRoot ? { accountRoot } : {}),
+  ...(openSignInPage ? { signIn: localSignInRuntime(openSignInPage) } : {}),
 });
+
+const RESET_ANSWERS: readonly HarnessResetOutcome[] = ['reset', 'not_limited', 'already_used', 'none_left'];
+const isResetAnswer = (outcome: HarnessResetOutcome): outcome is HarnessResetAnswer => RESET_ANSWERS.includes(outcome);
+
+/** Why a reset was not spent, or why Orglet cannot tell; the window shows these through `tMessage`. */
+const resetClaimFailures: Record<Exclude<HarnessResetOutcome, HarnessResetAnswer>, string> = {
+  expired: 'Phiên đăng nhập Claude Code đã hết hạn nên chưa dùng lượt reset nào. Claude Code tự làm mới ở lần chạy tới.',
+  unreadable: 'Orglet không đọc được phiên đăng nhập Claude Code của tài khoản này nên chưa dùng lượt reset nào.',
+  rate_limited: 'Claude đang giới hạn số lần reset nên chưa dùng lượt nào. Thử lại sau ít phút.',
+  cooling_down: 'Claude chưa cho dùng lượt reset lúc này. Chưa lượt nào bị dùng.',
+  failed: 'Không dùng được lượt reset lúc này. Chưa lượt nào bị dùng.',
+  unconfirmed: 'Claude chưa xác nhận lượt reset. Nếu phiên vẫn chạm trần sau ít phút, thử lại: lần sau gửi lại đúng yêu cầu này, không tốn thêm lượt.',
+  no_answer: 'Claude không trả lời yêu cầu reset. Thử lại: lần sau gửi lại đúng yêu cầu này, không tốn thêm lượt.',
+};
 
 /** The Limit per task of a chat whose orglet or crew never set one, as the composer and the terminal command use. */
 const DEFAULT_TASK_BUDGET_MICROS = 500_000;
+/** Only main sends this, with the path its picker returned; the window never names a path. */
+const relinkSourceInput = z.object({ taskId: Id, sourceId: Id, path: z.string().min(1).max(32768) }).strict();
 
-/** A folder waiting for a chat's first message, checked again at that moment (COD-186). */
+/**
+ * A folder waiting for a chat's first message, checked again at that moment (COD-186), or a schedule's own working
+ * folder, checked as its run starts (COD-294). Either becomes the new chat row's grant at `pending.permissions`.
+ */
 type NewChatFolder = { pending: PendingWorkspace; resolved: ResolvedDirectory; failure?: undefined } | { pending: PendingWorkspace; resolved?: undefined; failure: string };
 
 /** The empty chat a command names: one worker, a team, or the orglets of a group chat that has not started (COD-215). */
@@ -127,9 +165,30 @@ export class CoreService {
   readonly browser: BrowserTools;
   /** The core side of desktop apps: granted programs, the journal and window pictures (COD-261, phase 2a). */
   readonly desktop: DesktopTools;
+  /**
+   * Tacet on this computer (COD-303). The core builds one that can only report and delete what is on disk; the
+   * process entry swaps in one that can download and run the model in its worker thread.
+   */
+  decisions: Decisions;
+  /** Asks Tacet whether a quiet schedule run's answer is news worth announcing (COD-303). */
+  readonly quietRuns: QuietRunReview;
+  /** Asks Tacet which permissions a message being typed needs (COD-305). */
+  readonly permissionSuggestions: PermissionSuggestions;
+  /** Asks Tacet who in a group chat answers a message that tags nobody (COD-305). */
+  readonly turnRouting: TurnRouting;
   private harnessCache?: { at: number; value: Promise<HarnessInfo[]> };
   private harnessUsageCache?: { at: number; value: Promise<HarnessUsage> };
+  private openCodeGoUsageCache?: { at: number; value: Promise<OpenCodeGoUsage> };
+  /** Set while a read started by a Claude Code run is on, so a run of many steps starts one read, not one per step. */
+  private usageReadAfterRun = false;
+  /** The reset claim running for each Claude Code account, so a second click joins it instead of spending another. */
+  private resetClaims = new Map<string, Promise<HarnessResetClaim>>();
+  /** The id of a claim Claude may have received without saying so; the next try sends it again as the same claim. */
+  private pendingResetRequests = new Map<string, string>();
   readonly harnessAccounts: HarnessAccounts;
+  /** Sign-ins started from Settings (COD-327); quitting cancels them. */
+  readonly harnessSignIns: HarnessSignIns;
+  private usageReadings: UsageReadings;
   private modelListMemory = emptyModelListCache();
   private modelListLoaded = false;
   private modelListInflight = new Map<ModelListProviderId, Promise<ModelListRow>>();
@@ -140,6 +199,8 @@ export class CoreService {
     this.knowledge = new KnowledgeBase(store);
     this.chatSearch = new ChatSearch(store);
     this.harnessAccounts = new HarnessAccounts(store, harness.accountRoot);
+    this.harnessSignIns = new HarnessSignIns((harnessId, end) => void this.signInEnded(harnessId, end));
+    this.usageReadings = new UsageReadings(store);
     this.notify = () => { if (!this.store.db.isOpen) return; this.policy.captureHandoffs(); notify(); };
     this.sources = new Sources(store, profiler, pdfText);
     this.workspaceGrants = new WorkspaceGrants(store);
@@ -150,12 +211,23 @@ export class CoreService {
     this.mcp = new McpServers(store, this.notify, mcpRuntime);
     this.browser = new BrowserTools(store, browserHost, () => this.notify());
     this.desktop = new DesktopTools(store, desktopHost, () => this.notify(), ownPrograms);
-    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: harness.execute }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings(), this.browser, this.desktop);
+    this.runner = new Runner(store, this.sources, this.notify, adapter, task => this.policy.allowed(task), { detect: () => this.harnesses(false), execute: request => this.executeHarness(request) }, workspaceRuntime, this.appProposals, this.mcp, () => this.webSearchSettings(), this.browser, this.desktop);
     this.teams = new TeamRunner(store, this.runner, this.notify, new Preflight(store, this.sources, this.notify), task => this.policy.allowed(task));
     this.backups = new Backups(store, () => this.isBusy(), this.notify);
     this.routineFolders = new RoutineFolders(store);
-    this.routines = new Routines(store, this.sources, this.notify, (input, next) => this.createTask(input, next), clock, this.routineFolders);
+    this.routines = new Routines(store, this.sources, this.notify, (input, next, folder) => this.createTask(input, next, folder && { pending: { ...folder.resolved, permissions: folder.permissions }, resolved: folder.resolved }), clock, this.routineFolders);
     this.folderTriggers = new FolderTriggers(store, this.routineFolders, this.routines, this.sources, clock);
+    const dataDirectory = store.databasePath && store.databasePath !== ':memory:' ? dirname(resolve(store.databasePath)) : undefined;
+    this.decisions = new Decisions({ directory: dataDirectory && decisionsDirectory(dataDirectory) });
+    this.quietRuns = new QuietRunReview(store, () => this.decisions, this.notify, clock);
+    // COD-306: Tacet adds notes the keywords missed and asks about browser and desktop steps the rules let through.
+    // Both read the service afresh on every call, since the core replaces it with one that can load the model.
+    this.runner.knowledgeFit = (message, notes) => askKnowledgeFit(this.decisions, message, notes);
+    const secondOpinion = actionRiskOpinion(() => this.decisions);
+    this.browser.secondOpinion = secondOpinion;
+    this.desktop.secondOpinion = secondOpinion;
+    this.permissionSuggestions = new PermissionSuggestions(() => this.decisions);
+    this.turnRouting = new TurnRouting(store, () => this.decisions, clock);
     this.policy.captureHandoffs();
   }
   /**
@@ -175,6 +247,17 @@ export class CoreService {
     return this.sources.pathOf(input.id, task.sourceIds);
   }
   /**
+   * The file main's picker chose for a source a backup restored without its contents (COD-281). Only a chat that holds
+   * the source can point it at a file, and only at the same bytes.
+   */
+  async relinkSource(raw: unknown): Promise<Source> {
+    const input = relinkSourceInput.parse(raw);
+    const task = this.liveTask(input.taskId);
+    const source = await this.sources.relink(input.sourceId, task.sourceIds, input.path);
+    this.notify();
+    return source;
+  }
+  /**
    * Keeps a folder main's picker chose. For a chat that has not started it waits under the worker or team until
    * the first message (COD-186). For a chat row, a folder where there was none, or more permissions on the same
    * folder, leaves active and queued work running: queued runs read the grant when they start, and a run already
@@ -184,6 +267,7 @@ export class CoreService {
   async grantWorkspace(raw: unknown): Promise<unknown> {
     const input = GrantWorkspace.parse(raw);
     if ('watch' in input) return this.grantWatchFolder(input.directory);
+    if ('routine' in input) return this.grantRoutineFolder(input.directory, input.permissions);
     if (!('taskId' in input)) {
       const chat = newChatTargetOf(input);
       if ('teamId' in chat) this.assertAssignable('team', chat.teamId);
@@ -195,18 +279,44 @@ export class CoreService {
     if (this.store.get<Task>('tasks', input.taskId).sideOf) throw new Error('Chat phụ dùng thư mục của chat chính. Đổi thư mục ở chat chính.');
     const previous = this.workspaceGrants.view(input.taskId);
     const grant = await this.workspaceGrants.grant(input);
+    this.settleGrantChange(previous, grant);
+    return grant;
+  }
+
+  /**
+   * Another level on the folder a chat already has (COD-291), with the same consequences as picking it again: a lower
+   * level stops active work, a higher one stops nothing. A chat that has not started changes its waiting folder's level.
+   */
+  private async setWorkspaceLevel(input: z.infer<typeof commands.setWorkspaceLevel>): Promise<void> {
+    if (!('taskId' in input)) {
+      this.workspaceGrants.setPendingLevel(newChatTargetOf(input), input.permissions);
+      this.notify();
+      return;
+    }
+    if (this.store.get<Task>('tasks', input.taskId).sideOf) throw new Error('Chat phụ dùng thư mục của chat chính. Đổi thư mục ở chat chính.');
+    const previous = this.workspaceGrants.view(input.taskId);
+    const grant = await this.workspaceGrants.changeLevel(input.taskId, input.permissions);
+    this.settleGrantChange(previous, grant);
+  }
+
+  /** Stops what a replaced or narrowed grant leaves running, keeps side threads inside it, and tells every view. */
+  private settleGrantChange(previous: WorkspaceGrantView | null, grant: WorkspaceGrantView) {
     if (replacesGrant(previous, grant)) {
       this.teams.cancel(grant.taskId);
       this.runner.cancel(grant.taskId);
     }
     this.narrowSideThreadFolders(grant.taskId);
     this.notify();
-    return grant;
   }
   /** Keeps a folder main's picker chose for a routine to watch; the renderer gets its id and name, never the path. */
   private async grantWatchFolder(directory: string): Promise<WatchFolderView> {
     const resolved = await this.workspaceGrants.resolve(directory);
     return this.routineFolders.add(resolved);
+  }
+  /** Keeps a folder main's picker chose for a routine to work in, at the level the schedule form asked for (COD-294). */
+  private async grantRoutineFolder(directory: string, permissions: WorkspacePermission[]): Promise<WatchFolderView> {
+    const resolved = await this.workspaceGrants.resolve(directory);
+    return this.routineFolders.add(resolved, permissions, await folderBirth(resolved.directory, resolved.inode));
   }
   /**
    * `orglet run` (COD-245): starts an existing, enabled routine that was approved as it is now, with the files the
@@ -227,6 +337,7 @@ export class CoreService {
         // The stored servers with whether each one is running right now; never a secret value (COD-241).
         workspace.mcpServers = this.mcp.views();
         workspace.running = this.running();
+        workspace.routineToday = this.routines.today();
         return workspace;
       }
       case 'task': {
@@ -446,6 +557,12 @@ export class CoreService {
       case 'dismissRoutine': this.routines.dismiss((args as { id: string }).id); return;
       case 'catchUpRoutine': return this.routines.catchUp((args as { id: string }).id);
       case 'runRoutineNow': return this.routines.runCalled((args as { id: string }).id, []);
+      case 'deleteRoutine': return this.deleteRoutine(commands.deleteRoutine.parse(args).id);
+      case 'decisionModel': return this.decisions.state();
+      case 'installDecisionModel': return this.decisions.install();
+      case 'cancelDecisionModel': return this.decisions.cancel();
+      case 'removeDecisionModel': return this.decisions.remove();
+      case 'suggestPermissions': return this.permissionSuggestions.suggest(commands.suggestPermissions.parse(args).text);
       case 'cancel': {
         const taskId = (args as { id: string }).id;
         this.teams.cancel(taskId); this.runner.cancel(taskId);
@@ -556,6 +673,7 @@ export class CoreService {
         this.notify();
         return;
       }
+      case 'setWorkspaceLevel': return this.setWorkspaceLevel(commands.setWorkspaceLevel.parse(args));
       case 'setToolCapabilities': {
         const input = commands.setToolCapabilities.parse(args);
         if (!('taskId' in input)) { this.setNewChatCapabilities(input); return; }
@@ -595,6 +713,24 @@ export class CoreService {
         const input = commands.sourceBytes.parse(args);
         const task = this.store.get<Task>('tasks', input.taskId);
         return this.sources.readPreview(input.id, task.sourceIds);
+      }
+      case 'saveSourceVersion': {
+        const input = commands.saveSourceVersion.parse(args);
+        const task = this.liveTask(input.taskId);
+        if (task.sourceIds.length >= 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
+        const content = 'text' in input ? { text: input.text } : { bytes: input.bytes };
+        const source = await this.sources.saveVersion(input.sourceId, task.sourceIds, input.name, content);
+        // The chat keeps the edit beside the original, and it reaches an orglet only in a message that carries it. A
+        // turn that has not written down its own files would read them from the chat's list, which just grew: so, as a
+        // new message does, the latest turn and older runs keep the files they had before the edit joined.
+        const current = this.store.get<Task>('tasks', task.id);
+        const turnFiles = { brief: current.brief, sourceIds: [...current.sourceIds], excludedSources: current.excludedSources };
+        this.store.transaction(() => {
+          for (const run of this.store.detail(current.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: turnFiles } });
+          this.store.patchTask(current.id, { sourceIds: [...current.sourceIds, source.id], currentInput: current.currentInput ?? turnFiles });
+        });
+        this.notify();
+        return source;
       }
       case 'sourceOrigins': {
         const input = commands.sourceOrigins.parse(args);
@@ -661,27 +797,54 @@ export class CoreService {
         const item = this.knowledge.updateMemory(input.id, { text: input.text, pinned: input.pinned }); this.notify(); return item;
       }
       case 'deleteMemory': { this.knowledge.deleteMemory(commands.deleteMemory.parse(args).id); this.notify(); return; }
-      case 'harnesses': return this.harnesses(commands.harnesses.parse(args).refresh);
+      case 'harnesses': return this.withSignIns(this.harnesses(commands.harnesses.parse(args).refresh));
       case 'harnessUsage': return this.harnessUsage(commands.harnessUsage.parse(args).refresh);
+      case 'claimHarnessReset': return this.claimHarnessReset(commands.claimHarnessReset.parse(args).accountId);
+      case 'openCodeGoUsage': return this.openCodeGoUsage(commands.openCodeGoUsage.parse(args).refresh);
       case 'saveHarnessAccount': {
         const input = commands.saveHarnessAccount.parse(args);
         // A new name is a label only; a new account is selected, so that harness signs in from another folder.
-        if (input.id) return this.harnessAccount(input.harness, 'label', () => this.harnessAccounts.rename(input.harness, input.id!, input.label));
-        return this.harnessAccount(input.harness, 'sign-in', () => this.harnessAccounts.add(input.harness, input.label));
+        if (input.id) return this.withSignIns(this.harnessAccount(input.harness, 'label', () => this.harnessAccounts.rename(input.harness, input.id!, input.label)));
+        return this.withSignIns(this.harnessAccount(input.harness, 'sign-in', async () => {
+          // The new account is selected, so a sign-in waiting for the one before it no longer belongs on screen.
+          this.harnessSignIns.cancel(input.harness);
+          await this.harnessAccounts.add(input.harness, input.label);
+        }));
       }
       case 'removeHarnessAccount': {
         const input = commands.removeHarnessAccount.parse(args);
         // Removing the account in use hands the harness back to the default account; any other is a list change.
         const active = this.harnessAccounts.selection(input.harness).accountId === input.id;
-        return this.harnessAccount(input.harness, active ? 'sign-in' : 'label', () => this.harnessAccounts.remove(input.harness, input.id));
+        return this.withSignIns(this.harnessAccount(input.harness, active ? 'sign-in' : 'label', async () => {
+          // A sign-in into the folder being deleted would land nowhere.
+          if (active) this.harnessSignIns.cancel(input.harness);
+          await this.harnessAccounts.remove(input.harness, input.id);
+          this.usageReadings.forget(input.harness, input.id);
+        }));
       }
       case 'selectHarnessAccount': {
         const input = commands.selectHarnessAccount.parse(args);
-        return this.harnessAccount(input.harness, 'sign-in', () => this.harnessAccounts.select(input.harness, input.id));
+        return this.withSignIns(this.harnessAccount(input.harness, 'sign-in', () => {
+          if (this.harnessAccounts.selection(input.harness).accountId !== input.id) this.harnessSignIns.cancel(input.harness);
+          this.harnessAccounts.select(input.harness, input.id);
+        }));
+      }
+      case 'startHarnessSignIn': {
+        const input = commands.startHarnessSignIn.parse(args);
+        return this.startHarnessSignIn(input.harness, input.id);
+      }
+      case 'cancelHarnessSignIn': {
+        this.harnessSignIns.cancel(commands.cancelHarnessSignIn.parse(args).harness);
+        this.notify();
+        return this.withSignIns(this.harnesses(false));
+      }
+      case 'signOutHarness': {
+        const input = commands.signOutHarness.parse(args);
+        return this.signOutHarness(input.harness, input.id);
       }
       case 'eraseData': {
         const input = commands.eraseData.parse(args);
-        return this.eraseData(input.scope, input.confirm);
+        return await this.eraseData(input.scope, input.confirm);
       }
       case 'modelList': return this.modelList(commands.modelList.parse(args));
       case 'saveCustomConnection': {
@@ -723,6 +886,7 @@ export class CoreService {
       }
       case 'deleteEntity': {
         const input = commands.deleteEntity.parse(args);
+        this.assertEntityRevision(input.kind, input.id, input.expectedRevision, input.expectedName);
         this.deleteEntity(input.kind, input.id); this.notify(); return;
       }
       case 'updateTask': {
@@ -761,9 +925,10 @@ export class CoreService {
   }
   /** Creates a worker or a new revision of one, validated the way the worker dialog is. */
   private saveWorker(input: Args<'saveWorker'>): Worker {
+    this.assertEntityRevision('worker', input.id, input.expectedRevision);
     assertSkillReady(this.store.get<Skill>('skills', input.skillId), this.store);
     if (input.id) this.store.get<Worker>('workers', input.id);
-    const { modelId, mcpServerIds, ...fields } = input;
+    const { modelId, mcpServerIds, expectedRevision, ...fields } = input;
     if (isOpenCodePlan(fields.provider)) assertOpenCodeModel(fields.provider, modelId);
     if (isCustomProvider(fields.provider)) {
       const connection = requireCustomConnection(this.store, fields.provider);
@@ -789,9 +954,11 @@ export class CoreService {
     return skill;
   }
   private saveTeam(input: Args<'saveTeam'>): Team {
+    this.assertEntityRevision('team', input.id, input.expectedRevision);
     for (const workerId of [...input.memberIds, input.synthesizerId]) this.assertAssignable('worker', workerId);
     if (input.id) this.store.get<Team>('teams', input.id);
-    const team: Team = { ...input, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
+    const { expectedRevision, ...fields } = input;
+    const team: Team = { ...fields, id: input.id ?? id(), revision: input.id ? this.store.nextRevision(input.id) : 1 };
     this.store.version('teams', team);
     return team;
   }
@@ -801,6 +968,11 @@ export class CoreService {
     // A new or changed folder starts watching now, not at the next tick, so files already there stay the baseline.
     void this.folderTriggers.sync().catch(() => {});
     return routine;
+  }
+  /** A deleted folder routine stops watching now; its past runs stay as chats (COD-283). */
+  private deleteRoutine(routineId: string) {
+    this.routines.remove(routineId);
+    void this.folderTriggers.sync().catch(() => {});
   }
   /** Writes the settings given; a key left out keeps its value. The settings dialog and an applied proposal share this. */
   private applySettings(input: Partial<Args<'settings'>>) {
@@ -913,7 +1085,7 @@ export class CoreService {
    * still leaves its cost row behind and knowledge it taught keeps the artifact it cites. API keys live outside the
    * database, in the credential store, and no scope here touches them.
    */
-  eraseData(scope: EraseScope, confirm?: string): EraseSummary {
+  async eraseData(scope: EraseScope, confirm?: string): Promise<EraseSummary> {
     if (this.isBusy()) throw new Error('Chờ hoặc hủy các task/checker đang chạy trước khi xóa.');
     if (scope === 'everything' && confirm !== ERASE_CONFIRMATION) throw new Error(`Gõ ${ERASE_CONFIRMATION} để xác nhận xóa toàn bộ.`);
     const summary: EraseSummary = { scope, chats: 0, knowledge: 0, memory: 0, sources: 0, sourcesForgotten: 0, entities: 0 };
@@ -936,6 +1108,8 @@ export class CoreService {
       // Settings went with the tables, so the model lists cached in memory no longer have a row behind them.
       this.modelListMemory = emptyModelListCache();
       this.modelListLoaded = false;
+      // Tacet's files are Orglet's own download, so a full erase deletes them too (COD-303).
+      await this.decisions.remove();
     }
     this.notify();
     return summary;
@@ -975,6 +1149,26 @@ export class CoreService {
     return this.harnessUsageCache.value;
   }
 
+  /**
+   * How much of its OpenCode Go allowances the saved Go key has used. The key is read from main for this request only
+   * and goes nowhere but OpenCode Go; the answer carries no key. Reused for a minute, like harness usage.
+   */
+  openCodeGoUsage(refresh: boolean): Promise<OpenCodeGoUsage> {
+    if (refresh || !this.openCodeGoUsageCache || Date.now() - this.openCodeGoUsageCache.at > 60_000) {
+      const value = this.readOpenCodeGoUsage();
+      this.openCodeGoUsageCache = { at: Date.now(), value };
+    }
+    return this.openCodeGoUsageCache.value;
+  }
+
+  private async readOpenCodeGoUsage(): Promise<OpenCodeGoUsage> {
+    const checkedAt = this.clock().toISOString();
+    const key = await this.modelListRuntime.readKey?.('opencode-go').catch(() => null);
+    if (!key) return { windows: [], unavailable: 'signed_out', checkedAt };
+    const found = await readOpenCodeGoUsage(key, this.modelListRuntime.fetch ?? fetch);
+    return { ...found, checkedAt };
+  }
+
   /** Reads against the detection already cached: Dò lại has just refreshed it, and a second pass would spawn every CLI again. */
   private async readHarnessUsage(): Promise<HarnessUsage> {
     const read = this.harness.usage;
@@ -986,11 +1180,70 @@ export class CoreService {
       // One account at a time: every Codex read starts its own app server.
       for (const accountId of accountIds) {
         const found = await read(item.id, item.executable, this.harnessAccounts.configDir(item.id, accountId));
-        rows.push({ ...found, accountId, checkedAt: this.clock().toISOString() });
+        // An expired saved sign-in or a failed request shows the last good numbers with when, not nothing (COD-301).
+        rows.push(this.usageReadings.settle(item.id, { ...found, accountId, checkedAt: this.clock().toISOString() }, this.clock()));
       }
       return [item.id, rows] as const;
     }));
     return Object.fromEntries(perHarness);
+  }
+
+  /**
+   * Spends one banked reset of a Claude Code account because the person confirmed it in Settings (COD-328); nothing
+   * else calls this. Usage is read again whatever Claude answered, and anything other than an answer is an error.
+   */
+  claimHarnessReset(accountId: string): Promise<HarnessResetClaim> {
+    const claim = this.harness.claimReset;
+    if (!claim) return Promise.reject(new Error('Orglet không dùng được lượt reset ở đây.'));
+    const known = accountId === SYSTEM_ACCOUNT_ID || this.harnessAccounts.selection('claude-code').accounts.some(account => account.id === accountId);
+    if (!known) return Promise.reject(new Error('Không còn tài khoản này.'));
+    const running = this.resetClaims.get(accountId);
+    if (running) return running;
+    const started = this.runResetClaim(claim, accountId).finally(() => this.resetClaims.delete(accountId));
+    this.resetClaims.set(accountId, started);
+    return started;
+  }
+
+  private async runResetClaim(claim: NonNullable<HarnessRuntime['claimReset']>, accountId: string): Promise<HarnessResetClaim> {
+    const requestId = this.pendingResetRequests.get(accountId) ?? randomUUID();
+    this.pendingResetRequests.set(accountId, requestId);
+    const outcome = await claim(this.harnessAccounts.configDir('claude-code', accountId), requestId);
+    if (outcome !== 'unconfirmed' && outcome !== 'no_answer') this.pendingResetRequests.delete(accountId);
+    const usage = await this.harnessUsage(true);
+    this.notify();
+    if (isResetAnswer(outcome)) return { outcome, usage };
+    throw new Error(resetClaimFailures[outcome]);
+  }
+
+  /** Runs one harness call for the runner; the call may have renewed that account's saved sign-in. */
+  private async executeHarness(request: HarnessRequest): Promise<HarnessResult> {
+    try {
+      return await this.harness.execute(request);
+    } finally {
+      this.harnessRan(request.harness, request.configDir);
+    }
+  }
+
+  /**
+   * Claude Code, Cursor Agent and Gemini CLI renew their own saved sign-in when they run, and Orglet never does
+   * (COD-301). When the usage on hand found that account's token expired, the call that just ended has renewed it, so the
+   * numbers are read again now and the window is told. Any other state reads nothing: a run of many steps must not start
+   * a read per step.
+   */
+  private harnessRan(harness: HarnessCatalogId, configDir: string | undefined) {
+    const cached = this.harnessUsageCache;
+    if (!cached || this.usageReadAfterRun) return;
+    void cached.value.then(usage => {
+      if (this.harnessUsageCache !== cached || this.usageReadAfterRun) return;
+      const rows = usage[harness] ?? [];
+      const ranAccount = rows.find(row => this.harnessAccounts.configDir(harness, row.accountId) === configDir);
+      if (ranAccount?.unavailable !== 'expired') return;
+      this.usageReadAfterRun = true;
+      void this.harnessUsage(true).finally(() => {
+        this.usageReadAfterRun = false;
+        this.notify();
+      });
+    });
   }
 
   /**
@@ -1016,6 +1269,55 @@ export class CoreService {
     const rows = detected.map(row => ({ ...row, accounts: accounts[row.id].accounts }));
     this.harnessCache = { at: this.harnessCache?.at ?? Date.now(), value: Promise.resolve(rows) };
     return rows;
+  }
+
+  /** The rows with the sign-in each shown account has on its way, or the reason the last one failed. */
+  private async withSignIns(rows: Promise<HarnessInfo[]>): Promise<HarnessInfo[]> {
+    return (await rows).map(row => {
+      const signIn = this.harnessSignIns.view(row.id, row.accountId);
+      return signIn ? { ...row, signIn } : row;
+    });
+  }
+
+  /** The installed CLI of one harness, for the selected account only: Settings signs in or out what it shows. */
+  private async signInTarget(harness: HarnessCatalogId, accountId: string) {
+    if (this.harnessAccounts.selection(harness).accountId !== accountId) throw new Error('Tài khoản này không còn được chọn. Mở lại Cài đặt rồi thử lại.');
+    const row = (await this.harnesses(false)).find(item => item.id === harness);
+    if (!row?.executable) throw new Error(`Chưa cài ${harnessNames[harness]} trên máy này. Cài xong bấm Dò lại.`);
+    return { executable: row.executable, configDir: this.harnessAccounts.configDir(harness, accountId) };
+  }
+
+  /**
+   * Starts the CLI's own sign-in for the selected account and returns at once; the row shows it waiting. The browser
+   * part can take minutes, far past a command's time, so the ending arrives through `signInEnded`.
+   */
+  private async startHarnessSignIn(harness: HarnessCatalogId, accountId: string): Promise<HarnessInfo[]> {
+    const signIn = this.harness.signIn;
+    if (!signIn || !harnessSignsInApp[harness]) throw new Error(`${harnessNames[harness]} chưa đăng nhập được từ Orglet. Dùng lệnh đăng nhập bên dưới.`);
+    const target = await this.signInTarget(harness, accountId);
+    if (!this.harnessSignIns.isRunning(harness)) this.harnessSignIns.begin(harness, accountId, signIn.start(harness, target.executable, target.configDir));
+    this.notify();
+    return this.withSignIns(this.harnesses(false));
+  }
+
+  /** A sign-in that ended by itself: whatever happened, the CLI is asked again rather than trusted, and usage is read afresh. */
+  private async signInEnded(harness: HarnessCatalogId, end: SignInEnd) {
+    if (end.outcome === 'cancelled') {
+      this.notify();
+      return;
+    }
+    await this.harnessAccount(harness, 'sign-in', () => {}).catch(() => this.notify());
+  }
+
+  /** Signs the selected account out with the CLI's own command, then detects it again. */
+  private async signOutHarness(harness: HarnessCatalogId, accountId: string): Promise<HarnessInfo[]> {
+    const signIn = this.harness.signIn;
+    if (!signIn || !harnessLogoutArgs[harness]) throw new Error(`${harnessNames[harness]} chỉ đăng xuất được trong cửa sổ của nó, bằng /logout.`);
+    const target = await this.signInTarget(harness, accountId);
+    this.harnessSignIns.cancel(harness);
+    await signIn.signOut(harness, target.executable, target.configDir);
+    this.usageReadings.forget(harness, accountId);
+    return this.withSignIns(this.harnessAccount(harness, 'sign-in', () => {}));
   }
 
   /** Detects one harness again, when it signs in from another folder, and keeps the other rows as they were. */
@@ -1115,6 +1417,9 @@ export class CoreService {
       fetch: this.modelListRuntime.fetch,
       endpoints: this.modelListRuntime.endpoints,
       probe: this.modelListRuntime.probe,
+      claudeStart: this.modelListRuntime.claudeStart,
+      claudeToken: this.modelListRuntime.claudeToken,
+      appServer: this.modelListRuntime.appServer,
       timeoutMs: this.modelListRuntime.timeoutMs,
       harnesses: () => this.harnesses(false),
       customConnection: (provider: string) => findCustomConnection(readCustomConnections(this.store), provider),
@@ -1139,16 +1444,21 @@ export class CoreService {
     if (!found) throw new Error('Không tìm thấy mục này.');
     const workspace = this.store.workspace();
     const name = found.row.name;
-    if (kind === 'worker') {
-      if (!found.archived && workspace.workers.length <= 1) throw new Error('Cần giữ ít nhất một Tí.');
-      const team = workspace.teams.find(item => [...item.memberIds, item.synthesizerId].includes(entityId));
-      if (team) throw new Error(`Bỏ ${name} khỏi hội ${team.name} trước.`);
-    }
-    const uses = (task: { workerId: string; teamId?: string; assignees?: 'all' | string[] }) => kind === 'team' ? task.teamId === entityId : !task.teamId && (task.workerId === entityId || (Array.isArray(task.assignees) && task.assignees.includes(entityId)));
-    const routine = workspace.routines.find(item => item.enabled && uses(item.task));
-    if (routine) throw new Error(`Tắt hoặc đổi lịch chạy ${routine.name} trước.`);
-    if (this.store.all<Task>('tasks').some(task => !task.deletedAt && ['queued', 'running', 'pausing'].includes(task.status) && (uses(task) || (kind === 'worker' && task.assignees === 'all')))) throw new Error('Đợi công việc đang chạy xong rồi thử lại.');
+    if (kind === 'worker' && !found.archived && workspace.workers.length <= 1) throw new Error('Cần giữ ít nhất một Tí.');
+    const blocker = removalBlocker(workspace, kind, entityId);
+    if (blocker?.kind === 'crews') throw new Error(leaveCrewsMessage(name, blocker.crews.map(crew => crew.name)));
+    if (blocker?.kind === 'schedule') throw new Error(stopScheduleMessage(blocker.schedule.name));
+    const uses = (task: Task) => runBy(task, kind, entityId) || (kind === 'worker' && task.assignees === 'all');
+    if (this.store.all<Task>('tasks').some(task => !task.deletedAt && ['queued', 'running', 'pausing'].includes(task.status) && uses(task))) throw new Error('Đợi công việc đang chạy xong rồi thử lại.');
   }
+  private assertEntityRevision(kind: 'worker' | 'team', entityId: string | undefined, expectedRevision?: number, expectedName?: string): void {
+    if (expectedRevision === undefined && expectedName === undefined) return;
+    const found = entityId ? this.entity(kind, entityId) : undefined;
+    if (!found || found.archived || found.row.revision !== expectedRevision || (expectedName !== undefined && found.row.name !== expectedName)) {
+      throw new Error('Cấu hình đã thay đổi. Tải lại rồi thử lại.');
+    }
+  }
+
   private deleteEntity(kind: 'worker' | 'team', entityId: string) {
     this.assertRemovable(kind, entityId);
     this.setEntityState(kind, entityId, { deletedAt: this.clock().toISOString() });
@@ -1216,7 +1526,9 @@ export class CoreService {
    */
   private reviseTask(input: Args<'reviseTask'>, forwarded?: ForwardedMessage) {
     const task = this.store.get<Task>('tasks', input.taskId);
+    this.assertChatOpen(task);
     if (input.replyTo) new MessageInteractions(this.store).target(task.id, input.replyTo);
+    if (input.continueFrom) this.assertContinuable(task, input.continueFrom);
     if (task.pendingStart) throw new Error('Đã lưu tin nhắn mới; chờ lượt trước dừng hẳn.');
     if (this.sources.isChecking()) throw new Error('Đợi checker kết thúc trước khi tạo revision.');
     const active = this.runner.isActive(task.id) || this.teams.isActive(task.id);
@@ -1225,17 +1537,37 @@ export class CoreService {
     const sourceIds = [...new Set([...task.sourceIds, ...input.sourceIds])];
     if (sourceIds.length > 1000) throw new Error('Lịch sử task đã đủ 1.000 nguồn. Tạo task mới để tiếp tục.');
     this.policy.assertStart(task.teamId, task.id);
-    const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}) }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
+    const revised: Task = { ...task, sourceIds, currentInput: { brief: input.brief, sourceIds: [...new Set(input.sourceIds)], excludedSources: input.excludedSources, replyTo: input.replyTo, ...(forwarded ? { forwarded } : {}), ...(input.continueFrom ? { continueFrom: input.continueFrom } : {}) }, inputRevision: (task.inputRevision ?? 0) + 1, consent: input.consent, providerScopes: input.providerScopes, budgetMicros: this.currentTaskLimit(task) ?? input.budgetMicros, teamSnapshot: prepared.teamSnapshot, workerId: prepared.workerId, accepted: false, status: active ? 'pausing' : 'queued', pendingStart: active || undefined, pauseReason: undefined, handoff: undefined,
       decisionRequests: task.decisionRequests?.map(request => request.inputRevision === (task.inputRevision ?? 0) && !request.answer && !request.interruptedAt
         ? { ...request, interruptedAt: now() } : request) };
     this.store.transaction(() => {
       // Preserve readable input for older runs before expanding the task's history scope.
       for (const run of this.store.detail(task.id).runs) if (!run.snapshot.input) this.store.update('runs', { ...run, snapshot: { ...run.snapshot, input: { brief: task.brief, sourceIds: task.sourceIds, excludedSources: task.excludedSources } } });
+      this.keepForwardHeadline(task);
       this.store.update('tasks', revised);
       this.chatSearch.indexTurn(revised.id, revised.inputRevision ?? 0, revised.currentInput!, now());
     });
     if (active) { this.teams.cancel(task.id); this.runner.cancel(task.id); this.notify(); return; }
     this.start(revised, true);
+  }
+  /**
+   * A chat that began with a forward and has no title yet (titles off, or its first run named nothing) goes by what was
+   * forwarded only while that forward is its current turn. Before a later message replaces it, the headline is kept as
+   * the title, so the chat never falls back to the prompt text wrapped around the forward (COD-285).
+   */
+  private keepForwardHeadline(task: Task) {
+    if ((task.inputRevision ?? 0) !== 0 || !task.currentInput?.forwarded) return;
+    const titles = this.store.setting<Record<string, string>>('taskTitles', {});
+    if (titles[task.id]) return;
+    this.store.setSetting('taskTitles', { ...titles, [task.id]: chatHeadline(task).slice(0, 80) });
+  }
+  /**
+   * Continue is offered only under the latest turn's answer, when its run ran out of steps (COD-257); anything else
+   * would start the new run from calls and results that are not the chat's latest.
+   */
+  private assertContinuable(task: Task, runId: string) {
+    const run = this.store.detail(task.id).runs.find(candidate => candidate.id === runId);
+    if (!run || (run.snapshot.inputRevision ?? 0) !== (task.inputRevision ?? 0) || !canContinueRun(run)) throw new Error('Lượt này không tiếp tục được nữa. Nhắn tiếp để hỏi lại.');
   }
   /**
    * Sends one message to up to five other chats as the person's own message (COD-257). Each place is its own turn,
@@ -1351,7 +1683,23 @@ export class CoreService {
   /** Workers and teams chosen for new work must be active. */
   private assertAssignable(kind: 'worker' | 'team', entityId: string) {
     const found = this.entity(kind, entityId);
-    if (!found || found.archived) throw new Error(`${found?.row.name ?? (kind === 'worker' ? 'Tí' : 'Hội')} đã được lưu trữ hoặc xóa. Đổi người nhận trong Thiết lập công việc.`);
+    if (!found || found.archived) throw new Error(`${found?.row.name ?? (kind === 'worker' ? 'Tí' : 'Hội')} đã được lưu trữ hoặc xóa. Đổi người nhận trong Thiết lập chat.`);
+  }
+  /**
+   * A chat takes no new message while it is archived, or while the one orglet or crew it belongs to is archived or
+   * deleted; the refusal says which and what brings it back (COD-282). A group chat has no single owner, and
+   * `prepareTask` checks the orglets its turn goes to.
+   */
+  private assertChatOpen(task: Task) {
+    if (task.archivedAt) throw new Error('Cuộc trò chuyện này đã được lưu trữ. Khôi phục để nhắn tiếp.');
+    if (task.assignees) return;
+    const kind = task.teamId ? 'team' : 'worker';
+    const ownerId = task.teamId ?? task.workerId;
+    const state = this.store.entityState()[`${kind}s`][ownerId];
+    if (!state?.archivedAt && !state?.deletedAt) return;
+    const name = this.store.get<Worker | Team>(`${kind}s`, ownerId).name;
+    if (state.deletedAt) throw new Error(`${name} đã bị xóa, nên cuộc trò chuyện này chỉ còn để đọc.`);
+    throw new Error(`${name} đã được lưu trữ. Khôi phục để nhắn tiếp.`);
   }
   private liveTask(taskId: string) {
     const task = this.store.get<Task>('tasks', taskId);
@@ -1392,7 +1740,6 @@ export class CoreService {
     const keepArtifacts = new Set(origins.flatMap(origin => origin.kind === 'run' ? [origin.artifactId] : []));
     const memoriesToDelete = this.knowledge.memoriesOnlyFrom(task.id);
     const tombstone = charged || keepArtifacts.size > 0;
-    const removed = '(đã xóa)';
     this.store.transaction(() => {
       for (const run of runs) {
         db.prepare('DELETE FROM events WHERE run_id=?').run(run.id);
@@ -1402,6 +1749,7 @@ export class CoreService {
         db.prepare('DELETE FROM workspace_copies WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM workspace_processes WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM settings WHERE id=?').run(`workspace-retired:${run.id}`);
+        db.prepare('DELETE FROM settings WHERE id=?').run(restoredChangesKey(run.id));
         db.prepare('DELETE FROM leases WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM app_proposals WHERE run_id=?').run(run.id);
         this.browser.deleteRun(run.id);
@@ -1414,11 +1762,9 @@ export class CoreService {
       for (const item of proposed) this.knowledge.deleteRows(item.id);
       for (const item of memoriesToDelete) this.knowledge.deleteRows(item.id);
       if (tombstone) {
-        for (const run of runs) this.store.update('runs', { ...run, snapshot: { ...run.snapshot,
-          ...(run.snapshot.input ? { input: { ...run.snapshot.input, brief: removed, replyTo: undefined } } : {}),
-          context: undefined, preflightId: undefined, upstreamArtifactIds: undefined } });
+        for (const run of runs) this.store.update('runs', { ...run, snapshot: deletedRunSnapshot(run.snapshot) });
         const { currentInput: _input, messageReactions: _reactions, handoff: _handoff, evidenceRequests: _requests, archivedAt: _archived, ...rest } = task;
-        this.store.update('tasks', { ...rest, brief: removed, deletedAt: this.clock().toISOString() });
+        this.store.update('tasks', { ...rest, brief: DELETED_CHAT_TEXT, deletedAt: this.clock().toISOString() });
       } else {
         for (const run of runs) db.prepare('DELETE FROM step_attempts WHERE run_id=?').run(run.id);
         db.prepare('DELETE FROM runs WHERE task_id=?').run(task.id);
@@ -1462,7 +1808,8 @@ export class CoreService {
       const repliedTo = this.repliedOrglet(task, group);
       if (repliedTo) return [repliedTo];
     }
-    return group;
+    // Tacet's pick for this turn (COD-305), so a resumed or retried turn keeps the orglet it picked.
+    return this.turnRouting.recorded(task, group) ?? group;
   }
   /** The group member who wrote the answer this turn replies to, if the turn replies to one. */
   private repliedOrglet(task: Task, group: Worker[]): Worker | undefined {
@@ -1531,13 +1878,16 @@ export class CoreService {
     // A forward's first turn keeps its record on the current input, where every later turn keeps its own (COD-257).
     if (forwarded) task.currentInput = { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, forwarded };
     this.store.transaction(() => {
+      // A schedule's run takes its place under the day's cap in the same transaction that writes it (COD-288).
+      if (routine) task.routineDay = this.routines.admitRun(routine, task.budgetMicros);
       this.store.put('tasks', task);
       this.chatSearch.indexTurn(task.id, 0, task.currentInput ?? task, task.createdAt);
       if (routine) this.store.update('routines', { ...routine, lastTaskId: task.id });
       if (chosen) this.takeNewChatCapabilities(this.newChatTarget(input));
       if (folder) {
         if (folder.resolved) this.workspaceGrants.applyInsideTransaction(task.id, folder.resolved, folder.pending.permissions);
-        this.workspaceGrants.takePending(this.newChatTarget(input));
+        // A schedule's run brings its own folder (COD-294); the folder waiting for the orglet's empty chat stays there.
+        if (!routine) this.workspaceGrants.takePending(this.newChatTarget(input));
       }
     });
     this.start(task, true);
@@ -1596,6 +1946,7 @@ export class CoreService {
     if (currency.code !== 'USD' && !this.currencyRefresh && Date.now() - this.currencyAttemptAt > 600_000 && (!currency.updatedAt || this.clock().getTime() - new Date(currency.updatedAt).getTime() > RATE_MAX_AGE_MS)) { this.currencyAttemptAt = Date.now(); void this.updateCurrency(currency.code, false); }
     await this.routines.tick();
     await this.folderTriggers.poll();
+    await this.quietRuns.review();
   }
   private start(task: Task, startChecked = false) {
     if (!startChecked) this.policy.assertStart(task.teamId, task.id);
@@ -1603,7 +1954,7 @@ export class CoreService {
     this.store.update('tasks', task);
     if (task.teamSnapshot) { void this.teams.run(task, task.teamSnapshot); return; }
     const group = this.groupTurnWorkers(task);
-    if (group) { void this.teams.chat(task, group); return; }
+    if (group) { void this.teams.chat(task, group, false, this.turnRouting.router(task, group)); return; }
     const worker = this.store.get<Worker>('workers', task.workerId);
     const skill = this.store.get<Skill>('skills', worker.skillId);
     const run: Run = { id: id(), taskId: task.id, status: 'queued', snapshot: { workspaceGrant: this.workspaceGrants.snapshot(task.id), toolCapabilities: snapshotCapabilities(worker.provider, task.toolCapabilities), worker, skill, inputRevision: task.inputRevision ?? 0, input: task.currentInput ?? { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources } }, startedAt: now(), error: null };

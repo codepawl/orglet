@@ -1,0 +1,49 @@
+{
+  "about": "Group chats of two to four orglets and untagged messages sent to them, labelled with the one orglet that should answer or `everyone` (COD-305). Each orglet has the name, description and instructions a person would give it. `tune` cases chose the wording and the threshold; `held` cases were only scored.",
+  "groups": {
+    "studio": [
+      { "name": "Scout", "description": "Researcher: finds facts and sources", "instructions": "Research questions on the web, compare sources and cite them. Say plainly when something is uncertain." },
+      { "name": "Quill", "description": "Writer: drafts emails, posts and articles", "instructions": "Write and edit clear prose in the person's voice: emails, social posts, blog articles, announcements." },
+      { "name": "Byte", "description": "Developer: writes and fixes code", "instructions": "Write, review and debug code. Explain errors and propose fixes with short code samples." }
+    ],
+    "shop": [
+      { "name": "Lan", "description": "Kế toán: sổ sách, thuế, hóa đơn", "instructions": "Giúp ghi sổ, tính thuế, đối chiếu hóa đơn và báo cáo thu chi của cửa hàng." },
+      { "name": "Minh", "description": "Marketing: quảng cáo và nội dung mạng xã hội", "instructions": "Lên ý tưởng quảng cáo, viết bài đăng Facebook, TikTok và chương trình khuyến mãi." },
+      { "name": "Hà", "description": "Nhân sự: tuyển dụng và hợp đồng", "instructions": "Soạn tin tuyển dụng, lọc hồ sơ ứng viên, chuẩn bị hợp đồng lao động và lịch làm việc." }
+    ],
+    "product": [
+      { "name": "Reviewer", "description": "Checks code for bugs and security issues", "instructions": "Review diffs and pull requests. Point out bugs, security problems and missing tests." },
+      { "name": "Designer", "description": "UI and visual design", "instructions": "Advise on layout, colors, typography and how screens should look and feel." }
+    ],
+    "helpers": [
+      { "name": "Researcher", "description": "", "instructions": "Work with the user like a helpful coworker: answer questions, talk things through and do what they ask." },
+      { "name": "Assistant", "description": "", "instructions": "Help the user with whatever they ask. Keep replies clear and to the point." }
+    ]
+  },
+  "cases": [
+    { "split": "tune", "group": "studio", "expect": "Byte", "text": "Can you fix this TypeError in my React component? It says cannot read properties of undefined." },
+    { "split": "tune", "group": "studio", "expect": "Quill", "text": "Draft a LinkedIn post announcing our launch next Monday." },
+    { "split": "tune", "group": "studio", "expect": "Scout", "text": "How many electric cars were sold in Europe last year, and where does that number come from?" },
+    { "split": "tune", "group": "studio", "expect": "everyone", "text": "Hi team, what do you all think of the plan for next week?" },
+    { "split": "held", "group": "studio", "expect": "Byte", "text": "Write a Python function that removes duplicate rows from a CSV." },
+    { "split": "held", "group": "studio", "expect": "Quill", "text": "Rewrite this email so it sounds friendlier: we cannot refund you." },
+    { "split": "held", "group": "studio", "expect": "everyone", "text": "Each of you, tell me one thing we should change about the product." },
+
+    { "split": "tune", "group": "shop", "expect": "Lan", "text": "Tháng này cửa hàng phải nộp bao nhiêu thuế giá trị gia tăng?" },
+    { "split": "tune", "group": "shop", "expect": "Minh", "text": "Viết giúp mình một bài đăng Facebook cho đợt khuyến mãi cuối tuần." },
+    { "split": "tune", "group": "shop", "expect": "Hà", "text": "Soạn tin tuyển nhân viên bán hàng làm ca tối." },
+    { "split": "tune", "group": "shop", "expect": "everyone", "text": "Chào cả nhà, tuần này mọi người thấy cửa hàng cần cải thiện gì?" },
+    { "split": "held", "group": "shop", "expect": "Lan", "text": "Đối chiếu giúp mình các hóa đơn nhập hàng tháng 8." },
+    { "split": "held", "group": "shop", "expect": "Hà", "text": "Chuẩn bị hợp đồng lao động cho bạn nhân viên mới vào làm thứ Hai." },
+    { "split": "held", "group": "shop", "expect": "everyone", "text": "Mọi người cho ý kiến về kế hoạch mở chi nhánh thứ hai nhé." },
+
+    { "split": "tune", "group": "product", "expect": "Reviewer", "text": "Is there a SQL injection risk in this query builder?" },
+    { "split": "tune", "group": "product", "expect": "Designer", "text": "Which color should the primary button be on the dark theme?" },
+    { "split": "held", "group": "product", "expect": "Reviewer", "text": "Look at this pull request and tell me what tests are missing." },
+    { "split": "held", "group": "product", "expect": "Designer", "text": "The settings page feels cramped. How should I lay it out?" },
+
+    { "split": "tune", "group": "helpers", "expect": "everyone", "text": "Summarize the pros and cons of remote work." },
+    { "split": "held", "group": "helpers", "expect": "everyone", "text": "Giải thích giúp mình lạm phát là gì." },
+    { "split": "held", "group": "helpers", "expect": "everyone", "text": "Plan a three day trip to Da Nang for two people." }
+  ]
+}

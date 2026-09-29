@@ -15,7 +15,7 @@ export type TraceKind =
   | 'browser_open' | 'browser_read' | 'browser_find' | 'browser_screenshot' | 'browser_scroll'
   | 'browser_click' | 'browser_type' | 'browser_select' | 'browser_press' | 'browser_wait' | 'browser_asked'
   | 'desktop_read' | 'desktop_find' | 'desktop_screenshot' | 'desktop_act' | 'desktop_asked' | 'desktop_borrow'
-  | 'handoff' | 'remembered' | 'proposal' | 'failed' | 'other';
+  | 'handoff' | 'remembered' | 'proposal' | 'withheld' | 'failed' | 'other';
 
 export type TraceEntry = {
   id: string;
@@ -24,6 +24,8 @@ export type TraceEntry = {
   target?: string;
   /** The core's own sentence for a row that is a note rather than a verb and a target (a refusal, a stored memory). Kept in Vietnamese as saved; the row translates it. */
   note?: string;
+  /** Why the row happened when it is not obvious: a note Tacet loaded (COD-306). */
+  why?: string;
   /** A live step still going. */
   running?: boolean;
 };
@@ -75,6 +77,13 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Đã đọc (.+)$/, kind: 'read' },
   { pattern: /^Đã tìm (.+)$/, kind: 'search' },
   { pattern: /^Đã liệt kê tệp (.+)$/, kind: 'list' },
+  { pattern: /^Đã liệt kê tệp$/, kind: 'list' },
+  // Steps in the private copy (COD-292); the "Workspace <tool>: <path>" lines below are how saved runs wrote them.
+  { pattern: /^Đã ghi trong bản làm việc: (.+)$/, kind: 'edit' },
+  { pattern: /^Đã tạo thư mục trong bản làm việc: (.+)$/, kind: 'folder' },
+  { pattern: /^Đã chuyển trong bản làm việc: (.+)$/, kind: 'move' },
+  { pattern: /^Đã xóa trong bản làm việc: (.+)$/, kind: 'delete' },
+  { pattern: /^Đã xem lại bản làm việc$/, kind: 'other' },
   { pattern: /^Workspace (?:read|blob): (.+)$/, kind: 'read' },
   { pattern: /^Workspace search: (.+)$/, kind: 'search' },
   { pattern: /^Workspace write: (.+)$/, kind: 'edit' },
@@ -84,13 +93,18 @@ const eventPatterns: { pattern: RegExp; kind: TraceKind; note?: boolean }[] = [
   { pattern: /^Workspace list: (.+)$/, kind: 'list' },
   { pattern: /^Workspace (?:manifest|snapshot): ?$/, kind: 'other' },
   { pattern: /^Không có tệp hoặc thư mục: /, kind: 'failed', note: true },
-  { pattern: /^Không (?:chuyển|xóa|tạo) được/, kind: 'failed', note: true },
+  { pattern: /^Không (?:chuyển|xóa|tạo|ghi) được/, kind: 'failed', note: true },
+  // A call the chat does not allow or the worker got wrong (COD-289); a permission line says what to change and where.
+  { pattern: /^(?:Chưa (?:sửa|chạy|dùng) được .+ rồi gửi lại tin nhắn\.|Công cụ không có trong chat này: |Tham số công cụ không hợp lệ: )/, kind: 'failed', note: true },
   // A command names itself (dogfood, 2026-09-26); runs saved before that say only how a process stopped.
   { pattern: /^(?:Đã chạy lệnh|Đã dừng lệnh) /, kind: 'command', note: true },
   { pattern: /^Lệnh .+ (?:đã hết thời gian|in quá nhiều nên đã bị dừng)$/, kind: 'command', note: true },
   { pattern: /^Tiến trình đã dừng: /, kind: 'command', note: true },
   { pattern: /^(?:Đã ghi nhớ một điều|Đã gộp vào một ghi nhớ|Đã ghi một ghi nhớ)/, kind: 'remembered', note: true },
   { pattern: /^Không ghi nhớ được/, kind: 'failed', note: true },
+  // An image the connection was not shown (COD-292): the chat says so, or an answer that claims to have read it goes
+  // unchallenged next to a trace that counts one file fewer.
+  { pattern: /^Tí không xem được ảnh /, kind: 'withheld', note: true },
   { pattern: /^Câu trả lời kèm /, kind: 'failed', note: true },
   { pattern: /^Cảm xúc thứ \d+ bị từ chối/, kind: 'failed', note: true },
   { pattern: /^Đề xuất (?:thay đổi trong app|sửa hướng dẫn của Tí) bị từ chối/, kind: 'failed', note: true },
@@ -130,7 +144,8 @@ function knowledgeEntries(context: RunContext | undefined): TraceEntry[] {
   if (!context) return [];
   return context.manifest.loaded.filter(entry => entry.kind === 'knowledge').map((entry, index) => {
     const note = context.knowledge.find(item => item.id === entry.id);
-    return { id: `knowledge-${entry.id ?? index}`, kind: 'knowledge' as const, target: note?.title ?? t('Ghi chú') };
+    const why = entry.because === 'tacet' ? { why: t('Tacet chọn') } : {};
+    return { id: `knowledge-${entry.id ?? index}`, kind: 'knowledge' as const, target: note?.title ?? t('Ghi chú'), ...why };
   });
 }
 
@@ -188,7 +203,7 @@ const browserKinds: readonly TraceKind[] = ['browser_open', 'browser_read', 'bro
   'browser_click', 'browser_type', 'browser_select', 'browser_press', 'browser_wait', 'browser_asked'];
 
 /** The order the counts read in: what was loaded, then a crew's handoffs, then the steps, then what the run left behind. */
-const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'search', 'list', 'skill', 'web_search', 'web_read', 'browser', 'desktop', 'mcp', 'dataset', 'edit', 'folder', 'move', 'delete', 'command', 'remembered', 'proposal', 'failed', 'other'];
+const summaryOrder: SummaryKind[] = ['memory', 'knowledge', 'handoff', 'read', 'withheld', 'search', 'list', 'skill', 'web_search', 'web_read', 'browser', 'desktop', 'mcp', 'dataset', 'edit', 'folder', 'move', 'delete', 'command', 'remembered', 'proposal', 'failed', 'other'];
 
 function summaryKindOf(kind: TraceKind): SummaryKind {
   if (browserKinds.includes(kind)) return 'browser';
@@ -219,6 +234,7 @@ function countPhrase(kind: SummaryKind, count: number): string {
     case 'handoff': return count === 1 ? t('Giao 1 việc') : t('Giao {0} việc', [count]);
     case 'remembered': return count === 1 ? t('Ghi nhớ thêm 1 điều') : t('Ghi nhớ thêm {0} điều', [count]);
     case 'proposal': return count === 1 ? t('Đề xuất 1 thay đổi') : t('Đề xuất {0} thay đổi', [count]);
+    case 'withheld': return count === 1 ? t('1 ảnh không gửi cho Tí') : t('{0} ảnh không gửi cho Tí', [count]);
     case 'failed': return count === 1 ? t('1 bước không thành') : t('{0} bước không thành', [count]);
     case 'other': return count === 1 ? t('1 bước khác') : t('{0} bước khác', [count]);
   }

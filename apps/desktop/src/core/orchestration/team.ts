@@ -79,7 +79,7 @@ export class TeamRunner {
       }
       const memberArtifacts: Artifact[] = [];
       const successful = new Set<string>();
-      const failures: string[] = [];
+      const failures: { role: string; error: string }[] = [];
       // A member stopped at the task's cap pauses the crew the same way, but the chat must say it is the budget.
       let waitingBudget = false;
       const execute = async (workerId: string, signal?: AbortSignal) => {
@@ -113,7 +113,7 @@ export class TeamRunner {
           memberArtifacts.push(artifact);
           successful.add(workerId);
         } else {
-          failures.push(`${run.snapshot.worker.name}: ${result.runs.find(r => r.id === run.id)?.error ?? 'chưa hoàn tất'}`);
+          failures.push({ role: run.snapshot.worker.name, error: result.runs.find(r => r.id === run.id)?.error ?? 'chưa hoàn tất' });
         }
       };
       const orderedAssignments = team.memberIds.map(workerId => plannedNow.snapshot.plan!.assignments.find(assignment => assignment.workerId === workerId)).filter(assignment => assignment !== undefined);
@@ -132,12 +132,13 @@ export class TeamRunner {
               const blocked = planned.members.get(assignment.workerId)!;
               const error = 'Phần việc đang chờ kết quả từ phần việc chưa hoàn tất.';
               this.store.update('runs', { ...blocked, status: 'interrupted', error });
-              failures.push(blocked.snapshot.worker.name + ': ' + error);
+              failures.push({ role: blocked.snapshot.worker.name, error });
             }
             break;
           }
           for (const assignment of batch) pending.delete(assignment.workerId);
-          this.setWaits(task.id, crewWaits([...pending.values()], successful, planned.members, planned.synthesis, queuedSince));
+          this.setWaits(task.id, crewWaits([...pending.values()], successful, planned.members, planned.synthesis, queuedSince,
+            team.workflow === 'sequential' ? orderedAssignments.map(assignment => assignment.workerId) : undefined));
           const results = await Promise.allSettled(batch.map(assignment => execute(assignment.workerId, signal)));
           const rejected = results.find(result => result.status === 'rejected');
           if (rejected?.status === 'rejected') throw rejected.reason;
@@ -155,7 +156,9 @@ export class TeamRunner {
       const originalJoin = resume && leadDispatched
         ? memberArtifacts.filter(artifact => planned.synthesis.snapshot.upstreamArtifactIds?.includes(artifact.id)) : memberArtifacts;
       const synthesis = this.join(planned.synthesis, originalJoin, preflightId);
-      const limitations = failures.map(failure => `Role chưa hoàn tất: ${failure}`);
+      // The role and its error stay separate values, so the chat translates the error like a message of its own (COD-252).
+      const unfinishedRoles = () => failures.map(failure => `Role chưa hoàn tất: ${failure.role}: ${failure.error}`);
+      const limitations = unfinishedRoles();
       await this.runner.run(task, synthesis, { keepTaskOpen: true, upstream: memberArtifacts, limitations,
         assignment: plannedNow.snapshot.plan.synthesisBrief,
         reassign: async (callId, input, signal) => {
@@ -174,11 +177,11 @@ export class TeamRunner {
             if (successful.has(assignment.workerId)) continue;
             const latest = detail.runs.findLast(candidate => candidate.stage === 'member'
               && (candidate.snapshot.inputRevision ?? 0) === (task.inputRevision ?? 0) && assignmentKey(candidate) === assignment.workerId);
-            failures.push(`${latest?.snapshot.worker.name ?? assignment.workerId}: ${latest?.error ?? 'chưa hoàn tất'}`);
+            failures.push({ role: latest?.snapshot.worker.name ?? assignment.workerId, error: latest?.error ?? 'chưa hoàn tất' });
           }
-          limitations.splice(0, limitations.length, ...failures.map(failure => `Role chưa hoàn tất: ${failure}`));
+          limitations.splice(0, limitations.length, ...unfinishedRoles());
           return { attemptId: attempt.id, status: this.store.get<Run>('runs', attempt.id).status,
-            results: savedArtifactContext(memberArtifacts, detail.runs), failures };
+            results: savedArtifactContext(memberArtifacts, detail.runs), failures: failures.map(failure => `${failure.role}: ${failure.error}`) };
         },
       });
       const result = this.store.get<Run>('runs', synthesis.id);
@@ -191,9 +194,10 @@ export class TeamRunner {
   }
   /**
    * Group chat: every assigned worker answers the latest message in order, each seeing the replies before it. Workers
-   * that already answered this message are skipped, so resume and retry only run the rest.
+   * that already answered this message are skipped, so resume and retry only run the rest. `route`, when given, first
+   * narrows who answers (Tacet's pick, COD-305); it runs once the turn counts as running, so Stop and Pause reach it.
    */
-  async chat(task: Task, workers: Worker[], resume = false) {
+  async chat(task: Task, workers: Worker[], resume = false, route?: () => Promise<Worker[]>) {
     if (this.active.has(task.id)) throw new Error('Hội đang chạy task này.');
     if (!workers.length) throw new Error('Chưa có Tí nào để giao việc.');
     const control = { cancelled: false, paused: false, controller: new AbortController() }; this.active.set(task.id, control);
@@ -203,6 +207,10 @@ export class TeamRunner {
     let answered = 0, failed = 0, waitingBudget = false;
     const queuedSince = Date.now();
     try {
+      if (route) {
+        workers = await route();
+        this.notify();
+      }
       for (const [index, worker] of workers.entries()) {
         if (!this.canDispatch(task)) control.paused = true;
         if (control.cancelled || control.paused) break;

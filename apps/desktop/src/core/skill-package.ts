@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { parseDocument } from 'yaml';
 import { z } from 'zod';
 import { PackageInput, SkillMetadata, SkillPackage, SKILL_PACKAGE_LIMIT, SKILL_FILE_LIMIT } from '../shared/skill-package';
-import { Report, Finding, type Skill } from '../shared/contracts';
+import { StructuredReport, Finding, type Skill } from '../shared/contracts';
 import type { Store } from './storage/database';
 
 const supportedTools = new Set(['read_source', 'profile_dataset', 'audit_run_log', 'submit_report', 'reply', 'read_skill_resource']);
@@ -13,9 +13,9 @@ const Manifest = z.object({
 }).strict();
 // This release has one task input and one report output. Other schemas are preserved but cannot run.
 export const inputSchema = { type: 'object', properties: { brief: { type: 'string' } }, required: ['brief'], additionalProperties: false };
-export const outputSchema = z.toJSONSchema(Report, { target: 'draft-7' });
+export const outputSchema = z.toJSONSchema(StructuredReport, { target: 'draft-7' });
 // Schemas written by earlier exports stay importable. Each step removes the fields a later build added.
-const beforeWorkspaceEvidence = Report.extend({ findings: z.array(Finding.omit({ workspaceEvidenceIds: true })).max(50) });
+const beforeWorkspaceEvidence = StructuredReport.extend({ findings: z.array(Finding.omit({ workspaceEvidenceIds: true })).max(50) });
 const beforeWorkspaceEvidenceOutputSchema = z.toJSONSchema(beforeWorkspaceEvidence, { target: 'draft-7' });
 const beforeFormat = beforeWorkspaceEvidence.omit({ format: true });
 const beforeFormatOutputSchema = z.toJSONSchema(beforeFormat, { target: 'draft-7' });

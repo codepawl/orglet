@@ -67,12 +67,16 @@ it('names a single changed file once, in its heading, without a list above it (d
 
 it('words the turn line from the counts the core kept, naming the worker only when asked', () => {
   const summary = { files: 3, additions: 42, deletions: 7 };
-  expect(changedFilesLabel(summary)).toBe('Files changed: 3 · +42 −7');
-  expect(changedFilesLabel(summary, 'Scout')).toBe('Scout · files changed: 3 · +42 −7');
+  expect(changedFilesLabel(summary)).toBe('Changed 3 files · +42 −7');
+  expect(changedFilesLabel(summary, 'Scout')).toBe('Scout changed 3 files · +42 −7');
+  // One file has its own words, alone and in a crew's named line (COD-291).
+  expect(changedFilesLabel({ files: 1, additions: 3, deletions: 0 })).toBe('Changed 1 file · +3 −0');
+  expect(changedFilesLabel({ files: 1, additions: 3, deletions: 0 }, 'Writer')).toBe('Writer changed 1 file · +3 −0');
+  expect(changedFilesLabel({ files: 0, additions: 0, deletions: 0, folders: 1, lines: false }, 'Writer')).toBe('Writer changed 1 folder');
   const html = renderToStaticMarkup(createElement(ChangedFilesLine, { summary, onOpen: () => {} }));
   expect(html).toContain('class="activity-summary changed-files"');
   expect(html).toContain('aria-haspopup="dialog"');
-  expect(html.replace(/<[^>]+>/g, '')).toContain('Files changed: 3 · +42 −7');
+  expect(html.replace(/<[^>]+>/g, '')).toContain('Changed 3 files · +42 −7');
   // The line counts wear the diff's colours, apart from the file count.
   expect(html).toContain('<span class="diff-count-added">+42</span>');
   expect(html).toContain('<span class="diff-count-removed">−7</span>');
@@ -84,6 +88,28 @@ it('shows a line only for runs whose copy changed something', () => {
     copies: [copy(runIds[0], { files: 2, additions: 5, deletions: 1 }), copy(runIds[1], { files: 0, additions: 0, deletions: 0 })] };
   expect(changedFilesOf(runs, recovery).map(item => [item.run.snapshot.worker.name, item.summary])).toEqual([['Scout', { files: 2, additions: 5, deletions: 1 }]]);
   expect(changedFilesOf(runs, undefined)).toEqual([]);
+});
+
+it('keeps a restored turn’s line with its counts and outcome, and says it cannot be opened (COD-299)', () => {
+  const runs = [run(runIds[0], 'Scout'), run(runIds[1], 'Writer'), run(runIds[2], 'Lead')];
+  const recovery: WorkspaceRecoveryView = { taskId, attempts: [], processes: [], uncertainCalls: [], truncated: false,
+    copies: [copy(runIds[0], { files: 2, additions: 5, deletions: 1 })],
+    restored: [
+      // A working copy on this computer wins over what a backup kept for the same run.
+      { runId: runIds[0], diff: { files: 9, additions: 9, deletions: 9 }, outcome: { state: 'discarded' } },
+      { runId: runIds[1], diff: { files: 3, additions: 42, deletions: 7 }, outcome: { state: 'applied', skipped: 0 } },
+      { runId: runIds[2], diff: { files: 1, additions: 1, deletions: 0 }, outcome: { state: 'pending' } },
+    ] };
+  const lines = changedFilesOf(runs, recovery);
+  expect(lines.map(line => [line.run.snapshot.worker.name, line.summary.files, line.review, line.restored])).toEqual([
+    ['Scout', 2, { state: 'applied', skipped: 0 }, undefined],
+    ['Writer', 3, { state: 'applied', skipped: 0 }, true],
+    // Changes that waited for review cannot be applied without their working copy.
+    ['Lead', 1, { state: 'unapplied' }, true],
+  ]);
+  const html = renderToStaticMarkup(createElement(ChangedFilesLine, { summary: lines[1].summary, review: lines[1].review, restored: true, onOpen: () => {} }));
+  expect(html).not.toContain('<button');
+  expect(html.replace(/<[^>]+>/g, '')).toBe('Changed 3 files · +42 −7 · Applied · Restored from a backup, the changes can’t be opened');
 });
 
 it('tells a move from a rename, lists new and removed folders, and shows a plain copy without counts (COD-254)', () => {
@@ -111,9 +137,9 @@ it('tells a move from a rename, lists new and removed folders, and shows a plain
 });
 
 it('words the turn line with moves, deletions and folders, and drops line counts a plain copy does not have (COD-254)', () => {
-  expect(changedFilesLabel({ files: 6, additions: 0, deletions: 0, moved: 5, removed: 1, folders: 4, lines: false })).toBe('Files changed: 6 · 5 moved or renamed · 1 deleted');
-  expect(changedFilesLabel({ files: 3, additions: 42, deletions: 7, moved: 1 }, 'Scout')).toBe('Scout · files changed: 3 · 1 moved or renamed · +42 −7');
-  expect(changedFilesLabel({ files: 0, additions: 0, deletions: 0, folders: 2, lines: false })).toBe('Folders changed: 2');
+  expect(changedFilesLabel({ files: 6, additions: 0, deletions: 0, moved: 5, removed: 1, folders: 4, lines: false })).toBe('Changed 6 files · 5 moved or renamed · 1 deleted');
+  expect(changedFilesLabel({ files: 3, additions: 42, deletions: 7, moved: 1 }, 'Scout')).toBe('Scout changed 3 files · 1 moved or renamed · +42 −7');
+  expect(changedFilesLabel({ files: 0, additions: 0, deletions: 0, folders: 2, lines: false })).toBe('Changed 2 folders');
   const runs = [run(runIds[0], 'Scout')];
   const recovery: WorkspaceRecoveryView = { taskId, attempts: [], processes: [], uncertainCalls: [], truncated: false,
     copies: [copy(runIds[0], { files: 0, additions: 0, deletions: 0, folders: 1, lines: false })] };

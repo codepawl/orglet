@@ -21,7 +21,7 @@ import {
   BASE_URL_ERRORS, checkBaseUrl, CustomConnectionInput, customProviderId, MAX_CUSTOM_CONNECTIONS,
   connectionPricing, type CustomConnection, type CustomConnectionPrice, type CustomProviderId,
 } from '../../apps/desktop/src/shared/custom-connections';
-import { ModelListCache } from '../../apps/desktop/src/shared/models';
+import { MODEL_LIST_CACHE_VERSION, ModelListCache } from '../../apps/desktop/src/shared/models';
 import { ERASE_CONFIRMATION } from '../../apps/desktop/src/shared/erase';
 import { CustomConnectionsSection } from '../../apps/desktop/src/renderer/components/CustomConnections';
 import { rememberCustomConnections } from '../../apps/desktop/src/renderer/customConnections';
@@ -212,8 +212,8 @@ describe('schemas', () => {
   it('keeps model lists of custom connections in the one cache, and refuses a key that is neither', () => {
     const provider = customProviderId('0b8e7a52-2a0b-4c1e-9c6a-0d3d6f1e2a11');
     const row = { fetchedAt: now(), source: 'native' as const, models: [] };
-    expect(ModelListCache.safeParse({ version: 1, byProvider: { openai: row, [provider]: row } }).success).toBe(true);
-    expect(ModelListCache.safeParse({ version: 1, byProvider: { mystery: row } }).success).toBe(false);
+    expect(ModelListCache.safeParse({ version: MODEL_LIST_CACHE_VERSION, byProvider: { openai: row, [provider]: row } }).success).toBe(true);
+    expect(ModelListCache.safeParse({ version: MODEL_LIST_CACHE_VERSION, byProvider: { mystery: row } }).success).toBe(false);
   });
 });
 
@@ -324,6 +324,20 @@ describe('a chat run through the adapter', () => {
     expect(store.budgetReservations()).toEqual([]);
   });
 
+  it('leaves nothing to reconcile when a request to a free server fails or is stopped (COD-295)', async () => {
+    // Dogfood round 7: stopping a run on a free local connection left "1 request with unknown cost" and a $0.00 charge
+    // to reconcile in Settings. A known price of zero costs nothing whatever became of the request.
+    const connection = await addConnection();
+    const worker = await workerOn(connection);
+    fake.steps.push({ kind: 'status', status: 500, message: 'Local server stopped' });
+    const { task, run } = fixtureRun(worker);
+    await core.runner.run(task, run);
+    const detail = store.detail(task.id);
+    expect(detail.runs[0].status).not.toBe('completed');
+    expect(detail.usage).toMatchObject({ chargedMicros: 0, reservedMicros: 0, uncertainCount: 0 });
+    expect(store.budgetReservations()).toEqual([]);
+  });
+
   it('keeps a reply without token counts unknown and visible even when the server is free', async () => {
     const connection = await addConnection();
     const worker = await workerOn(connection);
@@ -384,9 +398,10 @@ describe('a chat run through the adapter', () => {
     expect(fake.chatRequests()[0].authorization).toBe(`Bearer ${FAKE_KEY}`);
     expect(detail.task.status).toBe('failed');
     expect(detail.runs[0].error).toContain('Company proxy từ chối yêu cầu (401)');
-    // Free and local: the failed request stays visible, but there is no held cost to talk about.
+    // Free and local: the refusal is in the run's error, and a known price of zero leaves no cost to talk about or to
+    // reconcile (COD-295; before, the failed request stayed as an unknown $0.00 charge in Settings).
     expect(detail.runs[0].error).not.toContain('Chi phí chưa rõ');
-    expect(detail.usage.uncertainCount).toBe(1);
+    expect(detail.usage.uncertainCount).toBe(0);
     expect(detail.usage.reservedMicros).toBe(0);
   });
 

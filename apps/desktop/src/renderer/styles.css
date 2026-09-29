@@ -46,12 +46,12 @@
   --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg));
   /* The prompt bar and the island's shared outline (COD-228): --border read as white on white. */
   --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg));
-  --primary:#171717; --primary-text:#fff; --error:#a82626; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
+  --primary:#171717; --primary-text:#fff; --error:#a82626; --error-ink:#ffffff; --success:#2e7a32; --working:#9a7b2f; --row-hover:#f1f1f2; --row-active:#e8e8ea; --focus:#576b99;
   --accent-text: var(--accent-text-light, #395a9d);
   --window:#f3f3f5; --wash-one:#dfe7ff; --wash-two:#e6f6ec; --wash-three:#f6e9f2; --panel-shadow: 0 1px 2px #00000012, 0 8px 20px #0000000a;
 }
-:root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); }
-@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); } }
+:root[data-theme=dark], .theme-dark { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --border-subtle: color-mix(in srgb, var(--border) 58%, var(--bg)); --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --error-ink:#3a0d0d; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); }
+@media (prefers-color-scheme:dark) { :root[data-theme=system] { color-scheme:dark; --window:#141414; --wash-one:#1b2440; --wash-two:#16281d; --wash-three:#2a1c27; --panel-shadow: 0 1px 2px #00000080; --bg:#212121; --sidebar:#171717; --surface:#2f2f2f; --text:#ececec; --muted:#b4b4b4; --border:#404040; --bar-line: color-mix(in srgb, var(--muted) 42%, var(--bg)); --bar-line-focus: color-mix(in srgb, var(--muted) 58%, var(--bg)); --primary:#ececec; --primary-text:#171717; --error:#ffaaaa; --error-ink:#3a0d0d; --success:#8fd48a; --working:#d4b45a; --row-hover:#252525; --row-active:#323232; --focus:#a6c1ff; --accent-text: var(--accent-text-dark, #87a3dd); } }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--text); font-family: var(--font); }
 button,input,textarea,select { font:inherit; color:inherit; }
@@ -110,6 +110,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The close button sits in the top-right corner, so the head starts below where the curve ends. */
 .details-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:var(--panel-inset) 10px 8px 16px; }
 .details-head h2 { font-size:15px; font-weight:600; }
+/* Opening Details from the keyboard lands on this heading (COD-284); the ring keeps clear of the letters. */
+.details-head h2:focus-visible { outline-offset:3px; border-radius:4px; }
 .details-body { flex:1; min-height:0; overflow:auto; padding:0 16px 16px; }
 .details-body .form { gap:14px; }
 /* Details: plain words on the surface, machine detail in one collapsed block at the end (user, 2026-09-19). */
@@ -315,6 +317,17 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .sidebar-scroll .history { min-height:100px; overflow:visible; }
 .sidebar-scroll .history:has(>.section-items[hidden]) { min-height:0; }
 .sidebar-footer>.org-button { justify-content:flex-start; }
+/* Settings shares its row with the update mark (COD-304): Settings keeps the width, the mark sits at the row's end,
+   centred on it. Downloading is a grey arrow; ready is a small pill in a soft accent tint that restarts into it. */
+.sidebar-settings { display:flex; align-items:center; gap:4px; }
+.sidebar-settings>.org-button:first-child { flex:1; min-width:0; justify-content:flex-start; }
+.update-button { flex-shrink:0; color:var(--muted); }
+.sidebar .update-button:hover:not(:disabled) { color:var(--text); }
+.update-button.ready { gap:5px; padding:4px 10px; min-height:28px; border-radius:999px; color:var(--text); background:color-mix(in srgb, var(--accent) 18%, var(--bg)); white-space:nowrap; animation:notice-dot-in var(--motion-base) var(--ease-out); }
+.sidebar .update-button.ready:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 28%, var(--bg)); }
+.update-button.ready.compact { padding:0; min-height:var(--org-icon-size, 32px); }
+.topbar-rail .update-button.ready:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 28%, var(--bg)); }
+@media (prefers-reduced-motion: reduce) { .update-button.ready { animation:none; } }
 .sidebar-footer .org-status-mark { margin-left:auto; }
 /* Selecting several rows (COD-214). A section's edit button holds its Done state while the section is in select
    mode. A picked row, or every row while picking, carries a checkbox in the status mark's slot, the same 29px it
@@ -383,14 +396,21 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer.expanded.has-context { grid-template-areas:"context context context" "attach attach attach" "input input input" "lead . send"; }
 .composer.expanded.has-context.has-trailing { grid-template-areas:"context context context context" "attach attach attach attach" "input input input input" "lead . trail send"; }
 .composer-context { grid-area:context; min-width:0; }
-/* Focus shows as a slightly stronger outline of the whole bar, plus the caret. */
+/* Focus inside the bar darkens its outline. Typing in it rings the whole pill in the focus colour, two pixels like
+   every other focus ring (COD-284): the border turns and an inset line adds the second pixel, so nothing around the
+   bar moves and the idle bar stays as quiet as before. A button inside the bar keeps its own ring instead. */
 .composer:focus-within { border-color:var(--bar-line-focus); }
+.composer:has(> textarea:focus-visible) { border-color:var(--focus); box-shadow:inset 0 0 0 1px var(--focus), 0 1px 2px #0000000d, 0 6px 20px #00000014; }
 /* Attached files: a strip of same-width cards that scrolls sideways, so twenty files take the height of one and the
    text underneath stays where the hand expects it. The cards keep clear of the pill's top corners by being drawn
    with a radius that nests inside the pill's (22 minus the 7px padding, rounded down). */
-/* Proximity, not mandatory: under mandatory Chromium insists the last card be reachable, so at the end it clamps
-   to the very edge and lands mid-card — the exact thing Composer.tsx computes a resting place to avoid. */
-.composer-attachments { grid-area:attach; display:flex; gap:8px; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; }
+/* Proximity, not mandatory: a wheel or a drag may stop between cards, and the strip rests at its very end after a
+   file is added (Composer.tsx), where the faded left end says there is more that way (COD-292). */
+.composer-attachments { --strip-fade-start:0px; --strip-fade-end:0px; grid-area:attach; display:flex; gap:8px; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity;
+  mask-image:linear-gradient(to right, transparent 0, #000 var(--strip-fade-start), #000 calc(100% - var(--strip-fade-end)), transparent 100%); }
+/* An end with cards scrolled past it fades out, so a file off the left edge is announced, not silently gone (COD-292). */
+.composer-attachments[data-more-start] { --strip-fade-start:48px; }
+.composer-attachments[data-more-end] { --strip-fade-end:48px; }
 /* The one place a scrollbar is hidden rather than styled: the global 12px bar is a quarter of the strip and sits
    inside the prompt pill, where it reads as chrome the bar does not carry anywhere else. The card clipped at the
    edge says there is more, and Composer.tsx turns a vertical wheel here into sideways scrolling so a plain mouse
@@ -493,6 +513,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @keyframes reaction-row-in-end { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
 .message-reply-context { display:flex; align-items:center; gap:6px; max-width:100%; padding:0; border:0; background:none; color:var(--muted); font:inherit; font-size:12px; text-align:start; overflow-wrap:anywhere; cursor:pointer; }
 .message-reply-context:hover { color:var(--text); }
+/* Who Tacet picked to answer (RoutedLine, COD-305): the same quiet line, but a statement, not a link. */
+.message-routed { margin:0; cursor:default; }
+.message-routed:hover { color:var(--muted); }
 /* The quoted message under a reaction is one clamped line (COD-221), never the whole message. */
 .details-reaction-source { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:1; overflow:hidden; }
 .details-team-message { padding:8px 0; overflow-wrap:anywhere; }
@@ -555,6 +578,50 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .mention { font-weight:600; color:var(--accent-text); background:color-mix(in srgb, var(--accent) 14%, transparent); border-radius:4px; padding:0 3px; }
 .composer-note { margin:10px 0 0; text-align:center; color:var(--muted); font-size:12px; }
 .composer-note button { border:0; background:transparent; color:var(--text); text-decoration:underline; margin-left:6px; }
+/* The Demo line under a message box (DemoNote, COD-293): the muted sentence and a small outline "Connect a model"
+   centred on one line, wrapping under each other only when the column is too narrow for both. */
+/* The row under a message box (ComposerFoot, COD-326): its one line centred under the bar, and the usage ring at the
+   right end, centred under the send button. The line's own top margin gives way to the row's. */
+.composer-foot { display:grid; grid-template-columns:28px minmax(0,1fr) 28px; column-gap:8px; align-items:center; min-height:28px; margin-top:6px; padding:0 10px; }
+.composer-foot-lines { grid-column:2; min-width:0; }
+.composer-foot-lines > .composer-note, .composer-foot-lines > .demo-note, .composer-foot-lines > .usage-note { margin:0; }
+.composer-foot > .usage-ring, .composer-foot > .usage-ring-waiting { grid-column:3; }
+/* The ring's place while the first usage read is on its way, so the bar does not move when it lands. */
+.usage-ring-waiting { display:grid; place-items:center; width:28px; height:28px; }
+/* The usage ring (UsageRing): a 16px ring filled as far as the closest limit, muted until 80%, then the warning
+   colour, then the error colour. It is a button that opens the details; hover darkens it, nothing else. */
+.usage-ring { display:grid; place-items:center; width:28px; height:28px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--muted); cursor:pointer; }
+.usage-ring:hover, .usage-ring[aria-expanded=true] { color:var(--text); }
+.usage-ring[data-tone=warning] { color:var(--warning); }
+.usage-ring[data-tone=out] { color:var(--error); }
+.usage-ring-glyph { display:block; }
+.usage-ring-track { fill:none; stroke:currentColor; stroke-width:2; opacity:.25; }
+.usage-ring-fill { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
+/* The details above the ring: the context window, each plan's allowances in Settings' rows, and the way to Settings.
+   Sections sit apart by spacing, never a line. */
+.usage-details { width:min(420px, calc(100vw - 24px)); padding:14px 16px; display:flex; flex-direction:column; gap:16px; color:var(--text); font-size:12px; }
+.usage-section { display:flex; flex-direction:column; gap:6px; }
+.usage-heading { margin:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; line-height:18px; }
+.usage-heading strong { font-size:13px; font-weight:600; }
+.usage-heading span { color:var(--muted); }
+.usage-figure { margin:0; font-variant-numeric:tabular-nums; line-height:16px; }
+.usage-muted { margin:0; color:var(--muted); line-height:16px; }
+.usage-section .plan-usage { margin:0; }
+.usage-details .usage-settings { align-self:flex-start; min-height:28px; padding:0 10px; font-size:12px; }
+/* The same line says when a harness account is nearly or wholly used, with the account that has room (PlanUsageNote, COD-326). */
+.demo-note, .usage-note { margin:10px 0 0; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 10px; color:var(--muted); font-size:12px; }
+.demo-note p, .usage-note p { margin:0; text-align:center; }
+.demo-note .org-button, .usage-note .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
+.usage-note[data-tone=warning] p { color:var(--warning); }
+.usage-note[data-tone=out] p { color:var(--error); }
+/* The permission a message seems to need (PermissionHint, COD-305): the control's own icon, the sentence, a link that
+   takes the step, and a small ✕, centred on one line and wrapping only when the column is too narrow. */
+.composer-note.permission-hint { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:4px 6px; }
+.permission-hint > svg { flex:none; }
+.permission-hint .text-link { margin:0; font-size:12px; white-space:nowrap; }
+.permission-hint .text-link:disabled { color:var(--muted); cursor:default; }
+.permission-hint .permission-hint-dismiss { display:inline-grid; place-items:center; width:20px; height:20px; margin:0; padding:0; border:0; border-radius:6px; background:transparent; color:var(--muted); cursor:pointer; }
+.permission-hint .permission-hint-dismiss:hover { color:var(--text); }
 /* Attachment (Attachment.tsx): a card for one attached file — the kind's icon, the name, a line with the kind and
    size, and a remove button that keeps its place and only shows on hover or a visible focus, so nothing shifts when
    the pointer arrives. Same width for every card, so a strip of them reads as a row and not as a ragged line of tags. */
@@ -562,7 +629,14 @@ svg { flex-shrink:0; stroke-width:1.7; }
    size. Past that width the row scrolls sideways. The bottom padding is the scrollbar's own lane, so the bar runs
    under the cards instead of across them; a vertical wheel is left alone so it still scrolls the thread.
    The whole card is the button, so its inside is the row the card would otherwise be. */
-.message-files { display:flex; gap:8px; width:fit-content; max-width:var(--bubble-max); margin:0 0 6px auto; padding:0 0 4px; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; animation:turn-in var(--motion-base) var(--ease-out); }
+.message-files { --strip-fade-start:0px; --strip-fade-end:0px; display:flex; gap:8px; width:fit-content; max-width:var(--bubble-max); margin:0 0 6px auto; padding:0 0 4px; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scroll-snap-type:x proximity; animation:turn-in var(--motion-base) var(--ease-out);
+  mask-image:linear-gradient(to right, transparent 0, #000 var(--strip-fade-start), #000 calc(100% - var(--strip-fade-end)), transparent 100%);
+  /* The scrollbar lane stays, but its thumb only shows while the row is pointed at or focused: at rest a thin bar under
+     the cards read as a divider line (dogfood round 7, COD-295). */
+  scrollbar-width:thin; scrollbar-color:transparent transparent; }
+.message-files:hover, .message-files:focus-within { scrollbar-color:color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
+.message-files[data-more-start] { --strip-fade-start:40px; }
+.message-files[data-more-end] { --strip-fade-end:40px; }
 .message-files .org-attachment { padding:0; }
 .consent { display:flex; flex-direction:column; gap:12px; padding:16px 8px 0; font-size:12px; color:var(--muted); }
 .consent>label { display:flex; gap:8px; align-items:flex-start; }
@@ -611,6 +685,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .org-drawer-scroll:has(> .floating-form) { display:flex; padding:0; overflow:hidden; }
 .form.floating-form { position:relative; flex:1; min-width:0; min-height:0; gap:0; }
 .floating-form-fields { flex:1; min-height:0; display:flex; flex-direction:column; gap:22px; padding:18px 24px 84px; overflow:auto; overscroll-behavior:contain; }
+/* A scope note reads as the Scope field's own line, not a field of its own. */
+.floating-form-fields > .scope-note { margin-top:-14px; }
 .floating-actions { position:absolute; right:24px; bottom:14px; z-index:2; width:fit-content; max-width:calc(100% - 48px); margin:0; padding:6px; border-radius:14px; background:color-mix(in srgb, var(--bg) 58%, transparent); backdrop-filter:blur(18px) saturate(1.5); box-shadow:0 12px 32px #0000001f; }
 .floating-actions .org-button-outline { background:transparent; color:var(--muted); }
 .floating-actions .org-button-outline:hover:not(:disabled) { background:transparent; color:var(--text); }
@@ -624,6 +700,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .run-error { background:var(--surface); padding:18px; border-radius:12px; margin-top:16px; }
 .run-error p { margin-top:6px; font-size:14px; }
+/* What became of a past turn without an answer (COD-290): one line; a long error ends in an ellipsis, whole in the tooltip. */
+.turn-outcome { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .error { color:var(--error); font-size:13px; }
 .error-banner { margin:0 var(--page-x); border:1px solid var(--border); background:var(--surface); border-radius:10px; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:var(--error); }
 .notice-banner { margin:0 var(--page-x); border:1px solid var(--border); background:var(--surface); border-radius:10px; padding:10px 12px; display:flex; align-items:flex-start; gap:12px; font-size:13px; }
@@ -745,7 +823,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .send-to-empty { margin:0; padding:14px 24px 10px; color:var(--muted); font-size:14px; text-align:center; }
 /* Files a picker, a folder or Send to left out, with the reason: quiet text, the list indented under its summary. */
 .intake-skipped { font-size:13px; line-height:18px; color:var(--muted); }
-.intake-skipped summary { cursor:pointer; }
+.intake-skipped > summary { list-style:none; cursor:pointer; }
+.intake-skipped > summary::-webkit-details-marker { display:none; }
+.intake-skipped[open] > summary .activity-chevron { transform:rotate(90deg); }
 .intake-skipped ul { margin:4px 0 0; padding-left:18px; }
 .send-to-note { margin:0; padding:6px 26px 16px; font-size:13px; line-height:18px; color:var(--muted); }
 /* Forward picker (COD-257): the Send to palette with a tick on every row, so several places can be picked, and a foot
@@ -805,6 +885,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
    switch: a key is long, and in a 460px row it had 254px left after the file and save buttons (user, 2026-09-20). */
 .setting-connection { flex-wrap:wrap; }
 .setting-connection > .setting-key-form { flex:1 0 100%; order:1; margin-top:8px; }
+/* OpenCode Go's plan usage: a line of its own under the text, starting where the text starts (the 26px mark and the
+   row's 12px gap), and as close to the description as the text column's own gap. */
+.setting-connection > .setting-connection-usage { flex:1 0 100%; order:1; min-width:0; padding-left:38px; margin-top:-4px; }
+.setting-connection-usage .plan-usage { margin:0; }
 .setting-key-form { display:flex; flex-wrap:nowrap; align-items:center; gap:6px; margin-top:2px; max-width:100%; }
 .setting-key-form .setting-key-file {
   width:34px; height:34px; min-height:34px; padding:0; border-radius:50%; color:var(--muted); flex-shrink:0;
@@ -901,6 +985,11 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .harness-account-form { display:flex; align-items:center; gap:6px; padding:10px; }
 .harness-account-form input { min-width:220px; min-height:34px; padding:0 10px; border:1px solid var(--border); border-radius:10px; background:var(--bg); color:var(--text); font-size:13px; }
 .harness-commands { display:flex; flex-direction:column; gap:12px; margin-top:10px; }
+/* Signing in from the row (COD-327): the button, or while the browser is open one plain line with Cancel beside it. */
+.harness-sign-in { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; }
+.harness-sign-in-waiting { font-size:13px; color:var(--text); }
+/* Busy looks like disabled, but stays focusable so the keyboard does not lose its place. */
+.harness-sign-in button[aria-disabled=true] { cursor:default; opacity:.5; }
 
 /* Custom OpenAI-compatible connections (COD-242): a titled group under the built-in APIs, each row's menu shown on
    hover or a visible focus like other rows, and the add/edit form floating beside its trigger. */
@@ -940,6 +1029,18 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .plan-usage-value { text-align:right; font-variant-numeric:tabular-nums; color:var(--text); }
 .plan-usage-reset { white-space:nowrap; }
 .plan-usage .org-skeleton { grid-column:1 / -1; }
+/* A Claude plan's banked resets under its bars (COD-328): the count in the bars' muted size, and the action that spends
+   one as a compact outline button on the same centre line. */
+.plan-resets { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:2px 0; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.plan-resets .org-button { min-height:28px; padding:0 10px; gap:6px; font-size:12px; white-space:nowrap; }
+/* Tacet's enable block (COD-303): a settings row whose text column carries the size or the state, and while bytes
+   arrive a slim bar in the plan-usage bar's shape. The error takes the error colour, never a coloured border. */
+.tacet-setup-meta { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+.tacet-setup-error { color:var(--error); line-height:1.45; }
+.tacet-setup .status-pill { align-self:flex-start; }
+.tacet-setup-bar { position:relative; display:block; height:6px; margin-top:4px; overflow:hidden; border-radius:999px; background:color-mix(in srgb, var(--text) 10%, transparent); }
+.tacet-setup-bar>span { position:absolute; inset:0 auto 0 0; border-radius:inherit; background:var(--accent); transition:width .25s var(--ease-out); }
+@media (prefers-reduced-motion: reduce) { .tacet-setup-bar>span { transition:none; } }
 /* Settings → Giới thiệu (COD-176): the face and the name lead, then the same rows as every other section. The links
    are one row of compact outline chips, each mark left of its name; the changelog is the version, the date and what
    changed, one release at a time. */
@@ -960,6 +1061,8 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    command sits under it, as close to the description as a card inside the row would be. */
 .about-command-line { padding-bottom:13px; }
 .about-command-line > .setting-row { padding-bottom:10px; }
+/* COD-296: the folder of the copy the command or Send to starts instead; a path has no spaces to wrap at. */
+.about-copy-path { font-family:var(--font-mono); font-size:12px; overflow-wrap:anywhere; }
 /* COD-237: five chips on one row in the 720px Settings dialog (460px of text column). Compact rather than the
    settings buttons' 34px, so the row stays one line down to about a 750px window; narrower than that the row
    becomes three columns, three chips over two, instead of one chip left alone on a second line. */
@@ -1033,6 +1136,8 @@ button.notice-body { cursor:pointer; }
 .notice-line { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 8px; }
 .notice-message { overflow-wrap:anywhere; }
 .notice-about { color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+/* An update notice carries its restart under the message while the update waits (COD-304). */
+.notice-actions { display:flex; margin-top:6px; }
 .notice-count { display:inline-flex; align-items:center; gap:2px; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .notice-count svg { transition:transform var(--motion-base) var(--ease-out); }
 .notice-body[aria-expanded=true] .notice-count svg { transform:rotate(180deg); }
@@ -1064,7 +1169,11 @@ button.notice-body { cursor:pointer; }
 .running-actions { display:flex; align-items:center; justify-content:flex-end; gap:2px; width:88px; }
 .org-button.running-action { width:28px; height:28px; min-height:28px; padding:5px; }
 .running-empty { margin:24px 0 0; padding:0 10px; font-size:13px; }
-.badge.running-count { margin-left:auto; min-width:20px; justify-content:center; font-variant-numeric:tabular-nums; }
+/* The Running button's counts (COD-287): what is under way in the quiet badge, what waits for you in the accent with
+   the pause bars, side by side at the button's end. */
+.running-counts { margin-left:auto; display:inline-flex; align-items:center; gap:4px; }
+.badge.running-count, .badge.running-waiting { min-width:20px; justify-content:center; font-variant-numeric:tabular-nums; }
+.badge.running-waiting { gap:2px; padding-left:3px; background:var(--accent); color:var(--accent-ink); }
 /* A count in a footer button fits the button's 20px line, so a button with a count is as tall as one without. */
 .sidebar-footer .badge { line-height:16px; }
 /* One on/off setting inside a form (components/Switch.tsx): title left, switch right, vertically centred on the
@@ -1086,6 +1195,10 @@ button.notice-body { cursor:pointer; }
 .provider-mark svg { width:15px; height:15px; }
 .provider-mark.small { width:22px; height:22px; border-radius:6px; }
 .provider-mark.small svg { width:13px; height:13px; }
+/* A model's maker in a picker row (COD-332): the bare mark at text size in the option's icon slot, no tile. */
+.model-mark { display:inline-grid; place-items:center; width:16px; height:16px; color:var(--text); flex-shrink:0; }
+.model-mark svg { width:15px; height:15px; }
+.model-mark-letter { font-size:11px; font-weight:600; line-height:1; }
 .library-text { display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; min-width:0; flex:1; overflow-wrap:anywhere; }
 .revision-select { display:flex; align-items:center; justify-content:flex-end; gap:8px; font-size:13px; color:var(--muted); margin-bottom:16px; }
 .thread-content>[role=status] { color:var(--muted); font-size:13px; text-align:right; margin-bottom:12px; }
@@ -1112,6 +1225,8 @@ button.notice-body { cursor:pointer; }
 .source-viewer .org-viewer-scroll { padding:20px 24px 40px; }
 .source-stage { display:flex; flex-direction:column; gap:12px; max-width:880px; margin:0 auto; min-width:0; }
 .source-stage>.preview-state { justify-content:center; padding:48px 0; font-size:14px; }
+.source-stage>.source-restored { flex-direction:column; gap:14px; text-align:center; }
+.source-restored>p { margin:0; max-width:420px; text-wrap:pretty; }
 /* The shape of a source or a diff on its way, at the width the content will take. */
 .source-stage>.source-shape,.source-stage>.diff-shape { width:100%; max-width:720px; padding:24px 0; font-size:14px; }
 .source-shape-media { height:240px; }
@@ -1189,10 +1304,27 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+/* Chat sources → data check (COD-292): results sit right under the Check button, newest first, each folded under its
+   time with the trace's chevron; the specialist checks fold under one "More checks" line at the end. */
+.check-results { display:flex; flex-direction:column; gap:4px; }
+.check-result > summary, .more-checks > summary { list-style:none; cursor:pointer; }
+.check-result > summary::-webkit-details-marker, .more-checks > summary::-webkit-details-marker { display:none; }
+.check-result[open] > summary .activity-chevron, .more-checks[open] > summary .activity-chevron { transform:rotate(90deg); }
+/* A <details> does not lay its content out as flex items, so each keeps a body that does. */
+.check-result-body { display:flex; flex-direction:column; gap:12px; padding:8px 0 12px; }
+.check-result-body > section { display:flex; flex-direction:column; gap:8px; }
+.check-result-body > section > :is(h4, p) { margin:0; }
+.check-result-body > ul { display:flex; flex-direction:column; gap:4px; margin:0; padding:0; list-style:none; font-size:12.5px; line-height:1.45; }
+.check-result-body > p.muted { margin:0; font-size:12px; }
+.more-checks-body { display:flex; flex-direction:column; gap:16px; padding-top:8px; }
 .profile-table { overflow-x: auto; max-width: 100%; }
 .profile-table table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .profile-table th, .profile-table td { text-align: left; padding: 6px; overflow-wrap: anywhere; }
-.profile-table tbody tr:nth-child(even) td { background: var(--surface); }
+.profile-table tbody tr:nth-child(even) :is(td, th) { background: var(--surface); }
+/* A number range reads as one value, so "-5 – 175" never breaks across lines. */
+.profile-table td.profile-range { white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* What a data check found worth a second look (COD-297): one plain sentence per line under the table. */
+.check-notes { display:flex; flex-direction:column; gap:4px; margin:0; padding:0; list-style:none; overflow-wrap:anywhere; }
 /* Routines: one soft card per schedule, icon-led facts, and a grouped editor. */
 .routine-list { display:flex; flex-direction:column; gap:12px; }
 .form .routine-card { display:flex; flex-direction:column; gap:12px; padding:14px 16px; border-radius:14px; background:var(--surface); }
@@ -1210,22 +1342,36 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    centre lines (user, 2026-09-20). */
 .routine-actions { display:flex; align-items:center; gap:6px; }
 /* The same button turns a schedule on and off; muted while it is off, so the card still says which state it is in. */
-.routine-actions .org-button:hover:not(:disabled) { background:var(--bg); }
+.routine-actions .org-button:hover:not(:disabled),.routine-actions .org-button[aria-expanded=true] { background:var(--bg); }
 .routine-meta { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:6px 16px; font-size:13px; }
 .routine-meta li { display:flex; align-items:center; gap:8px; min-width:0; overflow-wrap:anywhere; }
 .routine-meta li > svg,.routine-brief svg { color:var(--muted); flex-shrink:0; }
 /* The orglet's own face in its own colour, where the other lines have an icon (COD-258). */
 .routine-meta li > :is(.avatar, .composer-to-avatars) { flex-shrink:0; }
+/* A 14px icon sits centred in a 16px slot, the width of that face, so every line's text starts at the same x
+   (COD-333: the orglet's line started 2px right of the icon lines above and below it). The brief keeps the slot too. */
+.routine-meta li > svg,.routine-brief > svg { margin-inline:1px; }
 .routine-brief { display:flex; gap:8px; font-size:13px; color:var(--muted); }
 .routine-brief svg { margin-top:3px; }
 .routine-brief span { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
-.routine-alert { display:flex; gap:10px; padding:10px 12px; border-radius:10px; background:color-mix(in srgb, var(--error) 9%, var(--bg)); font-size:13px; }
-.routine-alert>svg { color:var(--error); flex-shrink:0; margin-top:2px; }
+/* A missed run or a folder that could not start one (COD-283): news on the card, not an error, so it sits on the page
+   colour with a muted icon and says plainly what happened and what to do. */
+.routine-alert { display:flex; gap:10px; padding:10px 12px; border-radius:10px; background:var(--bg); font-size:13px; }
+.routine-alert>svg { color:var(--muted); flex-shrink:0; margin-top:2px; }
 .routine-alert h4 { margin:0 0 4px; font-size:13px; font-weight:600; }
 .routine-alert .muted { margin:4px 0 0; }
 .routine-alert .actions { margin-top:8px; }
 .routine-last { align-self:flex-start; font-size:13px; min-height:32px; padding:4px 8px; margin:-4px 0 -4px -8px; }
 .routine-last:hover:not(:disabled) { background:var(--bg); }
+/* The newest run's outcome on the card (COD-294): the words take the colour of the mark, after a quiet dot. */
+.routine-last-outcome::before { content:'·'; margin-right:6px; color:var(--muted); }
+.routine-last-outcome[data-tone=error] { color:var(--error); }
+.routine-last-outcome[data-tone=success] { color:var(--success); }
+.routine-last-outcome[data-tone=muted] { color:var(--muted); }
+.routine-meta-folder { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* The schedule's own working folder (COD-294): level, folder name with its Change link, a note and review. */
+.routine-workspace { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.routine-workspace .org-switch-field { margin-top:8px; }
 .routine-empty { display:flex; flex-direction:column; align-items:center; gap:6px; padding:28px 16px; text-align:center; color:var(--muted); }
 .routine-empty p:first-of-type { color:var(--text); font-weight:500; }
 .routine-editor-title { display:inline-flex; align-items:center; gap:6px; margin-left:-8px; }
@@ -1233,6 +1379,10 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 .routine-group h4 { margin:0; font-size:13px; font-weight:600; color:var(--muted); }
 .form .routine-group input:not([type=checkbox]),.form .routine-group select,.form .routine-group textarea,.form .routine-group .org-money-input { background:var(--bg); }
 .routine-sources,.routine-folder,.routine-called { display:flex; flex-direction:column; gap:8px; }
+/* An hourly schedule's window and weekdays switches, and the daily cap with its ceiling under it (COD-288). */
+.routine-hours { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.routine-cap { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.routine-cap p { margin:0; }
 .routine-sources .org-panel-heading h3,.routine-folder .org-panel-heading h3 { font-size:13px; font-weight:500; }
 /* The watched folder: its name and its read-only level, never its path, which stays in the core. */
 .routine-folder-name { display:flex; align-items:center; gap:8px; min-width:0; margin:0; font-size:13px; }
@@ -1281,7 +1431,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
   --org-row-hover:var(--row-hover); --org-row-active:var(--row-active);
   --org-primary:var(--primary); --org-primary-text:var(--primary-text);
   --org-accent:var(--accent); --org-accent-ink:var(--accent-ink);
-  --org-error:var(--error); --org-success:var(--success); --org-working:var(--working); --org-warning:var(--warning); --org-focus:var(--focus);
+  --org-error:var(--error); --org-error-ink:var(--error-ink); --org-success:var(--success); --org-working:var(--working); --org-warning:var(--warning); --org-focus:var(--focus);
   --org-control-height:var(--control-height); --org-icon-size:var(--icon-size); --org-radius:var(--radius); --org-radius-menu:var(--select-menu-radius);
   --org-motion-quick:var(--motion-quick); --org-motion-base:var(--motion-base); --org-motion-gesture:var(--motion-gesture);
   --org-ease-out:var(--ease-out); --org-ease-spring:var(--ease-spring);
@@ -1836,6 +1986,10 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .archived-row { position:relative; }
 .archived-row > .org-row-menu { position:absolute; top:50%; right:0; transform:translateY(-50%); }
 .archived-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .history-item { padding-right:36px; }
+/* While the menu shows, it takes the pill's place instead of squeezing the name past it: an archived chat's name is
+   longer than an orglet's, and beside a group's two faces, the pill and the menu it kept four letters (COD-286). The
+   days left stay in the row's tooltip. */
+@media (hover:hover) { .archived-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .archive-age { display:none; } }
 @media (hover:none) { .archived-row .history-item { padding-right:36px; } }
 .model-picker { display:flex; align-items:center; gap:8px; }
 .model-picker-field { position:relative; flex:1; min-width:0; }
@@ -1945,6 +2099,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 }
 /* One outline for tab and bar: the same colour the bar's own focus rule sets. */
 .thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); }
+.thread-composer:has(.composer > textarea:focus-visible) .live-island { --island-line:var(--focus); }
 .live-island::before,.live-island::after { content:""; position:absolute; bottom:1px; width:calc(var(--island-fillet) + 1px); height:calc(var(--island-fillet) + 1px); }
 .live-island::before { left:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 0 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
 .live-island::after { right:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 100% 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
@@ -2052,11 +2207,13 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    column, and CodePreview's removed/added tints. */
 .changed-files svg { flex-shrink:0; }
 /* Changes held for review (COD-279): the line says they are not in the folder yet in the text colour, and ends on the
-   word that opens the viewer, underlined on hover like a link. Carried on by a later turn, it is plain text. */
+   word that opens the viewer, underlined on hover like a link. Carried on by a later turn, or restored from a backup
+   without its working copy (COD-299), it is plain text: a paragraph that drops only its own top and bottom margins, so
+   it keeps the button's -4px and its icon lines up with the step line above it. */
 .changed-files-pending { color:var(--text); }
 .changed-files-open { color:var(--text); font-weight:600; }
 .changed-files-review:hover .changed-files-open { text-decoration:underline; text-underline-offset:2px; }
-.activity-summary.changed-files-carried { margin:0; cursor:default; }
+.activity-summary.changed-files-carried { margin-block:0; cursor:default; }
 .activity-summary.changed-files-carried:hover { background:none; color:var(--muted); }
 /* In the viewer, a tick before each changed file or folder picks what Apply takes; the box sits on the row's centre. */
 .diff-file-tick.org-checkbox { flex-shrink:0; align-items:center; gap:0; margin:0; padding:8px 2px 8px 10px; }
@@ -2076,6 +2233,53 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   .source-viewer .diff-discard .diff-action-label { display:none; }
   .source-viewer .diff-discard { width:34px; padding:0; justify-content:center; }
 }
+/* Viewing and editing a file (COD-280). The source viewer is wider than a document, so its name keeps room between
+   the close button and the actions. Opening in the default app is always an icon; in a narrow window Ask, Edit and
+   Save keep only their icons too (each button carries its name as its label). */
+.source-viewer.source-file { width:min(1040px, calc(100vw - 32px)); }
+.source-viewer .source-open-external .source-action-label { display:none; }
+.source-viewer .source-open-external { width:34px; padding:0; justify-content:center; }
+@media (max-width: 900px) {
+  .source-viewer .source-action-label,.source-viewer .edit-action-label { display:none; }
+  .source-viewer .source-ask,.source-viewer .source-edit,.source-viewer .edit-save,.source-viewer .edit-ask { width:34px; padding:0; justify-content:center; }
+}
+/* An edit mode fills the viewer's height: the editor and the picture scroll inside themselves, not the page. */
+.source-viewer.source-editing .org-viewer-scroll { display:flex; flex-direction:column; overflow:hidden; padding:14px 20px 20px; }
+.source-viewer.source-editing .source-stage { flex:1; min-height:0; width:100%; }
+.source-viewer.source-markup .source-stage { max-width:none; }
+.text-editor { flex:1; min-height:0; display:flex; flex-direction:column; border-radius:10px; background:var(--bg); overflow:hidden; }
+.text-editor .cm-editor { flex:1; min-height:0; }
+/* Find and replace, on the editor's own card above the text: fields, toggles, the count, then the replacement. */
+.find-bar { display:flex; flex-direction:column; gap:6px; padding:10px 12px 6px; }
+.find-bar-row { display:flex; align-items:center; flex-wrap:wrap; gap:4px 6px; }
+.find-bar .find-bar-field { flex:1 1 180px; max-width:340px; min-height:30px; padding:4px 10px; font-size:12.5px; background:var(--surface); border-color:transparent; }
+.find-bar-toggles { display:inline-flex; align-items:center; gap:2px; }
+.find-bar .org-button.org-button-icon { width:30px; height:30px; min-height:30px; }
+.find-bar .org-button.org-button-icon.find-bar-toggle[aria-pressed='true'] { background:var(--row-active); color:var(--text); }
+.find-bar-count { min-width:52px; font-size:12px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.find-bar .find-bar-action { min-height:30px; padding:4px 10px; font-size:12.5px; white-space:nowrap; }
+.find-bar-close { margin-left:auto; }
+/* Marking up a picture: the tools in the viewer's second row, the picture fitted on the backdrop with a soft lift. */
+.markup-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 16px; }
+.markup-swatch { display:block; width:16px; height:16px; border-radius:50%; box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--text) 22%, transparent); }
+.markup-level { display:block; border-radius:50%; background:currentColor; }
+.markup-history { display:inline-flex; align-items:center; gap:2px; }
+.markup-history .org-button.org-button-icon { width:30px; height:30px; min-height:30px; }
+/* A PDF's pages while marking up (COD-302): previous, "Page 2/5", next, at the end of the drawing bar. */
+.markup-pages { display:inline-flex; align-items:center; gap:2px; }
+.markup-pages .org-button.org-button-icon { width:30px; height:30px; min-height:30px; }
+.markup-page-count { min-width:76px; font-size:12.5px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; white-space:nowrap; }
+/* A page on its way: a sheet in a page's usual proportions, at the width pages are shown. */
+.markup-page-shape.org-skeleton { width:min(720px, 100%); height:auto; flex-shrink:0; aspect-ratio:595 / 842; border-radius:4px; }
+.markup-stage { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; }
+/* A document page keeps the viewer's reading width and scrolls down, with room for its shadow (COD-302). */
+.markup-stage.markup-stage-page { align-items:flex-start; overflow-y:auto; overflow-x:hidden; padding:0 12px 12px; }
+.markup-frame { position:relative; flex-shrink:0; border-radius:4px; box-shadow:0 1px 2px #0000001a, 0 8px 28px #0000000f; }
+/* The picture only takes focus back from a closed label; it is not a control, so it draws no ring. */
+.markup-frame:focus-visible { outline:none; }
+.markup-canvas { display:block; border-radius:4px; touch-action:none; }
+/* The label box grows with what is typed and stops at the picture's right edge (COD-292), never running past it. */
+.markup-entry.org-input { position:absolute; width:auto; field-sizing:content; min-width:4ch; min-height:0; padding:0 4px; margin:-2px 0 0 -5px; border-color:var(--accent); background:color-mix(in srgb, var(--bg) 80%, transparent); line-height:1.25; }
 /* Lines added and removed wear the diff's own colours and a heavier weight, so they read apart from the file count. */
 .diff-counts { font-variant-numeric:tabular-nums; font-weight:600; }
 .diff-count-added { color:var(--success); }
@@ -2097,9 +2301,18 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .turn-after .blocked-command { margin-left:-4px; }
 .run-error-commands { display:flex; flex-direction:column; align-items:flex-start; gap:2px; margin:6px 0 0 -4px; }
 .run-error .blocked-command:hover { background:none; }
+/* An answer cut short by the step limit (COD-257): a muted line saying so, then Continue on the latest turn, the
+   outline pill the thread's other next steps use. Both sit on one centre line and wrap under each other when narrow. */
+.out-of-steps { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin:6px 0 2px; }
+.out-of-steps p { display:flex; align-items:center; gap:6px; margin:0; color:var(--muted); font-size:13px; line-height:20px; }
+.out-of-steps p svg { flex-shrink:0; }
 /* The last lines of a blocking command's output, stdout then stderr, each under its stream's name. */
 .command-output { display:flex; flex-direction:column; gap:20px; }
 .command-output-stream { display:flex; flex-direction:column; gap:8px; }
+/* A command's output is what the process printed, not code: one colour and no ligatures, so `!==` stays three
+   characters (COD-292). */
+.command-output .source-preview { font-variant-ligatures:none; font-feature-settings:"liga" 0, "calt" 0; }
+.command-output .source-preview [class^="tok-"] { color:inherit; font-style:inherit; font-weight:inherit; }
 /* The diff viewer (COD-163), redrawn in COD-279 after the owner called it ugly: a code review surface in the app's
    quiet style. On the viewer's grey stage sit one card listing the files and one card per file; cards and a tinted
    band per hunk tell things apart, never a rule. A path keeps the file's name in full weight and lets its folder
@@ -2181,13 +2394,65 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .trace-note,.trace-text { min-width:0; overflow-wrap:anywhere; }
 .trace-text { color:var(--text); }
 .trace-target { min-width:0; padding:0 8px; border-radius:6px; background:var(--surface); color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.trace-why { flex-shrink:0; }
 .trace-row.running .trace-verb { animation:thinking-pulse 1.4s ease-in-out infinite; }
 .trace-link { padding:0; border:0; background:none; font:inherit; font-size:12px; color:var(--muted); text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
 .trace-link:hover { color:var(--text); }
 @keyframes thinking-pulse { 50% { opacity:.45; } }
+/* A crew turn as a flow diagram (COD-331, `CrewPlanFlow`): folded like the trace, open it is the lead's box, an arrow
+   down, the members' rows, and the lead combining. Boxes are bordered cards on the page colour with the orglet's face,
+   name and status mark on one centre line and its part in two lines under them. The connectors are thin lines in a
+   muted mix, part of the drawing rather than dividers: an arrow into every box, and in a row of several a bar drawn by
+   each cell, so the fan stays joined when the row scrolls sideways. Single boxes share one width; a row's cells shrink
+   to 162px, room for a name of about twelve letters, before the row scrolls, with its ends fading and the scrollbar's lane bridged by the fan's own line. */
+.crew-plan { --flow-line:color-mix(in srgb, var(--muted) 60%, var(--bg)); --flow-stub:12px; --flow-arrow:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 6'%3E%3Cpath d='M0 0h9L4.5 6z'/%3E%3C/svg%3E");
+  margin:0 0 6px -4px; padding-left:35px; font-size:13px; color:var(--muted); }
+.crew-plan > summary { list-style:none; cursor:pointer; }
+.crew-plan > summary::-webkit-details-marker { display:none; }
+.crew-plan[open] > summary .activity-chevron { transform:rotate(90deg); }
+.crew-flow { display:flex; flex-direction:column; align-items:center; width:fit-content; max-width:calc(100% - 4px); margin:6px 0 4px 4px; padding:0; list-style:none; }
+.crew-step { display:flex; width:260px; max-width:100%; }
+.crew-step > .crew-node { flex:1; }
+.crew-link { flex-shrink:0; width:9px; height:10px; background:var(--flow-line); -webkit-mask:linear-gradient(#000 0 0) center / 1px 100% no-repeat; mask:linear-gradient(#000 0 0) center / 1px 100% no-repeat; }
+.crew-link-arrow { height:22px; -webkit-mask:var(--flow-arrow) center bottom / 9px 6px no-repeat, linear-gradient(#000 0 0) center top / 1px calc(100% - 5px) no-repeat;
+  mask:var(--flow-arrow) center bottom / 9px 6px no-repeat, linear-gradient(#000 0 0) center top / 1px calc(100% - 5px) no-repeat; }
+.crew-fan { position:relative; display:flex; justify-content:center; align-self:stretch; min-width:0; }
+.crew-fan::after { content:""; position:absolute; left:50%; bottom:0; width:1px; height:var(--fan-lane, 0px); background:var(--flow-line); pointer-events:none; }
+.crew-fan-row { --strip-fade-start:0px; --strip-fade-end:0px; display:flex; max-width:100%; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain;
+  mask-image:linear-gradient(to right, transparent 0, #000 var(--strip-fade-start), #000 calc(100% - var(--strip-fade-end)), transparent 100%);
+  scrollbar-width:thin; scrollbar-color:transparent transparent; }
+.crew-fan-row:hover, .crew-fan-row:focus-within { scrollbar-color:color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
+.crew-fan-row[data-more-start] { --strip-fade-start:32px; }
+.crew-fan-row[data-more-end] { --strip-fade-end:32px; }
+.crew-cell { position:relative; display:flex; flex:1 1 0; min-width:162px; max-width:200px; padding:var(--flow-stub) 5px; }
+.crew-cell > .crew-node { flex:1; }
+.crew-cell::before, .crew-cell::after { content:""; position:absolute; left:0; right:0; height:1px; background:var(--flow-line); }
+.crew-cell::before { top:0; }
+.crew-cell::after { bottom:0; }
+.crew-cell:first-child::before, .crew-cell:first-child::after { left:50%; }
+.crew-cell:last-child::before, .crew-cell:last-child::after { right:50%; }
+.crew-cell > .crew-node::before, .crew-cell > .crew-node::after { content:""; position:absolute; left:calc(50% - 4.5px); width:9px; height:var(--flow-stub); background:var(--flow-line); }
+.crew-cell > .crew-node::before { bottom:calc(100% + 1px); -webkit-mask:var(--flow-arrow) center bottom / 9px 6px no-repeat, linear-gradient(#000 0 0) center top / 1px calc(100% - 5px) no-repeat;
+  mask:var(--flow-arrow) center bottom / 9px 6px no-repeat, linear-gradient(#000 0 0) center top / 1px calc(100% - 5px) no-repeat; }
+.crew-cell > .crew-node::after { top:calc(100% + 1px); -webkit-mask:linear-gradient(#000 0 0) center / 1px 100% no-repeat; mask:linear-gradient(#000 0 0) center / 1px 100% no-repeat; }
+.crew-node { position:relative; display:flex; flex-direction:column; gap:4px; min-width:0; margin:0; padding:8px 9px 9px; border:1px solid var(--border); border-radius:12px; background:var(--bg); color:var(--text); font:inherit; text-align:left; transition:border-color var(--motion-base) var(--ease-out); }
+button.crew-node { cursor:pointer; }
+button.crew-node:hover { background:var(--row-hover); }
+.crew-node-head { display:flex; align-items:center; gap:6px; min-width:0; height:20px; }
+.crew-node-name { flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; font-weight:600; line-height:20px; }
+.crew-node-summary { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; font-size:12px; line-height:17px; color:var(--muted); overflow-wrap:anywhere; }
+.crew-node-summary.expanded { display:block; -webkit-line-clamp:unset; }
+.crew-node-working { border-color:color-mix(in srgb, var(--working) 50%, var(--border)); }
+.crew-node-failed, .crew-node-needs_you { border-color:color-mix(in srgb, var(--error) 40%, var(--border)); }
+.crew-node-stopped .crew-node-name { color:var(--muted); }
+@media (prefers-reduced-motion: reduce) { .crew-node { transition:none; } }
+@media(max-width:1000px) { .crew-plan { padding-left:0; } }
 /* The working line under an orglet's name: muted words with a brighter band sweeping across them, left to right. */
 .run-status-line { margin:0; padding-left:39px; min-height:28px; line-height:28px; font-size:14px; color:transparent; background:linear-gradient(90deg, var(--muted) 0%, var(--muted) 38%, var(--text) 50%, var(--muted) 62%, var(--muted) 100%) 0 0 / 250% 100%; -webkit-background-clip:text; background-clip:text; animation:status-sweep 2.2s linear infinite; }
 @keyframes status-sweep { from { background-position:100% 0; } to { background-position:0% 0; } }
+/* A run waiting on the person is not working: its line holds still (COD-290). It sits under the card it waits on,
+   which starts at the section's edge, not under the name, so it starts there too. */
+.run-status-line.waiting { padding-left:0; animation:none; background:none; color:var(--muted); }
 @media (prefers-reduced-motion: reduce) { .run-status-line { animation:none; background:none; color:var(--muted); } }
 @media(max-width:1000px) { .live-run { padding-left:0; } .run-status-line { padding-left:4px; } }
 @media (prefers-reduced-motion: reduce) { .trace-row.running .trace-verb { animation:none; } .activity-chevron { transition:none; } }
@@ -2276,8 +2541,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .side-thread-origin { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:4px 10px; margin:0 0 18px; color:var(--muted); font-size:12px; text-align:center; }
 .side-thread-origin button { padding:0; border:0; background:none; color:var(--text); font:inherit; font-weight:500; cursor:pointer; }
 .side-thread-origin button:hover { text-decoration:underline; text-underline-offset:3px; }
-/* Side threads under their orglet: a clear step below the orglet's row, a small step apart from each other. */
-.tree-children .side-thread-row .history-item { gap:8px; }
+/* Side threads under their orglet: a clear step below the orglet's row, a small step apart from each other. The rows
+   sit one indent in, so their name gets every pixel the row has (COD-286): 8px after the thread line's curve, 6px
+   around the status mark and before the schedule mark, and 6px at the end while no menu shows. At 10px on both ends
+   and 8px gaps, two invoice threads read the same fourteen letters. */
+.tree-children .side-thread-row .history-item { gap:6px; padding-left:8px; padding-right:6px; }
 /* The menu floats over the row's end and only takes room while it shows, so a quiet row gives its name the full
    width instead of truncating it next to an invisible button. */
 .side-thread-row { position:relative; }
@@ -2427,8 +2695,16 @@ html[data-overlay], html[data-overlay] body, html[data-overlay] #root { backgrou
 .browser-live-viewer .org-viewer-scroll { padding:16px; }
 .browser-live-viewer-body { display:flex; flex-direction:column; gap:16px; }
 .browser-live-viewer-body>.browser-approval { width:min(100%, 640px); margin:0 auto; }
-/* With a card asking under it, the page gives up height so the question and its answers fit on screen. */
-.browser-live-viewer-body:has(>.browser-approval) :is(.browser-live-stack, .browser-live-away)[data-large] { width:min(100%, 640px); }
+/* With a card asking about a step, the card sits beside the page when there is room, so the page keeps a readable
+   size instead of shrinking to 640px (COD-292); in a narrow window the card goes under the page, which gives up height
+   so the question and its answers still fit on screen. */
+.browser-live-viewer-body:has(>.browser-approval) { display:grid; grid-template-columns:minmax(0, 1fr) 300px; align-items:start; gap:20px; }
+.browser-live-viewer-body:has(>.browser-approval)>.browser-approval { width:auto; margin:0; }
+@media (max-width:999px) {
+  .browser-live-viewer-body:has(>.browser-approval) { display:flex; }
+  .browser-live-viewer-body:has(>.browser-approval)>.browser-approval { width:min(100%, 640px); margin:0 auto; }
+  .browser-live-viewer-body:has(>.browser-approval) :is(.browser-live-stack, .browser-live-away)[data-large] { width:min(100%, calc((100dvh - 400px) * var(--browser-live-ratio, 1.6))); }
+}
 /* The live view above already shows the page with the orglet's cursor on the element, so the card drops its picture. */
 .browser-live-viewer-body .browser-approval-shot { display:none; }
 .routine-browser { display:flex; flex-direction:column; gap:16px; min-width:0; }

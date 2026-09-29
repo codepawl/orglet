@@ -32,6 +32,33 @@ function EditorHarness({ onSubmit, error, busy = false, focusField }: { onSubmit
   </TabbedFormDialog>;
 }
 
+/** Settings the way the app opens it: from a button, with `open` in state and no Radix trigger. */
+function OpenedSettingsHarness() {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<Section>('general');
+  return <>
+    <button type="button" onClick={() => setOpen(true)}>Settings</button>
+    <TabbedDialog open={open} onClose={() => setOpen(false)} title="Settings" closeLabel="Close settings" closeIcon={<span>×</span>}
+      tabs={sections} tab={tab} onTab={setTab} panelId="opened-settings-panel">
+      <p>Body of {tab}</p>
+    </TabbedDialog>
+  </>;
+}
+
+/** An editor opened from a button that lands on a named field. */
+function OpenedEditorHarness() {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<Section>('general');
+  return <>
+    <button type="button" onClick={() => setOpen(true)}>Edit crew</button>
+    <TabbedFormDialog open={open} onClose={() => setOpen(false)} title="Crew" closeLabel="Close crew" closeIcon={<span>×</span>}
+      tabs={sections} tab={tab} onTab={setTab} panelId="opened-crew-panel" onSubmit={() => {}} submitLabel="Save" busyLabel="Saving…"
+      cancelLabel="Cancel" busy={false} focusField="goal">
+      <label>Goal <input data-field="goal" /></label>
+    </TabbedFormDialog>
+  </>;
+}
+
 describe('TabbedDialog', () => {
   it('heads the panel with the open tab, its description and actions, and moves between tabs with the arrows', async () => {
     const user = userEvent.setup();
@@ -60,6 +87,18 @@ describe('TabbedDialog', () => {
     expect(onHover).toHaveBeenCalled();
   });
 
+  it('gives focus back to the button that opened it when Escape closes it', async () => {
+    const user = userEvent.setup();
+    render(<OpenedSettingsHarness />);
+    const opener = screen.getByRole('button', { name: 'Settings' });
+    opener.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('dialog', { name: 'Settings' }).contains(document.activeElement)).toBe(true);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(opener);
+  });
+
   it('has no accessibility violations', async () => {
     render(<SettingsHarness />);
     expect(await axe(document.body, { rules: { region: { enabled: false } } })).toHaveNoViolations();
@@ -83,6 +122,18 @@ describe('TabbedFormDialog', () => {
     expect(screen.getByRole('alert').textContent).toBe('Name is required');
     const save = screen.getByRole('button', { name: 'Saving…' }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
+  });
+
+  it('gives focus back to what opened it after landing on a named field', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const user = userEvent.setup();
+    render(<OpenedEditorHarness />);
+    const opener = screen.getByRole('button', { name: 'Edit crew' });
+    await user.click(opener);
+    await waitFor(() => expect((document.activeElement as HTMLElement | null)?.dataset.field).toBe('goal'));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(opener);
   });
 
   it('lands on the named field when it opens', async () => {

@@ -26,8 +26,9 @@ function isContainer(value: JsonValue): value is JsonValue[] | { [key: string]: 
 }
 
 function summary(value: JsonValue[] | { [key: string]: JsonValue }) {
-  if (Array.isArray(value)) return t('{0} phần tử', [value.length.toLocaleString()]);
-  return t('{0} trường', [Object.keys(value).length.toLocaleString()]);
+  if (Array.isArray(value)) return value.length === 1 ? t('1 phần tử') : t('{0} phần tử', [value.length.toLocaleString()]);
+  const fieldCount = Object.keys(value).length;
+  return fieldCount === 1 ? t('1 trường') : t('{0} trường', [fieldCount.toLocaleString()]);
 }
 
 function Scalar({ value }: { value: null | boolean | number | string }) {

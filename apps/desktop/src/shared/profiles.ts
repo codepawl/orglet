@@ -22,12 +22,35 @@ export const ExactMatchAccuracy = ExactMatchRequest.safeExtend({
   ? result.reason === null && result.total !== null && result.total > 0 && result.matched !== null && result.matched <= result.total && result.accuracy === result.matched / result.total
   : result.reason !== null && result.matched === null && result.accuracy === null, 'Kết quả exact-match không nhất quán.');
 export type ExactMatchAccuracy = z.infer<typeof ExactMatchAccuracy>;
+/** What a column mostly holds. A CSV is read as text, so this comes from the values, not from the file. */
+export const ColumnKind = z.enum(['number', 'date', 'text', 'empty', 'other']);
+export type ColumnKind = z.infer<typeof ColumnKind>;
+// Fields after distinctNonNull were added with COD-297; profiles saved before it stay valid without them.
+const ColumnFacts = z.object({
+  name: z.string(), type: z.string(), nulls: Count, distinctNonNull: Count,
+  kind: ColumnKind.optional(),
+  /** Values that do not fit the kind: text in a number column, or anything but a real date in a date column. */
+  misfits: Count.optional(),
+  /** Values written like a date that name a day that does not exist, such as 2024-02-30. */
+  invalidDates: Count.optional(),
+  range: z.object({ minimum: z.number(), maximum: z.number(), negatives: Count }).nullable().optional(),
+});
+export type ColumnFacts = z.infer<typeof ColumnFacts>;
+/** Rows that share a key (every cell, or one column's value), counted in full; the first groups listed by row number. */
+const RowRepeats = z.object({
+  repeatedRows: Count,
+  groupCount: Count,
+  groups: z.array(z.object({ rows: z.array(Count).min(2).max(10), size: Count })).max(10),
+});
+export type RowRepeats = z.infer<typeof RowRepeats>;
 export const DatasetProfile = z.object({
   engine: z.string(), coverage: z.literal('full'), checks: z.array(z.string()), limitations: z.array(z.string()),
   datasets: z.array(z.object({
     sourceId: z.string().uuid(), rows: Count,
-    columns: z.array(z.object({ name: z.string(), type: z.string(), nulls: Count, distinctNonNull: Count })).max(128),
-    id: z.object({ column: z.string(), nulls: Count, duplicateNonNull: Count }).nullable(),
+    columns: z.array(ColumnFacts).max(128),
+    id: z.object({ column: z.string(), nulls: Count, duplicateNonNull: Count, repeats: RowRepeats.optional() }).nullable(),
+    duplicateRows: RowRepeats.optional(),
+    firstColumn: RowRepeats.extend({ column: z.string() }).nullable().optional(),
   })).min(1).max(2),
   // Fields after sameIdOrder were added later; stored profiles without them stay valid and never satisfy alignment gates.
   comparison: z.object({ schemaMatches: z.boolean(), overlappingDistinctIds: Count.nullable(), sameIdOrder: z.boolean().nullable(), columnsMatch: z.boolean().optional(), rowCountsMatch: z.boolean().optional(), onlyInFirst: Count.nullable().optional(), onlyInSecond: Count.nullable().optional() }).nullable(),

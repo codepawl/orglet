@@ -25,6 +25,45 @@ export const harnessLoginArgs: Record<HarnessCatalogId, readonly string[]> = {
 };
 
 /**
+ * Harnesses Settings can sign in without a terminal (COD-327). Codex answers through its app server, which hands back
+ * the page to open; Claude Code and Cursor Agent run their own login, which opens the browser and finishes there
+ * without a pasted code. Gemini CLI signs in from its own menu, so it keeps the copied command.
+ */
+export const harnessSignsInApp: Record<HarnessCatalogId, boolean> = { 'claude-code': true, codex: true, cursor: true, gemini: false };
+
+/** Sign-out subcommands from each CLI's own help. Gemini CLI signs out only with `/logout` inside its own window. */
+export const harnessLogoutArgs: Record<HarnessCatalogId, readonly string[] | undefined> = {
+  'claude-code': ['auth', 'logout'],
+  codex: ['logout'],
+  cursor: ['logout'],
+  gemini: undefined,
+};
+
+/**
+ * Whether signing in or out reaches every account of this CLI on the computer. The default account is the CLI's own
+ * home folder. Cursor Agent keeps its sign-in in one place per computer (`%APPDATA%\Cursor\auth.json` on Windows, the
+ * Keychain on macOS) whatever CURSOR_CONFIG_DIR says, so its added accounts share it.
+ */
+export const harnessSignInIsMachineWide = (id: HarnessCatalogId, accountId: string) => accountId === SYSTEM_ACCOUNT_ID || id === 'cursor';
+
+/** A sign-in Settings started for one account: still waiting for the browser, or ended with the CLI's reason. */
+export type HarnessSignIn = { accountId: string; state: 'waiting' } | { accountId: string; state: 'failed'; message: string };
+
+/**
+ * The only pages main opens for a sign-in: Codex's app server names an OpenAI address. Claude Code and Cursor Agent
+ * open their own pages, so nothing else ever needs to pass here.
+ */
+export function signInPageAllowed(address: string): boolean {
+  try {
+    const url = new URL(address);
+    const host = url.hostname.toLowerCase();
+    return url.protocol === 'https:' && (host === 'auth.openai.com' || host === 'chatgpt.com' || host.endsWith('.openai.com'));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Folder each CLI keeps its own config and credentials in. Setting it per probe and per run is what lets one
  * machine hold several accounts of the same CLI: an account is a folder, nothing more.
  */
@@ -84,12 +123,17 @@ export type HarnessInfo = {
   accountId: string;
   accounts: HarnessAccount[];
   configDir?: string;
+  /** A sign-in Settings started for the account shown, while it waits or after it failed (COD-327). */
+  signIn?: HarnessSignIn;
 };
 
 /** One rolling allowance of a subscription plan, as the CLI's vendor reports it for the signed-in account. */
 export type HarnessUsageWindow = {
-  kind: 'session' | 'weekly' | 'monthly';
-  /** The model this allowance is limited to, when it is not the whole plan (Claude's weekly allowance for one model). */
+  kind: 'session' | 'daily' | 'weekly' | 'monthly';
+  /**
+   * The model or pool this allowance is limited to, when it is not the whole plan: Claude's weekly allowance for one
+   * model, Cursor's Auto and API pools, Gemini CLI's daily allowance for one model.
+   */
   model?: string;
   /** 0 to 100. */
   usedPercent: number;
@@ -97,10 +141,30 @@ export type HarnessUsageWindow = {
 };
 
 /**
- * Why an account shows no allowance: the CLI reports none (Cursor Agent, Gemini CLI, an API-key sign-in), the account is
+ * Why an account shows no allowance: its sign-in has none to report (an API key, a plan without one), the account is
  * signed out, its saved sign-in has expired until the CLI runs again, or the read failed this time.
  */
 export type HarnessUsageGap = 'unsupported' | 'signed_out' | 'expired' | 'failed';
+
+/**
+ * Resets of the session allowance a Claude plan holds in the bank (COD-328): how many can be spent now, and when the
+ * one spent next runs out, when Claude says. Present only when there is at least one.
+ */
+export type HarnessBankedResets = { count: number; expiresAt?: string };
+
+/**
+ * What became of a request to spend one banked reset. The first four are Claude's answer to a claim; the rest mean
+ * nothing was spent (`expired`, `unreadable`, `rate_limited`, `cooling_down`, `failed`) or Claude could not say
+ * whether it was (`unconfirmed`, `no_answer`), in which case a retry sends the same claim again.
+ */
+export type HarnessResetOutcome = 'reset' | 'not_limited' | 'already_used' | 'none_left'
+  | 'expired' | 'unreadable' | 'rate_limited' | 'cooling_down' | 'failed' | 'unconfirmed' | 'no_answer';
+
+/** The answers to a claim that Claude gave, which the window words; every other outcome is an error. */
+export type HarnessResetAnswer = Extract<HarnessResetOutcome, 'reset' | 'not_limited' | 'already_used' | 'none_left'>;
+
+/** A claim Claude answered, with the plan usage read again after it. */
+export type HarnessResetClaim = { outcome: HarnessResetAnswer; usage: HarnessUsage };
 
 /** What the vendor says about one account: who is signed in, on which plan, and how much of it is used. */
 export type HarnessAccountUsage = {
@@ -108,8 +172,14 @@ export type HarnessAccountUsage = {
   email?: string;
   plan?: string;
   windows: HarnessUsageWindow[];
+  bankedResets?: HarnessBankedResets;
   unavailable?: HarnessUsageGap;
   checkedAt: string;
+  /**
+   * When this read could not get fresh numbers (an expired saved sign-in, a failed request), the windows are the last
+   * good reading of the same account and this is when it was taken (COD-301). Absent when the windows are fresh.
+   */
+  asOf?: string;
 };
 
 /** Every account of every installed harness, the system account first. */

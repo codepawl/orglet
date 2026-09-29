@@ -93,3 +93,11 @@
 @media (prefers-reduced-motion: reduce) {
   .org-attachment { animation: none; }
 }
+/* A file that can no longer be used keeps its place in the row but steps back: an outline instead of the filled
+   surface, and muted words, so it is told apart without a colour of its own. */
+.org-attachment-inactive {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--org-border, #e5e5e5);
+}
+.org-attachment-inactive .org-attachment-icon,
+.org-attachment-inactive .org-attachment-name { color: var(--org-muted, #666); }

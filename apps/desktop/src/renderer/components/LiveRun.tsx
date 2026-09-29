@@ -193,26 +193,44 @@ const inChromeDoing: Doing = { state: 'pausing', sentence: () => t('Bạn đang 
 const handBackDoing: Doing = { state: 'waiting', sentence: name => t('{0} đang chờ bạn trả lại trình duyệt…', [name]), line: () => t('Đang chờ bạn trả lại trình duyệt…') };
 
 /**
- * The island of a run that uses Orglet's browser (COD-261): waiting on the card that asks about a step, or, while
- * the person has taken the browser over, saying so with Watch (unless the tabs are in Chrome) and Hand back;
- * otherwise the run's own island with Watch, which opens the live view where Take over is.
+ * The island of a run that uses Orglet's browser (COD-261): while the person has taken the browser over, saying so
+ * with Watch (unless the tabs are in Chrome) and Hand back, even when a card waits on a step, since the card cannot be
+ * answered until the browser is handed back (COD-257); otherwise waiting on that card, or the run's own island with
+ * Watch, which opens the live view where Take over is.
  */
 export function withBrowserControls(view: IslandView, live: BrowserLive | undefined, workers: readonly Worker[], controls: { watch: () => void; handBack: () => void }): IslandView {
   if (!live) return view;
-  if (live.approval) return islandFor(askingDoing, workers);
   const watch = { kind: 'watch' as const, label: t('Theo dõi'), onSelect: controls.watch };
-  if (live.takenOver) {
+  const waiting = browserWaitingDoing(live);
+  if (live.takenOver && waiting) {
     const handBack = { kind: 'handBack' as const, label: t('Trả lại'), onSelect: controls.handBack };
-    const doing = live.waiting ? handBackDoing : live.inChrome ? inChromeDoing : holdingDoing;
-    return { ...islandFor(doing, workers), actions: live.inChrome ? [handBack] : [watch, handBack] };
+    return { ...islandFor(waiting, workers), actions: live.inChrome ? [handBack] : [watch, handBack] };
   }
+  if (waiting) return islandFor(waiting, workers);
   if (live.using) return { ...view, actions: [watch] };
   return view;
+}
+
+/** What a run's browser waits on the person for: to hand it back, while they hold it, or to answer a step's card. */
+function browserWaitingDoing(live: BrowserLive): Doing | undefined {
+  if (live.takenOver) return live.waiting ? handBackDoing : live.inChrome ? inChromeDoing : holdingDoing;
+  if (live.approval) return askingDoing;
+  return undefined;
 }
 
 /** The island of a run whose desktop step waits on its card (COD-261, phase 2a): it waits for the person's OK, like the browser's. */
 export function withDesktopApproval(view: IslandView, live: DesktopLive | undefined, workers: readonly Worker[]): IslandView {
   return live?.approval ? islandFor(askingDoing, workers) : view;
+}
+
+/**
+ * The chat's working line while the run waits on the person (COD-290): the island's words for a browser or desktop
+ * card, or for the browser they hold, instead of the step the run stopped on ("Writing a reply…" under an Allow
+ * card). Undefined while nothing waits on them.
+ */
+export function waitingStepLine(browser: BrowserLive | undefined, desktop: DesktopLive | undefined): string | undefined {
+  const waiting = (browser ? browserWaitingDoing(browser) : undefined) ?? (desktop?.approval ? askingDoing : undefined);
+  return waiting?.line();
 }
 
 /**
@@ -254,10 +272,11 @@ export function runStepLine({ progress, stage, message, pausing }: { progress?: 
 /**
  * What the run is doing, as one line under the orglet's name in the chat while no answer text has arrived: the same
  * words as the island, with a light sweeping across them so the chat itself shows the work is alive (owner,
- * 2026-09-26). The island already announces the state, so this line is not announced again.
+ * 2026-09-26). The island already announces the state, so this line is not announced again. `waiting` is a run
+ * stopped on the person (COD-290): nothing is at work, so the line holds still.
  */
-export function RunStatusLine({ line }: { line: string }) {
-  return <p className="run-status-line" aria-hidden="true">{line}</p>;
+export function RunStatusLine({ line, waiting = false }: { line: string; waiting?: boolean }) {
+  return <p className={waiting ? 'run-status-line waiting' : 'run-status-line'} aria-hidden="true">{line}</p>;
 }
 
 /** The live timer; `plain` is the line standing on its own above the text, in the folded control's place and colour. */

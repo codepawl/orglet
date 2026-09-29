@@ -24,7 +24,7 @@ try {
   await page.getByRole('button', { name: 'Tạo knowledge', exact: true }).click();
   await page.getByRole('textbox', { name: 'Tiêu đề', exact: true }).fill('Evidence limits');
   await page.getByRole('textbox', { name: 'Nội dung', exact: true }).fill('State which claims lack a cited source before summarizing.');
-  await page.getByRole('textbox', { name: 'Tags', exact: true }).fill('evidence, review');
+  await page.getByRole('textbox', { name: 'Thẻ', exact: true }).fill('evidence, review');
   await page.getByRole('combobox', { name: 'Phạm vi', exact: true }).click(); await page.getByRole('option', { name: team.name, exact: true }).click();
   await page.getByRole('switch', { name: /Luôn nạp/ }).click();
   await page.getByRole('button', { name: 'Lưu knowledge', exact: true }).click();
@@ -78,7 +78,8 @@ try {
   // The context manifest sits in the technical dialog now.
   await page.getByRole('button', { name: 'Chi tiết kỹ thuật', exact: true }).click();
   await page.getByText(/Context đã nạp/).first().click();
-  await page.getByText('Knowledge: Evidence limits · v2', { exact: false }).first().waitFor();
+  // The row says why the note loaded (COD-306): it is pinned.
+  await page.getByText('Knowledge: Evidence limits · luôn nạp · v2', { exact: false }).first().waitFor();
   // Templates reuse the same text for team instructions and the skill; the manifest shows the duplicate was dropped.
   await page.getByText('Kỹ năng · v1 · trùng nội dung đã nạp').first().waitFor();
 

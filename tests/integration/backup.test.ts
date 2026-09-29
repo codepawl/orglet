@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import { Backups } from '../../apps/desktop/src/core/storage/backup';
 import { ChatSearch } from '../../apps/desktop/src/core/storage/chat-search';
 import { BudgetLedger } from '../../apps/desktop/src/core/budgets/ledger';
 import { CoreService } from '../../apps/desktop/src/core/service';
 import { Report, type Run, type Task, type Worker, type Skill, type Source } from '../../apps/desktop/src/shared/contracts';
+import { WorkspaceRecovery } from '../../apps/desktop/src/core/storage/workspace-recovery';
+import { changeOutcomeOf } from '../../apps/desktop/src/shared/workspace-recovery';
 
 const stores: Store[] = [];
 const create = () => { const store = new Store(':memory:'); stores.push(store); return store; };
@@ -30,6 +35,21 @@ const resign = (text: string, mutate: (payload: any) => void) => {
 };
 
 describe('workspace backup and additive restore', () => {
+  it('exports and restores a run whose hand-in a failed command blocked', () => {
+    const original = create();
+    const fixtureData = fixture(original);
+    const blockedHandIn = {
+      commands: [{ processId: crypto.randomUUID(), program: 'shell' as const, arguments: ['npm test'], state: 'exited' as const, exitCode: 1 }],
+      copyFingerprint: 'c'.repeat(64),
+    };
+    original.update('runs', { ...fixtureData.run, status: 'failed', error: 'npm test exited with 1.', errorCode: 'hand_in_blocked', blockedHandIn });
+    const text = backups(original).export();
+    const restored = create();
+    const manager = backups(restored);
+    manager.restore(manager.preview(text).token);
+    expect(restored.get<Run>('runs', fixtureData.run.id)).toMatchObject({ errorCode: 'hand_in_blocked', blockedHandIn });
+  });
+
   it('keeps cited workspace read metadata without local paths or contents, and marks restored grants unavailable', () => {
     const original = create();
     const fixtureData = fixture(original);
@@ -190,5 +210,227 @@ describe('workspace backup and additive restore', () => {
     const core = new CoreService(target, () => {}, async () => { throw new Error('No paid requests'); });
     const saved = await core.command('saveWorker', { ...worker, name: 'Local edit after restore' }) as Worker;
     expect(saved.revision).toBe(3);
+  });
+});
+
+describe('restoring after deleting chats, and onto a new computer (COD-281)', () => {
+  const cores: CoreService[] = [];
+  const directories: string[] = [];
+  afterEach(async () => {
+    for (const core of cores.splice(0)) await core.runner.shutdown();
+    for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true });
+  });
+  const coreFor = (store: Store) => {
+    const core = new CoreService(store, () => {}, async () => { throw new Error('No paid requests'); });
+    cores.push(core);
+    return core;
+  };
+  const restoreInto = (store: Store, text: string) => {
+    const manager = backups(store);
+    manager.restore(manager.preview(text).token);
+  };
+  const reportOf = (title: string) => {
+    const report = { title, summary: 'Answer', findings: [], limitations: [] };
+    return { report, hash: createHash('sha256').update(JSON.stringify(report)).digest('hex') };
+  };
+  /** A finished chat whose one turn cost money and answered, and a free chat that never made a request. */
+  function paidAndFreeChats(store: Store) {
+    const paid = fixture(store);
+    const input = { brief: paid.task.brief, sourceIds: paid.task.sourceIds };
+    store.update('tasks', { ...paid.task, status: 'completed' });
+    store.update('runs', { ...paid.run, status: 'completed', snapshot: { ...paid.run.snapshot, input, inputRevision: 0 } });
+    paid.ledger.settle(paid.reservation, 100, 100);
+    const answer = reportOf('Paid answer');
+    store.put('artifacts', { id: id(), runId: paid.run.id, ...answer, createdAt: now() }, { column: 'run_id', value: paid.run.id });
+    const worker = store.all<Worker>('workers')[0];
+    const free: Task = { id: id(), workerId: worker.id, brief: 'Free chat', status: 'completed', sourceIds: [], consent: false, accepted: false, budgetMicros: 100_000, createdAt: now() };
+    store.put('tasks', free);
+    return { paid, free };
+  }
+  const liveBriefs = (store: Store) => store.workspace().tasks.map(task => task.brief).sort();
+  const countOf = (store: Store, table: string) => Number(store.db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()!.count);
+
+  it('brings the chats back after Delete chat history, with their answers, and counts their cost once', async () => {
+    const store = create(); const core = coreFor(store);
+    const { paid, free } = paidAndFreeChats(store);
+    const text = backups(store).export();
+    const usage = store.usage();
+    const reservationCount = countOf(store, 'reservations');
+    await core.command('eraseData', { scope: 'chats' });
+    expect(liveBriefs(store)).toEqual([]);
+    expect(store.get<Task>('tasks', paid.task.id).deletedAt).toBeDefined();
+
+    restoreInto(store, text);
+    expect(liveBriefs(store)).toEqual(['Free chat', 'Restore history']);
+    const detail = store.detail(paid.task.id);
+    expect(detail.task.deletedAt).toBeUndefined();
+    expect(detail.runs[0].snapshot.input?.brief).toBe('Restore history');
+    expect(detail.artifacts.map(artifact => artifact.report.title)).toEqual(['Paid answer']);
+    expect(detail.events.map(event => event.message)).toEqual(['Fixture event']);
+    expect(store.detail(free.id).task.brief).toBe('Free chat');
+    expect(store.usage()).toEqual(usage);
+    expect(countOf(store, 'reservations')).toBe(reservationCount);
+    expect(new ChatSearch(store).search('Restore').chats.map(hit => hit.taskId)).toEqual([paid.task.id]);
+
+    restoreInto(store, text);
+    expect(liveBriefs(store)).toEqual(['Free chat', 'Restore history']);
+    expect(store.usage()).toEqual(usage);
+  });
+
+  it('keeps the turns written after the backup as deleted when it brings a chat back', async () => {
+    const store = create(); const core = coreFor(store);
+    const { paid } = paidAndFreeChats(store);
+    const text = backups(store).export();
+    const laterInput = { brief: 'A later question', sourceIds: paid.task.sourceIds };
+    store.update('tasks', { ...store.get<Task>('tasks', paid.task.id), inputRevision: 1, currentInput: laterInput });
+    const laterRun: Run = { ...paid.run, id: id(), status: 'completed', snapshot: { ...paid.run.snapshot, input: laterInput, inputRevision: 1 } };
+    store.put('runs', laterRun, { column: 'task_id', value: paid.task.id });
+    const laterReservation = paid.ledger.reserve(laterRun.id, paid.task.id, 'openai', 1000, 100_000, 5_000_000);
+    paid.ledger.settle(laterReservation, 50, 50);
+    const usage = store.usage();
+    await core.command('eraseData', { scope: 'chats' });
+
+    restoreInto(store, text);
+    const detail = store.detail(paid.task.id);
+    expect(detail.task).toMatchObject({ brief: 'Restore history', inputRevision: 1, currentInput: { brief: '(đã xóa)' } });
+    expect(detail.task.deletedAt).toBeUndefined();
+    expect(detail.runs.map(run => run.snapshot.input?.brief)).toEqual(['Restore history', '(đã xóa)']);
+    expect(store.usage()).toEqual(usage);
+    expect(() => backups(store).preview(backups(store).export())).not.toThrow();
+  });
+
+  /** A working copy as the runtime stores it, with a private folder, a path and a hash the backup must not carry. */
+  function storeCopy(store: Store, runId: string, fields: Record<string, unknown>) {
+    const data = { runId, directory: 'C:\\private\\copies\\never-export', kind: 'git-worktree', edits: 1, baseline: { files: [] },
+      changes: [{ path: 'src/secret-name.ts', status: 'applied', hash: 'd'.repeat(64) }], ...fields };
+    store.db.prepare('INSERT INTO workspace_copies(run_id,data) VALUES(?,?)').run(runId, JSON.stringify(data));
+  }
+
+  it('brings a turn’s files line back after Delete chat history, with its counts and outcome but no files (COD-299)', async () => {
+    const store = create(); const core = coreFor(store);
+    const { paid } = paidAndFreeChats(store);
+    const diff = { files: 3, additions: 42, deletions: 7, moved: 1 };
+    storeCopy(store, paid.run.id, { state: 'integrated', diff, review: { state: 'applied', heldAt: now(), decidedAt: now(), skipped: 1 } });
+    const lineBefore = new WorkspaceRecovery(store).view(paid.task.id).copies[0];
+    expect(changeOutcomeOf(lineBefore)).toEqual({ state: 'applied', skipped: 1 });
+
+    const text = backups(store).export();
+    const saved = JSON.parse(text).payload.changedFiles;
+    expect(saved).toEqual([{ runId: paid.run.id, diff, outcome: { state: 'applied', skipped: 1 } }]);
+    expect(text).not.toContain('never-export');
+    expect(text).not.toContain('secret-name');
+    expect(text).not.toContain('d'.repeat(64));
+
+    await core.command('eraseData', { scope: 'chats' });
+    expect(countOf(store, 'workspace_copies')).toBe(0);
+    restoreInto(store, text);
+    const view = new WorkspaceRecovery(store).view(paid.task.id);
+    expect(view.copies).toEqual([]);
+    expect(view.restored).toEqual([{ runId: paid.run.id, diff, outcome: { state: 'applied', skipped: 1 } }]);
+
+    // A backup of the restored chat keeps the line, and deleting the chat again takes it away.
+    expect(JSON.parse(backups(store).export()).payload.changedFiles).toEqual(saved);
+    await core.command('eraseData', { scope: 'chats' });
+    expect(store.db.prepare(`SELECT COUNT(*) AS count FROM settings WHERE id LIKE 'workspace-restored:%'`).get()!.count).toBe(0);
+  });
+
+  it('keeps the working copy here over a restored line, and skips runs that changed nothing (COD-299)', () => {
+    const store = create();
+    const { paid, free } = paidAndFreeChats(store);
+    const emptyRun: Run = { id: id(), taskId: free.id, status: 'completed', snapshot: paid.run.snapshot, startedAt: now(), error: null };
+    store.put('runs', emptyRun, { column: 'task_id', value: free.id });
+    storeCopy(store, paid.run.id, { state: 'ready', diff: { files: 1, additions: 2, deletions: 0 }, review: { state: 'pending', heldAt: now() } });
+    storeCopy(store, emptyRun.id, { state: 'integrated', diff: { files: 0, additions: 0, deletions: 0 } });
+    const text = backups(store).export();
+    expect(JSON.parse(text).payload.changedFiles).toEqual([{ runId: paid.run.id, diff: { files: 1, additions: 2, deletions: 0 }, outcome: { state: 'pending' } }]);
+    restoreInto(store, text);
+    const view = new WorkspaceRecovery(store).view(paid.task.id);
+    expect(view.restored).toBeUndefined();
+    expect(view.copies[0].review?.state).toBe('pending');
+  });
+
+  it('refuses a files line for a run the backup does not have (COD-299)', () => {
+    const store = create();
+    paidAndFreeChats(store);
+    const text = resign(backups(store).export(), payload => {
+      payload.changedFiles = [{ runId: id(), diff: { files: 1, additions: 1, deletions: 0 } }];
+    });
+    expect(() => backups(store).preview(text)).toThrow('Dòng tệp đã sửa');
+  });
+
+  it('refuses a backup whose run differs from the deleted one, even for a deleted chat', async () => {
+    const store = create(); const core = coreFor(store);
+    const { paid } = paidAndFreeChats(store);
+    const text = backups(store).export();
+    await core.command('eraseData', { scope: 'chats' });
+    const changed = resign(text, payload => { payload.runs[0].snapshot.worker.name = 'Someone else'; });
+    const manager = backups(store);
+    expect(() => manager.restore(manager.preview(changed).token)).toThrow('xung đột');
+    expect(store.get<Task>('tasks', paid.task.id).deletedAt).toBeDefined();
+  });
+
+  it('replaces the untouched Researcher of a new computer instead of adding a second one', () => {
+    const original = create(); paidAndFreeChats(original);
+    const originalWorker = original.all<Worker>('workers')[0];
+    const text = backups(original).export();
+    const fresh = create();
+    restoreInto(fresh, text);
+    expect(fresh.workspace().workers.map(worker => worker.id)).toEqual([originalWorker.id]);
+    expect(fresh.all<Skill>('skills').map(skill => skill.id)).toEqual([originalWorker.skillId]);
+    expect(countOf(fresh, 'revisions')).toBe(countOf(original, 'revisions'));
+  });
+
+  it('keeps a Researcher the person already used on the new computer', () => {
+    const original = create(); paidAndFreeChats(original);
+    const text = backups(original).export();
+    const used = create(); const localWorker = used.all<Worker>('workers')[0];
+    used.put('tasks', { id: id(), workerId: localWorker.id, brief: 'Local chat', status: 'completed', sourceIds: [], consent: false, accepted: false, budgetMicros: 100_000, createdAt: now() } satisfies Task);
+    restoreInto(used, text);
+    expect(used.workspace().workers).toHaveLength(2);
+  });
+
+  it('keeps orglets deleted or archived when the backup was saved that way', async () => {
+    const original = create(); const core = coreFor(original);
+    paidAndFreeChats(original);
+    const skillId = original.all<Skill>('skills')[0].id;
+    const helper = await core.command('saveWorker', { name: 'Temp helper', instructions: 'Help.', provider: 'demo', skillId }) as Worker;
+    const resting = await core.command('saveWorker', { name: 'Resting', instructions: 'Rest.', provider: 'demo', skillId }) as Worker;
+    await core.command('deleteEntity', { kind: 'worker', id: helper.id });
+    await core.command('archiveEntity', { kind: 'worker', id: resting.id, archived: true });
+    const text = backups(original).export();
+
+    const fresh = create();
+    restoreInto(fresh, text);
+    const workspace = fresh.workspace();
+    expect(workspace.workers.map(worker => worker.name)).toEqual(['Researcher']);
+    expect(workspace.archivedWorkers.map(worker => worker.name)).toEqual(['Resting']);
+    expect(fresh.entityState().workers[helper.id]?.deletedAt).toBeDefined();
+  });
+
+  it('lets the person point a restored attachment at the same file, and only the same file', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orglet-restore-'));
+    directories.push(directory);
+    const original = create(); const originalCore = coreFor(original);
+    const path = join(directory, 'budget.csv');
+    await writeFile(path, 'item,amount\nads,120\n');
+    const [source] = await originalCore.sources.import([path]);
+    const worker = original.all<Worker>('workers')[0];
+    const task: Task = { id: id(), workerId: worker.id, brief: 'Read the budget', status: 'completed', sourceIds: [source.id], consent: false, accepted: false, budgetMicros: 100_000, createdAt: now() };
+    original.put('tasks', task);
+    const text = backups(original).export();
+
+    const fresh = create(); const core = coreFor(fresh);
+    restoreInto(fresh, text);
+    await expect(core.sources.read(source.id, [source.id])).rejects.toThrow('thu hồi');
+    const other = join(directory, 'other.csv');
+    await writeFile(other, 'item,amount\nads,999\n');
+    await expect(core.relinkSource({ taskId: task.id, sourceId: source.id, path: other })).rejects.toThrow('không khớp');
+    await expect(core.relinkSource({ taskId: id(), sourceId: source.id, path })).rejects.toThrow();
+    const relinked = await core.relinkSource({ taskId: task.id, sourceId: source.id, path });
+    expect(relinked.revoked).toBe(false);
+    expect(await core.sources.read(source.id, [source.id])).toBe('item,amount\nads,120\n');
+
+    await core.command('revoke', { id: source.id });
+    await expect(core.relinkSource({ taskId: task.id, sourceId: source.id, path })).rejects.toThrow();
   });
 });

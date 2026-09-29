@@ -3,8 +3,9 @@ import type { ContextManifest, RunContext } from '../../shared/knowledge';
 import { fingerprint } from '../tools/sources';
 import { turnMessageId } from '../../shared/message-interactions';
 import type { ChatQuote } from '../../shared/side-threads';
+import { THREAD_VERBATIM_TURNS } from '../../shared/thread-limits';
 
-export const HISTORY_TURNS = 10;
+export const HISTORY_TURNS = THREAD_VERBATIM_TURNS;
 export const HISTORY_TURN_CHARS = 4_000;
 export const HISTORY_CHARS = 24_000;
 export const SUMMARY_BYTES = 8_000;

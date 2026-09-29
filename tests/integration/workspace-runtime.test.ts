@@ -299,7 +299,9 @@ it('lets Codex correct an invalid report without repeating a committed workspace
   const detail = store.detail(task.id);
   expect(requests).toBe(4);
   expect(detail.task.status).toBe('completed');
-  expect(detail.events.some(event => event.message.includes('summary (invalid_type'))).toBe(true);
+  // The person reads a plain sentence (COD-292); the model got the field path to correct.
+  expect(detail.events.some(event => event.message === 'Báo cáo Tí nộp thiếu phần bắt buộc hoặc có phần sai dạng.')).toBe(true);
+  expect(JSON.stringify(detail.events)).not.toContain('invalid_type');
   expect(JSON.stringify(detail.events)).not.toContain('UNSAFE_INVALID_BODY');
   expect(store.db.prepare("SELECT COUNT(*) AS count FROM tool_calls WHERE run_id=? AND replay='never'").get(run.id)!.count).toBe(1);
   expect(await readFile(join(source, 'note.txt'), 'utf8')).toBe('updated');

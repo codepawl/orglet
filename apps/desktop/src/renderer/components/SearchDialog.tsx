@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { CornerDownLeft, Search, X } from 'lucide-react';
 import type { Task, Team, Worker, Workspace } from '../../shared/contracts';
 import { markMatches, type ChatSearchHit, type ChatSearchResult, type SnippetPart } from '../../shared/chat-search';
+import { chatHeadline } from '../../shared/forward';
 import { liveTeamTask, liveWorkerTask } from '../../shared/live-task';
 import { Button } from './ui';
 import { Avatar, RosterAvatars } from './Avatar';
@@ -36,7 +37,6 @@ const GROUP_TITLES: Record<SearchRow['kind'], () => string> = {
   chat: () => t('Các cuộc trò chuyện'),
 };
 
-const firstLine = (text: string) => text.split('\n')[0].trim();
 
 /** The orglets whose faces a chat wears: a crew's members, a group chat's orglets, or its one orglet, archived or not. */
 function chatFaces(task: Task, workspace: SearchWorkspace): Worker[] {
@@ -60,10 +60,10 @@ function chatOwner(task: Task, workspace: SearchWorkspace, faces: readonly Worke
  */
 function chatLabel(task: Task, workspace: SearchWorkspace, faces: readonly Worker[]): { name: string; detail?: string } {
   const owner = chatOwner(task, workspace, faces);
-  if (task.sideOf) return { name: task.title || firstLine(task.brief), detail: owner ? t('chat phụ · {0}', [owner]) : t('chat phụ') };
+  if (task.sideOf) return { name: task.title || chatHeadline(task), detail: owner ? t('chat phụ · {0}', [owner]) : t('chat phụ') };
   if (task.title) return { name: task.title, detail: owner };
-  if (owner) return { name: owner, detail: firstLine(task.brief) };
-  return { name: firstLine(task.brief) };
+  if (owner) return { name: owner, detail: chatHeadline(task) };
+  return { name: chatHeadline(task) };
 }
 
 function Marked({ parts }: { parts: readonly SnippetPart[] }) {

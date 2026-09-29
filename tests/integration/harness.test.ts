@@ -9,7 +9,7 @@ import { candidates, detectHarnesses, harnessAccountEnv, type Probe } from '../.
 import { HarnessAccounts } from '../../apps/desktop/src/core/harness/accounts';
 import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTerminationError, killTree, stopHarnessProcess, stderrTail, parseClaudeOutput, parseCodexOutput, parseCursorOutput, type HarnessRequest } from '../../apps/desktop/src/core/harness/exec';
 import { harnessNames, harnessReady, harnessStatus, loginCommand, loginCommands, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
-import type { Source, Task, Worker } from '../../apps/desktop/src/shared/contracts';
+import { MAX_CHAT_MESSAGE_CHARACTERS, type Source, type Task, type Worker } from '../../apps/desktop/src/shared/contracts';
 import { invoicePdf } from './pdf-fixture';
 
 let directory: string;
@@ -419,8 +419,9 @@ describe('accounts', () => {
 describe('runner integration', () => {
   let store: Store; let core: CoreService; let sources: Source[]; let detected: HarnessInfo[];
   let requests: (HarnessRequest & { files: Record<string, string> })[]; let reply: (request: HarnessRequest) => Promise<unknown>;
+  let reportedContext: { usedTokens: number; windowTokens?: number } | undefined;
   beforeEach(async () => {
-    store = new Store(':memory:'); requests = [];
+    store = new Store(':memory:'); requests = []; reportedContext = undefined;
     detected = [
       fixture({ id: 'claude-code', executable: 'claude.exe', version: '2.1.270 (Claude Code)', auth: 'logged_in', authDetail: 'Đăng nhập qua claude.ai' }),
       fixture({ id: 'codex', executable: 'codex.exe', version: 'codex-cli 0.154.0', auth: 'logged_in', authDetail: 'Logged in using ChatGPT' }),
@@ -435,7 +436,7 @@ describe('runner integration', () => {
         for (const name of await readdir(join(request.cwd, 'sources'))) files[name] = await readFile(join(request.cwd, 'sources', name), 'utf8');
         requests.push({ ...request, files });
         const output = await reply(request);
-        return { output: request.harness === 'codex' ? { payload: JSON.stringify(output) } : output, costUsd: 0.003 };
+        return { output: request.harness === 'codex' ? { payload: JSON.stringify(output) } : output, costUsd: 0.003, ...(reportedContext ? { context: reportedContext } : {}) };
       },
     });
     const note = join(directory, 'note.txt'); await writeFile(note, 'line one\nline two: the answer is 42');
@@ -466,6 +467,39 @@ describe('runner integration', () => {
     expect(detail.events.map(event => event.message).join(' ')).toContain('$0.0030');
   });
 
+  it('keeps how full the context was on the run, as the CLI reported it, and nothing when it did not (COD-326)', async () => {
+    reportedContext = { usedTokens: 33_436, windowTokens: 1_000_000 };
+    expect((await run('claude-code')).runs.at(-1)?.contextUse).toEqual({ usedTokens: 33_436, windowTokens: 1_000_000 });
+    reportedContext = undefined;
+    expect((await run('codex')).runs.at(-1)?.contextUse).toBeUndefined();
+  });
+
+  it.each(['claude-code', 'codex', 'gemini'] as const)('saves a full HTML chat answer from %s longer than the structured-report summary limit', async provider => {
+    const html = `<!doctype html>\n<html><body>${'<p>Full document content.</p>\n'.repeat(1000)}</body></html>`;
+    reply = async () => ({ message: html, title: null, report: null });
+    const detail = await run(provider);
+    expect(detail.task.status).toBe('completed');
+    expect(detail.runs.at(-1)?.error).toBeNull();
+    expect(detail.artifacts[0].report.format).toBe('chat');
+    expect(detail.artifacts[0].report.summary).toBe(html);
+  });
+
+  it('rejects an oversized chat envelope as an answer error without saving or truncating it', async () => {
+    reply = async () => ({ message: 'x'.repeat(MAX_CHAT_MESSAGE_CHARACTERS + 1), title: null, report: null });
+    const detail = await run('codex');
+    expect(detail.task.status).toBe('failed');
+    expect(detail.artifacts).toHaveLength(0);
+    expect(detail.runs.at(-1)?.error).toBe('Câu trả lời quá dài; chưa được lưu. Hãy yêu cầu chia nội dung thành nhiều phần.');
+  });
+
+  it('rejects a malformed chat envelope without falling back to structured-report validation', async () => {
+    reply = async () => ({ message: '<html>Document</html>', title: false, report: null });
+    const detail = await run('codex');
+    expect(detail.task.status).toBe('failed');
+    expect(detail.artifacts).toHaveLength(0);
+    expect(detail.runs.at(-1)?.error).toBe('Câu trả lời thiếu phần bắt buộc hoặc có phần sai dạng; chưa được lưu.');
+  });
+
   it('marks a run whose harness account ran out of plan usage, so the chat can offer another account (COD-225)', async () => {
     reply = async () => { throw new HarnessLimitError('Claude Code', { kind: 'quota', resetsAt: null }); };
     const outOfPlan = await run('claude-code');
@@ -475,6 +509,11 @@ describe('runner integration', () => {
     reply = async () => { throw new HarnessLimitError('Claude Code', { kind: 'rate', resetsAt: null }); };
     const busy = await run('claude-code');
     expect(busy.runs.at(-1)?.errorCode).toBeUndefined();
+    // One model's own allowance: the account still runs other models, so another account is not the offer (COD-301).
+    reply = async () => { throw new HarnessLimitError('Claude Code', { kind: 'model', model: 'Opus', resetsAt: null }); };
+    const modelOnly = await run('claude-code');
+    expect(modelOnly.runs.at(-1)?.errorCode).toBeUndefined();
+    expect(modelOnly.runs.at(-1)?.error).toContain('hết hạn mức riêng của model Opus');
   });
 
   describe('PDFs and images (COD-260)', () => {

@@ -56,6 +56,17 @@ it('lets the demo worker reply in chat instead of producing a sample report', as
   expect(store.detail(taskId).artifacts[0].report.format).toBe('chat');
 });
 
+it('persists a long HTML reply from the native tool loop without truncating it', async () => {
+  const workerId = await chatWorker('openai');
+  const html = `<!doctype html>\n<html><body>${'<p>Full document content.</p>\n'.repeat(1000)}</body></html>`;
+  replies.push(answer(html));
+  const taskId = await core.command('createTask', { workerId, brief: 'Write the complete HTML document', ...scope }) as string;
+  await until(() => store.detail(taskId).task.status === 'completed');
+  const detail = store.detail(taskId);
+  expect(detail.artifacts[0].report).toMatchObject({ format: 'chat', summary: html });
+  expect(detail.runs.at(-1)?.error).toBeNull();
+});
+
 const named = (message: string, title: string | null): ModelReply => ({ calls: [{ id: id(), name: 'reply', arguments: JSON.stringify({ message, title, knowledgeProposals: [] }) }], usage: { input: 200, output: 50 } });
 
 it('names a task from its first reply, keeps names the user set, and can be turned off', async () => {

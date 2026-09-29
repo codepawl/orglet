@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -9,7 +9,8 @@ import { cliEndpoint, CliRequest, type CliChat, type SendValue } from '../../app
 import { runCli } from '../../apps/desktop/src/cli/run';
 import { CliFailure, CliOperations, latestAnsweredRevision, matchChat, turnAnswers, turnErrors } from '../../apps/desktop/src/main/cli-operations';
 import { answerLine, CliServer, createCliToken, tokensMatch, writeCliToken } from '../../apps/desktop/src/main/cli-server';
-import { batchPath, pathHasEntry, pathWithEntry, pathWithoutEntry, shimContent } from '../../apps/desktop/src/main/cli-path';
+import { batchPath, CliPathInstaller, pathHasEntry, pathWithEntry, pathWithoutEntry, SHIM_NAME, shimContent, shimOwner, shimTargetOf } from '../../apps/desktop/src/main/cli-path';
+import { belongsToCopy, copyFolder } from '../../apps/desktop/src/main/install-copy';
 import type { Artifact, Run, Task, TaskDetail, Workspace } from '../../apps/desktop/src/shared/contracts';
 
 const workerId = '11111111-1111-4111-8111-111111111111';
@@ -201,6 +202,99 @@ describe('orglet PATH shim', () => {
   });
 });
 
+describe('which copy of Orglet owns the orglet command (COD-296)', () => {
+  const environment = { LOCALAPPDATA: 'C:\\Users\\Ân\\AppData\\Local', APPDATA: 'C:\\Users\\Ân\\AppData\\Roaming', USERPROFILE: 'C:\\Users\\Ân' };
+  const setupFolder = 'C:\\Users\\Ân\\AppData\\Local\\Orglet';
+  const userData = 'C:\\Users\\Ân\\AppData\\Roaming\\Orglet';
+  const setupCopy = { executable: `${setupFolder}\\app-0.2.12\\Orglet.exe`, setupFolder };
+  const zipCopy = { executable: 'D:\\Test builds\\Orglet-win32-x64\\Orglet.exe' };
+
+  function shimFor(executable: string, data = userData): string {
+    const folder = executable.slice(0, executable.lastIndexOf('\\'));
+    return shimContent({ executable, cliScript: `${folder}\\resources\\orglet-cli.cjs`, userData: data }, environment);
+  }
+
+  it('reads back the executable and data folder a shim starts, percent signs included', () => {
+    expect(shimTargetOf(shimFor(setupCopy.executable), environment)).toEqual({ executable: setupCopy.executable, userData });
+    expect(shimTargetOf(shimFor('D:\\100%\\Orglet.exe', 'D:\\100%\\data'), environment)).toEqual({ executable: 'D:\\100%\\Orglet.exe', userData: 'D:\\100%\\data' });
+    expect(shimTargetOf('@echo off\r\necho hello\r\n', environment)).toBeUndefined();
+  });
+
+  it('counts every version of a Setup install and its launcher as that install, and nothing else', () => {
+    expect(belongsToCopy(`${setupFolder}\\app-0.2.11\\Orglet.exe`, setupCopy)).toBe(true);
+    expect(belongsToCopy(`${setupFolder.toUpperCase()}\\APP-0.2.12\\orglet.exe`, setupCopy)).toBe(true);
+    expect(belongsToCopy(`${setupFolder}\\Orglet.exe`, setupCopy)).toBe(true);
+    expect(belongsToCopy(zipCopy.executable, setupCopy)).toBe(false);
+    expect(belongsToCopy(`${setupFolder}\\app-0.2.11\\Orglet.exe`, zipCopy)).toBe(false);
+    expect(belongsToCopy('D:\\Other\\app-0.2.11\\Orglet.exe', setupCopy)).toBe(false);
+    expect(copyFolder(`${setupFolder}\\app-0.2.11\\Orglet.exe`)).toBe(setupFolder);
+    expect(copyFolder(zipCopy.executable)).toBe('D:\\Test builds\\Orglet-win32-x64');
+  });
+
+  it('names the other copy, by its data folder when it is the same install on other data', () => {
+    expect(shimOwner(undefined, setupCopy, userData, environment)).toEqual({ kind: 'none' });
+    expect(shimOwner(shimFor(`${setupFolder}\\app-0.2.11\\Orglet.exe`), setupCopy, userData, environment)).toEqual({ kind: 'this' });
+    expect(shimOwner(shimFor(setupCopy.executable), zipCopy, userData, environment)).toEqual({ kind: 'other', copy: setupFolder });
+    expect(shimOwner(shimFor(zipCopy.executable), setupCopy, userData, environment)).toEqual({ kind: 'other', copy: 'D:\\Test builds\\Orglet-win32-x64' });
+    expect(shimOwner(shimFor(setupCopy.executable, 'C:\\Temp\\od\\test'), setupCopy, userData, environment)).toEqual({ kind: 'other', copy: 'C:\\Temp\\od\\test' });
+  });
+
+  describe('on start and in Setup steps', () => {
+    let bin: string | undefined;
+    afterEach(() => {
+      if (bin) rmSync(bin, { recursive: true, force: true });
+      bin = undefined;
+    });
+
+    /** A shim in a temporary bin folder, written the way the copy at `executable` writes it. */
+    function binWithShim(executable: string, data = userData): string {
+      bin = mkdtempSync(join(tmpdir(), 'orglet-bin-'));
+      const folder = executable.slice(0, executable.lastIndexOf('\\'));
+      writeFileSync(join(bin, SHIM_NAME), shimContent({ executable, cliScript: `${folder}\\resources\\orglet-cli.cjs`, userData: data }));
+      return bin;
+    }
+
+    function installerFor(folder: string, copy: { executable: string; setupFolder?: string }, data = userData): CliPathInstaller {
+      const executableFolder = copy.executable.slice(0, copy.executable.lastIndexOf('\\'));
+      return new CliPathInstaller(folder, { executable: copy.executable, cliScript: `${executableFolder}\\resources\\orglet-cli.cjs`, userData: data }, copy);
+    }
+
+    it('a test build leaves the chosen install’s shim exactly as it was', async () => {
+      const folder = binWithShim(setupCopy.executable);
+      const before = readFileSync(join(folder, SHIM_NAME), 'utf8');
+      const testBuild = installerFor(folder, zipCopy, 'C:\\Temp\\od\\cod296');
+      await testBuild.refresh();
+      await testBuild.installUnlessTaken();
+      await testBuild.removeUnlessTaken();
+      expect(readFileSync(join(folder, SHIM_NAME), 'utf8')).toBe(before);
+      expect(await testBuild.owner()).toEqual({ kind: 'other', copy: setupFolder });
+    });
+
+    it('the same install started on other data leaves it too', async () => {
+      const folder = binWithShim(setupCopy.executable);
+      const before = readFileSync(join(folder, SHIM_NAME), 'utf8');
+      await installerFor(folder, setupCopy, 'C:\\Temp\\od\\cod296').refresh();
+      expect(readFileSync(join(folder, SHIM_NAME), 'utf8')).toBe(before);
+    });
+
+    it('the chosen install follows its own update to a new app folder', async () => {
+      const folder = binWithShim(`${setupFolder}\\app-0.2.11\\Orglet.exe`);
+      const updated = installerFor(folder, setupCopy);
+      expect(await updated.owner()).toEqual({ kind: 'this' });
+      await updated.refresh();
+      expect(shimTargetOf(readFileSync(join(folder, SHIM_NAME), 'utf8'))?.executable).toBe(setupCopy.executable);
+    });
+
+    it('a ZIP copy the person chose keeps the command through the Setup install’s start', async () => {
+      const folder = binWithShim(zipCopy.executable);
+      const before = readFileSync(join(folder, SHIM_NAME), 'utf8');
+      await installerFor(folder, setupCopy).refresh();
+      await installerFor(folder, setupCopy).installUnlessTaken();
+      expect(readFileSync(join(folder, SHIM_NAME), 'utf8')).toBe(before);
+    });
+  });
+});
+
 describe('orglet round trip through the real server', () => {
   let folder: string | undefined;
   let server: CliServer | undefined;
@@ -236,7 +330,7 @@ describe('orglet round trip through the real server', () => {
     await writeCliToken(folder, token);
     const core = fakeCore();
     const opened: (CliChat | undefined)[] = [];
-    const operations = new CliOperations({ request: core.request, version: () => '9.9.9', open: chat => opened.push(chat), translate: message => `EN:${message}`, pollMilliseconds: 5 });
+    const operations = new CliOperations({ request: core.request, version: () => '9.9.9', open: chat => { opened.push(chat); }, translate: message => `EN:${message}`, pollMilliseconds: 5 });
     server = new CliServer({ endpoint: cliEndpoint(folder), token, handle: (request, signal) => operations.run(request, signal), translate: message => `EN:${message}` });
     await server.start();
     return { folder, token, core, opened };

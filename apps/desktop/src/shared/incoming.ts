@@ -18,8 +18,11 @@ export type IncomingNotice = { kind: 'notice'; message: string };
 
 export type Incoming = IncomingFiles | IncomingChat | IncomingNotice;
 
-/** Whether Explorer's Send to menu offers Orglet. Only a packaged Windows build can add it. */
-export type SendToState = { mode: 'windows'; installed: boolean } | { mode: 'unavailable' };
+/**
+ * Whether Explorer's Send to menu offers this copy of Orglet. Only a packaged Windows build can add it. When the entry
+ * starts another copy, `otherCopy` is that copy's folder, shown and never sent back (COD-296).
+ */
+export type SendToState = { mode: 'windows'; installed: boolean; otherCopy?: string } | { mode: 'unavailable' };
 
 /** The most files one message carries, the same as the file picker. */
 export const ATTACHMENT_LIMIT = 20;

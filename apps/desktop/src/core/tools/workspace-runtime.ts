@@ -11,7 +11,7 @@ import { WorkspaceGrants } from '../storage/workspace-grants';
 import { WorkspaceRecovery } from '../storage/workspace-recovery';
 import { ReadRecoveryFile, RecoveryFile, RestoreWorkspaceFile, WorkspaceConflictReason } from '../../shared/workspace-recovery';
 import { WorkspaceDiffRequest, WorkspaceDiffSummary, summarize, type WorkspaceDiff } from '../../shared/workspace-diff';
-import { planIntegration, plainCopyDiff, selectSteps, type IntegrationStep } from './workspace-plan';
+import { countChanges, planIntegration, plainCopyDiff, selectSteps, type IntegrationStep } from './workspace-plan';
 import { WorkspaceReview } from '../../shared/workspace-review';
 import type { WorkspaceFilesRuntime } from './workspace-files-runtime';
 import type { IntegrationStepInput, WorkspaceIntegration } from './workspace-integration';
@@ -109,7 +109,10 @@ function isMissingPathResult(result: unknown): result is ReturnType<typeof missi
   return typeof result === 'object' && result !== null && (result as { missing?: unknown }).missing === true;
 }
 
-/** A folder, move or delete the helper refused before changing anything; the worker can correct it (COD-254). */
+/**
+ * A folder, move, delete or write the helper refused before changing anything; the worker can correct it (COD-254,
+ * COD-289). It completes in the journal, so it never blocks the chat as an unknown outcome.
+ */
 function isRefusedResult(result: unknown): result is { refused: true; error: string } {
   return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
 }
@@ -124,15 +127,29 @@ function changedTheCopy(request: WorkspaceOperation, result: unknown): boolean {
   return request.operation === 'move' || request.operation === 'delete';
 }
 
-/** What a change to the private copy looks like in the run's activity; the trace reads these sentences. */
+/**
+ * What a step in the private copy looks like in the run's activity, in words a person reads (COD-292); the trace reads
+ * these sentences, and still reads the older "Workspace <tool>: <path>" ones kept in saved runs.
+ */
 function copyEvent(request: WorkspaceOperation): string {
-  if (request.operation === 'move') return `Workspace move: ${request.from} → ${request.to}`;
-  return `Workspace ${request.operation}: ${'path' in request ? request.path : ''}`;
+  switch (request.operation) {
+    case 'read':
+    case 'blob': return `Đã đọc ${request.path}`;
+    case 'list': return request.path ? `Đã liệt kê tệp ${request.path}` : 'Đã liệt kê tệp';
+    case 'search': return `Đã tìm “${request.text}”`;
+    case 'write': return `Đã ghi trong bản làm việc: ${request.path}`;
+    case 'create_folder': return `Đã tạo thư mục trong bản làm việc: ${request.path}`;
+    case 'move': return `Đã chuyển trong bản làm việc: ${request.from} → ${request.to}`;
+    case 'delete': return `Đã xóa trong bản làm việc: ${request.path}`;
+    case 'manifest':
+    case 'snapshot': return 'Đã xem lại bản làm việc';
+  }
 }
 
 function refusedEvent(request: WorkspaceOperation): string {
   if (request.operation === 'move') return `Không chuyển được: ${request.from} → ${request.to}`;
   if (request.operation === 'delete') return `Không xóa được: ${request.path}`;
+  if (request.operation === 'write') return `Không ghi được tệp: ${request.path}`;
   return `Không tạo được thư mục: ${'path' in request ? request.path : ''}`;
 }
 
@@ -210,7 +227,9 @@ export class WorkspaceRuntime {
   /**
    * What a run changed in its copy, with hunks, for the person to read (COD-163). Read-only: nothing is applied,
    * and the person's folder is never touched. It queues behind the run's own file operations so it never reads a
-   * file mid-write, and it follows the copy's read grant the way inspecting a file does.
+   * file mid-write. It is history, so it opens while the chat still has the folder the copy was made from, at any
+   * level (COD-291); a Git copy reads the objects of that folder's repository, so once the folder was removed or
+   * swapped for another the diff says so instead.
    */
   async diff(raw: unknown): Promise<WorkspaceDiff> {
     const input = WorkspaceDiffRequest.parse(raw);
@@ -222,7 +241,7 @@ export class WorkspaceRuntime {
       if (!copy?.directory) throw new Error('Lần chạy này không có bản làm việc để so sánh.');
       // The copy now belongs to a later turn, whose diff shows these changes together with its own (COD-279).
       if (copy.carriedTo) throw new Error(CARRIED_AWAY);
-      this.grants.assert(copy.grant, 'read');
+      this.grants.assertSameFolder(copy.grant);
       if (copy.kind !== 'git-worktree') {
         // A plain folder copy kept only the snapshot's hashes: what happened to each file, without lines (COD-254).
         const current = WorkspaceManifest.parse(await this.files.execute(copy.directory, { operation: 'manifest' }, signal));
@@ -401,7 +420,7 @@ export class WorkspaceRuntime {
             this.store.db.prepare(`INSERT INTO workspace_read_evidence(id,run_id,call_id,data) VALUES(?,?,?,?)
               ON CONFLICT(run_id,call_id) DO UPDATE SET id=excluded.id,data=excluded.data`)
               .run(evidence.id, run.id, callId, JSON.stringify(evidence));
-            this.store.event(run.id, `Workspace ${request.operation}: ${request.path}`);
+            this.store.event(run.id, copyEvent(request));
             this.notify();
             return { ...read, evidenceId: evidence.id };
           }
@@ -690,8 +709,9 @@ export class WorkspaceRuntime {
   /**
    * Applies a held copy (COD-279), all of it or the files and folders the person left ticked, through the same
    * hash-checked broker, backups and journal as any hand-in. It refuses a copy that changed since it was held and a
-   * folder grant that was revoked, replaced or narrowed below editing (widening keeps the grant and is fine). A conflict
-   * stops it the way it stops a hand-in, and the attempt is then settled in Details.
+   * folder grant that was revoked, replaced or narrowed (widening keeps the grant and is fine). A conflict stops it the
+   * way it stops a hand-in, and the attempt is then settled in Details. The counts are changes as the viewer lists
+   * them, not broker steps (COD-291).
    */
   async applyReview(run: Run, paths: readonly string[] | undefined, signal: AbortSignal, isActive: (taskId: string) => boolean): Promise<{ applied: number; skipped: number }> {
     signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
@@ -711,11 +731,13 @@ export class WorkspaceRuntime {
       const steps = planIntegration(held.baseline, manifest);
       const { kept, skipped } = paths ? selectSteps(steps, paths) : { kept: steps, skipped: [] };
       if (!kept.length) throw new Error(NOTHING_PICKED);
+      const applied = countChanges(steps, kept);
+      const left = countChanges(steps, skipped);
       // Decided before the first step, so a conflict part-way leaves a settled review and a copy to settle in Details.
       const copy: Copy = { ...held, changes: kept.map(changeOf),
-        review: { ...held.review, state: 'applied', decidedAt: now(), applied: kept.length, skipped: skipped.length } };
+        review: { ...held.review, state: 'applied', decidedAt: now(), applied, skipped: left } };
       await this.integrate(run, copy, kept, signal, authorize);
-      return { applied: kept.length, skipped: skipped.length };
+      return { applied, skipped: left };
     });
   }
 

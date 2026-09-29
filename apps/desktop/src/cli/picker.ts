@@ -1,5 +1,5 @@
 import { normalizeRoleText } from '../shared/role-words';
-import { renderMiniFaces, MINI_FACE_WIDTH } from './faces';
+import { renderMiniFace, MINI_FACE_WIDTH } from './faces';
 import type { ChatKind, ListValue } from './protocol';
 import { displayWidth, isHexColor, muted, NEUTRAL_COLOR, padEnd, paint, truncate, type ColorMode } from './terminal';
 
@@ -14,6 +14,12 @@ export type ChatEntry = {
   color: string;
   /** One face per orglet: the orglet itself, or a crew's members then its lead. */
   colors: string[];
+  provider?: string;
+  providerId?: string;
+  model?: string;
+  billing?: string;
+  description?: string;
+  members?: string[];
 };
 
 function validColor(color: string | undefined): string {
@@ -26,13 +32,36 @@ export function entriesFromList(list: ListValue): ChatEntry[] {
   const orglets = list.orglets.map(orglet => {
     const color = validColor(orglet.color);
     const detail = orglet.model ? `${orglet.provider}/${orglet.model}` : orglet.provider;
-    return { kind: 'worker' as const, name: orglet.name, detail, color, colors: [color] };
+    return {
+      kind: 'worker' as const,
+      name: orglet.name,
+      detail,
+      color,
+      colors: [color],
+      provider: orglet.provider,
+      providerId: orglet.providerId ?? orglet.provider,
+      model: orglet.model,
+      billing: orglet.billing,
+      description: orglet.description,
+    };
   });
   const crews = list.crews.map(crew => {
     const roster = [...new Set([...crew.members, crew.lead])];
     const colors = crew.colors?.length ? crew.colors.map(validColor) : roster.map(name => colorByName.get(name) ?? NEUTRAL_COLOR);
     const color = colorByName.get(crew.lead) ?? colors[colors.length - 1] ?? NEUTRAL_COLOR;
-    return { kind: 'team' as const, name: crew.name, detail: `crew · lead ${crew.lead}`, color, colors };
+    const lead = orglets.find(orglet => orglet.name === crew.lead);
+    return {
+      kind: 'team' as const,
+      name: crew.name,
+      detail: `crew · lead ${crew.lead}`,
+      color,
+      colors,
+      provider: lead?.provider,
+      providerId: lead?.providerId,
+      model: lead?.model,
+      billing: lead?.billing,
+      members: roster,
+    };
   });
   return [...orglets, ...crews];
 }
@@ -65,13 +94,16 @@ function matchRank(name: string, filter: string): number {
   return -1;
 }
 
-/** The entries the filter keeps, best fit first. Case and Vietnamese diacritics are ignored: "nghien" finds "Nghiên". */
+/** Orglets then crews, best fit within each group. Case and Vietnamese diacritics are ignored: "nghien" finds "Nghiên". */
 export function visibleEntries(state: PickerState): ChatEntry[] {
   const filter = normalizeRoleText(state.filter.trim());
   if (filter === '') return [...state.entries];
   const ranked = state.entries.map(entry => ({ entry, rank: matchRank(entry.name, filter) })).filter(item => item.rank >= 0);
-  // Array sort is stable, so entries of one rank keep the list's order.
-  return ranked.sort((first, second) => first.rank - second.rank).map(item => item.entry);
+  // The keyboard follows the same groups as the screen; stable ranks retain the app's order within a group.
+  return ranked.sort((first, second) => {
+    if (first.entry.kind !== second.entry.kind) return first.entry.kind === 'worker' ? -1 : 1;
+    return first.rank - second.rank;
+  }).map(item => item.entry);
 }
 
 /** A new filter starts the selection over at the best fit. */
@@ -92,7 +124,7 @@ export function chosenEntry(state: PickerState): ChatEntry | undefined {
   return visibleEntries(state)[state.selected];
 }
 
-export type PickerLayout = { width: number; mode: ColorMode; maxRows: number };
+export type PickerLayout = { width: number; mode: ColorMode; maxRows: number; maxLines?: number; grouped?: boolean; showFaces?: boolean };
 
 /** The first visible entry when more match than fit: a window that keeps the selection in view. */
 function windowStart(count: number, selected: number, maxRows: number): number {
@@ -103,7 +135,9 @@ function windowStart(count: number, selected: number, maxRows: number): number {
 
 export function entryLine(entry: ChatEntry, selected: boolean, layout: PickerLayout, facesWidth: number, nameWidth: number): string {
   const marker = selected ? paint('›', { foreground: entry.color, bold: true }, layout.mode) : ' ';
-  const faces = layout.mode === 'none' ? '' : `${padEnd(renderMiniFaces(entry.colors, layout.mode), facesWidth)} `;
+  const showFaces = layout.showFaces ?? layout.mode !== 'none';
+  const face = entry.kind === 'team' ? paint('▦', { foreground: entry.color, bold: true }, layout.mode) : renderMiniFace(entry.color, layout.mode);
+  const faces = showFaces ? `${padEnd(face, facesWidth)} ` : '';
   const name = truncate(entry.name, nameWidth);
   const paddedName = padEnd(selected ? paint(name, { bold: true }, layout.mode) : name, nameWidth);
   const used = 2 + displayWidth(faces) + nameWidth + 2;
@@ -113,24 +147,50 @@ export function entryLine(entry: ChatEntry, selected: boolean, layout: PickerLay
 
 /** Column widths shared by every line of one list, so names and details line up. */
 export function columnWidths(entries: readonly ChatEntry[], width: number): { facesWidth: number; nameWidth: number } {
-  const facesWidth = Math.max(MINI_FACE_WIDTH, ...entries.map(entry => entry.colors.length * MINI_FACE_WIDTH));
+  const facesWidth = MINI_FACE_WIDTH;
   const longestName = Math.max(0, ...entries.map(entry => displayWidth(entry.name)));
   const nameWidth = Math.min(longestName, Math.max(8, Math.floor(width / 2)));
   return { facesWidth, nameWidth };
 }
 
-export const PICKER_HINT = '↑↓ move · type to filter · Enter opens · Ctrl+C quits';
+export const PICKER_HINT = '↑↓ move · type to filter · Enter opens · Ctrl+C exit';
 
-/** The list under the picker's prompt, with a hint line; at most `maxRows` entries. */
+/** At most `maxRows` entries; `maxLines` also budgets group headings, spacing and the hint. */
 export function renderPickerLines(state: PickerState, layout: PickerLayout): string[] {
   const visible = visibleEntries(state);
-  if (visible.length === 0) return [muted(`  Nothing matches "${state.filter.trim()}".`, layout.mode), muted(`  ${PICKER_HINT}`, layout.mode)];
-  const start = windowStart(visible.length, state.selected, layout.maxRows);
-  const shown = visible.slice(start, start + layout.maxRows);
-  const { facesWidth, nameWidth } = columnWidths(state.entries, layout.width);
-  const lines = shown.map((entry, index) => entryLine(entry, start + index === state.selected, layout, facesWidth, nameWidth));
+  const maxLines = Math.max(0, layout.maxLines ?? Infinity);
+  if (maxLines === 0) return [];
+  if (visible.length === 0) return [muted(`  Nothing matches "${state.filter.trim()}".`, layout.mode), muted(`  ${PICKER_HINT}`, layout.mode)].slice(0, maxLines);
+  let start = windowStart(visible.length, state.selected, Math.max(1, layout.maxRows));
+  let end = Math.min(visible.length, start + Math.max(1, layout.maxRows));
+  const showHeadings = layout.grouped && maxLines >= 2;
+  const showHint = maxLines >= 3;
+  const available = maxLines - (showHint ? 1 : 0);
+  // Headings and their gap count as real rows. Trim the farthest edge, never the selected entry.
+  const lineCount = () => {
+    const groups = visible[start].kind === visible[end - 1].kind ? 1 : 2;
+    return end - start + (showHeadings ? groups * 2 - 1 : 0);
+  };
+  while (end - start > 1 && lineCount() > available) {
+    if (state.selected - start >= end - 1 - state.selected) start += 1;
+    else end -= 1;
+  }
+  const shown = visible.slice(start, end);
+  const { nameWidth, facesWidth } = columnWidths(state.entries, layout.width);
+  const lines: string[] = [];
+  for (const [index, entry] of shown.entries()) {
+    if (showHeadings && (index === 0 || entry.kind !== shown[index - 1].kind)) {
+      if (index > 0) lines.push('');
+      const count = visible.filter(candidate => candidate.kind === entry.kind).length;
+      const total = state.entries.filter(candidate => candidate.kind === entry.kind).length;
+      const countLabel = count === total ? `${count}` : `${count}/${total}`;
+      const title = entry.kind === 'worker' ? 'Orglets' : 'Crews';
+      lines.push(paint(`  [ ${title} · ${countLabel} ]`, { bold: true }, layout.mode));
+    }
+    lines.push(entryLine(entry, start + index === state.selected, layout, facesWidth, nameWidth));
+  }
   const more = visible.length - shown.length;
-  const hint = more > 0 ? `${PICKER_HINT} · ${more} more` : PICKER_HINT;
-  lines.push(muted(`  ${truncate(hint, Math.max(0, layout.width - 2))}`, layout.mode));
+  const hint = more > 0 ? `${more} more · ${PICKER_HINT}` : PICKER_HINT;
+  if (showHint) lines.push(muted(`  ${truncate(hint, Math.max(0, layout.width - 2))}`, layout.mode));
   return lines;
 }

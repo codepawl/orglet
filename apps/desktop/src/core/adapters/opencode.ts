@@ -2,7 +2,8 @@ import { APIConnectionError, APIConnectionTimeoutError, APIError, APIUserAbortEr
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { OpenAIAdapter, type ModelAdapter, type ModelReply, type RunMessage } from './openai';
 import { detectUsageLimit } from '../usageLimits';
-import { assertOpenCodeModel, OPENCODE_BASE_URLS, OPENCODE_PLAN_NAMES, type OpenCodePlan } from '../../shared/opencode';
+import { assertOpenCodeModel, OPENCODE_BASE_URLS, OPENCODE_PLAN_NAMES, type OpenCodeGoUsage, type OpenCodePlan } from '../../shared/opencode';
+import type { HarnessUsageWindow } from '../../shared/harness';
 
 /**
  * A provider refusal worded for the user. The runner shows its message instead of the generic "request did not
@@ -80,3 +81,44 @@ export function openCodeFailure(plan: OpenCodePlan, model: string, error: unknow
   if (error instanceof APIError) return new ProviderRequestError(statusMessage(plan, model, error));
   return error;
 }
+
+/**
+ * The usage endpoint OpenCode Go serves beside its models (`GET /zen/go/v1/usage`, read from the opencode console
+ * source on 2026-09-29). The key goes only there, the same service it is saved for.
+ */
+const OPENCODE_GO_USAGE_URL = `${OPENCODE_BASE_URLS['opencode-go']}/usage`;
+const USAGE_REQUEST_TIMEOUT_MS = 10_000;
+
+/** How much of its five-hour, weekly and monthly allowances a Go key has used. */
+export async function readOpenCodeGoUsage(key: string, request: typeof fetch): Promise<Omit<OpenCodeGoUsage, 'checkedAt'>> {
+  try {
+    const response = await request(OPENCODE_GO_USAGE_URL, {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(USAGE_REQUEST_TIMEOUT_MS),
+    });
+    // The key is valid, but its workspace has no Go subscription.
+    if (response.status === 403) return { windows: [], unavailable: 'unsupported' };
+    if (!response.ok) return { windows: [], unavailable: 'failed' };
+    const windows = openCodeGoUsageWindows(await response.json());
+    return windows.length ? { windows } : { windows: [], unavailable: 'failed' };
+  } catch {
+    return { windows: [], unavailable: 'failed' };
+  }
+}
+
+/** The answer names its windows `rolling` (five hours), `weekly` and `monthly`, each a percentage and a reset time. */
+export function openCodeGoUsageWindows(answer: unknown): HarnessUsageWindow[] {
+  const usage = isRecord(answer) && isRecord(answer.usage) ? answer.usage : undefined;
+  if (!usage) return [];
+  const named: [string, HarnessUsageWindow['kind']][] = [['rolling', 'session'], ['weekly', 'weekly'], ['monthly', 'monthly']];
+  const windows: HarnessUsageWindow[] = [];
+  for (const [field, kind] of named) {
+    const window = usage[field];
+    if (!isRecord(window) || typeof window.percent !== 'number' || !Number.isFinite(window.percent)) continue;
+    const resetsAt = typeof window.resetsAt === 'string' && !Number.isNaN(Date.parse(window.resetsAt)) ? new Date(window.resetsAt).toISOString() : undefined;
+    windows.push({ kind, usedPercent: Math.min(100, Math.max(0, window.percent)), ...(resetsAt ? { resetsAt } : {}) });
+  }
+  return windows;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);

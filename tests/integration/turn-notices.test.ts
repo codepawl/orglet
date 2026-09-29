@@ -79,7 +79,7 @@ it('orders a finished chat turn: the trace, the answer, then changed files, prop
   expect(reply).toContain('class="turn-after"');
   expect(html).toContain('Used 1 memory · Read 1 file');
   // The line counts are coloured spans inside the line, so the words are read without the markup.
-  expect(html.replace(/<[^>]+>/g, '')).toContain('Files changed: 2 · +5 −1');
+  expect(html.replace(/<[^>]+>/g, '')).toContain('Changed 2 files · +5 −1');
   // Nothing of the turn is drawn twice.
   expect(html.match(/class="turn-trace"/g)).toHaveLength(1);
   expect(html.match(/class="app-proposals"/g)).toHaveLength(1);

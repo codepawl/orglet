@@ -14,7 +14,7 @@ const file = (data: string | Buffer, format: DataFormat = 'csv') => ({ sourceId:
 it('profiles quoted CSV and detects duplicate, missing and reordered IDs', async () => {
   const result = await analyze({ files: [file('id,label\n1,"a,b"\n2,c\n2,d\n,e\n'), file('id,label\n2,d\n1,"a,b"\n2,c\n,e\n')], idColumn: 'id' });
   expect(result.datasets[0].rows).toBe(4);
-  expect(result.datasets[0].id).toEqual({ column: 'id', nulls: 1, duplicateNonNull: 1 });
+  expect(result.datasets[0].id).toEqual({ column: 'id', nulls: 1, duplicateNonNull: 1, repeats: { repeatedRows: 1, groupCount: 1, groups: [{ rows: [3, 4], size: 2 }] } });
   expect(result.datasets[0].columns[1].distinctNonNull).toBe(4);
   expect(result.comparison).toEqual({ schemaMatches: true, columnsMatch: true, rowCountsMatch: true, overlappingDistinctIds: 2, sameIdOrder: false, onlyInFirst: 0, onlyInSecond: 0 });
   expect(result.coverage).toBe('full');
@@ -42,6 +42,90 @@ it('loads a real Parquet file through native bindings', async () => {
     expect(result.datasets[0].id?.duplicateNonNull).toBe(0);
   } finally { connection.closeSync(); instance.closeSync(); await rm(directory, { recursive: true, force: true }); }
 });
+it('flags the founder metrics sheet: a repeated month, a negative count and a missing value (COD-297)', async () => {
+  const csv = 'month,signups,active_users,revenue\nJan,120,80,1200\nFeb,150,95,1350\nMar,,110,\nApr,210,140,1500\nMay,260,-5,1720\nMay,260,175,1720\n';
+  const result = await analyze({ files: [file(csv)], idColumn: null });
+  const [dataset] = result.datasets;
+  const column = (name: string) => dataset.columns.find(entry => entry.name === name)!;
+  expect(column('month')).toMatchObject({ type: 'VARCHAR', kind: 'text', misfits: 0, range: null });
+  expect(column('active_users')).toMatchObject({ kind: 'number', misfits: 0, range: { minimum: -5, maximum: 175, negatives: 1 } });
+  expect(column('signups')).toMatchObject({ kind: 'number', nulls: 1, range: { minimum: 120, maximum: 260, negatives: 0 } });
+  // The two May rows differ in one cell, so they are not identical rows; the first column still says they repeat.
+  expect(dataset.duplicateRows).toEqual({ repeatedRows: 0, groupCount: 0, groups: [] });
+  expect(dataset.firstColumn).toEqual({ column: 'month', repeatedRows: 1, groupCount: 1, groups: [{ rows: [6, 7], size: 2 }] });
+  expect(result.checks).toEqual(expect.arrayContaining(['column_kinds', 'number_ranges', 'duplicate_rows', 'first_column_repeats']));
+});
+it('lists identical rows by the row number a spreadsheet shows, and counts every group', async () => {
+  const lines = ['a,b', '1,x', '2,y', '1,x', '3,z', '2,y', '1,x'];
+  for (let group = 0; group < 12; group += 1) lines.push(`g${group},same`, `g${group},same`);
+  const result = await analyze({ files: [file(`${lines.join('\n')}\n`)], idColumn: null });
+  const repeats = result.datasets[0].duplicateRows!;
+  expect(repeats.repeatedRows).toBe(3 + 12);
+  expect(repeats.groupCount).toBe(14);
+  expect(repeats.groups).toHaveLength(10);
+  expect(repeats.groups[0]).toEqual({ rows: [2, 4, 7], size: 3 });
+  expect(repeats.groups[1]).toEqual({ rows: [3, 6], size: 2 });
+  // Categories repeat by design, so the first column is not treated as a row name here.
+  expect(result.datasets[0].firstColumn).toBeNull();
+  const jsonl = await analyze({ files: [file('{"a":1}\n{"a":2}\n{"a":1}\n', 'jsonl')], idColumn: null });
+  expect(jsonl.datasets[0].duplicateRows?.groups).toEqual([{ rows: [1, 3], size: 2 }]);
+});
+it('sorts values into numbers, dates, dates that do not exist and text that does not fit', async () => {
+  const csv = [
+    'amount,when,note,mixed',
+    '10,2024-01-05,hello,1',
+    'n/a,2024-02-30,ok,2',
+    '-3.5,31/02/2024,fine,three',
+    '1e3,5/1/2024,also,4',
+    'inf,2024/03/01 10:30,x,',
+    '7,soon,y,5',
+  ].join('\n');
+  const result = await analyze({ files: [file(`${csv}\n`)], idColumn: null });
+  const column = (name: string) => result.datasets[0].columns.find(entry => entry.name === name)!;
+  // inf and n/a are not plain numbers; they are the values that do not fit a number column.
+  expect(column('amount')).toMatchObject({ kind: 'number', misfits: 2, range: { minimum: -3.5, maximum: 1000, negatives: 1 } });
+  expect(column('when')).toMatchObject({ kind: 'date', invalidDates: 2, misfits: 3 });
+  expect(column('note')).toMatchObject({ kind: 'text', misfits: 0, invalidDates: 0 });
+  expect(column('mixed')).toMatchObject({ kind: 'number', misfits: 1, nulls: 1, range: { minimum: 1, maximum: 5 } });
+  const typed = await analyze({ files: [file('{"x":1,"y":"a"}\n{"x":"b","y":"2024-02-30"}\n{"x":2.5}\n', 'jsonl')], idColumn: null });
+  const x = typed.datasets[0].columns.find(entry => entry.name === 'x')!;
+  expect(x).toMatchObject({ type: 'JSON', kind: 'number', misfits: 1, range: { minimum: 1, maximum: 2.5 } });
+  expect(typed.datasets[0].columns.find(entry => entry.name === 'y')).toMatchObject({ kind: 'text', invalidDates: 1 });
+});
+it('lists repeated IDs by row number and leaves the first column alone when an ID column is chosen', async () => {
+  const result = await analyze({ files: [file('id,label\n1,a\n2,b\n1,c\n,d\n')], idColumn: 'id' });
+  expect(result.datasets[0].id).toEqual({ column: 'id', nulls: 1, duplicateNonNull: 1, repeats: { repeatedRows: 1, groupCount: 1, groups: [{ rows: [2, 4], size: 2 }] } });
+  expect(result.datasets[0].firstColumn).toBeNull();
+});
+it('checks a file near the 32 MB limit within the time the checker has', async () => {
+  const lines = ['id,day,amount,label,region,score'];
+  for (let row = 0; row < 600_000; row += 1) lines.push(`${row},2024-${String(row % 12 + 1).padStart(2, '0')}-${String(row % 28 + 1).padStart(2, '0')},${(row % 997) - 20},label-${row % 5000},region-${row % 7},${row % 101}.5`);
+  lines.push(lines[1]);
+  const csv = `${lines.join('\n')}\n`;
+  expect(Buffer.byteLength(csv)).toBeGreaterThan(25 * 1024 * 1024);
+  const started = Date.now();
+  const result = await analyze({ files: [file(csv)], idColumn: null });
+  expect(Date.now() - started).toBeLessThan(18_000);
+  const [dataset] = result.datasets;
+  expect(dataset.rows).toBe(600_001);
+  expect(dataset.duplicateRows).toMatchObject({ repeatedRows: 1, groups: [{ rows: [2, 600_002], size: 2 }] });
+  // The repeated id belongs to an identical row, which is already reported above; the first-column note skips it.
+  expect(dataset.firstColumn).toEqual({ column: 'id', repeatedRows: 0, groupCount: 0, groups: [] });
+  expect(dataset.columns.find(column => column.name === 'amount')).toMatchObject({ kind: 'number', range: { minimum: -20, maximum: 976 } });
+  expect(dataset.columns.find(column => column.name === 'day')).toMatchObject({ kind: 'date', misfits: 0 });
+  await expect(analyze({ files: [file(Buffer.alloc(32 * 1024 * 1024 + 1, 'a'))], idColumn: null })).rejects.toThrow('32 MB');
+}, 60_000);
+it('checks a wide file once instead of parsing it again for every column', async () => {
+  // 64 columns: reading the file again per column took past the 18-second limit before COD-297.
+  const header = Array.from({ length: 64 }, (_, index) => `c${index}`).join(',');
+  const lines = [header];
+  for (let row = 0; row < 55_000; row += 1) lines.push(Array.from({ length: 64 }, (_, index) => (row * 7 + index) % 1000).join(','));
+  const started = Date.now();
+  const result = await analyze({ files: [file(`${lines.join('\n')}\n`)], idColumn: null });
+  expect(Date.now() - started).toBeLessThan(18_000);
+  expect(result.datasets[0].columns).toHaveLength(64);
+  expect(result.datasets[0].columns[63]).toMatchObject({ kind: 'number', range: { minimum: 0, maximum: 999 } });
+}, 60_000);
 it('rejects malformed datasets and absent ID columns', async () => {
   await expect(analyze({ files: [file('not parquet', 'parquet')], idColumn: null })).rejects.toThrow();
   await expect(analyze({ files: [file('id\n1\n')], idColumn: 'id"; COPY x TO \'private\'; --' })).rejects.toThrow('ID');

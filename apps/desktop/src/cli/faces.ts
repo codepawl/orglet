@@ -130,6 +130,42 @@ export function renderFace(color: string | undefined, frame: FaceFrame, mode: Co
   return faceCells(color, frame).map(row => row.map(cell => paintCell(cell, mode)).join(''));
 }
 
+/** Compact speech bubble for the product header, with the same cell width in every colour mode. */
+const HEADER_PIXELS = [
+  '.######.',
+  '########',
+  '##o##o##',
+  '##o##o##',
+  '########',
+  '########',
+  '#######.',
+  '##......',
+];
+export const HEADER_FACE_WIDTH = HEADER_PIXELS[0].length;
+
+export function renderHeaderFace(color: string | undefined, mode: ColorMode): string[] {
+  const palette = paletteFor(color);
+  const pixels = HEADER_PIXELS.map(row => [...row].map(mark => {
+    if (mark === 'o') return EYE;
+    return mark === '#' ? BODY : EMPTY;
+  }));
+  const rows: string[] = [];
+  for (let row = 0; row < pixels.length; row += 2) {
+    const cells = pixels[row].map((top, column) => {
+      const bottom = pixels[row + 1][column];
+      // Plain terminals need visible blocks; coloured cell backgrounds avoid seams between glyphs.
+      if (top === EYE && bottom === EYE && mode === 'none') return ' ';
+      const cell = cellOf(top, bottom, palette);
+      if (mode === 'none' && cell.character === ' ' && cell.background) {
+        return paint('█', { foreground: cell.background }, mode);
+      }
+      return paintCell(cell, mode);
+    });
+    rows.push(cells.join(''));
+  }
+  return rows;
+}
+
 /** Eye glyphs of the one-row face: dots looking ahead, the same closed eyes as the big face otherwise. */
 const MINI_EYES: Record<FaceFrame, string> = { open: '•', left: '•', right: '•', blink: '─', happy: '^' };
 

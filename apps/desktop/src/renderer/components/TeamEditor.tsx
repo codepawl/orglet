@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MAX_CREW_CONCURRENT_TASKS, MAX_CREW_MEMBERS, QUIET_PARALLEL_LIMIT, type Team, type Workspace } from '../../shared/contracts';
+import { MAX_CREW_CONCURRENT_TASKS, MAX_CREW_MEMBERS, QUIET_PARALLEL_LIMIT, type Team, type Worker, type Workspace } from '../../shared/contracts';
 import { Button, FieldLabel, MoneyInput } from './ui';
 import { Columns2, ListOrdered, CalendarDays, Clock, Combine, Download, FileUp, Globe, Layers, ScrollText, SlidersHorizontal, Users, Wallet, Workflow } from 'lucide-react';
 import { ProviderMark } from './ProviderMark';
@@ -23,13 +23,39 @@ const tabs = [
   { id: 'limits' as const, label: 'Giới hạn & ca', icon: <Wallet size={16} /> },
 ];
 
+/**
+ * The orglet a new crew starts with as its member and its lead: the first one on a real connection, since a crew of
+ * the Demo orglet does nothing useful when others are connected (dogfood round 5, COD-287).
+ */
+function firstConnectedWorker(workers: readonly Worker[]): Worker | undefined {
+  return workers.find(worker => worker.provider !== 'demo') ?? workers[0];
+}
+
+/** A new crew's lead while the person has not picked one: kept while it is still a member, else the first member. */
+export function nextLead(current: string, members: readonly string[]): string {
+  if (members.includes(current)) return current;
+  return members[0] ?? '';
+}
+
 /** Team create/edit. Remount (via key) to reset the draft. */
 export function TeamDialog({ open, team, workspace, onClose, onCreated }: { open: boolean; team?: Team; workspace: Workspace; onClose: () => void; /** A new crew was saved; the app opens its chat (COD-255). Not called when an existing one is saved. */ onCreated?: (teamId: string) => void }) {
   const [tab, setTab] = useState<Tab>('general');
   const [name, setName] = useState(team?.name ?? '');
-  const [instructions, setInstructions] = useState(team?.instructions ?? 'Combine evidence from each role into one review. Preserve disagreements and explicitly identify missing evidence.');
-  const [members, setMembers] = useState(team?.memberIds ?? (workspace.workers[0] ? [workspace.workers[0].id] : []));
-  const [synthesizer, setSynthesizer] = useState(team?.synthesizerId ?? workspace.workers[0]?.id ?? '');
+  const startingWorker = firstConnectedWorker(workspace.workers);
+  const [instructions, setInstructions] = useState(team?.instructions ?? t('Gộp phần việc của từng Tí thành một câu trả lời. Giữ nguyên chỗ các Tí không đồng ý với nhau và nói rõ còn thiếu bằng chứng nào.'));
+  const [members, setMembers] = useState(team?.memberIds ?? (startingWorker ? [startingWorker.id] : []));
+  const [synthesizer, setSynthesizer] = useState(team?.synthesizerId ?? startingWorker?.id ?? '');
+  // On a new crew the lead follows the members until the person picks one: unticking the orglet ticked by default no
+  // longer leaves it leading a crew it is not in (dogfood round 7, COD-295). A picked lead, or an existing crew's, stays.
+  const [leadPicked, setLeadPicked] = useState(Boolean(team));
+  const changeMembers = (next: string[]) => {
+    setMembers(next);
+    if (!leadPicked) setSynthesizer(current => nextLead(current, next));
+  };
+  const pickLead = (workerId: string) => {
+    setLeadPicked(true);
+    setSynthesizer(workerId);
+  };
   const [workflow, setWorkflow] = useState(team?.workflow ?? 'parallel');
   const [limit, setLimit] = useState(toAmount(team?.monthlyBudgetMicros ?? 5_000_000));
   const [taskBudget, setTaskBudget] = useState(toAmount(team?.taskBudgetMicros ?? 500_000));
@@ -84,9 +110,9 @@ export function TeamDialog({ open, team, workspace, onClose, onCreated }: { open
   return <TabbedFormDialog open={open} onClose={onClose} title={team ? t('Thiết lập hội') : t('Hội mới')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="team-panel" onSubmit={submit} submitLabel={t('Lưu hội')} busy={busy} actions={actions} error={error}>
     {tab === 'general' && <>
       <label><FieldLabel icon={Users} required>{t('Tên hội')}</FieldLabel><Input data-field="name" value={name} onChange={e => { setName(e.target.value); if (invalid === 'name') clearError(); }} maxLength={80} invalid={invalid === 'name'} flash={flash} /></label>
-      <fieldset><legend><FieldLabel icon={Users} required>{t('Thành viên (1–{0})', [MAX_CREW_MEMBERS])}</FieldLabel></legend><div className="fieldset-options">{workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} data-field={invalid === 'members' ? 'members' : undefined} checked={members.includes(worker.id)} disabled={!members.includes(worker.id) && members.length >= MAX_CREW_MEMBERS} onChange={e => { setMembers(current => e.target.checked ? [...current, worker.id] : current.filter(id => id !== worker.id)); if (invalid === 'members') clearError(); }} {...fieldInvalid(invalid === 'members', flash)}><span className="inline-mark"><Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />{worker.name}</span></Checkbox>)}{!workspace.workers.length && <p className="muted">{t('Chưa có Tí nào. Tạo một Tí trước.')}</p>}</div></fieldset>
+      <fieldset><legend><FieldLabel icon={Users} required>{t('Thành viên (1–{0})', [MAX_CREW_MEMBERS])}</FieldLabel></legend><div className="fieldset-options">{workspace.workers.map(worker => <Checkbox key={worker.id} aria-label={worker.name} data-field={invalid === 'members' ? 'members' : undefined} checked={members.includes(worker.id)} disabled={!members.includes(worker.id) && members.length >= MAX_CREW_MEMBERS} onChange={e => { changeMembers(e.target.checked ? [...members, worker.id] : members.filter(id => id !== worker.id)); if (invalid === 'members') clearError(); }} {...fieldInvalid(invalid === 'members', flash)}><span className="inline-mark"><Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} />{worker.name}</span></Checkbox>)}{!workspace.workers.length && <p className="muted">{t('Chưa có Tí nào. Tạo một Tí trước.')}</p>}</div></fieldset>
       {members.length > QUIET_PARALLEL_LIMIT && <p className="muted">{t('Mỗi thành viên là một lượt gọi model, nên hội đông hơn thì mỗi lượt tốn hơn.')}</p>}
-      <Select label={<FieldLabel icon={Combine} required>{t('Tí trưởng')}</FieldLabel>} value={synthesizer} onChange={setSynthesizer} options={workspace.workers.map(worker => ({ value: worker.id, label: worker.name, icon: <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} /> }))} />
+      <Select label={<FieldLabel icon={Combine} required>{t('Tí trưởng')}</FieldLabel>} value={synthesizer} onChange={pickLead} options={workspace.workers.map(worker => ({ value: worker.id, label: worker.name, icon: <Avatar name={worker.name} seed={worker.id} emoji={worker.avatar?.emoji} mascot={worker.avatar?.mascot} defaultMascot hint={worker.description} color={worker.avatar?.color} size="xs" badge={worker.provider === 'demo' ? undefined : <ProviderMark provider={worker.provider} size="small" decorative />} /> }))} />
       <Select label={<FieldLabel icon={Workflow} required>{t('Quy trình')}</FieldLabel>} value={workflow} onChange={value => setWorkflow(value as typeof workflow)} options={[{ value: 'parallel', label: t('Song song, rồi tổng hợp'), icon: <Columns2 size={16} /> }, { value: 'sequential', label: t('Tuần tự, rồi tổng hợp'), icon: <ListOrdered size={16} /> }]} />
       <p className="muted">{t('Tuần tự theo thứ tự chọn thành viên; song song tối đa hai người cùng lúc.')}</p>
       <label><FieldLabel icon={ScrollText} required>{t('Hướng dẫn của hội')}</FieldLabel><Textarea data-field="instructions" rows={8} value={instructions} onChange={e => { setInstructions(e.target.value); if (invalid === 'instructions') clearError(); }} maxLength={16000} invalid={invalid === 'instructions'} flash={flash} /></label>

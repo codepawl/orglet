@@ -20,6 +20,9 @@ import { pdfTextInWorker } from './tools/pdf-text';
 import type { WebSearchKeyProvider } from '../shared/web-tools';
 import type { BrowserHost } from '../shared/browser-host';
 import { DesktopHelperProcess } from './tools/desktop-helper';
+import { Decisions } from './decisions/service';
+import { decisionsDirectory, filesFrom } from './decisions/manifest';
+import { workerRuntime } from './decisions/worker-runtime';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
@@ -121,7 +124,7 @@ const core = new CoreService(store, () => port.postMessage({ type: 'changed' }),
   if (provider === 'opencode-zen' || provider === 'opencode-go') return new OpenCodeAdapter(provider, key, model);
   if (provider === 'ollama') return new OpenAIAdapter(key, { baseURL: `${MODEL_LIST_ENDPOINTS.ollama}/v1`, model: model || CATALOG_HINT_IDS.ollama });
   return new OpenAIAdapter(key, { model });
-}, profile, undefined, localHarnessRuntime(join(process.argv[2], 'harness-accounts')), undefined, {
+}, profile, undefined, localHarnessRuntime(join(process.argv[2], 'harness-accounts'), url => port.postMessage({ type: 'openSignInPage', url })), undefined, {
   readKey: provider => requestKey(provider),
 }, workspaceRuntime, {
   readSecrets: requestMcpSecrets,
@@ -148,9 +151,20 @@ if (desktopHelper) core.desktop.showOverlayWith(state => new Promise<boolean>(re
   });
   port.postMessage({ type: 'desktopOverlay', id: overlayId, state });
 }));
-/** What quitting stops besides this process: the MCP servers and the desktop helper. */
+core.runner.onCliProgress = update => port.postMessage({ type: 'cliProgress', update });
+store.onActivity = activity => port.postMessage({ type: 'activity', activity });
+// Tacet (COD-303): downloaded only when the person asks, and run in its own worker thread built next to this file.
+core.decisions = new Decisions({
+  directory: decisionsDirectory(process.argv[2]),
+  files: filesFrom(process.env.ORGLET_TACET_SOURCE),
+  runtime: workerRuntime(join(__dirname, 'decisions.js')),
+});
+core.decisions.onState = state => port.postMessage({ type: 'decisionModel', state });
+/** What quitting stops besides this process: the MCP servers, the desktop helper, Tacet's worker and a harness sign-in. */
 async function shutdownHelpers() {
   desktopHelper?.stop();
+  core.harnessSignIns.cancelAll();
+  await core.decisions.shutdown();
   await core.mcp.shutdown();
 }
 port.on('message', async ({ data }) => {
@@ -179,6 +193,7 @@ port.on('message', async ({ data }) => {
       ? await core.sources.import(z.array(z.string().min(1).max(32768)).max(20).parse(args))
       : command === 'importFolder' ? await core.sources.importFolder(z.string().min(1).max(32768).parse(args))
       : command === 'sourcePath' ? core.sourcePath(args)
+      : command === 'relinkSource' ? await core.relinkSource(args)
       : command === 'grantWorkspace' ? await core.grantWorkspace(args)
       : command === 'runRoutine' ? await core.runRoutine(args)
       : command === 'exportArtifact' ? typeof args === 'string' ? core.exportMarkdown(Id.parse(args))

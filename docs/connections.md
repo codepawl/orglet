@@ -20,16 +20,19 @@ Part of the [user guide](user-guide.md). The full technical detail, including th
 
 A harness runs the orglet through the CLI's own account, so the cost lands on the plan you already pay for.
 
-1. Install the CLI and sign in to it in your own terminal (`claude auth login`, `codex login` or `agent login`). Gemini CLI has no login command: run `gemini`, choose **Sign in with Google**, finish in the browser, then type `/quit`.
+1. Install the CLI.
 2. Open **Settings → Local harnesses**. Each row shows one of four states: **Not installed**, **Found on disk** (installed, not signed in), **Signed in** (ready to run) or **Sign-in error** (the status check failed). Found on disk is not ready.
-3. If a row is not signed in, copy the login command it shows and run it, then choose **Rescan**. On Windows, pick your terminal beside the command first (PowerShell, Command Prompt or Git Bash); each needs its own line, and Orglet remembers the one you pick. Orglet never switches an orglet to Demo when sign-in fails.
-4. Open the orglet's settings and set **Model** to that harness. The model ID is optional; empty keeps the CLI's default.
+3. If a Claude Code, Codex or Cursor Agent row is not signed in, choose **Sign in** and finish in your browser. The row says it is waiting, with **Cancel**; when the browser part is done, Orglet checks the CLI again by itself. Orglet never sees your password or the CLI's tokens.
+4. If you prefer a terminal, or for Gemini CLI, copy the login command the row shows and run it, then choose **Rescan**. On Windows, pick your terminal beside the command first (PowerShell, Command Prompt or Git Bash); each needs its own line, and Orglet remembers the one you pick. Gemini CLI has no login command: the line starts `gemini`, where you choose **Sign in with Google**, finish in the browser, then type `/quit`. Orglet never switches an orglet to Demo when sign-in fails.
+5. Open the orglet's settings and set **Model** to that harness. The model ID is optional; empty keeps the CLI's default.
+
+To sign out, open the account menu (⋯) beside the account picker and choose **Sign out**. Orglet runs the CLI's own sign-out for the account shown. Signing out the **Default account** signs that CLI out on this whole computer, not only in Orglet, and the question says so. Gemini CLI signs out only inside its own window, with `/logout`.
 
 Orglet finds each CLI on `PATH` and in its usual install locations, including the copy the Claude or Codex desktop app downloaded and the npm global folder. It only ever runs each CLI's `--version` and login-status command to detect it. Gemini CLI has no login-status command, so Orglet reads its sign-in from the CLI's own `.gemini` folder instead (the method it chose and whether a Google sign-in is cached), without touching it. The desktop app's own session is not reused; the CLI must be signed in itself.
 
-**Accounts.** A harness row can hold more than one sign-in. **Default account** is what the CLI already has on this machine. The row's menu adds, renames and removes accounts; each is a private config folder that Orglet points the CLI at when it runs, and the login command the row copies signs in to the selected account. Orglet never copies or changes the credentials in those folders. Removing an account deletes its folder and that sign-in. Gemini CLI accounts work the same way through its `GEMINI_CLI_HOME` folder, as long as the CLI keeps its sign-in in files (its default). With `GEMINI_FORCE_ENCRYPTED_FILE_STORAGE` set, Gemini CLI keeps one sign-in in the system keychain for every folder, so only the default account is useful.
+**Accounts.** A harness row can hold more than one sign-in. **Default account** is what the CLI already has on this machine. The row's menu adds, renames and removes accounts; each is a private config folder that Orglet points the CLI at when it runs, and **Sign in** or the login command the row copies signs in to the selected account. Orglet never copies or changes the credentials in those folders. Removing an account deletes its folder and that sign-in. Gemini CLI accounts work the same way through its `GEMINI_CLI_HOME` folder, as long as the CLI keeps its sign-in in files (its default). With `GEMINI_FORCE_ENCRYPTED_FILE_STORAGE` set, Gemini CLI keeps one sign-in in the system keychain for every folder, so only the default account is useful. Cursor Agent keeps one sign-in per computer whatever the folder, so signing it in or out changes every Cursor Agent account at once.
 
-**Plan usage.** A signed-in row shows the account's address and plan, and how much of each allowance it has used (the current session, the week, a week limited to one model) with when it resets. The account picker shows the same for every account, so you can switch to one that still has room. Claude Code and Codex report these numbers; Cursor Agent reports only the account and plan, and Gemini CLI only the Google account. For Claude Code, Orglet sends the CLI's own sign-in token to Anthropic's usage endpoint and nowhere else. If the token has expired, open Claude Code once and choose **Rescan**.
+**Plan usage.** A signed-in row shows the account's address and plan, and how much of each allowance it has used (the current session, the week, a week limited to one model) with when it resets. The account picker shows the same for every account, so you can switch to one that still has room. Cursor Agent shows the included usage of your billing month and its Auto and API pools, the same rows as its own `/usage`. Gemini CLI shows a daily allowance for each model when you signed in with Google. Team plans, API keys and other sign-ins without a plan allowance show the account only. For Claude Code, Cursor Agent and Gemini CLI, Orglet sends the CLI's own sign-in token to that CLI's own service and nowhere else. Those CLIs renew the token only when they run, so between runs it is often expired even though you are signed in. The row then shows the last numbers Orglet read, with the time they are from, and reads them again after the next Orglet run on that CLI. Orglet never renews the token itself. When a Claude plan has banked resets, the row shows how many are left and when the next one ends, with **Dùng một lượt reset**. It asks first, then resets the current five-hour session allowance of that account and uses one reset; the weekly allowance stays. Orglet never spends one on its own, and while the saved sign-in is expired the button waits until Claude Code has run again.
 
 When a reply stops because the account ran out, the bar above the message box offers another account that still has room, for example **Use Work · 70% left**. One click switches to it and runs the turn again. If no other account has room, it says when yours resets.
 
@@ -49,6 +52,8 @@ Keys are encrypted with your system's secure storage (DPAPI on Windows, Keychain
 
 Ollama has no key: turn its switch on while Ollama is running locally.
 
+With an OpenCode Go key saved, its row shows how much of the plan's five-hour, weekly and monthly limits that key has used, and when each resets. The numbers come from OpenCode Go and are read again when you save a new key. A key without a Go subscription says so instead.
+
 ## Custom connections
 
 Any server that speaks the OpenAI chat/completions API can be a connection of its own: LM Studio at `http://localhost:1234/v1`, Groq, DeepSeek, Mistral, Together, Fireworks or a proxy at work. You can add up to 16, and each one is a model choice for an orglet.
@@ -60,6 +65,8 @@ Any server that speaks the OpenAI chat/completions API can be a connection of it
 5. Choose **Save**. In the orglet's settings, pick the connection under **Model**, then pick a model from its list or type the ID. A custom connection has no default model, so a model ID is required.
 
 The model list comes from the server's own `GET /models`, cached for 24 hours like the other lists. If the server does not answer, type the model ID yourself.
+
+To check a connection, open its **⋮** menu and choose **Test connection**. Orglet asks the server for its model list again and says how many models it offers, or why it did not answer.
 
 **Which addresses are allowed.** `https://` works for any host. Plain `http://` is allowed only for this computer (`localhost`, `127.0.0.1`, `::1`) and private-network addresses (`10.x`, `172.16–31.x`, `192.168.x`, `169.254.x`, `100.64–127.x`, `fc00::/7`, `fe80::/10`, and `.local` names). For any other host Orglet refuses `http://` instead of warning about it, because the key and every prompt would cross the internet unencrypted. An address may not carry a user name, a password, a `?query` or a `#fragment`; the key goes in its own field, where it is encrypted.
 
@@ -78,6 +85,8 @@ A reply that comes back without token counts stays unknown in **Charges to recon
 ## Model IDs
 
 For everything but Demo, an orglet has a model ID. The picker lists that provider's own models, fetched from the provider's API or CLI and cached on this computer for 24 hours; you can also type any ID. Built-in names such as GPT-4.1 mini are suggestions, not a lock. If the list fails to load, typing still works.
+
+Some connections have no model to fall back on: a custom connection, OpenCode Zen and OpenCode Go. There **Model ID** is marked required, and an empty field starts on the first model the connection lists (the only one, when it lists one). Ollama does the same when its suggestion, llama3.2, is not installed. You can change the ID or clear it. Saving with it empty turns the field red and scrolls it into view.
 
 When the provider's own list marks the chosen model as deprecated, the picker shows a quiet chip; a sunset date appears only when the provider included one. OpenCode Zen and Go have no default: pick a model from that plan's list, and models the OpenCode docs put on another endpoint show as **Not supported**. Details: [model-list-fetch.md](model-list-fetch.md).
 

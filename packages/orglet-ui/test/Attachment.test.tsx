@@ -41,6 +41,16 @@ describe('Attachment', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
+  it('draws a file that can no longer be used quieter, still openable, with its meta saying why', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    render(<ul><Attachment name="old.pdf" meta="Read access revoked" icon={<span>F</span>} onOpen={onOpen} inactive /></ul>);
+    const button = screen.getByRole('button', { name: /old\.pdf.*Read access revoked/ });
+    expect(button.closest('li')?.className).toBe('org-attachment org-attachment-inactive');
+    await user.click(button);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
   it('has no accessibility violations', async () => {
     const { container } = render(<ul>
       <Attachment name="a.csv" meta="Spreadsheet · 1 KB" icon={<span>F</span>} onRemove={() => undefined} removeLabel="Remove a.csv" removeIcon="×" />

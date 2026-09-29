@@ -1,4 +1,4 @@
-import { open, realpath, lstat, opendir, type FileHandle } from 'node:fs/promises';
+import { open, realpath, lstat, opendir, mkdir, writeFile, rm, type FileHandle } from 'node:fs/promises';
 import { basename, dirname, resolve, extname, join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Store, id, now } from '../storage/database';
@@ -8,6 +8,8 @@ import { DataFormat, type ExactMatchRequest, type ProfileExecutor, type DatasetP
 import { ViewableImageMime, type ImageRef } from '../../shared/images';
 import { pdfTextForWorker, type PdfPages, type PdfText, type PdfTextExtractor } from './pdf-text';
 import { extractPdfPagesHere } from './pdf-extract';
+import { fileNameOf, isVersionNameFor } from '../../shared/source-versions';
+import { pngSize } from '../../shared/png';
 
 export const fingerprint = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
 
@@ -62,6 +64,39 @@ export function imageWithheldMessage(name: string, reason: ImageWithheld): strin
   if (reason === 'connection') return `Tí không xem được ảnh ${name}: kết nối này không nhận ảnh.`;
   if (reason === 'format') return `Tí không xem được ảnh ${name}: model không nhận loại ảnh này (SVG, BMP).`;
   return `Tí không xem được ảnh ${name}: ảnh vượt 5 MB, mức lớn nhất gửi cho model.`;
+}
+
+/**
+ * Where edited versions are kept (COD-280): beside the database, so erasing and moving Orglet's data takes them along.
+ * An in-memory database has no folder, and then nothing can be saved.
+ */
+export function editedSourcesDirectory(store: Store): string | undefined {
+  if (store.databasePath === ':memory:' || !store.databasePath) return undefined;
+  return join(dirname(resolve(store.databasePath)), 'edited-sources');
+}
+
+const PDF_SIGNATURE = Buffer.from('%PDF-');
+
+/**
+ * The bytes of an edit, after checking it is what the original's kind allows: the same text kind under a name for the
+ * same extension, a PNG for an image, a PDF for a PDF. Video, audio and Parquet cannot be edited.
+ */
+function versionBytes(original: Source, name: string, content: { text: string } | { bytes: Uint8Array }): Buffer {
+  if (original.media === 'image') {
+    if (!('bytes' in content) || !isVersionNameFor(original.name, name, 'png')) throw new Error('Ảnh đã sửa được lưu thành PNG.');
+    const bytes = Buffer.from(content.bytes);
+    if (!pngSize(bytes)) throw new Error('Ảnh đã sửa không phải PNG hợp lệ.');
+    return bytes;
+  }
+  if (original.media === 'pdf') {
+    if (!('bytes' in content) || !isVersionNameFor(original.name, name, 'pdf')) throw new Error('PDF đã sửa được lưu thành PDF.');
+    const bytes = Buffer.from(content.bytes);
+    if (!bytes.subarray(0, PDF_SIGNATURE.length).equals(PDF_SIGNATURE)) throw new Error('PDF đã sửa không hợp lệ.');
+    return bytes;
+  }
+  if (original.media || original.format === 'parquet') throw new Error(`Chưa sửa được ${original.name} trong Orglet.`);
+  if (!('text' in content) || !isVersionNameFor(original.name, name)) throw new Error('Bản sửa phải giữ loại tệp gốc.');
+  return Buffer.from(content.text, 'utf8');
 }
 
 type ReadMode = 'buffer' | 'hash';
@@ -242,6 +277,54 @@ export class Sources {
     const copy: Source = { ...original, id: id(), revoked: false };
     this.store.put('sources', copy, { column: 'path', value: path });
     return copy;
+  }
+  /**
+   * Saves an edit the person made in the viewer as a new source (COD-280). The file the original points at is never
+   * written: the edit is Orglet's own copy under `edited-sources/<id>/`, read back through the same gate as an
+   * attached file, and linked to the original with `editedFrom`. Text stays the original's kind; an image is saved as
+   * PNG and a PDF as PDF, each checked by its signature. The caller adds it to the chat.
+   */
+  async saveVersion(originalId: string, allowedIds: string[], name: string, content: { text: string } | { bytes: Uint8Array }): Promise<Source> {
+    if (!allowedIds.includes(originalId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
+    const original = this.store.get<Source>('sources', originalId);
+    if (original.revoked) throw new Error('Quyền đọc nguồn đã bị thu hồi.');
+    const root = editedSourcesDirectory(this.store);
+    if (!root) throw new Error('Không lưu được bản sửa khi dữ liệu không nằm trong thư mục.');
+    const bytes = versionBytes(original, name, content);
+    const sourceId = id();
+    const directory = join(root, sourceId);
+    const path = join(directory, fileNameOf(name));
+    await mkdir(directory, { recursive: true });
+    try {
+      await writeFile(path, bytes, { flag: 'wx' });
+      const rule = limitFor(name);
+      const read = await this.readFile(path, rule, rule.kind === 'media' ? 'hash' : 'buffer');
+      const source: Source = { id: sourceId, name, bytes: read.size, hash: read.hash, revoked: false, editedFrom: originalId };
+      if (rule.format) source.format = rule.format;
+      if (rule.media) source.media = rule.media;
+      this.store.put('sources', source, { column: 'path', value: path });
+      return source;
+    } catch (error) {
+      await rm(directory, { recursive: true, force: true });
+      throw error;
+    }
+  }
+  /**
+   * Points a source restored from a backup at a file on this computer (COD-281). A backup carries no file contents or
+   * paths, so a restored source has no file and no read access. The person picks the file, and it is taken only when
+   * its bytes are the ones attached before, by SHA-256. A source attached on this computer keeps its path and any
+   * revocation the person made.
+   */
+  async relink(sourceId: string, allowedIds: string[], path: string): Promise<Source> {
+    if (!allowedIds.includes(sourceId)) throw new Error('Không có quyền đọc nguồn ngoài task này.');
+    const source = this.store.get<Source>('sources', sourceId);
+    if (this.storedPath(sourceId)) throw new Error('Chỉ chọn lại được tệp của nguồn khôi phục từ bản sao lưu.');
+    const rule = limitFor(source.name);
+    const read = await this.readFile(path, rule, rule.kind === 'media' ? 'hash' : 'buffer');
+    if (read.hash !== source.hash) throw new Error(`Tệp này không khớp với ${source.name} đã đính kèm. Chọn đúng tệp đó.`);
+    const relinked: Source = { ...source, revoked: false };
+    this.store.db.prepare('UPDATE sources SET data=?, path=? WHERE id=?').run(JSON.stringify(relinked), resolve(path), sourceId);
+    return relinked;
   }
   /** Exact permitted, hash-checked bytes, for handing a snapshot copy to a local harness. Never media. */
   async readVerified(sourceId: string, allowedIds: string[]): Promise<Buffer> {

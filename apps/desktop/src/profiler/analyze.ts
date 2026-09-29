@@ -2,11 +2,41 @@ import { DuckDBInstance, version } from '@duckdb/node-api';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DatasetProfile, type ExactMatchAccuracy, type ProfileInput } from '../shared/profiles';
+import { DatasetProfile, type ColumnFacts, type DataFormat, type ExactMatchAccuracy, type ProfileInput } from '../shared/profiles';
 import { auditRuns, RunAuditInputError } from './run-audit';
+import { columnFacts, firstColumnLooksLikeRowName, identifier, repeatedRows, wholeRowKey, type Query } from './column-checks';
 
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
-const identifier = (value: string) => `"${value.replaceAll('"', '""')}"`;
+
+type CheckedDataset = Omit<DatasetProfile['datasets'][number], 'sourceId'>;
+
+/**
+ * One file's facts: its rows, each column, the chosen ID column, identical rows and, when no ID column was chosen, a
+ * first column that looks like it names each row.
+ */
+async function checkDataset(query: Query, table: string, format: DataFormat, idColumn: string | null): Promise<CheckedDataset> {
+  const rows = Number((await query(`SELECT count(*) AS n FROM ${table}`))[0].n);
+  const schema = await query(`DESCRIBE ${table}`);
+  const columns: ColumnFacts[] = [];
+  for (const column of schema) columns.push(await columnFacts(query, table, String(column.column_name), String(column.column_type)));
+  // Row numbers count the way a spreadsheet shows them: in a CSV the column names are row 1.
+  const rowOffset = format === 'csv' ? 1 : 0;
+  const id = idColumn ? columns.find(column => column.name === idColumn) : undefined;
+  const idDuplicates = id ? rows - id.nulls - id.distinctNonNull : 0;
+  const idRepeats = id && idDuplicates > 0 ? await repeatedRows(query, table, identifier(id.name), rowOffset) : undefined;
+  const rowKey = wholeRowKey(columns.map(column => column.name));
+  const duplicateRows = await repeatedRows(query, table, rowKey, rowOffset);
+  const first = columns[0];
+  const checkFirstColumn = !idColumn && columns.length > 1 && firstColumnLooksLikeRowName(first, rows);
+  const firstRepeats = checkFirstColumn ? await repeatedRows(query, table, identifier(first.name), rowOffset, rowKey) : undefined;
+  return {
+    rows,
+    columns,
+    id: id ? { column: id.name, nulls: id.nulls, duplicateNonNull: idDuplicates, repeats: idRepeats } : null,
+    duplicateRows,
+    firstColumn: firstRepeats ? { column: first.name, ...firstRepeats } : null,
+  };
+}
 
 // Only this bundled code creates SQL. Neither source contents nor model replies supply SQL.
 export async function analyze(input: ProfileInput, scratchDirectory?: string): Promise<DatasetProfile> {
@@ -32,23 +62,18 @@ export async function analyze(input: ProfileInput, scratchDirectory?: string): P
     await connection.run(`SET allowed_paths = [${paths.map(literal).join(',')}]; SET enable_external_access = false; SET lock_configuration = true;`);
     timeout = setTimeout(() => connection?.interrupt(), 18_000);
     const query = async (sql: string) => (await connection!.runAndReadAll(sql)).getRowObjectsJson();
-    const result: DatasetProfile = { engine: `DuckDB ${version()}`, coverage: 'full', checks: ['schema', 'row_count', 'null_count', 'distinct_non_null'], limitations: ['Không thực thi code hoặc metric của challenge.', 'Các checks này không chứng minh không có leakage hoặc dataset có thể giải được.', 'CSV được đọc với header và các giá trị dạng text; ô rỗng là null. Không tự suy diễn kiểu số.', 'Không trả về mẫu dòng dữ liệu.'], datasets: [], comparison: null };
+    const result: DatasetProfile = { engine: `DuckDB ${version()}`, coverage: 'full', checks: ['schema', 'row_count', 'null_count', 'distinct_non_null'], limitations: ['Orglet chỉ đọc tệp, không chạy gì trong đó.', 'Các phép đếm này cho biết hình dạng của dữ liệu, không cho biết dữ liệu đúng hay đủ.', 'Dòng đầu của CSV là tên cột và là dòng 1. Ô được đọc như chữ rồi mới xét là số hay ngày; ô rỗng tính là ô trống.', 'Không trả về dòng dữ liệu nào: chỉ có số đếm, số thứ tự dòng, và số nhỏ nhất, lớn nhất của cột số.'], datasets: [], comparison: null };
     for (const [index, file] of input.files.entries()) {
       const reader = file.format === 'csv' ? `read_csv(${literal(paths[index])}, header=true, all_varchar=true, strict_mode=true, sample_size=-1)` : file.format === 'parquet' ? `read_parquet(${literal(paths[index])})` : `read_json(${literal(paths[index])}, format='newline_delimited', sample_size=-1, maximum_object_size=1048576)`;
-      await connection.run(`CREATE VIEW data${index} AS SELECT * FROM ${reader}`);
-      const schema = await query(`DESCRIBE data${index}`);
-      if (schema.length > 128) throw new Error('Dataset vượt 128 cột.');
-      const rows = Number((await query(`SELECT count(*) AS n FROM data${index}`))[0].n);
-      const columns: DatasetProfile['datasets'][number]['columns'] = [];
-      for (const column of schema) {
-        const name = String(column.column_name);
-        const counts = (await query(`SELECT count(*) FILTER (WHERE ${identifier(name)} IS NULL) AS missing, count(DISTINCT ${identifier(name)}) AS unique_values FROM data${index}`))[0];
-        columns.push({ name, type: String(column.column_type), nulls: Number(counts.missing), distinctNonNull: Number(counts.unique_values) });
-      }
-      const id = input.idColumn ? columns.find(column => column.name === input.idColumn) : undefined;
-      if (input.idColumn && !id && !input.exactMatch) throw new Error('Không tìm thấy cột ID đã chọn.');
-      result.datasets.push({ sourceId: file.sourceId, rows, columns, id: id ? { column: id.name, nulls: id.nulls, duplicateNonNull: rows - id.nulls - id.distinctNonNull } : null });
+      await connection.run(`CREATE VIEW source${index} AS SELECT * FROM ${reader}`);
+      if ((await query(`DESCRIBE source${index}`)).length > 128) throw new Error('Dataset vượt 128 cột.');
+      // The file is parsed once into memory, so each column query scans that table instead of parsing the file again.
+      await connection.run(`CREATE TABLE data${index} AS SELECT * FROM source${index}`);
+      const dataset = await checkDataset(query, `data${index}`, file.format, input.idColumn);
+      if (input.idColumn && !dataset.id && !input.exactMatch) throw new Error('Không tìm thấy cột ID đã chọn.');
+      result.datasets.push({ sourceId: file.sourceId, ...dataset });
     }
+    result.checks.push('column_kinds', 'number_ranges', 'invalid_dates', 'duplicate_rows', 'first_column_repeats');
     if (input.idColumn) result.checks.push('id_nulls', 'id_duplicates');
     if (input.runAudit) {
       const dataset = result.datasets[0];
@@ -76,7 +101,7 @@ export async function analyze(input: ProfileInput, scratchDirectory?: string): P
         const mismatch = Number((await query(`WITH a AS (SELECT row_number() OVER () AS position, CAST(${key} AS VARCHAR) AS id FROM data0), b AS (SELECT row_number() OVER () AS position, CAST(${key} AS VARCHAR) AS id FROM data1) SELECT count(*) AS n FROM a FULL JOIN b USING(position) WHERE a.position IS NULL OR b.position IS NULL OR a.id IS DISTINCT FROM b.id`))[0].n);
         result.comparison.sameIdOrder = mismatch === 0;
         result.checks.push('id_overlap', 'id_order_alignment');
-        result.limitations.push('So sánh ID bằng biểu diễn text, giữ nguyên thứ tự vật lý. ID trùng/null cần được xử lý riêng; overlap không tự chứng minh leakage.');
+        result.limitations.push('Mã được so như chữ, theo thứ tự dòng trong tệp. Mã trùng hoặc trống cần xem riêng; hai tệp có chung mã chưa chắc là có vấn đề.');
       }
     }
     if (input.exactMatch) {

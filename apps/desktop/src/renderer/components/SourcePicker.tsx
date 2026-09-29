@@ -1,10 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { FileText, FolderOpen, Plus } from 'lucide-react';
 import { Button } from './ui';
 import { t } from '../i18n';
 
+/**
+ * What takes focus once a choice closes the menu: the message box of the bar the picker sits in. `Composer` provides
+ * it; outside a bar the menu's own button takes focus back.
+ */
+export const MessageBoxFocus = createContext<(() => void) | undefined>(undefined);
+
 /** One entry point for adding sources; files and folder intake stay separate choices inside the menu. */
-export function SourcePicker({ onFiles, onFolder }: { onFiles: () => void; onFolder: () => void }) {
+export function SourcePicker({ onFiles, onFolder, disabled }: { onFiles: () => void; onFolder: () => void; /** A read-only chat takes no files (COD-282). */ disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const [openBelow, setOpenBelow] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -16,7 +22,15 @@ export function SourcePicker({ onFiles, onFolder }: { onFiles: () => void; onFol
     document.addEventListener('pointerdown', outside);
     return () => document.removeEventListener('pointerdown', outside);
   }, [open]);
-  const choose = (fn: () => void) => { setOpen(false); fn(); };
+  const focusMessageBox = useContext(MessageBoxFocus);
+  const choose = (fn: () => void) => {
+    setOpen(false);
+    // The chosen item leaves with the menu, which would drop focus to the page. Focus moves before the file dialog
+    // opens, so the window hands it back to the same place once the dialog closes.
+    if (focusMessageBox) focusMessageBox();
+    else trigger.current?.focus();
+    fn();
+  };
   const toggle = () => {
     if (!open) setOpenBelow(!hasRoomAbove(trigger.current));
     setOpen(!open);
@@ -30,7 +44,7 @@ export function SourcePicker({ onFiles, onFolder }: { onFiles: () => void; onFol
       items[(index + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
     }
   }}>
-    <Button ref={trigger} type="button" size="icon" className="composer-add" aria-label={t('Thêm nguồn')} title={t('Thêm nguồn')} aria-haspopup="menu" aria-expanded={open} onClick={toggle}><Plus size={20} /></Button>
+    <Button ref={trigger} type="button" size="icon" className="composer-add" aria-label={t('Thêm nguồn')} title={t('Thêm nguồn')} aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={toggle}><Plus size={20} /></Button>
     {open && <div className={openBelow ? 'source-menu below' : 'source-menu'} role="menu" aria-label={t('Thêm nguồn')}>
       <button type="button" role="menuitem" onClick={() => choose(onFiles)}><FileText size={16} /><span><strong>{t('Tệp')}</strong><small>{t('Chọn từng file cụ thể')}</small></span></button>
       <button type="button" role="menuitem" onClick={() => choose(onFolder)}><FolderOpen size={16} /><span><strong>{t('Thư mục')}</strong><small>{t('Tự lấy tối đa 20 file hỗ trợ')}</small></span></button>

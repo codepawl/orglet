@@ -1,0 +1,58 @@
+{
+  "about": "Hand-written chat messages labelled with the one permission each needs (COD-305). `none`: answered from what the orglet knows; `web`: search or read public web pages; `read`: read files in a folder on this computer; `edit`: change or create files there; `run`: run commands or programs; `browser`: use a website in Orglet's browser (sign in, click, fill a form). `tune` cases chose the wording and the threshold; `held` cases were only scored.",
+  "cases": [
+    { "split": "tune", "need": "none", "text": "Write a short birthday message for my sister." },
+    { "split": "tune", "need": "none", "text": "Explain the difference between TCP and UDP in simple words." },
+    { "split": "tune", "need": "none", "text": "Viết giúp mình một email xin nghỉ phép ngày mai." },
+    { "split": "tune", "need": "none", "text": "Giải thích đệ quy là gì cho người mới học lập trình." },
+    { "split": "tune", "need": "none", "text": "How do websites work? Explain it like I'm ten." },
+    { "split": "held", "need": "none", "text": "Give me five names for a small coffee shop." },
+    { "split": "held", "need": "none", "text": "Dịch câu này sang tiếng Anh: Tôi rất vui được gặp bạn." },
+    { "split": "held", "need": "none", "text": "Gợi ý 3 món ăn tối đơn giản với trứng." },
+
+    { "split": "tune", "need": "web", "text": "What's the weather in Hanoi today?" },
+    { "split": "tune", "need": "web", "text": "Find the latest news about the Fed interest rate decision." },
+    { "split": "tune", "need": "web", "text": "Tìm tin tức mới nhất về giá vàng hôm nay." },
+    { "split": "tune", "need": "web", "text": "Tra giúp tôi lịch thi đấu của đội tuyển Việt Nam tuần này." },
+    { "split": "tune", "need": "web", "text": "Read this article and summarize it: https://www.theverge.com/2026/9/20/ai-phones" },
+    { "split": "held", "need": "web", "text": "What is the current price of Bitcoin?" },
+    { "split": "held", "need": "web", "text": "Search for budget laptops released this month and compare their prices." },
+    { "split": "held", "need": "web", "text": "Tỷ giá USD hôm nay là bao nhiêu?" },
+
+    { "split": "tune", "need": "read", "text": "Look through the files in my project folder and tell me what this codebase does." },
+    { "split": "tune", "need": "read", "text": "Read my notes in the working folder and list the open tasks." },
+    { "split": "tune", "need": "read", "text": "Đọc các file trong thư mục dự án của tôi và giải thích cấu trúc." },
+    { "split": "tune", "need": "read", "text": "Trong thư mục báo cáo của tôi, file nào nói về doanh thu quý 3?" },
+    { "split": "tune", "need": "read", "text": "Find where the login function is defined in my code." },
+    { "split": "held", "need": "read", "text": "Which of the CSV files in my data folder has the most rows?" },
+    { "split": "held", "need": "read", "text": "Xem giúp mình code trong thư mục src có chỗ nào dễ gây lỗi không." },
+    { "split": "held", "need": "read", "text": "Tóm tắt các tài liệu Word trong thư mục làm việc." },
+
+    { "split": "tune", "need": "edit", "text": "Fix the typo in README.md and save the file." },
+    { "split": "tune", "need": "edit", "text": "Rename all the photos in my folder so the names start with the date." },
+    { "split": "tune", "need": "edit", "text": "Sửa lỗi chính tả trong file báo cáo rồi lưu lại." },
+    { "split": "tune", "need": "edit", "text": "Tạo file ghi chú mới tên todo.md trong thư mục dự án." },
+    { "split": "tune", "need": "edit", "text": "Update the config file so the server uses port 8080." },
+    { "split": "held", "need": "edit", "text": "Add a dark mode toggle to the CSS file of my website." },
+    { "split": "held", "need": "edit", "text": "Thêm một cột Tổng vào file Excel trong thư mục của tôi." },
+    { "split": "held", "need": "edit", "text": "Viết lại hàm tính thuế trong file tax.py cho gọn hơn." },
+
+    { "split": "tune", "need": "run", "text": "Run the test suite and tell me which tests fail." },
+    { "split": "tune", "need": "run", "text": "Install the dependencies with npm and start the dev server." },
+    { "split": "tune", "need": "run", "text": "Chạy lệnh git status trong thư mục dự án giúp tôi." },
+    { "split": "tune", "need": "run", "text": "Chạy các bài test rồi sửa test bị lỗi." },
+    { "split": "tune", "need": "run", "text": "Run this Python script and show me what it prints." },
+    { "split": "held", "need": "run", "text": "Build the project and tell me if there are compile errors." },
+    { "split": "held", "need": "run", "text": "Cài thư viện pandas rồi chạy script phân tích dữ liệu." },
+    { "split": "held", "need": "run", "text": "Build lại app và cho tôi biết có lỗi không." },
+
+    { "split": "tune", "need": "browser", "text": "Log in to my Shopee account and check the status of my last order." },
+    { "split": "tune", "need": "browser", "text": "Open the Google Form and fill in my name and email." },
+    { "split": "tune", "need": "browser", "text": "Vào trang quản trị website của tôi và xem có bao nhiêu đơn hàng mới." },
+    { "split": "tune", "need": "browser", "text": "Điền giúp tôi form đăng ký trên trang web của trường." },
+    { "split": "tune", "need": "browser", "text": "Go to the airline's website and check in for my flight." },
+    { "split": "held", "need": "browser", "text": "Click through the checkout on my online store and tell me if anything breaks." },
+    { "split": "held", "need": "browser", "text": "Mở trang Facebook của tôi và đọc các tin nhắn chưa trả lời." },
+    { "split": "held", "need": "browser", "text": "Đăng nhập vào trang quản lý khách hàng rồi xuất danh sách khách mới." }
+  ]
+}

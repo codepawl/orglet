@@ -44,7 +44,8 @@ loads the switch's styles.
 ## Components
 
 - `Button`: `variant` `ghost` (the default: quiet text, a soft background on hover), `outline` (a soft filled pill for a
-  secondary action) or `primary` (the one filled action of a place); `size="icon"` for a square holding one icon,
+  secondary action), `primary` (the one filled action of a place) or `danger` (filled in `--org-error` with
+  `--org-error-ink` text, for a yes that cannot be undone); `size="icon"` for a square holding one icon,
   named with `aria-label`, which answers hover with the icon's colour instead of a tile. `type` is left to the caller,
   so inside a form it submits unless it says `type="button"`.
 - `Input` and `Textarea`: a text field. Name it with a `<label>` around it or `aria-label`. `invalid` marks it as
@@ -68,7 +69,7 @@ loads the switch's styles.
 - `AnchoredPopover`: a panel attached to a trigger (`anchor` ref). It floats below it, flips above when there is no
   room, stays inside the window, closes on Escape or a pointer outside and gives focus back to the anchor. Inside an
   open dialog it portals into that dialog and sets `data-popup-open`, so Escape closes the popover, not the dialog.
-- `StatusMark`: a small status glyph for the left of a title. `variant` (`empty`, `dashed`, `filled`, `busy`) and
+- `StatusMark`: a small status glyph for the left of a title. `variant` (`empty`, `dashed`, `paused`, `filled`, `busy`) and
   `tone` (`muted`, `success`, `error`, `working`) pick a shape and a colour, and every state has its own shape, so
   colour is never the only difference. `label` is what a screen reader hears; `decorative` keeps it out of a named
   control. Which state a thing is in belongs to the application.
@@ -97,13 +98,19 @@ loads the switch's styles.
   name; the text stays as typed and converting it is the application's. `invalid` and `flash` work as on `Input`.
 - `Attachment`, `fileKind` and `formatFileSize`: a file as a same-width card (`name`, a `meta` line, the kind's
   `icon`), rendered as a list item. With `onOpen` the whole card opens the file; with `onRemove` (named by
-  `removeLabel`, showing `removeIcon`) a remove button appears on hover or focus without moving anything. `fileKind`
+  `removeLabel`, showing `removeIcon`) a remove button appears on hover or focus without moving anything; `inactive` draws a file that can no longer
+  be used (read access revoked) quieter, with `meta` saying why. `fileKind`
   reads the kind from the extension; `formatFileSize` gives "1.5 KB" in a locale.
 - `Drawer`: a centred panel with a header (title or breadcrumb, `description`, the panel's `actions`, a close button
   named by `closeLabel` showing `closeIcon`) and a body that scrolls on its own. Focus goes back to what opened it.
-- `confirmAction` and `Confirmer`: `await confirmAction({ title, description?, confirmLabel?, cancelLabel? })` asks one
-  yes-or-no question and resolves true only on confirm; render one `<Confirmer confirmLabel cancelLabel />` for the
-  default labels.
+- `confirmAction` and `Confirmer`: `await confirmAction({ title, description?, confirmLabel?, cancelLabel?, tone? })` asks
+  one yes-or-no question and resolves true only on confirm; `tone: 'danger'` draws the yes as a danger button. Render
+  one `<Confirmer confirmLabel cancelLabel />` for the default labels. Cancel takes focus, and the answer gives focus
+  back to what asked.
+- `useReturnFocus(onOpenAutoFocus?)`: for a Radix dialog opened from state rather than a `Dialog.Trigger`. Spread the
+  result on `Dialog.Content`: it remembers what had focus when the dialog opened and focuses it again when it closes,
+  unless something outside the dialog already took focus (a link in the dialog that closes it and focuses its target).
+  The kit's own dialogs use it.
 - `DialogOverlay`, `keepOpenForPopup` and `OPEN_POPUP_SELECTOR`: the frosted backdrop for any Radix dialog, and the
   Escape rule that closes an open menu inside a dialog before the dialog.
 - `showToast` and `Toaster`: `showToast(text, tone?, action?)` shows a short message at the top centre, `success`,
@@ -123,10 +130,16 @@ loads the switch's styles.
   one form. `TabbedFormDialog` pins Cancel and Save at the bottom with the `error` beside them, shows `busyLabel`
   while saving, and lands on the field named by `focusField`. A tab's `buttonProps` reach its button, such as a
   handler that prefetches on hover. Tabs follow the WAI-ARIA pattern: the arrows move and open, only the open tab is
-  in the Tab order.
+  in the Tab order. Closing gives focus back to what opened it.
 - `Viewer`: a large dialog for looking at one thing, in the style of macOS Quick Look: close on the left (`closeLabel`,
   `closeIcon`), the `icon` and `title` centred with an optional `meta` line under them, `actions` on the right, and the
-  content on a grey backdrop that scrolls on its own. `className` widens or restyles one kind of viewer.
+  content on a grey backdrop that scrolls on its own. `className` widens or restyles one kind of viewer. `toolbar` adds
+  a second row of tools under the first, for an editing mode such as marking up a picture; it stays put while the
+  content scrolls. Closing gives focus back to what opened it.
+- `ToolbarToggleGroup`: one choice out of a few small icon buttons, such as the tool, colour or stroke width of a
+  drawing bar. A radio group named by `label`: one Tab stop, the arrow keys, Home and End move the choice and the focus
+  together, and the picked item sits on a pale tint. Each item has a `label`, an `icon` and an optional `shortcut`,
+  shown in its tooltip and announced as `aria-keyshortcuts`; handling that key elsewhere is the caller's job.
 - `cn`: joins class names and lets the caller's win.
 
 ## Theming

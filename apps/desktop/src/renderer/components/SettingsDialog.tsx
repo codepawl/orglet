@@ -1,14 +1,15 @@
 import { TabbedDialog } from '@codepawl/orglet-ui';
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow } from 'lucide-react';
+import { Check, Contrast, Database, Globe, Info, MessageSquare, Plug, SlidersHorizontal, SquareTerminal, Wallet, X, RefreshCw, ExternalLink, Monitor, Moon, Sun, FileKey, Download, ArchiveRestore, Copy, Palette, Pencil, UserPlus, Trash2, UserRound, Laptop, Blocks, AppWindow, LogIn, LogOut } from 'lucide-react';
 import { avatarPalette } from './Avatar';
 import { currentAccentColor, DEFAULT_ACCENT_COLOR } from '../../shared/accent';
 import { ColorPicker } from './ColorPicker';
 import { AnchoredPopover } from './AnchoredPopover';
 import { API_PROVIDER_NAMES, ApiProvider, isLocalApi, MAX_PROVIDER_CONCURRENCY, QUIET_PARALLEL_LIMIT, type Connections, type LogoColor, type ProviderScope, type Workspace } from '../../shared/contracts';
 import { CustomConnectionsSection } from './CustomConnections';
-import { harnessCatalog, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
-import { PlanUsage } from './PlanUsage';
+import type { OpenCodeGoUsage } from '../../shared/opencode';
+import { harnessCatalog, harnessLogoutArgs, harnessSignInIsMachineWide, harnessSignsInApp, loginShellNames, SYSTEM_ACCOUNT_ID, tightestWindow, type HarnessAccountUsage, type HarnessBankedResets, type HarnessCatalogId, type HarnessInfo, type HarnessResetAnswer, type HarnessUsage, type LoginCommand, type LoginShell } from '../../shared/harness';
+import { BankedResets, PlanUsage, usageReadingTime } from './PlanUsage';
 import { bundledFont, CODE_FONT_SUGGESTIONS, FontFamily, fontStack, INTERFACE_FONT_SUGGESTIONS, INTERFACE_PREFERRED_FONTS, type FontRole } from '../../shared/fonts';
 import { Button } from './ui';
 import { Select } from './Select';
@@ -29,6 +30,7 @@ import { AboutSettings } from './AboutSettings';
 import { McpHeadingActions, McpSettings, type McpEditing } from './McpSettings';
 import { WebSearchSettings } from './WebSearchSettings';
 import type { WebSearchProvider } from '../../shared/web-tools';
+import type { ToastTone } from '@codepawl/orglet-ui';
 import { BrowserHeadingActions, BrowserProfilesSettings } from './BrowserSettings';
 import { t, tMessage, translated } from '../i18n';
 import { DEFAULT_LANGUAGE } from '../../shared/i18n';
@@ -36,6 +38,9 @@ import { orglet } from '../api';
 import { CommandBlock, Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import { dwellAbout, modelLists } from '../caches';
 import { dwellHandlers } from '../prefetch';
+import { chatHeadline } from '../../shared/forward';
+import { forgetAllDrafts } from '../drafts';
+import { TacetSetup } from './TacetSetup';
 
 /** 1 to 8 requests in flight per provider (COD-242). */
 const concurrencyChoices = Array.from({ length: MAX_PROVIDER_CONCURRENCY }, (_, index) => index + 1);
@@ -71,7 +76,7 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
 const settingNames = translated({
   language: 'Ngôn ngữ', theme: 'Giao diện', accentColor: 'Màu nhấn', logoColor: 'Màu logo', interfaceFont: 'Phông chữ', codeFont: 'Phông chữ code',
   autoTitles: 'Tự đặt tên cuộc trò chuyện', copyFormat: 'Định dạng khi sao chép', downloadFormat: 'Định dạng khi tải xuống', confirmOpenTask: 'Hỏi trước khi mở công việc',
-  archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi connection / tháng', providerConcurrency: 'Request đồng thời mỗi provider', providerConsent: 'Provider được phép',
+  archiveRetentionDays: 'Tự xóa mục đã lưu trữ', connectionLimitMicros: 'Giới hạn mỗi kết nối / tháng', providerConcurrency: 'Yêu cầu cùng lúc mỗi nhà cung cấp', providerConsent: 'Provider được phép',
   autoUpdate: 'Tự động cập nhật', backgroundNotifications: 'Báo khi cuộc trò chuyện xong', webSearchProvider: 'Nhà cung cấp tìm kiếm web',
 });
 const eraseNames: Record<EraseScope, string> = translated({ chats: 'Xóa lịch sử trò chuyện', knowledge: 'Xóa kiến thức', memory: 'Xóa ghi nhớ', sources: 'Xóa nguồn đã nhập', everything: 'Xóa toàn bộ dữ liệu' });
@@ -88,35 +93,110 @@ const sectionLabels: Partial<Record<SettingsTab, string>> = {
 /** Who is signed in and on which plan, as one line: "an@example.com · ChatGPT Plus". */
 const accountLine = (usage: HarnessAccountUsage) => [usage.email, usage.plan].filter(Boolean).join(' · ');
 
-/** An account in the picker: its address and how much of the allowance closest to its limit is used. */
+/**
+ * An account in the picker: its address and how much of the allowance closest to its limit is used, with the time
+ * when the numbers are an earlier reading.
+ */
 function accountSummary(usage: HarnessAccountUsage | undefined): string | undefined {
   if (!usage) return undefined;
   if (usage.unavailable === 'signed_out') return t('Chưa đăng nhập');
   const tightest = tightestWindow(usage);
   if (!tightest) return usage.email;
-  const used = t('đã dùng {0}%', [Math.round(tightest.usedPercent)]);
+  const percent = Math.round(tightest.usedPercent);
+  const used = usage.asOf ? t('{0}% lúc {1}', [percent, usageReadingTime(usage.asOf)]) : t('đã dùng {0}%', [percent]);
   return usage.email ? `${usage.email} · ${used}` : used;
 }
 
-/** Why a signed-in account shows no allowance. Signed out says nothing here: the login command below already does. */
+/**
+ * Why a signed-in account shows no fresh allowance. Signed out says nothing here: the login command below already
+ * does. An expired saved sign-in is not a sign-in problem: Claude Code renews it when it next runs, Orglet's own runs
+ * included, and Orglet reads again after such a run (COD-301). Until then the last numbers show with their time.
+ */
 function usageGapText(item: HarnessInfo, usage: HarnessAccountUsage): string | undefined {
   if (usage.unavailable === 'unsupported') return unreportedUsageText(item);
-  if (usage.unavailable === 'expired') return t('Phiên đăng nhập đã hết hạn. Mở {0} một lần rồi bấm Dò lại.', [item.name]);
+  if (usage.unavailable === 'expired' && usage.asOf) {
+    return t('Số liệu lúc {0}. {1} tự làm mới phiên đăng nhập ở lần chạy tới, rồi Orglet đọc lại.', [usageReadingTime(usage.asOf), item.name]);
+  }
+  if (usage.unavailable === 'expired') return t('Chưa có số liệu mới: {0} tự làm mới phiên đăng nhập ở lần chạy tới, rồi Orglet đọc lại.', [item.name]);
+  if (usage.unavailable === 'failed' && usage.asOf) return t('Chưa đọc được hạn mức lúc này. Số liệu lúc {0}.', [usageReadingTime(usage.asOf)]);
   if (usage.unavailable === 'failed') return t('Chưa đọc được hạn mức lúc này.');
   return undefined;
 }
 
-/** Cursor Agent and Gemini CLI never report a plan allowance; for the others it depends on how they signed in. */
+/**
+ * What spending a banked reset does, asked before anything is sent (COD-328). A reset clears the five-hour session
+ * allowance only; the weekly one stays where it is.
+ */
+function resetQuestion(account: string, resets: HarnessBankedResets): string {
+  if (resets.count === 1) return t('Claude đặt lại hạn mức phiên hiện tại (5 giờ) của {0}; hạn mức tuần giữ nguyên. Việc này dùng lượt reset cuối cùng và không hoàn tác được.', [account]);
+  return t('Claude đặt lại hạn mức phiên hiện tại (5 giờ) của {0}; hạn mức tuần giữ nguyên. Việc này dùng 1 trong {1} lượt reset và không hoàn tác được.', [account, resets.count]);
+}
+
+/** Claude's answer to a claim, in words. Only `reset` spent anything. */
+function resetAnswerNotice(outcome: HarnessResetAnswer): [string, ToastTone] {
+  if (outcome === 'reset') return [t('Đã dùng một lượt reset: hạn mức phiên đã được đặt lại.'), 'success'];
+  if (outcome === 'not_limited') return [t('Phiên hiện tại chưa chạm trần nên Claude chưa dùng lượt reset nào.'), 'info'];
+  if (outcome === 'already_used') return [t('Lượt reset này đã được dùng trước đó.'), 'info'];
+  return [t('Tài khoản này không còn lượt reset nào.'), 'info'];
+}
+
+/**
+ * Whether there is an allowance to show depends on how the CLI signed in, and for Cursor and Gemini CLI also on the plan
+ * (a team plan's spend, an account the CLI has not set up yet).
+ */
 function unreportedUsageText(item: HarnessInfo): string {
-  if (item.id === 'cursor') return t('Cursor Agent không cho biết gói đã dùng bao nhiêu.');
-  if (item.id === 'gemini') return t('Gemini CLI không cho biết gói đã dùng bao nhiêu.');
+  if (item.id === 'cursor') return t('Cursor không báo hạn mức cho kiểu đăng nhập hoặc gói này.');
+  if (item.id === 'gemini') return t('Gemini CLI không báo hạn mức cho kiểu đăng nhập hoặc gói này.');
   return t('Kiểu đăng nhập này không có hạn mức gói.');
 }
 
-/** What to do in the terminal once the login command runs. Gemini CLI has no login command, so it names the menu choice. */
+/**
+ * The saved Go key's five-hour, weekly and monthly allowances, the way a harness row shows its plan: the bars, or one
+ * line saying why there are none. Nothing is estimated.
+ */
+function OpenCodeGoPlanUsage({ usage, name }: { usage: OpenCodeGoUsage | undefined; name: string }) {
+  if (!usage) return <SkeletonGroup label={t('Đang đọc hạn mức gói…')}><div className="plan-usage"><Skeleton width="70%" /></div></SkeletonGroup>;
+  if (usage.unavailable === 'unsupported') return <span className="setting-description">{t('Key này chưa có gói OpenCode Go.')}</span>;
+  if (usage.unavailable === 'failed') return <span className="setting-description">{t('Chưa đọc được hạn mức lúc này.')}</span>;
+  return <PlanUsage windows={usage.windows} label={t('Hạn mức gói {0}', [name])} />;
+}
+
+/**
+ * How to sign in from here. Most CLIs sign in from the button and the browser (COD-327); Gemini CLI has no login
+ * command, so it names the menu choice in its own window.
+ */
 function signInStep(item: HarnessInfo): string {
   if (item.id === 'gemini') return t('Chạy lệnh bên dưới, chọn Sign in with Google, đăng nhập xong gõ /quit rồi bấm Dò lại.');
+  if (harnessSignsInApp[item.id]) return t('Bấm Đăng nhập rồi làm tiếp trong trình duyệt.');
   return t('Chạy lệnh bên dưới trong terminal rồi bấm Dò lại.');
+}
+
+/**
+ * Signing in without a terminal (COD-327): one button that starts the CLI's own sign-in in the selected account's
+ * folder. While it waits for the browser, the button gives way to one plain line and Cancel, and the row detects
+ * again by itself once the CLI is done. A failure says the CLI's reason under the button.
+ *
+ * It is one button whose words change, so keyboard focus stays on it from Sign in to Cancel and back. While Settings
+ * is busy it is only `aria-disabled`: a disabled button that holds focus drops it to the page.
+ */
+function HarnessSignInControl({ item, busy, onStart, onCancel }: { item: HarnessInfo; busy: boolean; onStart: () => void; onCancel: () => void }) {
+  const waiting = item.signIn?.state === 'waiting';
+  const press = () => {
+    if (busy) return;
+    if (waiting) onCancel();
+    else onStart();
+  };
+  return <div className="harness-sign-in" aria-live="polite">
+    {waiting && <span className="harness-sign-in-waiting">{t('Đang chờ bạn đăng nhập trong trình duyệt…')}</span>}
+    <Button variant="outline" aria-disabled={busy || undefined} onClick={press}>{waiting ? <><X size={14} />{t('Hủy')}</> : <><LogIn size={14} />{t('Đăng nhập')}</>}</Button>
+    {item.signIn?.state === 'failed' && <span className="error">{t('Chưa đăng nhập được: {0}', [tMessage(item.signIn.message)])}</span>}
+  </div>;
+}
+
+/** The sign-out question. The default account and Cursor Agent share one sign-in across the computer, so it says so. */
+function signOutQuestion(item: HarnessInfo): string {
+  if (harnessSignInIsMachineWide(item.id, item.accountId)) return t('Đăng xuất {0} trên cả máy này, không chỉ trong Orglet?', [item.name]);
+  return t('Đăng xuất tài khoản này khỏi {0}?', [item.name]);
 }
 
 /**
@@ -125,9 +205,11 @@ function signInStep(item: HarnessInfo): string {
  * so the login command shown next is the one that signs into it. Each option names the address signed in to it
  * and how much of its plan is used, so switching to the one with room is a choice made on sight.
  */
-function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove }: {
+function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove, onSignOut }: {
   item: HarnessInfo; usage?: HarnessAccountUsage[]; busy: boolean;
   onSelect: (id: string) => void; onSave: (id: string | undefined, label: string) => void; onRemove: (id: string) => void;
+  /** Present only when the account shown is signed in and its CLI has a sign-out command. */
+  onSignOut?: () => void;
 }) {
   const summaryOf = (accountId: string) => accountSummary(usage?.find(row => row.accountId === accountId));
   const row = useRef<HTMLDivElement>(null);
@@ -142,7 +224,7 @@ function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove }:
   };
   return <div className="harness-account" ref={row}>
     <Select size="sm" className="harness-account-select" ariaLabel={t('Tài khoản {0}', [item.name])} value={item.accountId} disabled={busy}
-      menuMinWidth={320} showDetail={false}
+      menuMinWidth={360} showDetail={false}
       onChange={onSelect}
       options={[
         { value: SYSTEM_ACCOUNT_ID, label: t('Tài khoản mặc định'), detail: summaryOf(SYSTEM_ACCOUNT_ID) ?? t('Đã đăng nhập sẵn'), icon: <Laptop size={16} /> },
@@ -155,6 +237,7 @@ function HarnessAccountPicker({ item, usage, busy, onSelect, onSave, onRemove }:
     ]} />}
     <RowMenu label={t('Tài khoản {0}', [item.name])} items={[
       { label: t('Thêm tài khoản'), icon: UserPlus, onSelect: () => setEditing({ label: '' }) },
+      ...(onSignOut ? [{ label: t('Đăng xuất'), icon: LogOut, confirm: { question: signOutQuestion(item), label: t('Đăng xuất') }, onSelect: onSignOut }] : []),
       ...(active ? [
         { label: t('Đổi tên'), icon: Pencil, onSelect: () => setEditing({ id: active.id, label: active.label }) },
         {
@@ -273,7 +356,7 @@ function EraseRow({ scope, title, description, caveat, question, busy, onErase }
   const total = scope === 'everything';
   const start = async () => {
     if (total) { setTyped(''); return; }
-    if (await confirmAction({ title: question, description: caveat, confirmLabel: t('Xóa') })) onErase(scope);
+    if (await confirmAction({ title: question, description: caveat, confirmLabel: t('Xóa'), tone: 'danger' })) onErase(scope);
   };
   return <div ref={row}>
     <Row title={title} description={description}>
@@ -367,11 +450,40 @@ function LoginCommandCopy({ commands, label }: { commands: LoginCommand[]; label
   return <CommandCopy command={current.command} label={label} picker={picker || undefined} />;
 }
 
+/** The login command's label: the fallback beside the sign-in button, the only way otherwise. */
+function loginCommandLabel(item: HarnessInfo, signsInHere: boolean): string {
+  if (item.status === 'not_installed') return t('Sau khi cài, đăng nhập bằng');
+  if (signsInHere) return t('Hoặc chạy lệnh này trong terminal');
+  return t('Lệnh đăng nhập');
+}
+
 /** A command to paste, from the kit's `CommandBlock`, copied through the main process. */
 function CommandCopy({ command, label, picker }: { command: string; label: string; picker?: ReactNode }) {
   return <CommandBlock command={command} label={label} toolbar={picker} copyLabel={t('Sao chép lệnh')} copyIcon={<Copy size={14} />} onCopy={next => void copyCommand(next)} />;
 }
 
+
+/**
+ * While a sign-in started here waits for the browser, the core's change notice reads the rows again, so the row
+ * leaves its waiting line as soon as the CLI is done, even if Settings was closed meanwhile. A sign-in that ends
+ * signed in says so and reads usage afresh.
+ */
+function useSignInEndings(harnesses: HarnessInfo[] | undefined, onHarnesses: (next: HarnessInfo[]) => void, loadUsage: (refresh: boolean) => Promise<void>) {
+  const waiting = (harnesses ?? []).filter(item => item.signIn?.state === 'waiting').map(item => item.id).join(' ');
+  const waitedFor = useRef<HarnessCatalogId[]>([]);
+  useEffect(() => {
+    if (!waiting) return;
+    return orglet.onChange(() => void orglet.call('harnesses', { refresh: false }).then(onHarnesses).catch(() => {}));
+  }, [waiting, onHarnesses]);
+  useEffect(() => {
+    const before = waitedFor.current;
+    waitedFor.current = (harnesses ?? []).filter(item => item.signIn?.state === 'waiting').map(item => item.id);
+    const ended = (harnesses ?? []).filter(item => before.includes(item.id) && item.signIn?.state !== 'waiting');
+    if (!ended.length) return;
+    void loadUsage(false);
+    for (const item of ended) if (item.status === 'signed_in') toast(t('Đã đăng nhập {0}', [item.name]), 'success', item.name);
+  }, [harnesses, loadUsage]);
+}
 
 /** `harnesses` is undefined until the first detection lands, which runs each CLI and takes seconds on a cold start. */
 type Props = { open: boolean; tab: SettingsTab; onTab: (tab: SettingsTab) => void; onClose: () => void; workspace: Workspace; connections: Connections; onConnections: (next: Connections) => void; harnesses: HarnessInfo[] | undefined; onHarnesses: (next: HarnessInfo[]) => void };
@@ -402,8 +514,32 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
       setUsage({});
     }
   }, []);
+  /** The Claude Code account whose banked reset is being spent, so its button waits and a second click does nothing. */
+  const [claimingReset, setClaimingReset] = useState<string>();
+  const claimReset = async (item: HarnessInfo, account: HarnessAccountUsage, resets: HarnessBankedResets) => {
+    const confirmed = await confirmAction({
+      title: t('Dùng một lượt reset?'),
+      description: resetQuestion(account.email ?? t('tài khoản này'), resets),
+      confirmLabel: t('Dùng lượt reset'),
+    });
+    if (!confirmed) return;
+    setClaimingReset(account.accountId);
+    try {
+      const claim = await orglet.call('claimHarnessReset', { accountId: account.accountId });
+      setUsage(claim.usage);
+      const [text, tone] = resetAnswerNotice(claim.outcome);
+      toast(text, tone, item.name);
+    } catch (error) {
+      toast((error as Error).message, 'error', item.name);
+      // The core read usage again after the attempt; this picks up that reading.
+      void loadUsage(false);
+    } finally {
+      setClaimingReset(undefined);
+    }
+  };
   const readsUsage = open && tab === 'harness' && harnesses !== undefined;
   useEffect(() => { if (readsUsage) void loadUsage(false); }, [readsUsage, loadUsage]);
+  useSignInEndings(harnesses, onHarnesses, loadUsage);
   const detectAgain = () => void act(async () => {
     setDetecting(true);
     try { onHarnesses(await orglet.call('harnesses', { refresh: true })); }
@@ -414,8 +550,27 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     modelLists.invalidate();
     return t('Đã dò lại harness');
   }, t('Harness trên máy'));
-  /** A connection that changed makes the session's model lists for it wrong; the core already dropped its own. */
-  const changeConnections = (next: Connections) => { modelLists.invalidate(); onConnections(next); };
+  /** How much of its allowances the saved OpenCode Go key has used; read only while Kết nối API is open and a key is saved. */
+  const [goUsage, setGoUsage] = useState<OpenCodeGoUsage>();
+  const loadGoUsage = useCallback(async (refresh: boolean) => {
+    try {
+      setGoUsage(await orglet.call('openCodeGoUsage', { refresh }));
+    } catch {
+      setGoUsage(undefined);
+    }
+  }, []);
+  const readsGoUsage = open && tab === 'connections' && Boolean(connections['opencode-go']);
+  useEffect(() => { if (readsGoUsage) void loadGoUsage(false); }, [readsGoUsage, loadGoUsage]);
+  /**
+   * A connection that changed makes the session's model lists for it wrong; the core already dropped its own. A new or
+   * removed Go key also makes its usage someone else's, so it is read again or dropped.
+   */
+  const changeConnections = (next: Connections) => {
+    modelLists.invalidate();
+    onConnections(next);
+    if (next['opencode-go']) void loadGoUsage(true);
+    else setGoUsage(undefined);
+  };
   const [keyDrafts, setKeyDrafts] = useState<Partial<Record<ApiProvider, string>>>({});
   /** Providers the user opened for editing before a key is saved. Saved connections stay “on” from `connections`. */
   const [editing, setEditing] = useState<Partial<Record<ApiProvider, boolean>>>({});
@@ -437,7 +592,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const reservationName = (reservationId: string) => {
     const reservation = workspace.budgetReservations.find(item => item.id === reservationId);
     const task = workspace.tasks.find(item => item.id === reservation?.taskId);
-    return task?.title || task?.brief.split('\n')[0] || reservation?.taskId;
+    return task?.title || (task ? chatHeadline(task) : undefined) || reservation?.taskId;
   };
   /** Runs one change and toasts its outcome; `about` names the setting or provider it concerned, for the notice centre. */
   const act = async (action: () => Promise<string | void>, about?: string) => {
@@ -455,13 +610,17 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
     if (summary.scope === 'everything') return t('Đã xóa toàn bộ dữ liệu. Orglet trở lại như mới cài.');
     if (summary.scope === 'knowledge') return t('Đã xóa {0} mục kiến thức.', [summary.knowledge]);
     if (summary.scope === 'memory') return t('Đã xóa {0} ghi nhớ.', [summary.memory]);
-    if (summary.scope === 'chats') return t('Đã xóa {0} cuộc trò chuyện.', [summary.chats]);
+    if (summary.scope === 'chats') return summary.chats === 1 ? t('Đã xóa 1 cuộc trò chuyện.') : t('Đã xóa {0} cuộc trò chuyện.', [summary.chats]);
     return summary.sourcesForgotten
       ? t('Đã xóa {0} nguồn, thu hồi {1} nguồn còn được trò chuyện nhắc tới.', [summary.sources, summary.sourcesForgotten])
-      : t('Đã xóa {0} nguồn.', [summary.sources]);
+      : summary.sources === 1 ? t('Đã xóa 1 nguồn.') : t('Đã xóa {0} nguồn.', [summary.sources]);
   };
-  const erase = (scope: EraseScope, confirm?: string) => void act(async () =>
-    eraseMessage(await orglet.call('eraseData', { scope, ...(confirm ? { confirm } : {}) })), eraseNames[scope]);
+  const erase = (scope: EraseScope, confirm?: string) => void act(async () => {
+    const summary = await orglet.call('eraseData', { scope, ...(confirm ? { confirm } : {}) });
+    // Unsent words and file cards are kept across restarts (`drafts.ts`); erased chats or files must not come back there.
+    if (scope === 'chats' || scope === 'sources' || scope === 'everything') forgetAllDrafts();
+    return eraseMessage(summary);
+  }, eraseNames[scope]);
   const commitLimit = () => {
     const micros = toMicros(limit);
     if (!Number.isFinite(micros) || micros < 1000 || micros > 1_000_000_000) { setLimitError(t('Nhập từ {0} đến {1}.', [formatMoney(1000), formatMoney(1_000_000_000)])); return; }
@@ -533,6 +692,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row id="background-notifications-label" title={t('Báo khi cuộc trò chuyện xong')} description={t('Chỉ khi Orglet chạy nền; không kèm câu trả lời.')}>
                 <Switch checked={workspace.backgroundNotifications} disabled={busy} labelledBy="background-notifications-label" onChange={value => void save({ backgroundNotifications: value })} />
               </Row>
+              {/* What makes a quiet hourly run announce itself (COD-303), beside the other rule for notices. */}
+              <TacetSetup />
               <Row title={t('Định dạng khi sao chép')} description={t('Bấm là sao chép, không hiện menu.')}>
                 <Select ariaLabel={t('Định dạng khi sao chép')} className="setting-select" value={workspace.copyFormat} disabled={busy} onChange={value => void save({ copyFormat: value as Workspace['copyFormat'] })} options={[{ value: 'ask', label: t('Luôn hỏi') }, { value: 'text', label: t('Văn bản thuần') }, { value: 'markdown', label: 'Markdown' }]} />
               </Row>
@@ -542,10 +703,10 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
               <Row title={t('Tự xóa mục đã lưu trữ')} description={t('Chat, Tí, hội; giữ số liệu chi phí.')}>
                 <Select ariaLabel={t('Tự xóa mục đã lưu trữ')} className="setting-select" value={String(workspace.archiveRetentionDays)} disabled={busy} onChange={value => void save({ archiveRetentionDays: Number(value) as Workspace['archiveRetentionDays'] })} options={[{ value: '7', label: t('Sau 7 ngày') }, { value: '30', label: t('Sau 30 ngày') }, { value: '0', label: t('Không tự xóa') }]} />
               </Row>
-              <Row title={t('Request đồng thời mỗi provider')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
+              <Row title={t('Yêu cầu cùng lúc mỗi nhà cung cấp')} description={workspace.providerConcurrency > QUIET_PARALLEL_LIMIT
                 ? `${t('Quá mức thì chờ, chưa trừ ngân sách.')} ${t('Chạy nhiều cùng lúc thì chi phí cũng dồn về cùng lúc.')}`
                 : t('Quá mức thì chờ, chưa trừ ngân sách.')}>
-                <Select ariaLabel={t('Request đồng thời mỗi provider')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={concurrencyChoices.map(value => ({ value: String(value), label: `${value} request`, detail: value === 1 ? t('tuần tự') : undefined }))} />
+                <Select ariaLabel={t('Yêu cầu cùng lúc mỗi nhà cung cấp')} className="setting-select" value={String(workspace.providerConcurrency)} disabled={busy} onChange={value => void save({ providerConcurrency: Number(value) })} options={concurrencyChoices.map(value => ({ value: String(value), label: value === 1 ? t('1 yêu cầu') : t('{0} yêu cầu', [value]), detail: value === 1 ? t('tuần tự') : undefined }))} />
               </Row>
             </>}
 
@@ -591,6 +752,9 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       }
                     }} />
                   </div>
+                  {/* The bars take a line of their own under the text, so the mark and the switch stay centred on the
+                      title and its description instead of dropping to the middle of the bars. */}
+                  {provider === 'opencode-go' && connections[provider] && <div className="setting-connection-usage"><OpenCodeGoPlanUsage usage={goUsage} name={name} /></div>}
                   {/* A key is long and this row is narrow, so the field takes a line of its own below the
                       switch rather than sharing the text column with it (user, 2026-09-20). */}
                     {active && !local && <form className="setting-key-form" onSubmit={event => {
@@ -632,9 +796,12 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                 {(harnesses ?? []).map(item => {
                   const pill = statusPill(item);
                   const showLogin = item.status !== 'signed_in';
+                  // Found but not signed in (or its status unreadable): the button signs in, the command stays as the fallback.
+                  const signsInHere = showLogin && item.status !== 'not_installed' && harnessSignsInApp[item.id];
                   const accountUsage = usage?.[item.id]?.find(row => row.accountId === item.accountId);
                   const signedInAs = !showLogin && accountUsage?.email ? accountLine(accountUsage) : undefined;
                   const usageGap = !showLogin && accountUsage ? usageGapText(item, accountUsage) : undefined;
+                  const bankedResets = !showLogin ? accountUsage?.bankedResets : undefined;
                   /** An account change re-detects in the core and drops its usage copy; the bars are read again after. */
                   const changeAccount = async (change: () => Promise<HarnessInfo[]>) => {
                     onHarnesses(await change());
@@ -657,6 +824,11 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         <div className="plan-usage"><Skeleton width="70%" /></div>
                       </SkeletonGroup>}
                       {!showLogin && accountUsage && <PlanUsage windows={accountUsage.windows} label={t('Hạn mức gói {0}', [item.name])} />}
+                      {/* Only a fresh reading offers the action. An expired sign-in waits for Claude Code's next run, which
+                          the line under the bars already says (COD-328). */}
+                      {accountUsage && bankedResets && <BankedResets resets={bankedResets}
+                        claiming={claimingReset === accountUsage.accountId}
+                        onClaim={accountUsage.unavailable ? undefined : () => void claimReset(item, accountUsage, bankedResets)} />}
                       {usageGap && <span className="setting-description">{usageGap}</span>}
                       {/* A harness that cannot hold accounts still shows where it lives; the others keep it behind the "i". */}
                       {item.executable && !item.runnable ? <span className="setting-path" title={item.executable}>{item.executable}</span> : null}
@@ -667,15 +839,24 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                         }, item.name)}
                         onSave={(id, label) => void act(async () => {
                           await changeAccount(() => orglet.call('saveHarnessAccount', { harness: item.id, ...(id ? { id } : {}), label }));
-                          return id ? t('Đã đổi tên tài khoản') : t('Đã thêm tài khoản {0}. Đăng nhập bằng lệnh bên dưới.', [label]);
+                          if (id) return t('Đã đổi tên tài khoản');
+                          if (harnessSignsInApp[item.id]) return t('Đã thêm tài khoản {0}. Bấm Đăng nhập bên dưới.', [label]);
+                          return t('Đã thêm tài khoản {0}. Đăng nhập bằng lệnh bên dưới.', [label]);
                         }, item.name)}
                         onRemove={id => void act(async () => {
                           await changeAccount(() => orglet.call('removeHarnessAccount', { harness: item.id, id }));
                           return t('Đã xóa tài khoản');
-                        }, item.name)} />}
+                        }, item.name)}
+                        onSignOut={item.status === 'signed_in' && harnessLogoutArgs[item.id] ? () => void act(async () => {
+                          await changeAccount(() => orglet.call('signOutHarness', { harness: item.id, id: item.accountId }));
+                          return t('Đã đăng xuất {0}', [item.name]);
+                        }, item.name) : undefined} />}
                       {((item.status === 'not_installed' && item.installCommand) || showLogin) && <div className="harness-commands">
                         {item.status === 'not_installed' && item.installCommand && <CommandCopy command={item.installCommand} label={t('Lệnh cài (tài liệu chính thức)')} />}
-                        {showLogin && <LoginCommandCopy commands={item.loginCommands} label={item.status === 'not_installed' ? t('Sau khi cài, đăng nhập bằng') : t('Lệnh đăng nhập')} />}
+                        {signsInHere && <HarnessSignInControl item={item} busy={busy}
+                          onStart={() => void act(async () => { onHarnesses(await orglet.call('startHarnessSignIn', { harness: item.id, id: item.accountId })); }, item.name)}
+                          onCancel={() => void act(async () => { onHarnesses(await orglet.call('cancelHarnessSignIn', { harness: item.id })); }, item.name)} />}
+                        {showLogin && <LoginCommandCopy commands={item.loginCommands} label={loginCommandLabel(item, signsInHere)} />}
                       </div>}
                     </div>
                   </div>;
@@ -689,8 +870,8 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
 
             {tab === 'usage' && <>
               <Row title={t('Đã đối soát')} description={t('Phần provider đã chốt số và tính tiền.')}><span className="setting-value">{formatMoney(workspace.usage.chargedMicros)}</span></Row>
-              <Row title={t('Đang giữ chỗ')} description={workspace.usage.uncertainCount > 0 ? <span className="error">{t('{0} request chưa rõ chi phí, vẫn được tính vào giới hạn.', [workspace.usage.uncertainCount])}</span> : t('Request đang chạy hoặc chưa rõ chi phí.')}><span className="setting-value">{formatMoney(workspace.usage.reservedMicros)}</span></Row>
-              <Row id="limit-label" title={t('Giới hạn mỗi connection / tháng')} description={limitError ? <span className="error" id="limit-error">{limitError}</span> : t('Tháng tính theo UTC. Áp dụng riêng cho từng API provider.')}>
+              <Row title={t('Đang giữ chỗ')} description={workspace.usage.uncertainCount > 0 ? <span className="error">{workspace.usage.uncertainCount === 1 ? t('1 yêu cầu chưa rõ chi phí, vẫn được tính vào giới hạn.') : t('{0} yêu cầu chưa rõ chi phí, vẫn được tính vào giới hạn.', [workspace.usage.uncertainCount])}</span> : t('Yêu cầu đang chạy hoặc chưa rõ chi phí.')}><span className="setting-value">{formatMoney(workspace.usage.reservedMicros)}</span></Row>
+              <Row id="limit-label" title={t('Giới hạn mỗi kết nối / tháng')} description={limitError ? <span className="error" id="limit-error">{limitError}</span> : t('Tháng tính theo UTC. Áp dụng riêng cho từng kết nối API.')}>
                 <span className={`org-money-input ${limitError ? 'org-money-input-invalid' : ''}`}><span aria-hidden>{moneySymbol()}</span><input aria-labelledby="limit-label" aria-invalid={Boolean(limitError)} aria-describedby={limitError ? 'limit-error' : undefined} inputMode="decimal" value={limit} disabled={busy} onChange={event => setLimit(event.target.value)} onBlur={commitLimit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitLimit(); } }} /></span>
               </Row>
               <Row title={t('Tiền tệ')} description={currency.code === 'USD' ? t('Lưu bằng USD theo giá provider.') : t('1 USD = {0} {1}{2}. Chi phí vẫn lưu bằng USD, chỉ quy đổi khi hiển thị.', [new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(currency.rate), currency.code, currency.updatedAt ? t(' · cập nhật {0}', [new Date(currency.updatedAt).toLocaleString('vi-VN')]) : ''])}>

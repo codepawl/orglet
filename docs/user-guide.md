@@ -24,7 +24,7 @@ The step-by-step first walk-through with screenshots is [Getting started](gettin
 - **A team with roles.** Each orglet has a name, a face, instructions and a skill. You talk to one orglet, a few of them, or a crew.
 - **Your existing AI plan.** An orglet can run through Claude Code, Codex, Cursor Agent or Gemini CLI using the account you are already logged in to. An API key is optional.
 - **Private by default.** No account, no server. An orglet reads only the files you attach to that chat or the folder you grant it.
-- **Repeat work runs itself.** Schedules send the same request daily or weekly while the app is open.
+- **Repeat work runs itself.** Schedules send the same request daily, on weekdays, weekly or every few hours while the app is open.
 
 What Orglet is not, and what it will not become for now, is in [product.md](product.md).
 
@@ -39,13 +39,13 @@ Windows is the public target. The [latest GitHub Release](https://github.com/cod
 | **Setup.exe** | You want the normal install. It installs per user, under your local app data, with a Start Menu entry. | Updates itself (since 0.2.4). |
 | **ZIP** | You want to unzip and run without an installer, for example on a machine where you cannot install software. | Does not update itself. Download the next release by hand. |
 
-Run Setup. **Windows protected your PC** (SmartScreen) can appear: the build is signed, but a new signing certificate has no reputation yet. Check that the dialog names **Nguyen Xuan An** as the publisher, then choose **More info → Run anyway**. A dialog that says **Unknown publisher** means the file is not the signed release; stop and download it again from the Release page.
+Run Setup. **Windows protected your PC** (SmartScreen) can appear: the build is signed, but a new signing certificate has no reputation yet. Check that the dialog names **Open Source Developer Xuan An Nguyen** as the publisher, then choose **More info → Run anyway**. A dialog that says **Unknown publisher** means the file is not the signed release; stop and download it again from the Release page.
 
-After the first launch, a Setup install checks GitHub Releases shortly after it starts and every few hours, downloads a new version in the background, and offers a restart. If you skip the restart, the next launch already uses the new version. **Settings → About** shows the version you run, lets you check by hand, and can turn automatic updates off. Versions 0.2.3 and earlier have no updater: install the current release by hand once, and from then on it updates itself. Details: [Settings → About](settings.md#about).
+After the first launch, a Setup install checks GitHub Releases shortly after it starts and every few hours, downloads a new version in the background, and offers a restart: an **Update** button beside **Settings** in the sidebar restarts into it with one click. If you skip the restart, the next launch already uses the new version. **Settings → About** shows the version you run, lets you check by hand, and can turn automatic updates off. Versions 0.2.3 and earlier have no updater: install the current release by hand once, and from then on it updates itself. Details: [Settings → About](settings.md#about).
 
 ### macOS and Linux
 
-macOS packaging exists (a ZIP of `Orglet.app` from CI, signed and notarized on `main`), but it is not a GitHub Release asset yet, and it cannot update itself unless it is signed. Linux has a CI ZIP that nobody has used on a real desktop yet. Both are for trying the app, not for daily use. See [macos-packaging.md](macos-packaging.md) and [linux-packaging.md](linux-packaging.md).
+Release 0.7.2 includes a macOS Apple silicon ZIP of `Orglet.app`, signed, notarized and stapled, and an experimental Linux x64 ZIP. There is no Intel Mac download yet. Unzip the macOS app and move it to Applications; on Linux unzip and run the `Orglet` binary. Linux passed the packaged desktop smoke on Ubuntu CI, but daily desktop use remains unverified and there are no automatic updates. See [macos-packaging.md](macos-packaging.md) and [linux-packaging.md](linux-packaging.md).
 
 ### From source
 

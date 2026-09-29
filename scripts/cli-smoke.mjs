@@ -2,11 +2,11 @@
 // the command the way a terminal would (orglet.cmd through cmd.exe on Windows, the sh launcher elsewhere).
 // Run after `pnpm build` or `pnpm make`.
 import { _electron as electron } from 'playwright';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, win32 } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createConnection } from 'node:net';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
@@ -59,7 +59,7 @@ function orgletWith(extraEnvironment, userData, ...argumentList) {
 }
 
 /** One raw line to the app's pipe, for what the command itself never sends. */
-function rawRequest(userData, request) {
+function rawRequest(userData, request, allFrames = false) {
   return new Promise((resolveResponse, reject) => {
     const socket = createConnection(endpoint(userData), () => socket.write(`${JSON.stringify(request)}\n`));
     let received = '';
@@ -67,7 +67,12 @@ function rawRequest(userData, request) {
     socket.on('data', chunk => { received += chunk; });
     socket.on('error', reject);
     socket.on('close', () => {
-      try { resolveResponse(JSON.parse(received.split('\n')[0])); } catch (error) { reject(error); }
+      try {
+        const lines = received.split('\n').filter(Boolean).map(line => JSON.parse(line));
+        resolveResponse(allFrames ? lines : lines[0]);
+      } catch (error) {
+        reject(error);
+      }
     });
   });
 }
@@ -87,15 +92,23 @@ function stopAppsOn(userData) {
   spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { env: { ...process.env, ORGLET_SMOKE_DATA: userData }, windowsHide: true });
 }
 
+/** The actual detached auto-start cannot be controlled by Playwright; inspect only this smoke's Windows processes. */
+function desktopHandlesOn(userData) {
+  const script = `ConvertTo-Json -InputObject @(Get-CimInstance Win32_Process -Filter "Name = 'Orglet.exe'" | Where-Object { $_.CommandLine -like '*' + $env:ORGLET_SMOKE_DATA + '*' } | ForEach-Object { (Get-Process -Id $_.ProcessId).MainWindowHandle.ToInt64() })`;
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { env: { ...process.env, ORGLET_SMOKE_DATA: userData }, encoding: 'utf8', windowsHide: true });
+  assert.equal(result.status, 0, `Could not inspect smoke processes: ${result.stderr}`);
+  return JSON.parse(result.stdout);
+}
+
 assert.ok(existsSync(launcher()), `No orglet launcher at ${launcher()}`);
-let app = await electron.launch({ executablePath: executable, args: [`--user-data-dir=${directory}`], env: appEnvironment });
+let app = await electron.launch({ executablePath: executable, args: ['--orglet-cli-background', `--user-data-dir=${directory}`], env: appEnvironment });
 let closed = false;
 app.once('close', () => { closed = true; });
 let userData = directory;
 try {
   userData = await app.evaluate(({ app: electronApp }) => electronApp.getPath('userData'));
   assert.ok(userData.toLowerCase().startsWith(directory.toLowerCase()), 'The CLI smoke needs an isolated data folder');
-  await app.firstWindow();
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 0, 'A terminal backend must start without a desktop window');
   // The pipe opens once the core is ready; the token file is written just before it.
   const tokenFile = join(userData, 'cli-token');
   for (let attempt = 0; attempt < 60 && !existsSync(tokenFile); attempt++) await new Promise(done => setTimeout(done, 500));
@@ -121,20 +134,83 @@ try {
   assert.ok(answer.length > 0, 'orglet send printed no answer');
   const read = expectOk(orglet(userData, 'read', '--to', 'Researcher'), 'orglet read');
   assert.equal(read, answer, 'orglet read should print the answer orglet send printed');
-  const detail = await app.firstWindow().then(page => page.evaluate(() => window.orglet.call('workspace', {})));
-  const chats = detail.tasks.filter(task => !task.teamId && !task.deletedAt);
-  assert.equal(chats.length, 1, 'orglet send should use the one chat the composer would');
-  assert.equal(chats[0].brief, 'hello from the CLI smoke');
-
+  const progressFrames = await rawRequest(userData, { op: 'send', token, to: 'Researcher', message: 'progress protocol smoke',
+    files: [], wait: true, timeoutSeconds: 120, progress: true }, true);
+  assert.ok(progressFrames.some(frame => frame.type === 'progress' && Array.isArray(frame.steps)), 'An opted-in send must emit a progress frame');
+  assert.equal(progressFrames.at(-1).ok, true, 'Progress must end with the normal response');
+  assert.equal(progressFrames.at(-1).value.finished, true);
   // A second message continues the same chat as a new turn, exactly like the composer.
   const second = JSON.parse(expectOk(orglet(userData, 'send', 'and a second message', '--to', 'Researcher', '--json'), 'orglet send --json'));
   assert.equal(second.finished, true);
-  assert.equal(second.taskId, chats[0].id);
   assert.ok(second.answers.length >= 1 && second.answers[0].text.length > 0);
   const status = JSON.parse(expectOk(orglet(userData, 'status', '--json'), 'orglet status --json'));
   assert.equal(status.orglets >= 1, true);
   assert.equal(`orglet ${status.version}`, version);
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 0, 'Status, list, send and read must work without creating a window');
+
+  // Person-driven configuration never calls a model or opens a desktop window.
+  const configurations = JSON.parse(expectOk(orglet(userData, 'config', '--json'), 'orglet config'));
+  assert.equal(configurations.orglets.length, status.orglets);
+  assert.ok(configurations.providers.every(provider => provider.id !== 'demo'));
+  assert.ok(configurations.orglets.every(orglet => !('mcpServerIds' in orglet.config) && !('autoApplyProposals' in orglet.config)));
+  const orgletConfigFile = join(directory, 'orglet.json');
+  await writeFile(orgletConfigFile, JSON.stringify({ name: 'CLI managed orglet', instructions: 'Review supplied work.', provider: 'codex', skillId: configurations.skills[0].id }));
+  const managedOrglet = JSON.parse(expectOk(orglet(userData, 'create', 'orglet', '--config', orgletConfigFile, '--json'), 'orglet create orglet'));
+  const crewConfigFile = join(directory, 'crew.json');
+  await writeFile(crewConfigFile, JSON.stringify({ name: 'CLI managed crew', instructions: 'Review together.', memberIds: [managedOrglet.id], synthesizerId: configurations.orglets[0].id, workflow: 'parallel', monthlyBudgetMicros: 100_000 }));
+  const managedCrew = JSON.parse(expectOk(orglet(userData, 'create', 'crew', '--config', crewConfigFile, '--json'), 'orglet create crew'));
+  const patchFile = join(directory, 'patch.json');
+  await writeFile(patchFile, JSON.stringify({ name: 'CLI renamed orglet', description: 'Edited from the terminal' }));
+  const revisedOrglet = JSON.parse(expectOk(orglet(userData, 'edit', 'orglet', managedOrglet.name, '--config', patchFile, '--json'), 'orglet edit orglet'));
+  assert.equal(revisedOrglet.id, managedOrglet.id);
+  assert.equal(revisedOrglet.revision, managedOrglet.revision + 1);
+  await writeFile(patchFile, JSON.stringify({ workflow: 'sequential' }));
+  const revisedCrew = JSON.parse(expectOk(orglet(userData, 'edit', 'crew', managedCrew.name, '--config', patchFile, '--json'), 'orglet edit crew'));
+  assert.equal(revisedCrew.revision, managedCrew.revision + 1);
+  assert.equal(orglet(userData, 'delete', 'orglet', revisedOrglet.name, '--confirm', revisedOrglet.name).code, 1, 'Crew membership must prevent deletion');
+  assert.equal(orglet(userData, 'delete', 'crew', managedCrew.name, '--confirm', 'wrong').code, 2, 'A wrong confirmation must not delete');
+  expectOk(orglet(userData, 'delete', 'crew', managedCrew.name, '--confirm', managedCrew.name), 'orglet delete crew');
+  expectOk(orglet(userData, 'delete', 'orglet', revisedOrglet.name, '--confirm', revisedOrglet.name), 'orglet delete orglet');
+  const restoredStatus = JSON.parse(expectOk(orglet(userData, 'status', '--json'), 'status after management'));
+  assert.equal(restoredStatus.orglets, status.orglets);
+  assert.equal(restoredStatus.crews, status.crews);
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 0, 'Managing configurations must not open a window');
+
+  // A racing terminal start must not turn the background instance into a desktop launch.
+  async function secondInstance(background) {
+    await new Promise((resolveExit, reject) => {
+      const child = spawn(executable, [...(background ? ['--orglet-cli-background'] : []), `--user-data-dir=${userData}`], { env: appEnvironment, stdio: 'ignore', windowsHide: true });
+      child.once('error', reject);
+      child.once('exit', resolveExit);
+    });
+  }
+  await secondInstance(true);
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 0, 'A second background start must not open the desktop');
+
+  // Both requests wait for the same first renderer load, then the queued target opens the right chat.
+  const opened = await Promise.all([rawRequest(userData, { op: 'open', token, to: 'Researcher' }), rawRequest(userData, { op: 'open', token, to: 'Researcher' })]);
+  assert.ok(opened.every(response => response.ok), 'Concurrent desktop opens must both finish');
+  const page = await app.firstWindow();
+  await page.locator('.chat-reply').first().waitFor();
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1, 'Concurrent opens must create only one desktop window');
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), true);
+  const detail = await page.evaluate(() => window.orglet.call('workspace', {}));
+  const chats = detail.tasks.filter(task => !task.teamId && !task.deletedAt);
+  assert.equal(chats.length, 1, 'orglet send should use the one chat the composer would');
+  assert.equal(chats[0].brief, 'hello from the CLI smoke');
+  assert.equal(second.taskId, chats[0].id);
   assert.ok(expectOk(orglet(userData, 'open', '--to', 'Researcher'), 'orglet open').includes('Researcher'));
+  expectOk(orglet(userData, 'status'), 'orglet status with the desktop open');
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1);
+  // Clicking the normal app launcher restores an existing minimized desktop.
+  if (process.platform === 'win32') {
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].minimize());
+    await secondInstance(true);
+    assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized()), true, 'A background start must not restore the desktop');
+    await secondInstance(false);
+    for (let attempt = 0; attempt < 60 && await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized()); attempt++) await new Promise(done => setTimeout(done, 100));
+    assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMinimized()), false, 'A normal app launch must restore the desktop');
+  }
 
   const unknown = orglet(userData, 'read', '--to', 'Nobody at all');
   assert.equal(unknown.code, 1);
@@ -151,11 +227,21 @@ try {
   assert.ok(afterRefusal.tasks.length >= 1, 'A refused request must not change anything');
 
   // With the app closed, the command starts it on the same data folder and answers once it is up.
-  await app.close();
+  const desktopClosed = app.waitForEvent('close');
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+  await desktopClosed;
   const started = orglet(userData, 'status');
-  stopAppsOn(userData);
   assert.equal(started.code, 0, `orglet status did not start the app: ${started.stderr}`);
   assert.match(started.stdout, /is running/);
+  assert.equal(expectOk(orglet(userData, 'read', '--to', 'Researcher'), 'read after background restart'), second.answers.map(answer => answer.text).join('\n\n'));
+  if (process.platform === 'win32') {
+    const handles = desktopHandlesOn(userData);
+    assert.ok(handles.length > 0, 'The detached backend must still be running');
+    assert.ok(handles.every(handle => handle === 0), 'CLI auto-start must not create a desktop window');
+    await secondInstance(false);
+    assert.ok(desktopHandlesOn(userData).some(handle => handle !== 0), 'A normal app launch must show the detached backend desktop');
+    expectOk(orglet(userData, 'open'), 'open after background restart');
+  }
   console.log(`CLI smoke passed: ${version}; answer "${answer.slice(0, 60)}"`);
 } finally {
   if (!closed) await app.close();

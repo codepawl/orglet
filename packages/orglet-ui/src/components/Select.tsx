@@ -7,7 +7,9 @@ import './Select.css';
  * One choice. `detail` is a second, muted line (or the same line with `inlineDetail`); `note` is a small muted word
  * after the label, such as "default", shown in the menu only; `labelStyle` draws the label in what it names, a font
  * family in that font, say. `group` starts a titled group where it changes; `dimmed` greys a choice that still works;
- * `badge` is a small chip at the end of the row.
+ * `badge` is a small chip at the end of the row. `spaced` starts the row after a small gap, a group with no title.
+ * `onSelect` makes the row an action instead of a value, such as "More" revealing further rows: choosing it runs the
+ * action and leaves the list open where it was.
  */
 export type SelectOption = {
   value: string;
@@ -20,6 +22,8 @@ export type SelectOption = {
   group?: string;
   badge?: ReactNode;
   labelStyle?: CSSProperties;
+  spaced?: boolean;
+  onSelect?: () => void;
 };
 
 type Placement = { style: CSSProperties; above: boolean };
@@ -103,6 +107,10 @@ export function Select({
   const choose = (index: number) => {
     const option = options[index];
     if (!option || option.disabled) return;
+    if (option.onSelect) {
+      option.onSelect();
+      return;
+    }
     if (option.value !== value) onChange(option.value);
     close();
     trigger.current?.focus();
@@ -183,7 +191,7 @@ export function Select({
     const start = open ? active : Math.max(0, selectedIndex);
     const firstLetter = typed.current.text.length === 1 ? 1 : 0;
     const order = [...options.keys()].map(offset => (start + firstLetter + offset) % options.length);
-    const match = order.find(index => !options[index].disabled && options[index].label.toLocaleLowerCase().startsWith(typed.current.text));
+    const match = order.find(index => !options[index].disabled && !options[index].onSelect && options[index].label.toLocaleLowerCase().startsWith(typed.current.text));
     if (match === undefined) return;
     if (open) setActive(match);
     else if (options[match].value !== value) onChange(options[match].value);
@@ -249,9 +257,9 @@ export function Select({
         ? <li key={`group-${option.group}`} role="presentation" className="org-select-group">{option.group}</li>
         : null;
       lastGroup = option.group;
-      return [header, <li key={option.value} id={`${id}-option-${index}`} data-index={index} role="option" aria-selected={option.value === value}
+      return [header, <li key={option.value} id={`${id}-option-${index}`} data-index={index} role="option" aria-selected={!option.onSelect && option.value === value}
         aria-disabled={option.disabled || undefined}
-        className={cn('org-select-option', index === active && 'org-select-option-active', option.dimmed && 'org-select-option-dimmed')}
+        className={cn('org-select-option', index === active && 'org-select-option-active', option.dimmed && 'org-select-option-dimmed', option.spaced && 'org-select-option-spaced', option.onSelect && 'org-select-option-action')}
         onPointerMove={() => { if (!option.disabled && index !== active) setActive(index); }}
         onPointerDown={event => event.preventDefault()}
         onClick={() => choose(index)}>

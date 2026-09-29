@@ -4,12 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../../apps/desktop/src/core/storage/database';
 import { CoreService } from '../../apps/desktop/src/core/service';
-import { nextOccurrence, inWorkHours, type Schedule } from '../../apps/desktop/src/shared/schedule';
+import { TimeZone, nextOccurrence, inWorkHours, type Schedule } from '../../apps/desktop/src/shared/schedule';
 import { ROUTINE_MISS_MS, SKIPPED_WHILE_INACTIVE, shouldDeferRoutine } from '../../apps/desktop/src/core/orchestration/routines';
-import type { Routine, Task, Team } from '../../apps/desktop/src/shared/contracts';
+import type { Routine, Task, Team, Worker } from '../../apps/desktop/src/shared/contracts';
 import { modelCatalog } from '../../apps/desktop/src/core/adapters/catalog';
 import { isPlanRequest, planReply } from './team-plan';
-import { scheduleCapabilities } from '../../apps/desktop/src/renderer/components/RoutinesPanel';
+import { formatClockTime, scheduleCapabilities } from '../../apps/desktop/src/renderer/components/RoutinesPanel';
+import { timeZoneChoices } from '../../apps/desktop/src/renderer/timeZones';
+import { runBy } from '../../apps/desktop/src/shared/schedule-runs';
+import { setLanguage } from '../../apps/desktop/src/renderer/i18n';
 
 let store: Store; let core: CoreService; let current: Date; let directory: string;
 const schedule: Schedule = { timeZone: 'Asia/Ho_Chi_Minh', time: '09:00', frequency: 'daily', weekday: 1 };
@@ -277,4 +280,95 @@ it('saves web search and the browser on a schedule as the editor sets them, and 
   expect(scheduleCapabilities(undefined, 'codex', false, true)).toEqual(['source.read', 'skill.read', 'app.propose', 'network.web']);
   expect(scheduleCapabilities(['source.read', 'network.web', 'browser.read'], 'openai', false, false)).toEqual(['source.read']);
   expect(scheduleCapabilities(['source.read'], 'openai', true, true)).toEqual(['source.read', 'browser.read', 'network.web']);
+});
+
+/**
+ * COD-283: schedules could not be deleted, so dead ones piled up and kept their orglet from being archived. Deleting
+ * one removes the schedule only; its runs are chats and stay, named after it.
+ */
+it('deletes a schedule and keeps its past runs as chats named after it', async () => {
+  const routine = await save();
+  const firstRun = await core.command('runRoutineNow', { id: routine.id }) as string;
+  await idle();
+  const secondRun = await core.command('runRoutineNow', { id: routine.id }) as string;
+  await idle();
+
+  await core.command('deleteRoutine', { id: routine.id });
+  expect(store.all<Routine>('routines')).toEqual([]);
+  for (const taskId of [firstRun, secondRun]) {
+    const run = store.get<Task>('tasks', taskId);
+    expect(run.routineId).toBe(routine.id);
+    expect(run.routineName).toBe('Morning review');
+  }
+  expect(store.workspace().tasks.map(task => task.id).sort()).toEqual([firstRun, secondRun].sort());
+  // A backup of runs whose schedule is gone still exports and passes its own checks.
+  expect(() => core.backups.preview(core.backups.export())).not.toThrow();
+
+  // Nothing is left to run: not on the clock, not from the window, and a second delete finds nothing.
+  await core.tick();
+  current = new Date('2026-01-05T02:00:00Z');
+  await core.tick();
+  await idle();
+  expect(store.all<Task>('tasks')).toHaveLength(2);
+  await expect(core.command('runRoutineNow', { id: routine.id })).rejects.toThrow();
+  await expect(core.command('deleteRoutine', { id: routine.id })).rejects.toThrow();
+});
+it('forgets the files a deleted folder schedule handled, and nothing else', async () => {
+  const kept = await save({ name: 'Kept' });
+  const deleted = await save({ name: 'Deleted' });
+  const arrival = { name: 'invoice.pdf', size: 10, modifiedMs: 1_000 };
+  core.routineFolders.markHandled(kept.id, [arrival]);
+  core.routineFolders.markHandled(deleted.id, [arrival]);
+  await core.command('deleteRoutine', { id: deleted.id });
+  expect(core.routineFolders.wasHandled(deleted.id, arrival)).toBe(false);
+  expect(core.routineFolders.wasHandled(kept.id, arrival)).toBe(true);
+  expect(store.all<Routine>('routines').map(routine => routine.name)).toEqual(['Kept']);
+});
+it('names the schedule that holds an orglet back, and lets it go once that schedule is deleted', async () => {
+  const skillId = store.workspace().skills[0].id;
+  const helper = await core.command('saveWorker', { name: 'Helper', instructions: 'Help.', provider: 'demo', skillId, taskBudgetMicros: 100_000 }) as Worker;
+  const routine = await save({ name: 'Nightly digest', task: { workerId: helper.id, sourceIds: [], brief: 'Digest', consent: false, budgetMicros: 1000 } });
+  expect(runBy(routine.task, 'worker', helper.id)).toBe(true);
+  expect(runBy(routine.task, 'team', helper.id)).toBe(false);
+  await expect(core.command('archiveEntity', { kind: 'worker', id: helper.id, archived: true })).rejects.toThrow('Tắt hoặc xóa lịch Nightly digest trước.');
+  await core.command('deleteRoutine', { id: routine.id });
+  await core.command('deleteEntity', { kind: 'worker', id: helper.id });
+  expect(store.workspace().workers.map(worker => worker.id)).not.toContain(helper.id);
+});
+it('says 100 schedules is the most and points at deleting one', async () => {
+  for (let index = 0; index < 100; index++) await save({ name: `Schedule ${index}`, enabled: false });
+  await expect(save({ name: 'One too many' })).rejects.toThrow('Xóa hoặc sửa một lịch hiện có.');
+});
+it('offers every time zone with the computer\'s first, UTC, and a saved alias kept as saved', () => {
+  const at = new Date('2026-01-05T00:00:00Z');
+  const zones = ['America/Argentina/Buenos_Aires', 'America/New_York', 'Asia/Saigon', 'Asia/Tokyo', 'Europe/Kiev'];
+  const choices = timeZoneChoices('Asia/Saigon', 'Asia/Ho_Chi_Minh', at, zones);
+  expect(choices[0]).toEqual({ value: 'Asia/Saigon', label: 'Saigon', region: 'Asia', offset: 'UTC+7', system: true });
+  expect(choices.filter(choice => choice.value === 'Asia/Saigon')).toHaveLength(1);
+  expect(choices.slice(1).map(choice => choice.value)).toEqual(['America/Argentina/Buenos_Aires', 'America/New_York', 'Asia/Ho_Chi_Minh', 'Asia/Tokyo', 'Europe/Kiev', 'UTC']);
+  expect(choices.find(choice => choice.value === 'America/Argentina/Buenos_Aires')).toMatchObject({ label: 'Argentina / Buenos Aires', region: 'America', offset: 'UTC-3' });
+  expect(choices.find(choice => choice.value === 'UTC')).toMatchObject({ label: 'UTC', region: '', offset: '' });
+  expect(timeZoneChoices('UTC', 'UTC', at, ['Europe/London'])[1]).toMatchObject({ label: 'London', offset: 'UTC' });
+  // The runtime's own list is used when none is given, and every value in it saves.
+  const everything = timeZoneChoices('UTC', 'UTC', at);
+  expect(everything.length).toBeGreaterThan(300);
+  expect(everything.filter(choice => choice.value === 'UTC')).toHaveLength(1);
+  expect(everything.every(choice => TimeZone.safeParse(choice.value).success)).toBe(true);
+});
+it('writes a schedule\'s time on the interface\'s clock, like the next run beside it', () => {
+  const host = globalThis as { document?: unknown };
+  const hadDocument = 'document' in host;
+  host.document ??= { documentElement: {} };
+  try {
+    setLanguage('en');
+    // ICU puts a narrow no-break space before PM.
+    expect(formatClockTime('13:05')).toMatch(/^1:05\sPM$/);
+    setLanguage('en-GB');
+    expect(formatClockTime('13:05')).toBe('13:05');
+    setLanguage('vi');
+    expect(formatClockTime('01:36')).toBe('01:36');
+  } finally {
+    setLanguage(undefined);
+    if (!hadDocument) delete host.document;
+  }
 });

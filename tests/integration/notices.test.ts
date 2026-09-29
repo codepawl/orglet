@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { collapseNotices, isUnreadNotice, newNoticesFirst, noticeGroupLabels, useNotices, type Notice } from '../../apps/desktop/src/renderer/components/notifications';
-import { toast } from '../../apps/desktop/src/renderer/components/toast';
+import { collapseNotices, isUnreadNotice, newNoticesFirst, noticeGroupLabels, restartNoticeId, useNotices, type Notice } from '../../apps/desktop/src/renderer/components/notifications';
+import { noticeKindOf, toast } from '../../apps/desktop/src/renderer/components/toast';
 import { calendarDaysAgo, clockLabel, dayLabel } from '../../apps/desktop/src/renderer/components/TimeMark';
 
 let nextId = 1;
@@ -130,6 +130,22 @@ describe('what counts as unread', () => {
     ]);
   });
 
+  it('files each toast under its own kind: a problem under Problems, a note under Info, the rest under Done (COD-288 review)', () => {
+    const before = recordedNotices().at(-1)?.id ?? 0;
+    toast('Đã lưu Tí', 'success', 'Researcher');
+    toast('Không xóa được Tí', 'error', 'Researcher');
+    toast('Inbox sweep đã chạm giới hạn chi phí hôm nay', 'info', 'Inbox sweep');
+    toast('Researcher đã trả lời trong chat phụ', 'success', 'Side thread', { unread: true });
+    const added = recordedNotices().filter(notice => notice.id > before);
+    expect(added.map(notice => [notice.text, notice.kind])).toEqual([
+      ['Đã lưu Tí', 'done'],
+      ['Không xóa được Tí', 'error'],
+      ['Inbox sweep đã chạm giới hạn chi phí hôm nay', 'info'],
+      ['Researcher đã trả lời trong chat phụ', 'done'],
+    ]);
+    expect([noticeKindOf('success'), noticeKindOf('error'), noticeKindOf('info')]).toEqual(['done', 'error', 'info']);
+  });
+
   it('never files a confirmation under "new", even when it arrived after the centre was last opened', () => {
     const seen = notice('Đã sao chép', '2026-09-23T09:00:00.000Z');
     const confirmation = notice('Đã lưu Tí', '2026-09-23T10:00:00.000Z', { confirmation: true });
@@ -151,5 +167,27 @@ describe('what counts as unread', () => {
     // Before the centre knows what was seen, nothing moves.
     expect(newNoticesFirst(collapseNotices([saved, created, answer, seen]), null).map(row => row.notice.text))
       .toEqual(['Đã lưu', 'Đã tạo Tí', 'Dev đã trả lời trong chat phụ', 'Đã tạo Tí']);
+  });
+});
+
+/** A downloaded update is announced once and kept; only its newest notice restarts, and only while it waits (COD-304). */
+describe('the update notice', () => {
+  it('carries the restart on the newest update notice while an update is ready, and nowhere otherwise', () => {
+    const older = notice('Orglet 0.6.1 đã tải xong. Khởi động lại để dùng bản mới.', '2026-09-26T10:00:00.000Z', { update: true });
+    const saved = notice('Đã lưu', '2026-09-27T09:00:00.000Z');
+    const newest = notice('Orglet 0.6.2 đã tải xong. Khởi động lại để dùng bản mới.', '2026-09-27T10:00:00.000Z', { update: true });
+    const later = notice('Đã lưu', '2026-09-27T11:00:00.000Z');
+    expect(restartNoticeId([older, saved, newest, later], true)).toBe(newest.id);
+    expect(restartNoticeId([older, saved, newest, later], false)).toBeUndefined();
+    expect(restartNoticeId([saved, later], true)).toBeUndefined();
+  });
+
+  it('keeps the update mark when a toast records it, and counts it as unread news', () => {
+    toast('Orglet 0.6.2 đã tải xong. Khởi động lại để dùng bản mới.', 'success', 'Cập nhật', { unread: true, update: true });
+    const html = renderToStaticMarkup(createElement(function Probe() {
+      const recorded = useNotices().at(-1);
+      return createElement('span', null, JSON.stringify({ update: recorded?.update, confirmation: recorded?.confirmation ?? false }));
+    }));
+    expect(html).toContain('{&quot;update&quot;:true,&quot;confirmation&quot;:false}');
   });
 });

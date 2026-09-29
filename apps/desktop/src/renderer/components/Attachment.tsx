@@ -26,14 +26,16 @@ export function fileSize(bytes: number): string {
  * A file attached to a message, drawn by the kit's card (COD-274) with the app's own file-kind icons and words: the
  * kind and size on the meta line, "Remove {name}" on the remove button.
  */
-export function Attachment({ name, bytes, onRemove, onOpen, removeLabel }: { name: string; bytes?: number; onRemove?: () => void; onOpen?: () => void; removeLabel?: string }) {
+export function Attachment({ name, bytes, onRemove, onOpen, removeLabel, revoked = false }: { name: string; bytes?: number; onRemove?: () => void; onOpen?: () => void; removeLabel?: string; revoked?: boolean }) {
   const kind = fileKind(name);
   const KindIcon = kindIcons[kind];
-  const meta = bytes !== undefined ? `${kindLabels[kind]} · ${fileSize(bytes)}` : kindLabels[kind];
+  const sizeMeta = bytes !== undefined ? `${kindLabels[kind]} · ${fileSize(bytes)}` : kindLabels[kind];
+  // A file whose read access was revoked says so on its card, where the person looks (dogfood round 6, COD-292).
+  const meta = revoked ? t('Đã thu hồi quyền đọc') : sizeMeta;
   const icon = <KindIcon size={20} />;
   if (onRemove) {
     return <KitAttachment name={name} meta={meta} icon={icon} onOpen={onOpen} onRemove={onRemove}
       removeLabel={removeLabel ?? t('Bỏ {0}', [name])} removeIcon={<X size={14} />} />;
   }
-  return <KitAttachment name={name} meta={meta} icon={icon} onOpen={onOpen} />;
+  return <KitAttachment name={name} meta={meta} icon={icon} onOpen={onOpen} inactive={revoked} />;
 }

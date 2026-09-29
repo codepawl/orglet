@@ -32,7 +32,7 @@ function listLines(entries: readonly ChatEntry[], layout: Layout): string[] {
   return entries.map(entry => entryLine(entry, false, { ...layout, maxRows: entries.length }, facesWidth, nameWidth));
 }
 
-/** `orglet list` with each orglet's face, and each crew's members side by side. */
+/** `orglet list` with orglet faces and a distinct group icon for crews. */
 export function styledList(value: ListValue, layout: Layout): string {
   const entries = entriesFromList(value);
   const orglets = entries.filter(entry => entry.kind === 'worker');
@@ -59,14 +59,14 @@ export function answerColor(answer: CliAnswer, fallback: string | undefined): st
 }
 
 /** The line over an answer: the happy face and the name in the orglet's colour, with an optional muted note. */
-export function answerByline(name: string, color: string, mode: ColorMode, note?: string): string {
-  const face = mode === 'none' ? '' : `${renderMiniFace(color, mode, 'happy')} `;
+export function answerByline(name: string, color: string, mode: ColorMode, note?: string, showFace = true): string {
+  const face = mode === 'none' || !showFace ? '' : `${renderMiniFace(color, mode, 'happy')} `;
   const title = paint(name, { bold: true, foreground: color }, mode);
   const suffix = note ? ` ${muted(`· ${note}`, mode)}` : '';
   return `${face}${title}${suffix}`;
 }
 
-export type AnswerLayout = Layout & { fallbackColor?: string; firstNote?: string };
+export type AnswerLayout = Layout & { fallbackColor?: string; firstNote?: string; showFace?: boolean };
 
 /** Answers the way the chat view prints them: each under its author's byline, the text as light Markdown. */
 export function renderAnswers(answers: readonly CliAnswer[], layout: AnswerLayout): string[] {
@@ -75,7 +75,7 @@ export function renderAnswers(answers: readonly CliAnswer[], layout: AnswerLayou
     if (index > 0) lines.push('');
     const color = answerColor(answer, layout.fallbackColor);
     const note = index === 0 ? layout.firstNote : undefined;
-    lines.push(answerByline(answer.name, color, layout.mode, note));
+    lines.push(answerByline(answer.name, color, layout.mode, note, layout.showFace));
     lines.push(...renderMarkdown(answer.text, { width: layout.width, mode: layout.mode, accent: color, indent: '  ' }));
   });
   return lines;

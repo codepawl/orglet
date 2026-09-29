@@ -11,6 +11,7 @@ Language (English (US), English (UK), Tiếng Việt), **Appearance** (light or 
 ## Chat
 
 - **Name chats automatically**: a title from the first message.
+- **Tacet on this computer**: a small model that tells you when an hourly schedule's answer has something new instead of every run finishing quietly, offers a permission a message seems to need under the message box, picks who answers a group-chat message that tags nobody, loads a note worded differently from your message when the message is about it ([memory.md](memory.md#which-notes-load-and-why)), and asks you before a step in Orglet's browser or a desktop app that the rules let through but it reads as sending, paying, deleting or publishing ([browser.md](browser.md#a-second-opinion-from-tacet)). It is not installed with Orglet. **Download** fetches about 305 MB once, with a bar and **Cancel**; if the connection drops, **Retry** picks up where it stopped. It runs on this computer and sends nothing out. **Remove** deletes it, and so does **Erase everything**. How it decides: [decisions.md](decisions.md).
 - **Copy format** and **Download format**: plain text or Markdown for answers and reports.
 - **Ask before opening a task**.
 - **Delete archived items**: archived chats, orglets and crews can clear themselves after a while.
@@ -56,7 +57,13 @@ These numbers cover requests Orglet makes through an API key. Harness runs use t
 
 **Save backup** writes one JSON file with orglets, crews, revisions, schedules, chat history, answers and reports, checker results, memories and knowledge, reactions and costs. It does **not** include API keys, source file contents, the working-folder grants, checkpoint context, or the proposal cards in chats; reports can contain excerpts of your sources, so keep the file private. The limit is 50 MB.
 
-**Restore from file** validates the backup and adds the records that are missing; what is already there stays. Restored schedules come back disabled, restored sources have no file access until you attach the files again, and a restored backup grants no folder or web access. Interrupted requests are not resent.
+**Restore from file** validates the backup and adds the records that are missing; what is already there stays. Restored schedules come back disabled, and a restored backup grants no folder or web access. Interrupted requests are not resent.
+
+- **After Delete chat history.** Restoring brings the deleted chats back with their answers. A chat you kept talking in after the backup was saved comes back with those later turns shown as deleted. Costs are counted once: the cost records the deletion kept are the same ones the backup holds.
+- **On a new computer.** If you have not used the Researcher that a new install starts with, the backup's orglets take its place instead of sitting beside it. Orglets and crews that were archived or deleted when you saved the backup stay that way. Schedule runs from the backup do not show up as new notifications.
+- **Attached files.** A backup holds no file contents, so a restored file opens with **Choose file**. Pick the same file on this computer and Orglet reads it again; a different file, even with the same name, is refused.
+- **Files an orglet changed.** The line under a turn, such as "Changed 3 files · +42 −7 · Applied", comes back with its counts and whether the changes were applied, discarded or never reached your folder. The backup keeps only those counts, not file names or contents, so where the orglet's private copy is no longer on this computer the line says it came from a backup and cannot be opened.
+- **If restoring fails**, a dialog says why, and nothing in Orglet has changed.
 
 ### Erase
 
@@ -83,6 +90,8 @@ The Orglet face and the version you run. The face says hello when the tab opens,
 **What is new** lists the last ten releases, the one you run marked. Each shows its version, its date and what changed; the install advice every release page repeats is left out. It is fetched from GitHub once an hour; offline, it shows the last copy and when it was fetched.
 
 **Check for updates** shows one state at a time: not checked yet, checking, up to date with the time, downloading, ready with **Restart now**, or the error. **Automatic updates** (on by default) checks 30 seconds after launch and every four hours, downloads in the background, then asks you to restart; if you do not, the next launch uses the new version. Off, it checks only when you click.
+
+You do not have to open this tab to notice an update. While a new version downloads, a grey arrow sits beside **Settings** in the sidebar; once it is ready, that turns into an **Update** button, and one click restarts into the new version. The same restart is on the update's notice in **Notifications**. If orglets are still working, Orglet asks first, because restarting interrupts their runs; you can resume them in their chats afterwards.
 
 | Build | Updates itself |
 |---|---|
