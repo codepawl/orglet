@@ -9,7 +9,19 @@ export async function useVietnamese(page) {
     return workspace.language;
   });
   await page.getByRole('textbox', { name: 'Tin nhắn' }).waitFor();
+  await useFullSidebar(page);
   return initial;
+}
+
+/**
+ * A new profile starts on the rail (COD-340), and the smokes were written against the full sidebar, with its section
+ * menus and row actions, so each opens it once. A wide window remembers that for the rest of the run, restarts
+ * included; a narrow one would only lay it over the chat, so there it stays folded.
+ */
+export async function useFullSidebar(page) {
+  const opener = page.getByRole('button', { name: 'Mở sidebar', exact: true });
+  const wide = await page.evaluate(() => innerWidth > 780);
+  if (wide && await opener.isVisible()) await opener.click();
 }
 
 /** Open a specific under-the-hood task by its brief via search (sidebar no longer lists task rows). */

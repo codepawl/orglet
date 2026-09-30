@@ -64,7 +64,7 @@ async function main() {
     await page.screenshot({ path: join(outputFolder, 'new-task.png') });
 
     const team = await callCore(page, 'createTemplate', { templateId: 'research-review', provider: 'demo' });
-    await page.getByRole('button', { name: team.name, exact: true }).click();
+    await page.getByRole('button', { name: team.name, exact: true }).first().click();
     await page.getByRole('textbox', { name: 'Message' }).fill(brief);
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     const taskHandle = await page.waitForFunction(async teamId => {
@@ -76,9 +76,14 @@ async function main() {
     // The run's island settles into the bar when the run ends; the knowledge offer that may follow (COD-208) can stay in the shot.
     await page.locator('.live-island:not(.live-island-knowledge)').waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {});
     await page.waitForTimeout(600);
+    // The crew's plan makes the turn taller than the window, and the thread follows its end: start the shot at the
+    // question instead, so the message is not cut under the header.
+    const showFromTop = () => page.locator('.thread-scroll').evaluate(element => { element.scrollTop = 0; });
+    await showFromTop();
     await page.screenshot({ path: join(outputFolder, 'chat-light.png') });
 
     await setTheme(page, 'dark');
+    await showFromTop();
     await page.screenshot({ path: join(outputFolder, 'chat-dark.png') });
 
     await setTheme(page, 'light');

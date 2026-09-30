@@ -22,7 +22,9 @@
   --panel-width: min(720px, calc(100vw - 32px)); --panel-height: min(640px, calc(100dvh - 32px));
   --control-height: 34px; --icon-size: 32px; --radius: 9px; --page-x: 20px; --chrome-y: 12px; --sidebar-width: 228px;
   /* Panels are rounded cards sitting apart on the window background (user, 2026-09-19). */
-  --panel-radius: 16px; --shell-gap: 8px; --details-width: 320px;
+  --panel-radius: 16px; --shell-gap: 8px; --details-width: 400px;
+  /* The folded left column and the row of open chats above the main card (COD-340). RAIL_WIDTH in App.tsx matches. */
+  --rail-width: 52px; --tab-strip-height: 36px;
   /* How far a control stays from the end of a rounded panel. At less than the radius it sits beside the corner
      curve, and two curves that close read as fighting rather than nested (user, 2026-09-19). */
   --panel-inset: var(--panel-radius);
@@ -93,18 +95,30 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-resizer::after { content:''; display:block; width:3px; height:100%; margin:0 auto; border-radius:999px; background:transparent; transition:background .12s; }
 .details-resizer:hover::after,.details-resizer:focus-visible::after,.app.resizing .details-resizer::after { background:color-mix(in srgb, var(--text) 22%, transparent); }
 .details-resizer:focus-visible { outline:none; }
-.app.sidebar-hidden { grid-template-columns:0 minmax(0,1fr); }
+/* Folded, the sidebar gives its column to the rail (COD-340). */
+.app.sidebar-hidden { grid-template-columns:var(--rail-width) minmax(0,1fr); }
+/* Every panel has its place, so the tab strip can take a row of its own above the main card and the right panel. The
+   left column spans both rows; without the strip there is one row and the same rules hold. */
+.app > .sidebar,.app > .rail { grid-column:1; grid-row:1 / -1; }
+.app > .chat-tabs { grid-column:2 / -1; grid-row:1; }
+.app > .main-pane { grid-column:2; grid-row:-2 / -1; }
+.app > .details-pane { grid-column:3; grid-row:-2 / -1; }
+.app.with-tabs { grid-template-rows:var(--tab-strip-height) minmax(0,1fr); }
+.app.with-tabs .details-resizer { top:calc(var(--shell-gap) * 2 + var(--tab-strip-height)); }
 /* Opening or hiding a side panel slides rather than snaps (user, 2026-09-19). The columns carry the movement, the
    panel itself fades and shifts with them, and a drag turns the transition off so the handle stays under the
    pointer. A collapsed sidebar stays in the tree, inert, so it can animate out as well as in. */
 .app.panel-moving { transition:grid-template-columns var(--motion-base) var(--ease-out); }
 .app.resizing { transition:none; }
-.sidebar { transition:opacity var(--motion-quick) var(--ease-out), transform var(--motion-base) var(--ease-out); }
-.sidebar.collapsed { min-width:0; padding-left:0; padding-right:0; opacity:0; transform:translateX(-14px); pointer-events:none; }
+.sidebar { transition:opacity var(--motion-quick) var(--ease-out), transform var(--motion-base) var(--ease-out), visibility 0s linear 0s; }
+/* Once faded out it is hidden too (COD-340): the rail takes its place, and the sidebar's rows must not stay in the
+   accessibility tree under the rail's faces of the same names. */
+.sidebar.collapsed { min-width:0; padding-left:0; padding-right:0; opacity:0; transform:translateX(-14px); pointer-events:none; visibility:hidden;
+  transition:opacity var(--motion-quick) var(--ease-out), transform var(--motion-base) var(--ease-out), visibility 0s linear var(--motion-base); }
 @media(prefers-reduced-motion:reduce) { .app.panel-moving,.sidebar { transition:none; } .details-pane { animation:none; } }
 /* Chat details are a third panel in the shell, the same card as the sidebar (user, 2026-09-19). */
 .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr) var(--details-width); }
-.app.sidebar-hidden.with-details { grid-template-columns:0 minmax(0,1fr) var(--details-width); }
+.app.sidebar-hidden.with-details { grid-template-columns:var(--rail-width) minmax(0,1fr) var(--details-width); }
 .details-pane { display:flex; flex-direction:column; min-height:0; background:transparent; border-radius:var(--panel-radius); overflow:hidden; animation:pane-in var(--motion-base) var(--ease-out); }
 @keyframes pane-in { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
 /* The close button sits in the top-right corner, so the head starts below where the curve ends. */
@@ -217,9 +231,69 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .technical-run details ul { margin:6px 0 0; padding-left:18px; color:var(--muted); font-size:12px; }
 .technical-run details h4 { margin-top:8px; font-size:12px; font-weight:600; }
 @media(prefers-reduced-motion:reduce) { .technical-run details > summary::before { transition:none; } }
-@media(max-width:1000px) { .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr); } .details-pane { display:none; } }
-/* Collapsed sidebar: the two buttons live in the main panel, not on the window behind it (user, 2026-09-19). */
-.topbar-rail { display:flex; align-items:center; gap:2px; margin-right:6px; flex-shrink:0; }
+/* Beside the full sidebar the right panel gives way under 1000px; beside the rail there is room for it down to 860px. */
+@media(max-width:1000px) { .app.with-details { grid-template-columns:var(--sidebar-width) minmax(0,1fr); } .app:not(.sidebar-hidden) > .details-pane { display:none; } }
+@media(max-width:860px) { .app.sidebar-hidden.with-details { grid-template-columns:var(--rail-width) minmax(0,1fr); } .details-pane { display:none; } }
+/* The folded left column (COD-340): the roster as faces on the window, beside the tab strip of open chats. It has no
+   ground of its own, like the sidebar, so it takes the sidebar's hover and selected pair tinted from the text colour.
+   Top and foot are fixed; the faces between them scroll when the roster is taller than the window. */
+.rail { --row-hover:color-mix(in srgb, var(--text) 7%, transparent); --row-active:color-mix(in srgb, var(--text) 12%, transparent);
+  display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; min-height:0; }
+.rail .org-button:hover:not(:disabled) { background:var(--row-hover); }
+.rail-top,.rail-foot { display:flex; flex-direction:column; align-items:center; gap:2px; flex-shrink:0; }
+.rail-top .org-button,.rail-foot .org-button,.rail-create { width:36px; height:36px; min-height:36px; padding:0; }
+.rail-create { color:var(--muted); }
+.rail-roster { --roster-fade-start:0px; --roster-fade-end:0px; flex:1; min-height:0; width:100%; display:flex; flex-direction:column; align-items:center; gap:12px; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain;
+  mask-image:linear-gradient(to bottom, transparent 0, #000 var(--roster-fade-start), #000 calc(100% - var(--roster-fade-end)), transparent 100%); }
+/* An end with faces scrolled past it fades out, the way the file strip's ends do (COD-292). */
+.rail-roster[data-more-start] { --roster-fade-start:28px; }
+.rail-roster[data-more-end] { --roster-fade-end:28px; }
+/* The column is 52px, so the global 12px bar would take a quarter of it and push the faces off centre; the faces are
+   reached with the wheel and from the keyboard, which scrolls a focused one into view. */
+.rail-roster::-webkit-scrollbar { width:0; height:0; }
+.rail-group { display:flex; flex-direction:column; align-items:center; gap:4px; margin:0; padding:0; list-style:none; }
+.rail-face { position:relative; display:grid; place-items:center; width:36px; height:36px; padding:0; border:0; border-radius:10px; background:transparent; color:var(--muted); cursor:pointer; }
+.rail-face:hover { background:var(--row-hover); color:var(--text); }
+.rail-face.active { background:var(--row-active); color:var(--text); }
+.rail-face-picture { display:grid; place-items:center; }
+/* The face's mark rides on its top-right corner, on a ring of the window colour so it reads over the picture. The
+   marks that sit on a tint keep it, laid over the window colour. */
+.rail-face-mark { --org-status-mark-size:14px; position:absolute; top:0; right:0; background-color:var(--window); box-shadow:0 0 0 2px var(--window); }
+.rail-face-mark:is(.org-status-mark-busy,.org-status-mark-paused,.org-status-mark-asking) { background-image:linear-gradient(color-mix(in srgb, currentColor 16%, transparent), color-mix(in srgb, currentColor 16%, transparent)); }
+.rail-count { position:absolute; top:-7px; right:-9px; display:grid; place-items:center; min-width:16px; height:16px; padding:0 4px; border-radius:999px; font-size:10px; font-weight:600; line-height:1; font-variant-numeric:tabular-nums; box-shadow:0 0 0 2px var(--window); }
+.rail-count.accent { background:var(--accent); color:var(--accent-ink); }
+.rail-count.quiet { background:var(--surface); color:var(--text); }
+/* The group chats behind the rail's one button: faces, name and mark on one line each. */
+.rail-group-list { display:flex; flex-direction:column; gap:2px; width:240px; margin:0; padding:0; list-style:none; }
+.rail-group-chat { display:flex; align-items:center; gap:8px; width:100%; min-height:34px; padding:0 8px; border:0; border-radius:8px; background:transparent; color:var(--text); font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.rail-group-chat:hover { background:var(--row-hover); }
+.rail-group-chat.active { background:var(--row-active); }
+.rail-group-faces { display:inline-flex; align-items:center; flex-shrink:0; }
+.rail-group-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* The open chats, one tab each, across the top of the main card and the right panel (COD-340). The strip sits on the
+   window like the rail and takes the same pair of tints; it is set apart from the card by the shell's gap alone. A
+   tab is a face, a name that truncates and one mark, which gives way to the close button on hover or keyboard focus
+   in the same slot, so nothing moves. The strip scrolls sideways, never wraps, and fades an end with tabs past it. */
+.chat-tabs { --row-hover:color-mix(in srgb, var(--text) 7%, transparent); --row-active:color-mix(in srgb, var(--text) 12%, transparent);
+  display:flex; align-items:center; min-width:0; }
+.chat-tabs-strip { --strip-fade-start:0px; --strip-fade-end:0px; display:flex; align-items:center; gap:4px; min-width:0; height:100%; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain;
+  mask-image:linear-gradient(to right, transparent 0, #000 var(--strip-fade-start), #000 calc(100% - var(--strip-fade-end)), transparent 100%); }
+.chat-tabs-strip[data-more-start] { --strip-fade-start:32px; }
+.chat-tabs-strip[data-more-end] { --strip-fade-end:32px; }
+/* Hidden like the composer's file strip: a bar would add its height under every tab. The wheel scrolls it sideways. */
+.chat-tabs-strip::-webkit-scrollbar { width:0; height:0; }
+.chat-tab { position:relative; flex:0 0 auto; display:flex; align-items:center; max-width:220px; height:32px; border-radius:var(--radius); color:var(--muted); }
+.chat-tab:hover { background:var(--row-hover); color:var(--text); }
+.chat-tab.active { background:var(--row-active); color:var(--text); }
+.chat-tab-open { display:flex; align-items:center; gap:7px; flex:0 1 auto; min-width:0; height:100%; padding:0 4px 0 8px; border:0; border-radius:inherit; background:transparent; color:inherit; font:inherit; font-size:13px; font-weight:500; cursor:pointer; }
+.chat-tab-face { display:inline-flex; align-items:center; flex-shrink:0; }
+.chat-tab-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chat-tab-end { position:relative; display:grid; place-items:center; flex-shrink:0; width:22px; height:22px; margin-right:5px; }
+.chat-tab-mark { --org-status-mark-size:14px; }
+.chat-tab-close { position:absolute; inset:0; display:grid; place-items:center; padding:0; border:0; border-radius:6px; background:transparent; color:var(--muted); opacity:0; cursor:pointer; }
+.chat-tab-close:hover { color:var(--text); }
+.chat-tab:hover .chat-tab-close,.chat-tab:has(:focus-visible) .chat-tab-close { opacity:1; }
+.chat-tab:hover .chat-tab-mark,.chat-tab:has(:focus-visible) .chat-tab-mark { opacity:0; }
 /* Top and bottom clear the corner curve, because the brand row and the footer buttons sit right in it. */
 /* The side panels have no ground of their own: they sit straight on the window, and the chat is the one card
    (user, 2026-09-19). The radius stays so a hovered row still rounds inside the corner. */
@@ -326,7 +400,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .update-button.ready { gap:5px; padding:4px 10px; min-height:28px; border-radius:999px; color:var(--text); background:color-mix(in srgb, var(--accent) 18%, var(--bg)); white-space:nowrap; animation:notice-dot-in var(--motion-base) var(--ease-out); }
 .sidebar .update-button.ready:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 28%, var(--bg)); }
 .update-button.ready.compact { padding:0; min-height:var(--org-icon-size, 32px); }
-.topbar-rail .update-button.ready:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 28%, var(--bg)); }
+.rail .update-button:hover:not(:disabled) { color:var(--text); }
+.rail .update-button.ready:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 28%, var(--bg)); }
 @media (prefers-reduced-motion: reduce) { .update-button.ready { animation:none; } }
 .sidebar-footer .org-status-mark { margin-left:auto; }
 /* Selecting several rows (COD-214). A section's edit button holds its Done state while the section is in select
@@ -1372,7 +1447,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    adds must not shift the shell along: everything is one column here. */
 /* Under 780px the sidebar floats over the chat, so it needs the window's own colour: docked it is transparent over
    the window, and floating that way the chat showed through it. */
-@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:0; width:232px; background:var(--window); box-shadow:8px 0 30px #0002; } .app,.app.sidebar-hidden,.app.sidebar-hidden.with-details,.app.with-details { grid-template-columns:minmax(0,1fr); } .new-task-content { padding:18px; } }
+@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:0; width:232px; background:var(--window); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; } .app,.app.sidebar-hidden,.app.sidebar-hidden.with-details,.app.with-details { grid-template-columns:var(--rail-width) minmax(0,1fr); } .new-task-content { padding:18px; } }
 @media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .user-message { max-width:100%; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 0; } .finding-heading { flex-wrap:wrap; } .main-footer { padding:8px 12px; } }
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }

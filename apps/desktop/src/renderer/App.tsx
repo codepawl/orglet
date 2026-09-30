@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
-import { ArrowLeft, ChevronRight, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, MessagesSquare, MessageSquareText, UserRoundCog, Users } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, MessagesSquare, MessageSquareText, UserRoundCog, UserRoundPlus, Users } from 'lucide-react';
 import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
@@ -53,7 +53,7 @@ import { chatHeadline } from '../shared/forward';
 import { attachIntake, carriedDraft, type Incoming, type IncomingChat, type IncomingFiles } from '../shared/incoming';
 import { dropDraft, emptyChatDraftKey, keepDraft, readDraft } from './drafts';
 import { chatToReopen, rememberedChat, rememberOpenChat } from './lastChat';
-import { tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
+import { chatTabMark, tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
 import { taskResultSeen } from '../shared/task-seen';
 import { RowMenu } from './components/RowMenu';
 import { Select } from './components/Select';
@@ -64,7 +64,7 @@ import { removalBlocker } from '../shared/removal';
 import { NoticeCentre } from './components/NoticeCentre';
 import { RunningCentre, RunningCounts } from './components/RunningCentre';
 import { watchRunProgress } from './runProgress';
-import { runningCount, waitingForPersonCount } from '../shared/running';
+import { runningCount, waitingForPersonCount, waitsForPerson } from '../shared/running';
 import { runningButtonLabel } from './runningList';
 import { recordNotice, useUnreadNotices } from './components/notifications';
 import { KnowledgeEditor, KnowledgeLibrary } from './components/KnowledgeLibrary';
@@ -94,6 +94,9 @@ import { readyUpdateLabel, UpdateButton } from './components/UpdateButton';
 import { restartIntoUpdate } from './updateRestart';
 import { chatClosure, closedChatDestination, openChatRefresh, type ChatDestination, type OpenChatReads } from './openChat';
 import { swapScreen } from './screenTransition';
+import { ChatTabs, type ChatTabItem } from './components/ChatTabs';
+import { SidebarRail, type RailAction, type RailEntry } from './components/SidebarRail';
+import { chatTabState, closeChatTab, cycleChatTab, openChatTab, parseChatTabKey, pruneChatTabs, readChatTabs, readSidebarMode, strongestChatTabState, tabKeyForView, writeChatTabs, writeSidebarMode, type ChatTabState } from './chatTabs';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -112,7 +115,30 @@ function taskNameOf(workspace: Pick<Workspace, 'tasks'>, taskId: string): string
 }
 
 const SIDEBAR_WIDTH = { min: 190, max: 420, default: 228, step: 16 };
-const DETAILS_WIDTH = { min: 280, max: 560, default: 320, step: 16 };
+// The right panel takes the room the list column gave up to the tab strip (COD-340).
+const DETAILS_WIDTH = { min: 280, max: 720, default: 400, step: 16 };
+/** The folded left column, the same as --rail-width in styles.css. */
+const RAIL_WIDTH = 52;
+/** The chat column never gets narrower than this for the right panel's sake; past it the panel stops growing. */
+const CHAT_MIN_WIDTH = 480;
+/** The window padding on both sides and the gaps between three columns, each `--shell-gap` (8px). */
+const SHELL_GAPS_WIDTH = 32;
+
+/** The right panel's width: what the person dragged it to, held back so the chat beside it keeps its room. */
+function detailsPaneWidth(chosen: number, windowWidth: number, leftColumnWidth: number): number {
+  const room = windowWidth - leftColumnWidth - SHELL_GAPS_WIDTH - CHAT_MIN_WIDTH;
+  return Math.max(DETAILS_WIDTH.min, Math.min(chosen, room));
+}
+
+function useWindowWidth(): number {
+  const [width, setWidth] = useState(() => innerWidth);
+  useEffect(() => {
+    const follow = () => setWidth(innerWidth);
+    addEventListener('resize', follow);
+    return () => removeEventListener('resize', follow);
+  }, []);
+  return width;
+}
 
 /**
  * Ids that were not in the sidebar a moment ago. Everything present when the workspace first arrives counts as
@@ -288,12 +314,20 @@ export function App() {
   };
   const update = useCached(updateStates, window.orglet ? APP_KEY : undefined);
   const updateMark = updateIndicator(update);
-  const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  // Full sidebar or the rail (COD-340): the stored mode, written back when the person folds or opens it, never when a
+  // narrow window folds it for them.
+  const [searchOpen, setSearchOpen] = useState(false); const [sidebar, setSidebar] = useState(() => readSidebarMode() === 'full' && innerWidth > 780); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   // Dragging tracks the pointer; a width is the distance from the window edge minus the gap the panel sits in.
   const sidebarPane = usePaneWidth({ storageKey: 'orglet.sidebar-width', bounds: SIDEBAR_WIDTH, widthFromPointer: clientX => clientX - shellGap(), widerKey: 'ArrowRight' });
   const detailsPane = usePaneWidth({ storageKey: 'orglet.details-width', bounds: DETAILS_WIDTH, widthFromPointer: clientX => innerWidth - clientX - shellGap(), widerKey: 'ArrowLeft' });
   const sidebarWidth = sidebarPane.width;
   const resizing = sidebarPane.resizing || detailsPane.resizing;
+  const windowWidth = useWindowWidth();
+  // The rail stays on screen whenever the full sidebar is not a column of its own: folded, or laid over a narrow window.
+  const narrowWindow = windowWidth <= 780;
+  const railShown = !sidebar || narrowWindow;
+  const leftColumnWidth = railShown ? RAIL_WIDTH : sidebarWidth;
+  const detailsWidth = detailsPaneWidth(detailsPane.width, windowWidth, leftColumnWidth);
   const [panelMoving, setPanelMoving] = useState(false);
   useEffect(() => {
     setPanelMoving(true);
@@ -465,29 +499,26 @@ export function App() {
     document.documentElement.style.setProperty('--font', fontStack('interface', workspace?.interfaceFont));
     document.documentElement.style.setProperty('--font-mono', fontStack('code', workspace?.codeFont));
   }, [workspace?.interfaceFont, workspace?.codeFont]);
-  // A narrow window folds the sidebar away; widening it again brings back a sidebar the window folded, never one the
-  // person closed themselves (dogfood, 2026-09-26: after 740 px and back, the sidebar stayed hidden).
-  const sidebarFoldedForWidth = useRef(innerWidth <= 780);
+  // A narrow window folds the sidebar to the rail; widening it again brings back the mode the person chose, which is
+  // kept apart from what the width did (dogfood, 2026-09-26: after 740 px and back, the sidebar stayed hidden).
   useEffect(() => {
     const media = matchMedia('(max-width: 780px)');
     const followWidth = () => {
-      if (media.matches) {
-        setSidebar(open => {
-          if (open) sidebarFoldedForWidth.current = true;
-          return false;
-        });
-        return;
-      }
-      if (!sidebarFoldedForWidth.current) return;
-      sidebarFoldedForWidth.current = false;
-      setSidebar(true);
+      if (media.matches) setSidebar(false);
+      else setSidebar(readSidebarMode() === 'full');
     };
     media.addEventListener('change', followWidth);
     return () => media.removeEventListener('change', followWidth);
   }, []);
   const closeSidebar = () => {
-    sidebarFoldedForWidth.current = false;
     setSidebar(false);
+    // Closing the sidebar laid over a narrow window is not a choice of mode; folding it in a wide one is.
+    if (!matchMedia('(max-width: 780px)').matches) writeSidebarMode('rail');
+  };
+  const openFullSidebar = () => {
+    setSidebar(true);
+    // A narrow window lays the full sidebar over the chat for a moment; only a wide one makes it the mode.
+    if (!matchMedia('(max-width: 780px)').matches) writeSidebarMode('full');
   };
   // The copy on screen is the one worth keeping: a handful of recent chats makes switching instant.
   useEffect(() => { if (detail) taskDetails.set(detail.task.id, detail); }, [detail]);
@@ -582,6 +613,77 @@ export function App() {
     clearSelection();
     openGroupChat(group);
   };
+  // The open chats as tabs across the top (COD-340). Whatever opens a chat (the rail, the sidebar, search, a
+  // notification, Send to, a forward) changes what is on screen, and the tab follows from that, so no opener has to
+  // know about tabs. Closing a tab only takes it off the strip.
+  const [chatTabs, setChatTabs] = useState<readonly string[]>(readChatTabs);
+  const activeTabKey = workspace ? tabKeyForView({ selected, teamId, workerId, pendingGroup: Boolean(groupChat) }, workspace.tasks) : undefined;
+  // The first orglet is on screen for one frame before the start reopens the last chat; it gets no tab of its own.
+  const [tabsBooted, setTabsBooted] = useState(false);
+  useEffect(() => { if (workspace && !workspace.workers.length) setTabsBooted(true); }, [workspace]);
+  useEffect(() => { writeChatTabs(chatTabs); }, [chatTabs]);
+  useEffect(() => {
+    if (activeTabKey && tabsBooted) setChatTabs(keys => openChatTab(keys, activeTabKey));
+  }, [activeTabKey, tabsBooted]);
+  useEffect(() => {
+    if (!workspace) return;
+    setChatTabs(keys => pruneChatTabs(keys, workspace, activeTabKey));
+  }, [workspace, activeTabKey]);
+  const openChatTabKey = (key: string) => {
+    const target = parseChatTabKey(key);
+    if (!target) return;
+    clearSelection();
+    if (target.kind === 'worker') openWorker(target.id);
+    else if (target.kind === 'team') openTeam(target.id);
+    else openTask(target.id);
+  };
+  const closeTab = (key: string) => {
+    const closed = closeChatTab(chatTabs, key, activeTabKey);
+    setChatTabs(closed.keys);
+    if (closed.activate) openChatTabKey(closed.activate);
+  };
+  const stepTab = (step: 1 | -1) => {
+    const next = cycleChatTab(chatTabs, activeTabKey, step);
+    if (next) openChatTabKey(next);
+  };
+  // Ctrl+Tab and Ctrl+Shift+Tab walk the strip, Ctrl+W closes the open tab. Ctrl+W is always taken, even with one
+  // tab: left to the window it would close Orglet. While a dialog is over the page they do nothing.
+  const tabKeys = useRef({ stepTab, closeTab, activeTabKey });
+  tabKeys.current = { stepTab, closeTab, activeTabKey };
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.altKey || event.metaKey) return;
+      const walking = event.key === 'Tab';
+      const closing = event.key.toLowerCase() === 'w' && !event.shiftKey;
+      if (!walking && !closing) return;
+      event.preventDefault();
+      if (document.querySelector('[role=dialog]')) return;
+      const current = tabKeys.current;
+      if (walking) current.stepTab(event.shiftKey ? -1 : 1);
+      else if (current.activeTabKey) current.closeTab(current.activeTabKey);
+    };
+    window.addEventListener('keydown', keydown);
+    return () => window.removeEventListener('keydown', keydown);
+  }, []);
+  // The right panel is remembered per tab, for this session: a chat whose details were open opens with them again.
+  const detailsTabs = useRef(new Set<string>());
+  const activeTabKeyRef = useRef(activeTabKey);
+  activeTabKeyRef.current = activeTabKey;
+  useEffect(() => {
+    if (!activeTabKey) return;
+    const wanted = detailsTabs.current.has(activeTabKey);
+    setPanel(current => {
+      if (wanted && current === null) return 'activity';
+      if (!wanted && current === 'activity') return null;
+      return current;
+    });
+  }, [activeTabKey]);
+  useEffect(() => {
+    const key = activeTabKeyRef.current;
+    if (!key) return;
+    if (detailsOpen) detailsTabs.current.add(key);
+    else detailsTabs.current.delete(key);
+  }, [detailsOpen]);
   // An orglet or crew just created opens its chat (COD-255), once a workspace that lists it has arrived. Selecting it
   // any earlier would be undone by the check that falls back to the first orglet when the id is not listed yet.
   useEffect(() => {
@@ -617,6 +719,7 @@ export function App() {
   useEffect(() => {
     if (!workspace || !workerId || bootedLiveThread.current) return;
     bootedLiveThread.current = true;
+    setTabsBooted(true);
     if (selected || teamId) return;
     const lastOpen = chatToReopen(workspace.tasks, rememberedChat());
     if (lastOpen) { replaceNextView.current = true; openTask(lastOpen.id); return; }
@@ -1572,7 +1675,95 @@ export function App() {
       ? <DemoNote someOnDemo={isDemo ? undefined : emptyChatDemoWorker.name} preflight={isDemo && Boolean(team?.preflight)} onConnect={() => connectModel(emptyChatDemoWorker)} />
       : emptyChatUsage.out ? emptyChatUsage.note
       : emptyChatHint ? <ComposerPermissionHint text={brief} controls={emptyChatHint} fallback={emptyChatUsage.note} /> : emptyChatUsage.note ?? null;
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsPane.width}px` } as CSSProperties}>
+  /** A crew's or an orglet's face at a given size, the same drawing the sidebar row uses. */
+  const workerFace = (item: Worker, size: 'xs' | 'sm') => <Avatar name={item.name} seed={item.id} emoji={item.avatar?.emoji} mascot={item.avatar?.mascot} defaultMascot hint={item.description} color={item.avatar?.color} size={size} />;
+  const crewFace = (item: Team) => <RosterAvatars workers={teamRoster(item, workspace.workers)} size="xs" max={2} countRest={false} />;
+  const orderedTeams = teamOrder.order.map(id => workspace.teams.find(item => item.id === id)).filter((item): item is Team => Boolean(item));
+  const orderedWorkers = workerOrder.order.map(id => workspace.workers.find(item => item.id === id)).filter((item): item is Worker => Boolean(item));
+  const teamRowActive = (item: Team) => teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id);
+  const workerRowActive = (item: Worker) => !teamId && !group && workerId === item.id && (!selected || selected === liveWorkerTask(workspace.tasks, item.id)?.id);
+  const groupChatName = (chat: Task) => {
+    const members = taskWorkers(chat, workspace);
+    return chat.title || groupChatNames(members.map(member => member.name)) || t('{0} Tí', [members.length]);
+  };
+  /** The chat a tab stands for: an orglet's or crew's main chat (none before its first message), or the tab's own row. */
+  const chatOfTab = (key: string): Task | undefined => {
+    const target = parseChatTabKey(key);
+    if (!target) return undefined;
+    if (target.kind === 'worker') return liveWorkerTask(activeTasks, target.id);
+    if (target.kind === 'team') return liveTeamTask(activeTasks, target.id);
+    return workspace.tasks.find(task => task.id === target.id);
+  };
+  /**
+   * A tab's one state. What waits for the person comes from the Running list, the held reviews and, for a browser or
+   * desktop step or an app proposal, the chat's last loaded copy: those live only in a chat's detail.
+   */
+  const tabStateOf = (task: Task | undefined): ChatTabState => {
+    if (!task) return 'idle';
+    const knownCopy = detail?.task.id === task.id ? detail : taskDetails.get(task.id);
+    const pendingApproval = Boolean(knownCopy?.browser?.approval || knownCopy?.desktop?.approval || knownCopy?.appProposals.some(proposal => proposal.status === 'pending'));
+    const runs = (workspace.running ?? []).filter(item => item.taskId === task.id);
+    return chatTabState({ status: task.status, seen: taskSeen(task), waitsForPerson: runs.some(waitsForPerson), heldForReview: workspace.heldForReview.includes(task.id), pendingApproval });
+  };
+  // A face on the rail reads like the tab of the same chat: an orglet's main chat, or every chat it is in until it has
+  // one (the sidebar row's roll-up), and a crew's own chat.
+  const railMarkOf = (tasks: readonly Task[]) => chatTabMark(strongestChatTabState(tasks.map(tabStateOf)));
+  const orgletChats = (id: string) => {
+    const live = liveWorkerTask(activeTasks, id);
+    return live ? [live] : activeTasks.filter(task => taskWorkers(task, workspace).some(item => item.id === id));
+  };
+  const crewChats = (id: string) => [liveTeamTask(activeTasks, id)].filter((task): task is Task => Boolean(task));
+  const railCrews: RailEntry[] = orderedTeams.map(item => ({ key: item.id, name: item.name, face: crewFace(item), status: railMarkOf(crewChats(item.id)), active: teamRowActive(item),
+    onOpen: () => { clearSelection(); openTeam(item.id); }, onDwell: dwellTeam(item) }));
+  const railOrglets: RailEntry[] = orderedWorkers.map(item => ({ key: item.id, name: item.name, face: workerFace(item, 'sm'), status: railMarkOf(orgletChats(item.id)), active: workerRowActive(item),
+    onOpen: () => { clearSelection(); openWorker(item.id); }, onDwell: dwellWorker(item) }));
+  const railGroupChats: RailEntry[] = groupChats.map(chat => ({ key: chat.id, name: groupChatName(chat), face: <RosterAvatars workers={taskWorkers(chat, workspace)} size="xs" max={2} countRest={false} />,
+    status: railMarkOf([chat]), active: selected === chat.id, onOpen: () => { clearSelection(); openTask(chat.id); }, onDwell: resting => dwellChat(chat.id, resting) }));
+  const railGroupsMark = railMarkOf(groupChats);
+  const railCreateItems = [
+    { label: t('Tạo Tí'), icon: UserRoundPlus, onSelect: () => { setEditingWorker(undefined); setPanel('worker'); } },
+    { label: t('Tạo hội'), icon: Users, onSelect: () => { setEditingTeam(undefined); setPanel('team'); } },
+  ];
+  // The sidebar footer as icons. Running counts what waits for the person in the accent, otherwise what is under way.
+  const railActions: RailAction[] = [
+    { key: 'notices', icon: <Bell size={18} />, label: t('Thông báo'), ariaLabel: unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo'), count: unreadNotices, onClick: () => setNoticesOpen(true) },
+    { key: 'running', icon: <Activity size={18} />, label: t('Đang chạy'), ariaLabel: runningButtonLabel(runningNow, waitingForYou), count: waitingForYou || runningNow, countTone: waitingForYou > 0 ? 'accent' : 'quiet', onClick: () => setRunningOpen(true) },
+    { key: 'schedules', icon: <CalendarClock size={18} />, label: t('Lịch chạy'), ariaLabel: pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy'), count: pendingRoutines, onClick: () => openRoutines() },
+    { key: 'library', icon: <BookOpen size={18} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), count: knowledgeToReview, onClick: () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); } },
+    { key: 'settings', icon: <Settings size={18} />, label: t('Cài đặt'), onClick: () => openSettings(), onDwell: dwellAbout },
+  ];
+  const taskTabName = (task: Task) => {
+    if (task.routineId) return workspace.routines.find(item => item.id === task.routineId)?.name ?? task.routineName ?? taskName(task.id) ?? task.brief;
+    if (isGroupChat(task)) return groupChatName(task);
+    if (task.teamId) return workspace.teams.find(item => item.id === task.teamId)?.name ?? task.teamSnapshot?.name ?? taskName(task.id) ?? task.brief;
+    return taskName(task.id) ?? task.brief;
+  };
+  const taskTabFace = (task: Task) => {
+    if (isGroupChat(task)) return <RosterAvatars workers={taskWorkers(task, workspace)} size="xs" max={2} countRest={false} />;
+    const crew = task.teamId ? workspace.teams.find(item => item.id === task.teamId) : undefined;
+    if (crew) return crewFace(crew);
+    const owner = [...workspace.workers, ...workspace.archivedWorkers].find(item => item.id === task.workerId);
+    return owner ? workerFace(owner, 'xs') : <Avatar name={task.brief} seed={task.id} size="xs" />;
+  };
+  const tabItemOf = (key: string): ChatTabItem | undefined => {
+    const target = parseChatTabKey(key);
+    if (!target) return undefined;
+    const state = tabStateOf(chatOfTab(key));
+    if (target.kind === 'worker') {
+      const item = workspace.workers.find(candidate => candidate.id === target.id);
+      return item && { key, name: item.name, face: workerFace(item, 'xs'), state };
+    }
+    if (target.kind === 'team') {
+      const item = workspace.teams.find(candidate => candidate.id === target.id);
+      return item && { key, name: item.name, face: crewFace(item), state };
+    }
+    const task = workspace.tasks.find(candidate => candidate.id === target.id);
+    return task && { key, name: taskTabName(task), face: taskTabFace(task), state };
+  };
+  const tabItems = chatTabs.map(tabItemOf).filter((item): item is ChatTabItem => Boolean(item));
+  // One chat needs no strip: a newcomer's window stays as quiet as a single chat.
+  const tabsShown = tabItems.length > 1;
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${tabsShown ? ' with-tabs' : ''}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {detailsOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
@@ -1611,17 +1802,14 @@ export function App() {
       {selectionBar}
       <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => setRunningOpen(true)} aria-label={runningButtonLabel(runningNow, waitingForYou)}><Activity size={18} />{t('Đang chạy')}<RunningCounts running={runningNow} waiting={waitingForYou} /></Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><div className="sidebar-settings"><Button onClick={() => openSettings()} {...dwellHandlers(dwellAbout)}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${hasConnection(connections, workspace.customConnections) ? 'connected' : ''}`} /></Button>{updateMark && <UpdateButton indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} />}</div></div>
     </aside>
-    {/* Collapsed sidebar keeps its two most used actions in a narrow rail, stacked like ChatGPT. */}
-
+    {/* Folded, the left column is the rail: the roster as faces, with the chats in the tab strip (COD-340). */}
+    {railShown && <SidebarRail onExpand={openFullSidebar} onSearch={() => setSearchOpen(true)} createItems={railCreateItems}
+      crews={railCrews} orglets={railOrglets} groupChats={railGroupChats} groupChatsMark={railGroupsMark} actions={railActions}
+      trailing={updateMark && <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} />}
+      covered={sidebar && narrowWindow} />}
+    {tabsShown && <ChatTabs tabs={tabItems} activeKey={activeTabKey} onSelect={openChatTabKey} onClose={closeTab} />}
     <main className="main-pane" id="main-content" tabIndex={-1}>
       <header className="topbar">
-        {/* With the sidebar collapsed these live here, inside the panel, rather than on the window behind it. */}
-        {!sidebar && <div className="topbar-rail">
-          <Button size="icon" aria-label={t('Mở sidebar')} title={t('Mở sidebar')} onClick={() => setSidebar(true)}><PanelLeft size={18} /></Button>
-          <Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-keyshortcuts="Control+K" aria-haspopup="dialog" title={t('Tìm cuộc trò chuyện (Ctrl K)')} onClick={() => setSearchOpen(true)}><Search size={18} /></Button>
-          {/* The sidebar's update button is hidden with it, so a ready update also waits here (COD-304). */}
-          {updateMark?.kind === 'ready' && <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} />}
-        </div>}
         <div>
           {/* An empty group chat shows who is in it, the way a crew's row does; a count alone names nobody. */}
           {!selected && group && <RosterAvatars workers={groupWorkers} size="sm" max={4} />}

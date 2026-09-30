@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent } from 'react';
 import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
-import { Activity, Bell, BookOpen, CalendarClock, Plus, Settings } from './icons';
+import { Activity, Bell, BookOpen, CalendarClock, PanelLeft, Plus, Settings } from './icons';
 import { t } from '../i18n';
 import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
@@ -80,6 +80,16 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
       </div>
       <div className="sidebar-footer">{footer.map(item => <Button key={item.label} disabled>{item.icon}{item.label}</Button>)}</div>
     </aside>
+    {/* Folded, the column is the rail (COD-340): the shape of a few faces between its disabled top and foot. */}
+    {!sidebar && <nav className="rail" aria-label={t('Điều hướng')}>
+      <div className="rail-top"><Button size="icon" aria-label={t('Mở sidebar')} disabled><PanelLeft size={18} /></Button></div>
+      <div className="rail-roster">
+        <SkeletonGroup label={t('Đang mở danh sách Tí…')}>
+          {Array.from({ length: WORKER_ROW_SHAPES }, (_, index) => <div key={index} className="rail-face"><Skeleton shape="circle" className="row-shape-face" delay={index * 0.06} /></div>)}
+        </SkeletonGroup>
+      </div>
+      <div className="rail-foot">{footer.map(item => <Button key={item.label} size="icon" aria-label={item.label} disabled>{item.icon}</Button>)}</div>
+    </nav>}
     <main className="main-pane" id="main-content" tabIndex={-1}>
       <header className="topbar"><div /></header>
       <div className="team-chat team-chat-fresh">

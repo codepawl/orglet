@@ -1,8 +1,8 @@
 import { cn } from '../cn';
 import './StatusMark.css';
 
-export type StatusMarkVariant = 'empty' | 'dashed' | 'paused' | 'filled' | 'busy';
-export type StatusMarkTone = 'muted' | 'success' | 'error' | 'working';
+export type StatusMarkVariant = 'empty' | 'dashed' | 'paused' | 'filled' | 'busy' | 'asking';
+export type StatusMarkTone = 'muted' | 'success' | 'error' | 'working' | 'accent';
 export type StatusMarkState = { variant: StatusMarkVariant; tone: StatusMarkTone };
 
 /*
@@ -24,10 +24,13 @@ const glyphs = {
   done: <path d="M4.8 8.3 7 10.5l4.2-4.6" {...ring} strokeWidth={2.2} strokeLinejoin="round" />,
   // Something needs a person: the one mark that is not a ring, so it stands out in a list.
   attention: <path d="M8 4.4v4.4M8 11.4v.2" {...ring} strokeWidth={2.2} />,
+  // Waiting for the person to answer, allow or review something (COD-340): a head and shoulders, since it is about you.
+  asking: <path d="M8 7.6a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6ZM4.7 12c.6-1.7 1.8-2.6 3.3-2.6s2.7.9 3.3 2.6" {...ring} strokeWidth={1.9} strokeLinejoin="round" />,
 } as const;
 
 function glyphFor(variant: StatusMarkVariant, tone: StatusMarkTone) {
   if (variant === 'busy') return glyphs.busy;
+  if (variant === 'asking') return glyphs.asking;
   if (variant === 'paused') return glyphs.paused;
   if (variant === 'filled') return tone === 'error' ? glyphs.attention : glyphs.done;
   if (variant === 'dashed') return tone === 'error' ? glyphs.attention : glyphs.waiting;

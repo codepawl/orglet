@@ -17,7 +17,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/chat-dark.png">
-  <img src="docs/images/chat-light.png" alt="Orglet team chat: one report back, workers and teams in the sidebar, no task list" width="900">
+  <img src="docs/images/chat-light.png" alt="Orglet crew chat: one answer back, the crew and orglets as faces on the rail, open chats as tabs across the top" width="900">
 </picture>
 
 </div>
@@ -30,7 +30,7 @@ Orglet is a desktop app where you keep a few AI workers, each with a name, a rol
 - **Keep your data on your computer.** No Orglet server holds your work. Chats, workers and files live in a local database. A free CodePawl account is optional, and nothing syncs yet ([account](docs/account.md)).
 - **Made for one person.** Freelancers, solo founders and anyone who uses ChatGPT or Claude every day and wants a bit more structure.
 
-Click a **team** or **worker** in the sidebar to open that chat. One live conversation each; a new message is a turn, not a new task. Team chats plan, run members as hidden jobs, and bring one report back. Internal jobs stay under **Details**. In a group chat of several orglets, a message that tags nobody goes to everyone, or, with Tacet downloaded, to the one orglet it clearly fits, which the message then names ([how](docs/decisions.md#who-answers-in-a-group-chat)). [How it works](docs/team-chat.md).
+Click a **team** or **worker** in the sidebar, or its face on the narrow rail the sidebar folds into, to open that chat. The chats you open line up as tabs across the top, each marked when it is working, needs you, has a new answer or hit a problem ([how](docs/chat-guide.md#open-chats-and-the-rail)). One live conversation each; a new message is a turn, not a new task. Team chats plan, run members as hidden jobs, and bring one report back. Internal jobs stay under **Details**. In a group chat of several orglets, a message that tags nobody goes to everyone, or, with Tacet downloaded, to the one orglet it clearly fits, which the message then names ([how](docs/decisions.md#who-answers-in-a-group-chat)). [How it works](docs/team-chat.md).
 
 Reply to a saved user or worker message to give the next turn a precise reference, or react without starting a run. Team messages appear in Details with the same actions. Reactions and reply links stay with the local chat and its backup; a reaction alone does not change permissions or dispatch work.
 
@@ -55,7 +55,7 @@ Chat answers can hold a complete HTML or code document, up to 262,144 characters
 | 🌐 **Your language** | US English by default, with UK English and Vietnamese in Settings. |
 
 <p align="center">
-  <img src="docs/images/new-task.png" alt="Empty worker chat in Orglet. The sidebar lists teams and workers, not a pile of tasks." width="720">
+  <img src="docs/images/new-task.png" alt="Empty orglet chat in Orglet. The rail on the left shows orglets and crews as faces, not a pile of tasks." width="720">
 </p>
 
 Workers can run through a local CLI, an API key, or Demo:

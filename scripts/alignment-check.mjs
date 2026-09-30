@@ -120,6 +120,8 @@ async function openSidebar(page) {
 /** Back to a known state: no dialog, no menu, the sidebar showing the orglet's chat. */
 async function reset(page, context) {
   for (let attempt = 0; attempt < 3 && await page.locator('[role=dialog], [role=menu]').count(); attempt++) await page.keyboard.press('Escape');
+  // The right panel is part of the page, and a tab remembers it (COD-340): close it so the next screen starts without.
+  if (await page.locator('.details-pane').count()) await page.keyboard.press('Escape');
   await openSidebar(page);
   await page.getByRole('button', { name: context.researcher.name, exact: true }).first().click();
   await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor();
@@ -138,6 +140,23 @@ async function openWorkerTab(page, context, tab) {
   await page.getByRole('tab', { name: label(tab), exact: true }).click();
 }
 
+/** A tab for each of four chats (COD-340), ending on the orglet's own, so the strip shows above the main card. */
+async function openTabs(page, context) {
+  await openSidebar(page);
+  for (const name of [context.crew.name, 'Writer', 'Data analyst', context.researcher.name]) {
+    await openSidebar(page);
+    await page.getByRole('button', { name, exact: true }).first().click();
+  }
+  await page.locator('.chat-tabs').waitFor();
+}
+
+/** Folds the sidebar to the rail (COD-340); the next reset opens it again. A narrow window has folded it already. */
+async function foldSidebar(page) {
+  const fold = page.getByRole('button', { name: label('Thu gọn sidebar'), exact: true });
+  if (await fold.isVisible()) await fold.click();
+  await page.locator('.rail').waitFor();
+}
+
 const SCREENS = [
   { name: 'chat', open: async () => {} },
   { name: 'chat-options-menu', open: async page => { await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
@@ -147,6 +166,16 @@ const SCREENS = [
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },
   { name: 'empty-chat', open: async page => { await openSidebar(page); await page.getByRole('button', { name: 'Writer', exact: true }).first().click(); await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor(); } },
+  // The open chats as tabs, beside the full sidebar and beside the rail, and with the right panel open (COD-340).
+  { name: 'chat-tabs', open: openTabs },
+  { name: 'rail', open: async (page, context) => { await openTabs(page, context); await foldSidebar(page); } },
+  { name: 'rail-details', open: async (page, context) => {
+    await openTabs(page, context);
+    await foldSidebar(page);
+    await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click();
+    await page.getByRole('menuitem', { name: label('Chi tiết') }).click();
+    await page.locator('.details-pane').first().waitFor({ state: 'attached' });
+  } },
   { name: 'worker-dialog', open: (page, context) => openWorkerTab(page, context, 'Chung') },
   { name: 'worker-dialog-permissions', open: (page, context) => openWorkerTab(page, context, 'Quyền') },
   // Every Settings tab, in the dialog's order. One family: they share a panel, so their heading, content edges and the
