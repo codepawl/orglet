@@ -38,6 +38,11 @@ export const ModelListRow = z.object({
   source: ModelSource,
   models: z.array(ModelEntry).max(500),
   error: z.string().max(500).optional(),
+  /**
+   * When a list that learned nothing is fetched again, instead of after the usual day (COD-338): Claude Code signed in
+   * but no alias resolved and no names read, most often because its start timed out on a busy computer.
+   */
+  retryAfter: z.iso.datetime().optional(),
 }).strict();
 export type ModelListRow = z.infer<typeof ModelListRow>;
 

@@ -572,6 +572,9 @@ function harnessOf(list: HarnessInfo[], id: 'claude-code' | 'codex' | 'cursor') 
   return list.find(item => item.id === id);
 }
 
+/** How soon a Claude Code list that learned nothing is fetched again (COD-338). */
+export const CLAUDE_CODE_RETRY_MS = 10 * 60 * 1000;
+
 /** The header Claude Code's own calls send with its sign-in token (the same one `usage.ts` sends to read the plan). */
 const CLAUDE_OAUTH_BETA = 'oauth-2025-04-20';
 
@@ -588,7 +591,7 @@ async function readClaudeCodeNames(configDir: string | undefined, options: Model
  * when it starts (`claudeStartProbe`), and the Models API, called with the account's own sign-in, names each model
  * ("Claude Opus 5.5") and lists the rest. Without a sign-in, or when both fail, the aliases stay as they were.
  */
-async function fetchClaudeCode(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error'>> {
+async function fetchClaudeCode(options: ModelListFetchOptions): Promise<Pick<ModelListRow, 'models' | 'source' | 'error' | 'retryAfter'>> {
   const info = harnessOf(await options.harnesses(), 'claude-code');
   if (!info || info.auth !== 'logged_in' || !info.executable) return withCatalogHint('claude-code', claudeCodeModels(), 'alias');
   const start = options.claudeStart ?? claudeStartProbe;
@@ -600,7 +603,11 @@ async function fetchClaudeCode(options: ModelListFetchOptions): Promise<Pick<Mod
   ]);
   const [defaultModel, ...resolved] = started;
   const aliases = Object.fromEntries(CLAUDE_CODE_ALIASES.map((alias, index) => [alias.id, resolved[index]]));
-  return withCatalogHint('claude-code', claudeCodeEntries({ defaultModel, aliases, named }), 'alias');
+  const row = withCatalogHint('claude-code', claudeCodeEntries({ defaultModel, aliases, named }), 'alias');
+  // Signed in, yet nothing learned: keep the plain aliases for now and ask again soon, not a day later (COD-338).
+  const learnedNothing = !named && started.every(model => model === undefined);
+  if (!learnedNothing) return row;
+  return { ...row, retryAfter: new Date(options.now().getTime() + CLAUDE_CODE_RETRY_MS).toISOString() };
 }
 
 /** `model/list` from `codex app-server`, the list with names and the default; undefined when it did not answer. */
