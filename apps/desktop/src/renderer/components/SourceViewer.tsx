@@ -13,6 +13,7 @@ import { ImageEditing, PdfEditing, TextEditing } from './SourceEditing';
 import { languageOf } from './highlight';
 import { currentLocale, t, tMessage } from '../i18n';
 import { orglet } from '../api';
+import { reportFeature } from '../analytics';
 import { Skeleton, SkeletonGroup, SkeletonText } from '@codepawl/orglet-ui';
 import { sourcePreviews } from '../caches';
 import { useCached } from '../prefetch';
@@ -105,6 +106,7 @@ export function SourceDialog({ detail, sourceId, lines, onClose, refresh, openSo
 }) {
   const source = detail.sources.find(item => item.id === sourceId);
   const taskId = detail.task.id;
+  useEffect(() => reportFeature('file_viewer'), []);
   // A text source seen this session is drawn at once (COD-218); the hash in the key pins the copy to the file as it was.
   const previewKey = source && !source.media ? `${taskId}:${sourceId}:${source.hash}` : undefined;
   const keptText = useCached(sourcePreviews, previewKey);

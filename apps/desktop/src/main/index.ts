@@ -3,7 +3,7 @@ import { basename, dirname, join, relative, isAbsolute, resolve } from 'node:pat
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { mkdir, open, rm, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { release as osRelease } from 'node:os';
+import { release as osRelease, userInfo } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { translate, DEFAULT_LANGUAGE, type Language } from '../shared/i18n';
@@ -52,6 +52,8 @@ import { CLEAN_BROWSER_PROFILE, type BrowserState } from '../shared/browser';
 import { signInPageAllowed } from '../shared/harness';
 import { ACCOUNT_SCHEME, accountsBaseUrl } from '../shared/account';
 import { AccountFile, AccountService, accountPayload } from './account';
+import { AnalyticsClient } from './analytics';
+import { AnalyticsFeature, FLUSH_INTERVAL_MS, RendererErrorReport, analyticsAllowedHere, featureForCommand, settingChanges, settingsSnapshot, type ErrorKind } from '../shared/analytics';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -82,6 +84,12 @@ let credentials: Credentials;
 let mcpSecrets: McpSecretStore;
 /** The optional CodePawl account (COD-337): its tokens stay here, the window hears only `AccountState`. */
 let account: AccountService;
+/** Usage analytics for a signed-in account (COD-344); records nothing without an account or with the switch off. */
+let analytics: AnalyticsClient;
+/** The settings as last saved, so a save can say which keys changed without sending their values. */
+let savedSettings: Record<string, unknown> = {};
+/** Set once analytics had its last flush at quit, so the second before-quit goes straight through. */
+let analyticsFlushed = false;
 let webSearchKeys: WebSearchKeys;
 /** The MCP server processes the core reports running, so they stop even when the core cannot stop them (COD-241). */
 let mcpProcesses: ProcessIdentity[] = [];
@@ -194,6 +202,37 @@ function notifyInBackground(notice: BackgroundNotice): boolean {
   notification.show();
   return true;
 }
+/** The account name the scrubber takes out of error reports; some systems cannot say, and then only the home folder goes. */
+function currentUserName(): string | undefined {
+  try {
+    return userInfo().username;
+  } catch {
+    return undefined;
+  }
+}
+/** What a command the window sent says about how Orglet is used: a feature, or which settings changed. */
+function recordCommand(command: string, args: unknown) {
+  const feature = featureForCommand(command, args);
+  if (feature) analytics.recordFeature(feature);
+  if (command !== 'settings') return;
+  const next = args as Record<string, unknown>;
+  // Without the startup read to compare against, every key would look changed; the first save only sets the baseline.
+  const changes = Object.keys(savedSettings).length ? settingChanges(savedSettings, next, new Date()) : [];
+  for (const event of changes) analytics.record(event);
+  savedSettings = { ...savedSettings, ...next };
+}
+/**
+ * Main's own crashes and failed promises, for analytics. The monitor only watches, so Electron still handles an
+ * uncaught exception as before; a rejection is still printed.
+ */
+function watchErrors() {
+  process.on('uncaughtExceptionMonitor', error => analytics.recordError('uncaught', error.message, error.stack));
+  process.on('unhandledRejection', reason => {
+    console.error('Unhandled rejection:', reason);
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    analytics.recordError('unhandled_rejection', error.message, error.stack);
+  });
+}
 /** The line protocol the `orglet` command talks to (COD-234), with a new token on every start. */
 async function startCliServer(directory: string) {
   const token = createCliToken();
@@ -208,7 +247,10 @@ async function startCliServer(directory: string) {
   cliServer = new CliServer({
     endpoint: cliEndpoint(directory),
     token,
-    handle: (cliRequest, signal, progress) => operations.run(cliRequest, signal, progress),
+    handle: (cliRequest, signal, progress) => {
+      analytics.recordFeature('cli');
+      return operations.run(cliRequest, signal, progress);
+    },
     translate: translateForCli,
   });
   await cliServer.start();
@@ -312,7 +354,10 @@ function queueIncoming(item: Incoming) {
   if (window && !window.isDestroyed()) window.webContents.send('orglet:incoming');
 }
 async function incomingFor(launch: Exclude<LaunchRequest, { kind: 'account' }>): Promise<Incoming> {
-  if (launch.kind === 'send-to') return sentFiles.offer(launch.paths);
+  if (launch.kind === 'send-to') {
+    analytics.recordFeature('send_to');
+    return sentFiles.offer(launch.paths);
+  }
   if (launch.kind === 'refused') return { kind: 'notice', message: launch.message };
   const workspace = await request('workspace', {}) as Workspace;
   const found = resolveLinkChat(launch.link.target, chatsOf(workspace));
@@ -462,9 +507,25 @@ async function start() {
     baseUrl: accountsBaseUrl(process.env.ORGLET_ACCOUNTS_URL),
     store: new AccountFile(directory, safeStorage),
     openExternal: address => shell.openExternal(address),
-    onChange: state => { if (window && !window.isDestroyed()) window.webContents.send('orglet:account', accountPayload(state)); },
+    onChange: state => {
+      if (window && !window.isDestroyed()) window.webContents.send('orglet:account', accountPayload(state));
+      void analytics?.accountChanged(state);
+    },
   });
   await account.load();
+  analytics = new AnalyticsClient({
+    directory,
+    baseUrl: accountsBaseUrl(process.env.ORGLET_ACCOUNTS_URL),
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    allowed: analyticsAllowedHere({ env: process.env, packaged: app.isPackaged, updateTestBuild }),
+    getAccessToken: () => account.getAccessToken(),
+    scrub: { homeDirectory: app.getPath('home'), userName: currentUserName() },
+    flushIntervalMs: FLUSH_INTERVAL_MS,
+  });
+  await analytics.load();
+  await analytics.accountChanged(account.state());
+  watchErrors();
   browserProfiles = new BrowserProfiles(join(directory, 'browser'));
   browserHost = new BrowserHostProcess(browserProfiles.profilesRoot, relayBrowserEvent);
   const workspaceRuntimePaths = app.isPackaged ? {
@@ -498,6 +559,12 @@ async function start() {
       // Only Codex's sign-in page, handed over by its app server (COD-327); any other address the core names is dropped.
       if (message.type === 'openSignInPage') {
         if (typeof message.url === 'string' && signInPageAllowed(message.url)) void shell.openExternal(message.url);
+        return;
+      }
+      if (message.type === 'analytics') { analytics.record(message.event); return; }
+      if (message.type === 'analyticsError') {
+        const kind: ErrorKind = message.kind === 'run_failed' ? 'run_failed' : 'core';
+        analytics.recordError(kind, String(message.message ?? ''), typeof message.stack === 'string' ? message.stack : undefined);
         return;
       }
       if (message.type === 'decisionModel') {
@@ -552,6 +619,8 @@ async function start() {
   });
   const startupSettings = await request('workspace', {}).then(workspace => workspace as { language?: Language; autoUpdate?: boolean }).catch(() => ({} as { language?: Language; autoUpdate?: boolean }));
   language = startupSettings.language ?? DEFAULT_LANGUAGE;
+  savedSettings = settingsSnapshot(startupSettings);
+  void analytics.appStarted({ version: app.getVersion(), platform: process.platform, arch: process.arch, locale: language, installKind: installKind(updateEnvironment) });
   useSpellCheckerLanguage(language);
   updater = new Updater({
     engine: autoUpdater,
@@ -604,6 +673,7 @@ async function start() {
       if (choice.profileId !== CLEAN_BROWSER_PROFILE && !await browserProfiles.has(choice.profileId)) throw new Error('Không tìm thấy hồ sơ trình duyệt này.');
     }
     const result = await request(command, args);
+    recordCommand(command, args);
     // The core forgot the connection; its key goes with it, so no secret is left behind that nothing points at.
     if (command === 'deleteCustomConnection') {
       await credentials.remove(customProviderId((args as { id: string }).id));
@@ -623,6 +693,15 @@ async function start() {
   handle('orglet:account-sign-in', async () => accountPayload(await account.signIn()));
   handle('orglet:account-cancel-sign-in', async () => accountPayload(account.cancelSignIn()));
   handle('orglet:account-sign-out', async () => accountPayload(await account.signOut()));
+  // Analytics (COD-344): the window can read and flip the switch, name a feature from a fixed list, and report an error
+  // of its own, which is scrubbed here. It never learns the install id, the queue or the token.
+  handle('orglet:analytics-state', async () => analytics.state());
+  handle('orglet:analytics-set', async raw => analytics.setEnabled(z.boolean().parse(raw)));
+  handle('orglet:analytics-feature', async raw => { analytics.recordFeature(AnalyticsFeature.parse(raw)); });
+  handle('orglet:analytics-error', async raw => {
+    const report = RendererErrorReport.parse(raw);
+    analytics.recordError('renderer', report.message, report.stack);
+  });
   // Settings → Browser (COD-261). The window names profiles by id; their folders stay here and in the host.
   handle('orglet:browser-state', async () => browserState());
   handle('orglet:browser-create', async raw => { await browserProfiles.create(raw); return browserState(); });
@@ -1005,6 +1084,16 @@ else {
   app.on('activate', () => { if (started) void showWindow(); });
   app.on('window-all-closed', () => app.quit());
   app.on('before-quit', event => {
+    // Analytics gets one short last flush (at most 3 seconds) before anything else closes.
+    if (analytics && !analyticsFlushed) {
+      analyticsFlushed = true;
+      if (analytics.active()) {
+        event.preventDefault();
+        void analytics.shutdown().finally(() => app.quit());
+        return;
+      }
+      void analytics.shutdown();
+    }
     // The browser's windows close first, so no Chrome or Edge window Orglet drove outlives the app (COD-261).
     if (browserHost?.running && !browserClosing) {
       event.preventDefault();

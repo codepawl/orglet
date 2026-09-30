@@ -105,6 +105,47 @@ async function startHeldModel() {
 
 const HELD_MODEL = 'held:latest';
 
+/**
+ * A stand-in for accounts.codepawl.com (COD-344), so Settings → Account can be measured signed in without a real
+ * account or a browser: it hands out a token for any code, answers /me with a made-up profile and takes revokes.
+ */
+async function startFakeAccounts() {
+  const sendJson = (response, body) => {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(body));
+  };
+  const server = createServer((request, response) => {
+    if (request.method === 'POST' && request.url.startsWith('/api/auth/oauth2/token')) return sendJson(response, { access_token: 'alignment-access', refresh_token: 'alignment-refresh', expires_in: 900, token_type: 'Bearer' });
+    if (request.method === 'GET' && request.url.startsWith('/me')) return sendJson(response, { id: 'alignment', email: 'an@example.com', name: 'An Nguyen', plan: 'free' });
+    if (request.method === 'POST') return sendJson(response, {});
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  return { url: `http://127.0.0.1:${server.address().port}`, close: () => server.close() };
+}
+
+/** Starts a sign-in whose browser never answers, so the Account tab shows its waiting state. */
+async function startSignInThatWaits(page) {
+  await app.evaluate(({ shell }) => { shell.openExternal = async () => undefined; });
+  await page.evaluate(() => { void window.orglet.accountSignIn().catch(() => undefined); });
+}
+
+/**
+ * Signs in through the real flow with the browser left out: main's `shell.openExternal` is swapped for one that sends
+ * the callback straight back, the way a second instance would, and the fake service answers the rest.
+ */
+async function signInWithoutBrowser(page) {
+  await app.evaluate(({ app: electronApp, shell }) => {
+    shell.openExternal = async address => {
+      const state = new URL(address).searchParams.get('state');
+      const argv = [process.execPath, `com.codepawl.orglet://auth/callback?code=alignment&state=${state}`];
+      setTimeout(() => electronApp.emit('second-instance', { preventDefault() {} }, argv, process.cwd(), { argv }), 50);
+    };
+  });
+  await page.evaluate(() => window.orglet.accountSignIn());
+}
+
 /** A crew whose member runs on the held model, so a turn of it stays working (COD-167 island in a crew chat). */
 async function seedIslandCrew(page, researcher) {
   await page.evaluate(() => window.orglet.connect('ollama'));
@@ -245,7 +286,17 @@ const SCREENS = [
   { name: 'settings-browser', family: 'settings', open: page => openSettingsTab(page, 'Trình duyệt') },
   { name: 'settings-costs', family: 'settings', open: page => openSettingsTab(page, 'Chi phí & giới hạn') },
   { name: 'settings-data', family: 'settings', open: page => openSettingsTab(page, 'Dữ liệu') },
-  { name: 'settings-account', family: 'settings', open: page => openSettingsTab(page, 'Tài khoản CodePawl') },
+  { name: 'settings-account', family: 'settings', open: page => openSettingsTab(page, 'Tài khoản') },
+  { name: 'settings-account-signing-in', family: 'settings', open: async page => {
+    await startSignInThatWaits(page);
+    await openSettingsTab(page, 'Tài khoản');
+    await page.getByRole('button', { name: label('Hủy'), exact: true }).waitFor();
+  }, close: async page => { await page.evaluate(() => window.orglet.accountCancelSignIn()); } },
+  { name: 'settings-account-signed-in', family: 'settings', open: async page => {
+    await signInWithoutBrowser(page);
+    await openSettingsTab(page, 'Tài khoản');
+    await page.getByRole('switch', { name: startsWith('Thống kê sử dụng và báo lỗi') }).waitFor();
+  }, close: async page => { await page.evaluate(() => window.orglet.accountSignOut()); } },
   { name: 'settings-about', family: 'settings', open: page => openSettingsTab(page, 'Giới thiệu') },
 ];
 
@@ -306,6 +357,10 @@ const dataFolder = await mkdtemp(join(tmpdir(), 'orglet-alignment-data-'));
 const { env } = await isolatedHarnessEnvironment(dataFolder);
 // This check measures the first-run account question too (COD-337), so its empty profile is a new install.
 delete env.ORGLET_SKIP_ACCOUNT_CHOICE;
+// The signed-in Account screen signs in against a local stand-in; analytics stays off so nothing is sent even there.
+const fakeAccounts = await startFakeAccounts();
+env.ORGLET_ACCOUNTS_URL = fakeAccounts.url;
+env.ORGLET_ANALYTICS = 'off';
 const heldModel = await startHeldModel();
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${dataFolder}`], env });
 let closed = false;
@@ -334,6 +389,7 @@ try {
 } finally {
   if (!closed) await app.close();
   heldModel?.close();
+  fakeAccounts.close();
   // The seeded workspace is throwaway; a file the app still holds is left for the system's temp cleanup.
   await rm(dataFolder, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 }).catch(() => {});
 }

@@ -46,6 +46,10 @@ const bridge: Bridge = {
     ipcRenderer.on('orglet:account', listener);
     return () => ipcRenderer.removeListener('orglet:account', listener);
   },
+  analyticsState: () => invoke('orglet:analytics-state'),
+  setAnalytics: enabled => invoke('orglet:analytics-set', enabled),
+  reportFeature: feature => invoke('orglet:analytics-feature', feature),
+  reportError: report => invoke('orglet:analytics-error', report),
   openLink: link => invoke('orglet:open-link', link),
   changelog: (refresh = false) => invoke('orglet:changelog', refresh),
   updateState: () => invoke('orglet:update-state'),

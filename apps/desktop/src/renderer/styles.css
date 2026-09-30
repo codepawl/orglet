@@ -863,6 +863,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .account-choice-option .org-button { width:100%; min-height:40px; }
 .account-choice-option p, .account-choice-waiting p { margin:0; color:var(--muted); font-size:13px; line-height:1.45; text-align:center; text-wrap:balance; }
 .account-choice-option p.error { color:var(--error); }
+/* What signing in sends (COD-344): one quieter line under the sign-in sentence, links in the text colour. */
+.account-choice-option p.account-choice-disclosure { font-size:12px; }
 .account-choice-waiting { display:flex; flex-direction:column; align-items:center; gap:16px; }
 .row-shape { display:flex; align-items:center; gap:8px; padding:7px 10px 7px 12px; font-size:13px; }
 .row-shape-face { width:22px; height:22px; border-radius:6px; flex-shrink:0; }
@@ -1065,10 +1067,32 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
    read as the same kind of control; which variant each takes is the rule above SettingsDialog's heading actions. */
 .setting-control .org-button,
 #settings-panel > .org-panel-heading .org-button:not(.org-button-icon) { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; }
+/* The kit's outline button rests on --surface, which on the white Settings panel is 1.1:1 and read as no button at all
+   until hovered (owner, 2026-09-30, the Account tab's Cancel). In a settings row it rests one step stronger and hovers
+   one step past that, in both themes. */
+.setting-control .org-button-outline,
+#settings-panel > .org-panel-heading .org-button-outline { background:color-mix(in srgb, var(--text) 8%, var(--bg)); }
+.setting-control .org-button-outline:hover:not(:disabled),
+#settings-panel > .org-panel-heading .org-button-outline:hover:not(:disabled) { background:color-mix(in srgb, var(--text) 14%, var(--bg)); }
 /* Every select and number field in a settings row shares one width, so the right edge reads as one column. */
 .setting-control .setting-select,.setting-control .org-money-input { width:210px; }
 .setting-control .org-money-input input { flex:1; width:auto; min-width:0; }
 .setting-value { font-size:14px; font-variant-numeric:tabular-nums; }
+/* Settings → Account signed out (COD-344): what an account gives, a quiet list of an icon and one line each, then the
+   sentence on what signing in sends. No card and no rule: the list sits under its row by spacing alone. */
+.account-benefits { margin:0 0 4px; padding:0; list-style:none; display:grid; gap:10px; }
+/* The same 26px mark slot and 12px gap as the other Settings lists (Connections, Harness, Browser), so the marks and
+   the text of every tab line up; the alignment check compares them (family-lead). */
+.account-benefits li { display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.45; }
+.account-benefit-icon { flex:none; display:inline-grid; place-items:center; width:26px; height:20px; color:var(--muted); }
+.account-disclosure { margin:16px 0 0; font-size:12px; line-height:1.5; color:var(--muted); }
+.account-disclosure .org-info-tip { vertical-align:middle; margin-left:2px; }
+/* A title with its "i" right after it, both on the title's centre line. */
+.account-title-info { display:inline-flex; align-items:center; gap:4px; }
+/* The "i" rides the title's line without making it taller, so the switch stays on the row's centre. */
+.account-title-info .org-info-tip-trigger { width:20px; height:20px; min-height:20px; padding:2px; }
+.account-disclosure .org-info-tip-trigger { width:20px; height:20px; min-height:20px; padding:2px; }
+.account-policy-links { white-space:nowrap; }
 .setting-note { font-size:12px; color:var(--muted); margin:10px 0 4px; line-height:1.5; }
 /* Notes introduce the group they sit under. */
 .settings-subheading+.setting-note,.settings-subheading-row+.setting-note { margin-top:2px; }
@@ -1797,6 +1821,11 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
   0%,100% { transform:translateY(var(--gaze-y)) translateX(0); }
   14%,36% { transform:translateY(var(--gaze-y)) translateX(-1.3px); } 54%,76% { transform:translateY(var(--gaze-y)) translateX(1.3px); }
 }
+
+/* Settings → Account while the browser sign-in is open (COD-344): the orglet thinks, the same loop as a reply being
+   thought about, so the row shows it is waiting without a spinner. Reduced motion stops it like every other loop. */
+.account-waiting .mascot { animation:mascot-ponder var(--motion-cycle) ease-in-out infinite; }
+.account-waiting .mascot-eyes { --gaze-y:-0.8px; animation:mascot-glance var(--motion-cycle) ease-in-out infinite; }
 
 /* Working: once output streams the head settles and leans in, and the eyes read the work, blinking as they jump
    back to the start of the line. */

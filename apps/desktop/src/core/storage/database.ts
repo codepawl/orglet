@@ -41,6 +41,8 @@ export const now = () => new Date().toISOString();
 export const id = () => randomUUID();
 export class Store {
   onActivity: (activity: RunActivity) => void = () => {};
+  /** Every run status saved, for analytics (COD-344); told after the change is stored. */
+  onRunStatus: (taskId: string, runId: string, status: TaskStatus, errorCode?: RunErrorCode) => void = () => {};
 
   /** Progress must never change a tool's authorization, result or journal. */
   activity(activity: RunActivity): void {
@@ -314,6 +316,11 @@ export class Store {
       this.put('tasks', { ...this.get<Task>('tasks', taskId), status });
       this.put('runs', { ...this.get<Run>('runs', runId), status, error, errorCode, ...details }, { column: 'task_id', value: taskId });
     });
+    try {
+      this.onRunStatus(taskId, runId, status, errorCode);
+    } catch {
+      // An observer, such as analytics, can never fail the run it watches.
+    }
   }
   usage(taskId?: string): Usage {
     const where = taskId ? 'WHERE r.task_id=?' : '';

@@ -23,6 +23,7 @@ import { DesktopHelperProcess } from './tools/desktop-helper';
 import { Decisions } from './decisions/service';
 import { decisionsDirectory, filesFrom } from './decisions/manifest';
 import { workerRuntime } from './decisions/worker-runtime';
+import { runFinishedEvent, TURN_COMMANDS, turnSentEvent, turnTaskId } from './analytics-events';
 
 type ParentPort = { postMessage(message: unknown): void; on(event: 'message', callback: (event: { data: unknown }) => void): void };
 const port = (process as unknown as { parentPort: ParentPort }).parentPort;
@@ -153,6 +154,19 @@ if (desktopHelper) core.desktop.showOverlayWith(state => new Promise<boolean>(re
 }));
 core.runner.onCliProgress = update => port.postMessage({ type: 'cliProgress', update });
 store.onActivity = activity => port.postMessage({ type: 'activity', activity });
+// Analytics (COD-344): the core only describes what happened; main decides whether anything is recorded at all.
+const runsReported = new Set<string>();
+store.onRunStatus = (taskId, runId, status, errorCode) => {
+  const event = runFinishedEvent(store, taskId, runId, status, new Date());
+  if (!event || runsReported.has(runId)) return;
+  runsReported.add(runId);
+  port.postMessage({ type: 'analytics', event });
+  // A failed run is reported by its code only; its message can quote a provider's answer or a file name.
+  if (status === 'failed') port.postMessage({ type: 'analyticsError', kind: 'run_failed', message: errorCode ?? 'unknown' });
+};
+process.on('uncaughtExceptionMonitor', error => {
+  port.postMessage({ type: 'analyticsError', kind: 'core', message: error.message, stack: error.stack });
+});
 // Tacet (COD-303): downloaded only when the person asks, and run in its own worker thread built next to this file.
 core.decisions = new Decisions({
   directory: decisionsDirectory(process.argv[2]),
@@ -215,11 +229,17 @@ port.on('message', async ({ data }) => {
       : command === 'browserReleased' ? await core.browser.released(Id.parse(args))
       : await core.command(command as Command, args);
     port.postMessage({ id, ok: true, value });
+    if (TURN_COMMANDS.has(command)) reportTurn(command, args, value);
   } catch (error) {
     const message = error instanceof z.ZodError ? 'Dữ liệu không hợp lệ.' : error instanceof Error ? error.message : 'Core gặp lỗi.';
     port.postMessage({ id, ok: false, error: message });
   }
 });
+function reportTurn(command: string, args: unknown, result: unknown) {
+  const taskId = turnTaskId(command, args, result);
+  const event = taskId ? turnSentEvent(store, taskId, new Date()) : undefined;
+  if (event) port.postMessage({ type: 'analytics', event });
+}
 void core.tick();
 setInterval(() => { void core.tick().catch(() => port.postMessage({ type: 'changed' })); }, 5000);
 port.postMessage({ type: 'ready', sqliteVersion: store.sqliteVersion });

@@ -72,6 +72,8 @@ describe('the About tab links', () => {
       threads: 'https://www.threads.com/@codepawl',
       releases: 'https://github.com/codepawl/orglet/releases',
       exaKeys: 'https://dashboard.exa.ai/api-keys',
+      privacy: 'https://codepawl.com/privacy',
+      terms: 'https://codepawl.com/terms',
     });
     expect(AboutLink.options).toEqual(Object.keys(ABOUT_LINKS));
     expect(AboutLink.safeParse('https://example.com').success).toBe(false);

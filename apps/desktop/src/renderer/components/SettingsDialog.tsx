@@ -60,6 +60,8 @@ const SAVED_KEY_MASK = '••••••••••••••••';
 export type SettingsTab = 'general' | 'chat' | 'connections' | 'search' | 'harness' | 'mcp' | 'browser' | 'usage' | 'data' | 'account' | 'about';
 // Short sections, each a few rows (user, 2026-09-17: clearer, but not overwhelming). About sits last (COD-176).
 const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
+  // The optional CodePawl account (COD-337); nothing syncs yet. First, as Account (owner, 2026-09-30).
+  { id: 'account', label: 'Tài khoản', icon: <CircleUserRound size={16} /> },
   { id: 'general', label: 'Chung', icon: <SlidersHorizontal size={16} /> },
   { id: 'chat', label: 'Cuộc trò chuyện', icon: <MessageSquare size={16} /> },
   { id: 'connections', label: 'Kết nối API', icon: <Plug size={16} /> },
@@ -72,8 +74,6 @@ const tabs: { id: SettingsTab; label: string; icon: ReactNode }[] = [
   { id: 'browser', label: 'Trình duyệt', icon: <AppWindow size={16} /> },
   { id: 'usage', label: 'Chi phí & giới hạn', icon: <Wallet size={16} /> },
   { id: 'data', label: 'Dữ liệu', icon: <Database size={16} /> },
-  // The optional CodePawl account (COD-337); nothing syncs yet.
-  { id: 'account', label: 'Tài khoản CodePawl', icon: <CircleUserRound size={16} /> },
   { id: 'about', label: 'Giới thiệu', icon: <Info size={16} /> },
 ];
 // Section notes sit under the section title.
@@ -93,7 +93,6 @@ const sectionLabels: Partial<Record<SettingsTab, string>> = {
   mcp: 'Tí hỏi bạn trước mỗi lần gọi công cụ.',
   browser: 'Tí đọc trang trong cửa sổ riêng, không dùng hồ sơ của bạn.',
   usage: 'Chỉ tính request qua Orglet; harness trên máy dùng gói riêng.',
-  account: 'Không bắt buộc. Chưa có gì được đồng bộ.',
 };
 
 /** Who is signed in and on which plan, as one line: "an@example.com · ChatGPT Plus". */
