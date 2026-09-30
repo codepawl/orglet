@@ -17,7 +17,10 @@
 .org-status-mark-success { color: var(--org-success, #2e7d32); }
 .org-status-mark-error { color: var(--org-error, #c62828); }
 .org-status-mark-working { color: var(--org-working, #4473d3); }
+.org-status-mark-accent { color: var(--org-accent, #4473d3); }
 .org-status-mark-empty { color: color-mix(in srgb, var(--org-muted, #666) 55%, transparent); }
+/* Waiting for the person carries news, so it sits on a tint in the accent, the colour the app uses for "waiting for you". */
+.org-status-mark-asking { background: color-mix(in srgb, currentColor 14%, transparent); }
 /* A pause waits for the person, so it sits on a tint like the other states that carry news; idle stays plain. */
 .org-status-mark-paused { background: color-mix(in srgb, currentColor 13%, transparent); }
 .org-status-mark-busy {

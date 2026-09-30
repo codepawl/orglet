@@ -16,7 +16,7 @@ try {
   await writeFile(original, 'id,label\n1,old\n'); await writeFile(added, 'id,label\n2,new\n3,new\n');
   await app.evaluate(({ dialog }, path) => { globalThis.originalOpen = dialog.showOpenDialog; dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, original);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'eris-review', provider: 'demo' }));
-  await page.getByRole('button', { name: 'Eris Review', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Eris Review', exact: true }).first().waitFor();
   const id = await page.evaluate(async () => {
     const sources = await window.orglet.pickSources(); const workspace = await window.orglet.call('workspace', {}); const team = workspace.teams.find(team => team.name === 'Eris Review');
     return window.orglet.call('createTask', { workerId: team.synthesizerId, teamId: team.id, brief: 'Revision UI fixture', sourceIds: sources.map(source => source.id), consent: false, budgetMicros: 1000 });

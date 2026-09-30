@@ -133,8 +133,8 @@ try {
   await page.screenshot({ path: join(output, 'desktop-about.png') });
   await page.keyboard.press('Escape');
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
-  await page.getByRole('button', { name: 'Research Review', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Research Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Research Review', exact: true }).first().waitFor();
+  await page.getByRole('button', { name: 'Research Review', exact: true }).first().click();
   await page.getByRole('heading', { name: 'Đang nhắn với Research Review' }).waitFor();
   // A crew on Demo offers the way to a real model under its message box (COD-293); its own settings lead the
   // header's menu.
@@ -177,7 +177,7 @@ try {
   await technical.getByRole('button', { name: 'Đóng panel', exact: true }).click();
   await technical.waitFor({ state: 'hidden' });
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Researcher', exact: true }).click();
+  await page.getByRole('button', { name: 'Researcher', exact: true }).first().click();
   await archiveCurrentChat(page);
   const datasetPath = join(data, 'dataset.csv'); await writeFile(datasetPath, 'id,label\n1,a\n2,b\n2,c\n');
   await app.evaluate(({ dialog }, path) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }); }, datasetPath);

@@ -3595,6 +3595,11 @@ export const en: Dictionary = {
   'Đã bắt đầu một lần đăng nhập khác.': 'Another sign-in started.',
   'Phiên đăng nhập đã hết. Đăng nhập lại.': 'Your sign-in ended. Sign in again.',
   'Chưa đăng nhập tài khoản CodePawl.': 'Not signed in to a CodePawl account.',
+  // COD-340: open chats as tabs across the top, and the sidebar folded to a rail of faces.
+  'Chat đang mở': 'Open chats',
+  'Đóng tab {0}': 'Close tab {0}',
+  'Đóng tab (Ctrl W)': 'Close tab (Ctrl W)',
+  'Tạo mới': 'Create',
 
 };
 
