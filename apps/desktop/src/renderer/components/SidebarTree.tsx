@@ -9,6 +9,7 @@ import { dwellHandlers } from '../prefetch';
 import { hidesActive } from '../sidebarChats';
 
 export function statusMarkLabel(status: StatusMarkState): string {
+  if (status.variant === 'asking') return t('Đang chờ bạn');
   if (status.variant === 'busy') return t('Đang làm');
   if (status.variant === 'filled' && status.tone === 'error') return t('Cần xem lại');
   if (status.variant === 'filled') return t('Có kết quả mới');

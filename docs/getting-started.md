@@ -43,12 +43,13 @@ The Researcher worker starts on **Demo**, so you can try the app without any acc
 
 On first launch the window is US English. A **Researcher** worker is already there, on **Demo**. The app uses your system's usual interface font.
 
-- The **sidebar** lists **Teams** and **Workers** only. There is no task list. Click a name to open that chat.
+- The **rail** on the left shows each crew and orglet as a face. There is no task list. Click a face to open that chat; hover it for the name. **Open sidebar** at the top switches to the full **sidebar**, which lists them by name.
+- Once you open a second chat, the chats you have open sit as **tabs** across the top.
 - The **main column** is the conversation, headed **Chatting with …**. The message box sits at the bottom.
-- The footer has **Schedules**, **Library**, and **Settings**.
+- The foot of the rail has **Notifications**, **Running**, **Schedules**, **Library** and **Settings**.
 
 <p align="center">
-  <img src="images/new-task.png" alt="Empty Researcher chat. Sidebar shows Teams and Workers, not tasks." width="720">
+  <img src="images/new-task.png" alt="Empty Researcher chat. The rail on the left shows orglets and crews as faces, not tasks." width="720">
 </p>
 
 To change language: **Settings** → **General** → **Language** (English (US), English (UK), or Tiếng Việt). To switch light or dark: **Settings** → **General** → **Appearance**.
@@ -57,7 +58,7 @@ The side buttons on a mouse, or Alt+Left and Alt+Right, go back and forward thro
 
 ## 3. Send a Demo message
 
-1. Click **Researcher** in the sidebar.
+1. Click **Researcher** on the rail.
 2. Type a short message in the box at the bottom.
 3. Send it.
 

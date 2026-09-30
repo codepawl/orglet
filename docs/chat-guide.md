@@ -1,12 +1,43 @@
 # In a chat
 
-What you can do inside a chat once an orglet or crew is set up: attach files, type emoji, keep typing from the keyboard, see how much of a plan and of the context is used, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
+What you can do inside a chat once an orglet or crew is set up: keep several chats open as tabs, attach files, type emoji, keep typing from the keyboard, see how much of a plan and of the context is used, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
 In an orglet's chat, the model picker in the row under the message box shows the selected model's name. Open it to choose another model for that orglet. Each row shows the maker's logo and the model's name with its version, such as Opus 5.5, as the CLI or provider reports it. When the version is not known, the row shows the short name, such as Opus.
 
 The row marked **Default** is the model that runs when you have not picked one. Choosing it saves no model, so the orglet follows the CLI if its default changes later. The newest model of each family is listed first. Older ones, and models only reachable by their full ID, are under **More models**. The same list appears in the orglet's settings under **Model**, where you can still type any model ID.
+
+## Open chats and the rail
+
+The left side lists who is on your team. The chats you are working in sit as tabs across the top.
+
+**The rail.** On a new install the left side is a narrow rail. From the top:
+
+1. **Open sidebar** switches to the full sidebar, with its sections, names and row menus. **Collapse sidebar** at its top brings the rail back. Orglet remembers which one you picked, and the full sidebar keeps the width you dragged it to. In a window narrower than 780 px the rail stays, and **Open sidebar** lays the full sidebar over the chat until you pick something.
+2. The magnifier opens search (**Ctrl+K**).
+3. **+** offers **New orglet** and **New crew**.
+4. One face per crew, then one per orglet, in the sidebar's order. Click a face to open that chat. Hover it to see the name. A small mark on the corner shows the chat's state, the same as its tab.
+5. When you have group chats, one button lists them. Click one to open it.
+6. At the foot: Notifications, Running, Schedules, Library and Settings, each with a count when something is waiting.
+
+If you used Orglet before tabs arrived, it opens with the full sidebar, as before. Fold it once to use the rail.
+
+**Tabs.** Every chat you open gets a tab: an orglet's chat, a crew's chat, a group chat, a side thread or a schedule's run. It does not matter how you opened it: the rail, the sidebar, search, a notification, **Send to** or a forwarded message. With only one chat open, there is no tab row, so the window looks as it did.
+
+Each tab shows a face, the name and one mark:
+
+| Mark | Meaning |
+|---|---|
+| A turning ring | The orglet is working. |
+| A person on a tint | It needs you: a question, a step or an app change to allow, changes to review, or a paused turn. |
+| A tick | A new answer you have not opened. |
+| An exclamation mark | Something went wrong. |
+| A dotted ring | Nothing new. |
+
+To close a tab, hover it and click **×**, or click it with the middle mouse button. Closing a tab only takes it off the row. The chat and its messages stay, and it comes back when you open it again. When you close the tab you are in, the tab next to it opens. A chat you archive or delete loses its tab. Orglet keeps your tabs when it restarts. When there are more tabs than fit, scroll the row sideways with the mouse wheel. The tab you are in always scrolls into view.
+
+**Details** is remembered per tab while Orglet is open: a chat you had open with Details opens with Details again. The panel is wider than before, and you can drag its edge. It never pushes the chat narrower than 480 px.
 
 ## Attach files
 
@@ -34,6 +65,7 @@ The names are GitHub's, which Slack and Discord mostly share. The menu only open
 
 ## Keyboard
 
+- **Ctrl+Tab** opens the next tab and **Ctrl+Shift+Tab** the one before; both wrap round. **Ctrl+W** closes the tab you are in. It never closes the Orglet window, even with one tab left. These keys do nothing while a dialog is open.
 - After you send, the message box stays ready, so you can type the next message straight away. If a message cannot be sent, it comes back in the box, in front of anything you typed since.
 - After you pick files or a folder with **+**, the cursor is back in the message box.
 - Opening **Details** moves the keyboard into the panel. Its close button or **Escape** puts you back where you were.
