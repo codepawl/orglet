@@ -11,7 +11,7 @@ import { signatureAccepted, sha256OfFile } from '../../installer/npm/lib/verify.
 import { expandBatchPath, installedLaunch, shimLaunchOf } from '../../installer/npm/lib/installed.js';
 
 /*
- * COD-343: `npx @codepawl/orglet` installs the release's Setup only when it matches GitHub's SHA-256 and carries the
+ * COD-343: `npx orglet` installs the release's Setup only when it matches GitHub's SHA-256 and carries the
  * publisher's valid signature, and once Orglet is installed it starts exactly what the app's own `orglet.cmd` starts.
  */
 

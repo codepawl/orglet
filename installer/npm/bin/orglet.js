@@ -5,7 +5,7 @@ import { install, RELEASES_PAGE } from '../lib/install.js';
 import { installedLaunch, windowsAppInstalled } from '../lib/installed.js';
 
 /*
- * `npx @codepawl/orglet` installs Orglet; once it is installed, every other argument goes to the app's own `orglet`
+ * `npx orglet` installs Orglet; once it is installed, every other argument goes to the app's own `orglet`
  * command (docs/cli.md), so a global install of this package never behaves differently from the command Setup adds.
  * `orglet install` installs or updates to the latest release at any time.
  */
