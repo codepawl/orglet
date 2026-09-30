@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Store, id, now } from '../../apps/desktop/src/core/storage/database';
 import type { Task, Worker, Workspace } from '../../apps/desktop/src/shared/contracts';
-import { FollowUpComposer, restoreUnsent } from '../../apps/desktop/src/renderer/components/Composer';
+import { Composer, FollowUpComposer, restoreUnsent } from '../../apps/desktop/src/renderer/components/Composer';
 
 /*
  * COD-284, found dogfooding the packaged app: after sending, the follow-up typed straight away went nowhere. The
@@ -135,6 +135,42 @@ it('gives focus to the message box after files are picked from the + menu', asyn
   await act(async () => { files.click(); });
   expect(container.querySelector('[role=menu]')).toBeNull();
   expect(document.activeElement).toBe(textarea);
+});
+
+it('keeps the box to the text and send, with add and the send options in the toolbar row under it', () => {
+  renderBar(chat());
+  const box = container.querySelector('form.composer')!;
+  expect(box.querySelector('textarea')).not.toBeNull();
+  expect(box.querySelector('.send')).not.toBeNull();
+  expect(box.querySelector('.composer-add')).toBeNull();
+  expect(box.querySelector('.composer-send-options')).toBeNull();
+  const toolbar = box.nextElementSibling!;
+  expect(toolbar.classList.contains('composer-toolbar')).toBe(true);
+  expect(toolbar.querySelector('.composer-leading .composer-add')).not.toBeNull();
+  expect(toolbar.querySelector('.composer-toolbar-end .composer-send-options')).not.toBeNull();
+});
+
+it('fills send only when there is text, and keeps stop beside it while a run works', () => {
+  const draw = (value: string, onStop?: () => void) => act(() => root.render(createElement(Composer, {
+    value, onChange: () => undefined, onSubmit: () => undefined, label: 'Message', placeholder: 'Ask', sendLabel: 'Send', leading: null, onStop })));
+  const buttons = () => [...container.querySelectorAll<HTMLButtonElement>('form.composer .composer-send button')];
+
+  draw('');
+  expect(buttons().map(button => button.getAttribute('aria-label'))).toEqual(['Send']);
+  expect(buttons()[0].disabled).toBe(true);
+  expect(buttons()[0].classList.contains('org-button-primary')).toBe(false);
+
+  draw('Compare the invoices');
+  expect(buttons()[0].disabled).toBe(false);
+  expect(buttons()[0].classList.contains('org-button-primary')).toBe(true);
+
+  const stop = vi.fn();
+  draw('', stop);
+  expect(buttons().map(button => button.getAttribute('aria-label'))).toEqual(['Stop']);
+  draw('and flag the late one', stop);
+  expect(buttons().map(button => button.getAttribute('aria-label'))).toEqual(['Stop', 'Send']);
+  act(() => buttons()[0].click());
+  expect(stop).toHaveBeenCalledTimes(1);
 });
 
 it('restores an unsent message on its own, or before the words typed after it', () => {

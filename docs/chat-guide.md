@@ -4,7 +4,7 @@ What you can do inside a chat once an orglet or crew is set up: attach files, ty
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
-In an orglet's chat, the model picker in the message box shows the selected model's name. Open it to choose another model for that orglet. Each row shows the maker's logo and the model's name with its version, such as Opus 5.5, as the CLI or provider reports it. When the version is not known, the row shows the short name, such as Opus.
+In an orglet's chat, the model picker in the row under the message box shows the selected model's name. Open it to choose another model for that orglet. Each row shows the maker's logo and the model's name with its version, such as Opus 5.5, as the CLI or provider reports it. When the version is not known, the row shows the short name, such as Opus.
 
 The row marked **Default** is the model that runs when you have not picked one. Choosing it saves no model, so the orglet follows the CLI if its default changes later. The newest model of each family is listed first. Older ones, and models only reachable by their full ID, are under **More models**. The same list appears in the orglet's settings under **Model**, where you can still type any model ID.
 
@@ -12,7 +12,7 @@ The row marked **Default** is the model that runs when you have not picked one. 
 
 An orglet reads only what you attach to **that** chat, or what is inside the working folder you granted it ([Permissions](permissions-and-learning.md#permissions)).
 
-1. Click **+** next to the message box.
+1. Click **+** under the message box, at the left.
 2. Pick **Files**, or **Folder** for up to 20 supported files from one folder (hidden and generated files are skipped, and the chat lists what was left out).
 3. Write what you want done, then send.
 
@@ -41,7 +41,7 @@ The names are GitHub's, which Slack and Discord mostly share. The menu only open
 
 ## Usage and context
 
-Under the message box, at the right end, a small ring shows how close the chat is to a limit: the orglet's subscription plan (Claude Code or Codex) or the model's context window, whichever is closer. It stays grey until 80%, turns amber from 80%, and red at 100%.
+Under the message box, at the right end of the row with the model picker, a small ring shows how close the chat is to a limit: the orglet's subscription plan (Claude Code or Codex) or the model's context window, whichever is closer. It stays grey until 80%, turns amber from 80%, and red at 100%.
 
 Click the ring to see what it is made of:
 
@@ -49,7 +49,7 @@ Click the ring to see what it is made of:
 - **Plan usage limits**: each allowance of the plan, with how much is used and when it resets, and which account it is. If Orglet could not read fresh numbers, for example because Claude Code's sign-in renews only when it runs, you see the last numbers with their time (**Figures as of 07:05**).
 - **View details** opens **Settings → Harness**.
 
-From 80% of a plan allowance, a line next to the ring says how much is used and when it resets. At 100%, the line says the plan ran out. If another account of the same app has room, the line offers it (**Use Work · 70% left**). Clicking it switches that app to the other account for every orglet, as **Settings → Harness** would. Nothing is sent until you send it.
+From 80% of a plan allowance, a line under that row says how much is used and when it resets. At 100%, the line says the plan ran out. If another account of the same app has room, the line offers it (**Use Work · 70% left**). Clicking it switches that app to the other account for every orglet, as **Settings → Harness** would. Nothing is sent until you send it.
 
 In a crew or group chat, the ring follows the account closest to its limit among the orglets in the chat, and the details list each app.
 
@@ -60,7 +60,7 @@ The ring shows only what a provider reported. Codex does not report its context 
 Each orglet has one main chat. Clicking the orglet always opens it. When you want to ask something on the side without mixing it into the main chat, or while the orglet is still busy there, send it in a side thread.
 
 1. Type the message in the orglet's main chat.
-2. Press **Ctrl+Shift+Enter** (Cmd+Shift+Enter on macOS), or click the small arrow next to Send and choose **Send in a new thread**.
+2. Press **Ctrl+Shift+Enter** (Cmd+Shift+Enter on macOS), or click the small arrow in the row under the message box and choose **Send in a new thread**.
 3. You stay in the main chat. A short message says the side thread started; click **Open** to go there, or open it later.
 
 Side threads are listed under the orglet in the sidebar, newest first, each with its own status mark. In the **Send to** picker's recent chats, a side thread says "side thread · Researcher" beside its name, so files go there only when you pick it; choosing the orglet itself goes to its main chat. The name is the orglet's title for it, or your first message. Each one has a menu to rename, archive or delete it, like any chat. When a side thread answers while you are away from that orglet's chats, a message says so with **Open**, and it is also kept in Notifications, where one orglet's answers share one row ([Notifications](#notifications)).

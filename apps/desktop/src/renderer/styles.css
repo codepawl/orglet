@@ -384,17 +384,17 @@ svg { flex-shrink:0; stroke-width:1.7; }
    side. The row is a fixed height and each face moves inside its own box, so a hop never shifts the heading. */
 .fresh-faces { display:flex; justify-content:center; align-items:flex-end; gap:18px; min-height:96px; margin-bottom:26px; }
 .fresh-faces .avatar.xl { margin-bottom:8px; }
-/* Prompt bar: a one-line pill (add · input · [who] · send) that grows into a box when the text wraps or sources are attached.
-   Grown, it is three zones stacked: the attached files, the text, then the controls. The zones are told apart by
-   what they are made of (cards on a surface, bare text, round buttons) and by spacing, never by a line. */
-.composer { position:relative; display:grid; grid-template-columns:auto minmax(0,1fr) auto; grid-template-areas:"lead input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--bar-line); border-radius:24px; background:var(--bg); box-shadow:0 1px 2px #0000000d, 0 6px 20px #00000014; }
-.composer.has-trailing { grid-template-columns:auto minmax(0,1fr) auto auto; grid-template-areas:"lead input trail send"; }
-/* The controls row holds a 36px add button, a shorter chip and the 36px send button, so it centres them explicitly. */
-.composer.expanded { grid-template-areas:"attach attach attach" "input input input" "lead . send"; align-items:center; row-gap:6px; border-radius:22px; padding:7px; }
-.composer.expanded.has-trailing { grid-template-areas:"attach attach attach attach" "input input input input" "lead . trail send"; }
+/* Prompt bar: a one-line pill (input · send) that grows into a box when the text wraps or sources are attached, with
+   the toolbar row (add · model or recipient · usage ring) under it (owner's reference, 2026-09-30). Grown, the box is
+   zones stacked: the reply target, the attached files, then the text with send beside its last line. The zones are
+   told apart by what they are made of (cards on a surface, bare text, a round button) and by spacing, never by a line. */
+.composer { position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"input send"; align-items:end; column-gap:4px; padding:5px; border:1px solid var(--bar-line); border-radius:24px; background:var(--bg); box-shadow:0 1px 2px #0000000d, 0 6px 20px #00000014; }
+/* Only the zones that are there get a row, so an empty one adds no gap above the text. */
+.composer.expanded { row-gap:6px; border-radius:22px; padding:7px; }
+.composer.expanded.has-attachments { grid-template-areas:"attach attach" "input send"; }
 /* A reply target is the bar's first zone, inside the pill with the text it belongs to (user, 2026-09-22). */
-.composer.expanded.has-context { grid-template-areas:"context context context" "attach attach attach" "input input input" "lead . send"; }
-.composer.expanded.has-context.has-trailing { grid-template-areas:"context context context context" "attach attach attach attach" "input input input input" "lead . trail send"; }
+.composer.expanded.has-context { grid-template-areas:"context context" "input send"; }
+.composer.expanded.has-context.has-attachments { grid-template-areas:"context context" "attach attach" "input send"; }
 .composer-context { grid-area:context; min-width:0; }
 /* Focus inside the bar darkens its outline. Typing in it rings the whole pill in the focus colour, two pixels like
    every other focus ring (COD-284): the border turns and an inset line adds the second pixel, so nothing around the
@@ -417,9 +417,16 @@ svg { flex-shrink:0; stroke-width:1.7; }
    still reaches every card. Nothing sets scrollbar-width or scrollbar-color, which would drop this subtree back
    to Chromium's plain bar. */
 .composer-attachments::-webkit-scrollbar { width:0; height:0; }
-.composer-leading { grid-area:lead; display:flex; align-items:center; }
-.composer-trailing { grid-area:trail; display:flex; align-items:center; align-self:center; max-width:min(220px,42vw); }
-.composer>textarea { grid-area:input; display:block; width:100%; resize:none; min-height:36px; max-height:250px; border:0; outline:none; background:transparent; padding:7px 6px; font-size:inherit; line-height:22px; }
+/* The toolbar under the box (owner's reference, 2026-09-30): add at the left, the model or recipient and then the
+   usage ring at the right, every control 28px and centred on one line. Its sides are the box's border plus padding,
+   so the controls start and end where the box's own content does, in the pill and in the grown box alike. */
+.composer-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:28px; margin-top:6px; padding:0 6px; }
+.composer.expanded + .composer-toolbar { padding:0 8px; }
+.composer-leading { display:flex; align-items:center; flex-shrink:0; }
+.composer-toolbar-end { display:flex; align-items:center; justify-content:flex-end; gap:4px; min-width:0; }
+.composer-trailing { display:flex; align-items:center; min-width:0; max-width:min(220px,42vw); }
+.composer-toolbar .composer-add { width:28px; height:28px; min-height:28px; padding:0; }
+.composer>textarea { grid-area:input; display:block; width:100%; resize:none; min-height:36px; max-height:250px; border:0; outline:none; background:transparent; padding:7px 6px 7px 10px; font-size:inherit; line-height:22px; }
 /* Colouring a tag while it is typed: a textarea cannot style part of its own text, so the same string is painted
    in a layer above it and the textarea keeps only its caret and its selection. The two must agree on every metric
    that affects wrapping — font, size, line-height, padding, width — so both read them from the same rules here.
@@ -428,7 +435,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer>textarea.has-highlight::selection { background:color-mix(in srgb, var(--focus) 40%, transparent); }
 .composer-highlight {
   grid-area:input; position:absolute; inset:0; z-index:2; pointer-events:none; overflow:hidden;
-  padding:7px 6px; font-size:inherit; line-height:22px; white-space:pre-wrap; overflow-wrap:break-word;
+  padding:7px 6px 7px 10px; font-size:inherit; line-height:22px; white-space:pre-wrap; overflow-wrap:break-word;
 }
 .composer-highlight .mention { background:transparent; padding:0; }
 .composer.expanded>textarea,.composer.expanded>.composer-highlight { padding:4px 8px; }
@@ -437,26 +444,32 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer .org-button-icon { width:36px; height:36px; min-height:36px; }
 .composer-add { border-radius:50%; color:var(--text); }
 .composer-add:hover:not(:disabled) { background:var(--surface); }
-.send { grid-area:send; border-radius:50%; }
-.send:disabled { opacity:.35; }
+/* Send (and stop, which takes its place during a run) is a 30px circle at the box's bottom right (owner, 2026-09-30:
+   smaller). The slot sits on the last text line: 3px up in the pill puts its centre on the line's centre (7px textarea
+   padding plus half the 22px line = 18px, minus half the button), and in the grown box the 4px padding plus half a line
+   is the button's own half, so it sits on the box padding. Empty, send is a muted arrow with no fill; with text it
+   fills with the accent, so the two states differ by more than a shade. */
+.composer-send { grid-area:send; display:flex; align-items:center; gap:4px; margin-bottom:3px; }
+.composer.expanded .composer-send { margin-bottom:0; }
+.composer .composer-send .send { width:30px; height:30px; min-height:30px; padding:0; border-radius:50%; }
+.send:disabled { opacity:.45; }
 /* While a run is in progress the send button is the stop button, and a ring turns inside it so the eye lands
    there (user, 2026-09-19). The arc is drawn in the button's own text colour: outside the button it would run
    dark on dark and read as a halo rather than as something moving. */
 .send.stop { position:relative; }
 .send.stop .send-spin {
-  position:absolute; inset:3px; border-radius:50%; pointer-events:none;
+  position:absolute; inset:2px; border-radius:50%; pointer-events:none;
   border:2px solid color-mix(in srgb, var(--accent-ink) 28%, transparent); border-top-color:var(--accent-ink);
   animation:send-spin 820ms linear infinite;
 }
 @keyframes send-spin { to { transform:rotate(1turn); } }
 @media(prefers-reduced-motion:reduce) { .send.stop .send-spin { animation-duration:2.4s; } }
-/* Compact Select left of send — pill trigger like ChatGPT’s model chip. A team chat puts the recipient here; a
-   one-to-one chat puts the worker's model, since its header already names the worker (user, 2026-09-19). */
-/* Shorter than the send button: it is the secondary control, and at the send button's height its pill crowded
-   the prompt bar's own corner curve (user, 2026-09-19). */
+/* Compact Select at the toolbar's right, before the usage ring: a quiet chip naming the model. A
+   team chat puts the recipient here; a one-to-one chat puts the worker's model, since its header already names the
+   worker (user, 2026-09-19). The toolbar's 28px, like the add button and the ring beside it. */
 .composer-trailing .composer-to-select.org-select-trigger,
 .composer-trailing .composer-model-select.org-select-trigger {
-  width:auto; max-width:100%; min-height:30px; padding:3px 10px; gap:6px;
+  width:auto; max-width:100%; min-height:28px; padding:3px 10px; gap:6px;
   border:0; border-radius:999px; background:transparent; box-shadow:none;
 }
 .composer-trailing .composer-to-select.org-select-trigger:hover:not(:disabled),
@@ -580,12 +593,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer-note button { border:0; background:transparent; color:var(--text); text-decoration:underline; margin-left:6px; }
 /* The Demo line under a message box (DemoNote, COD-293): the muted sentence and a small outline "Connect a model"
    centred on one line, wrapping under each other only when the column is too narrow for both. */
-/* The row under a message box (ComposerFoot, COD-326): its one line centred under the bar, and the usage ring at the
-   right end, centred under the send button. The line's own top margin gives way to the row's. */
-.composer-foot { display:grid; grid-template-columns:28px minmax(0,1fr) 28px; column-gap:8px; align-items:center; min-height:28px; margin-top:6px; padding:0 10px; }
-.composer-foot-lines { grid-column:2; min-width:0; }
-.composer-foot-lines > .composer-note, .composer-foot-lines > .demo-note, .composer-foot-lines > .usage-note { margin:0; }
-.composer-foot > .usage-ring, .composer-foot > .usage-ring-waiting { grid-column:3; }
+/* The note line under the toolbar (ComposerFoot, COD-326): one line centred under the bar, in a row of its own so a
+   sentence and its button never squeeze the toolbar's controls. The line's own top margin gives way to the row's. */
+.composer-foot { display:flex; flex-direction:column; align-items:center; min-height:28px; justify-content:center; margin-top:4px; padding:0 6px; }
+.composer-foot > .composer-note, .composer-foot > .demo-note, .composer-foot > .usage-note { margin:0; }
+/* A hint that decided to show nothing leaves the row empty; it then takes no room. */
+.composer-foot:empty { display:none; }
 /* The ring's place while the first usage read is on its way, so the bar does not move when it lands. */
 .usage-ring-waiting { display:grid; place-items:center; width:28px; height:28px; }
 /* The usage ring (UsageRing): a 16px ring filled as far as the closest limit, muted until 80%, then the warning
@@ -2543,11 +2556,11 @@ button.crew-node:hover { background:var(--row-hover); }
 .mcp-picker .org-checkbox { margin:0; }
 .mcp-grants>.permission-folder-title { margin:0; font-size:14px; }
 
-/* Side threads (COD-247). The send options sit left of send: shorter than it, like the composer's other secondary
-   control, so they keep clear of the pill's curve, and they answer hover with colour only. */
-.composer .composer-send-options { width:28px; height:28px; min-height:28px; padding:0; border-radius:50%; color:var(--muted); background:transparent; }
-.composer .composer-send-options:hover:not(:disabled),.composer .composer-send-options[aria-expanded=true] { background:transparent; color:var(--text); }
-.composer .composer-send-options:disabled { opacity:.35; }
+/* Side threads (COD-247). The send options sit at the toolbar's right under the box, 28px like the toolbar's other
+   controls, and they answer hover with colour only. */
+.composer-toolbar .composer-send-options { width:28px; height:28px; min-height:28px; padding:0; border-radius:50%; color:var(--muted); background:transparent; }
+.composer-toolbar .composer-send-options:hover:not(:disabled),.composer-toolbar .composer-send-options[aria-expanded=true] { background:transparent; color:var(--text); }
+.composer-toolbar .composer-send-options:disabled { opacity:.35; }
 /* An answer brought in from a side thread: on the person's side like their own messages, on the quiet surface so it
    is not mistaken for something they typed, with where it came from on top. */
 .brought-in { display:flex; flex-direction:column; gap:6px; width:fit-content; max-width:var(--bubble-max); margin:16px 0 0 auto; padding:10px 16px 12px; border-radius:18px; background:var(--surface); animation:turn-in var(--motion-base) var(--ease-out); }
