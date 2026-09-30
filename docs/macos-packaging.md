@@ -42,9 +42,10 @@ There is no DMG maker in this milestone.
 4. Import Developer ID P12 into a job-local keychain when secrets exist (`scripts/ci-macos-import-signing.sh`)
 5. `pnpm make` with `APPLE_SIGNING_ENABLED=true` after a successful import
 6. `codesign --verify --deep --strict`, then `stapler validate` and `spctl --assess --type execute` on the packaged app. The runner is a real Mac, so these fail the job when a build would warn on download
-7. Upload the darwin ZIP as `orglet-macos-signed-zip` or `orglet-macos-unsigned-zip` (14-day retention)
+7. On a push or manual run, unpack the ZIP, run `stapler validate` and `spctl` on that copy, and write `notarized.txt` (Gatekeeper's `source=Notarized Developer ID`, the commit, the ZIP's name and SHA-256) only when Gatekeeper accepted it as notarized
+8. Upload the darwin ZIP, with `notarized.txt` when it exists, as `orglet-macos-signed-zip` or `orglet-macos-unsigned-zip` (14-day retention)
 
-It does **not** run packaged Playwright smokes. Those still belong to the Windows `packaged` job. It does **not** publish a GitHub Release. Fork pull requests get no secrets, so they package unsigned and the Gatekeeper gate is skipped.
+It does **not** run packaged Playwright smokes. Those still belong to the Windows `packaged` job. It does **not** publish a GitHub Release itself: the Release workflow attaches the ZIP from the green push run of the tagged commit, and only when `notarized.txt` names that commit and matches the ZIP byte for byte. Without it the release goes out without macOS and its notes say why (see [windows-release-gates.md](windows-release-gates.md#what-a-tag-ships)). Fork pull requests get no secrets, so they package unsigned and the Gatekeeper gate is skipped.
 
 Fork pull requests do not receive repository secrets, so those runs stay unsigned.
 
@@ -131,5 +132,5 @@ Record the Mac model, macOS version, commit SHA, whether the ZIP came from Actio
 
 - No launch of the app itself: CI checks the signature, the staple and Gatekeeper assessment, not that the window opens
 - No universal (`arm64` + `x64`) binary; each make is the runner's arch
-- No public macOS GitHub Release; Windows 0.2.x remains the only release platform
+- No updater: the macOS ZIP on a release does not update itself, and a missing macOS build never holds back the Windows release
 - Linux packaging is still coming later

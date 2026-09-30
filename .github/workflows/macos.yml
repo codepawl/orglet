@@ -81,6 +81,30 @@ jobs:
           elif [ -n "${APPLE_API_KEY:-}" ] || { [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; }; then
             stapler validate "${apps[0]}"
             spctl --assess --type execute --verbose=4 "${apps[0]}"
+            # The Release workflow attaches the macOS ZIP only when this marker is in the artifact, so it has to
+            # speak for the exact bytes people download: unpack the ZIP and ask Gatekeeper about that copy.
+            zips=(out/make/zip/darwin/*/Orglet-darwin-*.zip)
+            if [ "${#zips[@]}" -ne 1 ]; then
+              echo "expected one macOS ZIP, found ${#zips[@]}"
+              exit 1
+            fi
+            unpacked="$RUNNER_TEMP/zip-check"
+            rm -rf "$unpacked"
+            ditto -x -k "${zips[0]}" "$unpacked"
+            stapler validate "$unpacked/Orglet.app"
+            assessment=$(spctl --assess --type execute --verbose=4 "$unpacked/Orglet.app" 2>&1)
+            echo "$assessment"
+            if grep -q '^source=Notarized Developer ID$' <<<"$assessment"; then
+              {
+                echo "source=Notarized Developer ID"
+                echo "commit=$GITHUB_SHA"
+                echo "file=$(basename "${zips[0]}")"
+                echo "sha256=$(shasum -a 256 "${zips[0]}" | cut -d ' ' -f 1)"
+              } > out/make/zip/darwin/notarized.txt
+              cat out/make/zip/darwin/notarized.txt
+            else
+              echo "::warning::Gatekeeper accepted the ZIP's app but not as Notarized Developer ID; no release marker written"
+            fi
           else
             echo "Notarization credentials are not set; signed but not notarized, so Gatekeeper is not checked."
           fi
@@ -90,6 +114,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: orglet-macos-${{ steps.signing.outputs.enabled == 'true' && 'signed' || 'unsigned' }}-zip
-          path: out/make/zip/darwin/**/*.zip
+          # notarized.txt exists only when the step above proved notarization; release.yml looks for it.
+          path: |
+            out/make/zip/darwin/**/*.zip
+            out/make/zip/darwin/notarized.txt
           if-no-files-found: error
           retention-days: 14
