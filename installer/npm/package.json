@@ -1,5 +1,5 @@
 {
-  "name": "@codepawl/orglet",
+  "name": "@codepawlhq/orglet",
   "version": "0.9.0",
   "description": "Install Orglet, a desktop app for a small team of AI workers, and run its orglet command.",
   "type": "module",

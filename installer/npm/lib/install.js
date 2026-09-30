@@ -17,7 +17,7 @@ import { PUBLISHER, readSignature, sha256OfFile, signatureAccepted } from './ver
 export const RELEASES_PAGE = 'https://github.com/codepawl/orglet/releases/latest';
 
 async function download(url, destination, onProgress) {
-  const response = await fetch(url, { headers: { 'user-agent': '@codepawl/orglet installer' } });
+  const response = await fetch(url, { headers: { 'user-agent': '@codepawlhq/orglet installer' } });
   if (!response.ok || !response.body) throw new Error(`The download failed: GitHub answered ${response.status}.`);
   const total = Number(response.headers.get('content-length')) || 0;
   let received = 0;
