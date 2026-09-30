@@ -70,7 +70,8 @@ Every orglet and every crew has **one live chat**. A new message is a turn in th
 
 ## The window
 
-- The **sidebar** lists **Orglets** and **Crews**. Click a name to open that chat. **+** next to a section creates one; the pencil turns on select mode for archiving, deleting or starting a group chat. In a window narrower than 780 px the sidebar folds away; widen the window and it comes back, unless you closed it yourself.
+- The **rail** on the left shows each crew and orglet as a face; click one to open that chat. **Open sidebar** at its top switches to the full **sidebar**, which lists **Orglets** and **Crews** by name. **+** next to a section creates one; the pencil turns on select mode for archiving, deleting or starting a group chat. Orglet remembers which of the two you use. In a window narrower than 780 px the rail stays and the sidebar opens over the chat.
+- The **tabs** across the top are the chats you have open, each with a mark for its state. They appear once you open a second chat. [Open chats and the rail](chat-guide.md#open-chats-and-the-rail).
 - The **main column** is the conversation. **Details** opens the panel with the chat's permissions, cost, internal jobs and recovery controls.
 - The **footer** has **Notifications**, **Schedules**, **Library** and **Settings**. A dot on a button means something waits for you there.
 - Back and forward work like a browser: the side buttons on a mouse, or Alt+Left and Alt+Right, step through the chats and panels you opened.

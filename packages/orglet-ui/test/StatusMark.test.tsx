@@ -18,7 +18,7 @@ describe('StatusMark', () => {
       unmount();
       return glyph;
     };
-    const glyphs = [drawn('empty', 'muted'), drawn('dashed', 'muted'), drawn('paused', 'muted'), drawn('busy', 'working'), drawn('filled', 'success'), drawn('filled', 'error')];
+    const glyphs = [drawn('empty', 'muted'), drawn('dashed', 'muted'), drawn('paused', 'muted'), drawn('busy', 'working'), drawn('filled', 'success'), drawn('filled', 'error'), drawn('asking', 'accent')];
     expect(new Set(glyphs).size).toBe(glyphs.length);
     expect(drawn('dashed', 'error')).toBe(drawn('filled', 'error'));
   });
@@ -29,6 +29,13 @@ describe('StatusMark', () => {
     expect(mark.className).toContain('org-status-mark-paused');
     expect(mark.querySelector('circle')).toBeNull();
     expect(mark.querySelector('path')!.getAttribute('d')).toMatch(/^M[\d.]+ [\d.]+v[\d.]+M[\d.]+ [\d.]+v[\d.]+$/);
+  });
+
+  it('draws waiting for the person on a tint in the accent (COD-340)', () => {
+    const { container } = render(<StatusMark variant="asking" tone="accent" label="Waiting for you" />);
+    const mark = container.querySelector('.org-status-mark')!;
+    expect(mark.className).toBe('org-status-mark org-status-mark-asking org-status-mark-accent');
+    expect(mark.querySelector('path')).not.toBeNull();
   });
 
   it('stays out of the accessible name when decorative, and applies the caller class last', () => {
