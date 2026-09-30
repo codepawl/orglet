@@ -28,14 +28,21 @@
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
 }
-/* The panel scrolls on its own and rounds its own corner, since the dialog does not clip menus that overflow it. */
+/* The panel scrolls on its own and rounds its own corner, since the dialog does not clip menus that overflow it.
+   Its scrollbar gutter is kept whether or not the open tab scrolls: without it a short tab's content ran 12px further
+   right than a long tab's. The right padding gives back what the app's 12px gutter takes, so both sides keep 24px. */
 .org-tabbed-dialog-panel {
   overflow: auto;
-  padding: 18px 24px 24px;
+  scrollbar-gutter: stable;
+  padding: 18px 12px 24px 24px;
   overscroll-behavior: contain;
   border-bottom-right-radius: 16px;
 }
-.org-tabbed-dialog-panel > .org-panel-heading { margin-bottom: 10px; }
+/* Every tab's title starts at the same height. The heading is as tall as its text; its actions, taller than a title
+   line, overhang it by the same amount above and below instead of setting its height, so they stay centred on the
+   title block. A title with no description used to sit 8px lower, centred in the 36px an action would need. */
+.org-tabbed-dialog-panel > .org-panel-heading { min-height: 0; margin-bottom: 10px; }
+.org-tabbed-dialog-panel > .org-panel-heading > .org-panel-heading-actions { margin-block: -8px; }
 .org-tabbed-dialog-form {
   flex: 1;
   min-height: 0;
@@ -107,5 +114,5 @@
     white-space: nowrap;
     flex-shrink: 0;
   }
-  .org-tabbed-dialog-panel { padding: 14px 16px 20px; }
+  .org-tabbed-dialog-panel { padding: 14px 4px 20px 16px; }
 }

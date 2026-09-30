@@ -2,13 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   centreOffset,
   clusterValues,
+  commonValue,
+  familyFindings,
   gapsBetween,
   groupLines,
   isClippedWithoutEllipsis,
   isShortLabel,
+  nextWordWouldFit,
   outliers,
+  paintsColour,
+  trailingShortfall,
   unevenGaps,
   type Box,
+  type ScreenMetrics,
 } from '../../scripts/alignment/rules';
 
 const box = (left: number, top: number, width: number, height: number): Box => ({ left, top, right: left + width, bottom: top + height });
@@ -76,5 +82,66 @@ describe('alignment check maths (COD-333)', () => {
     expect(isShortLabel('Kết nối model')).toBe(true);
     expect(isShortLabel('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.')).toBe(false);
     expect(isShortLabel('   ')).toBe(false);
+  });
+});
+
+describe('panel headings and screen families', () => {
+  it('measures how far a heading action stops short of the content edge', () => {
+    // Settings → Local harnesses before the fix: a transparent Rescan whose label ended at 433 in a 484px column.
+    expect(trailingShortfall(484, 433.2)).toBe(50.8);
+    expect(trailingShortfall(484, 484)).toBe(0);
+    expect(trailingShortfall(484, 490)).toBe(-6);
+  });
+
+  it('tells a painting colour from a see-through one', () => {
+    expect(paintsColour('rgba(0, 0, 0, 0)')).toBe(false);
+    expect(paintsColour('transparent')).toBe(false);
+    expect(paintsColour('rgb(0 0 0 / 0)')).toBe(false);
+    expect(paintsColour('rgb(244, 244, 245)')).toBe(true);
+    expect(paintsColour('rgba(68, 115, 211, 0.9)')).toBe(true);
+    expect(paintsColour('color(srgb 0.1 0.2 0.3)')).toBe(true);
+    expect(paintsColour('color(srgb 0.1 0.2 0.3 / 0)')).toBe(false);
+  });
+
+  it('flags a wrapped description only when an action box shows less than it takes', () => {
+    // "Demo." needed 45px; the transparent button left 63px of its box empty.
+    expect(nextWordWouldFit(3, 62.8, 45.2)).toBe(true);
+    expect(nextWordWouldFit(3, 20, 45.2)).toBe(false);
+    // A filled button shows its whole box: nothing beside the description is empty, whatever the slack.
+    expect(nextWordWouldFit(40, 0, 45.2)).toBe(false);
+  });
+
+  it('takes the most common whole-pixel value', () => {
+    expect(commonValue([62, 62.4, 60, 61.6])).toBe(62);
+    expect(commonValue([])).toBeUndefined();
+  });
+
+  it('flags the screens of a family whose heading, edges or lead column disagree with the rest', () => {
+    const contentBox = box(24, 0, 460, 500);
+    const screen = (screen: string, overrides: Partial<ScreenMetrics>) => ({
+      screen,
+      metrics: { headingTop: 28, contentLeft: 24, contentRight: 484, contentBox, ...overrides } as ScreenMetrics,
+    });
+    const findings = familyFindings([
+      screen('general', { headingTop: 35.5 }),
+      screen('connections', { leadMark: 37, leadText: 62 }),
+      screen('harness', { leadMark: 37, leadText: 60 }),
+      screen('mcp', { contentRight: 496 }),
+      screen('browser', { contentRight: 496, leadMark: 36, leadText: 58 }),
+      screen('data', {}),
+    ], 1);
+    expect(findings.map(finding => [finding.kind, finding.screen, finding.offset])).toEqual([
+      ['family-heading', 'general', 7.5],
+      ['family-edge', 'mcp', 12],
+      ['family-edge', 'browser', 12],
+      ['family-lead', 'harness', -2],
+      ['family-lead', 'browser', -4],
+    ]);
+    expect(findings[0].message).toBe('heading starts 7.5px lower than on the other screens of its family');
+  });
+
+  it('finds nothing when every screen of a family agrees', () => {
+    const metrics: ScreenMetrics = { headingTop: 28, contentLeft: 24, contentRight: 496, leadMark: 37, leadText: 62, contentBox: box(24, 0, 472, 500) };
+    expect(familyFindings([{ screen: 'a', metrics }, { screen: 'b', metrics: { ...metrics, leadMark: undefined, leadText: undefined } }, { screen: 'c', metrics }], 1)).toEqual([]);
   });
 });
