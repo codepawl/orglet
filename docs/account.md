@@ -13,6 +13,8 @@ A new install asks once, before the app opens:
 
 If you already used Orglet before this version, you are not asked. The app opens as it did.
 
+The orglet on the screen reacts as you go. It looks aside while your browser is open, winces if signing in fails, and smiles once you have chosen, just before the app opens.
+
 ## Sign in
 
 1. Choose **Sign in**, on the first start or in **Settings → CodePawl account**.
