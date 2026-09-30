@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { WatchFolderView } from '../../shared/routine-triggers';
 import { WorkspacePermissions, type WorkspacePermission } from '../../shared/workspace-access';
 import { Store, id, now } from './database';
-import type { ResolvedDirectory } from './workspace-grants';
+import { birthOf, sameFolder, type ResolvedDirectory } from './workspace-grants';
 
 /**
  * Folders routines watch (COD-245) or work in (COD-294). A folder gets here only from main's native picker, resolved
@@ -29,37 +29,17 @@ const WORK_FOLDER_TOO_WIDE = 'Mức quyền của thư mục làm việc rộng 
 /** Shown on the schedule's card when a run could not start because its working folder is gone or was replaced. */
 export const workFolderUnavailable = (name: string) => `Thư mục làm việc ${name} của lịch không còn hoặc đã bị thay thế, nên lịch chưa chạy. Chọn lại thư mục trong lịch rồi lưu.`;
 
-/** Whether a folder on disk is still the one the picker granted: same canonical path, a directory, same volume and file id. */
+/**
+ * Whether a folder on disk is still the one the picker granted: the same canonical path, a directory, the same volume
+ * and file id, and the same birth time where the file system reports one (COD-294 for working folders, COD-300 for
+ * watched ones), so a folder made again at the same path on Linux is not taken for it.
+ */
 async function stillTheSame(folder: StoredFolder): Promise<boolean> {
   try {
     const canonical = await realpath(folder.directory);
     const identity = await stat(folder.directory, { bigint: true });
-    return canonical === folder.directory && identity.isDirectory()
-      && identity.dev.toString() === folder.device && identity.ino.toString() === folder.inode;
-  } catch {
-    return false;
-  }
-}
-/**
- * A directory's birth time in nanoseconds, or undefined where the platform does not report one (Node gives 0 then).
- * Path, volume and file id alone cannot tell a folder from one made again at the same path on Linux, where ext4 and
- * tmpfs hand a freed inode number straight back; the birth time can. NTFS and APFS report one too, and Node on Linux
- * reads it through statx. Only a routine's working folder checks it (COD-294): a chat's grant and a watched folder
- * still compare path, volume and file id, and share that gap on Linux.
- */
-export async function folderBirth(directory: string, expectedInode: string): Promise<string | undefined> {
-  const identity = await stat(directory, { bigint: true });
-  // A folder swapped between the picker's resolve and this read is not the one the person picked.
-  if (identity.ino.toString() !== expectedInode) throw new Error(WORK_FOLDER_NOT_GRANTED);
-  return identity.birthtimeNs > 0n ? identity.birthtimeNs.toString() : undefined;
-}
-
-/** Whether the folder on disk was born when the picked one was; a row with no birth time has nothing to compare. */
-async function bornTheSame(folder: StoredFolder): Promise<boolean> {
-  if (!folder.birth) return true;
-  try {
-    const identity = await stat(folder.directory, { bigint: true });
-    return identity.birthtimeNs.toString() === folder.birth;
+    const onDisk = { directory: canonical, device: identity.dev.toString(), inode: identity.ino.toString(), birth: birthOf(identity) };
+    return identity.isDirectory() && sameFolder(folder, onDisk);
   } catch {
     return false;
   }
@@ -76,9 +56,12 @@ export class RoutineFolders {
     return StoredFolder.parse(JSON.parse(String(row.data)));
   }
 
-  /** Keeps a folder the picker resolved, at the level it was opened at, and returns what the renderer may know about it. */
-  add(resolved: ResolvedDirectory, permissions: WorkspacePermission[] = ['read'], birth?: string): WatchFolderView {
-    const folder: StoredFolder = { id: id(), ...resolved, permissions: WorkspacePermissions.parse(permissions), createdAt: now(), ...(birth ? { birth } : {}) };
+  /**
+   * Keeps a folder the picker resolved, at the level it was opened at, and returns what the renderer may know about it.
+   * The birth time comes from the same read as the path and file id, so a folder swapped in between cannot slip in.
+   */
+  add(resolved: ResolvedDirectory, permissions: WorkspacePermission[] = ['read']): WatchFolderView {
+    const folder: StoredFolder = { id: id(), ...resolved, permissions: WorkspacePermissions.parse(permissions), createdAt: now() };
     this.store.db.prepare('INSERT INTO routine_folders(id,data) VALUES(?,?)').run(folder.id, JSON.stringify(StoredFolder.parse(folder)));
     return WatchFolderView.parse({ folderId: folder.id, name: folder.name });
   }
@@ -102,8 +85,8 @@ export class RoutineFolders {
   async workFolder(folderId: string): Promise<ResolvedDirectory> {
     const folder = this.find(folderId);
     if (!folder) throw new Error(WORK_FOLDER_NOT_GRANTED);
-    if (!await stillTheSame(folder) || !await bornTheSame(folder)) throw new Error(workFolderUnavailable(folder.name));
-    return { directory: folder.directory, device: folder.device, inode: folder.inode, name: folder.name };
+    if (!await stillTheSame(folder)) throw new Error(workFolderUnavailable(folder.name));
+    return { directory: folder.directory, device: folder.device, inode: folder.inode, birth: folder.birth, name: folder.name };
   }
 
   /** The folder's name for a routine being saved; refuses an id the picker never granted. */
