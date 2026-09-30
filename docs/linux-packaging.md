@@ -25,6 +25,8 @@ There is no deb, RPM, AppImage, Flatpak or Snap, and no signing. Add one when so
 
 `.github/workflows/linux.yml` runs typecheck, the test suite and `pnpm make`, uploads the zip as `orglet-linux-zip` (14 days), then starts the app under a virtual display and runs `pnpm test:desktop` against it.
 
+The Release workflow attaches that zip, as an experimental download, from the green push run of the tagged commit. A missing or red Linux build never holds back the Windows release; the release notes and the job summary say it was skipped (see [windows-release-gates.md](windows-release-gates.md#what-a-tag-ships)).
+
 Two things are true of the runner rather than of Orglet, so they are fixed in the workflow and not in the app:
 
 - **No screen.** The job installs `xvfb` and runs the smoke through `xvfb-run`.
