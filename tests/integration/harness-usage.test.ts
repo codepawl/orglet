@@ -225,6 +225,17 @@ describe('reading one account', () => {
     expect(fake.reads).toEqual([join('home', 'person', '.claude', '.credentials.json')]);
   });
 
+  it('reads the system Claude account from CLAUDE_CONFIG_DIR when Orglet runs with it, never the home folder (COD-339)', async () => {
+    // An isolated test run points CLAUDE_CONFIG_DIR at an empty folder; the developer's own sign-in must stay unread.
+    const isolated = join('tmp', 'isolated-claude');
+    const fake = fakeRuntime({ status: signedInClaude, env: { CLAUDE_CONFIG_DIR: isolated }, files: {} });
+    const read = await readHarnessUsage('claude-code', 'claude.exe', undefined, fake.runtime);
+    expect(fake.reads).toEqual([join(isolated, '.credentials.json')]);
+    expect(fake.reads.some(path => path.startsWith(join('home', 'person')))).toBe(false);
+    expect(fake.fetches).toEqual([]);
+    expect(read.windows).toEqual([]);
+  });
+
   it('never calls the endpoint with an expired token, and never writes to the credentials', async () => {
     const fake = fakeRuntime({ status: signedInClaude, credentials: claudeCredentials(Date.parse('2026-09-24T10:00:00Z')) });
     expect(await readHarnessUsage('claude-code', 'claude.exe', undefined, fake.runtime)).toEqual({ email: 'an@example.com', plan: 'Max 20x', windows: [], unavailable: 'expired' });
