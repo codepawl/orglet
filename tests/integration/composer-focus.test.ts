@@ -137,6 +137,19 @@ it('gives focus to the message box after files are picked from the + menu', asyn
   expect(document.activeElement).toBe(textarea);
 });
 
+it('keeps the box to the text and send, with add and the send options in the toolbar row under it', () => {
+  renderBar(chat());
+  const box = container.querySelector('form.composer')!;
+  expect(box.querySelector('textarea')).not.toBeNull();
+  expect(box.querySelector('.send')).not.toBeNull();
+  expect(box.querySelector('.composer-add')).toBeNull();
+  expect(box.querySelector('.composer-send-options')).toBeNull();
+  const toolbar = box.nextElementSibling!;
+  expect(toolbar.classList.contains('composer-toolbar')).toBe(true);
+  expect(toolbar.querySelector('.composer-leading .composer-add')).not.toBeNull();
+  expect(toolbar.querySelector('.composer-toolbar-end .composer-send-options')).not.toBeNull();
+});
+
 it('restores an unsent message on its own, or before the words typed after it', () => {
   expect(restoreUnsent('First', '')).toBe('First');
   expect(restoreUnsent('First', '  ')).toBe('First');

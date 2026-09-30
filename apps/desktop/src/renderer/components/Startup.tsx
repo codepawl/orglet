@@ -96,7 +96,7 @@ export function Startup({ error, onRetry, sidebar = true, sidebarWidth = DEFAULT
           </div>
           <div className="thread-composer">
             <Composer value="" onChange={() => undefined} onSubmit={() => undefined} label={t('Tin nhắn')} placeholder={t('Nhắn với {0}…', [t('Tí')])} sendLabel={t('Gửi tin nhắn')} disabled
-              leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Thêm nguồn')} disabled><Plus size={20} /></Button>} />
+              leading={<Button type="button" size="icon" className="composer-add" aria-label={t('Thêm nguồn')} disabled><Plus size={18} /></Button>} />
           </div>
         </div>
       </div>
