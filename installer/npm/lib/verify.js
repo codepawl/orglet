@@ -30,12 +30,19 @@ export function signatureAccepted(signature) {
 /** Asks Windows about a file's Authenticode signature: `{ status, subject }`. */
 export function readSignature(path) {
   const script = [
+    "$ErrorActionPreference = 'Stop'",
     '$signature = Get-AuthenticodeSignature -LiteralPath $env:ORGLET_SETUP_PATH',
     '[pscustomobject]@{ status = [string]$signature.Status; subject = [string]$signature.SignerCertificate.Subject } | ConvertTo-Json -Compress',
   ].join('; ');
+  // A PSModulePath inherited from PowerShell 7 hides Windows PowerShell's own modules, so Get-AuthenticodeSignature
+  // is not found and the answer comes back empty. pwsh clears it for a powershell.exe it starts; Node does not.
+  const environment = { ...process.env, ORGLET_SETUP_PATH: path };
+  for (const name of Object.keys(environment)) {
+    if (name.toLowerCase() === 'psmodulepath') delete environment[name];
+  }
   return new Promise((resolve, reject) => {
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
-      env: { ...process.env, ORGLET_SETUP_PATH: path },
+      env: environment,
       windowsHide: true,
     }, (error, stdout) => {
       if (error) {

@@ -22,12 +22,27 @@ export function versionOfTag(tag) {
   return String(tag ?? '').replace(/^v/, '');
 }
 
+/**
+ * What to say when GitHub refuses. Without a token GitHub allows 60 API requests an hour per address, and it can also
+ * refuse bursts for a short while; both answer 403 or 429, and saying so beats a bare status code.
+ */
+export function releaseErrorMessage(status, headers) {
+  if (status !== 403 && status !== 429) return `GitHub answered ${status} for the latest Orglet release.`;
+  const resetSeconds = Number(headers.get('x-ratelimit-reset'));
+  const remaining = headers.get('x-ratelimit-remaining');
+  if (remaining === '0' && resetSeconds > 0) {
+    const resetTime = new Date(resetSeconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `GitHub's limit for requests without an account is used up on this network. Try again after ${resetTime}.`;
+  }
+  return 'GitHub turned the request away for now (too many requests). Try again in a minute.';
+}
+
 /** Reads the latest release: its version and assets. */
 export async function latestRelease(fetchImplementation = fetch) {
   const response = await fetchImplementation(RELEASES_API, {
     headers: { accept: 'application/vnd.github+json', 'user-agent': '@codepawl/orglet installer' },
   });
-  if (!response.ok) throw new Error(`GitHub answered ${response.status} for the latest Orglet release.`);
+  if (!response.ok) throw new Error(releaseErrorMessage(response.status, response.headers));
   const release = await response.json();
   return { version: versionOfTag(release.tag_name), assets: release.assets ?? [] };
 }

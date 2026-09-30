@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 // @ts-expect-error The installer is plain JavaScript published on its own (installer/npm); it has no type declarations.
-import { installerAssetFor, sha256Of, versionOfTag } from '../../installer/npm/lib/release.js';
+import { installerAssetFor, releaseErrorMessage, sha256Of, versionOfTag } from '../../installer/npm/lib/release.js';
 // @ts-expect-error Same package.
 import { signatureAccepted, sha256OfFile } from '../../installer/npm/lib/verify.js';
 // @ts-expect-error Same package.
@@ -93,4 +93,11 @@ it.runIf(process.platform === 'win32')('starts what the app\'s orglet.cmd starts
   expect(shimLaunchOf('@echo off\r\necho hello\r\n', environment)).toBeUndefined();
   expect(installedLaunch('win32', { LOCALAPPDATA: join(localAppData, 'missing') })).toBeUndefined();
   expect(expandBatchPath('100%% %UNKNOWN%', environment)).toBe('100% %UNKNOWN%');
+});
+
+it('says why GitHub refused instead of a bare status code', () => {
+  const limited = new Headers({ 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1790776059' });
+  expect(releaseErrorMessage(403, limited)).toMatch(/limit for requests without an account is used up.*Try again after/);
+  expect(releaseErrorMessage(429, new Headers())).toMatch(/too many requests/);
+  expect(releaseErrorMessage(404, new Headers())).toBe('GitHub answered 404 for the latest Orglet release.');
 });
