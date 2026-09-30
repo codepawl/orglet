@@ -1079,8 +1079,10 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 /* Settings → Account signed out (COD-344): what an account gives, a quiet list of an icon and one line each, then the
    sentence on what signing in sends. No card and no rule: the list sits under its row by spacing alone. */
 .account-benefits { margin:0 0 4px; padding:0; list-style:none; display:grid; gap:10px; }
-.account-benefits li { display:flex; align-items:center; gap:10px; font-size:13px; line-height:1.45; }
-.account-benefit-icon { flex:none; display:inline-grid; place-items:center; width:20px; height:20px; color:var(--muted); }
+/* The same 26px mark slot and 12px gap as the other Settings lists (Connections, Harness, Browser), so the marks and
+   the text of every tab line up; the alignment check compares them (family-lead). */
+.account-benefits li { display:flex; align-items:center; gap:12px; font-size:13px; line-height:1.45; }
+.account-benefit-icon { flex:none; display:inline-grid; place-items:center; width:26px; height:20px; color:var(--muted); }
 .account-disclosure { margin:16px 0 0; font-size:12px; line-height:1.5; color:var(--muted); }
 .account-disclosure .org-info-tip { vertical-align:middle; margin-left:2px; }
 /* A title with its "i" right after it, both on the title's centre line. */
