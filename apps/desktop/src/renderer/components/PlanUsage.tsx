@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
-import { contextPercent, usageRingFor, type ChatContextUse, type ComposerUsage, type HarnessPlan } from '../../shared/composer-usage';
+import { composerUsageTone, contextPercent, usageRingFor, type ChatContext, type ComposerUsage, type ContextLine, type HarnessPlan } from '../../shared/composer-usage';
 import { THREAD_VERBATIM_TURNS } from '../../shared/thread-limits';
 import { SYSTEM_ACCOUNT_ID, type HarnessBankedResets, type HarnessInfo, type HarnessUsageWindow } from '../../shared/harness';
 import { currentLocale, t } from '../i18n';
@@ -123,22 +123,66 @@ export function formatTokens(tokens: number) {
   return format(tokens, '');
 }
 
-/** What Orglet sent of the chat on that run: the latest turns word for word, older ones as a summary (`core/context/thread.ts`). */
-function compactionLine(context: ChatContextUse) {
+/** What Orglet sends of the chat: the latest turns word for word, older ones as a summary (`core/context/thread.ts`). */
+function compactionLine(context: ChatContext) {
   if (context.summarizedTurns > 0) return t('Lần gần nhất gửi nguyên văn {0} lượt; {1} lượt cũ hơn đã gộp thành tóm tắt.', [context.verbatimTurns ?? 0, context.summarizedTurns]);
   return t('Mỗi tin nhắn gửi nguyên văn tối đa {0} lượt gần nhất; lượt cũ hơn được gộp thành tóm tắt.', [THREAD_VERBATIM_TURNS]);
 }
 
-function ContextSection({ context, named }: { context: ChatContextUse; named: boolean }) {
-  const percent = Math.round(contextPercent(context));
-  const title = named ? t('Cửa sổ ngữ cảnh · {0}', [context.workerName]) : t('Cửa sổ ngữ cảnh');
+/**
+ * One row of the usage popover: what it is and, beside it, the model it is about; at the right a quiet note (when an
+ * allowance resets) and the figure; a thin bar under all of them when there is a share to draw. The bar follows the
+ * ring's scale: muted, then the warning colour from 80%, the error colour at 100%.
+ */
+function UsageRow({ label, strong = false, detail, aside, value, muted = false, percent }: {
+  label: string;
+  strong?: boolean;
+  detail?: string;
+  aside?: string;
+  value: string;
+  /** The figure says something is not known, so it takes the quiet colour. */
+  muted?: boolean;
+  percent?: number;
+}) {
+  const shown = percent === undefined ? undefined : Math.round(percent);
+  const name = detail ? `${label} · ${detail}` : label;
+  return <div className="usage-row">
+    <span className={strong ? 'usage-row-label strong' : 'usage-row-label'}>{label}</span>
+    {detail && <span className="usage-row-detail">{detail}</span>}
+    {aside && <span className="usage-row-aside">{aside}</span>}
+    <span className={muted ? 'usage-row-value muted' : 'usage-row-value'}>{value}</span>
+    {percent !== undefined && shown !== undefined && <span className="plan-usage-bar" role="meter" aria-label={name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={shown} aria-valuetext={t('Đã dùng {0}%', [shown])}>
+      <span data-tone={composerUsageTone(percent)} style={{ width: `${Math.min(100, shown)}%` }} />
+    </span>}
+  </div>;
+}
+
+/** "33.4k / 1M (3%)", "0 / 200k (0%)" before the first run, or plainly that the model's size is not known. */
+function contextFigure(line: ContextLine): { value: string; percent?: number; muted?: boolean } {
+  if (!line.windowTokens) return { value: line.measured ? t('{0} · chưa rõ sức chứa', [formatTokens(line.usedTokens)]) : t('Chưa rõ sức chứa'), muted: true };
+  const percent = contextPercent({ usedTokens: line.usedTokens, windowTokens: line.windowTokens });
+  return { value: t('{0} / {1} ({2}%)', [formatTokens(line.usedTokens), formatTokens(line.windowTokens), Math.round(percent)]), percent };
+}
+
+const modelName = (line: ContextLine) => line.modelLabel ?? t('model mặc định');
+
+/**
+ * The context window of the model each orglet will use next. One orglet: the section's own row, with its model beside
+ * the title. Several (a crew, a group chat): the title, then a row per orglet with its model.
+ */
+function ContextSection({ context }: { context: ChatContext }) {
+  const title = t('Cửa sổ ngữ cảnh');
+  const [first] = context.lines;
+  const unknown = context.lines.some(line => !line.windowTokens);
   return <section className="usage-section" aria-label={title}>
-    <p className="usage-heading"><strong>{title}</strong></p>
-    <p className="usage-figure">{t('{0} / {1} ({2}%)', [formatTokens(context.usedTokens), formatTokens(context.windowTokens), percent])}</p>
-    <span className="plan-usage-bar" role="meter" aria-label={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={t('Đã dùng {0}%', [percent])}>
-      <span data-tone={usageTone(percent)} style={{ width: `${percent}%` }} />
-    </span>
+    {context.lines.length === 1
+      ? <UsageRow label={title} strong detail={modelName(first)} {...contextFigure(first)} />
+      : <>
+        <p className="usage-heading"><strong>{title}</strong></p>
+        {context.lines.map(line => <UsageRow key={line.workerId} label={line.workerName} detail={modelName(line)} {...contextFigure(line)} />)}
+      </>}
     <p className="usage-muted">{compactionLine(context)}</p>
+    {unknown && <p className="usage-muted">{t('Sức chứa hiện ra khi danh sách model hoặc CLI cho biết.')}</p>}
   </section>;
 }
 
@@ -147,22 +191,23 @@ function PlanSection({ plan, now }: { plan: HarnessPlan; now?: Date }) {
   const account = [plan.harness.name, planAccountLine(plan)].filter(Boolean).join(' · ');
   return <section className="usage-section" aria-label={`${title} · ${plan.harness.name}`}>
     <p className="usage-heading"><strong>{title}</strong><span>{account}</span></p>
-    <PlanUsage windows={plan.usage.windows} label={t('Hạn mức gói {0}', [plan.harness.name])} now={now} />
+    <div role="group" aria-label={t('Hạn mức gói {0}', [plan.harness.name])} className="usage-rows">
+      {plan.usage.windows.map(window => <UsageRow key={`${window.kind}-${window.model ?? ''}`} label={usageWindowLabel(window)}
+        {...(window.resetsAt ? { aside: usageResetLabel(window.resetsAt, now) } : {})} value={`${Math.round(window.usedPercent)}%`} percent={window.usedPercent} />)}
+    </div>
     {plan.usage.asOf && <p className="usage-muted">{t('Số liệu lúc {0}', [usageReadingTime(plan.usage.asOf, now)])}</p>}
   </section>;
 }
 
 /**
- * The ring under the message box (COD-326, after the Claude app): how close the chat is to a limit, the tightest plan
- * allowance or the model's context window, muted until 80%, then the warning colour, then the error colour at 100%.
- * A click opens what it is made of: the context window with how Orglet trims the chat, each harness's plan allowances
- * in Settings' rows, and a way to Settings → Harness.
+ * The ring under the message box (COD-326): how close the chat is to a limit, the tightest plan allowance or the
+ * fullest context window, muted until 80%, then the warning colour, then the error colour at 100%. A click opens what
+ * it is made of: first the context window of the model each orglet will use next, then each harness's plan allowances,
+ * and a way to Settings → Harness.
  */
-export function UsageRing({ plans, context, contextNamed = false, onOpenSettings, now }: {
+export function UsageRing({ plans, context, onOpenSettings, now }: {
   plans?: ComposerUsage;
-  context?: ChatContextUse;
-  /** Name whose context it is: a crew or group chat has several orglets. */
-  contextNamed?: boolean;
+  context?: ChatContext;
   onOpenSettings: () => void;
   now?: Date;
 }) {
@@ -182,7 +227,7 @@ export function UsageRing({ plans, context, contextNamed = false, onOpenSettings
       <UsageRingGlyph percent={ring.percent} />
     </button>
     <AnchoredPopover anchor={trigger} open={open} onClose={() => setOpen(false)} label={t('Mức dùng')} className="usage-details">
-      {context && <ContextSection context={context} named={contextNamed} />}
+      {context && <ContextSection context={context} />}
       {planList.map(plan => <PlanSection key={plan.harness.id} plan={plan} now={now} />)}
       {planList.length > 0 && <Button type="button" variant="outline" className="usage-settings" onClick={openSettings}>{t('Xem chi tiết')}</Button>}
     </AnchoredPopover>

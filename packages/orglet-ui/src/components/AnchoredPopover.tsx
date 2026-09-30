@@ -27,14 +27,20 @@ function onAnchorControl(anchor: HTMLElement | null, target: Node): boolean {
   return Boolean(control && anchor.contains(control));
 }
 
-/** Below the anchor when it fits, above when there is more room there; never past the window edges. */
+/**
+ * Below the anchor when it fits, above when there is more room there; never past the window edges. Content taller than
+ * the room on that side is held to the room and scrolls inside, so its top or bottom is never cut off by the window.
+ */
 function placeNear(anchor: HTMLElement, popover: HTMLElement): Placement {
   const anchorBox = anchor.getBoundingClientRect();
   const width = popover.offsetWidth;
-  const height = popover.offsetHeight;
+  // The whole content, borders included, even while an earlier placement holds it shorter.
+  const naturalHeight = popover.scrollHeight + popover.offsetHeight - popover.clientHeight;
   const roomBelow = innerHeight - anchorBox.bottom - GAP - EDGE;
   const roomAbove = anchorBox.top - GAP - EDGE;
-  const above = roomBelow < height && roomAbove > roomBelow;
+  const above = roomBelow < naturalHeight && roomAbove > roomBelow;
+  const room = Math.max(0, Math.floor(above ? roomAbove : roomBelow));
+  const height = Math.min(naturalHeight, room);
   const preferredLeft = anchorBox.left + anchorBox.width / 2 > innerWidth / 2 ? anchorBox.right - width : anchorBox.left;
   const left = Math.min(Math.max(preferredLeft, EDGE), innerWidth - width - EDGE);
   const top = above ? anchorBox.top - GAP - height : anchorBox.bottom + GAP;
@@ -48,6 +54,7 @@ function placeNear(anchor: HTMLElement, popover: HTMLElement): Placement {
       position: host === document.body ? 'fixed' : 'absolute',
       left: Math.round(left - origin.left),
       top: Math.round(top - origin.top),
+      ...(naturalHeight > room ? { maxHeight: room, overflowY: 'auto' } : {}),
     },
   };
 }

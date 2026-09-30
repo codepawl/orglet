@@ -52,7 +52,7 @@ import { usdCurrency, type CurrencyCode, type CurrencyState } from '../shared/cu
 import { assertSkillReady, inspectPackage, packageForImport, packageForExport } from './skill-package';
 import { taskResultStamp } from '../shared/task-seen';
 import { fetchProviderList, withCatalogHint, type ModelListRuntime } from './models/fetch';
-import { canStoreModelListRow, dropProviderRow, readModelListCache, writeModelListCache } from './models/cache';
+import { canStoreModelListRow, dropProviderRow, readModelListCache, readReportedContextWindows, withReportedContextWindows, writeModelListCache } from './models/cache';
 import { emptyModelListCache, MODEL_LIST_CACHE_VERSION, MODEL_LIST_TTL_MS, ModelListProvider, type ModelListProvider as ModelListProviderId, type ModelListResult, type ModelListRow } from '../shared/models';
 import { mentionedPeople, parseMentions } from '../shared/mentions';
 import { assertOpenCodeModel, isOpenCodePlan, type OpenCodeGoUsage } from '../shared/opencode';
@@ -1354,9 +1354,9 @@ export class CoreService {
     const stale = !row || modelListStale(row, this.clock());
     if (row && !input.refresh) {
       if (stale && !this.modelListFailed.has(provider)) this.scheduleModelListRefresh(provider);
-      return this.toModelListResult(row, stale);
+      return this.toModelListResult(provider, row, stale);
     }
-    return this.toModelListResult(await this.refreshModelList(provider), false);
+    return this.toModelListResult(provider, await this.refreshModelList(provider), false);
   }
   /** Drop one provider's cached list (API key change, harness Dò lại, or cache-shape bump). */
   invalidateModelList(provider: CredentialProvider | ModelListProviderId) {
@@ -1379,8 +1379,10 @@ export class CoreService {
     this.modelListMemory = readModelListCache(this.store);
     this.modelListLoaded = true;
   }
-  private toModelListResult(row: ModelListRow, stale: boolean): ModelListResult {
-    return { models: row.models, fetchedAt: row.fetchedAt, stale, customIdOk: true, source: row.source, ...(row.error ? { error: row.error } : {}) };
+  /** The list as the renderer gets it: the fetched row, with the window a harness reported on each model the row gives none for. */
+  private toModelListResult(provider: ModelListProviderId, row: ModelListRow, stale: boolean): ModelListResult {
+    const models = withReportedContextWindows(row.models, readReportedContextWindows(this.store)[provider]);
+    return { models, fetchedAt: row.fetchedAt, stale, customIdOk: true, source: row.source, ...(row.error ? { error: row.error } : {}) };
   }
   private scheduleModelListRefresh(provider: ModelListProviderId) {
     void this.refreshModelList(provider).then(() => this.notify()).catch(() => {});

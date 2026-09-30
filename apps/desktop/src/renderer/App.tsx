@@ -686,7 +686,7 @@ export function App() {
   const group = groupChat && groupWorkers.length === groupChat.workerIds.length ? groupChat : undefined;
   const executionWorkers = team ? teamRoster(team, workspace!.workers) : group ? groupWorkers : worker ? [worker] : [];
   // Plan usage by the empty chat's bar (COD-326); an open chat's bar reads its own through FollowUpComposer.
-  const emptyChatUsage = usePlanUsageBar({ providers: selected ? [] : executionWorkers.map(item => item.provider), harnesses, running: false, action, openSettings: () => openSettings('harness') });
+  const emptyChatUsage = usePlanUsageBar({ workers: selected ? [] : executionWorkers, harnesses, running: false, action, openSettings: () => openSettings('harness') });
   /**
    * An orglet's or crew's chat is its one live row. When that row starts somewhere other than this composer (the
    * `orglet` terminal command) while the empty chat is on screen, the view switches to it, so a question it asks,

@@ -96,7 +96,7 @@ function belongsUnderMore(entry: ModelEntry, models: readonly ModelEntry[], list
 }
 
 /** The listed model that runs when none is set: the one the CLI named, else Orglet's own suggestion for the API. */
-function defaultEntryId(provider: ModelListProvider, models: readonly ModelEntry[]): string | undefined {
+export function defaultEntryId(provider: ModelListProvider, models: readonly ModelEntry[]): string | undefined {
   const named = models.find(entry => entry.isDefault);
   if (named) return named.id;
   return Object.hasOwn(CATALOG_HINT_IDS, provider) ? CATALOG_HINT_IDS[provider as keyof typeof CATALOG_HINT_IDS] : undefined;

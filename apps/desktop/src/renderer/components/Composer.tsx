@@ -25,7 +25,10 @@ import { ComposerPermissionHint, type PermissionHintControls } from '../permissi
 import type { HarnessInfo } from '../../shared/harness';
 import { useComposerUsage } from '../planUsage';
 import { PlanUsageNote, UsageRing } from './PlanUsage';
-import { latestContextUse, usageRingFor } from '../../shared/composer-usage';
+import { chatContextFor, usageRingFor, type ContextWorker } from '../../shared/composer-usage';
+import { isHarness } from '../../shared/harness';
+import { modelLists } from '../caches';
+import { useCachedEach } from '../prefetch';
 import { Skeleton } from '@codepawl/orglet-ui';
 
 const SINGLE_LINE = 40;
@@ -338,6 +341,23 @@ export function DemoNote({ someOnDemo, preflight, onConnect }: { /** Only some o
   </div>;
 }
 
+/** Runs whose reported window has already sent their connection's model list to be read again, this session. */
+const windowsReread = new Set<string>();
+
+/**
+ * When a harness run in the chat reports its model's window, the core keeps it and adds it to that connection's model
+ * list (COD-326). Reading the list again once per such run lets every other chat on that model show its capacity
+ * before its own first run. The core answers from its own copy, so this costs no call to the vendor.
+ */
+function useReportedWindowRefresh(runs: readonly Run[]) {
+  const latest = runs.findLast(run => run.contextUse?.windowTokens && isHarness(run.snapshot.worker.provider));
+  useEffect(() => {
+    if (!latest || windowsReread.has(latest.id)) return;
+    windowsReread.add(latest.id);
+    modelLists.refresh(latest.snapshot.worker.provider).catch(() => { /* the chat's own run already gives this chat its window */ });
+  }, [latest?.id]);
+}
+
 /** What a message box's foot shows for plan usage and context (COD-326); see `usePlanUsageBar`. */
 export type UsageFoot = { ring?: ReactNode; note?: ReactNode; out: boolean };
 
@@ -346,22 +366,26 @@ export type UsageFoot = { ring?: ReactNode; note?: ReactNode; out: boolean };
  * (`Composer`'s `usage`), and the note line under that row from 80% of a plan allowance on. Once the account is out,
  * that line comes before a permission hint, since nothing would run; nearly out, it gives way to one. The island already says the account is out after a
  * run stopped on it (COD-225), so the line waits while it does. Switching selects the other account, as Settings
- * would; the next message runs on it. `runs` is the chat's, for the context window of its latest run.
+ * would; the next message runs on it. `workers` answer in the chat, and `runs` are the chat's (none in an empty chat),
+ * for the context window of the model each orglet will use next.
  */
-export function usePlanUsageBar({ providers, harnesses, running, runs, contextNamed, action, openSettings }: {
-  providers: readonly string[];
+export function usePlanUsageBar({ workers, harnesses, running, runs = [], action, openSettings }: {
+  workers: readonly ContextWorker[];
   harnesses: readonly HarnessInfo[] | undefined;
   running: boolean;
   runs?: readonly Run[];
-  contextNamed?: boolean;
   action: (fn: () => Promise<unknown>) => void;
   openSettings: () => void;
 }): UsageFoot {
+  const providers = workers.map(worker => worker.provider);
   const { view: usage, loading } = useComposerUsage(providers, harnesses, running);
   const island = useDockedIsland();
-  const context = runs ? latestContextUse(runs) : undefined;
+  const listed = [...new Set(providers.filter(provider => provider !== 'demo'))];
+  const lists = useCachedEach(modelLists, listed);
+  const context = chatContextFor(workers, Object.fromEntries(listed.map(provider => [provider, lists[provider]?.models])), runs);
+  useReportedWindowRefresh(runs);
   const ring = usageRingFor(usage, context)
-    ? <UsageRing plans={usage} context={context} contextNamed={contextNamed} onOpenSettings={openSettings} />
+    ? <UsageRing plans={usage} context={context} onOpenSettings={openSettings} />
     : loading ? <span className="usage-ring-waiting" aria-hidden="true"><Skeleton shape="circle" width={16} height={16} /></span> : undefined;
   if (!usage) return { ring, out: false };
   const switchAccount = (harness: HarnessInfo, accountId: string) => action(() => orglet.call('selectHarnessAccount', { harness: harness.id, id: accountId }));
@@ -418,7 +442,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
   const reply = selectedReply?.taskId === detail.task.id ? selectedReply : undefined;
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
   const blocked = missing.length > 0 || Boolean(readOnly);
-  const planUsage = usePlanUsageBar({ providers: workers.map(worker => worker.provider), harnesses, running: busy, runs: detail.runs, contextNamed: workers.length > 1, action, openSettings: () => openSettings('harness') });
+  const planUsage = usePlanUsageBar({ workers, harnesses, running: busy, runs: detail.runs, action, openSettings: () => openSettings('harness') });
   // An MCP approval card is answered with its buttons; typing sends a new message instead (COD-241).
   const pendingDecision = detail.task.decisionRequests?.findLast(request => request.inputRevision === (detail.task.inputRevision ?? 0) && !request.answer && !request.interruptedAt && !request.approval);
   /**

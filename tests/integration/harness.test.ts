@@ -12,6 +12,8 @@ import { executeHarness, harnessArgs, HarnessError, HarnessLimitError, HarnessTe
 import { CURSOR_ONE_SIGN_IN_ON_MAC, harnessAccountsSignInApart, harnessNames, harnessReady, harnessSignInIsMachineWide, harnessStatus, loginCommand, loginCommands, missingHarness, SYSTEM_ACCOUNT_ID, type HarnessInfo } from '../../apps/desktop/src/shared/harness';
 import { MAX_CHAT_MESSAGE_CHARACTERS, type Source, type Task, type Worker } from '../../apps/desktop/src/shared/contracts';
 import { invoicePdf } from './pdf-fixture';
+import { readReportedContextWindows, writeModelListCache } from '../../apps/desktop/src/core/models/cache';
+import { MODEL_LIST_CACHE_VERSION, type ModelListResult } from '../../apps/desktop/src/shared/models';
 
 let directory: string;
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'orglet-harness-test-')); });
@@ -519,6 +521,20 @@ describe('runner integration', () => {
     expect((await run('claude-code')).runs.at(-1)?.contextUse).toEqual({ usedTokens: 33_436, windowTokens: 1_000_000 });
     reportedContext = undefined;
     expect((await run('codex')).runs.at(-1)?.contextUse).toBeUndefined();
+  });
+
+  it('remembers the window Claude Code reported for its default model and adds it to the model list (COD-326)', async () => {
+    const opus = { provider: 'claude-code' as const, id: 'opus', displayName: 'Opus 5.5', isDefault: true as const, source: 'alias' as const };
+    const sonnet = { provider: 'claude-code' as const, id: 'sonnet', displayName: 'Sonnet 5', source: 'alias' as const };
+    writeModelListCache(store, { version: MODEL_LIST_CACHE_VERSION, byProvider: { 'claude-code': { fetchedAt: new Date().toISOString(), source: 'alias', models: [opus, sonnet] } } });
+    reportedContext = { usedTokens: 33_436, windowTokens: 1_000_000 };
+    await run('claude-code');
+    expect(readReportedContextWindows(store)).toEqual({ 'claude-code': { opus: 1_000_000 } });
+    const list = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+    expect(list.models.map(model => [model.id, model.contextTokens])).toEqual([['opus', 1_000_000], ['sonnet', undefined]]);
+    reportedContext = { usedTokens: 12, windowTokens: 1_000_000 };
+    await run('codex');
+    expect(readReportedContextWindows(store)).toEqual({ 'claude-code': { opus: 1_000_000 } });
   });
 
   it.each(['claude-code', 'codex', 'gemini'] as const)('saves a full HTML chat answer from %s longer than the structured-report summary limit', async provider => {

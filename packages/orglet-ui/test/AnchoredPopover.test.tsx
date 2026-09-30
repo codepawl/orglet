@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 import { AnchoredPopover } from '../src';
 
@@ -83,6 +83,31 @@ describe('AnchoredPopover', () => {
     await user.click(screen.getByRole('button', { name: 'Pick a colour' }));
     const settings = screen.getByRole('dialog', { name: 'Settings' });
     expect(settings.contains(screen.getByRole('dialog', { name: 'Colour picker' }))).toBe(true);
+  });
+
+  it('holds content taller than the room to that room and scrolls it, above the anchor when there is more room there', async () => {
+    const user = userEvent.setup();
+    const box = { top: 313, bottom: 341, left: 600, right: 628, width: 28, height: 28, x: 600, y: 313, toJSON: () => ({}) };
+    const spies = [
+      vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(600),
+      vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(740),
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(box as DOMRect),
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(420),
+      vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(379),
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(381),
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(379),
+    ];
+    try {
+      render(<PopoverHarness />);
+      await user.click(screen.getByRole('button', { name: 'Pick a colour' }));
+      const popover = screen.getByRole('dialog', { name: 'Colour picker' });
+      // 239px below the anchor and 293px above it, both short of the 381px it needs: above, held to 293px.
+      expect(popover.style.maxHeight).toBe('293px');
+      expect(popover.style.overflowY).toBe('auto');
+      expect(popover.style.top).toBe('12px');
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
   });
 
   it('has no accessibility violations when open', async () => {

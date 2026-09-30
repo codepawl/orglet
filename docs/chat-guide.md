@@ -45,7 +45,7 @@ Under the message box, at the right end of the row with the model picker, a smal
 
 Click the ring to see what it is made of:
 
-- **Context window**: how many tokens the orglet's latest answer sent to the model, out of how many the model holds ("304.3k / 1M (30%)"), and how Orglet trims a long chat. Each message sends up to the last 10 turns word for word; older turns are folded into a short summary.
+- **Context window**: the model the orglet will answer with next, how many tokens its latest answer in this chat sent, out of how many that model holds ("304.3k / 1M (30%)"), and how Orglet trims a long chat. Before the chat's first answer it shows the model's size with nothing used yet ("0 / 1M (0%)"). In a crew or group chat each orglet has its own line with its model. Each message sends up to the last 10 turns word for word; older turns are folded into a short summary.
 - **Plan usage limits**: each allowance of the plan, with how much is used and when it resets, and which account it is. If Orglet could not read fresh numbers, for example because Claude Code's sign-in renews only when it runs, you see the last numbers with their time (**Figures as of 07:05**).
 - **View details** opens **Settings → Harness**.
 
@@ -53,7 +53,7 @@ From 80% of a plan allowance, a line under that row says how much is used and wh
 
 In a crew or group chat, the ring follows the account closest to its limit among the orglets in the chat, and the details list each app.
 
-The ring shows only what a provider reported. Codex does not report its context use, so a Codex chat shows its plan only. An API model shows the ring once it has answered and its model list gives a context window (OpenRouter today). Nothing shows for Demo, Cursor Agent or Gemini CLI.
+The ring shows only what a provider reported. A model's size comes from its model list (OpenRouter today) or from what Claude Code said on an earlier answer with that model; until one of them says, the line reads **Window size unknown**. Codex reports neither its context use nor its window, so a Codex chat's ring follows its plan. Nothing shows for Demo, Cursor Agent or Gemini CLI, which report neither a plan nor a window.
 
 ## Side threads
 

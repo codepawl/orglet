@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useReducer, useSyncExternalStore } from 'react';
 
 /**
  * Session memory for what the renderer has already asked the core for (COD-218). The rule it serves: a click never
@@ -170,6 +170,23 @@ export function useCached<Value>(cache: SessionCache<Value>, key: string | undef
     cache.read(key).catch(() => { /* the component shows its own empty state; the error surfaces where it is acted on */ });
   }, [cache, key]);
   return value;
+}
+
+/**
+ * `useCached` for several keys at once, such as the model list of every connection in a crew: the kept entry per key
+ * (undefined until it arrives), each fetched once if the cache has none.
+ */
+export function useCachedEach<Value>(cache: SessionCache<Value>, keys: readonly string[]): Record<string, Value | undefined> {
+  const [, rerender] = useReducer((count: number) => count + 1, 0);
+  useEffect(() => cache.subscribe(rerender), [cache]);
+  const joined = keys.join('\u0000');
+  useEffect(() => {
+    for (const key of keys) {
+      if (cache.has(key)) continue;
+      cache.read(key).catch(() => { /* a list that fails to load leaves its entry empty; the caller says what it does not know */ });
+    }
+  }, [cache, joined]);
+  return Object.fromEntries(keys.map(key => [key, cache.get(key)]));
 }
 
 /** Hover and focus handlers that start and stop a dwell, for any element whose click opens something with data behind it. */
