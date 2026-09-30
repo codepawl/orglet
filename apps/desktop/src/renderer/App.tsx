@@ -96,6 +96,7 @@ import { chatClosure, closedChatDestination, openChatRefresh, type ChatDestinati
 import { swapScreen } from './screenTransition';
 import { ChatTabs, type ChatTabItem } from './components/ChatTabs';
 import { SidebarRail, type RailAction, type RailEntry } from './components/SidebarRail';
+import { reportFeature } from './analytics';
 import { chatTabState, closeChatTab, cycleChatTab, openChatTab, parseChatTabKey, pruneChatTabs, readChatTabs, readSidebarMode, strongestChatTabState, tabKeyForView, writeChatTabs, writeSidebarMode, type ChatTabState } from './chatTabs';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
@@ -513,7 +514,9 @@ export function App() {
   const closeSidebar = () => {
     setSidebar(false);
     // Closing the sidebar laid over a narrow window is not a choice of mode; folding it in a wide one is.
-    if (!matchMedia('(max-width: 780px)').matches) writeSidebarMode('rail');
+    if (matchMedia('(max-width: 780px)').matches) return;
+    writeSidebarMode('rail');
+    reportFeature('rail');
   };
   const openFullSidebar = () => {
     setSidebar(true);
@@ -622,6 +625,8 @@ export function App() {
   const [tabsBooted, setTabsBooted] = useState(false);
   useEffect(() => { if (workspace && !workspace.workers.length) setTabsBooted(true); }, [workspace]);
   useEffect(() => { writeChatTabs(chatTabs); }, [chatTabs]);
+  // The strip shows from two open chats on, so that is when tabs count as used.
+  useEffect(() => { if (chatTabs.length >= 2) reportFeature('tabs'); }, [chatTabs.length]);
   useEffect(() => {
     if (activeTabKey && tabsBooted) setChatTabs(keys => openChatTab(keys, activeTabKey));
   }, [activeTabKey, tabsBooted]);

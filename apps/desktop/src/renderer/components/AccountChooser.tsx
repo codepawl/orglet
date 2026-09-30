@@ -3,6 +3,7 @@ import { Laptop, LogIn, X } from 'lucide-react';
 import type { AccountChoice, AccountState } from '../../shared/account';
 import { orglet } from '../api';
 import { t } from '../i18n';
+import { AnalyticsDisclosure } from './AccountSettings';
 import { Orglet3D } from './Orglet3D';
 import type { Moment } from './orgletStage';
 import { toast } from './toast';
@@ -89,7 +90,10 @@ export function AccountChooser({ account, onChoose }: { account: AccountState | 
             <Button variant="primary" disabled={saving} onClick={() => void signIn()}><LogIn size={16} />{phase === 'failed' ? t('Thử lại lần nữa') : t('Đăng nhập')}</Button>
             {phase === 'failed'
               ? <p className="error" role="alert">{error}</p>
-              : <p>{t('Một tài khoản CodePawl miễn phí; đồng bộ giữa các máy sẽ có sau.')}</p>}
+              : <>
+                <p>{t('Một tài khoản CodePawl miễn phí; đồng bộ giữa các máy sẽ có sau.')}</p>
+                <p className="account-choice-disclosure"><AnalyticsDisclosure signedIn={false} /></p>
+              </>}
           </div>
           <div className="account-choice-option">
             <Button variant="outline" disabled={saving} onClick={() => void useLocally()}><Laptop size={16} />{t('Dùng không cần tài khoản')}</Button>

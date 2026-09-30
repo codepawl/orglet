@@ -504,6 +504,14 @@ export interface Bridge {
   accountSignOut(): Promise<import('./account').AccountState>;
   /** Every change of the account's state, pushed by the main process. */
   onAccount(callback: (state: import('./account').AccountState) => void): () => void;
+  /** Whether usage analytics is on for the signed-in account (COD-344); nothing is recorded without an account. */
+  analyticsState(): Promise<import('./analytics').AnalyticsState>;
+  /** The switch in Settings → Account; turning it off empties the queue. */
+  setAnalytics(enabled: boolean): Promise<import('./analytics').AnalyticsState>;
+  /** A feature from the fixed list was used; main counts it once per session, only when analytics is on. */
+  reportFeature(feature: import('./analytics').AnalyticsFeature): Promise<void>;
+  /** An error the window caught; main scrubs it and queues it only when analytics is on. */
+  reportError(report: import('./analytics').RendererErrorReport): Promise<void>;
   /** Opens one of the About tab's links in the browser. The renderer names the link; main holds the address. */
   openLink(link: AboutLink): Promise<void>;
   /** Release notes from GitHub, or the last list this machine fetched when it is offline. */
