@@ -46,7 +46,7 @@ function startsWith(vietnamese) {
 /** Every exported rule as a declaration, so the functions can call each other by name inside the window. */
 function measuringSource() {
   const declarations = Object.entries(rules).map(([name, value]) => typeof value === 'function' ? value.toString() : `const ${name} = ${JSON.stringify(value)};`);
-  return `(() => {\n${declarations.join('\n')}\nwindow.__orgletAlignment = { measurePage, drawOutlines, clearOutlines };\n})()`;
+  return `(() => {\n${declarations.join('\n')}\nwindow.__orgletAlignment = { measurePage, measureFamily, drawOutlines, clearOutlines };\n})()`;
 }
 
 async function callCore(page, command, input) {
@@ -109,7 +109,12 @@ async function settle(page) {
 
 async function openSidebar(page) {
   const opener = page.getByRole('button', { name: label('Mở sidebar'), exact: true });
-  if (await opener.isVisible()) await opener.click();
+  if (!await opener.isVisible()) return;
+  // Just after the window widens, the collapsed sidebar's opener can still be on screen and then leave as the sidebar
+  // comes back; a click that finds it gone has nothing left to do (it used to wait 30 s for it to return).
+  await opener.click({ timeout: 5_000 }).catch(async error => {
+    if (await opener.isVisible()) throw error;
+  });
 }
 
 /** Back to a known state: no dialog, no menu, the sidebar showing the orglet's chat. */
@@ -144,17 +149,26 @@ const SCREENS = [
   { name: 'empty-chat', open: async page => { await openSidebar(page); await page.getByRole('button', { name: 'Writer', exact: true }).first().click(); await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor(); } },
   { name: 'worker-dialog', open: (page, context) => openWorkerTab(page, context, 'Chung') },
   { name: 'worker-dialog-permissions', open: (page, context) => openWorkerTab(page, context, 'Quyền') },
-  { name: 'settings-general', open: page => openSettingsTab(page, 'Chung') },
-  { name: 'settings-harness', open: page => openSettingsTab(page, 'Harness trên máy') },
-  { name: 'settings-connections', open: page => openSettingsTab(page, 'Kết nối API') },
-  { name: 'settings-costs', open: page => openSettingsTab(page, 'Chi phí & giới hạn') },
-  { name: 'settings-account', open: page => openSettingsTab(page, 'Tài khoản CodePawl') },
+  // Every Settings tab, in the dialog's order. One family: they share a panel, so their heading, content edges and the
+  // lead column of their list rows are compared with each other (familyFindings in rules.ts).
+  { name: 'settings-general', family: 'settings', open: page => openSettingsTab(page, 'Chung') },
+  { name: 'settings-chat', family: 'settings', open: page => openSettingsTab(page, 'Cuộc trò chuyện') },
+  { name: 'settings-connections', family: 'settings', open: page => openSettingsTab(page, 'Kết nối API') },
+  { name: 'settings-search', family: 'settings', open: page => openSettingsTab(page, 'Tìm kiếm web') },
+  { name: 'settings-harness', family: 'settings', open: page => openSettingsTab(page, 'Harness trên máy') },
+  { name: 'settings-mcp', family: 'settings', open: page => openSettingsTab(page, 'MCP') },
+  { name: 'settings-browser', family: 'settings', open: page => openSettingsTab(page, 'Trình duyệt') },
+  { name: 'settings-costs', family: 'settings', open: page => openSettingsTab(page, 'Chi phí & giới hạn') },
+  { name: 'settings-data', family: 'settings', open: page => openSettingsTab(page, 'Dữ liệu') },
+  { name: 'settings-account', family: 'settings', open: page => openSettingsTab(page, 'Tài khoản CodePawl') },
+  { name: 'settings-about', family: 'settings', open: page => openSettingsTab(page, 'Giới thiệu') },
 ];
 
 /** Records one measured pass: the findings, printed, and an outlined screenshot when there are any. */
-async function record(page, screen, size, theme) {
+async function record(page, screen, size, theme, family) {
   const findings = await measure(page);
   const pass = { screen, width: size.width, height: size.height, theme, findings };
+  if (family) pass.family = { name: family, metrics: await page.evaluate(() => window.__orgletAlignment.measureFamily()) };
   if (findings.length > 0 || options.allScreenshots) {
     pass.screenshot = join(outputFolder, `${screen}-${size.width}x${size.height}-${theme}.png`);
     await screenshotWithOutlines(page, findings, pass.screenshot);
@@ -225,7 +239,7 @@ try {
         await reset(page, context);
         await screen.open(page, context);
         await settle(page);
-        await record(page, screen.name, size, theme);
+        await record(page, screen.name, size, theme, screen.family);
       }
     }
   }
@@ -234,6 +248,30 @@ try {
   // The seeded workspace is throwaway; a file the app still holds is left for the system's temp cleanup.
   await rm(dataFolder, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 }).catch(() => {});
 }
+
+/**
+ * Screens of one family at the same size and theme, compared with each other once all are measured. Each finding joins
+ * the pass of the screen that disagrees; that pass's outlined screenshot, taken earlier, does not show it.
+ */
+function compareFamilies() {
+  const groups = new Map();
+  for (const pass of passes) {
+    if (!pass.family?.metrics) continue;
+    const key = `${pass.family.name} ${pass.width}x${pass.height} ${pass.theme}`;
+    groups.set(key, [...(groups.get(key) ?? []), pass]);
+  }
+  for (const [key, members] of groups) {
+    const findings = rules.familyFindings(members.map(pass => ({ screen: pass.screen, metrics: pass.family.metrics })), rules.DEFAULT_TOLERANCES.column);
+    if (findings.length === 0) continue;
+    console.log(`\nfamily ${key}: ${findings.length} finding${findings.length === 1 ? '' : 's'}`);
+    for (const finding of findings) {
+      const pass = members.find(member => member.screen === finding.screen);
+      pass.findings.push({ kind: finding.kind, selector: rules.FAMILY_PANEL_SELECTOR, text: finding.screen, message: finding.message, offset: finding.offset, boxes: finding.boxes });
+      console.log(`  [${finding.kind}] ${finding.screen}: ${finding.message}`);
+    }
+  }
+}
+compareFamilies();
 
 const counts = {};
 for (const pass of passes) for (const finding of pass.findings) counts[finding.kind] = (counts[finding.kind] ?? 0) + 1;

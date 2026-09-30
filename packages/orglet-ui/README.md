@@ -82,7 +82,10 @@ loads the switch's styles.
   `labels`, including the ones built from a value (`areaValue`, `presetColor`, `removeColor`). It sets
   `data-popup-open`, so Escape closes it rather than a dialog around it.
 - `PanelHeading`: a section's title (`level` 2 or 3) with its `description` under it on the left and the section's
-  actions (its children) on the right, vertically centred.
+  actions (its children) on the right, vertically centred. Actions end flush with the section's right edge, so give
+  each a visible surface: `primary` only for the section's main add or create action, `outline` for a utility action
+  such as a rescan, never a bare `ghost` button with a label (its box is flush but its label is not, so it reads as
+  shifted left and colourless). An icon-only button lines up by its box and may stay `ghost`.
 - `FieldLabel`: a field's title with a small decorative leading `icon` (any icon component that takes `size`, such as
   one from lucide-react); `required` draws the red asterisk without adding it to the field's name.
 - `InfoTip`: technical detail (ids, paths, hashes) behind a small button: opens on hover and keyboard focus, pins
@@ -126,7 +129,9 @@ loads the switch's styles.
   `--org-select-option-height`.
 - `TabbedDialog`, `TabbedFormDialog` and `DialogTabs`: the settings layout, a title and close button on top, the tabs
   on the left (a row on a narrow window) and the open section headed by its tab's `label`, with `description` and
-  `actions`, scrolling on its own. `TabbedDialog` applies changes at once; with `onSubmit` its body and `footer` form
+  `actions`, scrolling on its own. Every tab shares one frame: the panel keeps its scrollbar gutter whether or not
+  the tab scrolls, so content ends at the same x on every tab, and the heading is as tall as its text with the
+  actions overhanging it, so each tab's title starts at the same height. `TabbedDialog` applies changes at once; with `onSubmit` its body and `footer` form
   one form. `TabbedFormDialog` pins Cancel and Save at the bottom with the `error` beside them, shows `busyLabel`
   while saving, and lands on the field named by `focusField`. A tab's `buttonProps` reach its button, such as a
   handler that prefetches on hover. Tabs follow the WAI-ARIA pattern: the arrows move and open, only the open tab is

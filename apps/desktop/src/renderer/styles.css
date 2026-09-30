@@ -888,7 +888,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .settings-subheading-row .settings-subheading { margin:0; }
 .settings-subheading-row .org-button { font-size:12px; font-weight:500; min-height:26px; padding:2px 8px; gap:5px; border-radius:8px; color:var(--muted); }
 .settings-subheading-row .org-button:hover:not(:disabled) { color:var(--text); }
-.setting-row { display:flex; align-items:center; gap:12px; padding:13px 0; }
+/* Every settings row, and the one leading column of the rows that start with a mark (API connections, local
+   harnesses, MCP servers, the browser and its profiles): a slot the size of a provider mark, then the row's gap to the
+   text, so the mark's centre and the text start at the same x on every tab. */
+.setting-row { --setting-mark:26px; --setting-mark-gap:12px; display:flex; align-items:center; gap:var(--setting-mark-gap); padding:13px 0; }
 .setting-connection { align-items:center; }
 .setting-connection .setting-text { gap:8px; }
 /* A connection that is off reads quieter through its mark and a muted title, never through opacity on the text: its
@@ -899,9 +902,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
    switch: a key is long, and in a 460px row it had 254px left after the file and save buttons (user, 2026-09-20). */
 .setting-connection { flex-wrap:wrap; }
 .setting-connection > .setting-key-form { flex:1 0 100%; order:1; margin-top:8px; }
-/* OpenCode Go's plan usage: a line of its own under the text, starting where the text starts (the 26px mark and the
-   row's 12px gap), and as close to the description as the text column's own gap. */
-.setting-connection > .setting-connection-usage { flex:1 0 100%; order:1; min-width:0; padding-left:38px; margin-top:-4px; }
+/* OpenCode Go's plan usage: a line of its own under the text, starting where the text starts (the mark's slot and the
+   row's gap), and as close to the description as the text column's own gap. */
+.setting-connection > .setting-connection-usage { flex:1 0 100%; order:1; min-width:0; padding-left:calc(var(--setting-mark) + var(--setting-mark-gap)); margin-top:-4px; }
 .setting-connection-usage .plan-usage { margin:0; }
 .setting-key-form { display:flex; flex-wrap:nowrap; align-items:center; gap:6px; margin-top:2px; max-width:100%; }
 .setting-key-form .setting-key-file {
@@ -919,16 +922,19 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .setting-description { font-size:13px; color:var(--muted); line-height:1.45; }
 /* A quiet word beside a title or a button while something is fetched again; never a spinner (COD-218). */
 .setting-checking { margin-left:8px; font-weight:400; }
-/* Both labels share one grid cell, so a button keeps the width of the longer one and nothing beside it reflows. */
+/* Both labels share one grid cell, so a button keeps the width of the longer one and nothing beside it reflows. Each
+   label carries its own icon and the pair is centred in the cell, so a filled button shows even padding on both sides
+   instead of an empty tail after the shorter label (and never a gap between the icon and its label). */
 .steady-label { display:inline-grid; }
-/* Both labels share one cell so the button keeps its width; the shown one starts beside the icon instead of being
-   centred in the width of the longer one, which opened a gap after the icon. */
-.steady-label > span { grid-area:1 / 1; text-align:start; }
+.steady-label > span { grid-area:1 / 1; display:inline-flex; align-items:center; justify-content:center; gap:7px; }
 button:not([data-checking]) .steady-label > span:last-child, button[data-checking] .steady-label > span:first-child { visibility:hidden; }
 .release-shape { margin-top:4px; }
 .skill-review-shape { height:8em; margin-top:10px; }
 .setting-control { display:flex; align-items:center; gap:8px; flex-shrink:0; }
-.setting-control .org-button { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; }
+/* A labelled button in a row and one in the tab's heading share one shape, so Dò lại, Thêm hồ sơ and Lưu bản sao lưu
+   read as the same kind of control; which variant each takes is the rule above SettingsDialog's heading actions. */
+.setting-control .org-button,
+#settings-panel > .org-panel-heading .org-button:not(.org-button-icon) { min-height:34px; padding:6px 12px; font-size:13px; border-radius:18px; }
 /* Every select and number field in a settings row shares one width, so the right edge reads as one column. */
 .setting-control .setting-select,.setting-control .org-money-input { width:210px; }
 .setting-control .org-money-input input { flex:1; width:auto; min-width:0; }
@@ -968,7 +974,7 @@ button:not([data-checking]) .steady-label > span:last-child, button[data-checkin
 .budget-review-history summary { cursor:pointer; font-size:13px; }
 .budget-review-history ul { margin-top:10px; }
 .budget-review-history li { display:flex; flex-wrap:wrap; gap:5px 10px; font-size:12px; color:var(--muted); }
-.harness-row { display:flex; gap:10px; align-items:flex-start; }
+.harness-row { display:flex; gap:var(--setting-mark-gap); align-items:flex-start; }
 .harness-row>.provider-mark { margin-top:1px; }
 .harness-row>.setting-text { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
 /* Name on the left, state on the right, on the line the mark sits beside. */
@@ -2494,7 +2500,7 @@ button.crew-node:hover { background:var(--row-hover); }
 /* MCP (COD-241). Settings → MCP rows follow the harness rows: a mark, the name with its state on one line, the
    command or address under it, the tools folded. The editor is a Drawer form; the approval card sits in the answer
    bubble like a decision question. Separation is spacing and a quiet surface, never a line. */
-.mcp-row>.mcp-mark { display:inline-flex; align-items:center; justify-content:center; width:24px; height:26px; flex-shrink:0; color:var(--muted); }
+.mcp-row>.mcp-mark { display:inline-flex; align-items:center; justify-content:center; width:var(--setting-mark); height:26px; flex-shrink:0; color:var(--muted); }
 .mcp-row .setting-control { align-self:flex-start; min-height:26px; }
 .mcp-row .setting-path { font-family:var(--font-mono); font-size:11.5px; }
 .mcp-tools { margin-left:-4px; }

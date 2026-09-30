@@ -276,7 +276,8 @@ export function BrowserProfilesSettings({ busy, act, creating, onCreating }: { b
       <div className="setting-row harness-row mcp-row">
         <span className="mcp-mark" aria-hidden="true"><ShieldCheck size={18} /></span>
         <div className="setting-text">
-          <span className="setting-title">{t('Sạch')}</span>
+          {/* The same 26px head line as the rows around it, so the mark sits on the title's centre. */}
+          <span className="harness-head"><span className="setting-title">{t('Sạch')}</span></span>
           <span className="setting-description">{t('Mặc định. Mỗi lượt chạy mở một cửa sổ riêng tư, không đăng nhập đâu, và xóa sạch khi xong.')}</span>
         </div>
       </div>

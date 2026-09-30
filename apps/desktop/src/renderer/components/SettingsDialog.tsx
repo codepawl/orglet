@@ -645,11 +645,15 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
 
   // The About tab reads the build, the updater and the release list; resting on its tab fetches them ahead of the click.
   const shownTabs = tabs.map(item => ({ ...item, label: t(item.label), ...(item.id === 'about' ? { buttonProps: dwellHandlers(dwellAbout) } : {}) }));
+  // Heading actions follow one rule: `primary` (filled accent) only for the tab's main add/create action (Thêm máy
+  // chủ, Thêm hồ sơ); a utility action such as Dò lại is `outline`, the neutral filled look of the row buttons, and
+  // never a bare ghost button, which read as colourless text and shifted left of the edge it should end on.
   return <TabbedDialog open={open} onClose={onClose} title={t('Cài đặt')} closeLabel={t('Đóng cài đặt')} closeIcon={<X size={18} />} tabsLabel={t('Mục cài đặt')}
     tabs={shownTabs} tab={tab} onTab={onTab} panelId="settings-panel" description={sectionLabels[tab] ? t(sectionLabels[tab]) : undefined}
     actions={<>{tab === 'harness' && <>
-              {/* The button says it is checking instead of a line beside it, so the heading never reflows while it runs. */}
-              <Button disabled={busy || harnesses === undefined} onClick={detectAgain} aria-live="polite" data-checking={detecting || undefined}><RefreshCw size={13} /><span className="steady-label"><span aria-hidden={detecting}>{t('Dò lại')}</span><span aria-hidden={!detecting}>{t('Đang dò lại…')}</span></span></Button>
+              {/* The button says it is checking instead of a line beside it, so the heading never reflows while it runs.
+                  Each label carries its own icon, so the shown one sits centred in the width of the longer one. */}
+              <Button variant="outline" disabled={busy || harnesses === undefined} onClick={detectAgain} aria-live="polite" data-checking={detecting || undefined}><span className="steady-label"><span aria-hidden={detecting}><RefreshCw size={13} />{t('Dò lại')}</span><span aria-hidden={!detecting}><RefreshCw size={13} />{t('Đang dò lại…')}</span></span></Button>
             </>}{tab === 'mcp' && <McpHeadingActions busy={busy} act={act} onAdd={() => setMcpEditing('new')} />}{tab === 'browser' && <BrowserHeadingActions busy={busy} onCreate={() => setCreatingProfile(true)} />}</>}>
 
             {tab === 'general' && <>

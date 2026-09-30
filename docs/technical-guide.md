@@ -427,7 +427,7 @@ The run-audit smoke checks structured log errors, direction selection, repeat/fa
 
 ### Alignment check
 
-`pnpm test:alignment` (COD-333) checks alignment by measuring instead of by eye. It launches the packaged app on a temporary data folder, seeds orglets, a crew with an answered turn, a chat with an answer and four schedules (one per orglet, one per crew, one off, one hourly), all on Demo, and visits the chat, its menus, the crew chat, the sidebar row menu, Schedules and the schedule editor, an empty chat, the orglet dialog (General, Permissions) and Settings (General, Local harnesses, API connections, Costs & limits). Each screen is measured at 1200×820 and 740×600, light and dark, with reduced motion. Logged-out fixture CLIs and empty CLI config folders keep the harness tab from reading this machine's sign-ins or asking a vendor for plan usage.
+`pnpm test:alignment` (COD-333) checks alignment by measuring instead of by eye. It launches the packaged app on a temporary data folder, seeds orglets, a crew with an answered turn, a chat with an answer and four schedules (one per orglet, one per crew, one off, one hourly), all on Demo, and visits the chat, its menus, the crew chat, the sidebar row menu, Schedules and the schedule editor, an empty chat, the orglet dialog (General, Permissions) and every Settings tab (General, Chat, API connections, Web search, Local harnesses, MCP, Browser, Costs & limits, Data, CodePawl account, About). Each screen is measured at 1200×820 and 740×600, light and dark, with reduced motion. Logged-out fixture CLIs and empty CLI config folders keep the harness tab from reading this machine's sign-ins or asking a vendor for plan usage.
 
 The measurements live in `scripts/alignment/rules.ts` (unit tests in `tests/integration/alignment-rules.test.ts`) and run in the window:
 
@@ -440,6 +440,13 @@ The measurements live in `scripts/alignment/rules.ts` (unit tests in `tests/inte
 | `wrap` | Short labels meant for one line (buttons, tabs, menu items, options, switches, badges, headings, labels; 40 characters and five words at most) | the label takes two lines |
 | `clip` | One-line text (`nowrap`) | cut by its box with no ellipsis |
 | `overflow` | The page, any panel that scrolls, and anything free to spill | the page or a panel scrolls sideways, or something sticks out past the window's right edge |
+| `heading-action` | A panel heading (`.org-panel-heading`): where its last action visibly ends, against the right edge of the content box it heads. A button with a surface ends at its box; a transparent one ends at its label and icon; an icon-only button at its box | more than 1px short of the edge or past it |
+| `heading-wrap` | The same headings: a description that wraps while the actions beside it take more width than they show | the description's next word would fit on its first line if the actions were only as wide as they look |
+| `family-heading` | Screens of one family (every Settings tab), compared at the same size and theme: the top of the heading's first line, from the top of the tab panel (`[role=tabpanel]`) | more than 1px from the value most screens share |
+| `family-edge` | The same screens: the left and right edges of the panel's content box, inside its padding and scrollbar | more than 1px from the value most screens share |
+| `family-lead` | The same screens: in list rows that start at the content's left edge with a mark followed by text, the mark's horizontal centre and where the text starts | more than 1px from the value most screens share |
+
+Screens join a family with `family` in `SCREENS` in `scripts/alignment-check.mjs`. Family findings are compared once every screen is measured, so they are printed under a `family` line and added to the report, but the outlined screenshot of that screen does not show them.
 
 Stacked faces (a crew) are compared only with other stacks: they are wider than one face by design. Hidden, zero-size and visually hidden elements are skipped, and so is decorative text inside an `aria-hidden` layer. Where a difference is intentional, put `data-align-ignore` on the element or a parent, either empty (every check) or with the kinds to skip (`data-align-ignore="uneven-gap"`), and say why in a comment next to it.
 

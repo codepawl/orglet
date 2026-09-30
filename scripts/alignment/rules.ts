@@ -10,7 +10,9 @@
 
 export type Box = { left: number; top: number; right: number; bottom: number };
 
-export type FindingKind = 'centre-line' | 'column-start' | 'icon-slot' | 'uneven-gap' | 'wrap' | 'clip' | 'overflow';
+export type FindingKind =
+  | 'centre-line' | 'column-start' | 'icon-slot' | 'uneven-gap' | 'wrap' | 'clip' | 'overflow' | 'heading-action' | 'heading-wrap'
+  | 'family-heading' | 'family-edge' | 'family-lead';
 
 export type Finding = {
   kind: FindingKind;
@@ -167,6 +169,75 @@ export function isClippedWithoutEllipsis(metrics: { scrollWidth: number; clientW
 export function isShortLabel(text: string): boolean {
   const trimmed = text.trim();
   return trimmed.length > 0 && trimmed.length <= 40 && trimmed.split(/\s+/).length <= 5;
+}
+
+/**
+ * How far the visible end of a heading's last action stops short of the content's right edge: positive when it stops
+ * short, negative when it runs past. The visible end of a transparent button is its label, not its box.
+ */
+export function trailingShortfall(contentRight: number, paintedRight: number): number {
+  return round(contentRight - paintedRight);
+}
+
+/**
+ * Whether a wrapped heading description would keep its next word on the first line if the actions beside it were only
+ * as wide as they look: the room is what is left at the end of the first line plus the part of the actions' boxes that
+ * shows nothing (a transparent button as wide as a longer label it is not showing).
+ */
+export function nextWordWouldFit(lineSlack: number, emptyActionWidth: number, nextWordWidth: number): boolean {
+  if (emptyActionWidth <= 0) return false;
+  return lineSlack + emptyActionWidth >= nextWordWidth;
+}
+
+/**
+ * What one screen of a family (every Settings tab) measures, relative to its panel's left and top edges, so screens
+ * that share a panel can be compared. `leadMark` is the centre of the mark that starts the panel's list rows and
+ * `leadText` where their text starts; both are absent on a screen without such rows.
+ */
+export type ScreenMetrics = {
+  headingTop?: number;
+  contentLeft: number;
+  contentRight: number;
+  leadMark?: number;
+  leadText?: number;
+  /** Absolute boxes for the outlines: the heading's first line, the content box, the first lead row's mark and text. */
+  headingBox?: Box;
+  contentBox: Box;
+  leadBoxes?: Box[];
+};
+
+export type FamilyFinding = { kind: FindingKind; screen: string; message: string; offset: number; boxes: Box[] };
+
+/**
+ * The screens of one family that disagree with the rest on the heading's top, the content's left and right edges, or
+ * the lead column of list rows. Each value is compared the way a column is: the value most screens share is the
+ * reference.
+ */
+export function familyFindings(screens: { screen: string; metrics: ScreenMetrics }[], tolerance: number): FamilyFinding[] {
+  const findings: FamilyFinding[] = [];
+  const compare = (kind: FindingKind, valueOf: (metrics: ScreenMetrics) => number | undefined, describeOffset: (offset: number) => string, boxesOf: (metrics: ScreenMetrics) => Box[]) => {
+    const measured = screens.filter(entry => valueOf(entry.metrics) !== undefined);
+    for (const { item, offset } of outliers(measured, entry => valueOf(entry.metrics) as number, tolerance)) {
+      findings.push({ kind, screen: item.screen, message: describeOffset(round(offset)), offset: round(offset), boxes: boxesOf(item.metrics) });
+    }
+  };
+  const side = (offset: number, positive: string, negative: string) => `${Math.abs(offset)}px ${offset > 0 ? positive : negative}`;
+  compare('family-heading', metrics => metrics.headingTop,
+    offset => `heading starts ${side(offset, 'lower', 'higher')} than on the other screens of its family`,
+    metrics => metrics.headingBox ? [metrics.headingBox] : []);
+  compare('family-edge', metrics => metrics.contentLeft,
+    offset => `content starts ${side(offset, 'right', 'left')} of the other screens of its family`,
+    metrics => [metrics.contentBox]);
+  compare('family-edge', metrics => metrics.contentRight,
+    offset => `content ends ${side(offset, 'right', 'left')} of the other screens of its family`,
+    metrics => [metrics.contentBox]);
+  compare('family-lead', metrics => metrics.leadMark,
+    offset => `list rows centre their leading mark ${side(offset, 'right', 'left')} of the other screens of its family`,
+    metrics => metrics.leadBoxes ?? []);
+  compare('family-lead', metrics => metrics.leadText,
+    offset => `list rows start their text ${side(offset, 'right', 'left')} of the other screens of its family`,
+    metrics => metrics.leadBoxes ?? []);
+  return findings;
 }
 
 /* ---------- In the window: reading the DOM ---------- */
@@ -528,6 +599,197 @@ export function checkOverflow(element: Element): Finding[] {
   }];
 }
 
+/** A section heading with its title and description on the left and its actions on the right (the kit's `PanelHeading`). */
+export const PANEL_HEADING_SELECTOR = '.org-panel-heading';
+export const PANEL_HEADING_ACTIONS_SELECTOR = '.org-panel-heading-actions';
+/** The panel every screen of a family shares: a tab's panel. */
+export const FAMILY_PANEL_SELECTOR = '[role=tabpanel]';
+
+/** Whether a colour string paints anything: not `transparent` and not fully see-through. */
+export function paintsColour(colour: string): boolean {
+  if (!colour || colour === 'transparent') return false;
+  const inside = colour.match(/\(([^)]*)\)/)?.[1];
+  if (!inside) return true;
+  // The alpha is after a slash (`rgb(0 0 0 / 0)`, `color(srgb 0 0 0 / 0)`) or the fourth comma value (`rgba(0, 0, 0, 0)`).
+  const commaValues = inside.split(',');
+  const alpha = inside.includes('/') ? inside.split('/').at(-1) : commaValues.length === 4 ? commaValues[3] : undefined;
+  if (alpha === undefined) return true;
+  return parseFloat(alpha) > 0;
+}
+
+/** Whether the element draws a surface of its own: a background, a border or a shadow. */
+export function paintsSurface(element: Element): boolean {
+  const style = getComputedStyle(element);
+  if (paintsColour(style.backgroundColor) || style.backgroundImage !== 'none') return true;
+  if (style.boxShadow !== 'none') return true;
+  return ['Top', 'Right', 'Bottom', 'Left'].some(side => {
+    const width = parseFloat(style.getPropertyValue(`border-${side.toLowerCase()}-width`));
+    return width > 0 && style.getPropertyValue(`border-${side.toLowerCase()}-style`) !== 'none' && paintsColour(style.getPropertyValue(`border-${side.toLowerCase()}-color`));
+  });
+}
+
+/**
+ * What the eye reads as the element's extent: its box when it draws a surface, or when it is an icon-only control (a
+ * square hit target lines up by its box); otherwise the union of the visible text and marks inside it. A transparent
+ * button as wide as a longer label it is not showing reads as its shown label only.
+ */
+export function paintedBox(element: Element): Box | undefined {
+  if (!isRendered(element)) return undefined;
+  const box = toBox(element.getBoundingClientRect());
+  if (paintsSurface(element) || isMark(element)) return box;
+  const parts: Box[] = [];
+  for (const node of textNodesIn(element)) parts.push(...textLines(node));
+  for (const mark of element.querySelectorAll(MARK_TAGS.join(','))) {
+    if (isRendered(mark) && !mark.parentElement?.closest('svg')) parts.push(toBox(mark.getBoundingClientRect()));
+  }
+  for (const child of element.querySelectorAll('*')) {
+    if (child.closest('svg') || !isRendered(child) || !paintsSurface(child)) continue;
+    parts.push(toBox(child.getBoundingClientRect()));
+  }
+  if (parts.length === 0) return textNodesIn(element).length === 0 && element.matches('button, [role=button]') ? box : undefined;
+  return union(parts);
+}
+
+/** The content box of an element: inside its border, padding and scrollbar. */
+export function contentBoxOf(element: Element): Box {
+  const rectangle = element.getBoundingClientRect();
+  const style = getComputedStyle(element);
+  const left = rectangle.left + element.clientLeft + parseFloat(style.paddingLeft);
+  const top = rectangle.top + element.clientTop + parseFloat(style.paddingTop);
+  const right = rectangle.left + element.clientLeft + element.clientWidth - parseFloat(style.paddingRight);
+  const bottom = rectangle.top + element.clientTop + element.clientHeight - parseFloat(style.paddingBottom);
+  return toBox({ left, top, right, bottom });
+}
+
+/** The actions of a panel heading that are on screen, each with the part of it the eye reads. */
+export function headingActions(heading: Element): { element: Element; box: Box; painted: Box }[] {
+  const group = heading.querySelector(PANEL_HEADING_ACTIONS_SELECTOR);
+  if (!group) return [];
+  return inFlowChildren(group).flatMap(element => {
+    const painted = paintedBox(element);
+    return painted ? [{ element, box: toBox(element.getBoundingClientRect()), painted }] : [];
+  });
+}
+
+/**
+ * A panel heading's last action ends where the content it heads ends. Measured on what is painted, so a transparent
+ * button whose label stops early reads as shifted left even when its box is flush.
+ */
+export function checkHeadingAction(heading: Element, tolerances: Tolerances): Finding[] {
+  if (ignoredFor(heading, 'heading-action') || !heading.parentElement) return [];
+  const actions = headingActions(heading);
+  if (actions.length === 0) return [];
+  const last = actions.reduce((furthest, action) => action.painted.right > furthest.painted.right ? action : furthest);
+  const content = contentBoxOf(heading.parentElement);
+  const shortfall = trailingShortfall(content.right, last.painted.right);
+  if (Math.abs(shortfall) <= tolerances.column) return [];
+  const where = shortfall > 0 ? 'short of' : 'past';
+  return [{
+    kind: 'heading-action',
+    selector: describe(last.element),
+    text: snippet(last.element),
+    message: `heading action's visible edge ends ${Math.abs(shortfall)}px ${where} the content's right edge${last.painted.right < last.box.right - 1 ? ' (its box is wider than what it shows)' : ''}`,
+    offset: shortfall,
+    boxes: [last.painted, { left: content.right - 1, top: last.box.top, right: content.right, bottom: last.box.bottom }],
+  }];
+}
+
+/** The description's words with their boxes, in reading order. */
+export function wordBoxes(nodes: Text[]): { word: string; box: Box }[] {
+  const words: { word: string; box: Box }[] = [];
+  const range = document.createRange();
+  for (const node of nodes) {
+    const text = node.textContent ?? '';
+    for (const match of text.matchAll(/\S+/g)) {
+      range.setStart(node, match.index ?? 0);
+      range.setEnd(node, (match.index ?? 0) + match[0].length);
+      const rectangles = [...range.getClientRects()].filter(rectangle => rectangle.width > 0);
+      if (rectangles.length > 0) words.push({ word: match[0], box: toBox(rectangles[0]) });
+    }
+  }
+  return words;
+}
+
+/**
+ * A heading description that wraps while the actions beside it leave room: its next word would fit on the first line
+ * if the actions were only as wide as they look.
+ */
+export function checkHeadingWrap(heading: Element): Finding[] {
+  if (ignoredFor(heading, 'heading-wrap')) return [];
+  const actions = headingActions(heading);
+  if (actions.length === 0) return [];
+  const group = heading.querySelector(PANEL_HEADING_ACTIONS_SELECTOR) as Element;
+  const nodes = textNodesIn(heading).filter(node => !node.parentElement?.closest('h1, h2, h3, h4') && !group.contains(node));
+  if (nodes.length === 0) return [];
+  const lines = groupLines(nodes.flatMap(node => textLines(node)));
+  if (lines.length < 2) return [];
+  const next = wordBoxes(nodes).find(entry => entry.box.top >= lines[0].bottom - 1);
+  if (!next) return [];
+  const container = toBox((nodes[0].parentElement as Element).getBoundingClientRect());
+  const slack = container.right - lines[0].right;
+  const groupBox = toBox(group.getBoundingClientRect());
+  const shown = union(actions.map(action => action.painted));
+  const empty = round(boxWidth(groupBox) - boxWidth(shown));
+  // The word needs a space before it on the line it would join; a third of the text's height is about one.
+  const needed = round(boxWidth(next.box) + (lines[0].bottom - lines[0].top) / 3);
+  if (!nextWordWouldFit(slack, empty, needed)) return [];
+  return [{
+    kind: 'heading-wrap',
+    selector: describe(nodes[0].parentElement as Element),
+    text: snippet(nodes[0].parentElement as Element),
+    message: `heading description wraps onto ${lines.length} lines while ${empty}px of the actions beside it show nothing; "${next.word}" (${needed}px) would fit`,
+    offset: empty,
+    boxes: [lines[0], groupBox],
+  }];
+}
+
+/** The most common value among `values`, rounded to whole pixels, or undefined for none. */
+export function commonValue(values: number[]): number | undefined {
+  if (values.length === 0) return undefined;
+  const counts = new Map<number, number>();
+  for (const value of values) counts.set(Math.round(value), (counts.get(Math.round(value)) ?? 0) + 1);
+  let best = Math.round(values[0]);
+  for (const [value, count] of counts) if (count > (counts.get(best) ?? 0)) best = value;
+  return best;
+}
+
+/**
+ * What a family screen measures for `familyFindings`: the heading's first line, the panel's content box, and the lead
+ * column of its list rows (flex rows that start at the content's left edge with a mark followed by text). Undefined
+ * when the screen has no family panel.
+ */
+export function measureFamily(): ScreenMetrics | undefined {
+  const panel = [...document.querySelectorAll(FAMILY_PANEL_SELECTOR)].find(isRendered);
+  if (!panel) return undefined;
+  const panelBox = toBox(panel.getBoundingClientRect());
+  const content = contentBoxOf(panel);
+  const metrics: ScreenMetrics = { contentLeft: round(content.left - panelBox.left), contentRight: round(content.right - panelBox.left), contentBox: content };
+  const heading = [...panel.querySelectorAll('h1, h2, h3')].find(isRendered);
+  const headingShape = heading ? textShape(heading) : undefined;
+  if (headingShape) {
+    metrics.headingBox = headingShape.first[0];
+    metrics.headingTop = round(headingShape.first[0].top - panelBox.top);
+  }
+  const marks: number[] = [];
+  const texts: number[] = [];
+  for (const row of panel.querySelectorAll('*')) {
+    if (row.closest('svg') || !isRendered(row) || ignoredFor(row, 'family-lead')) continue;
+    if (!isFlexRow(getComputedStyle(row))) continue;
+    const children = inFlowChildren(row);
+    if (children.length < 2 || !isMark(children[0])) continue;
+    const markBox = toBox(children[0].getBoundingClientRect());
+    if (Math.abs(markBox.left - content.left) > 2) continue;
+    const shape = textShape(children[1]);
+    if (!shape) continue;
+    marks.push(horizontalCentre(markBox) - panelBox.left);
+    texts.push(shape.first[0].left - panelBox.left);
+    if (!metrics.leadBoxes) metrics.leadBoxes = [markBox, shape.first[0]];
+  }
+  metrics.leadMark = commonValue(marks);
+  metrics.leadText = commonValue(texts);
+  return metrics;
+}
+
 /** Runs every check over the rendered page and returns the findings, one per element and kind. */
 export function measurePage(tolerances: Tolerances): Finding[] {
   const findings: Finding[] = [];
@@ -548,6 +810,7 @@ export function measurePage(tolerances: Tolerances): Finding[] {
     if (style.display === 'flex' || style.display === 'inline-flex') findings.push(...checkGaps(element, tolerances));
     findings.push(...checkSingleLine(element));
     findings.push(...checkOverflow(element));
+    if (element.matches(PANEL_HEADING_SELECTOR)) findings.push(...checkHeadingAction(element, tolerances), ...checkHeadingWrap(element));
   }
   findings.push(...checkColumns(columns, tolerances));
   const seen = new Set<string>();
@@ -564,7 +827,10 @@ export function drawOutlines(findings: Finding[]): void {
   const layer = document.createElement('div');
   layer.setAttribute('data-align-overlay', '');
   layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647;';
-  const colours: Record<string, string> = { 'centre-line': '#e5484d', 'column-start': '#f76b15', 'icon-slot': '#f76b15', 'uneven-gap': '#8e4ec6', wrap: '#0090ff', clip: '#0090ff', overflow: '#e54666' };
+  const colours: Record<string, string> = {
+    'centre-line': '#e5484d', 'column-start': '#f76b15', 'icon-slot': '#f76b15', 'uneven-gap': '#8e4ec6', wrap: '#0090ff', clip: '#0090ff', overflow: '#e54666',
+    'heading-action': '#e5484d', 'heading-wrap': '#0090ff', 'family-heading': '#12a594', 'family-edge': '#12a594', 'family-lead': '#12a594',
+  };
   for (const finding of findings) {
     for (const box of finding.boxes) {
       const outline = document.createElement('div');
