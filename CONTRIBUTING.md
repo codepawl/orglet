@@ -82,8 +82,9 @@ Releases are a maintainer action; do not push a release tag or open a GitHub Rel
 
 1. The version in `package.json` is set to the release version and landed on `main` through a normal pull request.
 2. Once the Windows desktop workflow is green on that commit, the maintainer pushes an **annotated** tag `vX.Y.Z` on it whose message is the release notes.
-3. [`release.yml`](.github/workflows/release.yml) does the rest on GitHub's side: it checks the tag against `package.json`, waits for the green Windows build of that commit, downloads the Setup, ZIP and updater files that build already made, and publishes the GitHub Release with the tag message as its notes. No build passes through anyone's machine.
-4. Installed copies pick the release up through the built-in updater within a few hours.
+3. [`release.yml`](.github/workflows/release.yml) does the rest on GitHub's side, and no build passes through anyone's machine. It checks the tag against `package.json`, waits for the Windows, macOS and Linux builds of that commit, and publishes the GitHub Release with the tag message as its notes plus a generated **Downloads** line. Windows (Setup, ZIP and updater files) must be green or nothing ships; the notarized macOS ZIP and the experimental Linux ZIP are attached when their builds passed and skipped with a note otherwise.
+4. The same run then starts [`npm-installer.yml`](.github/workflows/npm-installer.yml), which publishes `@codepawlhq/orglet` at the tag's version, and opens a pull request in `codepawl/codepawl-web` that refreshes the site's download snapshot. orglet.codepawl.com already reads the latest release live. Orglet has no PyPI package.
+5. Installed copies pick the release up through the built-in updater within a few hours.
 
 The full checklist, including signing and what the release notes must say, is [docs/windows-release-gates.md](docs/windows-release-gates.md).
 

@@ -29,12 +29,12 @@ It downloads the latest Setup from GitHub Releases and runs it only after two ch
 
 ### From a GitHub Release
 
-The [latest release](https://github.com/codepawl/orglet/releases/latest) carries a Windows **Setup.exe** (installs per user and updates itself) and a **ZIP** (unzip and run; does not update itself). Release 0.7.2 also includes a signed, notarized Apple silicon macOS ZIP and an experimental Linux x64 ZIP.
+The [latest release](https://github.com/codepawl/orglet/releases/latest) carries a Windows **Setup.exe** (installs per user and updates itself) and a **ZIP** (unzip and run; does not update itself). Each release also includes a signed, notarized Apple silicon macOS ZIP and an experimental Linux x64 ZIP when those builds passed; the **Downloads** line in the release notes says which platforms a release carries.
 
 | If you use | Do this |
 |---|---|
 | Windows | Run Setup. SmartScreen may show **Windows protected your PC** while the signing certificate is new: check that it names **Open Source Developer Xuan An Nguyen** as the publisher, then **More info** → **Run anyway**. Details: [user guide → Install](user-guide.md#install). |
-| macOS | Download the Apple silicon ZIP from the release, unzip `Orglet.app` and move it to Applications. The 0.7.2 release is signed, notarized and stapled. There is no Intel Mac download yet. Details: [macos-packaging.md](macos-packaging.md). |
+| macOS | Download the Apple silicon ZIP from the release, unzip `Orglet.app` and move it to Applications. A release only carries the macOS ZIP after Gatekeeper accepted it as notarized. There is no Intel Mac download yet. Details: [macos-packaging.md](macos-packaging.md). |
 
 | Linux x64 | Download the experimental ZIP, unzip it and run the `Orglet` binary. CI passed a desktop smoke on Ubuntu; daily desktop use is not verified. There are no automatic updates. See [linux-packaging.md](linux-packaging.md). |
 

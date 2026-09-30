@@ -5,7 +5,7 @@
   <img src="images/orglets/windows-release-gates-light.png" alt="" width="112" height="112" align="right">
 </picture>
 
-This page is the Windows ship checklist: required pull-request CI, how Windows builds are signed, optional human installer validation, and the GitHub Release procedure. The [latest release](https://github.com/codepawl/orglet/releases/latest) carries Windows Setup and ZIP assets. Public Windows releases have been signed since 0.7.1.
+This page is the ship checklist: required pull-request CI, how Windows builds are signed, optional human installer validation, and the release procedure, where one tag ships the GitHub Release, the npm installer and the website snapshot ([What a tag ships](#what-a-tag-ships)). The [latest release](https://github.com/codepawl/orglet/releases/latest) carries Windows Setup and ZIP assets, and the macOS and Linux ZIPs when their builds passed. Public Windows releases have been signed since 0.7.1.
 
 It does **not** record that a smoke already ran. It does **not** create tags or Releases.
 
@@ -16,6 +16,8 @@ It does **not** record that a smoke already ran. It does **not** create tags or 
 | Packaged Windows smoke | GitHub Actions on the release commit | GitHub Release |
 | Installer smoke on a clean machine | Optional human validation | Does not block public Windows releases |
 | Git tag + GitHub Release | Maintainer, after they approve | Public Windows release |
+| Notarized macOS build of the tagged commit | GitHub Actions (`macos.yml` push run) | Only the macOS ZIP on that release |
+| Linux build of the tagged commit | GitHub Actions (`linux.yml` push run) | Only the Linux ZIP on that release |
 
 Required pull-request CI is the **Windows desktop** workflow (`.github/workflows/desktop.yml`). It runs on `windows-latest`. Separate **macOS desktop** and **Linux desktop** workflows run typecheck, tests and `pnpm make` for dogfood packaging; Linux also starts the packaged app headlessly. macOS signs when Developer ID credentials exist and notarizes only when Apple credentials exist. Neither workflow replaces the required Windows `test` aggregator. See [macos-packaging.md](macos-packaging.md) and [linux-packaging.md](linux-packaging.md).
 
@@ -140,9 +142,34 @@ When a maintainer is ready to ship a public Windows release:
 1. Confirm required Windows CI is green on the commit you will tag (the `test` aggregator).
 2. Confirm the Windows packaged CI job and required `test` aggregator passed on that commit. If a human ran the optional Setup checklist, record its machine, commit and result; never present CI as a clean-machine install.
 3. Set `package.json` `version` to the version you are shipping if it is not already, and land that on `main`.
-4. Write the release notes: put the SmartScreen paragraph in them (see [Signing](#signing)), link this page, state AGPL-3.0 and that the public GitHub Release ships Windows only. macOS and Linux ZIP packaging exist for dogfood and are not Release assets. For the first release that carries the updater, add one line: 0.2.3 and earlier do not update themselves, so install this one by hand.
+4. Write the release notes: put the SmartScreen paragraph in them (see [Signing](#signing)), link this page and state AGPL-3.0. Do not list platforms: the workflow appends a **Downloads** line naming what it actually attached, and a line saying why macOS is missing when it is. For the first release that carries the updater, add one line: 0.2.3 and earlier do not update themselves, so install this one by hand.
 5. Create an annotated tag on that commit whose message is those notes, then push it: `git tag -a v<version> <commit> -F notes.md` and `git push origin v<version>`. Only a maintainer does this; do not reuse an existing release tag.
-6. The **Release** workflow (`.github/workflows/release.yml`) takes it from there, on GitHub's side, so no build travels through your machine. It checks that the tag matches `package.json`, waits for the green Windows build of that commit, and attaches from that build **all four** of `Orglet-<version> Setup.exe`, `RELEASES`, `orglet-<version>-full.nupkg` and the ZIP, with the tag message as the notes. `RELEASES` lists the `.nupkg` by name and update.electronjs.org looks both up in the Release assets; without them, installed copies never learn about this version (see [Updates](#updates)). A local `pnpm make` is never a release asset. A tag pushed before this workflow existed is published by hand: **Actions → Release → Run workflow** with the tag. Publishing the Release then starts **npm installer** (`.github/workflows/npm-installer.yml`), which publishes `@codepawlhq/orglet` at the same version through npm trusted publishing. The package only downloads that Release's Setup, so a failed npm publish never blocks the release; rerun it from **Actions → npm installer** with the tag.
+6. The **Release** workflow (`.github/workflows/release.yml`) takes it from there, on GitHub's side, so no build travels through your machine. It checks that the tag matches `package.json`, waits for the green Windows build of that commit, and attaches from that build **all four** of `Orglet-<version> Setup.exe`, `RELEASES`, `orglet-<version>-full.nupkg` and the ZIP, with the tag message as the notes. `RELEASES` lists the `.nupkg` by name and update.electronjs.org looks both up in the Release assets; without them, installed copies never learn about this version (see [Updates](#updates)). A local `pnpm make` is never a release asset. The same run attaches the macOS and Linux ZIPs when their builds passed, starts the npm installer publish and opens the website pull request ([What a tag ships](#what-a-tag-ships)). A tag pushed before this workflow existed is published by hand: **Actions → Release → Run workflow** with the tag.
 7. After the workflow finishes (it checks this too), open `https://update.electronjs.org/codepawl/orglet/win32-x64/0.0.1` in a browser. It should answer with JSON naming the new version; a `204` means the service found no usable Release, so check the three assets.
 
 Do not attach builds from a different commit. Do not upload signing certificates or private keys.
+
+## What a tag ships
+
+Wait until all three platform workflows are green on the commit before tagging. Each cancels an older push run on `main` when a newer commit lands, so a commit that was quickly followed by another may have no finished macOS or Linux run; rerun it from Actions before tagging if that platform should be in the release.
+
+| Output | Where it comes from | If it is missing |
+|---|---|---|
+| Windows Setup, `RELEASES`, `orglet-<version>-full.nupkg`, Windows ZIP | The green `desktop.yml` push run of the tagged commit | The release fails and nothing ships |
+| `Orglet-darwin-arm64-<version>.zip` | The green `macos.yml` push run, only its `orglet-macos-signed-zip` artifact, and only when its `notarized.txt` says `source=Notarized Developer ID`, names the tagged commit and matches the ZIP's name and SHA-256 | Skipped. The release notes say macOS is not in the release and why, and the job summary flags it. An unsigned or unnotarized macOS build is never attached |
+| `Orglet-linux-x64-<version>.zip`, experimental | The green `linux.yml` push run (`orglet-linux-zip`) | Skipped and flagged in the job summary |
+| `@codepawlhq/orglet` on npm | `npm-installer.yml`, started by the release run | The release is already out; rerun **Actions → npm installer → Run workflow** with the tag |
+| Website snapshot pull request | The release run's `website` job | Skipped with a notice when `CODEPAWL_WEB_TOKEN` is not set |
+| PyPI | Nothing. Orglet has no Python package; `codepawl/tacet-sdk` is a separate project with its own releases | — |
+
+The release waits up to 80 minutes for the Windows build. While it waits it also picks up macOS and Linux runs of the same commit, and once Windows is green it waits only for macOS or Linux runs that are still going. The workflow appends to the tag message a **Downloads** line built from the files it attached, then checks that the release carries the names orglet.codepawl.com reads: `Orglet-<version>.Setup.exe` (GitHub turns the space in `Orglet-<version> Setup.exe` into a dot), `Orglet-darwin-<arch>-<version>.zip` and `Orglet-linux-<arch>-<version>.zip`.
+
+**npm.** `npm-installer.yml` publishes `installer/npm` at the tag's version through npm trusted publishing, with provenance and public access. It skips a version already on npm and refuses a tag with no GitHub Release, so rerunning it is safe. The release run starts it with `workflow_dispatch` instead of calling it as a reusable workflow. A Release created with `GITHUB_TOKEN` never fires its `release: published` trigger, and for a reusable workflow npm matches the trusted publisher against the calling workflow's file name (`release.yml`). Dispatched, `npm-installer.yml` is the top-level workflow, so the trusted publisher set up for it keeps working.
+
+**Website.** orglet.codepawl.com reads the latest release live through its `/api/orglet-release` function, so its download buttons follow a new release within minutes without any step here. `src/orglet-release.json` in `codepawl/codepawl-web` is the fallback for when that GitHub call fails. The `website` job rewrites it from the release's assets on a branch `orglet-release-v<version>` and opens a pull request, and does nothing when that branch already exists. That Pages project has no Git connection, so merging the pull request does not deploy it; deploy as the codepawl-web README says.
+
+### One-time setup
+
+- **npm.** The package's trusted publisher on npmjs.com is repository `codepawl/orglet`, workflow `npm-installer.yml`, with the environment left empty because the workflow names none. Nothing else is needed. If the publish ever moves into `release.yml` or becomes a reusable workflow, add `release.yml` as a second trusted publisher first.
+- **`CODEPAWL_WEB_TOKEN`.** A fine-grained personal access token limited to `codepawl/codepawl-web` with **Contents** and **Pull requests** set to read and write, saved as an Actions secret in this repository. Without it the website job prints a notice and stops.
+- **Apple secrets** for notarization, as in [macos-packaging.md](macos-packaging.md). Without them the macOS build is not notarized and releases go out without macOS.
