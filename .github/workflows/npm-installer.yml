@@ -1,0 +1,37 @@
+name: npm installer
+# Publishes @codepawl/orglet (installer/npm) whenever a GitHub Release is published, versioned like the release. The
+# package downloads that release's Setup, so it carries no app code. It publishes through npm trusted publishing
+# (OIDC, with provenance): no npm token lives in the repository or on a maintainer's machine. The trusted publisher
+# (this repository and this workflow file) is set once in the package's settings on npmjs.com.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag whose version to publish, for example v0.9.0
+        required: true
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: npm-installer-${{ inputs.tag || github.event.release.tag_name }}
+jobs:
+  publish:
+    name: publish @codepawl/orglet
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Version the package like the release
+        working-directory: installer/npm
+        run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+      - name: Publish
+        working-directory: installer/npm
+        run: npm publish --access public --provenance

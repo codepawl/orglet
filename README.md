@@ -127,6 +127,14 @@ If an API request fails or its provider omits usage, Orglet keeps the budget res
 
 ## Install
 
+On Windows, one command installs it, if you have Node.js 20 or later:
+
+```sh
+npx @codepawl/orglet
+```
+
+It downloads the latest Setup, checks that it matches the release on GitHub and is signed by Orglet's publisher, then runs it. Once Orglet is installed, the same package passes any command on to `orglet` ([how](installer/npm/README.md)).
+
 [Latest GitHub Release](https://github.com/codepawl/orglet/releases/latest) includes a signed Windows **Setup.exe** and a **ZIP** containing the signed app. The release page shows the version and assets available now; [build from source](#dev) if you need the current `main` branch instead.
 
 Windows releases are signed with Certum. A new certificate can still trigger a SmartScreen warning; check that the publisher is **Open Source Developer Xuan An Nguyen**. macOS CI signs when Developer ID credentials are available and notarizes only when Apple credentials are also available; check that artifact's CI run before relying on Gatekeeper approval.
