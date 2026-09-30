@@ -54,6 +54,29 @@ describe('AnchoredPopover', () => {
     expect(screen.queryByRole('dialog', { name: 'Colour picker' })).toBeNull();
   });
 
+  it('closes on the title of a row used as the anchor, but not on the row\'s own control', async () => {
+    function RowHarness() {
+      const row = useRef<HTMLDivElement>(null);
+      const [open, setOpen] = useState(false);
+      return <>
+        <div ref={row}>
+          <span>Code font</span>
+          <button type="button" onClick={() => setOpen(true)}>Another font</button>
+        </div>
+        <AnchoredPopover anchor={row} open={open} onClose={() => setOpen(false)} label="Font name">
+          <input aria-label="Font" />
+        </AnchoredPopover>
+      </>;
+    }
+    const user = userEvent.setup();
+    render(<RowHarness />);
+    await user.click(screen.getByRole('button', { name: 'Another font' }));
+    await user.click(screen.getByRole('button', { name: 'Another font' }));
+    expect(screen.getByRole('dialog', { name: 'Font name' })).toBeTruthy();
+    await user.click(screen.getByText('Code font'));
+    expect(screen.queryByRole('dialog', { name: 'Font name' })).toBeNull();
+  });
+
   it('lives inside the open dialog it was opened from', async () => {
     const user = userEvent.setup();
     render(<PopoverHarness inDialog />);

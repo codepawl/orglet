@@ -14,6 +14,19 @@ function hostOf(anchor: HTMLElement | null) {
   return dialog ?? document.body;
 }
 
+const CONTROL = 'button, a[href], input, select, textarea, [role=button], [role=combobox], [role=switch], [role=menuitem]';
+
+/**
+ * Whether a pointer landed on the anchor's own control, which keeps the popover open (its click is what opens it).
+ * An anchor may be a whole settings row: a pointer on the row's title or description is outside, as it reads.
+ */
+function onAnchorControl(anchor: HTMLElement | null, target: Node): boolean {
+  if (!anchor || !anchor.contains(target)) return false;
+  if (anchor.matches(CONTROL)) return true;
+  const control = target instanceof Element ? target.closest(CONTROL) : null;
+  return Boolean(control && anchor.contains(control));
+}
+
 /** Below the anchor when it fits, above when there is more room there; never past the window edges. */
 function placeNear(anchor: HTMLElement, popover: HTMLElement): Placement {
   const anchorBox = anchor.getBoundingClientRect();
@@ -91,9 +104,8 @@ export function AnchoredPopover({ anchor, open, onClose, label, className, child
     if (!open) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target as Node;
-      const insideAnchor = anchor.current?.contains(target) ?? false;
       const insidePopover = popover.current?.contains(target) ?? false;
-      if (!insideAnchor && !insidePopover) onClose();
+      if (!insidePopover && !onAnchorControl(anchor.current, target)) onClose();
     };
     document.addEventListener('pointerdown', closeOnOutsidePointer, true);
     return () => document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
