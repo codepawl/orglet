@@ -293,11 +293,21 @@ async function readClaude(executable: string, configDir: string | undefined, run
  * holds no token, its Keychain item.
  */
 async function claudeSignIn(configDir: string | undefined, runtime: UsageRuntime): Promise<Record<string, unknown> | undefined> {
-  const folder = configDir ?? join(runtime.home, '.claude');
+  const accountFolder = claudeAccountFolder(configDir, runtime);
+  const folder = accountFolder ?? join(runtime.home, '.claude');
   const saved = claudeOauth(await runtime.readText(join(folder, '.credentials.json')).catch(() => ''));
   if (text(saved?.accessToken) || (runtime.platform ?? process.platform) !== 'darwin' || !runtime.readKeychain) return saved;
-  const kept = claudeOauth(await runtime.readKeychain(claudeKeychainService(configDir)).catch(() => undefined) ?? '');
+  const kept = claudeOauth(await runtime.readKeychain(claudeKeychainService(accountFolder)).catch(() => undefined) ?? '');
   return kept ?? saved;
+}
+
+/**
+ * The folder Claude Code keeps this account in: an added account's own, else CLAUDE_CONFIG_DIR when Orglet itself runs
+ * with it (Claude Code honours it for its default account too), else none, meaning the home folder (COD-339). Without
+ * this, a test run given an empty CLAUDE_CONFIG_DIR still read the developer's real sign-in.
+ */
+function claudeAccountFolder(configDir: string | undefined, runtime: UsageRuntime): string | undefined {
+  return configDir ?? text(runtime.env?.CLAUDE_CONFIG_DIR);
 }
 
 const claudeOauth = (credentials: string) => {
@@ -333,7 +343,8 @@ const fetchClaudeUsage = (token: string, runtime: UsageRuntime) => runtime.fetch
  * the account folder when one is set, in the home folder for the system account.
  */
 async function readClaudeOrganization(configDir: string | undefined, runtime: UsageRuntime): Promise<string | undefined> {
-  const file = configDir ? join(configDir, '.claude.json') : join(runtime.home, '.claude.json');
+  const accountFolder = claudeAccountFolder(configDir, runtime);
+  const file = accountFolder ? join(accountFolder, '.claude.json') : join(runtime.home, '.claude.json');
   const account = parseJson(await runtime.readText(file).catch(() => ''));
   const organization = isRecord(account) && isRecord(account.oauthAccount) ? text(account.oauthAccount.organizationUuid) : undefined;
   return organization && ORGANIZATION_ID_PATTERN.test(organization) ? organization : undefined;
