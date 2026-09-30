@@ -119,6 +119,36 @@ it('keeps accepting a grant stored before birth times, and learns the birth time
   if (onDisk.birthtimeNs > 0n) expect(stored.birth).toBe(onDisk.birthtimeNs.toString());
 });
 
+it('revokes a side thread whose main chat now names a folder born at another time (COD-300)', async () => {
+  const onDisk = await stat(workspace, { bigint: true });
+  const side: Task = { ...task, id: id(), sideOf: { taskId: task.id, throughRevision: 0 } };
+  store.put('tasks', side);
+  await grants.grant({ taskId: task.id, directory: workspace, permissions: ['read'] });
+  store.transaction(() => grants.copyInsideTransaction(task.id, side.id));
+  // The main chat's grant now carries another birth time at the same path and file id, as after a re-pick on Linux.
+  editStoredGrant(grant => ({ ...grant, birth: '1' }));
+  if (onDisk.birthtimeNs === 0n) {
+    expect(grants.narrowTo(side.id, task.id)).toBe(false);
+    return;
+  }
+  expect(grants.narrowTo(side.id, task.id)).toBe(true);
+  expect(grants.view(side.id)?.revoked).toBe(true);
+});
+
+it('refuses a folder waiting for a chat\'s first message when it was made again at the same path (COD-300)', async () => {
+  const onDisk = await stat(workspace, { bigint: true });
+  const chat = { workerId: task.workerId };
+  await grants.setPending(chat, workspace, ['read']);
+  const pending = grants.pending(chat)!;
+  if (onDisk.birthtimeNs === 0n) {
+    await expect(grants.confirmPending({ ...pending, birth: '1' })).resolves.toMatchObject({ directory: workspace });
+    return;
+  }
+  expect(pending.birth).toBe(onDisk.birthtimeNs.toString());
+  await expect(grants.confirmPending({ ...pending, birth: '1' })).rejects.toThrow('bị thay thế');
+  await expect(grants.confirmPending(pending)).resolves.toMatchObject({ directory: workspace });
+});
+
 it('compares birth times only when both records know one', () => {
   const folder = { directory: '/work', device: '1', inode: '2' };
   expect(sameFolder({ ...folder, birth: '5' }, { ...folder, birth: '5' })).toBe(true);

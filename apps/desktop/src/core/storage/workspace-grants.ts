@@ -11,7 +11,10 @@ import { Store, id } from './database';
  * The folder's birth time in nanoseconds, where the file system reports one; absent on older rows (COD-300). Path,
  * volume and file id alone cannot tell a folder from one made again at the same path on Linux, where ext4 and tmpfs
  * hand a freed inode number straight back; the birth time can. NTFS and APFS report one too, and Node on Linux reads
- * it through statx (kernels without statx report the change time instead, which a rename also moves).
+ * it through statx. Known limit: on a Linux kernel without statx (before 4.11) libuv reports the change time as the
+ * birth time, and a folder's change time moves whenever an entry is added or removed, so a folder there would read
+ * as replaced after its first change. Ignoring a birth time equal to the change time would hide that, but would also
+ * let through the case this exists for: a folder just made again at the path, whose two times are still equal.
  */
 const Birth = z.string().regex(/^[1-9][0-9]*$/).optional();
 
@@ -99,7 +102,7 @@ export class WorkspaceGrants {
     const identity = await stat(directory, { bigint: true });
     if (!identity.isDirectory()) throw new Error(FOLDER_ERROR);
     const birth = birthOf(identity);
-    return { directory, device: identity.dev.toString(), inode: identity.ino.toString(), ...(birth ? { birth } : {}), name: basename(directory) || directory };
+    return { directory, device: identity.dev.toString(), inode: identity.ino.toString(), birth, name: basename(directory) || directory };
   }
 
   /**
@@ -122,11 +125,11 @@ export class WorkspaceGrants {
     // A grant made before COD-300 learns its folder's birth time the next time the same folder is applied.
     const birth = previous?.birth ?? resolved.birth;
     let grant: z.infer<typeof StoredGrant>;
-    if (widened) grant = StoredGrant.parse({ ...previous, permissions, ...(birth ? { birth } : {}) });
-    else if (keepsFolder) grant = StoredGrant.parse({ ...previous, revision: previous.revision + 1, permissions, ...(birth ? { birth } : {}) });
+    if (widened) grant = StoredGrant.parse({ ...previous, permissions, birth });
+    else if (keepsFolder) grant = StoredGrant.parse({ ...previous, revision: previous.revision + 1, permissions, birth });
     else {
       grant = StoredGrant.parse({ id: id(), taskId, revision: (previous?.revision ?? 0) + 1, permissions, name: resolved.name, revoked: false,
-        directory: resolved.directory, device: resolved.device, inode: resolved.inode, ...(resolved.birth ? { birth: resolved.birth } : {}) });
+        directory: resolved.directory, device: resolved.device, inode: resolved.inode, birth: resolved.birth });
     }
     this.store.db.prepare(`INSERT INTO workspace_grants(task_id,data) VALUES(?,?)
       ON CONFLICT(task_id) DO UPDATE SET data=excluded.data`).run(taskId, JSON.stringify(grant));

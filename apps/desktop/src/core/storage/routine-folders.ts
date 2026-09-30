@@ -86,7 +86,7 @@ export class RoutineFolders {
     const folder = this.find(folderId);
     if (!folder) throw new Error(WORK_FOLDER_NOT_GRANTED);
     if (!await stillTheSame(folder)) throw new Error(workFolderUnavailable(folder.name));
-    return { directory: folder.directory, device: folder.device, inode: folder.inode, ...(folder.birth ? { birth: folder.birth } : {}), name: folder.name };
+    return { directory: folder.directory, device: folder.device, inode: folder.inode, birth: folder.birth, name: folder.name };
   }
 
   /** The folder's name for a routine being saved; refuses an id the picker never granted. */
