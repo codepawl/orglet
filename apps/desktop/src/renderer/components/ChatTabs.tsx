@@ -28,7 +28,9 @@ export function ChatTabs({ tabs, activeKey, onSelect, onClose }: {
   useActiveTabInView(strip, activeKey);
   useSidewaysWheel(strip);
   return <nav className="chat-tabs" aria-label={t('Chat đang mở')}>
-    <ul ref={strip} className="chat-tabs-strip" {...overflowAttributes(more)}>
+    {/* More tabs than fit is expected: the strip scrolls sideways by design, with faded ends, so the alignment
+        check's sideways-scroll finding does not apply to it. */}
+    <ul ref={strip} className="chat-tabs-strip" data-align-ignore="overflow" {...overflowAttributes(more)}>
       {tabs.map(tab => <ChatTab key={tab.key} tab={tab} active={tab.key === activeKey} onSelect={onSelect} onClose={onClose} />)}
     </ul>
   </nav>;

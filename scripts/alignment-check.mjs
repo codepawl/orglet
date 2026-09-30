@@ -1,4 +1,5 @@
 import { _electron as electron } from 'playwright';
+import { createServer } from 'node:http';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -8,8 +9,9 @@ import { packagedExecutable } from './packaged-executable.mjs';
 import { isolatedHarnessEnvironment } from './fake-harnesses.mjs';
 
 // Measures alignment on the packaged app's main screens instead of trusting a screenshot (COD-333). It seeds a
-// throwaway workspace on Demo (no provider is called), visits each screen at two window sizes in both themes, and
-// runs the checks in scripts/alignment/rules.ts in the window. Findings go to stdout, a JSON report and one outlined
+// throwaway workspace on Demo (no provider is called; one crew member runs on a local stand-in for Ollama that holds
+// its request, so the island on the prompt bar can be measured), visits each screen at two window sizes in both
+// themes, and runs the checks in scripts/alignment/rules.ts in the window. Findings go to stdout, a JSON report and one outlined
 // screenshot per screen that has any. Exits 1 on findings unless --report-only.
 //
 //   pnpm test:alignment [--report-only] [--all-screenshots] [--only schedules,settings-general] [--language vi|en] [--out <folder>]
@@ -66,6 +68,52 @@ async function setAppearance(page, theme) {
   await page.waitForFunction(value => document.documentElement.dataset.theme === value, theme);
 }
 
+/**
+ * A stand-in for Ollama on its fixed local port, so a crew member's run keeps working while the island docked on the
+ * prompt bar is measured: it lists one model and holds every chat request open until the check ends. Nothing leaves
+ * the machine. Undefined when the port is taken (a real Ollama), and the island screen is then skipped.
+ */
+async function startHeldModel() {
+  const heldResponses = new Set();
+  const sendJson = (response, body) => {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(body));
+  };
+  const server = createServer((request, response) => {
+    if (request.method === 'GET' && request.url.startsWith('/api/tags')) return sendJson(response, { models: [{ name: HELD_MODEL, model: HELD_MODEL, size: 1 }] });
+    if (request.method === 'GET' && request.url.startsWith('/v1/models')) return sendJson(response, { object: 'list', data: [{ id: HELD_MODEL, object: 'model', owned_by: 'alignment-check' }] });
+    if (request.method === 'POST' && request.url.startsWith('/v1/chat/completions')) {
+      heldResponses.add(response);
+      request.on('close', () => heldResponses.delete(response));
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  const listening = await new Promise(done => {
+    server.once('error', () => done(false));
+    server.listen(11434, '127.0.0.1', () => done(true));
+  });
+  if (!listening) return undefined;
+  return {
+    close: () => {
+      for (const response of heldResponses) response.destroy();
+      server.close();
+    },
+  };
+}
+
+const HELD_MODEL = 'held:latest';
+
+/** A crew whose member runs on the held model, so a turn of it stays working (COD-167 island in a crew chat). */
+async function seedIslandCrew(page, researcher) {
+  await page.evaluate(() => window.orglet.connect('ollama'));
+  const auditor = await callCore(page, 'saveWorker', { name: 'Run auditor', description: 'Reads run logs and says what failed', instructions: 'Answer clearly and briefly.', provider: 'ollama', modelId: HELD_MODEL, skillId: researcher.skillId, avatar: { color: '#2f9e44' } });
+  const workspace = await callCore(page, 'workspace', {});
+  const writer = workspace.workers.find(worker => worker.name === 'Writer') ?? researcher;
+  return callCore(page, 'saveTeam', { name: 'Release crew', instructions: 'Check the release together.', memberIds: [auditor.id, writer.id], synthesizerId: researcher.id, workflow: 'parallel', monthlyBudgetMicros: 10_000_000 });
+}
+
 /** Orglets, a crew with an answered turn, a chat with an answer, and schedules for an orglet and for a crew. */
 async function seedWorkspace(page) {
   await page.waitForFunction(() => window.orglet !== undefined);
@@ -97,7 +145,8 @@ async function seedWorkspace(page) {
   for (const schedule of schedules) {
     await callCore(page, 'saveRoutine', { ...base, name: schedule.name, enabled: schedule.enabled ?? true, schedule: schedule.schedule, task: { ...base.task, ...schedule.task } });
   }
-  return { researcher, crew };
+  const islandCrew = heldModel ? await seedIslandCrew(page, researcher) : undefined;
+  return { researcher, crew, islandCrew };
 }
 
 async function settle(page) {
@@ -162,6 +211,13 @@ const SCREENS = [
   { name: 'chat-options-menu', open: async page => { await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'composer-add-menu', open: async page => { await page.getByRole('button', { name: label('Thêm nguồn'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'crew-chat', open: async (page, context) => { await openSidebar(page); await page.getByRole('button', { name: context.crew.name, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); } },
+  // A crew turn at work: the island on the prompt bar, with the member on the held model still working (COD-167).
+  { name: 'crew-chat-island', needs: 'islandCrew', open: async (page, context) => {
+    context.islandTaskId = await callCore(page, 'createTask', { workerId: context.researcher.id, teamId: context.islandCrew.id, brief: 'Check the last three run logs and say what failed.', sourceIds: [], consent: true, providerScopes: ['ollama'], budgetMicros: 100_000 });
+    await openSidebar(page);
+    await page.getByRole('button', { name: context.islandCrew.name, exact: true }).first().click();
+    await page.locator('.live-island:not(.leaving)').waitFor();
+  }, close: async (page, context) => { await callCore(page, 'cancel', { id: context.islandTaskId }); } },
   { name: 'sidebar-row-menu', open: async (page, context) => { await openSidebar(page); await page.getByRole('button', { name: label('Tùy chọn {0}', [context.researcher.name]), exact: true }).click(); await page.getByRole('menu').waitFor(); } },
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },
@@ -250,6 +306,7 @@ const dataFolder = await mkdtemp(join(tmpdir(), 'orglet-alignment-data-'));
 const { env } = await isolatedHarnessEnvironment(dataFolder);
 // This check measures the first-run account question too (COD-337), so its empty profile is a new install.
 delete env.ORGLET_SKIP_ACCOUNT_CHOICE;
+const heldModel = await startHeldModel();
 const app = await electron.launch({ executablePath: packagedExecutable(), args: [`--user-data-dir=${dataFolder}`], env });
 let closed = false;
 app.once('close', () => { closed = true; });
@@ -259,7 +316,8 @@ try {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   if (!options.only || options.only.includes('first-run')) await measureFirstRun(page);
   const context = await seedWorkspace(page);
-  const screens = SCREENS.filter(screen => !options.only || options.only.includes(screen.name));
+  const screens = SCREENS.filter(screen => (!options.only || options.only.includes(screen.name)) && (!screen.needs || context[screen.needs]));
+  if (!heldModel) console.log('crew-chat-island skipped: port 11434 is taken, so the held model could not start');
   for (const theme of THEMES) {
     await setAppearance(page, theme);
     for (const size of SIZES) {
@@ -269,11 +327,13 @@ try {
         await screen.open(page, context);
         await settle(page);
         await record(page, screen.name, size, theme, screen.family);
+        if (screen.close) await screen.close(page, context);
       }
     }
   }
 } finally {
   if (!closed) await app.close();
+  heldModel?.close();
   // The seeded workspace is throwaway; a file the app still holds is left for the system's temp cleanup.
   await rm(dataFolder, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 }).catch(() => {});
 }

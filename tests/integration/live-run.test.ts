@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
-import { islandBeforeStreaming, islandOf, liveRunOf, withBrowserControls, workingWorkers } from '../../apps/desktop/src/renderer/components/LiveRun';
+import { islandBeforeStreaming, islandOf, liveRunOf, runEventMessage, runStepLine, withBrowserControls, workingWorkers } from '../../apps/desktop/src/renderer/components/LiveRun';
 import type { BrowserApprovalView, BrowserLive } from '../../apps/desktop/src/shared/browser';
-import type { Run, Worker } from '../../apps/desktop/src/shared/contracts';
+import type { Activity, Run, Worker } from '../../apps/desktop/src/shared/contracts';
 import { emptyProgress, type ActivityStep, type RunProgressUpdate } from '../../apps/desktop/src/shared/progress';
 
 function run(id: string, stage?: Run['stage']): Run {
@@ -131,6 +131,32 @@ it('names what the core itself observed before anything has streamed, with no re
   expect(islandBeforeStreaming({ workers: [worker], message: 'Đã đọc brief.md', pausing: false })).toEqual({ state: 'reading', label: 'Minh is reading brief.md…', named: { before: '', name: 'Minh', after: ' is reading brief.md…' }, workers: [worker] });
   expect(islandBeforeStreaming({ workers: [worker], message: 'Đang chờ lượt 2', pausing: false })).toEqual({ state: 'waiting', label: 'Minh is waiting for a turn…', named: { before: '', name: 'Minh', after: ' is waiting for a turn…' }, workers: [worker] });
   expect(islandBeforeStreaming({ workers: [worker], message: 'Đã đọc brief.md', pausing: true }).state).toBe('pausing');
+});
+
+it('reads the line of the run the island is about, not the latest line of the chat from another orglet', () => {
+  const events = [
+    { id: '1', runId: 'auditor-run', message: 'Đã đọc run.log', createdAt: '1' },
+    { id: '2', runId: 'writer-run', message: 'Model đang trả kết quả…', createdAt: '2' },
+    { id: '3', runId: 'auditor-run', message: 'Tin nhắn cho Writer', createdAt: '3', teamMessage: {} },
+  ] as Activity[];
+  expect(runEventMessage(events, 'auditor-run')).toBe('Đã đọc run.log');
+  expect(runEventMessage(events, 'writer-run')).toBe('Model đang trả kết quả…');
+  expect(runEventMessage(events, 'lead-run')).toBeUndefined();
+});
+
+it('lets a crew member say what it is doing the way the same orglet does in its own chat', () => {
+  const member = (message?: string) => islandBeforeStreaming({ workers: [worker], stage: 'member', message, pausing: false });
+  expect(member('Bắt đầu role Minh.').label).toBe('Working with Minh…');
+  expect(member('Đang gọi model · bước 1/6').label).toBe('Working with Minh…');
+  expect(member('Model đang trả kết quả…')).toMatchObject({ state: 'writing', label: 'Minh is writing a reply…' });
+  expect(member('Đã đọc run.log')).toMatchObject({ state: 'reading', label: 'Minh is reading run.log…' });
+  expect(member('Đang chờ lượt gọi provider; chưa giữ ngân sách cho bước này.')).toMatchObject({ state: 'waiting', label: 'Minh is waiting for a turn…' });
+  const solo = islandBeforeStreaming({ workers: [worker], message: 'Model đang trả kết quả…', pausing: false });
+  expect(member('Model đang trả kết quả…')).toEqual(solo);
+  expect(runStepLine({ stage: 'member', message: 'Model đang trả kết quả…', pausing: false })).toBe(runStepLine({ message: 'Model đang trả kết quả…', pausing: false }));
+  // Planning and combining are the lead's whole run, whatever its model is doing.
+  expect(islandBeforeStreaming({ workers: [worker], stage: 'synthesis', message: 'Model đang trả kết quả…', pausing: false }).label).toBe('Minh is combining…');
+  expect(islandBeforeStreaming({ workers: [worker], stage: 'plan', message: 'Model đang trả kết quả…', pausing: false }).label).toBe('Minh is assigning work…');
 });
 
 it('cuts the sentence around the one name it carries, wherever the translation puts it (COD-250)', () => {

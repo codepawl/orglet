@@ -12,7 +12,7 @@ export type Box = { left: number; top: number; right: number; bottom: number };
 
 export type FindingKind =
   | 'centre-line' | 'column-start' | 'icon-slot' | 'uneven-gap' | 'wrap' | 'clip' | 'overflow' | 'heading-action' | 'heading-wrap'
-  | 'family-heading' | 'family-edge' | 'family-lead';
+  | 'family-heading' | 'family-edge' | 'family-lead' | 'island-seam';
 
 export type Finding = {
   kind: FindingKind;
@@ -790,6 +790,88 @@ export function measureFamily(): ScreenMetrics | undefined {
   return metrics;
 }
 
+/**
+ * One bottom corner of the live island and the prompt bar under it, in CSS pixels as the window lays them out. The
+ * corner is the tab's `::before` (left) or `::after` (right).
+ */
+export type IslandCornerMetrics = {
+  side: 'left' | 'right';
+  /** The bottom edge of the corner's bottom border, and of the bar's top border. */
+  cornerLineBottom: number;
+  barLineBottom: number;
+  /** The corner's bottom border, the bar's top border, the corner's side border and the tab's side border. */
+  cornerLineWidth: number;
+  barLineWidth: number;
+  cornerSideWidth: number;
+  tabSideWidth: number;
+  /** The corner's edge against the tab, and the inner edge of the tab's side border it should meet. */
+  cornerInnerEdge: number;
+  tabPaddingEdge: number;
+  /** How far the tab reaches below the bar's top edge. */
+  tabReach: number;
+};
+
+/**
+ * The seam between the live island and the prompt bar (COD-167, COD-228): each corner's bottom border is the bar's
+ * top border, with the same bottom edge and width, and its side border is the tab's side border, and the tab reaches
+ * past the bar's line so none of it shows under the tab. Chromium rounds a border down to whole device pixels, so equal
+ * edges and widths here are what keeps the three lines on the same device pixels at 125% and 150%.
+ */
+export function islandSeamFindings(corners: IslandCornerMetrics[], tolerance = 0.05): { side: string; message: string; offset: number }[] {
+  const findings: { side: string; message: string; offset: number }[] = [];
+  for (const corner of corners) {
+    const lineOffset = corner.cornerLineBottom - corner.barLineBottom;
+    if (Math.abs(lineOffset) > tolerance) findings.push({ side: corner.side, message: `the ${corner.side} corner's line ends ${round(Math.abs(lineOffset))}px ${lineOffset > 0 ? 'below' : 'above'} the bar's top line`, offset: round(lineOffset) });
+    if (Math.abs(corner.cornerLineWidth - corner.barLineWidth) > tolerance) findings.push({ side: corner.side, message: `the ${corner.side} corner's line is ${round(corner.cornerLineWidth)}px where the bar's top line is ${round(corner.barLineWidth)}px`, offset: round(corner.cornerLineWidth - corner.barLineWidth) });
+    if (Math.abs(corner.cornerSideWidth - corner.tabSideWidth) > tolerance) findings.push({ side: corner.side, message: `the ${corner.side} corner's side is ${round(corner.cornerSideWidth)}px where the tab's side is ${round(corner.tabSideWidth)}px`, offset: round(corner.cornerSideWidth - corner.tabSideWidth) });
+    const edgeOffset = corner.cornerInnerEdge - corner.tabPaddingEdge;
+    if (Math.abs(edgeOffset) > tolerance) findings.push({ side: corner.side, message: `the ${corner.side} corner meets the tab's side ${round(Math.abs(edgeOffset))}px off its border`, offset: round(edgeOffset) });
+    if (corner.tabReach < corner.barLineWidth + 1) findings.push({ side: corner.side, message: `the tab reaches ${round(corner.tabReach)}px into the bar, so the bar's line or its typing ring shows under it`, offset: round(corner.tabReach) });
+  }
+  return findings;
+}
+
+/** Measures the docked island's two corners against the bar, when an island is on screen. */
+export function checkIslandSeam(): Finding[] {
+  const island = document.querySelector('.live-island:not(.leaving)');
+  const bar = island?.parentElement?.querySelector('.composer');
+  if (!island || !bar || ignoredFor(island, 'island-seam')) return [];
+  const islandBox = island.getBoundingClientRect();
+  const islandStyle = getComputedStyle(island);
+  const barBox = bar.getBoundingClientRect();
+  const barStyle = getComputedStyle(bar);
+  const barLineWidth = parseFloat(barStyle.borderTopWidth);
+  const paddingLeft = islandBox.left + parseFloat(islandStyle.borderLeftWidth);
+  const paddingRight = islandBox.right - parseFloat(islandStyle.borderRightWidth);
+  const paddingTop = islandBox.top + parseFloat(islandStyle.borderTopWidth);
+  const corners: IslandCornerMetrics[] = (['left', 'right'] as const).map(side => {
+    const corner = getComputedStyle(island, side === 'left' ? '::before' : '::after');
+    const cornerLineBottom = paddingTop + parseFloat(corner.top) + parseFloat(corner.paddingTop) + parseFloat(corner.height) + parseFloat(corner.paddingBottom) + parseFloat(corner.borderBottomWidth);
+    // The corner is placed in the tab's padding box: `right` counts from its right edge, `left` from its left edge.
+    const cornerInnerEdge = side === 'left' ? paddingRight - parseFloat(corner.right) : paddingLeft + parseFloat(corner.left);
+    return {
+      side,
+      cornerLineBottom,
+      barLineBottom: barBox.top + barLineWidth,
+      cornerLineWidth: parseFloat(corner.borderBottomWidth),
+      barLineWidth,
+      cornerSideWidth: parseFloat(side === 'left' ? corner.borderRightWidth : corner.borderLeftWidth),
+      tabSideWidth: parseFloat(side === 'left' ? islandStyle.borderLeftWidth : islandStyle.borderRightWidth),
+      cornerInnerEdge,
+      tabPaddingEdge: side === 'left' ? paddingLeft : paddingRight,
+      tabReach: islandBox.bottom - barBox.top,
+    };
+  });
+  return islandSeamFindings(corners).map(finding => ({
+    kind: 'island-seam' as const,
+    selector: describe(island),
+    text: finding.side,
+    message: finding.message,
+    offset: finding.offset,
+    boxes: [toBox(islandBox), toBox(barBox)],
+  }));
+}
+
 /** Runs every check over the rendered page and returns the findings, one per element and kind. */
 export function measurePage(tolerances: Tolerances): Finding[] {
   const findings: Finding[] = [];
@@ -813,6 +895,7 @@ export function measurePage(tolerances: Tolerances): Finding[] {
     if (element.matches(PANEL_HEADING_SELECTOR)) findings.push(...checkHeadingAction(element, tolerances), ...checkHeadingWrap(element));
   }
   findings.push(...checkColumns(columns, tolerances));
+  findings.push(...checkIslandSeam());
   const seen = new Set<string>();
   return findings.filter(finding => {
     const key = `${finding.kind}|${finding.selector}|${finding.text}|${finding.offset}`;
@@ -829,7 +912,7 @@ export function drawOutlines(findings: Finding[]): void {
   layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647;';
   const colours: Record<string, string> = {
     'centre-line': '#e5484d', 'column-start': '#f76b15', 'icon-slot': '#f76b15', 'uneven-gap': '#8e4ec6', wrap: '#0090ff', clip: '#0090ff', overflow: '#e54666',
-    'heading-action': '#e5484d', 'heading-wrap': '#0090ff', 'family-heading': '#12a594', 'family-edge': '#12a594', 'family-lead': '#12a594',
+    'heading-action': '#e5484d', 'heading-wrap': '#0090ff', 'family-heading': '#12a594', 'family-edge': '#12a594', 'family-lead': '#12a594', 'island-seam': '#e5484d',
   };
   for (const finding of findings) {
     for (const box of finding.boxes) {

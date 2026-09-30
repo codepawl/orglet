@@ -7,6 +7,7 @@ import {
   gapsBetween,
   groupLines,
   isClippedWithoutEllipsis,
+  islandSeamFindings,
   isShortLabel,
   nextWordWouldFit,
   outliers,
@@ -14,6 +15,7 @@ import {
   trailingShortfall,
   unevenGaps,
   type Box,
+  type IslandCornerMetrics,
   type ScreenMetrics,
 } from '../../scripts/alignment/rules';
 
@@ -143,5 +145,26 @@ describe('panel headings and screen families', () => {
   it('finds nothing when every screen of a family agrees', () => {
     const metrics: ScreenMetrics = { headingTop: 28, contentLeft: 24, contentRight: 496, leadMark: 37, leadText: 62, contentBox: box(24, 0, 472, 500) };
     expect(familyFindings([{ screen: 'a', metrics }, { screen: 'b', metrics: { ...metrics, leadMark: undefined, leadText: undefined } }, { screen: 'c', metrics }], 1)).toEqual([]);
+  });
+});
+
+describe('the island seam on the prompt bar', () => {
+  // At 125% Chromium draws a 1px border 0.8px wide; the corner has to use the same width and edge as the bar and tab.
+  const sound: IslandCornerMetrics = { side: 'left', cornerLineBottom: 661.5, barLineBottom: 661.5, cornerLineWidth: 0.8, barLineWidth: 0.8, cornerSideWidth: 0.8, tabSideWidth: 0.8, cornerInnerEdge: 618, tabPaddingEdge: 618, tabReach: 3 };
+
+  it("passes a corner whose lines are the bar's and the tab's", () => {
+    expect(islandSeamFindings([sound, { ...sound, side: 'right' }])).toEqual([]);
+  });
+
+  it('flags the old gradient corner, a whole pixel thick and a pixel low, and a tab that barely reaches the bar', () => {
+    const gradient = { ...sound, cornerLineBottom: 662.5, cornerLineWidth: 1, cornerSideWidth: 1, cornerInnerEdge: 617.8, tabReach: 1 };
+    const messages = islandSeamFindings([gradient]).map(finding => finding.message);
+    expect(messages).toEqual([
+      "the left corner's line ends 1px below the bar's top line",
+      "the left corner's line is 1px where the bar's top line is 0.8px",
+      "the left corner's side is 1px where the tab's side is 0.8px",
+      "the left corner meets the tab's side 0.2px off its border",
+      "the tab reaches 1px into the bar, so the bar's line or its typing ring shows under it",
+    ]);
   });
 });

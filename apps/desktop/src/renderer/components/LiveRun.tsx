@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Run, Worker } from '../../shared/contracts';
+import type { Activity, Run, Worker } from '../../shared/contracts';
 import type { BrowserLive } from '../../shared/browser';
 import type { DesktopLive } from '../../shared/desktop';
 import type { RunMemory } from '../../shared/knowledge';
@@ -41,6 +41,15 @@ export function liveRunOf(runs: Run[], updates: Record<string, RunProgressUpdate
   const streaming = (run: Run) => updates[run.id] !== undefined;
   const run = runs.find(item => item.stage === 'synthesis' && streaming(item)) ?? runs.find(streaming);
   return run ? { run, update: updates[run.id] } : undefined;
+}
+
+/**
+ * The latest line the core logged for one run, leaving out team messages. The island and the chat's step line read
+ * the run they are about, never the chat's latest line: in a crew or a group chat that line can belong to another
+ * orglet's run, so the sentence named one orglet with what another was doing.
+ */
+export function runEventMessage(events: readonly Activity[], runId: string): string | undefined {
+  return events.findLast(event => event.runId === runId && !event.teamMessage)?.message;
 }
 
 /**
@@ -246,18 +255,32 @@ export function browsingSiteOf(messages: readonly string[]): string | undefined 
   return undefined;
 }
 
+/**
+ * What a run that streams nothing is doing, from its stage and its own latest line. Planning and combining are the
+ * lead's whole run. A crew member's run says what it is doing the way the same orglet does in its own chat (reading,
+ * waiting for a turn, writing), and only in between is it the crew's "Working with …"; the stage used to win over
+ * those, so a crew member stayed on that sentence while a solo chat moved on.
+ */
 function doingBeforeStreaming({ stage, message, pausing, site }: { stage?: Run['stage']; message?: string; pausing: boolean; site?: string }): Doing {
-  const read = message && !browserSiteOfEvent(message) ? message.match(/^Đã đọc (.+)$/) : null;
-  const browsing = (message ? browserSiteOfEvent(message) : undefined) ?? site;
   if (pausing) return pausingDoing;
   if (stage === 'plan' || message === 'Đang phân việc.') return { state: 'thinking', sentence: name => t('{0} đang phân việc…', [name]), line: () => t('Đang phân việc…') };
-  if (stage === 'member') return { state: 'thinking', sentence: name => t('Đang giao {0}…', [name]), line: () => t('Đang làm phần việc được giao…') };
   if (stage === 'synthesis' || message?.startsWith('Đang tổng hợp')) return { state: 'writing', sentence: name => t('{0} đang tổng hợp…', [name]), line: () => t('Đang tổng hợp…') };
-  if (read) return { state: 'reading', sentence: name => t('{0} đang đọc {1}…', [name, read[1]]), line: () => t('Đang đọc {0}…', [read[1]]) };
-  if (browsing && !message?.startsWith('Đang chờ lượt')) return { state: 'reading', sentence: name => t('{0} đang xem {1}…', [name, browsing]), line: () => t('Đang xem {0}…', [browsing]) };
-  if (message?.startsWith('Đang chờ lượt')) return { state: 'waiting', sentence: name => t('{0} đang chờ lượt…', [name]), line: () => t('Đang chờ lượt…') };
-  if (message === 'Model đang trả kết quả…') return writingDoing;
+  const observed = observedDoing(message, site);
+  if (observed) return observed;
+  if (stage === 'member') return { state: 'thinking', sentence: name => t('Đang giao {0}…', [name]), line: () => t('Đang làm phần việc được giao…') };
   return thinkingDoing;
+}
+
+/** What the run's own latest line says it is doing: a read, a page, a wait for a turn, or writing; else undefined. */
+function observedDoing(message: string | undefined, site: string | undefined): Doing | undefined {
+  const read = message && !browserSiteOfEvent(message) ? message.match(/^Đã đọc (.+)$/) : null;
+  const browsing = (message ? browserSiteOfEvent(message) : undefined) ?? site;
+  const waitingForTurn = message?.startsWith('Đang chờ lượt') ?? false;
+  if (read) return { state: 'reading', sentence: name => t('{0} đang đọc {1}…', [name, read[1]]), line: () => t('Đang đọc {0}…', [read[1]]) };
+  if (browsing && !waitingForTurn) return { state: 'reading', sentence: name => t('{0} đang xem {1}…', [name, browsing]), line: () => t('Đang xem {0}…', [browsing]) };
+  if (waitingForTurn) return { state: 'waiting', sentence: name => t('{0} đang chờ lượt…', [name]), line: () => t('Đang chờ lượt…') };
+  if (message === 'Model đang trả kết quả…') return writingDoing;
+  return undefined;
 }
 
 /**
