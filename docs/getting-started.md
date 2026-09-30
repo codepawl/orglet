@@ -22,10 +22,10 @@ Use **Windows** or **macOS** (Apple silicon). An experimental Linux x64 ZIP is a
 With Node.js 20 or later, run:
 
 ```sh
-npx @codepawl-hq/orglet
+npx @codepawlhq/orglet
 ```
 
-It downloads the latest Setup from GitHub Releases and runs it only after two checks: the file matches the release byte for byte (SHA-256), and Windows accepts its signature from Open Source Developer Xuan An Nguyen. If either check fails, nothing is installed. `npx @codepawl-hq/orglet install` updates to the latest release later.
+It downloads the latest Setup from GitHub Releases and runs it only after two checks: the file matches the release byte for byte (SHA-256), and Windows accepts its signature from Open Source Developer Xuan An Nguyen. If either check fails, nothing is installed. `npx @codepawlhq/orglet install` updates to the latest release later.
 
 ### From a GitHub Release
 

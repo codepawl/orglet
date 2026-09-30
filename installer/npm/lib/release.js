@@ -40,7 +40,7 @@ export function releaseErrorMessage(status, headers) {
 /** Reads the latest release: its version and assets. */
 export async function latestRelease(fetchImplementation = fetch) {
   const response = await fetchImplementation(RELEASES_API, {
-    headers: { accept: 'application/vnd.github+json', 'user-agent': '@codepawl-hq/orglet installer' },
+    headers: { accept: 'application/vnd.github+json', 'user-agent': '@codepawlhq/orglet installer' },
   });
   if (!response.ok) throw new Error(releaseErrorMessage(response.status, response.headers));
   const release = await response.json();

@@ -130,7 +130,7 @@ If an API request fails or its provider omits usage, Orglet keeps the budget res
 On Windows, one command installs it, if you have Node.js 20 or later:
 
 ```sh
-npx @codepawl-hq/orglet
+npx @codepawlhq/orglet
 ```
 
 It downloads the latest Setup, checks that it matches the release on GitHub and is signed by Orglet's publisher, then runs it. Once Orglet is installed, the same package passes any command on to `orglet` ([how](installer/npm/README.md)).
