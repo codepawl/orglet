@@ -273,16 +273,19 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
       onChange={event => changeText(event.target)}
       onKeyUp={event => syncCursor(event.currentTarget)} onClick={event => syncCursor(event.currentTarget)} onSelect={event => syncCursor(event.currentTarget)}
       onKeyDown={onKeyDown} />
-    {onStop && canSend && <Button type="button" variant="primary" size="icon" className="send stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}>
+    {/* Send is a small round button at the box's bottom right, on the last line of text. It stays quiet (an outline of
+        an arrow, no fill) until there is something to send, then fills with the accent, so ready and not ready read at
+        a glance (owner, 2026-09-30: smaller). While a run works, stop takes the slot; words typed meanwhile bring send
+        back beside it, so stopping stays one click away. */}
+    <div className="composer-send">
+      {onStop && <Button type="button" variant="primary" size="icon" className="send stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}>
         <span className="send-spin" aria-hidden="true" />
-        <Square size={11} fill="currentColor" />
+        <Square size={9} fill="currentColor" />
       </Button>}
-    {onStop && !canSend
-      ? <Button type="button" variant="primary" size="icon" className="send stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}>
-        <span className="send-spin" aria-hidden="true" />
-        <Square size={11} fill="currentColor" />
-      </Button>
-      : <Button type="submit" variant="primary" size="icon" className="send" aria-label={sendLabel} disabled={!canSend}><ArrowUp size={19} /></Button>}
+      {(!onStop || canSend) && <Button type="submit" variant={canSend ? 'primary' : 'ghost'} size="icon" className="send" aria-label={sendLabel} title={sendLabel} disabled={!canSend}>
+        <ArrowUp size={16} strokeWidth={2.25} />
+      </Button>}
+    </div>
   </form>
   {/* Directly under the box, one line: add at the left, the model or recipient and then the usage ring at the right.
       Out here rather than inside the box, so the box stays the text and its send button, and the model sits on the

@@ -444,20 +444,27 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer .org-button-icon { width:36px; height:36px; min-height:36px; }
 .composer-add { border-radius:50%; color:var(--text); }
 .composer-add:hover:not(:disabled) { background:var(--surface); }
-.send { grid-area:send; border-radius:50%; }
-.send:disabled { opacity:.35; }
+/* Send (and stop, which takes its place during a run) is a 30px circle at the box's bottom right (owner, 2026-09-30:
+   smaller). The slot sits on the last text line: 3px up in the pill puts its centre on the line's centre (7px textarea
+   padding plus half the 22px line = 18px, minus half the button), and in the grown box the 4px padding plus half a line
+   is the button's own half, so it sits on the box padding. Empty, send is a muted arrow with no fill; with text it
+   fills with the accent, so the two states differ by more than a shade. */
+.composer-send { grid-area:send; display:flex; align-items:center; gap:4px; margin-bottom:3px; }
+.composer.expanded .composer-send { margin-bottom:0; }
+.composer .composer-send .send { width:30px; height:30px; min-height:30px; padding:0; border-radius:50%; }
+.send:disabled { opacity:.45; }
 /* While a run is in progress the send button is the stop button, and a ring turns inside it so the eye lands
    there (user, 2026-09-19). The arc is drawn in the button's own text colour: outside the button it would run
    dark on dark and read as a halo rather than as something moving. */
 .send.stop { position:relative; }
 .send.stop .send-spin {
-  position:absolute; inset:3px; border-radius:50%; pointer-events:none;
+  position:absolute; inset:2px; border-radius:50%; pointer-events:none;
   border:2px solid color-mix(in srgb, var(--accent-ink) 28%, transparent); border-top-color:var(--accent-ink);
   animation:send-spin 820ms linear infinite;
 }
 @keyframes send-spin { to { transform:rotate(1turn); } }
 @media(prefers-reduced-motion:reduce) { .send.stop .send-spin { animation-duration:2.4s; } }
-/* Compact Select at the toolbar's right, before the usage ring: a quiet chip like the model name in Claude's bar. A
+/* Compact Select at the toolbar's right, before the usage ring: a quiet chip naming the model. A
    team chat puts the recipient here; a one-to-one chat puts the worker's model, since its header already names the
    worker (user, 2026-09-19). The toolbar's 28px, like the add button and the ring beside it. */
 .composer-trailing .composer-to-select.org-select-trigger,
