@@ -1,0 +1,34 @@
+{
+  "name": "@codepawl/orglet",
+  "version": "0.9.0",
+  "description": "Install Orglet, a desktop app for a small team of AI workers, and run its orglet command.",
+  "type": "module",
+  "bin": {
+    "orglet": "bin/orglet.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "os": [
+    "win32",
+    "darwin",
+    "linux"
+  ],
+  "license": "AGPL-3.0-only",
+  "homepage": "https://orglet.codepawl.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codepawl/orglet.git",
+    "directory": "installer/npm"
+  },
+  "bugs": "https://github.com/codepawl/orglet/issues",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

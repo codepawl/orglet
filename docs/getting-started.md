@@ -17,6 +17,16 @@ Orglet is early. Expect rough edges, and check answers against your own sources 
 
 Use **Windows** or **macOS** (Apple silicon). An experimental Linux x64 ZIP is also available. You do not need an account. The first start asks whether to sign in to a CodePawl account or use Orglet without one; either works, and nothing syncs yet ([CodePawl account](account.md)).
 
+### With one command (Windows)
+
+With Node.js 20 or later, run:
+
+```sh
+npx @codepawl/orglet
+```
+
+It downloads the latest Setup from GitHub Releases and runs it only after two checks: the file matches the release byte for byte (SHA-256), and Windows accepts its signature from Open Source Developer Xuan An Nguyen. If either check fails, nothing is installed. `npx @codepawl/orglet install` updates to the latest release later.
+
 ### From a GitHub Release
 
 The [latest release](https://github.com/codepawl/orglet/releases/latest) carries a Windows **Setup.exe** (installs per user and updates itself) and a **ZIP** (unzip and run; does not update itself). Release 0.7.2 also includes a signed, notarized Apple silicon macOS ZIP and an experimental Linux x64 ZIP.
