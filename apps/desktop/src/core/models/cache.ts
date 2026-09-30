@@ -5,6 +5,10 @@ import {
   MODEL_LIST_MAX_BYTES,
   MODEL_LISTS_SETTING,
   ModelListCache,
+  REPORTED_CONTEXT_WINDOWS_PER_PROVIDER,
+  REPORTED_CONTEXT_WINDOWS_SETTING,
+  ReportedContextWindows,
+  type ModelEntry,
   type ModelListProvider,
   type ModelListRow,
 } from '../../shared/models';
@@ -20,6 +24,33 @@ export function modelContextTokens(cache: ModelListCache, provider: string, mode
   if (!modelId) return undefined;
   const row = cache.byProvider[provider as ModelListProvider];
   return row?.models.find(entry => entry.id === modelId || entry.aliases?.includes(modelId))?.contextTokens;
+}
+
+export function readReportedContextWindows(store: Store): ReportedContextWindows {
+  const parsed = ReportedContextWindows.safeParse(store.setting(REPORTED_CONTEXT_WINDOWS_SETTING, {}));
+  return parsed.success ? parsed.data : {};
+}
+
+/** Keeps the window a harness reported for one model, as the newest entry of that connection. */
+export function rememberReportedContextWindow(store: Store, provider: string, modelId: string, windowTokens: number) {
+  const windows = readReportedContextWindows(store);
+  const known = { ...windows[provider] };
+  if (known[modelId] === windowTokens) return;
+  delete known[modelId];
+  known[modelId] = windowTokens;
+  const kept = Object.entries(known).slice(-REPORTED_CONTEXT_WINDOWS_PER_PROVIDER);
+  store.setSetting(REPORTED_CONTEXT_WINDOWS_SETTING, { ...windows, [provider]: Object.fromEntries(kept) });
+}
+
+/** A list's models with the harness's reported window on each one the list gives none for, by id, alias or resolved id. */
+export function withReportedContextWindows(models: ModelEntry[], reported: Record<string, number> | undefined): ModelEntry[] {
+  if (!reported) return models;
+  return models.map(entry => {
+    if (entry.contextTokens) return entry;
+    const names = [entry.id, entry.resolvedId, ...(entry.aliases ?? [])].filter((name): name is string => Boolean(name));
+    const windowTokens = names.map(name => reported[name]).find(tokens => tokens !== undefined);
+    return windowTokens ? { ...entry, contextTokens: windowTokens } : entry;
+  });
 }
 
 export function writeModelListCache(store: Store, cache: ModelListCache) {

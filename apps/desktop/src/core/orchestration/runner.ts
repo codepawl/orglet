@@ -22,7 +22,7 @@ import { harnessSeesImages, modelSeesImages } from '../models/image-input';
 import type { MessageImage, ModelAdapter, RunMessage } from '../adapters/openai';
 import { ProviderRequestError } from '../adapters/opencode';
 import { assertOpenCodeModel, isOpenCodePlan } from '../../shared/opencode';
-import { modelContextTokens, readModelListCache } from '../models/cache';
+import { modelContextTokens, readModelListCache, rememberReportedContextWindow } from '../models/cache';
 import { resolveWorkerModel } from '../models/resolve';
 import { ProfileArgs, type ProfileRecord } from '../../shared/profiles';
 import type { PreflightRecord } from '../../shared/preflight';
@@ -1097,7 +1097,10 @@ export class Runner {
             ...(harness.configDir ? { configDir: harness.configDir } : {}),
             ...(run.snapshot.model ? { model: run.snapshot.model } : {}) },
           onResult: result => {
-            if (result.context) run = { ...run, contextUse: result.context };
+            if (result.context) {
+              run = { ...run, contextUse: result.context };
+              this.rememberReportedWindow(run, result.context);
+            }
             checkpoint = result.costUsd === null
               ? { ...checkpoint, harnessCallsWithoutCost: (checkpoint.harnessCallsWithoutCost ?? 0) + 1 }
               : { ...checkpoint, harnessCostMicros: addHarnessCost(checkpoint.harnessCostMicros, result.costUsd) };
@@ -1713,6 +1716,18 @@ export class Runner {
     return { usedTokens: Math.max(0, Math.round(promptTokens)), ...(windowTokens ? { windowTokens } : {}) };
   }
 
+  /**
+   * Keeps the window a harness said it runs this run's model with, so the usage popover can show the model's capacity
+   * in a chat that has not run on it yet. A run on the CLI's default names no model; it counts for the model the CLI
+   * listed as its default, and for nothing when the list does not say which that is.
+   */
+  private rememberReportedWindow(run: Run, context: RunContextUse) {
+    const provider = run.snapshot.worker.provider;
+    if (!context.windowTokens || !isHarness(provider)) return;
+    const modelId = run.snapshot.model ?? readModelListCache(this.store).byProvider[provider]?.models.find(entry => entry.isDefault)?.id;
+    if (modelId) rememberReportedContextWindow(this.store, provider, modelId, context.windowTokens);
+  }
+
   private crewLimitations(run: Run, options: { upstream?: Artifact[]; limitations?: string[] }) {
     const given = options.limitations ?? [];
     if (run.stage !== 'synthesis') return given;
@@ -2035,7 +2050,10 @@ export class Runner {
       }
       for (const capability of run.snapshot.toolCapabilities ?? []) assertCapability(run, this.store.get<Task>('tasks', task.id), capability);
       if (result.notice) this.event(run.id, result.notice);
-      if (result.context) run = { ...run, contextUse: result.context };
+      if (result.context) {
+        run = { ...run, contextUse: result.context };
+        this.rememberReportedWindow(run, result.context);
+      }
       signal.throwIfAborted();
       this.event(run.id, harnessReplyLine(tool.name, result));
       const readIds = new Set([...given.map(item => item.sourceId), ...scope.checkedSourceIds]);

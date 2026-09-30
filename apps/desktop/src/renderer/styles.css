@@ -614,12 +614,31 @@ svg { flex-shrink:0; stroke-width:1.7; }
    Sections sit apart by spacing, never a line. */
 .usage-details { width:min(420px, calc(100vw - 24px)); padding:14px 16px; display:flex; flex-direction:column; gap:16px; color:var(--text); font-size:12px; }
 .usage-section { display:flex; flex-direction:column; gap:6px; }
+/* Held to the window's room, the popover scrolls (AnchoredPopover); its sections keep their height instead of squeezing. */
+.usage-details > * { flex-shrink:0; }
 .usage-heading { margin:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; line-height:18px; }
 .usage-heading strong { font-size:13px; font-weight:600; }
 .usage-heading span { color:var(--muted); }
 .usage-figure { margin:0; font-variant-numeric:tabular-nums; line-height:16px; }
 .usage-muted { margin:0; color:var(--muted); line-height:16px; }
 .usage-section .plan-usage { margin:0; }
+/* A row of the popover (COD-326): the name and, beside it, the model in the quiet colour; at the right the reset note
+   and the figure; a 4px bar under the whole row. Rows of one section sit 10px apart, sections 16px, so a section still
+   reads as one group without a line between them. The bar keeps the ring's scale: muted, warning from 80%, error at
+   100%, so the popover says in colour what the ring said. */
+.usage-rows { display:flex; flex-direction:column; gap:10px; }
+.usage-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; align-items:baseline; column-gap:8px; row-gap:5px; line-height:18px; }
+.usage-row-label { grid-column:1; white-space:nowrap; }
+.usage-row-label.strong { font-size:13px; font-weight:600; }
+.usage-row-detail { grid-column:2; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
+.usage-row-aside { grid-column:3; white-space:nowrap; color:var(--muted); }
+.usage-row-value { grid-column:4; white-space:nowrap; text-align:right; font-variant-numeric:tabular-nums; }
+.usage-row-value.muted { color:var(--muted); }
+.usage-row > .plan-usage-bar { grid-column:1 / -1; height:4px; }
+.usage-row > .plan-usage-bar > span { background:var(--muted); }
+.usage-row > .plan-usage-bar > span[data-tone=warning] { background:var(--warning); }
+.usage-row > .plan-usage-bar > span[data-tone=out] { background:var(--error); }
+.usage-section > .usage-row + .usage-row { margin-top:4px; }
 .usage-details .usage-settings { align-self:flex-start; min-height:28px; padding:0 10px; font-size:12px; }
 /* The same line says when a harness account is nearly or wholly used, with the account that has room (PlanUsageNote, COD-326). */
 .demo-note, .usage-note { margin:10px 0 0; display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:6px 10px; color:var(--muted); font-size:12px; }

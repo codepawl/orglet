@@ -76,6 +76,17 @@ export const CATALOG_HINT_IDS = {
 } as const;
 
 export const MODEL_LISTS_SETTING = 'modelLists';
+
+/**
+ * The context window a harness reported running each model with on a finished run (Claude Code's
+ * `modelUsage[model].contextWindow`), by connection and model id. Kept apart from the fetched lists, which a refresh
+ * replaces, and merged into a list's answer where the list itself gives no window. Local only, like the lists.
+ */
+export const ReportedContextWindows = z.record(z.string().max(200), z.record(CustomModelId, z.number().int().positive().max(100_000_000)));
+export type ReportedContextWindows = z.infer<typeof ReportedContextWindows>;
+export const REPORTED_CONTEXT_WINDOWS_SETTING = 'reportedContextWindows';
+/** How many models' windows one connection keeps; the oldest report goes first. */
+export const REPORTED_CONTEXT_WINDOWS_PER_PROVIDER = 100;
 export const MODEL_LIST_TTL_MS = 24 * 60 * 60 * 1000;
 export const MODEL_LIST_MAX = 500;
 export const MODEL_LIST_MAX_BYTES = 1024 * 1024;

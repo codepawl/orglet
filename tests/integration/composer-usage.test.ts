@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { composerUsageFor, composerUsageTone, contextPercent, latestContextUse, usageRingFor } from '../../apps/desktop/src/shared/composer-usage';
+import { chatContextFor, composerUsageFor, composerUsageTone, contextPercent, usageRingFor, type ContextWorker } from '../../apps/desktop/src/shared/composer-usage';
+import { withReportedContextWindows } from '../../apps/desktop/src/core/models/cache';
+import type { ModelEntry } from '../../apps/desktop/src/shared/models';
 import type { Run } from '../../apps/desktop/src/shared/contracts';
 import type { ContextManifest } from '../../apps/desktop/src/shared/knowledge';
 import { SYSTEM_ACCOUNT_ID, type HarnessAccountUsage, type HarnessInfo, type HarnessUsage, type HarnessUsageWindow } from '../../apps/desktop/src/shared/harness';
@@ -99,39 +101,91 @@ describe('what the bar by the message box shows (COD-326)', () => {
   });
 });
 
-const run = (id: string, workerName: string, contextUse?: Run['contextUse'], manifest?: Partial<ContextManifest>) => ({
+const run = (id: string, worker: { id: string; name?: string; provider?: string }, contextUse?: Run['contextUse'], options: { model?: string; manifest?: Partial<ContextManifest> } = {}) => ({
   id,
   taskId: 'task',
   status: 'completed',
   startedAt: checkedAt,
   error: null,
   ...(contextUse ? { contextUse } : {}),
-  snapshot: { worker: { id: workerName, name: workerName }, ...(manifest ? { context: { knowledge: [], manifest: { bytes: 0, loaded: [], omitted: [], ...manifest } } } : {}) },
+  snapshot: {
+    worker: { id: worker.id, name: worker.name ?? worker.id, provider: worker.provider ?? 'claude-code' },
+    ...(options.model ? { model: options.model } : {}),
+    ...(options.manifest ? { context: { knowledge: [], manifest: { bytes: 0, loaded: [], omitted: [], ...options.manifest } } } : {}),
+  },
 }) as unknown as Run;
 
-describe('the context window under the message box (COD-326)', () => {
-  it('reads the latest run that reported a window, and skips one that did not', () => {
-    const runs = [run('a', 'Writer', { usedTokens: 20_000, windowTokens: 200_000 }), run('b', 'Researcher', { usedTokens: 50_000 })];
-    expect(latestContextUse(runs)).toMatchObject({ usedTokens: 20_000, windowTokens: 200_000, workerName: 'Writer', summarizedTurns: 0 });
-    expect(latestContextUse([run('c', 'Researcher')])).toBeUndefined();
+const writer: ContextWorker = { id: 'writer', name: 'Writer', provider: 'claude-code' };
+const opus: ModelEntry = { provider: 'claude-code', id: 'opus', displayName: 'Opus 5.5', resolvedId: 'claude-opus-5-5', isDefault: true, source: 'alias' };
+const sonnet: ModelEntry = { provider: 'claude-code', id: 'sonnet', displayName: 'Sonnet 5', source: 'alias' };
+
+describe('the context window of the model the chat will use next (COD-326)', () => {
+  it('before the chat has run, shows the capacity the model list gives for the CLI default, with nothing used', () => {
+    const context = chatContextFor([writer], { 'claude-code': [{ ...opus, contextTokens: 1_000_000 }, sonnet] }, []);
+    expect(context?.lines).toEqual([{ workerId: 'writer', workerName: 'Writer', modelLabel: 'Opus 5.5', usedTokens: 0, measured: false, windowTokens: 1_000_000 }]);
+    expect(usageRingFor(undefined, context)).toEqual({ percent: 0, tone: 'normal' });
   });
 
-  it('counts the older turns Orglet folded into a summary on that run', () => {
-    const omitted: ContextManifest['omitted'] = [
-      { kind: 'turn', revision: 1, reason: 'summarized' },
-      { kind: 'turn', revision: 1, reason: 'summarized' },
-      { kind: 'turn', revision: 2, reason: 'summarized' },
-      { kind: 'turn', revision: 12, reason: 'truncated' },
+  it('reads the capacity of the model the orglet chose, from an API list too', () => {
+    const openrouterWorker: ContextWorker = { id: 'reader', name: 'Reader', provider: 'openrouter', modelId: 'anthropic/claude-sonnet-5' };
+    const models: ModelEntry[] = [{ provider: 'openrouter', id: 'anthropic/claude-sonnet-5', displayName: 'Claude Sonnet 5', contextTokens: 200_000, source: 'native' }];
+    const [line] = chatContextFor([openrouterWorker], { openrouter: models }, [])!.lines;
+    expect(line).toMatchObject({ modelLabel: 'Claude Sonnet 5', usedTokens: 0, windowTokens: 200_000 });
+  });
+
+  it('takes the latest run\'s use and the window that run reported for the same model, over the list', () => {
+    const runs = [
+      run('a', writer, { usedTokens: 20_000, windowTokens: 1_000_000 }),
+      run('b', { id: 'someone-else' }, { usedTokens: 90_000, windowTokens: 200_000 }),
+      run('c', writer, { usedTokens: 304_300 }, { manifest: { omitted: [{ kind: 'turn', revision: 1, reason: 'summarized' }, { kind: 'turn', revision: 2, reason: 'summarized' }], verbatimTurns: 10 } }),
     ];
-    const context = latestContextUse([run('a', 'Writer', { usedTokens: 304_300, windowTokens: 1_000_000 }, { omitted, verbatimTurns: 10 })]);
+    const context = chatContextFor([writer], { 'claude-code': [{ ...opus, contextTokens: 500_000 }] }, runs);
+    expect(context?.lines[0]).toMatchObject({ usedTokens: 304_300, measured: true, windowTokens: 1_000_000 });
     expect(context).toMatchObject({ summarizedTurns: 2, verbatimTurns: 10 });
-    expect(contextPercent(context!)).toBeCloseTo(30.43);
+    expect(usageRingFor(undefined, context)?.percent).toBeCloseTo(30.43);
+  });
+
+  it('counts a run on the default under any of its names, and not a run on another model', () => {
+    const onDefault = [run('a', writer, { usedTokens: 10_000, windowTokens: 1_000_000 }, { model: 'claude-opus-5-5' })];
+    expect(chatContextFor([writer], { 'claude-code': [opus] }, onDefault)?.lines[0].windowTokens).toBe(1_000_000);
+    const switched = { ...writer, modelId: 'sonnet' };
+    const line = chatContextFor([switched], { 'claude-code': [opus, { ...sonnet, contextTokens: 200_000 }] }, onDefault)!.lines[0];
+    expect(line).toMatchObject({ modelLabel: 'Sonnet 5', usedTokens: 10_000, windowTokens: 200_000 });
+  });
+
+  it('says the capacity is unknown when neither a run nor the list gave one, and the ring leaves it out', () => {
+    const codex: ContextWorker = { id: 'coder', name: 'Coder', provider: 'codex' };
+    const context = chatContextFor([codex], { codex: [{ provider: 'codex', id: 'gpt-6', displayName: 'GPT-6', isDefault: true, source: 'native' }] }, [run('a', codex, { usedTokens: 1_200 })]);
+    expect(context?.lines[0]).toEqual({ workerId: 'coder', workerName: 'Coder', modelLabel: 'GPT-6', usedTokens: 1_200, measured: true });
+    expect(usageRingFor(undefined, context)).toBeUndefined();
+    const withPlan = composerUsageFor(['codex'], [harness('codex')], { codex: [row(SYSTEM_ACCOUNT_ID, 12, 30)] });
+    expect(usageRingFor(withPlan, context)).toEqual({ percent: 30, tone: 'normal' });
+    expect(chatContextFor([codex], {}, [])?.lines[0]).toEqual({ workerId: 'coder', workerName: 'Coder', usedTokens: 0, measured: false });
+  });
+
+  it('in a crew, gives each orglet its own line in roster order, skips Demo, and the ring follows the fullest known one', () => {
+    const lead: ContextWorker = { id: 'lead', name: 'Lead', provider: 'claude-code', modelId: 'sonnet' };
+    const helper: ContextWorker = { id: 'helper', name: 'Helper', provider: 'demo' };
+    const coder: ContextWorker = { id: 'coder', name: 'Coder', provider: 'codex' };
+    const lists = { 'claude-code': [{ ...opus, contextTokens: 1_000_000 }, { ...sonnet, contextTokens: 200_000 }] };
+    const runs = [run('a', lead, { usedTokens: 170_000, windowTokens: 200_000 }, { model: 'sonnet' }), run('b', writer, { usedTokens: 50_000, windowTokens: 1_000_000 })];
+    const context = chatContextFor([lead, helper, writer, coder, writer], lists, runs);
+    expect(context?.lines.map(line => [line.workerName, line.modelLabel, line.usedTokens, line.windowTokens])).toEqual([
+      ['Lead', 'Sonnet 5', 170_000, 200_000],
+      ['Writer', 'Opus 5.5', 50_000, 1_000_000],
+      ['Coder', undefined, 0, undefined],
+    ]);
+    expect(usageRingFor(undefined, context)).toEqual({ percent: 85, tone: 'warning' });
+  });
+
+  it('gives nothing for a chat with only Demo', () => {
+    expect(chatContextFor([{ id: 'demo', name: 'Researcher', provider: 'demo' }], {}, [])).toBeUndefined();
   });
 });
 
 describe('the ring under the message box (COD-326)', () => {
   const plans = (session: number) => composerUsageFor(['codex'], [harness('codex')], { codex: [row(SYSTEM_ACCOUNT_ID, session, 10)] });
-  const context = (usedTokens: number) => ({ usedTokens, windowTokens: 1_000_000, workerName: 'Writer', summarizedTurns: 0 });
+  const context = (usedTokens: number) => chatContextFor([writer], { 'claude-code': [{ ...opus, contextTokens: 1_000_000 }] }, [run('a', writer, { usedTokens })]);
 
   it('shows nothing when neither a plan nor a context window is known', () => {
     expect(usageRingFor(undefined, undefined)).toBeUndefined();
@@ -141,5 +195,15 @@ describe('the ring under the message box (COD-326)', () => {
     expect(usageRingFor(plans(30), context(850_000))).toEqual({ percent: 85, tone: 'warning' });
     expect(usageRingFor(plans(100), context(100_000))).toEqual({ percent: 100, tone: 'out' });
     expect(usageRingFor(undefined, context(304_300))).toEqual({ percent: 30.43, tone: 'normal' });
+    expect(contextPercent({ usedTokens: 1_200_000, windowTokens: 1_000_000 })).toBe(100);
+  });
+});
+
+describe('windows a harness reported, merged into its model list (COD-326)', () => {
+  it('fills only models the list gives no window for, by id, resolved id or alias', () => {
+    const models: ModelEntry[] = [opus, { ...sonnet, aliases: ['sonnet-latest'] }, { provider: 'claude-code', id: 'haiku', contextTokens: 200_000, source: 'alias' }];
+    const merged = withReportedContextWindows(models, { 'claude-opus-5-5': 1_000_000, 'sonnet-latest': 400_000, haiku: 1 });
+    expect(merged.map(model => model.contextTokens)).toEqual([1_000_000, 400_000, 200_000]);
+    expect(withReportedContextWindows(models, undefined)).toBe(models);
   });
 });
