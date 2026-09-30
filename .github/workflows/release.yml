@@ -1,9 +1,14 @@
 name: Release
-# Publishes the GitHub Release from the Windows build CI already made for the tagged commit, so the
-# Setup, the updater files and the ZIP never travel through a maintainer's machine.
-# Push an annotated tag vX.Y.Z whose message is the release notes. A tag made before this workflow
-# existed carries an older copy of the repository, so publish it by hand: Actions -> Release -> Run
-# workflow, with that tag.
+# One tag ships everything. Push an annotated tag vX.Y.Z whose message is the release notes, and this workflow:
+#   1. publishes the GitHub Release from the builds CI already made for the tagged commit, so no build travels
+#      through a maintainer's machine. Windows (Setup, the updater files, the ZIP) is required and blocks the
+#      release. macOS (only when that build proved notarization) and Linux (experimental) are attached when their
+#      green builds exist and are skipped with a note otherwise;
+#   2. starts npm-installer.yml, which publishes @codepawlhq/orglet at the same version;
+#   3. opens a pull request in codepawl/codepawl-web that refreshes the site's release snapshot, when the
+#      CODEPAWL_WEB_TOKEN secret exists. The site already reads the latest release live.
+# A tag made before this workflow existed carries an older copy of the repository, so publish it by hand:
+# Actions -> Release -> Run workflow, with that tag.
 on:
   push:
     tags: ['v*']
@@ -22,12 +27,15 @@ jobs:
     name: publish release
     runs-on: ubuntu-latest
     timeout-minutes: 100
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - name: Resolve the tagged commit and check its version
+        id: resolve
         run: |
           set -euo pipefail
           commit=$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)
@@ -42,38 +50,69 @@ jobs:
           fi
           echo "COMMIT=$commit" >> "$GITHUB_ENV"
           echo "VERSION=$version" >> "$GITHUB_ENV"
-      - name: Wait for a green Windows build of that commit
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Wait for the builds of that commit
         run: |
           set -euo pipefail
-          # The tag is usually pushed while the build of its commit is still running.
-          for attempt in $(seq 1 80); do
-            run=$(gh run list --workflow desktop.yml --commit "$COMMIT" --event push --limit 20 \
+          # The tag is usually pushed while the builds of its commit are still running. Windows must turn green.
+          # macOS and Linux are waited for as long as they are still running, but never block the release.
+          green_run() {
+            gh run list --workflow "$1" --commit "$COMMIT" --event push --limit 20 \
               --json databaseId,status,conclusion \
-              --jq 'map(select(.status == "completed" and .conclusion == "success"))[0].databaseId // empty')
-            if [ -n "$run" ]; then
-              echo "RUN=$run" >> "$GITHUB_ENV"
-              exit 0
+              --jq 'map(select(.status == "completed" and .conclusion == "success"))[0].databaseId // empty'
+          }
+          # A platform is settled once it has a green run or none of its runs for this commit is still going.
+          settled() {
+            [ -n "$2" ] && return 0
+            running=$(gh run list --workflow "$1" --commit "$COMMIT" --event push --limit 20 \
+              --json status --jq 'map(select(.status != "completed")) | length')
+            [ "$running" = 0 ]
+          }
+          windows_run=""
+          macos_run=""
+          linux_run=""
+          for _ in $(seq 1 80); do
+            [ -n "$windows_run" ] || windows_run=$(green_run desktop.yml)
+            [ -n "$macos_run" ] || macos_run=$(green_run macos.yml)
+            [ -n "$linux_run" ] || linux_run=$(green_run linux.yml)
+            if [ -n "$windows_run" ] && settled macos.yml "$macos_run" && settled linux.yml "$linux_run"; then
+              break
             fi
             sleep 60
           done
-          echo "::error::no green Windows desktop build for $COMMIT"
-          exit 1
-      - name: Download its Setup and ZIP
+          if [ -z "$windows_run" ]; then
+            echo "::error::no green Windows desktop build for $COMMIT"
+            exit 1
+          fi
+          {
+            echo "WINDOWS_RUN=$windows_run"
+            echo "MACOS_RUN=$macos_run"
+            echo "LINUX_RUN=$linux_run"
+          } >> "$GITHUB_ENV"
+          echo "Windows run $windows_run, macOS run ${macos_run:-none green}, Linux run ${linux_run:-none green}"
+      - name: Download the builds
         run: |
           set -euo pipefail
-          gh run download "$RUN" --dir artifacts --pattern 'orglet-windows-*'
+          gh run download "$WINDOWS_RUN" --dir artifacts/windows --pattern 'orglet-windows-*'
+          # Only the signed macOS artifact is ever considered; an unsigned one is never downloaded.
+          if [ -n "$MACOS_RUN" ]; then
+            gh run download "$MACOS_RUN" --dir artifacts/macos --name orglet-macos-signed-zip || true
+          fi
+          if [ -n "$LINUX_RUN" ]; then
+            gh run download "$LINUX_RUN" --dir artifacts/linux --name orglet-linux-zip || true
+          fi
           find artifacts -type f -printf '%s %p\n'
       - name: Check the files the updater needs
         run: |
           set -euo pipefail
-          releases=$(find artifacts -name RELEASES -print -quit)
+          releases=$(find artifacts/windows -name RELEASES -print -quit)
           setup_dir=$(dirname "$releases")
           package="$setup_dir/orglet-$VERSION-full.nupkg"
           test -f "$package"
           # update.electronjs.org serves whatever RELEASES names, so it has to name this version's package.
           grep -q "orglet-$VERSION-full.nupkg" "$releases"
           setup=$(find "$setup_dir" -name '*Setup.exe' -print -quit)
-          zip=$(find artifacts -name "Orglet-win32-x64-$VERSION.zip" -print -quit)
+          zip=$(find artifacts/windows -name "Orglet-win32-x64-$VERSION.zip" -print -quit)
           test -n "$setup"
           test -n "$zip"
           {
@@ -82,6 +121,64 @@ jobs:
             echo "PACKAGE=$package"
             echo "ZIP=$zip"
           } >> "$GITHUB_ENV"
+      - name: Choose the macOS and Linux files
+        run: |
+          set -euo pipefail
+          # Each platform ends with a file to attach or a reason it was skipped. Neither outcome blocks Windows.
+          macos_zip=""
+          macos_reason=""
+          marker=$(find artifacts/macos -name notarized.txt -print -quit 2>/dev/null || true)
+          candidate=$(find artifacts/macos -name "Orglet-darwin-*-$VERSION.zip" -print -quit 2>/dev/null || true)
+          if [ -z "$MACOS_RUN" ]; then
+            macos_reason="no green macOS build of this commit"
+          elif [ -z "$candidate" ]; then
+            macos_reason="the macOS build has no signed ZIP for $VERSION"
+          elif [ -z "$marker" ]; then
+            macos_reason="the macOS build did not prove notarization (no Gatekeeper marker)"
+          else
+            # The marker is written only after Gatekeeper accepted the unpacked ZIP as Notarized Developer ID. It
+            # must name this commit and these exact bytes.
+            expected_sum=$(sed -n 's/^sha256=//p' "$marker")
+            actual_sum=$(sha256sum "$candidate" | cut -d ' ' -f 1)
+            if ! grep -qx 'source=Notarized Developer ID' "$marker"; then
+              macos_reason="the macOS Gatekeeper marker does not say Notarized Developer ID"
+            elif ! grep -qx "commit=$COMMIT" "$marker"; then
+              macos_reason="the macOS Gatekeeper marker names another commit"
+            elif ! grep -qx "file=$(basename "$candidate")" "$marker" || [ "$expected_sum" != "$actual_sum" ]; then
+              macos_reason="the macOS Gatekeeper marker does not match the ZIP"
+            else
+              macos_zip="$candidate"
+            fi
+          fi
+          linux_zip=$(find artifacts/linux -name "Orglet-linux-*-$VERSION.zip" -print -quit 2>/dev/null || true)
+          linux_reason=""
+          if [ -z "$LINUX_RUN" ]; then
+            linux_reason="no green Linux build of this commit"
+          elif [ -z "$linux_zip" ]; then
+            linux_reason="the Linux build has no ZIP for $VERSION"
+          fi
+          {
+            echo "MACOS_ZIP=$macos_zip"
+            echo "MACOS_REASON=$macos_reason"
+            echo "LINUX_ZIP=$linux_zip"
+            echo "LINUX_REASON=$linux_reason"
+          } >> "$GITHUB_ENV"
+          {
+            echo "## Orglet $VERSION"
+            echo "- Windows: attached from run $WINDOWS_RUN"
+            if [ -n "$macos_zip" ]; then
+              echo "- macOS: attached from run $MACOS_RUN (notarized)"
+            else
+              echo "- **macOS skipped:** $macos_reason"
+            fi
+            if [ -n "$linux_zip" ]; then
+              echo "- Linux: attached from run $LINUX_RUN (experimental)"
+            else
+              echo "- **Linux skipped:** $linux_reason"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ -n "$macos_zip" ] || echo "::warning::macOS is not in this release: $macos_reason"
+          [ -n "$linux_zip" ] || echo "::warning::Linux is not in this release: $linux_reason"
       - name: Publish
         run: |
           set -euo pipefail
@@ -91,9 +188,44 @@ jobs:
             echo "::error::$TAG is a lightweight tag; push an annotated tag whose message is the release notes"
             exit 1
           fi
-          gh api "repos/$GH_REPO/git/tags/$tag_object" --jq .message > "$RUNNER_TEMP/notes.md"
-          gh release create "$TAG" --verify-tag --title "Orglet $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
-            "$SETUP" "$RELEASES_FILE" "$PACKAGE" "$ZIP"
+          notes="$RUNNER_TEMP/notes.md"
+          gh api "repos/$GH_REPO/git/tags/$tag_object" --jq .message > "$notes"
+          # The platform line is written here from what is actually attached, so nobody edits notes by hand.
+          downloads="Windows x64 (Setup, which updates itself, and a ZIP)"
+          if [ -n "$MACOS_ZIP" ]; then
+            downloads="$downloads, macOS on Apple silicon (a ZIP of the signed, notarized and stapled app)"
+          fi
+          if [ -n "$LINUX_ZIP" ]; then
+            downloads="$downloads, Linux x64 (an experimental ZIP)"
+          fi
+          {
+            echo
+            echo "**Downloads:** $downloads."
+            if [ -z "$MACOS_ZIP" ]; then
+              echo
+              echo "macOS is not in this release: $MACOS_REASON."
+            fi
+          } >> "$notes"
+          files=("$SETUP" "$RELEASES_FILE" "$PACKAGE" "$ZIP")
+          [ -z "$MACOS_ZIP" ] || files+=("$MACOS_ZIP")
+          [ -z "$LINUX_ZIP" ] || files+=("$LINUX_ZIP")
+          gh release create "$TAG" --verify-tag --title "Orglet $VERSION" --notes-file "$notes" "${files[@]}"
+      - name: Check the download names the website reads
+        run: |
+          set -euo pipefail
+          # orglet.codepawl.com lists downloads from the latest release by these exact asset names.
+          names=$(gh release view "$TAG" --json assets --jq '.assets[] | select(.state == "uploaded") | .name')
+          expected=("Orglet-$VERSION.Setup.exe")
+          [ -z "$MACOS_ZIP" ] || expected+=("$(basename "$MACOS_ZIP")")
+          [ -z "$LINUX_ZIP" ] || expected+=("$(basename "$LINUX_ZIP")")
+          for name in "${expected[@]}"; do
+            if grep -qx "$name" <<<"$names"; then
+              echo "Website download: $name"
+            else
+              echo "::warning::the release has no $name, so the website will not list it"
+              echo "- **Missing on the website:** \`$name\`" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
       - name: Check the update feed
         run: |
           set -euo pipefail
@@ -105,3 +237,104 @@ jobs:
           else
             echo "::warning::update.electronjs.org does not serve Orglet $VERSION yet"
           fi
+
+  npm:
+    name: start the npm installer publish
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Run npm-installer.yml for this tag
+        run: |
+          set -euo pipefail
+          # A release made with GITHUB_TOKEN never fires npm-installer.yml's release trigger, but a
+          # workflow_dispatch does. It also keeps npm-installer.yml the top-level workflow, which is the file npm's
+          # trusted publisher names (a reusable workflow call would be matched against release.yml instead).
+          gh workflow run npm-installer.yml --ref "$TAG" -f tag="$TAG"
+          echo "Started npm installer for $TAG: https://github.com/$GH_REPO/actions/workflows/npm-installer.yml" >> "$GITHUB_STEP_SUMMARY"
+
+  website:
+    name: open the website snapshot pull request
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+      VERSION: ${{ needs.publish.outputs.version }}
+      WEB_TOKEN: ${{ secrets.CODEPAWL_WEB_TOKEN }}
+      RELEASE_TOKEN: ${{ github.token }}
+    steps:
+      - name: Refresh src/orglet-release.json in codepawl/codepawl-web
+        run: |
+          set -euo pipefail
+          if [ -z "$WEB_TOKEN" ]; then
+            echo "::notice::CODEPAWL_WEB_TOKEN is not set, so no website pull request. The site still reads the latest release live."
+            echo "- Website snapshot pull request skipped: \`CODEPAWL_WEB_TOKEN\` is not set" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          web_repo=codepawl/codepawl-web
+          branch="orglet-release-$TAG"
+          if GH_TOKEN="$WEB_TOKEN" gh api "repos/$web_repo/branches/$branch" >/dev/null 2>&1; then
+            echo "::notice::$web_repo already has branch $branch; nothing to do"
+            exit 0
+          fi
+          # The snapshot lists exactly what the release carries, in the shape the site's parseManifest reads.
+          root="https://github.com/$GH_REPO/releases/download/$TAG"
+          names=$(GH_TOKEN="$RELEASE_TOKEN" gh release view "$TAG" --json assets \
+            --jq '.assets[] | select(.state == "uploaded") | .name')
+          entries=()
+          # The names the site's parseRelease accepts, in the order the snapshot lists them.
+          for candidate in "windows x64 Orglet-$VERSION.Setup.exe" \
+            "macos arm64 Orglet-darwin-arm64-$VERSION.zip" "macos x64 Orglet-darwin-x64-$VERSION.zip" \
+            "linux x64 Orglet-linux-x64-$VERSION.zip" "linux arm64 Orglet-linux-arm64-$VERSION.zip"; do
+            read -r platform architecture name <<<"$candidate"
+            if grep -qx "$name" <<<"$names"; then
+              entries+=("{ \"platform\": \"$platform\", \"architecture\": \"$architecture\", \"url\": \"$root/$name\" }")
+            fi
+          done
+          if [ "${#entries[@]}" -eq 0 ]; then
+            echo "::warning::the release has no website downloads; no snapshot pull request"
+            exit 0
+          fi
+          git clone --depth 1 "https://x-access-token:$WEB_TOKEN@github.com/$web_repo.git" web
+          snapshot=web/src/orglet-release.json
+          {
+            echo "{"
+            echo "  \"version\": \"$VERSION\","
+            echo "  \"downloads\": ["
+            last=$((${#entries[@]} - 1))
+            for index in "${!entries[@]}"; do
+              separator=","
+              [ "$index" -lt "$last" ] || separator=""
+              echo "    ${entries[$index]}$separator"
+            done
+            echo "  ]"
+            echo "}"
+          } > "$snapshot"
+          jq -e --arg version "$VERSION" '.version == $version and (.downloads | length > 0)' "$snapshot" >/dev/null
+          cat "$snapshot"
+          cd web
+          if git diff --quiet; then
+            echo "::notice::the website snapshot already names $TAG"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898728+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "Point the Orglet download snapshot at $TAG"
+          git push origin "$branch"
+          body="The Orglet release workflow made this after publishing [$TAG](https://github.com/$GH_REPO/releases/tag/$TAG).
+
+          The page already reads the latest release live through \`/api/orglet-release\`; this snapshot is what it shows when that GitHub call fails. The Pages project has no Git connection, so merging does not deploy: deploy as the README says."
+          GH_TOKEN="$WEB_TOKEN" gh pr create --repo "$web_repo" --head "$branch" --base main \
+            --title "Orglet $VERSION downloads snapshot" --body "$body"
+          echo "- Website snapshot pull request opened in $web_repo" >> "$GITHUB_STEP_SUMMARY"
