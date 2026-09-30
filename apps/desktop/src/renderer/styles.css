@@ -282,10 +282,12 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .chat-tabs-strip[data-more-end] { --strip-fade-end:32px; }
 /* Hidden like the composer's file strip: a bar would add its height under every tab. The wheel scrolls it sideways. */
 .chat-tabs-strip::-webkit-scrollbar { width:0; height:0; }
-.chat-tab { position:relative; flex:0 0 auto; display:flex; align-items:center; max-width:220px; height:32px; border-radius:var(--radius); color:var(--muted); }
+/* Every tab is the same width (owner, 2026-09-30: tabs of different sizes were hard to hit), so each sits where the
+   pointer expects it; a longer name ends in an ellipsis and the mark or close button keeps the tab's right edge. */
+.chat-tab { position:relative; flex:0 0 var(--chat-tab-width); width:var(--chat-tab-width); display:flex; align-items:center; height:32px; border-radius:var(--radius); color:var(--muted); --chat-tab-width:168px; }
 .chat-tab:hover { background:var(--row-hover); color:var(--text); }
 .chat-tab.active { background:var(--row-active); color:var(--text); }
-.chat-tab-open { display:flex; align-items:center; gap:7px; flex:0 1 auto; min-width:0; height:100%; padding:0 4px 0 8px; border:0; border-radius:inherit; background:transparent; color:inherit; font:inherit; font-size:13px; font-weight:500; cursor:pointer; }
+.chat-tab-open { display:flex; align-items:center; gap:7px; flex:1 1 auto; min-width:0; height:100%; padding:0 4px 0 8px; border:0; border-radius:inherit; background:transparent; color:inherit; font:inherit; font-size:13px; font-weight:500; cursor:pointer; }
 .chat-tab-face { display:inline-flex; align-items:center; flex-shrink:0; }
 .chat-tab-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .chat-tab-end { position:relative; display:grid; place-items:center; flex-shrink:0; width:22px; height:22px; margin-right:5px; }
