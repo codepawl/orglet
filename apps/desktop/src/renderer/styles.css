@@ -2116,14 +2116,16 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    takes its own room, so it covers no answer and stays put while the chat scrolls. The faces are `Avatar` at the
    list size (24px, the whole-pixel glyph); they never blink or look up (`alive` is for the chat being read) and
    move only with the run's state, see the end of this block.
-   The join: the tab has no bottom edge and overlaps the bar's top border by one pixel, so its fill covers that
-   stretch of line, and its two bottom corners curve outward into the bar, the inverted corner a tab makes with the
-   panel it belongs to. Each corner is a pseudo-element the width of the fillet plus the tab's own outline, painted
-   with a radial gradient centred on its outer top corner: clear inside the fillet radius, one pixel of outline on
-   the arc, then the bar's colour beyond it. So the outline runs down the tab's side, round the arc and along the
-   bar's top edge without a break, and the arc's ends meet the tab's side and the bar's edge as tangents. The
-   pseudo-element covers the tab's outline over the fillet's height, because that outline would otherwise run
-   straight on past the arc's tangent down to the bar, a stub beside every fillet (COD-169). The tab keeps to the
+   The join: the tab has no bottom edge and reaches into the bar past its top border, so its fill covers that stretch
+   of line, and its two bottom corners curve outward into the bar, the inverted corner a tab makes with the panel it
+   belongs to. Each corner is a pseudo-element drawn with real borders, a right (or left) and a bottom border with a
+   rounded corner between them, clear inside the arc and filled with the bar's colour outside it by a spread shadow
+   clipped to the box. Its side border sits on the tab's own side border and its bottom border on the bar's top
+   border, placed from the same edges, so the three lines are one width and land on the same device pixels at any
+   scale: Chromium rounds a 1px border down to whole device pixels (0.8px at 125%, 0.67px at 150%), and the old
+   gradient fillet, drawn a whole CSS pixel thick from fixed offsets, stepped off the bar's line and bulged at the
+   tab's side there. The corner's fill also runs down to the tab's bottom, over the tab's side border inside the
+   bar, which would otherwise poke out under the bar's line as a stub beside every fillet (COD-169). The tab keeps to the
    straight part of the bar's edge: the max-width stays clear of the bar's corners (24px at their largest) in every
    shape the bar takes, and the min-width keeps the tab a pill (over four times its height) under a short label.
    The faces carry the state (COD-171). The tab used to end in a glowing shape whose silhouette and colour
@@ -2135,26 +2137,41 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
    the run pausing. That is motion a person reads without a legend, it is the vocabulary the app already has, and
    it costs a transform on a 24px drawing. The rules sit after the tab's own, below. */
 .live-island {
-  --island-fillet:12px; --island-line:var(--bar-line);
+  --island-fillet:12px; --island-line:var(--bar-line); --island-reach:3px; --island-shadow:0 -3px 14px #00000012;
   position:relative; z-index:1; display:flex; align-items:flex-end; justify-content:center;
   width:fit-content; min-width:150px; max-width:calc(100% - 2 * (24px + var(--island-fillet)));
-  /* Tab and bar are one shape with one outline round the outside (COD-228): the tab reaches 2px into the bar, past
-     its 1px top line, so no part of that line shows under the tab even when the seam lands on half a pixel. The
-     extra pixel comes off the padding, so the content sits where it did. */
-  margin:0 auto -2px; padding:5px 10px 6px 9px;
+  /* Tab and bar are one shape with one outline round the outside (COD-228): the tab reaches 3px into the bar, past its
+     top line and the second pixel the typing ring adds under it (COD-284), whose soft lower edge showed under the tab
+     at 125% when the reach was 2px. The reach comes off the padding, so the content sits where it did. */
+  margin:0 auto calc(-1 * var(--island-reach)); padding:5px 10px 7px 9px;
   border:1px solid var(--island-line); border-bottom:0; border-radius:18px 18px 0 0;
-  background:var(--bg); color:var(--text); box-shadow:0 -3px 14px #00000012;
+  background:var(--bg); color:var(--text); box-shadow:var(--island-shadow);
   /* The shadow stops at the seam: below it is the bar, which carries its own. The sides keep room for the fillets. */
   clip-path:inset(-24px calc(-24px - var(--island-fillet)) 0 calc(-24px - var(--island-fillet)));
-  transform-origin:50% 100%;
+  /* Grown from the bar's top edge, not from the tab's bottom inside the bar, so the corners stay on the bar's line. */
+  transform-origin:50% calc(100% - var(--island-reach));
   animation:island-rise 200ms var(--ease-out);
 }
 /* One outline for tab and bar: the same colour the bar's own focus rule sets. */
 .thread-composer:has(.composer:focus-within) .live-island { --island-line:var(--bar-line-focus); }
-.thread-composer:has(.composer > textarea:focus-visible) .live-island { --island-line:var(--focus); }
-.live-island::before,.live-island::after { content:""; position:absolute; bottom:1px; width:calc(var(--island-fillet) + 1px); height:calc(var(--island-fillet) + 1px); }
-.live-island::before { left:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 0 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
-.live-island::after { right:calc(-1px - var(--island-fillet)); background:radial-gradient(circle at 100% 0, #0000 calc(var(--island-fillet) - .25px), var(--island-line) calc(var(--island-fillet) + .25px), var(--island-line) calc(var(--island-fillet) + .75px), var(--bg) calc(var(--island-fillet) + 1.25px)); }
+/* Typing rings the bar in two pixels, its border and an inset line (COD-284); the tab and its corners carry the same
+   second line on the inside of the shape, so the ring runs round the tab too instead of stepping at the corners. */
+.thread-composer:has(.composer > textarea:focus-visible) .live-island {
+  --island-line:var(--focus); --island-ring:0 0 0 1px var(--focus),;
+  box-shadow:inset 1px 1px 0 0 var(--focus), inset -1px 0 0 0 var(--focus), var(--island-shadow);
+}
+/* The corner's box starts a fillet above the bar's top edge and ends under the bar's top border, so its bottom border
+   is the bar's. The clip lets the fill reach the tab's bottom and two pixels into the tab, over the soft edge of the
+   tab's typing ring, and keeps the ring's shadow off the box's top and outer edges, where it left a faint line; the
+   tab's and the bar's own lines lie under that trimmed pixel. */
+.live-island::before,.live-island::after {
+  content:""; position:absolute; box-sizing:content-box;
+  top:calc(100% - var(--island-reach) - var(--island-fillet)); width:var(--island-fillet); height:var(--island-fillet);
+  border:0 solid var(--island-line); border-bottom-width:1px;
+  box-shadow:var(--island-ring,) 0 0 0 var(--island-fillet) var(--bg);
+}
+.live-island::before { right:100%; border-right-width:1px; border-bottom-right-radius:var(--island-fillet); clip-path:inset(1px -2px calc(-1 * var(--island-reach)) 1px); }
+.live-island::after { left:100%; border-left-width:1px; border-bottom-left-radius:var(--island-fillet); clip-path:inset(1px 1px calc(-1 * var(--island-reach)) -2px); }
 /* Out of the bar and back into it (COD-173). The tab is the bar's own material raised into a tab, so it moves the
    way such a thing would: its base never leaves the bar. Arriving, it grows up out of the bar's edge, a scale from
    the seam (`transform-origin` above), so the fillets stay planted and the top stays a pill as it comes, and the

@@ -26,7 +26,7 @@ import { Attachment } from './Attachment';
 import { needsTimeMark, TimeMark } from './TimeMark';
 import { MessageActions, MessageBadges } from './MessageActions';
 import { turnMessageId } from '../../shared/message-interactions';
-import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, waitingStepLine, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
+import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, runEventMessage, waitingStepLine, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
 import { BrowserLiveViewer, openBrowserViewer, takeOverBrowser } from './BrowserLiveView';
 import { DesktopApprovalCard } from './DesktopApps';
@@ -232,17 +232,18 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   // A run that ended while the person held its browser keeps its tabs open for them (COD-261), so the island stays
   // with Hand back until they give it back.
   const heldRun = !dockedRun && detail.browser?.takenOver ? latestTurn?.runs.at(-1) : undefined;
+  const dockedRunMessage = dockedRun ? runEventMessage(detail.events, dockedRun.id) : undefined;
   const runIsland = dockedRun
     ? latestLive?.update.progress
       ? islandOf(latestLive.update.progress, pausing, islandWorkers)
-      : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing,
+      : islandBeforeStreaming({ workers: islandWorkers, stage: dockedRun.stage, message: dockedRunMessage, pausing,
         site: browsingSiteOf(detail.events.filter(event => event.runId === dockedRun.id).map(event => event.message)) })
     : heldRun ? islandBeforeStreaming({ workers: [heldRun.snapshot.worker], pausing: true }) : undefined;
   // The same state as one line in the chat, until the answer's text starts arriving; while a card waits for the
   // person, or they hold the browser, it says that instead of the step the run stopped on (COD-290).
   const waitingLine = waitingStepLine(detail.browser, detail.desktop);
   const runStatus = dockedRun && !latestLive?.update.progress?.answer
-    ? waitingLine ?? runStepLine({ progress: latestLive?.update.progress, stage: dockedRun.stage, message: detail.events.at(-1)?.message, pausing })
+    ? waitingLine ?? runStepLine({ progress: latestLive?.update.progress, stage: dockedRun.stage, message: dockedRunMessage, pausing })
     : undefined;
   // While a run uses Orglet's browser the island carries Watch, and Hand back once taken over, and waits with the card
   // (COD-261). Watch opens the live view, where the person takes the browser over.
