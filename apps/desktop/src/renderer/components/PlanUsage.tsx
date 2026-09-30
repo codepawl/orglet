@@ -6,6 +6,7 @@ import { SYSTEM_ACCOUNT_ID, type HarnessBankedResets, type HarnessInfo, type Har
 import { currentLocale, t } from '../i18n';
 import { Button } from './ui';
 import { AnchoredPopover } from './AnchoredPopover';
+import { maskEmail } from '../../shared/pii';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -99,7 +100,7 @@ export function harnessAccountLabel(harness: Pick<HarnessInfo, 'accounts'>, acco
 /** Whose plan it is, as one line: the account's name when there are several, and the address. */
 function planAccountLine(plan: HarnessPlan) {
   const named = plan.harness.accounts.length > 0 ? harnessAccountLabel(plan.harness, plan.harness.accountId) : undefined;
-  return [named, plan.usage.email].filter(Boolean).join(' · ');
+  return [named, plan.usage.email ? maskEmail(plan.usage.email) : undefined].filter(Boolean).join(' · ');
 }
 
 const RING_RADIUS = 6;

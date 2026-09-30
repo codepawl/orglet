@@ -6,6 +6,7 @@ import { t } from '../i18n';
 import { Orglet3D } from './Orglet3D';
 import { toast } from './toast';
 import { Button } from './ui';
+import { maskEmail } from '../../shared/pii';
 
 /*
  * The first-run question (COD-337): a new install asks once whether to sign in to a CodePawl account or to use Orglet
@@ -35,7 +36,7 @@ export function AccountChooser({ account, onChoose }: { account: AccountState | 
         return;
       }
       await onChoose('account');
-      toast(state.email ? t('Đã đăng nhập bằng {0}', [state.email]) : t('Đã đăng nhập'), 'success', t('Tài khoản CodePawl'));
+      toast(state.email ? t('Đã đăng nhập bằng {0}', [maskEmail(state.email)]) : t('Đã đăng nhập'), 'success', t('Tài khoản CodePawl'));
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
       setPhase('failed');
