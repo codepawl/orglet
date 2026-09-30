@@ -22,8 +22,9 @@ export type ClaudeCodeReading = {
   named?: ModelEntry[];
 };
 
-// Starting Claude Code and reading its first line took 8 to 10 seconds on 2026-09-29 (2.1.283, four at once).
-const START_TIMEOUT_MS = 20_000;
+// Starting Claude Code and reading its first line took 8 to 10 seconds on 2026-09-29 (2.1.283, four at once) and 9 to
+// 13 seconds on 2026-09-30 (2.1.284, five at once); 20 seconds was not enough on a busy computer (COD-338).
+const START_TIMEOUT_MS = 45_000;
 const DATED_SUFFIX = /^-\d{8}$/;
 
 /**

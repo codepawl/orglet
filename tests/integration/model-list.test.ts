@@ -267,6 +267,50 @@ describe('model list fetch adapters', () => {
     ]);
   });
 
+  it('asks Claude Code again after ten minutes, not a day, when a signed-in fetch learned nothing (COD-338)', async () => {
+    // Every start timed out and the Models API gave nothing, as on a busy computer right after an install.
+    let answering = false;
+    let current = new Date('2026-09-30T01:00:00Z');
+    const resolved: Record<string, string> = { default: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5', haiku: 'claude-haiku-4-5-20251001', fable: 'claude-fable-5-1' };
+    const core = coreFor(store(), {
+      claudeStart: async (_executable, _env, alias) => answering ? resolved[alias ?? 'default'] : undefined,
+      claudeToken: async () => undefined,
+    }, () => current, { detect: async () => [signedIn('claude-code', '/bin/claude')], execute: async () => { throw new Error('no exec'); } });
+    const first = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+    expect(first.models.map(model => model.resolvedId)).toEqual([undefined, undefined, undefined, undefined]);
+
+    answering = true;
+    current = new Date('2026-09-30T01:09:00Z');
+    expect((await core.command('modelList', { provider: 'claude-code' }) as ModelListResult).stale).toBe(false);
+
+    current = new Date('2026-09-30T01:11:00Z');
+    const later = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+    expect(later.stale).toBe(true);
+    await core.waitForModelListRefresh('claude-code');
+    const refreshed = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+    expect(refreshed.models.map(model => [model.id, model.resolvedId])).toEqual([
+      ['sonnet', 'claude-sonnet-5-5'], ['opus', 'claude-opus-5-5'], ['haiku', 'claude-haiku-4-5-20251001'], ['fable', 'claude-fable-5-1'],
+    ]);
+    expect(refreshed.stale).toBe(false);
+  });
+
+  it('never replaces a Claude Code list that named its models with one that learned nothing (COD-338)', async () => {
+    let answering = true;
+    let current = new Date('2026-09-30T01:00:00Z');
+    const core = coreFor(store(), {
+      claudeStart: async (_executable, _env, alias) => answering ? (alias === 'opus' || !alias ? 'claude-opus-5-5' : undefined) : undefined,
+      claudeToken: async () => undefined,
+    }, () => current, { detect: async () => [signedIn('claude-code', '/bin/claude')], execute: async () => { throw new Error('no exec'); } });
+    await core.command('modelList', { provider: 'claude-code' });
+    answering = false;
+    current = new Date('2026-10-01T02:00:00Z');
+    await core.command('modelList', { provider: 'claude-code', refresh: true });
+    const kept = await core.command('modelList', { provider: 'claude-code' }) as ModelListResult;
+    expect(kept.models.find(model => model.id === 'opus')?.resolvedId).toBe('claude-opus-5-5');
+    // It waits ten minutes before asking again, instead of asking every time the picker opens.
+    expect(kept.stale).toBe(false);
+  });
+
   it('reads Codex names and its default from app-server model/list, without hidden models', async () => {
     const asked: unknown[] = [];
     const probe: Probe = async () => { throw new Error('the debug JSON must not be needed'); };

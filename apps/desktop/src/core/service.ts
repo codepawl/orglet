@@ -125,6 +125,12 @@ const relinkSourceInput = z.object({ taskId: Id, sourceId: Id, path: z.string().
 type NewChatFolder = { pending: PendingWorkspace; resolved: ResolvedDirectory; failure?: undefined } | { pending: PendingWorkspace; resolved?: undefined; failure: string };
 
 /** The empty chat a command names: one worker, a team, or the orglets of a group chat that has not started (COD-215). */
+/** A cached list is fetched again after a day, or at its `retryAfter` when a fetch learned nothing (COD-338). */
+function modelListStale(row: ModelListRow, now: Date): boolean {
+  if (row.retryAfter) return now.getTime() >= new Date(row.retryAfter).getTime();
+  return now.getTime() - new Date(row.fetchedAt).getTime() > MODEL_LIST_TTL_MS;
+}
+
 function newChatTargetOf(input: { workerId: string } | { teamId: string } | { workerIds: string[] }): NewChatTarget {
   if ('teamId' in input) return { teamId: input.teamId };
   if ('workerIds' in input) return { workerIds: input.workerIds };
@@ -1345,7 +1351,7 @@ export class CoreService {
     const provider = ModelListProvider.parse(input.provider);
     this.hydrateModelLists();
     const row = this.modelListMemory.byProvider[provider];
-    const stale = !row || this.clock().getTime() - new Date(row.fetchedAt).getTime() > MODEL_LIST_TTL_MS;
+    const stale = !row || modelListStale(row, this.clock());
     if (row && !input.refresh) {
       if (stale && !this.modelListFailed.has(provider)) this.scheduleModelListRefresh(provider);
       return this.toModelListResult(row, stale);
@@ -1387,8 +1393,10 @@ export class CoreService {
     const work = fetchProviderList(provider, this.modelListFetchOptions()).then(row => {
       if ((this.modelListEpoch.get(provider) ?? 0) !== epoch) return previous ?? row;
       this.modelListFailed.delete(provider);
-      this.writeModelListRow(provider, row);
-      return this.modelListMemory.byProvider[provider] ?? row;
+      // A fetch that learned nothing never replaces a list that did; it only puts off the next try (COD-338).
+      const kept = row.retryAfter && previous && !previous.retryAfter ? { ...previous, retryAfter: row.retryAfter } : row;
+      this.writeModelListRow(provider, kept);
+      return this.modelListMemory.byProvider[provider] ?? kept;
     }).catch(error => {
       this.modelListFailed.add(provider);
       if (previous) return { ...previous, error: error instanceof Error ? error.message.slice(0, 500) : previous.error };
