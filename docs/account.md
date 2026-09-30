@@ -26,7 +26,7 @@ The link back to the app uses the `com.codepawl.orglet:` scheme. Setup registers
 ## Settings → CodePawl account
 
 - **Not signed in**: a short note and **Sign in**.
-- **Signed in**: your email and name with **Sign out**, your **Plan** (Free), and **Sync**, which says it is coming next and that nothing leaves this computer yet.
+- **Signed in**: your email, shown only in part (such as `an•••@example.com`) so a screenshot does not carry it, and your name, with **Sign out**, your **Plan** (Free), and **Sync**, which says it is coming next and that nothing leaves this computer yet.
 - **Your sign-in ended**: the service no longer accepts this computer's sign-in, for example after 30 days without opening Orglet or after you signed out everywhere. Choose **Sign in again**. Nothing on this computer is lost.
 
 ## What is stored where

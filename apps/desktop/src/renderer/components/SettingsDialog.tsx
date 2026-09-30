@@ -43,6 +43,7 @@ import { forgetAllDrafts } from '../drafts';
 import { TacetSetup } from './TacetSetup';
 import { AccountSettings } from './AccountSettings';
 import type { AccountState } from '../../shared/account';
+import { maskEmail, maskEmailsIn } from '../../shared/pii';
 
 /** 1 to 8 requests in flight per provider (COD-242). */
 const concurrencyChoices = Array.from({ length: MAX_PROVIDER_CONCURRENCY }, (_, index) => index + 1);
@@ -96,7 +97,7 @@ const sectionLabels: Partial<Record<SettingsTab, string>> = {
 };
 
 /** Who is signed in and on which plan, as one line: "an@example.com · ChatGPT Plus". */
-const accountLine = (usage: HarnessAccountUsage) => [usage.email, usage.plan].filter(Boolean).join(' · ');
+const accountLine = (usage: HarnessAccountUsage) => [usage.email ? maskEmail(usage.email) : undefined, usage.plan].filter(Boolean).join(' · ');
 
 /**
  * An account in the picker: its address and how much of the allowance closest to its limit is used, with the time
@@ -106,10 +107,10 @@ function accountSummary(usage: HarnessAccountUsage | undefined): string | undefi
   if (!usage) return undefined;
   if (usage.unavailable === 'signed_out') return t('Chưa đăng nhập');
   const tightest = tightestWindow(usage);
-  if (!tightest) return usage.email;
+  if (!tightest) return usage.email ? maskEmail(usage.email) : undefined;
   const percent = Math.round(tightest.usedPercent);
   const used = usage.asOf ? t('{0}% lúc {1}', [percent, usageReadingTime(usage.asOf)]) : t('đã dùng {0}%', [percent]);
-  return usage.email ? `${usage.email} · ${used}` : used;
+  return usage.email ? `${maskEmail(usage.email)} · ${used}` : used;
 }
 
 /**
@@ -529,7 +530,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
   const claimReset = async (item: HarnessInfo, account: HarnessAccountUsage, resets: HarnessBankedResets) => {
     const confirmed = await confirmAction({
       title: t('Dùng một lượt reset?'),
-      description: resetQuestion(account.email ?? t('tài khoản này'), resets),
+      description: resetQuestion(account.email ? maskEmail(account.email) : t('tài khoản này'), resets),
       confirmLabel: t('Dùng lượt reset'),
     });
     if (!confirmed) return;
@@ -829,7 +830,7 @@ export function SettingsDialog({ open, tab, onTab, onClose, workspace, connectio
                       </span>
                       {/* Signed in, the account itself says more than "signed in through claude.ai". */}
                       {/* Found but signed out, the state says so and the command follows: one short line points at it. */}
-                      <span className="setting-description">{signedInAs ?? (item.status === 'detected' ? signInStep(item) : tMessage(item.authDetail))}</span>
+                      <span className="setting-description">{signedInAs ?? (item.status === 'detected' ? signInStep(item) : maskEmailsIn(tMessage(item.authDetail)))}</span>
                       {!showLogin && usage === undefined && <SkeletonGroup label={t('Đang đọc hạn mức gói…')}>
                         <div className="plan-usage"><Skeleton width="70%" /></div>
                       </SkeletonGroup>}

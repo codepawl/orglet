@@ -6,6 +6,7 @@ import { orglet } from '../api';
 import { t } from '../i18n';
 import { toast } from './toast';
 import { Button } from './ui';
+import { maskEmail } from '../../shared/pii';
 
 /*
  * Settings → Account (COD-337). Signed out: what an account is for and Sign in. Signed in: whose account and which plan,
@@ -34,7 +35,7 @@ export function AccountSettings({ account, busy, act }: { account: AccountState 
   const signIn = async () => {
     try {
       const state = await orglet.accountSignIn();
-      if (state.status === 'signed_in') toast(state.email ? t('Đã đăng nhập bằng {0}', [state.email]) : t('Đã đăng nhập'), 'success', about);
+      if (state.status === 'signed_in') toast(state.email ? t('Đã đăng nhập bằng {0}', [maskEmail(state.email)]) : t('Đã đăng nhập'), 'success', about);
     } catch (error) {
       toast(error instanceof Error ? error.message : String(error), 'error', about);
     }
@@ -57,12 +58,12 @@ export function AccountSettings({ account, busy, act }: { account: AccountState 
     <Button variant="primary" disabled={busy} onClick={() => void signIn()}><LogIn size={14} />{t('Đăng nhập')}</Button>
   </Row>;
 
-  if (account.status === 'expired') return <Row title={account.email ?? t('Đã đăng nhập')} description={t('Phiên đăng nhập đã hết. Dữ liệu trên máy này vẫn còn nguyên.')}>
+  if (account.status === 'expired') return <Row title={account.email ? maskEmail(account.email) : t('Đã đăng nhập')} description={t('Phiên đăng nhập đã hết. Dữ liệu trên máy này vẫn còn nguyên.')}>
     <Button variant="primary" disabled={busy} onClick={() => void signIn()}><LogIn size={14} />{t('Đăng nhập lại')}</Button>
   </Row>;
 
   return <>
-    <Row title={account.email ?? t('Đã đăng nhập')} description={account.name}>
+    <Row title={account.email ? maskEmail(account.email) : t('Đã đăng nhập')} description={account.name}>
       <Button variant="outline" disabled={busy} onClick={signOut}><LogOut size={14} />{t('Đăng xuất')}</Button>
     </Row>
     <Row title={t('Gói')} description={!account.plan || account.plan === 'free' ? t('Tài khoản miễn phí. Orglet vẫn miễn phí và mã nguồn mở.') : undefined}>
