@@ -758,7 +758,28 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .account-choice-screen { box-sizing:border-box; display:grid; height:100dvh; padding:var(--shell-gap); background:var(--window); }
 .account-choice { min-width:0; min-height:0; display:flex; align-items:center; justify-content:center; overflow:auto; padding:32px 16px; background:var(--bg); border-radius:var(--panel-radius); box-shadow:var(--panel-shadow); }
 .account-choice:focus { outline:none; }
-.account-choice-body { width:min(340px, 100%); display:flex; flex-direction:column; align-items:center; animation:turn-in var(--motion-base) var(--ease-out); }
+.account-choice-body { width:min(340px, 100%); display:flex; flex-direction:column; align-items:center; }
+/* First-run motion (COD-341). The screens never move: no fades, no slides, no text rising in (the owner: "not like a
+   PowerPoint slide"). The orglet carries every change, in its own way of moving. Startup, the account choice and the
+   app are separate trees swapped by `swapScreen` (renderer/screenTransition.ts) inside a view transition whose root is
+   a cut. Only the startup orglet is named (`.screen-swap` sets the name while a swap runs), so it hops from its place
+   on the startup screen to its place on the account choice: a crouch, the jump, a squash on landing, like the stage's
+   own hop. Only the live face is drawn; its old picture was taken mid-hop and left a grey ghost. Into the app the
+   choice's face goes with its screen and the new chat's own orglet greets with its hop. Everything else the face does
+   there (glance, think, wince, smile) is the 3D stage's, in AccountChooser.tsx. Reduced motion: `swapScreen` cuts. */
+::view-transition-old(root), ::view-transition-new(root) { animation:none; }
+.screen-swap .startup-face { view-transition-name:first-run-face; }
+::view-transition-old(first-run-face) { display:none; }
+::view-transition-new(first-run-face) { animation:none; }
+::view-transition-group(first-run-face) { animation-duration:380ms; animation-timing-function:cubic-bezier(.4, 0, .2, 1); }
+::view-transition-image-pair(first-run-face) { transform-origin:50% 100%; animation:first-run-hop 380ms linear both; }
+@keyframes first-run-hop {
+  0% { transform:none; animation-timing-function:ease-out; }
+  14% { transform:translateY(2px) scale(1.06, .92); animation-timing-function:cubic-bezier(.2, .7, .3, 1); }
+  50% { transform:translateY(-22px) scale(.96, 1.05); animation-timing-function:cubic-bezier(.6, 0, .9, .5); }
+  80% { transform:translateY(0) scale(1.07, .91); animation-timing-function:ease-out; }
+  100% { transform:none; }
+}
 .account-choice .welcome { margin:0 0 28px; text-wrap:balance; }
 .account-choice-options { width:100%; display:flex; flex-direction:column; gap:22px; }
 .account-choice-option { display:flex; flex-direction:column; gap:8px; }

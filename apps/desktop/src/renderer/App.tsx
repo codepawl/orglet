@@ -93,6 +93,7 @@ import { becameReady, updateIndicator } from '../shared/updates';
 import { readyUpdateLabel, UpdateButton } from './components/UpdateButton';
 import { restartIntoUpdate } from './updateRestart';
 import { chatClosure, closedChatDestination, openChatRefresh, type ChatDestination, type OpenChatReads } from './openChat';
+import { swapScreen } from './screenTransition';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -324,6 +325,8 @@ export function App() {
   // one selected when they were created; otherwise a late refresh replaces the open task with nothing.
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const workspaceRef = useRef(workspace); workspaceRef.current = workspace;
+  // Set when the first-run account question is answered, so the refresh that follows moves to the app as a transition.
+  const leavingAccountChoice = useRef(false);
   // The open chat, once a refresh found the workspace no longer lists it, and where the view goes instead (COD-282).
   const [goneChat, setGoneChat] = useState<{ taskId: string; destination?: ChatDestination }>();
   /** What was being done when the banner's error was set; the notice centre shows it under the message (COD-174). */
@@ -373,7 +376,16 @@ export function App() {
       });
       writeSeenStorage(seenInfo.current);
       if (taskDetail) showingCachedDetail.current = null;
-      setWorkspace({ ...next, tasks }); setConnections(connectionState); setWorkerId(value => value || next.workers[0]?.id || '');
+      const showWorkspace = () => {
+        setWorkspace({ ...next, tasks });
+        setConnections(connectionState);
+        setWorkerId(value => value || next.workers[0]?.id || '');
+      };
+      // The first workspace replaces the startup screen, and an answered account choice replaces that screen (COD-341).
+      const screenChanges = !workspaceRef.current || leavingAccountChoice.current;
+      leavingAccountChoice.current = false;
+      if (screenChanges) swapScreen(showWorkspace);
+      else showWorkspace();
       if (selected && openChat?.gone) {
         setGoneChat({ taskId: selected, destination: closedChatDestination(previousRow, next) });
         return;
@@ -1195,7 +1207,11 @@ export function App() {
   // A new install asks once, before the app, whether to sign in or stay local (COD-337); the answer is kept and the
   // workspace it comes back in drops this screen. Anyone who already has chats, or updated from an older build, never sees it.
   if (needsAccountChoice(workspace, account)) return <>
-    <AccountChooser account={account} onChoose={async choice => { await orglet.call('accountChoice', { choice }); await refresh(); }} />
+    <AccountChooser account={account} onChoose={async choice => {
+      await orglet.call('accountChoice', { choice });
+      leavingAccountChoice.current = true;
+      await refresh();
+    }} />
     <Toaster />
   </>;
   /** A worker row resting under the pointer fetches its live chat and its model list ahead of the click. */
