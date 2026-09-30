@@ -72,9 +72,10 @@ function restingScrollLeft(strip: HTMLUListElement) {
  * Team and group chats can pass `mentions` so `@` opens a worker picker. In every chat `:sk` offers matching emoji
  * and a finished `:skull:` turns into its emoji (COD-233).
  */
-export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, placeholder, sendLabel, leading, trailing, attachments, onRemoveAttachment, context, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void;
+export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, placeholder, sendLabel, leading, trailing, usage, attachments, onRemoveAttachment, context, disabled, sendDisabled, textareaRef, mentions, onStop }: { value: string; onChange: (value: string) => void; onSubmit: () => void;
   /** Ctrl+Shift+Enter (Cmd on macOS): the other way to send, where the bar has one ("in a new thread", COD-247). */
-  onAlternateSubmit?: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode; attachments?: readonly ComposerAttachment[]; onRemoveAttachment?: (id: string) => void;
+  onAlternateSubmit?: () => void; label: string; placeholder: string; sendLabel: string; leading: ReactNode; /** Sits left of the send button (e.g. who this message goes to). */ trailing?: ReactNode;
+  /** The usage ring (COD-326), in the same row as the send button, left of `trailing`. */ usage?: ReactNode; attachments?: readonly ComposerAttachment[]; onRemoveAttachment?: (id: string) => void;
   /** The top zone of the grown bar, above the files: what this message answers, for example. */
   context?: ReactNode; disabled?: boolean; sendDisabled?: boolean; textareaRef?: RefObject<HTMLTextAreaElement | null>; mentions?: MentionRoster;
   /**
@@ -224,7 +225,7 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
     }
     if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); if (canSend) submit(); }
   };
-  return <form className={`composer${expanded ? ' expanded' : ''}${trailing ? ' has-trailing' : ''}${context ? ' has-context' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) submit(); }}>
+  return <form className={`composer${expanded ? ' expanded' : ''}${trailing || usage ? ' has-trailing' : ''}${context ? ' has-context' : ''}`} onSubmit={event => { event.preventDefault(); if (canSend) submit(); }}>
     {emojiOpen && <ul id={listId} className="mention-menu emoji-menu" role="listbox" aria-label={t('Chèn emoji')}>
       {emojis.map((choice, index) => {
         const optionId = `${listId}-emoji-${choice.name}`;
@@ -267,7 +268,7 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
       onChange={event => changeText(event.target)}
       onKeyUp={event => syncCursor(event.currentTarget)} onClick={event => syncCursor(event.currentTarget)} onSelect={event => syncCursor(event.currentTarget)}
       onKeyDown={onKeyDown} />
-    {trailing && <div className="composer-trailing">{trailing}</div>}
+    {(trailing || usage) && <div className="composer-trailing">{usage}{trailing}</div>}
     {onStop && canSend && <Button type="button" variant="primary" size="icon" className="send stop" aria-label={t('Dừng')} title={t('Dừng')} onClick={onStop}>
         <span className="send-spin" aria-hidden="true" />
         <Square size={11} fill="currentColor" />
@@ -318,8 +319,8 @@ export function DemoNote({ someOnDemo, preflight, onConnect }: { /** Only some o
 export type UsageFoot = { ring?: ReactNode; note?: ReactNode; out: boolean };
 
 /**
- * Plan usage and context under a message box (COD-326): the ring at the right end of the row under the bar, and the
- * line in that row from 80% of a plan allowance on. Once the account is out, that line comes before a permission
+ * Plan usage and context for a message box (COD-326): the ring in the bar beside the send button, and the line in the
+ * row under the bar from 80% of a plan allowance on. Once the account is out, that line comes before a permission
  * hint, since nothing would run; nearly out, it gives way to one. The island already says the account is out after a
  * run stopped on it (COD-225), so the line waits while it does. Switching selects the other account, as Settings
  * would; the next message runs on it. `runs` is the chat's, for the context window of its latest run.
@@ -348,13 +349,12 @@ export function usePlanUsageBar({ providers, harnesses, running, runs, contextNa
 
 /**
  * The row under a message box (COD-326): its one line in the middle (what to do first, a plan nearly out, a permission
- * hint) and the usage ring at the right end, where the Claude app keeps it. An empty row takes no room.
+ * hint). The usage ring sits in the bar itself, beside the send button. An empty row takes no room.
  */
-export function ComposerFoot({ ring, children }: { ring?: ReactNode; children?: ReactNode }) {
-  if (!ring && Children.toArray(children).length === 0) return null;
+export function ComposerFoot({ children }: { children?: ReactNode }) {
+  if (Children.toArray(children).length === 0) return null;
   return <div className="composer-foot">
     <div className="composer-foot-lines">{children}</div>
-    {ring}
   </div>;
 }
 
@@ -495,7 +495,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
     items={[{ label: t('Gửi trong chat phụ mới'), icon: MessageSquarePlus, shortcut: 'Ctrl+Shift+Enter', onSelect: sendInNewThread }]} /> : undefined;
   return <div className="thread-composer">
     <IslandDock />
-    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} label={t('Tin nhắn')} placeholder={readOnly ? t('Chỉ đọc') : detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(readOnly)} sendDisabled={blocked || Boolean(detail.task.pendingStart) || submitting || Boolean(readOnly)}
+    <Composer textareaRef={textarea} value={text} onChange={setText} onSubmit={send} onAlternateSubmit={sideThreads ? sendInNewThread : undefined} trailing={sendOptions} usage={planUsage.ring} label={t('Tin nhắn')} placeholder={readOnly ? t('Chỉ đọc') : detail.task.pendingStart ? t('Đang chuyển sang yêu cầu mới…') : busy ? t('Nhắn để đổi hướng đang làm…') : pendingDecision ? t('Trả lời câu hỏi…') : t('Nhắn tiếp…')} sendLabel={t('Gửi tin nhắn')} disabled={Boolean(readOnly)} sendDisabled={blocked || Boolean(detail.task.pendingStart) || submitting || Boolean(readOnly)}
       onStop={busy || detail.task.pendingStart ? () => action(() => orglet.call('cancel', { id: detail.task.id })) : undefined}
       mentions={workers.length > 1 || team ? { people: workers, ...(team ? { allNames: [team.name] } : {}) } : undefined}
       context={reply && !pendingDecision ? <div className="composer-reply">
@@ -506,7 +506,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
       attachments={added.sources} onRemoveAttachment={removeFile}
       leading={<SourcePicker disabled={Boolean(readOnly)} onFiles={() => action(async () => addFiles({ sources: await orglet.pickSources(), skipped: [] }))} onFolder={() => action(async () => addFiles(await orglet.pickFolder()))} />} />
     <SkippedFiles items={added.skipped} />
-    <ComposerFoot ring={planUsage.ring}>
+    <ComposerFoot>
     {readOnly && <p className="composer-note" role="status">{readOnly.note}{readOnly.action && <button type="button" onClick={readOnly.action.onSelect}>{readOnly.action.label}</button>}</p>}
     {!busy && !readOnly && blocked && <p className="composer-note">{t('Cần kết nối {0} trước khi gửi.', [missing.map(providerLabel).join(t(' và '))])}<button type="button" onClick={() => openSettings(settingsTabFor(missing))}>{t('Mở Cài đặt')}</button></p>}
     {!readOnly && !blocked && demoWorker && onConnectModel && <DemoNote someOnDemo={providers.length > 0 ? demoWorker.name : undefined} preflight={providers.length === 0 && Boolean(team?.preflight)} onConnect={() => onConnectModel(demoWorker)} />}

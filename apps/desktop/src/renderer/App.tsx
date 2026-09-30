@@ -1482,7 +1482,7 @@ export function App() {
   };
   const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với hội…') : t('Nhắn với {0}…', [groupName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} sendDisabled={busy || (!isDemo && missingConnections.length > 0)} mentions={team ? { people: executionWorkers, allNames: [team.name] } : group ? { people: groupWorkers } : undefined}
     leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
-    trailing={composerTrailing}
+    trailing={composerTrailing} usage={emptyChatUsage.ring}
     attachments={sources} onRemoveAttachment={id => setSources(sources.filter(source => source.id !== id))} />;
   /** A section's header buttons: the edit button that turns select mode on (a check while it is), then create. */
   const sectionActions = (section: SidebarSelectionSection, selectLabel: string, createLabel: string, create: () => void) => {
@@ -1653,7 +1653,7 @@ export function App() {
           <h1 className="welcome">{t('Đang nhắn với {0}', [chatName])}</h1>
           <div className="thread-composer">
             {composerBar}
-            <ComposerFoot ring={emptyChatUsage.ring}>{composerHint}</ComposerFoot>
+            <ComposerFoot>{composerHint}</ComposerFoot>
             <SkippedFiles items={skippedSources} />
           </div>
           <Starters starters={starters} onPick={pickStarter}

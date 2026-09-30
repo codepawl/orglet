@@ -418,7 +418,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
    to Chromium's plain bar. */
 .composer-attachments::-webkit-scrollbar { width:0; height:0; }
 .composer-leading { grid-area:lead; display:flex; align-items:center; }
-.composer-trailing { grid-area:trail; display:flex; align-items:center; align-self:center; max-width:min(220px,42vw); }
+.composer-trailing { grid-area:trail; display:flex; align-items:center; align-self:center; gap:2px; max-width:min(220px,42vw); }
 .composer>textarea { grid-area:input; display:block; width:100%; resize:none; min-height:36px; max-height:250px; border:0; outline:none; background:transparent; padding:7px 6px; font-size:inherit; line-height:22px; }
 /* Colouring a tag while it is typed: a textarea cannot style part of its own text, so the same string is painted
    in a layer above it and the textarea keeps only its caret and its selection. The two must agree on every metric
@@ -580,14 +580,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .composer-note button { border:0; background:transparent; color:var(--text); text-decoration:underline; margin-left:6px; }
 /* The Demo line under a message box (DemoNote, COD-293): the muted sentence and a small outline "Connect a model"
    centred on one line, wrapping under each other only when the column is too narrow for both. */
-/* The row under a message box (ComposerFoot, COD-326): its one line centred under the bar, and the usage ring at the
-   right end, centred under the send button. The line's own top margin gives way to the row's. */
+/* The row under a message box (ComposerFoot, COD-326): its one line centred under the bar. The usage ring sits in
+   the bar's trailing controls, beside the send button. The line's own top margin gives way to the row's. */
 .composer-foot { display:grid; grid-template-columns:28px minmax(0,1fr) 28px; column-gap:8px; align-items:center; min-height:28px; margin-top:6px; padding:0 10px; }
 .composer-foot-lines { grid-column:2; min-width:0; }
 .composer-foot-lines > .composer-note, .composer-foot-lines > .demo-note, .composer-foot-lines > .usage-note { margin:0; }
-.composer-foot > .usage-ring, .composer-foot > .usage-ring-waiting { grid-column:3; }
 /* The ring's place while the first usage read is on its way, so the bar does not move when it lands. */
-.usage-ring-waiting { display:grid; place-items:center; width:28px; height:28px; }
+.usage-ring-waiting { display:grid; place-items:center; flex-shrink:0; width:28px; height:28px; }
 /* The usage ring (UsageRing): a 16px ring filled as far as the closest limit, muted until 80%, then the warning
    colour, then the error colour. It is a button that opens the details; hover darkens it, nothing else. */
 .usage-ring { display:grid; place-items:center; width:28px; height:28px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--muted); cursor:pointer; }

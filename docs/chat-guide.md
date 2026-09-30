@@ -41,7 +41,7 @@ The names are GitHub's, which Slack and Discord mostly share. The menu only open
 
 ## Usage and context
 
-Under the message box, at the right end, a small ring shows how close the chat is to a limit: the orglet's subscription plan (Claude Code or Codex) or the model's context window, whichever is closer. It stays grey until 80%, turns amber from 80%, and red at 100%.
+In the message box, just left of the send button (and of the model picker, when there is one), a small ring shows how close the chat is to a limit: the orglet's subscription plan (Claude Code or Codex) or the model's context window, whichever is closer. It stays grey until 80%, turns amber from 80%, and red at 100%.
 
 Click the ring to see what it is made of:
 
