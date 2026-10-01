@@ -12,7 +12,8 @@ import { pickReaction, reactionEmoji, reactionMeanings, reactionOrder, userReact
 import type { Artifact, Run, Skill, Task, Worker } from '../../apps/desktop/src/shared/contracts';
 
 /*
- * COD-219: reactions sit on the bubble's corner, one per person, and the react button always opens the picker.
+ * COD-219: reactions sit with their message, one per person, and the react button always opens the picker. Since COD-365
+ * they are a row under the message, and the buttons are the message's floating toolbar.
  */
 
 let store: Store;
@@ -41,7 +42,7 @@ function renderThread(taskId: string, workers: Worker[], skills: Skill[]) {
   }));
 }
 
-/** The markup of one message: the bubble with the given id up to its action row, and the action row up to the end of its turn. */
+/** The markup of one message: its text with the given id up to its toolbar, and the toolbar up to the end of the message. */
 function bubbleMarkup(html: string, elementId: string) {
   const start = html.indexOf(`id="${elementId}"`);
   expect(start).toBeGreaterThan(-1);
@@ -51,8 +52,8 @@ function bubbleMarkup(html: string, elementId: string) {
   return { bubble: html.slice(start, actions), actions: html.slice(actions, Math.min(...ends)) };
 }
 
-describe('the badges on the bubble', () => {
-  it('anchors the marks to the user bubble and to the answer, and keeps them out of the action row', () => {
+describe('the badges under the message', () => {
+  it('puts the marks under the person\'s message and under the answer, and keeps them out of the toolbar', () => {
     const { task, run, artifact, researcher, skill } = savedChat();
     const userTurn = turnMessageId(task.id, 0);
     store.update('tasks', { ...task, messageReactions: [
@@ -63,31 +64,31 @@ describe('the badges on the bubble', () => {
     const html = renderThread(task.id, [researcher], [skill]);
 
     const userBubble = bubbleMarkup(html, `message-${userTurn}`);
-    expect(userBubble.bubble).toContain('class="org-reaction-badges org-reaction-badges-start"');
+    expect(userBubble.bubble).toContain('class="org-reaction-badges org-reaction-badges-inline"');
     expect(userBubble.bubble).toContain('🎉');
     expect(userBubble.bubble).toContain('1 reacted 🎉: Researcher');
     expect(userBubble.bubble).toContain('aria-pressed="false"');
     expect(userBubble.actions).not.toContain('reaction-badge');
 
     const answer = bubbleMarkup(html, `message-${artifact.id}`);
-    expect(answer.bubble).toContain('class="org-reaction-badges org-reaction-badges-end"');
+    expect(answer.bubble).toContain('class="org-reaction-badges org-reaction-badges-inline"');
     expect(answer.bubble).toContain('2 reacted 😂: You, Researcher');
     expect(answer.bubble).toContain('aria-pressed="true"');
     expect(answer.bubble).toContain('class="org-reaction-badge-count" aria-hidden="true">2<');
     expect(answer.actions).not.toContain('reaction-badge');
     expect(answer.actions).not.toContain('😂');
-    // The answer's actions still carry the react trigger, which opens the picker rather than clearing the mark.
+    // The answer's toolbar still carries the react trigger, which opens the picker rather than clearing the mark.
     expect(answer.actions).toContain('aria-haspopup="true"');
   });
 
-  it('puts a report\'s marks on its card', () => {
+  it('puts a report\'s marks under its card', () => {
     const { task, run, artifact, researcher, skill } = savedChat();
     const report = { ...artifact.report, format: 'report' as const };
     store.put('artifacts', { ...artifact, report, hash: createHash('sha256').update(JSON.stringify(report)).digest('hex') }, { column: 'run_id', value: run.id });
     store.update('tasks', { ...task, messageReactions: [{ messageId: artifact.id, emoji: 'agree', actor: 'user', createdAt: now() }] });
     const html = renderThread(task.id, [researcher], [skill]);
     const card = html.indexOf('class="report-card"');
-    const badges = html.indexOf('class="org-reaction-badges org-reaction-badges-end"');
+    const badges = html.indexOf('class="org-reaction-badges org-reaction-badges-inline"');
     expect(card).toBeGreaterThan(-1);
     expect(badges).toBeGreaterThan(card);
     expect(html.indexOf('class="message-actions"', card)).toBeGreaterThan(badges);

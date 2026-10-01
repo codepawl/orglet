@@ -44,10 +44,13 @@ try {
   const state = await page.evaluate(() => window.orglet.call('workspace', {}));
   const taskId = state.tasks[0].id; assert.equal(state.tasks[0].accepted, false);
   const answer = page.locator('.chat-reply').first();
+  // The buttons are the message's toolbar, which shows while the message is pointed at (COD-365).
+  await answer.hover();
   await answer.getByRole('button', { name: 'Thả react' }).click();
   await answer.getByRole('button', { name: 'Mình thấy ổn, giữ hướng này.' }).click();
   const reacted = await page.evaluate(id => window.orglet.call('task', { id }), taskId);
   assert.equal(reacted.task.messageReactions?.[0].emoji, 'agree');
+  await answer.hover();
   await answer.getByRole('button', { name: 'Trả lời tin này' }).click();
   await page.locator('.composer-reply').waitFor();
   await page.getByRole('button', { name: 'Bỏ trả lời' }).click();

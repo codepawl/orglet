@@ -175,6 +175,10 @@ async function seedWorkspace(page) {
   await waitForTask(page, crewTaskId);
   const chatTaskId = await callCore(page, 'createTask', { workerId: researcher.id, brief: 'Plan the launch of my weekly newsletter next month. Keep it short.', sourceIds: [], consent: false, budgetMicros: 1000 });
   await waitForTask(page, chatTaskId);
+  // A side thread of that chat, which opens in the right panel beside it (COD-365).
+  const sideThreadBrief = 'Draft three subject lines for it.';
+  const sideThreadId = await callCore(page, 'startSideThread', { taskId: chatTaskId, brief: sideThreadBrief, sourceIds: [], consent: false, providerScopes: [], budgetMicros: 1000 });
+  await waitForTask(page, sideThreadId);
   // An earlier chat of an orglet, replaced by a newer one: it has no row anywhere in the sidebar, so opening it puts it on
   // the Open list (COD-355). Group chats, side threads and schedule runs have their own rows and never go there.
   const analyst = (await callCore(page, 'workspace', {})).workers.find(worker => worker.name === 'Data analyst');
@@ -195,7 +199,7 @@ async function seedWorkspace(page) {
     await callCore(page, 'saveRoutine', { ...base, name: schedule.name, enabled: schedule.enabled ?? true, schedule: schedule.schedule, task: { ...base.task, ...schedule.task } });
   }
   const islandCrew = heldModel ? await seedIslandCrew(page, researcher) : undefined;
-  return { researcher, crew, islandCrew, earlierChatBrief };
+  return { researcher, crew, islandCrew, earlierChatBrief, sideThreadBrief };
 }
 
 async function settle(page) {
@@ -264,6 +268,14 @@ async function foldSidebar(page) {
 
 const SCREENS = [
   { name: 'chat', open: async () => {} },
+  // An answer pointed at: its toolbar floats at its top right (COD-365).
+  { name: 'chat-message-toolbar', open: async page => { await page.locator('.main-pane .assistant-message').first().hover(); await page.locator('.main-pane .assistant-message .message-actions').first().waitFor(); } },
+  // A side thread opened from its row: in the right panel beside its main chat, or in the main card when the window has no room for the panel.
+  { name: 'side-thread-panel', open: async (page, context) => {
+    await openSidebar(page);
+    await page.getByRole('button', { name: context.sideThreadBrief }).first().click();
+    await page.locator('.thread-pane .chat-reply, .main-pane .side-thread-origin').first().waitFor();
+  } },
   { name: 'chat-options-menu', open: async page => { await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'composer-add-menu', open: async page => { await page.getByRole('button', { name: label('Thêm nguồn'), exact: true }).first().click(); await page.getByRole('menu').waitFor(); } },
   { name: 'crew-chat', open: async (page, context) => { await openSidebar(page); await page.getByRole('button', { name: context.crew.name, exact: true }).first().click(); await page.locator('.chat-reply, .report').first().waitFor(); } },

@@ -10,7 +10,8 @@ import { SkillEditor } from './components/Editors';
 import { WorkerDialog, workerProviderOptions } from './components/WorkerDialog';
 import { chatSettingsTarget, connectModelStep, demoWorkerToConnect } from './chatSettings';
 import { SettingsDialog, type SettingsTab } from './components/SettingsDialog';
-import { TaskThread } from './components/TaskThread';
+import { TaskThread, ThreadSkeleton } from './components/TaskThread';
+import { SideThreadPanel } from './components/SideThreadPanel';
 import { focusMessage } from './components/messageMarks';
 import { SourcePanel, type SourceTarget } from './components/SourcePanel';
 import { SourceDialog } from './components/SourceViewer';
@@ -87,7 +88,7 @@ import { noSelection, pruneSelection, selectRange, toggleSelection, type Selecti
 import { groupChatFromRecipient, groupChatFromSelection, groupChatKey, groupChatNames, groupChatRecipient, groupChatTaskInput, isGroupChat, isGroupChatTask, openGroupChats, pruneGroupChat, type PendingGroupChat } from './groupChat';
 import type { AppProposal, ProposalTarget } from '../shared/app-proposals';
 import { proposedMascot, type ProposalActions } from './components/AppProposals';
-import { EditableText, Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
+import { EditableText } from '@codepawl/orglet-ui';
 import { APP_KEY, dwellAbout, dwellChat, dwellModels, followWorkspace, taskDetails, updateStates } from './caches';
 import { dwellHandlers, useCached } from './prefetch';
 import { becameReady, updateIndicator } from '../shared/updates';
@@ -183,17 +184,8 @@ function freshFaceSize(count: number): 'xl' | 'lg' {
   return count > BIG_FRESH_FACES ? 'lg' : 'xl';
 }
 
-function ThreadSkeleton() {
-  return <SkeletonGroup className="thread-skeleton" label={t('Đang mở cuộc trò chuyện…')}>
-    <div className="thread-skeleton-ask"><Skeleton shape="block" className="thread-skeleton-bubble" /></div>
-    <div className="thread-skeleton-reply">
-      <Skeleton shape="circle" className="thread-skeleton-face" />
-      <div><Skeleton width="92%" /><Skeleton width="78%" delay={0.08} /><Skeleton width="46%" delay={0.16} /></div>
-    </div>
-  </SkeletonGroup>;
-}
 
-type Panel = 'task' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | null;
+type Panel = 'task' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | 'thread' | null;
 export function App() {
   useLanguage();
   const [workspace, setWorkspace] = useState<Workspace>(); const [connections, setConnections] = useState<Connections>(emptyConnections());
@@ -233,7 +225,8 @@ export function App() {
   };
   const [sourceTarget, setSourceTarget] = useState<SourceTarget>();
   // One source per dialog (user, 2026-09-21): a file opens in its own viewer; the panel lists the chat's files and holds the checkers.
-  const [viewingSource, setViewingSource] = useState<{ id: string; lines?: [number, number] }>();
+  // `detail` is set when the file belongs to the side thread open in the right panel rather than to the chat on screen.
+  const [viewingSource, setViewingSource] = useState<{ id: string; lines?: [number, number]; detail?: TaskDetail }>();
   // Chat details list the team behind a team chat; a worker chat has none.
   const detailTeam = detail ? workspace?.teams.find(team => team.id === detail.task.teamId) : undefined;
   const openSources = (target?: SourceTarget) => {
@@ -283,7 +276,14 @@ export function App() {
   const openSettings = (tab: SettingsTab = 'general') => { setSettingsTab(tab); setPanel('settings'); };
   // Chat details sit in the shell next to the conversation, not over it.
   const detailsOpen = panel === 'activity';
-  const detailsOpenRef = useRef(detailsOpen); detailsOpenRef.current = detailsOpen;
+  // A side thread opens in the same right panel, beside its main chat, and takes Details' place while open (COD-365).
+  const [sideThread, setSideThread] = useState<{ taskId: string; mainTaskId: string; messageId?: string }>();
+  const sideThreadRef = useRef(sideThread); sideThreadRef.current = sideThread;
+  // A thread deleted or archived while open leaves the panel with its main chat.
+  const sideThreadRow = sideThread ? workspace?.tasks.find(task => task.id === sideThread.taskId && !task.deletedAt && !task.archivedAt) : undefined;
+  const threadOpen = panel === 'thread' && sideThreadRow !== undefined && sideThread?.mainTaskId === selected;
+  const sidePaneOpen = detailsOpen || threadOpen;
+  const detailsOpenRef = useRef(sidePaneOpen); detailsOpenRef.current = sidePaneOpen;
   // Several crews or orglets picked in the sidebar (COD-214), and the section whose edit button is in its Done
   // state. Both live here only: nothing is stored, and rows that leave the workspace leave the selection.
   const [selection, setSelection] = useState<SidebarSelection>(noSelection);
@@ -342,7 +342,7 @@ export function App() {
     const motion = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--motion-base')) || 170;
     const timer = setTimeout(() => setPanelMoving(false), motion + 40);
     return () => clearTimeout(timer);
-  }, [sidebar, detailsOpen]);
+  }, [sidebar, sidePaneOpen]);
   const [dismissedCatchUpNotice, setDismissedCatchUpNotice] = useState('');
   const composer = useRef<HTMLTextAreaElement>(null); const refreshId = useRef(0);
   const bootedLiveThread = useRef(false);
@@ -551,9 +551,37 @@ export function App() {
     const stamp = new Date().toISOString();
     setWorkspace(current => current ? { ...current, tasks: current.tasks.map(task => task.id === taskId ? { ...task, [field]: task[field] ?? stamp } : task) } : current);
   };
+  /** Whether the right panel shows at this window width; the stylesheet hides it below these widths (`.details-pane`). */
+  const sidePanelFits = () => innerWidth > 1000 || (innerWidth > 860 && !sidebar);
+  /**
+   * The main chat a side thread opens beside, in the right panel (COD-365, like a Slack thread), or nothing when the
+   * thread should fill the main pane as before: the window has no room for the panel, or its main chat is archived
+   * or deleted and so cannot be opened beside it.
+   */
+  const mainChatBeside = (id: string): string | undefined => {
+    const row = workspace?.tasks.find(task => task.id === id);
+    if (!row?.sideOf || !sidePanelFits()) return undefined;
+    const mainTaskId = row.sideOf.taskId;
+    const main = workspace?.tasks.find(task => task.id === mainTaskId && !task.deletedAt && !task.archivedAt);
+    return main?.id;
+  };
+  const showThreadBeside = (id: string, mainTaskId: string, messageId?: string) => {
+    if (mainTaskId !== selectedRef.current) openInPane(mainTaskId);
+    setSideThread({ taskId: id, mainTaskId, messageId });
+    setPanel('thread');
+  };
+  /** Opens a chat: a side thread beside its main chat when there is room, anything else in the main pane. */
+  const openTask = (id: string, options: { toMessage?: boolean } = {}) => {
+    const mainTaskId = mainChatBeside(id);
+    if (mainTaskId) {
+      showThreadBeside(id, mainTaskId);
+      return;
+    }
+    openInPane(id, options);
+  };
   // Re-opening the task already shown keeps its detail; clearing it would wait for a reload that never comes.
   // `toMessage` is set when a message in the chat takes focus instead of the main pane (a search result, COD-267).
-  const openTask = (id: string, { toMessage = false }: { toMessage?: boolean } = {}) => {
+  const openInPane = (id: string, { toMessage = false }: { toMessage?: boolean } = {}) => {
     // The ref, not this render's `selected`: a toast's Undo runs a closure from the render before its chat was left.
     if (id !== selectedRef.current) {
       const cached = taskDetails.get(id);
@@ -589,7 +617,14 @@ export function App() {
     }
   };
   const openChatAt = (taskId: string, messageId?: string) => {
-    openTask(taskId, { toMessage: Boolean(messageId) });
+    const mainTaskId = mainChatBeside(taskId);
+    if (mainTaskId) {
+      // The thread in the panel brings the message into view itself once it has loaded.
+      showThreadBeside(taskId, mainTaskId, messageId);
+      setMessageToShow(undefined);
+      return;
+    }
+    openInPane(taskId, { toMessage: Boolean(messageId) });
     setMessageToShow(messageId ? { taskId, messageId } : undefined);
   };
   const openTeam = (id: string) => {
@@ -730,6 +765,9 @@ export function App() {
     if (!activeChatKey) return;
     const wanted = detailsChats.current.has(activeChatKey);
     setPanel(current => {
+      // A side thread stays open beside its own main chat; moving to any other chat closes it.
+      if (current === 'thread' && sideThreadRef.current?.mainTaskId === selectedRef.current) return current;
+      if (current === 'thread') return wanted ? 'activity' : null;
       if (wanted && current === null) return 'activity';
       if (!wanted && current === 'activity') return null;
       return current;
@@ -1861,16 +1899,17 @@ export function App() {
   });
   const chatView = chatViewToShow(chatViewKey ? chatViews[chatViewKey] : undefined, chatViewList);
   const openScheduleEditor = (view: RoutineView) => { setRoutineDraft(undefined); setRoutineView(view); setPanel('routines'); };
+  const sourceDetail = viewingSource?.detail ?? detail;
   const chatViewContent = chatView === 'files' && viewDetail ? <SourcePanel detail={viewDetail} target={sourceTarget} refresh={() => void refresh()} openSource={id => setViewingSource({ id })} />
     : chatView === 'changes' && viewDetail ? <ChangesView detail={viewDetail} recovery={workspaceRecovery} action={action} />
       // A schedule opens in the Schedules dialog to be edited, so leaving an unsaved edit asks the one question it always has.
       : chatView === 'schedules' ? <RoutinesPanel workspace={workspace} routines={ownerSchedules} view={{ editing: false }} onView={openScheduleEditor} onDirty={markRoutineDirty} onBack={() => openRoutines()} openTask={openTask} />
         : chatView === 'memory' ? <MemoryList memories={ownerMemories} workspace={workspace} onOpenChat={openTask} />
           : null;
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${sidePaneOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
-    {detailsOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
+    {sidePaneOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
     <aside className={`sidebar${sidebar ? '' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={!sidebar || undefined}>
       <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong><Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button><Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={closeSidebar}><PanelLeft size={18} /></Button></div>
       <div className="sidebar-scroll">
@@ -1977,6 +2016,22 @@ export function App() {
         : null}
       <footer className="main-footer">{t('Câu trả lời có thể sai. Kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
     </main>
+    {threadOpen && sideThread && sideThreadRow && <SideThreadPanel key={sideThread.taskId} taskId={sideThread.taskId} focusMessageId={sideThread.messageId}
+      title={taskName(sideThread.taskId) ?? sideThreadRow.brief}
+      orgletName={workspace.workers.find(item => item.id === sideThreadRow.workerId)?.name ?? 'Orglet'}
+      onClose={() => setPanel(null)} onSeen={() => void refresh()}>
+      {(threadDetail, threadRecovery) => <FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}>
+        <TaskThread detail={threadDetail} workspace={workspace} recovery={threadRecovery} action={action} islandDock={threadDetail.task.id} embedded
+          showSources={target => target?.type === 'source' ? setViewingSource({ id: target.id, lines: target.lines, detail: threadDetail }) : openSources(target)}
+          openMessage={messageId => requestAnimationFrame(() => focusMessage(messageId))}
+          proposals={[]} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions}
+          mentionPeople={taskWorkers(threadDetail.task, workspace)} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker}
+          askToFix={text => setFollowUpPrefill({ taskId: threadDetail.task.id, text, at: Date.now() })} forward={setForwarding} />
+        <FollowUpComposer key={`follow:${threadDetail.task.id}`} detail={threadDetail} workspace={workspace} harnesses={harnesses} ready={ready} islandDock={threadDetail.task.id}
+          openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action}
+          prefill={followUpPrefill?.taskId === threadDetail.task.id ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} onConnectModel={connectModel} />
+      </FormatPreferences.Provider>}
+    </SideThreadPanel>}
     {detailsOpen && (detail || detailsTeam || detailsWorker || group) && <DetailsPanel workspace={workspace} team={detailsTeam} worker={detailsWorker} group={!selected && group ? groupWorkers : undefined} detail={detail}
       recovery={workspaceRecovery} recoveryFocus={recoveryFocus}
       readProcessOutput={detail ? (processId, stream, offset) => orglet.call('recoveryProcessOutput', { taskId: detail.task.id, processId, stream, offset }) : undefined}
@@ -2013,7 +2068,7 @@ export function App() {
         onWorkspace: changeNewChatWorkspace,
       } : undefined}
       workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
-    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : t('Chi tiết cuộc trò chuyện')}>
+    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity', 'thread'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : t('Chi tiết cuộc trò chuyện')}>
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
       {panel === 'skill' && <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />}
@@ -2024,11 +2079,12 @@ export function App() {
       </div>}
       {panel === 'knowledge' && <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />}
     </Drawer>
-    {viewingSource && detail && <SourceDialog key={viewingSource.id} detail={detail} sourceId={viewingSource.id} lines={viewingSource.lines} onClose={() => setViewingSource(undefined)} refresh={() => void refresh()}
-      openSource={id => setViewingSource({ id })}
+    {viewingSource && sourceDetail && <SourceDialog key={viewingSource.id} detail={sourceDetail} sourceId={viewingSource.id} lines={viewingSource.lines} onClose={() => setViewingSource(undefined)} refresh={() => void refresh()}
+      openSource={id => setViewingSource(current => ({ id, detail: current?.detail }))}
       onAsk={source => {
         // Ask about this (COD-280): the file goes on the chat's next message, and the viewer gives way to the composer.
-        setFollowUpPrefill({ taskId: selected ?? detail.task.id, intake: { sources: [source], skipped: [] }, at: Date.now() });
+        // A file opened from the side thread in the right panel goes on that thread's message.
+        setFollowUpPrefill({ taskId: viewingSource.detail ? sourceDetail.task.id : selected ?? sourceDetail.task.id, intake: { sources: [source], skipped: [] }, at: Date.now() });
         setViewingSource(undefined);
         // From the Files view the message box is a tab away: go back to the chat, where the file waits on it.
         showChatView('chat');

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route, ChevronRight } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route, ChevronRight, UserRound } from 'lucide-react';
 import { routeOfTurn, type TurnRoute } from '../../shared/turn-routing';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
+import { Skeleton, SkeletonGroup } from '@codepawl/orglet-ui';
 import { formatMoney } from './money';
 import type { SourceTarget } from './SourcePanel';
 import { ReviewSummary } from './ReviewSummary';
@@ -23,8 +24,10 @@ import { harnessAccountLabel } from './PlanUsage';
 import { accountSwitchFor, outOfPlanRun, type AccountSwitch } from '../../shared/account-switch';
 import { Markdown } from './Markdown';
 import { Attachment } from './Attachment';
-import { needsTimeMark, TimeMark } from './TimeMark';
-import { MessageActions, MessageBadges } from './MessageActions';
+import { clockLabel, needsTimeMark, TimeMark } from './TimeMark';
+import { MessageActions, MessageBadges, hasReactions } from './MessageActions';
+import { messageGrouping, personAuthorKey, workerAuthorKey } from '../messageGroups';
+import { MAIN_DOCK } from './islandDock';
 import { turnMessageId } from '../../shared/message-interactions';
 import { LiveRun, RunStatusLine, browsingSiteOf, islandBeforeStreaming, islandOf, liveRunOf, runStepLine, useRunProgress, runEventMessage, waitingStepLine, withBrowserControls, withDesktopApproval, workingWorkers } from './LiveRun';
 import { BrowserApprovalCard } from './BrowserApproval';
@@ -117,7 +120,9 @@ type Turn = { revision: number; runs: Run[]; sentAt: string; brief: string; repl
  * checklist requires it. Run controls belong to the latest turn only; token usage and cost live in Chi tiết.
  */
 
-export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward }: { detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
+export function TaskThread({ detail, workspace, recovery, action, showSources, reviewRecovery, openMessage, proposals, openKnowledge, reviewKnowledge, proposalActions, mentionPeople, mentionAllNames, openMemories, openChat, openMainChat, scheduleRun, askToFix, forward, islandDock = MAIN_DOCK, embedded = false }: {
+  /** The prompt bar this chat's island docks on: the main chat's, or a side thread's in the right panel (COD-365). */ islandDock?: string;
+  /** Drawn inside the right panel beside its main chat (COD-365): the panel's own head says what the thread is. */ embedded?: boolean; detail: TaskDetail; /** The live workers, skills and chats, so the app-change cards can name what an id or a same-reply ref points at (COD-212) and open the chats a self-improvement came from (COD-162). */ workspace: Pick<Workspace, 'workers' | 'skills' | 'tasks'>; recovery?: WorkspaceRecoveryView; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; reviewRecovery?: (runId?: string) => void; openMessage: (messageId: string) => void; proposals: Knowledge[]; openKnowledge: (item: Knowledge) => void; reviewKnowledge: () => void; /** Apply, dismiss, undo and open for the app-change cards (COD-199); the parent owns the bridge. */ proposalActions: ProposalActions; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[]; /** Opens a worker's Memory tab from the trace above its answer (COD-220). */ openMemories?: (workerId: string) => void;
   /** Opens another chat: the side thread a quote came from, or the main chat an answer was brought into (COD-247). */ openChat?: (taskId: string) => void;
   /** Opens an orglet's main chat from one of its side threads. */ openMainChat?: (workerId: string) => void;
   /** Set on a schedule's run: the schedule's name, who ran it, and the way to the schedule (COD-258). */ scheduleRun?: { name: string; owner: string; openSchedule?: () => void };
@@ -264,17 +269,17 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
     },
   };
   useEffect(() => {
-    if (dockedIsland) dockIsland({ kind: 'run', ...dockedIsland });
+    if (dockedIsland) dockIsland({ kind: 'run', ...dockedIsland }, islandDock);
     else if (accountShown) dockIsland({
       kind: 'account', key: accountShown.runId, harnessName: accountShown.harness.name,
       ...(switchTarget ? { target: { label: switchTarget.label, usedPercent: switchTarget.usedPercent } } : {}),
       ...(switchResetsAt ? { resetsAt: switchResetsAt } : {}),
       switchAccount: () => accountActions.current.switchAccount(), dismiss: () => accountActions.current.dismiss(),
-    });
-    else if (knowledgeShown) dockIsland({ kind: 'knowledge', key: suggestionKey, count: proposals.length, review: () => knowledgeActions.current.review(), dismiss: () => knowledgeActions.current.dismiss() });
-    else dockIsland(undefined);
-  }, [dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, dockedIsland?.actions?.map(control => control.kind).join(','), islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt]);
-  useEffect(() => () => dockIsland(undefined), []);
+    }, islandDock);
+    else if (knowledgeShown) dockIsland({ kind: 'knowledge', key: suggestionKey, count: proposals.length, review: () => knowledgeActions.current.review(), dismiss: () => knowledgeActions.current.dismiss() }, islandDock);
+    else dockIsland(undefined, islandDock);
+  }, [islandDock, dockedIsland?.state, dockedIsland?.label, dockedIsland?.receipt, dockedIsland?.actions?.map(control => control.kind).join(','), islandWorkerKey, knowledgeShown, suggestionKey, accountShown?.runId, switchTarget?.accountId, switchTarget?.label, switchTarget?.usedPercent, switchResetsAt]);
+  useEffect(() => () => dockIsland(undefined, islandDock), [islandDock]);
 
   // A face nods when its answer lands, not when an old chat opens: the runs already finished when this chat was
   // opened stay still, and only a run that completes after that is marked `landed` (the Finishing state in styles.css).
@@ -282,7 +287,30 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   if (finishedAtOpen.current === null) finishedAtOpen.current = new Set(detail.runs.filter(run => run.status === 'completed').map(run => run.id));
   const landed = (run: Run) => run.status === 'completed' && !finishedAtOpen.current!.has(run.id);
   const bylineClass = (author?: Run, working = false) => working ? 'message-byline working' : author && landed(author) ? 'message-byline landed' : 'message-byline';
-  const byline = (author?: Run, working = false) => <div className={bylineClass(author, working)}>{/* Agent marks sit left of the name. */}{author ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} /> : <span className="orglet-mark small">o</span>}<strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author && bylineRole(author)}{author && <span className="byline-provider">{providerName(author.snapshot.worker.provider)}</span>}</div>;
+  /**
+   * The head of an orglet's message (COD-365): its face in the gutter, carrying the state the face plays (thinking
+   * while the run works, a nod when the answer lands), and on the line beside it the name, the role it played for a
+   * crew and the model that wrote it.
+   */
+  const workerHeader = (author?: Run, working = false): MessageHeader => ({
+    face: <span className={bylineClass(author, working)}>{author
+      ? <Avatar name={author.snapshot.worker.name} seed={author.snapshot.worker.id} mascot={author.snapshot.worker.avatar?.mascot} defaultMascot hint={author.snapshot.worker.description} color={author.snapshot.worker.avatar?.color} size="md" alive badge={author.snapshot.worker.provider === 'demo' ? undefined : <ProviderMark provider={author.snapshot.worker.provider} size="small" decorative />} />
+      : <span className="orglet-mark small">o</span>}</span>,
+    name: <><strong>{author?.snapshot.worker.name ?? 'Orglet'}</strong>{author && bylineRole(author)}{author && <span className="byline-provider">{providerName(author.snapshot.worker.provider)}</span>}</>,
+  });
+  const personHeader: MessageHeader = { face: <PersonFace />, name: <strong>{t('Bạn')}</strong> };
+  const reactions = detail.task.messageReactions ?? [];
+  /** A message's reactions for its foot row, or nothing when nobody reacted, so the row is left out. */
+  const badgesFor = (messageId: string) => hasReactions(reactions, messageId)
+    ? <MessageBadges taskId={detail.task.id} messageId={messageId} reactions={reactions} runs={detail.runs} action={action} />
+    : undefined;
+  /** The faces of who has read this far, or nothing when no orglet stopped at this turn. */
+  const receiptsFor = (revision: number) => {
+    const readers = readersByRevision.get(revision) ?? [];
+    return readers.length > 0 ? <ReadReceipts readers={readers} /> : undefined;
+  };
+  // Who wrote each message in drawing order, so a run of messages from one author shares one head (COD-365).
+  const grouping = messageGrouping();
 
   // One line per run of the turn that changed files in its working copy (COD-163); `named` says whose line carries
   // the worker's name. Each opens the diff viewer.
@@ -320,20 +348,20 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       handIn: author?.stage === 'synthesis' ? blockedLinesOf(runs) : undefined,
       changes: changedFilesLines(runs, run => run.id !== artifact.runId),
       proposals: proposalCards(proposals),
-      // A chat answer copies and downloads from its row; a report keeps those in its viewer's toolbar.
-      actions: <MessageActions key="actions" taskId={detail.task.id} messageId={artifact.id} author={authorName} reactions={detail.task.messageReactions ?? []} action={action}
-        text={chat ? replyText : tMessage(artifact.report.title)}
-        onForward={forward ? () => forward({ taskId: detail.task.id, messageId: artifact.id, author: authorName, text: chat ? replyText : `${tMessage(artifact.report.title)}\n\n${tMessage(artifact.report.summary)}`, files: [] }) : undefined}
-        leading={<>
-          {chat && <ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [authorName])} action={action} />}
-          {detail.task.sideOf && <BringIntoMainChat artifactId={artifact.id} brought={broughtIn.has(artifact.id)} about={t('Câu trả lời của {0}', [authorName])} action={action} openChat={openChat} />}
-        </>} trailing={receipts} />,
     });
-    // The reactions ride on the answer's own corner, whichever shape it takes (COD-219).
-    const badges = <MessageBadges taskId={detail.task.id} messageId={artifact.id} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="end" />;
+    // A chat answer copies and downloads from its toolbar; a report keeps those in its viewer's toolbar.
+    const toolbar = <MessageActions taskId={detail.task.id} messageId={artifact.id} author={authorName} reactions={reactions} action={action}
+      text={chat ? replyText : tMessage(artifact.report.title)}
+      onForward={forward ? () => forward({ taskId: detail.task.id, messageId: artifact.id, author: authorName, text: chat ? replyText : `${tMessage(artifact.report.title)}\n\n${tMessage(artifact.report.summary)}`, files: [] }) : undefined}
+      leading={<>
+        {chat && <ArtifactActions artifactId={artifact.id} about={t('Câu trả lời của {0}', [authorName])} action={action} />}
+        {detail.task.sideOf && <BringIntoMainChat artifactId={artifact.id} brought={broughtIn.has(artifact.id)} about={t('Câu trả lời của {0}', [authorName])} action={action} openChat={openChat} />}
+      </>} />;
+    // The reactions sit under the answer, whichever shape it takes (COD-219, COD-365).
+    const badges = badgesFor(artifact.id);
     return chat
-      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} retry={retry} />
-      : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} badges={badges} />;
+      ? <ChatReply artifact={artifact} text={replyText} notices={notices} badges={badges} receipts={receipts} toolbar={toolbar} retry={retry} />
+      : <ReportView artifact={artifact} author={author} latest={latest} busy={busy} detail={detail} action={action} showSources={showSources} notices={notices} badges={badges} toolbar={toolbar} />;
   };
   /**
    * The answer a blocked hand-in kept (COD-270): the orglet's words as it wrote them, then why its changes did not
@@ -383,7 +411,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
 
   return <div className="thread-scroll" ref={viewport}>
     <div className="thread-content" ref={threadContent}>
-      {detail.task.sideOf && <p className="side-thread-origin">
+      {detail.task.sideOf && !embedded && <p className="side-thread-origin">
         {/* Once an answer was brought in, the main chat did change; the line then says only what this chat is. */}
         <span>{detail.artifacts.some(artifact => broughtIn.has(artifact.id)) ? t('Chat phụ với {0}.', [sideThreadOrglet]) : t('Chat phụ với {0}. Chat chính vẫn như cũ.', [sideThreadOrglet])}</span>
         {openMainChat && <button type="button" onClick={() => openMainChat(detail.task.workerId)}>{t('Mở chat chính')}</button>}
@@ -448,34 +476,52 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         const retryButton = latest && !busy && !['completed', 'waiting_input'].includes(detail.task.status)
           ? <Button className="limit-retry" variant="outline" onClick={() => action(() => orglet.call('retry', { id: detail.task.id }))}><RotateCcw size={16} />{t('Thử lại với thiết lập hiện tại')}</Button>
           : null;
+        // Each message of the turn is placed in drawing order, so a run of messages from one author shares one head.
+        const timeMarked = needsTimeMark(previousSentAt, turn.sentAt);
+        if (timeMarked) grouping.breakHere();
+        const personMessageId = turnMessageId(detail.task.id, turn.revision);
+        const personContinued = grouping.place({ key: personAuthorKey, at: turn.sentAt });
+        const replyHeads = turn.replies.map(reply => grouping.place({ key: workerAuthorKey(reply.run.snapshot.worker.id), at: reply.artifact.createdAt }) ? undefined : workerHeader(reply.run));
+        const sectionShown = !turn.replies.length || (latest && (busy || detail.task.status !== 'completed'));
+        // Who signs the turn's own message: the run thinking right now, or whoever answered or stopped. A crew turn that
+        // already shows its replies, or a run not started yet, signs nothing and reads as part of the message above.
+        const sectionAuthor = latest && busy ? thinkingRun : turn.replies.length ? undefined : waitingAuthor;
+        const sectionSigned = latest && busy ? thinkingRun !== undefined : !turn.replies.length;
+        const sectionAt = turn.artifact?.createdAt ?? sectionAuthor?.startedAt;
+        const sectionContinued = sectionShown && sectionSigned
+          ? grouping.place({ key: sectionAuthor ? workerAuthorKey(sectionAuthor.snapshot.worker.id) : 'orglet', at: sectionAt })
+          : true;
+        const sectionHeader = sectionSigned && !sectionContinued ? workerHeader(sectionAuthor, latest && busy) : undefined;
+        const chatAnswered = answered && turn.artifact?.report.format === 'chat';
+        const standaloneReceipts = chatAnswered ? undefined : receiptsFor(turn.revision);
+        const turnQuotes = (detail.task.quotes ?? []).filter(quote => quote.afterRevision === turn.revision);
+        const quoteHeads = turnQuotes.map(quote => grouping.place({ key: personAuthorKey, at: quote.createdAt }) ? undefined : personHeader);
         return <div className="chat-turn" key={turn.revision}>
-          {needsTimeMark(previousSentAt, turn.sentAt) && <TimeMark at={turn.sentAt} />}
-          {/* The files ride above the bubble in their own sideways row, the way a chat app sends attachments ahead
-              of the text, rather than stacking one per line inside it (user, 2026-09-21). */}
-          {addedFiles.length > 0 && <MessageFiles files={addedFiles} onOpen={sourceId => showSources({ type: 'source', id: sourceId })} />}
-          {turn.forwarded
-            ? <ForwardedTurn forwarded={turn.forwarded} elementId={`message-${turnMessageId(detail.task.id, turn.revision)}`} mentionPeople={mentionPeople} mentionAllNames={mentionAllNames}
-              openOrigin={openChat && workspace.tasks.some(task => task.id === turn.forwarded!.fromTaskId) ? () => openChat(turn.forwarded!.fromTaskId) : undefined}
-              badges={<MessageBadges taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="start" />} />
-            : <div className="user-message" id={`message-${turnMessageId(detail.task.id, turn.revision)}`} tabIndex={-1}>
-              {turn.replyTo && <button type="button" className="message-reply-context" onClick={() => openMessage(turn.replyTo!)}>
-                <Reply size={13} aria-hidden="true" />{t('Mở tin gốc: {0}', [replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')])}
-              </button>}
-              <RoutedLine route={routeOfTurn(detail.task.routedTurns, turn.revision)} nameOf={workerId => workspace.workers.find(worker => worker.id === workerId)?.name
-                ?? detail.runs.find(run => run.snapshot.worker.id === workerId)?.snapshot.worker.name} />
-              <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
-              {/* On the bubble's start corner: the bubble is right-aligned, so that corner faces the thread. */}
-              <MessageBadges taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} reactions={detail.task.messageReactions ?? []} runs={detail.runs} action={action} align="start" />
-            </div>}
-          {/* Under the bubble, as a worker's answer carries them, so both sides of the chat act the same way. */}
-          <MessageActions taskId={detail.task.id} messageId={turnMessageId(detail.task.id, turn.revision)} author={t('Bạn')} text={turn.forwarded ? turn.forwarded.note ?? turn.forwarded.text : turn.brief} reactions={detail.task.messageReactions ?? []} action={action}
-            onForward={forward ? () => forward({ taskId: detail.task.id, messageId: turnMessageId(detail.task.id, turn.revision), author: turn.forwarded ? forwardedAuthor(turn.forwarded) : t('Bạn'), text: turn.forwarded ? turn.forwarded.text : turn.brief, files: addedFiles }) : undefined} />
-          {turn.replies.map(reply => <section key={reply.run.id} className="assistant-message" aria-label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])}>
-            {byline(reply.run)}
+          {timeMarked && <TimeMark at={turn.sentAt} />}
+          <Message className="person-message" label={t('Tin của bạn')} header={personContinued ? undefined : personHeader} at={turn.sentAt}>
+            {turn.forwarded
+              ? <ForwardedTurn forwarded={turn.forwarded} elementId={`message-${personMessageId}`} mentionPeople={mentionPeople} mentionAllNames={mentionAllNames}
+                openOrigin={openChat && workspace.tasks.some(task => task.id === turn.forwarded!.fromTaskId) ? () => openChat(turn.forwarded!.fromTaskId) : undefined} />
+              : <>
+                {turn.replyTo && <button type="button" className="message-reply-context" onClick={() => openMessage(turn.replyTo!)}>
+                  <Reply size={13} aria-hidden="true" />{t('Mở tin gốc: {0}', [replyLabel(turn.replyTo) ?? t('Tin nhắn trước không còn hiển thị')])}
+                </button>}
+                <RoutedLine route={routeOfTurn(detail.task.routedTurns, turn.revision)} nameOf={workerId => workspace.workers.find(worker => worker.id === workerId)?.name
+                  ?? detail.runs.find(run => run.snapshot.worker.id === workerId)?.snapshot.worker.name} />
+                <div className="user-message" id={`message-${personMessageId}`} tabIndex={-1}>
+                  <p><MentionText text={turn.brief} people={mentionPeople ?? []} allNames={mentionAllNames} /></p>
+                </div>
+              </>}
+            {/* The files follow the text in their own sideways row, the way Slack lists a message's attachments. */}
+            {addedFiles.length > 0 && <MessageFiles files={addedFiles} onOpen={sourceId => showSources({ type: 'source', id: sourceId })} />}
+            <MessageFoot badges={badgesFor(personMessageId)} />
+            <MessageActions taskId={detail.task.id} messageId={personMessageId} author={t('Bạn')} text={turn.forwarded ? turn.forwarded.note ?? turn.forwarded.text : turn.brief} reactions={reactions} action={action}
+              onForward={forward ? () => forward({ taskId: detail.task.id, messageId: personMessageId, author: turn.forwarded ? forwardedAuthor(turn.forwarded) : t('Bạn'), text: turn.forwarded ? turn.forwarded.text : turn.brief, files: addedFiles }) : undefined} />
+          </Message>
+          {turn.replies.map((reply, replyIndex) => <Message key={reply.run.id} className="assistant-message" label={t('Trả lời của {0}', [reply.run.snapshot.worker.name])} header={replyHeads[replyIndex]} at={reply.artifact.createdAt}>
             {answer(reply.artifact, reply.run, [reply.run], turnProposals.filter(proposal => proposal.runId === reply.run.id), latest)}
-          </section>)}
-          {(!turn.replies.length || (latest && (busy || detail.task.status !== 'completed'))) && <section className={latest && (detail.task.status === 'waiting_input' || browserApproval || desktopApproval) ? 'assistant-message needs-you' : 'assistant-message'} aria-label={t('Trả lời của {0}', [waitingAuthor?.snapshot.worker.name ?? 'Orglet'])}>
-            {latest && busy && thinkingRun ? byline(thinkingRun, true) : !(latest && busy) && !turn.replies.length && byline(waitingAuthor)}
+          </Message>)}
+          {sectionShown && <Message className={latest && (detail.task.status === 'waiting_input' || browserApproval || desktopApproval) ? 'assistant-message needs-you' : 'assistant-message'} label={t('Trả lời của {0}', [waitingAuthor?.snapshot.worker.name ?? 'Orglet'])} header={sectionHeader} at={sectionAt}>
             {turn.runs.some(item => item.snapshot.preflightId) && <Button variant="outline" onClick={() => showSources()}>{t('Xem kiểm tra trước review')}</Button>}
             {latest && detail.task.status === 'waiting_input' && pendingDecision?.approval && <McpApprovalCard approval={pendingDecision.approval} busy={answeringDecision} sideThread={Boolean(detail.task.sideOf)}
               workerName={detail.runs.find(run => run.id === pendingDecision.runId)?.snapshot.worker.name ?? 'Orglet'}
@@ -531,7 +577,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
                 the latest turn's pause already says so in its own line. */}
             {!turn.artifact && !turn.replies.length && !heldRun && !(latest && busy) && !unresolvedError && !(latest && pendingDecision) && !(latest && detail.task.status === 'paused') && <TurnOutcomeLine outcome={unansweredTurnLine(turn.runs, headline)} />}
             {answered
-              ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest, retryButton && turn.artifact!.report.format === 'chat' && turn.artifact!.report.limitations.length > 0 ? retryButton : undefined, turn.artifact!.report.format === 'chat' ? <ReadReceipts readers={readersByRevision.get(turn.revision) ?? []} /> : undefined)
+              ? answer(turn.artifact!, turn.author, turn.runs, remainingProposals, latest, retryButton && turn.artifact!.report.format === 'chat' && turn.artifact!.report.limitations.length > 0 ? retryButton : undefined, turn.artifact!.report.format === 'chat' ? receiptsFor(turn.revision) : undefined)
               : heldRun
                 ? heldAnswer(heldRun, remainingProposals)
                 /* No answer of its own to hang them on (still running, failed, or a group turn whose replies carry
@@ -556,10 +602,12 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
               {!busy && ['paused', 'interrupted', 'waiting_budget'].includes(detail.task.status) && <Button variant="primary" onClick={() => action(() => orglet.call('resume', { id: detail.task.id }))}>{t('Tiếp tục từ checkpoint')}</Button>}
               {retryButton && !(answered && turn.artifact?.report.format === 'chat' && turn.artifact.report.limitations.length > 0) && retryButton}
             </div>}
-          </section>}
-          {answered && turn.artifact?.report.format === 'chat' ? null : <ReadReceipts readers={readersByRevision.get(turn.revision) ?? []} />}
-          {(detail.task.quotes ?? []).filter(quote => quote.afterRevision === turn.revision).map(quote =>
-            <BroughtInQuote key={quote.id} quote={quote} threadName={threadName(quote.fromTaskId)} onOpen={openChat && threadName(quote.fromTaskId) ? () => openChat(quote.fromTaskId) : undefined} />)}
+          </Message>}
+          {/* A turn whose answer is not a chat message keeps its read faces on a line of their own at the turn's end. */}
+          {standaloneReceipts && <div className="turn-receipts">{standaloneReceipts}</div>}
+          {turnQuotes.map((quote, quoteIndex) => <Message key={quote.id} className="person-message brought-in-message" label={t('Tin của bạn')} header={quoteHeads[quoteIndex]} at={quote.createdAt}>
+            <BroughtInQuote quote={quote} threadName={threadName(quote.fromTaskId)} onOpen={openChat && threadName(quote.fromTaskId) ? () => openChat(quote.fromTaskId) : undefined} />
+          </Message>)}
         </div>;
       })}
     </div>
@@ -624,22 +672,71 @@ function OutOfStepsLine({ busy, onContinue }: { busy: boolean; onContinue?: () =
   </div>;
 }
 
+/** A chat on its way: the shape of two messages, a short one and an answer, each a face beside its lines. */
+export function ThreadSkeleton() {
+  return <SkeletonGroup className="thread-skeleton" label={t('Đang mở cuộc trò chuyện…')}>
+    <div className="thread-skeleton-message">
+      <Skeleton shape="circle" className="thread-skeleton-face" />
+      <div><Skeleton width="38%" /></div>
+    </div>
+    <div className="thread-skeleton-message">
+      <Skeleton shape="circle" className="thread-skeleton-face" />
+      <div><Skeleton width="92%" /><Skeleton width="78%" delay={0.08} /><Skeleton width="46%" delay={0.16} /></div>
+    </div>
+  </SkeletonGroup>;
+}
+
+/** The head of a message: the face for the gutter and the name line beside it. */
+type MessageHeader = { face: ReactNode; name: ReactNode };
+
 /**
- * A normal chat answer: the message as a bubble, the action row directly under it, then its limitations.
- * Notices stay in their order (COD-217): what was loaded before writing above, what came out of it below the row.
+ * One message in the flat list (COD-365, after Slack): the face in a narrow gutter and, beside it, the name and the
+ * time over everything the message carries. A message that continues its author's group has no head; its gutter
+ * shows the time while the pointer is over it. The toolbar inside floats at the message's top right.
  */
-function ChatReply({ artifact, text, notices, badges, retry }: { artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges: ReactNode; retry?: ReactNode }) {
+function Message({ className, label, header, at, children }: { className: string; label: string; header?: MessageHeader; at?: string; children: ReactNode }) {
+  return <section className={className} aria-label={label} data-continued={header ? undefined : 'true'}>
+    <div className="message-gutter">{header ? header.face : at && <MessageTime at={at} className="message-hover-time" />}</div>
+    <div className="message-main">
+      {header && <div className="message-head">{header.name}{at && <MessageTime at={at} className="message-time" />}</div>}
+      {children}
+    </div>
+  </section>;
+}
+
+/** When a message was sent: the time of day, and the whole date and time in the tooltip. */
+function MessageTime({ at, className }: { at: string; className: string }) {
+  const full = new Date(at).toLocaleString(currentLocale(), { dateStyle: 'medium', timeStyle: 'short' });
+  return <time className={className} dateTime={at} title={full}>{clockLabel(at)}</time>;
+}
+
+/** The person's face: there is no picture to show, so a quiet figure in the size of an orglet's face. */
+function PersonFace() {
+  return <span className="avatar md person-face" aria-hidden="true"><UserRound size={16} /></span>;
+}
+
+/** Under a message: the reactions it wears and, at the line's end, the faces of who has read this far. */
+function MessageFoot({ badges, receipts }: { badges?: ReactNode; receipts?: ReactNode }) {
+  if (!badges && !receipts) return null;
+  return <div className="message-foot">{badges}{receipts}</div>;
+}
+
+/**
+ * A normal chat answer: the text, what came out of it, its limitations, then its reactions and read faces.
+ * Notices stay in their order (COD-217): what was loaded before writing above the text, what came out of it below.
+ */
+function ChatReply({ artifact, text, notices, badges, receipts, toolbar, retry }: { artifact: Artifact; /** The message as shown, already translated and with source ids named. */ text: string; notices: TurnNotices; badges?: ReactNode; receipts?: ReactNode; toolbar: ReactNode; retry?: ReactNode }) {
   return <div className="chat-reply">
     {notices.before}
-    <div className="chat-bubble-row">
-      <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={text} />{badges}</div>
-      {notices.after}
-    </div>
+    <div className="chat-bubble" id={`message-${artifact.id}`} tabIndex={-1}><Markdown className="prose" text={text} /></div>
+    {notices.after}
     {artifact.report.limitations.length > 0 && <div className="chat-limitations">
       <strong>{t('Phần chưa hoàn tất hoặc còn giới hạn')}</strong>
       {artifact.report.limitations.map((limitation, index) => <p key={index}>{tMessage(limitation)}</p>)}
       {retry}
     </div>}
+    <MessageFoot badges={badges} receipts={receipts} />
+    {toolbar}
   </div>;
 }
 
@@ -667,10 +764,10 @@ function forwardedAuthor(forwarded: ForwardedMessage): string {
 }
 
 /**
- * A turn that is a forward (COD-257), the way Messenger draws one: the forwarded message on the quiet surface, so it
- * is not mistaken for something the person typed, headed by where it came from (which opens that chat while it
- * exists), then the note, if any, as the person's own bubble. Files that were not sent along are named under the
- * text; the ones that were are this turn's files and sit above it like any attachment.
+ * A turn that is a forward (COD-257): the forwarded message on the quiet surface, so it is not mistaken for
+ * something the person typed, headed by where it came from (which opens that chat while it exists), then the note,
+ * if any, as the person's own text. Files that were not sent along are named under the forwarded text; the ones that
+ * were are this turn's files and follow the message like any attachment.
  */
 /**
  * Who answers a group-chat message that tagged nobody, when Tacet picked one orglet for it (COD-305). It sits where a
@@ -686,7 +783,7 @@ export function RoutedLine({ route, nameOf }: { route?: TurnRoute; nameOf: (work
   </p>;
 }
 
-function ForwardedTurn({ forwarded, elementId, badges, openOrigin, mentionPeople, mentionAllNames }: { forwarded: ForwardedMessage; elementId: string; badges: ReactNode; openOrigin?: () => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
+function ForwardedTurn({ forwarded, elementId, openOrigin, mentionPeople, mentionAllNames }: { forwarded: ForwardedMessage; elementId: string; openOrigin?: () => void; mentionPeople?: readonly MentionPerson[]; mentionAllNames?: readonly string[] }) {
   const author = forwardedAuthor(forwarded);
   const sameName = forwarded.authorKind === 'orglet' && author === forwarded.from;
   let origin = t('Chuyển tiếp từ {0} · {1} viết', [forwarded.from, author]);
@@ -695,22 +792,21 @@ function ForwardedTurn({ forwarded, elementId, badges, openOrigin, mentionPeople
   else if (forwarded.authorKind === 'person') origin = t('Chuyển tiếp từ {0} · bạn viết', [forwarded.from]);
   const unshared = forwarded.files.filter(file => !file.sourceId).map(file => file.name);
   return <>
-    <div className="user-message forwarded-message" id={elementId} tabIndex={-1}>
+    <div className="forwarded-message" id={elementId} tabIndex={-1}>
       {openOrigin
         ? <button type="button" className="message-reply-context" onClick={openOrigin}><Forward size={13} aria-hidden="true" />{origin}</button>
         : <p className="message-reply-context"><Forward size={13} aria-hidden="true" />{origin}</p>}
       {forwarded.authorKind === 'orglet' ? <Markdown className="prose" text={forwarded.text} /> : <p>{forwarded.text}</p>}
       {unshared.length > 0 && <p className="forwarded-files"><FileX size={13} aria-hidden="true" />{t('Không gửi kèm: {0}', [unshared.join(', ')])}</p>}
-      {badges}
     </div>
     {forwarded.note && <div className="user-message forward-note"><p><MentionText text={forwarded.note} people={mentionPeople ?? []} allNames={mentionAllNames} /></p></div>}
   </>;
 }
 
 /**
- * An answer from a side thread that the person brought into this main chat (COD-247). It sits on the person's side,
- * like their own messages, because they put it here; the line above it says where it came from and opens that thread.
- * It is a quote, not a message sent: nothing ran when it arrived.
+ * An answer from a side thread that the person brought into this main chat (COD-247). It is signed by the person,
+ * because they put it here, and sits on the quiet surface as a quote; the line above it says where it came from and
+ * opens that thread. It is a quote, not a message sent: nothing ran when it arrived.
  */
 function BroughtInQuote({ quote, threadName, onOpen }: { quote: ChatQuote; threadName?: string; onOpen?: () => void }) {
   const origin = threadName ? t('{0} trong chat phụ “{1}”', [quote.author, threadName]) : t('{0} trong một chat phụ đã xóa', [quote.author]);
@@ -770,8 +866,8 @@ function MessageFiles({ files, onOpen }: { files: TaskDetail['sources']; onOpen:
 }
 
 /**
- * Who has read this far. On a chat answer the faces sit at the end of that bubble's action row, level with
- * the buttons (user, 2026-09-20). A later note does not push them down.
+ * Who has read this far. On a chat answer the faces sit at the end of the line under it, beside its reactions
+ * (user, 2026-09-20; COD-365 moved the buttons into the floating toolbar).
  */
 function ReadReceipts({ readers }: { readers: readonly Run[] }) {
   if (!readers.length) return null;
@@ -795,7 +891,7 @@ function ArtifactActions({ artifactId, about, action }: { artifactId: string; ab
  * A structured report is sent like a file a colleague attaches (user decision 2026-09-17): a quiet file card in the chat
  * that opens in a macOS-style document viewer. The Demo sample has no summary worth showing, only its limits.
  */
-function ReportView({ artifact, author, latest, busy, detail, action, showSources, notices, badges }: { artifact: Artifact; author?: Run; latest: boolean; busy: boolean; detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; notices: TurnNotices; badges: ReactNode }) {
+function ReportView({ artifact, author, latest, busy, detail, action, showSources, notices, badges, toolbar }: { artifact: Artifact; author?: Run; latest: boolean; busy: boolean; detail: TaskDetail; action: (fn: () => Promise<unknown>) => void; showSources: (target?: SourceTarget) => void; notices: TurnNotices; badges?: ReactNode; toolbar: ReactNode }) {
   const [open, setOpen] = useState(false);
   const report = artifact.report;
   const name = tMessage(report.title);
@@ -804,9 +900,10 @@ function ReportView({ artifact, author, latest, busy, detail, action, showSource
   return <>
     <div className="report-turn" id={`message-${artifact.id}`} tabIndex={-1}>
       {notices.before}
-      {/* The card is a button, so the badges sit beside it in a wrapper the size of the card, not inside it. */}
-      <div className="report-card"><DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} />{badges}</div>
+      <div className="report-card"><DocumentCard name={name} meta={meta} onOpen={() => setOpen(true)} /></div>
       {notices.after}
+      <MessageFoot badges={badges} />
+      {toolbar}
     </div>
     <ReportDocument artifact={artifact} author={author} detail={detail} open={open} onClose={() => setOpen(false)} busy={busy} action={action} showSources={showSources} actions={<>
       {latest && <Button variant="outline" className="doc-action" disabled={detail.task.accepted || busy} onClick={() => action(() => orglet.call('accept', { id: detail.task.id }))}><Check size={15} />{detail.task.accepted ? t('Đã chấp nhận') : t('Chấp nhận báo cáo')}</Button>}
