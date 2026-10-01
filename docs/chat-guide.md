@@ -8,11 +8,33 @@ In an orglet's chat, the model picker in the row under the message box shows the
 
 The row marked **Default** is the model that runs when you have not picked one. Choosing it saves no model, so the orglet follows the CLI if its default changes later. The newest model of each family is listed first. Older ones, and models only reachable by their full ID, are under **More models**. The same list appears in the orglet's settings under **Model**, where you can still type any model ID.
 
-## Open chats and the rail
+## The area rail and the sidebar
 
-The left side picks the chat. The tabs at the top of a chat pick what you see of it: the messages, its files, what it changed, its schedules or its memory.
+Orglet's shell follows Discord's. A narrow **area rail** at the far left picks an area, the **sidebar** beside it lists that area, and the main card shows what you picked. The tabs at the top of a chat pick what you see of it: the messages, its files, what it changed, its schedules or its memory.
 
-**The sidebar.** It lists your orglets, each with its side threads and schedule runs under it, and your channels under **Channels**: each a **#** and its name, newest first, the empty ones included. A channel where a lead splits the work (what used to be a crew) lists its schedule runs under it. An orglet's row opens your DM with it, a channel's row opens the channel ([Channels](orglets-and-crews.md#channels)). Click a row to open that chat. A chat is listed once: when you open a chat that has no row anywhere in the sidebar, for example an older run of a schedule found through search or a notification, it lands in **Open** at the top. With nothing like that open, there is no **Open** section. Each row shows a face, the name and one mark:
+**The area rail.** From the top: **Home**, **Channels**, **Activity**, **Library** and **Schedules**, then one **+** that creates an orglet, a channel or a schedule. Each button is named by its tooltip and carries a count when something waits there. Home, Channels and Activity are areas, so the sidebar changes with them. Library and Schedules open their own panel. The area you left open comes back when Orglet starts. Folding the sidebar (the button in its head) leaves only the rail, which then starts with **Open sidebar**. In a window narrower than 780 px the sidebar lies over the chat until you pick something.
+
+**The user panel.** At the bottom left, across the rail and the sidebar: you, a few words on what Orglet is doing (what is running, or whether you are signed in to a CodePawl account), and **Settings**. A dot says whether any connection can run a model, and a ready update shows its restart button here. With the sidebar folded it shrinks to your face, which opens Settings.
+
+**Home.** Under the search box ("Find or start a conversation"), **Friends** opens the Friends page and **Direct messages** lists your orglets, each with its side threads and schedule runs under it. An orglet's row opens your DM with it. The Friends page is Discord's, for orglets:
+
+- **All** lists every orglet, **Working** only the ones with a run going right now. Each row has its face, its name, its description (or **Working**), a message button and a menu to edit, archive or delete it. The box above searches names and descriptions, ignoring case and accents.
+- **Add friend** makes an orglet from a name: type it, choose **Create orglet**, and the new-orglet dialog opens with the name filled in. Under **Other places to find friends** you can bring back an archived orglet, add a ready-made group (Research Review, Eris Review: each adds its orglets and a channel, on Demo until you connect a model) or import a template file.
+
+**Channels.** The sidebar lists your channels the way Discord's server list does: those with no category first, then one collapsible group per category. A category's **+** starts a channel in it. A channel's category is set in its settings, under **Category**. Each channel is a **#** and its name with its status mark; the rest is under [Channels](orglets-and-crews.md#channels). Open channels show a **member column** at the right with each orglet's face and whether it is working, and the lead marked when the lead splits the work. A row opens that orglet's DM. The header's member button hides or shows the column, Details takes its place while open, and a window narrower than 1100 px has no column.
+
+**Activity.** Four views, in the sidebar and as tabs on the page:
+
+| View | What it holds |
+|---|---|
+| **Needs you** | Runs stopped for a question or an approval, schedules that did not run, and notes waiting for review, each with the way to open it. |
+| **Running** | Every run under way or in line, with pause, resume, stop and the chat it works for ([technical guide](technical-guide.md#what-is-running-and-the-queue)). |
+| **Done** | Everything the app told you after its toast was gone, grouped by day, filtered by kind. Opening it marks the news as read. |
+| **Saved** | Messages you saved with **Save for later** under a message. A row opens the chat at that message; the bookmark takes it off again. |
+
+The Activity button on the rail carries what waits for you, in the accent, or the unread news.
+
+**Marks.** Each chat row shows a face (or a **#**), the name and one mark:
 
 | Mark | Meaning |
 |---|---|
@@ -24,19 +46,7 @@ The left side picks the chat. The tabs at the top of a chat pick what you see of
 
 A schedule's run has a calendar before its name. Hover a row to see whose chat it is.
 
-To take a chat off **Open**, hover it and click **×**, or click it with the middle mouse button. This only takes it off the list. The chat and its messages stay, and it comes back when you open it again. When you close the chat you are in, the chat you used before it opens. A chat you archive or delete leaves the list. Orglet keeps the list when it restarts.
-
-**The rail.** On a new install the left side is a narrow rail. From the top:
-
-1. **Open sidebar** switches to the full sidebar, with its sections, names and row menus. **Collapse sidebar** at its top brings the rail back. Orglet remembers which one you picked, and the full sidebar keeps the width you dragged it to. In a window narrower than 780 px the rail stays, and **Open sidebar** lays the full sidebar over the chat until you pick something.
-2. The magnifier opens search (**Ctrl+K**).
-3. **+** offers **New orglet** and **New channel**.
-4. One face per orglet, in the sidebar's order. Click a face to open that chat. Hover it to see the name. A small mark on the corner shows the chat's state, the same as in the sidebar.
-5. When you have channels, one **#** button lists them. Click one to open it.
-6. Under those, the faces of the chats on **Open**, the same ones the sidebar lists there. Hover one to see its name and whose chat it is, and click the small **×** on its corner to close it. Side threads and schedule runs are reached through their orglet's face, as before.
-7. At the foot: Notifications, Running, Schedules, Library and Settings, each with a count when something is waiting.
-
-If you used Orglet before the rail arrived, it opens with the full sidebar, as before. Fold it once to use the rail.
+**Open.** A chat is listed once: when you open a chat that has no row anywhere in the sidebar, for example an older run of a schedule found through search or a notification, it lands in **Open** at the top of Home. With nothing like that open, there is no **Open** section. To take a chat off **Open**, hover it and click **×**, or click it with the middle mouse button. This only takes it off the list. The chat and its messages stay, and it comes back when you open it again. When you close the chat you are in, the chat you used before it opens. A chat you archive or delete leaves the list. Orglet keeps the list when it restarts.
 
 **The tabs at the top of a chat.** Beside the chat's name, a few tabs show the parts of that chat. When the chat is narrow, for example with **Details** open, they move to a line under the name. **Chat** is always first and is where every chat opens. The others appear only when the chat has something for them, with a count:
 

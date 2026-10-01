@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react';
-import { CalendarDays, Clock, Columns2, Combine, Download, FileUp, Globe, Hash, Layers, ListOrdered, MessageSquareQuote, MessagesSquare, ScrollText, SlidersHorizontal, UserRound, UsersRound, Wallet, Workflow } from 'lucide-react';
+import { CalendarDays, Clock, Columns2, Combine, Download, FileUp, FolderTree, Globe, Hash, Layers, ListOrdered, MessageSquareQuote, MessagesSquare, ScrollText, SlidersHorizontal, UserRound, UsersRound, Wallet, Workflow } from 'lucide-react';
 import { Input, Textarea } from '@codepawl/orglet-ui';
 import { MAX_CREW_CONCURRENT_TASKS, MAX_CREW_MEMBERS, QUIET_PARALLEL_LIMIT, type ChannelLeadSettings, type Team, type Worker, type Workspace } from '../../shared/contracts';
-import { CHANNEL_NAME_LIMIT, CHANNEL_TOPIC_LIMIT, MAX_CHANNEL_MEMBERS, type ChannelMember, type ChannelMode } from '../../shared/channels';
+import { CHANNEL_CATEGORY_LIMIT, CHANNEL_NAME_LIMIT, CHANNEL_TOPIC_LIMIT, MAX_CHANNEL_MEMBERS, type ChannelMember, type ChannelMode } from '../../shared/channels';
 import { TimeZone } from '../../shared/schedule';
 import { Button, FieldLabel, MoneyInput } from './ui';
 import { Avatar } from './Avatar';
@@ -14,6 +14,7 @@ import { TabbedFormDialog } from './DialogTabs';
 import { fieldInvalid } from './fieldInvalid';
 import { toAmount, toMicros } from './money';
 import { toast } from './toast';
+import { categoryNames } from '../areas';
 import { t } from '../i18n';
 import { orglet } from '../api';
 
@@ -30,7 +31,7 @@ const limitsTab = { id: 'limits' as const, label: 'Giới hạn & ca', icon: <Wa
  * crew record that holds how the lead splits the work (COD-369). `initialTab` opens the members straight away, as the
  * header's faces do.
  */
-export type ChannelDraft = { id: string; name: string; topic?: string; members: ChannelMember[]; crewId?: string; initialTab?: 'members' } | { id?: undefined; members?: ChannelMember[]; initialTab?: undefined };
+export type ChannelDraft = { id: string; name: string; topic?: string; category?: string; members: ChannelMember[]; crewId?: string; initialTab?: 'members' } | { id?: undefined; members?: ChannelMember[]; category?: string; initialTab?: undefined };
 
 /** A new channel's lead while the person has not picked one: kept while it is still a member, else the first member. */
 export function nextLead(current: string, members: readonly string[]): string {
@@ -50,6 +51,9 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
   const [tab, setTab] = useState<Tab>(draft.initialTab ?? 'general');
   const [name, setName] = useState(editing ? draft.name : '');
   const [topic, setTopic] = useState(editing ? draft.topic ?? '' : '');
+  // The category the channel is listed under in the Channels area (COD-366); a new channel made from a category's + starts in it.
+  const [category, setCategory] = useState(draft.category ?? '');
+  const knownCategories = categoryNames([...workspace.tasks.map(task => task.channel?.category), ...workspace.emptyChannels.map(channel => channel.category)]);
   // Members are orglets; a crew picked before crews became channels joins as its orglets, and one that left the
   // workspace is not offered again, so saving drops it.
   const [orgletIds, setOrgletIds] = useState<string[]>(() => startingOrglets(draft.members ?? [], workspace));
@@ -80,7 +84,7 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
     if (!orgletIds.length) return fail('members', t('Chọn ít nhất một Tí.'), 'members');
     const leadSettings = mode === 'lead' ? lead.validate(orgletIds, fail) : undefined;
     if (mode === 'lead' && !leadSettings) return;
-    const fields = { name: trimmed, topic: topic.trim(), members: orgletIds.map(id => ({ kind: 'orglet' as const, id })), mode, ...(leadSettings ? { lead: leadSettings } : {}) };
+    const fields = { name: trimmed, topic: topic.trim(), category: category.trim(), members: orgletIds.map(id => ({ kind: 'orglet' as const, id })), mode, ...(leadSettings ? { lead: leadSettings } : {}) };
     void run(async () => {
       if (editing) {
         await orglet.call('updateChannel', { id: draft.id, ...fields });
@@ -108,6 +112,9 @@ export function ChannelDialog({ open, draft, workspace, onClose, onCreated }: { 
         <Input data-field="name" value={name} onChange={event => { setName(event.target.value); if (invalid === 'name') clearError(); }} maxLength={CHANNEL_NAME_LIMIT + 1} placeholder={t('ví dụ: ra-mắt')} invalid={invalid === 'name'} flash={flash} /></label>
       <label><FieldLabel icon={MessageSquareQuote}>{t('Chủ đề')}</FieldLabel>
         <Input value={topic} onChange={event => setTopic(event.target.value)} maxLength={CHANNEL_TOPIC_LIMIT} placeholder={t('Kênh này để làm gì')} /></label>
+      <label><FieldLabel icon={FolderTree}>{t('Nhóm')}</FieldLabel>
+        <Input value={category} onChange={event => setCategory(event.target.value)} maxLength={CHANNEL_CATEGORY_LIMIT} list="channel-categories" placeholder={t('Không nhóm')} />
+        <datalist id="channel-categories">{knownCategories.map(name => <option key={name} value={name} />)}</datalist></label>
       {editing && !crew && <p className="muted">{t('Template lưu cách Tí trưởng chia việc. Chọn cách đó trong Cách làm việc để xuất template.')}</p>}
       {crew && <p className="muted">{t('Template gồm kênh, Tí và skill đã lưu; không có API key.')}</p>}
     </>}

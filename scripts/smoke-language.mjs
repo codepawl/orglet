@@ -24,6 +24,18 @@ export async function useFullSidebar(page) {
   if (wide && await opener.isVisible()) await opener.click();
 }
 
+/**
+ * The area rail (COD-366) picks what the sidebar lists: Home has the orglets, Channels the channels. A smoke that works
+ * with channels opens that area first, and one that goes back to an orglet's row opens Home.
+ */
+export async function openChannels(page) {
+  await page.locator('.area-tile[title="Kênh"], .area-tile[title="Channels"]').first().click();
+}
+
+export async function openHome(page) {
+  await page.locator('.area-tile[title="Bạn bè và tin nhắn"], .area-tile[title="Friends and direct messages"]').first().click();
+}
+
 /** Open a specific under-the-hood task by its brief via search (sidebar no longer lists task rows). */
 export async function openThreadByBrief(page, brief) {
   if (await page.getByRole('button', { name: 'Mở sidebar', exact: true }).count()) {
