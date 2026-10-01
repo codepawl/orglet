@@ -9,7 +9,7 @@ import { dwellHandlers } from '../prefetch';
 import type { OpenChatState } from '../openChats';
 
 /** What kind of chat sits on the Open list: one with no row of its own, such as an earlier chat or an older schedule run. */
-export type OpenChatKind = 'side' | 'group' | 'schedule' | 'earlier';
+export type OpenChatKind = 'side' | 'channel' | 'schedule' | 'earlier';
 
 /** One chat on the Open list (COD-355): who it is with, its name, its one state, and how to open and close it. */
 export type OpenChatItem = {

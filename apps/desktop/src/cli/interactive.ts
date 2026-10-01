@@ -594,9 +594,9 @@ class Session {
       case 'usage': return this.printMuted(command.message);
       case 'chats': return this.listChats(command.archived);
       case 'side': return this.awaitNewChat(actions => signal => actions.side(targetOf(this.chat!), command.message, signal));
-      case 'group': return this.awaitNewChat(actions => signal => actions.group(command.names, command.message, signal));
+      case 'channel': return this.awaitNewChat(actions => signal => actions.channel(command.names, command.message, signal));
       case 'bring': return this.chatChange(actions => actions.bring(this.chatId(), command.ref), value => t('Đã đưa #{0} vào chat chính với {1}.', value.ref, value.chat.name));
-      case 'members': return this.chatChange(actions => actions.members(this.chatId(), command.names), value => t('Từ tin nhắn sau, chat nhóm gửi tới: {0}.', value.names.join(', ')));
+      case 'members': return this.chatChange(actions => actions.members(this.chatId(), command.names), value => t('Từ tin nhắn sau, kênh gồm: {0}.', value.names.join(', ')));
       case 'rename': return this.chatChange(actions => actions.rename(targetOf(this.chat!), command.title), value => t('Đã đổi tên chat thành {0}.', value.title ?? value.name));
       case 'archive': return this.chatChange(actions => actions.archive(targetOf(this.chat!)), value => t('Đã lưu trữ chat {0}.', value.name));
       case 'schedules': return this.listSchedules();
@@ -739,7 +739,7 @@ class Session {
     this.replaceLine(this.picker.filter);
   }
 
-  /** Opens a side thread, group chat or any other chat by the start of its id, as `/chats` printed it (COD-354). */
+  /** Opens a side thread, channel or any other chat by the start of its id, as `/chats` printed it (COD-354). */
   private async openChatById(prefix: string): Promise<void> {
     const actions = this.actions();
     if (!actions) return;
@@ -934,7 +934,7 @@ class Session {
     }
   }
 
-  /** The id of a chat opened with `/to #id`; side threads and group chats have no other name. */
+  /** The id of a chat opened with `/to #id`; side threads and channels are reached this way. */
   private chatId(): string {
     const target = this.chat?.target;
     if (!target) throw new AppRefusal(t('Mở chat bằng /to #mã trước; /chats liệt kê mã của từng chat.'), 'invalid');
@@ -988,7 +988,7 @@ class Session {
     return this.chatChange(actions => actions.enableSchedule(name, action === 'on'), value => formatScheduleChange('schedule-enable', value));
   }
 
-  /** Waits for a side thread or group chat's first answer, then says how to open that chat here. */
+  /** Waits for a side thread or channel's first answer, then says how to open that chat here. */
   private async awaitNewChat(start: (actions: ChatActionClient) => (signal: AbortSignal) => Promise<SendValue>): Promise<void> {
     let opened: SendValue | undefined;
     await this.awaitAction(actions => async signal => {

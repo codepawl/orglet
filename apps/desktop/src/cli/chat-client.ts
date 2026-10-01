@@ -35,7 +35,7 @@ export type ChatActionClient = {
   chats: (archived: boolean) => Promise<ChatsValue>;
   side: (to: string, message: string, signal: AbortSignal) => Promise<SendValue>;
   bring: (chat: string, message?: string) => Promise<BringValue>;
-  group: (names: string[], message: string, signal: AbortSignal) => Promise<SendValue>;
+  channel: (names: string[], message: string, signal: AbortSignal) => Promise<SendValue>;
   members: (chat: string, names: string[]) => Promise<MembersValue>;
   rename: (to: string, title: string) => Promise<ChatChangeValue>;
   archive: (to: string) => Promise<ChatChangeValue>;
@@ -98,7 +98,7 @@ export function appChatClient(userData: string, executable: string | undefined):
       chats: archived => request<ChatsValue>({ op: 'chats', archived }),
       side: (to, message, signal) => request<SendValue>({ op: 'side-thread', ...chatFields(to), message, ...WAIT }, signal),
       bring: (chat, message) => request<BringValue>({ op: 'bring', chat, ...(message ? { message } : {}) }),
-      group: (names, message, signal) => request<SendValue>({ op: 'group', names, message, ...WAIT }, signal),
+      channel: (names, message, signal) => request<SendValue>({ op: 'channel', names, message, ...WAIT }, signal),
       members: (chat, names) => request<MembersValue>({ op: 'members', chat, names }),
       rename: (to, title) => request<ChatChangeValue>({ op: 'chat-change', ...chatFields(to), change: 'rename', title }),
       archive: to => request<ChatChangeValue>({ op: 'chat-change', ...chatFields(to), change: 'archive' }),

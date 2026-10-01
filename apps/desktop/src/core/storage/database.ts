@@ -16,6 +16,7 @@ import { McpServer, type McpServerView } from '../../shared/mcp';
 import { CHAT_SEARCH_BACKFILL } from './chat-search';
 import { DEFAULT_WEB_SEARCH_PROVIDER, WebSearchProvider } from '../../shared/web-tools';
 import type { RunActivity } from '../../shared/run-activity';
+import { emptyChannels, migrateGroupChats } from './channels';
 
 /** The skill a new workspace starts with. */
 export function seedSkill(skillId: string): Skill {
@@ -258,6 +259,8 @@ export class Store {
         SELECT id,'legacy',? FROM reservations WHERE state='unknown'`).run(now());
     });
     this.seedDefaults();
+    // Group chats become channels (COD-361); optional JSON on their rows, so no schema version.
+    migrateGroupChats(this);
     if (newInstall) this.setSetting('accountChoice', firstRunChoice());
     this.recover();
   }
@@ -384,7 +387,12 @@ export class Store {
     const archived = <T extends { id: string }>(kind: 'workers' | 'teams', items: T[]) => items.flatMap(item => state[kind][item.id]?.archivedAt && !state[kind][item.id]?.deletedAt ? [{ ...item, archivedAt: state[kind][item.id].archivedAt! }] : []);
     // Items the user never placed keep their creation order after the placed ones.
     const ordered = <T extends { id: string }>(items: T[], ids: string[] = []) => items.map((item, index) => ({ item, rank: ids.includes(item.id) ? ids.indexOf(item.id) : ids.length + index })).sort((a, b) => a.rank - b.rank).map(entry => entry.item);
-    return { knowledge: this.all('knowledge'), workers: live('workers', ordered(this.all<Worker>('workers'), order.workers)), teams: live('teams', ordered(this.all<Team>('teams'), order.teams)), archivedWorkers: archived('workers', this.all<Worker>('workers')), archivedTeams: archived('teams', this.all<Team>('teams')), skills: this.all('skills'), tasks: this.all<Task>('tasks').reverse().filter(task => !task.deletedAt).map(task => titles[task.id] ? { ...task, title: titles[task.id] } : task), routines: this.all('routines'), heldForReview: this.heldForReview(), usage: this.usage(), budgetReservations: this.budgetReservations(), language: this.setting('language', DEFAULT_LANGUAGE), autoTitles: this.setting('autoTitles', true), copyFormat: this.setting('copyFormat', 'ask'), downloadFormat: this.setting('downloadFormat', 'ask'), confirmOpenTask: this.setting('confirmOpenTask', true), archiveRetentionDays: this.setting('archiveRetentionDays', 30), avatarColors: this.setting<string[]>('avatarColors', []), accentColor: currentAccentColor(this.setting('accentColor', this.setting('mentionColor', DEFAULT_ACCENT_COLOR))), logoColor: this.setting('logoColor', 'mono'), interfaceFont: this.setting<string | undefined>('interfaceFont', undefined), codeFont: this.setting<string | undefined>('codeFont', undefined), autoUpdate: this.setting('autoUpdate', true), backgroundNotifications: this.setting('backgroundNotifications', true), theme: this.setting('theme', 'system'), connectionLimitMicros: this.setting('connectionLimitMicros', 5_000_000), providerConcurrency: this.setting('providerConcurrency', 2), providerConsent: this.setting('providerConsent', []), customConnections: readCustomConnections(this), currency: this.setting('currency', usdCurrency), sqliteVersion: this.sqliteVersion, newChatCapabilities: this.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}), newChatWorkspace: this.newChatWorkspace(), recentAppChanges: this.recentAppChanges(), mcpServers: this.mcpServerViews(), webSearchProvider: this.webSearchProvider(), accountChoice: this.accountChoice() };
+    return { knowledge: this.all('knowledge'), workers: live('workers', ordered(this.all<Worker>('workers'), order.workers)), teams: live('teams', ordered(this.all<Team>('teams'), order.teams)), archivedWorkers: archived('workers', this.all<Worker>('workers')), archivedTeams: archived('teams', this.all<Team>('teams')), skills: this.all('skills'), tasks: this.all<Task>('tasks').reverse().filter(task => !task.deletedAt).map(task => this.titled(task, titles)), emptyChannels: emptyChannels(this), routines: this.all('routines'), heldForReview: this.heldForReview(), usage: this.usage(), budgetReservations: this.budgetReservations(), language: this.setting('language', DEFAULT_LANGUAGE), autoTitles: this.setting('autoTitles', true), copyFormat: this.setting('copyFormat', 'ask'), downloadFormat: this.setting('downloadFormat', 'ask'), confirmOpenTask: this.setting('confirmOpenTask', true), archiveRetentionDays: this.setting('archiveRetentionDays', 30), avatarColors: this.setting<string[]>('avatarColors', []), accentColor: currentAccentColor(this.setting('accentColor', this.setting('mentionColor', DEFAULT_ACCENT_COLOR))), logoColor: this.setting('logoColor', 'mono'), interfaceFont: this.setting<string | undefined>('interfaceFont', undefined), codeFont: this.setting<string | undefined>('codeFont', undefined), autoUpdate: this.setting('autoUpdate', true), backgroundNotifications: this.setting('backgroundNotifications', true), theme: this.setting('theme', 'system'), connectionLimitMicros: this.setting('connectionLimitMicros', 5_000_000), providerConcurrency: this.setting('providerConcurrency', 2), providerConsent: this.setting('providerConsent', []), customConnections: readCustomConnections(this), currency: this.setting('currency', usdCurrency), sqliteVersion: this.sqliteVersion, newChatCapabilities: this.setting<Record<string, ToolCapability[]>>('newChatCapabilities', {}), newChatWorkspace: this.newChatWorkspace(), recentAppChanges: this.recentAppChanges(), mcpServers: this.mcpServerViews(), webSearchProvider: this.webSearchProvider(), accountChoice: this.accountChoice() };
+  }
+  /** A chat's name as every reader shows it: a channel's own name (COD-361), else the title the person or first answer gave. */
+  private titled(task: Task, titles: Record<string, string>): Task {
+    if (task.channel) return { ...task, title: task.channel.name };
+    return titles[task.id] ? { ...task, title: titles[task.id] } : task;
   }
   /** MCP servers as saved, before the core overlays whether each one is running; see `McpServers.views`. */
   private mcpServerViews(): McpServerView[] {

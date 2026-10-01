@@ -21,12 +21,13 @@ const tabs = [
 ];
 
 /**
- * Task settings, like the worker and team dialogs: its name, who answers it and its cost limit. Assign it to all
+ * Task settings, like the worker and team dialogs: its name, who answers it and its cost limit. A channel's name and
+ * members are the channel's own (COD-361, `ChannelDialog`), so for a channel this keeps only the limit. Assign it to all
  * workers (including ones added later), to chosen workers (several make a group chat that answers in turn), or to a
  * team. New assignees answer from the next message and see the earlier chat. Remount (via key) to reset the draft.
  */
 export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { open: boolean; task?: Task; workspace: Workspace; usedMicros: number; onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>('general');
+  const [tab, setTab] = useState<Tab>(task?.channel ? 'limits' : 'general');
   const [title, setTitle] = useState(task?.title ?? '');
   const [mode, setMode] = useState(!task ? 'workers' : task.teamId ? `team:${task.teamId}` : task.assignees === 'all' ? 'all' : 'workers');
   const [chosen, setChosen] = useState<string[]>(() => !task ? [] : Array.isArray(task.assignees) ? task.assignees : [task.workerId]);
@@ -53,7 +54,8 @@ export function TaskDialog({ open, task, workspace, usedMicros, onClose }: { ope
     } catch (err) { setError((err as Error).message); setInvalid(undefined); } finally { setBusy(false); }
   };
 
-  return <TabbedFormDialog open={open} onClose={onClose} title={t('Thiết lập chat')} tabs={tabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="task-panel" onSubmit={() => void submit()} submitLabel={t('Lưu chat')} busy={busy || running} error={error}>
+  const shownTabs = task.channel ? tabs.filter(item => item.id === 'limits') : tabs;
+  return <TabbedFormDialog open={open} onClose={onClose} title={t('Thiết lập chat')} tabs={shownTabs} tab={tab} onTab={next => { setTab(next); clearError(); }} panelId="task-panel" onSubmit={() => void submit()} submitLabel={t('Lưu chat')} busy={busy || running} error={error}>
     {tab === 'general' && <>
       <label><FieldLabel icon={Type}>{t('Tên chat')}</FieldLabel><Input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} placeholder={task.brief.split('\n')[0].slice(0, 120)} /></label>
       <Select label={<FieldLabel icon={UserRound} required>{t('Giao cho')}</FieldLabel>} value={mode} onChange={value => { setMode(value); if (invalid === 'assignees') clearError(); }} invalid={invalid === 'assignees'} flash={flash} options={[

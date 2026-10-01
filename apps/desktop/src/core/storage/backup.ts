@@ -33,6 +33,8 @@ import { ChangedFilesRecord } from '../../shared/workspace-recovery';
 import { changedFilesRecords, restoredChangesKey } from './workspace-recovery';
 import { RunAttention } from '../../shared/quiet-runs';
 import { MAX_TURN_ROUTES, TurnRoute } from '../../shared/turn-routing';
+import { Channel } from '../../shared/channels';
+import { migrateGroupChats } from './channels';
 
 const Hash = z.string().regex(/^[a-f0-9]{64}$/);
 const Integer = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
@@ -41,7 +43,7 @@ const Worker = WorkerInput.extend({ id: Id, revision: Revision }).strict();
 const Skill = SkillInput.extend({ id: Id, revision: Revision, package: SkillPackage.optional() }).strict();
 const Team = TeamInput.extend({ id: Id, revision: Revision }).strict();
 const Status = z.enum(['queued', 'running', 'pausing', 'paused', 'completed', 'partial', 'failed', 'cancelled', 'interrupted', 'waiting_budget', 'waiting_input']);
-const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), messageReactions: z.array(MessageReaction).max(1000).optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), pendingStart: z.boolean().optional(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), routineName: z.string().trim().min(1).max(80).optional(), routineDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), attention: RunAttention.optional(), routedTurns: z.array(TurnRoute).max(MAX_TURN_ROUTES).optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(400).optional(), mcpGrants: z.array(McpGrant).max(200).optional(), sideOf: SideOf.optional(), quotes: z.array(ChatQuote).max(MAX_CHAT_QUOTES).optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
+const Task = TaskInput.extend({ id: Id, sourceIds: z.array(Id).max(1000), inputRevision: Integer.optional(), currentInput: RunInput.optional(), messageReactions: z.array(MessageReaction).max(1000).optional(), teamSnapshot: Team.optional(), status: Status, createdAt: z.iso.datetime(), accepted: z.boolean(), pendingStart: z.boolean().optional(), seenStamp: z.string().max(200).optional(), lastArtifactId: Id.optional(), seenAt: z.iso.datetime().optional(), routineId: Id.optional(), routineName: z.string().trim().min(1).max(80).optional(), routineDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), attention: RunAttention.optional(), routedTurns: z.array(TurnRoute).max(MAX_TURN_ROUTES).optional(), pauseReason: z.literal('shift').optional(), handoff: Handoff.optional(), evidenceRequests: z.array(EvidenceRequest).optional(), decisionRequests: z.array(DecisionRequest).max(400).optional(), mcpGrants: z.array(McpGrant).max(200).optional(), sideOf: SideOf.optional(), quotes: z.array(ChatQuote).max(MAX_CHAT_QUOTES).optional(), channel: Channel.optional(), archivedAt: z.iso.datetime().optional(), deletedAt: z.iso.datetime().optional() }).strict();
 const Run = z.object({ id: Id, taskId: Id, stage: z.enum(['plan', 'member', 'synthesis', 'group']).optional(), status: Status, snapshot: z.object({ workspaceGrant: WorkspaceGrantSnapshot.optional(), assignment: PlanAssignment.optional(), reassignment: TeamReassignment.optional(), toolCapabilities: ToolCapabilities.optional(), worker: Worker, skill: Skill, input: RunInput.optional(), context: RunContext.optional(), workFrame: WorkFrame.optional(), inputRevision: Integer.optional(), team: Team.optional(), upstreamArtifactIds: z.array(Id).optional(), preflightId: Id.optional(), scoreProfileIds: z.array(Id).max(20).optional(), model: z.string().optional(), pricingVersion: z.string().optional(), plan: TeamPlan.optional(), improvement: ImprovementSignals.optional(), mcpTools: z.array(McpRunTool).max(20 * 64).optional(), browser: z.object({ profileId: BrowserProfileId }).strict().optional(), desktop: z.object({ programs: z.array(z.string().max(120)).max(MAX_DESKTOP_APPS) }).strict().optional() }).strict(), startedAt: z.iso.datetime(), error: z.string().nullable(), errorCode: z.enum(['unresolved_attempt', 'report_rejected', 'plan_limit', 'hand_in_blocked']).optional(), blockedHandIn: BlockedHandIn.optional(), outOfSteps: z.literal(true).optional(), contextUse: RunContextUse.optional() }).strict();
 /**
  * Every field a run or its snapshot can carry must be in the schema above, or exporting a workspace that has one fails
@@ -705,6 +707,8 @@ export class Backups {
       for (const item of merged.knowledge ?? []) { this.store.put('knowledge', item); knowledge.index(item); }
       new ChatSearch(this.store).rebuild();
     });
+    // A backup made before channels brings its group chats back as group chats; they become channels like any other (COD-361).
+    migrateGroupChats(this.store);
     this.pending = undefined; this.notify();
   }
 }

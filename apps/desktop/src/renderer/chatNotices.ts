@@ -9,7 +9,8 @@ import { chatHeadline } from '../shared/forward';
 import { toast } from './components/toast';
 import { pendingGroupSize } from './components/notifications';
 import { taskWorkers } from './assignees';
-import { groupChatNames } from './groupChat';
+import { memberNames } from './channelChat';
+import { channelLabel } from '../shared/channels';
 
 const BUSY: readonly TaskStatus[] = ['queued', 'running', 'pausing'];
 const NEEDS_YOU: readonly TaskStatus[] = ['waiting_input', 'waiting_budget'];
@@ -60,17 +61,19 @@ export function finishedChats(previous: ReadonlyMap<string, TaskStatus>, tasks: 
   return finished;
 }
 
-/** How the sidebar names a chat: its title, or the first line of what was asked. */
+/** How the sidebar names a chat: a channel's `#name`, its title, or the first line of what was asked. */
 function chatName(task: Task): string {
+  if (task.channel) return channelLabel(task.channel.name);
   return task.title || chatHeadline(task);
 }
 
 /** The orglet, crew or group a chat belongs to, the way its header names it. */
 function ownerName(task: Task, names: ChatNames): string {
   if (task.teamId) return names.teams.find(team => team.id === task.teamId)?.name ?? 'Orglet';
+  if (task.channel) return channelLabel(task.channel.name);
   if (task.assignees === 'all') return t('Toàn bộ Tí');
   const workers = taskWorkers(task, { workers: names.workers, teams: names.teams });
-  if (workers.length > 1) return groupChatNames(workers.map(worker => worker.name)) ?? t('{0} Tí', [workers.length]);
+  if (workers.length > 1) return memberNames(workers.map(worker => worker.name)) ?? t('{0} Tí', [workers.length]);
   return workers[0]?.name ?? 'Orglet';
 }
 

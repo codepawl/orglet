@@ -23,18 +23,18 @@ describe('archived chats in the sidebar (COD-286)', () => {
       ['new-thread', 'side'], ['main', 'main'], ['scout-run', 'schedule'], ['old-thread', 'side'],
     ]);
     expect(archivedChatsIn(tasks, 'teams').map(item => [item.task.id, item.kind])).toEqual([['crew-run', 'schedule'], ['crew-chat', 'main']]);
-    expect(archivedChatsIn(tasks, 'groups').map(item => [item.task.id, item.kind])).toEqual([['group', 'group'], ['everyone', 'group']]);
+    expect(archivedChatsIn(tasks, 'channels').map(item => [item.task.id, item.kind])).toEqual([['group', 'channel'], ['everyone', 'channel']]);
   });
 
   it('never lists an open or a deleted chat', () => {
-    const listed = [...archivedChatsIn(tasks, 'workers'), ...archivedChatsIn(tasks, 'teams'), ...archivedChatsIn(tasks, 'groups')].map(item => item.task.id);
+    const listed = [...archivedChatsIn(tasks, 'workers'), ...archivedChatsIn(tasks, 'teams'), ...archivedChatsIn(tasks, 'channels')].map(item => item.task.id);
     expect(listed).not.toContain('open-thread');
     expect(listed).not.toContain('deleted');
   });
 
-  it('keeps a schedule run of several orglets with the group chats, named as a run', () => {
+  it('keeps a schedule run of several orglets with the channels, named as a run', () => {
     const run = chat('group-run', { assignees: ['scout', 'writer'], routineId: 'daily', archivedAt: '2026-09-25T08:00:00Z' });
-    expect(archivedChatSection(run)).toBe('groups');
+    expect(archivedChatSection(run)).toBe('channels');
     expect(archivedChatKind(run)).toBe('schedule');
   });
 });

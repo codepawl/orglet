@@ -10,7 +10,7 @@ import { CliOperations } from '../../apps/desktop/src/main/cli-operations';
 import { createCliToken } from '../../apps/desktop/src/main/cli-server';
 import type { Artifact, Run, Task, TaskDetail, Workspace } from '../../apps/desktop/src/shared/contracts';
 
-/** Chats themselves from the terminal (COD-354): listing, side threads, group chats, archive, delete and templates. */
+/** Chats themselves from the terminal (COD-354): listing, side threads, channels (COD-361), archive, delete and templates. */
 
 const researcherId = '11111111-1111-4111-8111-111111111111';
 const writerId = '22222222-2222-4222-8222-222222222222';
@@ -18,6 +18,8 @@ const crewId = '33333333-3333-4333-8333-333333333333';
 const mainId = 'aaaa0000-0000-4000-8000-000000000000';
 const sideId = 'bbbb0000-0000-4000-8000-000000000000';
 const groupId = 'cccc0000-0000-4000-8000-000000000000';
+const channelId = 'c1c10000-0000-4000-8000-000000000000';
+const newChannelId = 'c2c20000-0000-4000-8000-000000000000';
 const crewChatId = 'dddd0000-0000-4000-8000-000000000000';
 const oldId = 'eeee0000-0000-4000-8000-000000000000';
 const runId = 'f0000000-0000-4000-8000-000000000000';
@@ -38,7 +40,7 @@ function workspace(): Workspace {
     tasks: [
       task(mainId, '2026-10-01T09:00:00.000Z'),
       task(sideId, '2026-10-01T10:00:00.000Z', { sideOf: { taskId: mainId, throughRevision: 0 }, title: 'Try again' }),
-      task(groupId, '2026-10-01T11:00:00.000Z', { assignees: [researcherId, writerId] }),
+      task(groupId, '2026-10-01T11:00:00.000Z', { assignees: [researcherId, writerId], channel: { id: channelId, name: 'launch', topic: 'Ship it', members: [{ kind: 'orglet', id: researcherId }, { kind: 'orglet', id: writerId }] } }),
       task(crewChatId, '2026-10-01T08:00:00.000Z', { workerId: writerId, teamId: crewId }),
       task(oldId, '2026-09-01T08:00:00.000Z', { archivedAt: '2026-09-02T08:00:00.000Z', title: 'Old notes' }),
     ],
@@ -63,6 +65,7 @@ function fakeCore() {
     }
     if (command === 'startSideThread') return sideId;
     if (command === 'createTask') return groupId;
+    if (command === 'createChannel') return newChannelId;
     if (command === 'bringIntoMainChat') return mainId;
     if (command === 'createTemplate') return { id: crewId, name: 'Research Review', memberIds: [researcherId], synthesizerId: writerId };
     return undefined;
@@ -74,12 +77,14 @@ function fakeCore() {
 }
 
 describe('orglet chat arguments', () => {
-  it('parses chats, side threads, group chats and changes to chats, orglets and crews', () => {
+  it('parses chats, side threads, channels and changes to chats, orglets and crews', () => {
     expect(parseArguments(['chats', '--archived'])).toEqual({ kind: 'chats', archived: true, json: false });
     expect(parseArguments(['read', '--chat', '#bbbb0000'])).toEqual({ kind: 'read', chat: 'bbbb0000', json: false });
     expect(parseArguments(['side', 'try this', '--to', 'Researcher', '--no-wait'])).toMatchObject({ kind: 'side', message: 'try this', to: 'Researcher', wait: false });
     expect(parseArguments(['bring', '--chat', 'bbbb', '--message', '1.1'])).toEqual({ kind: 'bring', chat: 'bbbb', message: '1.1', json: false });
-    expect(parseArguments(['group', 'hello', '--with', 'Researcher', '--with', 'Writer'])).toMatchObject({ kind: 'group', names: ['Researcher', 'Writer'], message: 'hello' });
+    expect(parseArguments(['channel', 'hello', '--with', 'Researcher', '--with', 'Review crew', '--name', 'launch', '--topic', 'Ship it'])).toMatchObject({ kind: 'channel', names: ['Researcher', 'Review crew'], message: 'hello', name: 'launch', topic: 'Ship it' });
+    // `group` is the older name of `channel` and keeps working, now with one member enough.
+    expect(parseArguments(['group', 'hello', '--with', 'Researcher'])).toMatchObject({ kind: 'channel', names: ['Researcher'], message: 'hello' });
     expect(parseArguments(['members', '--chat', 'cccc', '--with', 'A', '--with=B'])).toEqual({ kind: 'members', chat: 'cccc', names: ['A', 'B'], json: false });
     expect(parseArguments(['rename', '--chat', 'bbbb', '--title', 'New'])).toEqual({ kind: 'chat-change', change: 'rename', chat: 'bbbb', title: 'New', json: false });
     expect(parseArguments(['archive', '--to', 'Researcher'])).toEqual({ kind: 'chat-change', change: 'archive', to: 'Researcher', json: false });
@@ -92,7 +97,7 @@ describe('orglet chat arguments', () => {
   });
 
   it('refuses mistakes as usage errors', () => {
-    const mistakes = [['read', '--to', 'A', '--chat', 'bbbb'], ['read', '--chat', 'xyz'], ['group', 'hi', '--with', 'A'], ['members', '--with', 'A', '--with', 'B'],
+    const mistakes = [['read', '--to', 'A', '--chat', 'bbbb'], ['read', '--chat', 'xyz'], ['group', 'hi'], ['channel', '--with', 'A'], ['members', '--with', 'A', '--with', 'B'], ['send', 'x', '--to', 'A', '--topic', 'y'],
       ['restore', '--to', 'A'], ['rename', '--to', 'A'], ['bring'], ['template', 'research-review'], ['template', 'other', '--provider', 'demo'],
       ['delete', '--chat', 'eeee'], ['archive', 'crew'], ['archive', 'orglet', 'A', '--to', 'B'], ['chats', '--to', 'A'], ['list', '--chat', 'bbbb'], ['status', '--archived']];
     for (const mistake of mistakes) expect(() => parseArguments(mistake), mistake.join(' ')).toThrow(UsageError);
@@ -102,10 +107,11 @@ describe('orglet chat arguments', () => {
     expect(parseSlash('/chats archived')).toEqual({ kind: 'chats', archived: true });
     expect(parseSlash('/side try this')).toEqual({ kind: 'side', message: 'try this' });
     expect(parseSlash('/bring #1.1')).toEqual({ kind: 'bring', ref: '#1.1' });
-    expect(parseSlash('/group Researcher, Writer -- compare')).toEqual({ kind: 'group', names: ['Researcher', 'Writer'], message: 'compare' });
+    expect(parseSlash('/channel Researcher, Review crew -- compare')).toEqual({ kind: 'channel', names: ['Researcher', 'Review crew'], message: 'compare' });
+    expect(parseSlash('/group Researcher -- compare')).toEqual({ kind: 'channel', names: ['Researcher'], message: 'compare' });
     expect(parseSlash('/members Researcher, Writer')).toEqual({ kind: 'members', names: ['Researcher', 'Writer'] });
     expect(parseSlash('/rename Plans')).toEqual({ kind: 'rename', title: 'Plans' });
-    for (const usage of ['/side', '/group Researcher -- hi', '/group A, B', '/members A', '/rename', '/bring x']) expect(parseSlash(usage).kind, usage).toBe('usage');
+    for (const usage of ['/side', '/channel -- hi', '/group A, B', '/members', '/rename', '/bring x']) expect(parseSlash(usage).kind, usage).toBe('usage');
     expect(chatFields('#bbbb')).toEqual({ chat: 'bbbb' });
     expect(chatFields('Researcher')).toEqual({ to: 'Researcher' });
   });
@@ -116,7 +122,7 @@ describe('orglet chats in the app', () => {
     const core = fakeCore();
     const open = await core.operations.run({ op: 'chats', token, archived: false }, core.signal) as ChatsValue;
     expect(open.chats.map(row => [row.short, row.kind, row.name, row.with])).toEqual([
-      ['cccc0000', 'group', 'brief of cccc', ['Researcher', 'Writer']],
+      ['cccc0000', 'channel', '#launch', ['Researcher', 'Writer']],
       ['bbbb0000', 'side', 'Try again', ['Researcher']],
       ['aaaa0000', 'orglet', 'Researcher', ['Researcher']],
       ['dddd0000', 'crew', 'Review crew', ['Researcher', 'Writer']],
@@ -143,16 +149,24 @@ describe('orglet chats in the app', () => {
     await expect(core.operations.run({ op: 'bring', token, chat: 'aaaa' }, core.signal)).rejects.toThrow('chat phụ');
   });
 
-  it('starts a group chat, sends into it by id and changes its members', async () => {
+  it('starts a channel of orglets and crews, sends into it by id and changes its members', async () => {
     const core = fakeCore();
-    await core.operations.run({ op: 'group', token, names: ['writer', 'Researcher', 'Writer'], message: 'compare', ...wait }, core.signal);
-    expect(core.argsOf('createTask')).toEqual({ workerId: writerId, assignees: [writerId, researcherId], brief: 'compare', sourceIds: [], excludedSources: [], consent: true, providerScopes: ['anthropic', 'openai'], budgetMicros: 200_000 });
-    await expect(core.operations.run({ op: 'group', token, names: ['Writer', 'writer'], message: 'x', ...wait }, core.signal)).rejects.toThrow('hai Tí khác nhau');
+    await core.operations.run({ op: 'channel', token, names: ['writer', 'Review crew', 'Writer'], message: 'compare', topic: 'Ship it', ...wait }, core.signal);
+    expect(core.argsOf('createChannel')).toEqual({ name: 'Writer, Review crew', topic: 'Ship it', members: [{ kind: 'orglet', id: writerId }, { kind: 'crew', id: crewId }] });
+    // The crew answers as its orglets, after the orglets named on their own.
+    expect(core.argsOf('createTask')).toEqual({ workerId: writerId, assignees: [writerId, researcherId], channelId: newChannelId, brief: 'compare', sourceIds: [], excludedSources: [], consent: true, providerScopes: ['anthropic', 'openai'], budgetMicros: 200_000 });
     await core.operations.run({ op: 'send', token, chat: 'cccc', message: 'again', files: [], ...wait }, core.signal);
     expect(core.argsOf('reviseTask')).toMatchObject({ taskId: groupId, brief: 'again', providerScopes: ['openai', 'anthropic'], budgetMicros: 300_000 });
-    await core.operations.run({ op: 'members', token, chat: 'cccc', names: ['Researcher', 'Writer'] }, core.signal);
-    expect(core.argsOf('updateTask')).toEqual({ id: groupId, title: '', assignee: { kind: 'workers', workerIds: [researcherId, writerId] }, budgetMicros: 300_000 });
-    await expect(core.operations.run({ op: 'members', token, chat: 'aaaa', names: ['Researcher', 'Writer'] }, core.signal)).rejects.toThrow('chat nhóm');
+    await core.operations.run({ op: 'members', token, chat: 'cccc', names: ['Researcher', 'Review crew'] }, core.signal);
+    expect(core.argsOf('updateChannel')).toEqual({ id: channelId, name: 'launch', topic: 'Ship it', members: [{ kind: 'orglet', id: researcherId }, { kind: 'crew', id: crewId }] });
+    await expect(core.operations.run({ op: 'members', token, chat: 'aaaa', names: ['Researcher', 'Writer'] }, core.signal)).rejects.toThrow('một kênh');
+  });
+
+  it('deletes a channel with its name typed with or without the #', async () => {
+    const core = fakeCore();
+    await expect(core.operations.run({ op: 'chat-change', token, chat: 'cccc', change: 'delete', confirmName: 'launc' }, core.signal)).rejects.toThrow('#launch');
+    await core.operations.run({ op: 'chat-change', token, chat: 'cccc', change: 'delete', confirmName: 'launch' }, core.signal);
+    expect(core.argsOf('deleteTask')).toEqual({ id: groupId });
   });
 
   it('renames, archives, restores and deletes a chat, deleting only with its exact name', async () => {
@@ -205,8 +219,8 @@ function adminClient() {
       calls.push(`bring ${chatId} ${message}`);
       return { mainTaskId: mainId, chat, ref: '1.1' };
     },
-    group: async (names, message) => {
-      calls.push(`group ${names.join('|')} ${message}`);
+    channel: async (names, message) => {
+      calls.push(`channel ${names.join('|')} ${message}`);
       return turnValue({ chat: { ...chat, name: 'compare', taskId: groupId }, answers: [{ name: 'Writer', text: 'Group answer.', createdAt: '1' }] });
     },
     members: async (chatId, names) => {
@@ -273,9 +287,9 @@ describe('orglet chat session and the chats themselves', () => {
     expect(result.transcript).toContain('Renamed the chat to Plan B.');
   });
 
-  it('starts a group chat and changes its members, and needs an opened chat for /bring', async () => {
-    const result = await adminSession('/bring\n/group Researcher, Writer -- compare\n/members Researcher, Writer\n/exit\n');
-    expect(result.calls).toEqual(['group Researcher|Writer compare']);
+  it('starts a channel and changes its members, and needs an opened chat for /bring', async () => {
+    const result = await adminSession('/bring\n/channel Researcher, Writer -- compare\n/members Researcher, Writer\n/exit\n');
+    expect(result.calls).toEqual(['channel Researcher|Writer compare']);
     expect(result.transcript).toContain('Open the chat with /to #id first');
     expect(result.transcript).toContain('Group answer.');
     expect(result.transcript).toContain('/to #cccc0000 opens this chat.');
