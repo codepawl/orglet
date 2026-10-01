@@ -9,6 +9,7 @@ import { markdownToPlain } from '../../apps/desktop/src/shared/plainText';
 import type { ModelReply } from '../../apps/desktop/src/core/adapters/openai';
 import type { Worker } from '../../apps/desktop/src/shared/contracts';
 import { turnMessageId } from '../../apps/desktop/src/shared/message-interactions';
+import { earlierTurns } from './earlier-turns';
 
 let directory: string; let store: Store; let core: CoreService;
 let replies: ModelReply[]; let sent: { messages: unknown[]; tools: string[] }[];
@@ -41,8 +42,7 @@ it('answers as a normal chat message and keeps earlier turns for the next messag
   replies.push(answer('Bạn vừa chào mình.'));
   await core.command('reviseTask', { taskId, brief: 'Mình vừa nói gì?', ...scope });
   await until(() => store.detail(taskId).artifacts.length === 2 && store.detail(taskId).task.status === 'completed');
-  const history = (sent[1].messages as { role: string; content: string }[]).map(message => message.content).find(content => content.includes('earlierConversation'));
-  expect(JSON.parse(history!).earlierConversation).toEqual([
+  expect(earlierTurns(sent[1].messages)).toEqual([
     { from: 'user', id: taskId, text: 'Chào bạn' },
     { from: 'you', id: store.detail(taskId).artifacts[0].id, text: 'Chào bạn, mình đây.' },
   ]);
@@ -135,7 +135,7 @@ it('lets several workers, or all of them, answer each message in turn, each seei
   await until(() => store.detail(taskId).task.status === 'completed' && store.detail(taskId).runs.filter(run => run.stage === 'group').length === 2);
   const group = store.detail(taskId).runs.filter(run => run.stage === 'group');
   expect(group.map(run => run.snapshot.worker.id)).toEqual([workerId, second.id]);
-  const earlier = (index: number) => JSON.parse((sent[index].messages as { content: string }[]).map(message => message.content).find(content => content.includes('earlierConversation'))!).earlierConversation;
+  const earlier = (index: number) => earlierTurns(sent[index].messages);
   // The second worker sees the first worker's reply to the same message by name.
   expect(earlier(2)).toContainEqual(expect.objectContaining({ from: 'Researcher', id: expect.any(String), text: 'Researcher đây.' }));
   expect(earlier(2)).toContainEqual(expect.objectContaining({ from: 'Researcher', id: expect.any(String), text: 'Chào từ Researcher.' }));

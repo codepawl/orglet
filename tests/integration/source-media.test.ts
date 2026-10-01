@@ -131,7 +131,9 @@ const toolResult = (request: SentRequest) => request.messages.findLast(message =
 async function chatWith(provider: 'openai' | 'anthropic' | 'xai', sourceIds: string[], brief: string, modelId?: string) {
   const worker = store.all<Worker>('workers')[0];
   await core.command('saveWorker', { ...worker, provider, ...(modelId ? { modelId } : {}) });
-  const taskId = await core.command('createTask', { workerId: worker.id, brief, sourceIds, consent: true, providerScopes: [provider], budgetMicros: 100_000 }) as string;
+  // A step on Claude Sonnet 5.5 holds more than $0.10 (COD-358).
+  const budgetMicros = provider === 'anthropic' ? 1_000_000 : 100_000;
+  const taskId = await core.command('createTask', { workerId: worker.id, brief, sourceIds, consent: true, providerScopes: [provider], budgetMicros }) as string;
   await until(() => ['completed', 'failed'].includes(store.detail(taskId).task.status));
   return store.detail(taskId);
 }

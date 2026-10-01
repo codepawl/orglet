@@ -54,7 +54,7 @@ function answerOf(usedMemories?: { id: string; revision: number; text: string }[
 
 function renderThread(runs: Run[], events: Activity[], artifact: Artifact, openMemories?: (workerId: string) => void) {
   const detail: TaskDetail = { task, runs, events, artifacts: [artifact], profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [],
-    usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 } };
+    usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } };
   return renderToStaticMarkup(createElement(TaskThread, {
     detail, workspace: { workers: [worker, writer], skills: [skill], tasks: [task] }, action: () => {}, showSources: () => {}, openMessage: () => {},
     proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {}, openMemories,

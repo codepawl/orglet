@@ -238,6 +238,13 @@ export class Store {
       // How long a borrow held the real mouse and keyboard (phase 2b). A nullable column, which older builds ignore.
       const desktopColumns = new Set((this.db.prepare('PRAGMA table_info(desktop_actions)').all() as { name: string }[]).map(column => column.name));
       if (!desktopColumns.has('duration_ms')) this.db.exec('ALTER TABLE desktop_actions ADD COLUMN duration_ms INTEGER');
+      // The prompt tokens of a settled request that a provider read from or wrote to its cache (COD-358), parts of the
+      // ledger row's input tokens. A table of its own rather than ledger columns, because older builds insert ledger
+      // rows by position; they ignore this table.
+      this.db.exec(`CREATE TABLE IF NOT EXISTS ledger_cache (
+          ledger_id TEXT PRIMARY KEY REFERENCES ledger(id), cache_read_tokens INTEGER NOT NULL CHECK(cache_read_tokens>=0),
+          cache_write_tokens INTEGER NOT NULL CHECK(cache_write_tokens>=0)
+        );`);
       // The orglet form used to force the $0.50 default limit on Claude Code orglets, which stopped real work after a
       // few calls. An orglet on Claude Code now runs on the person's plan unless it has a limit of its own (COD-253),
       // so that forced default is dropped once; any other limit someone picked is kept. A settings row, not a schema
@@ -324,8 +331,11 @@ export class Store {
   }
   usage(taskId?: string): Usage {
     const where = taskId ? 'WHERE r.task_id=?' : '';
-    const row = this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN r.state!='settled' THEN r.amount ELSE 0 END),0) AS reserved, COALESCE(SUM(l.amount),0) AS charged, COALESCE(SUM(CASE WHEN r.state='unknown' THEN 1 ELSE 0 END),0) AS uncertain, COALESCE(SUM(l.input_tokens),0) AS input_tokens, COALESCE(SUM(l.output_tokens),0) AS output_tokens FROM reservations r LEFT JOIN ledger l ON l.reservation_id=r.id ${where}`).get(...(taskId ? [taskId] : []))!;
-    return { reservedMicros: Number(row.reserved), chargedMicros: Number(row.charged), uncertainCount: Number(row.uncertain), inputTokens: Number(row.input_tokens), outputTokens: Number(row.output_tokens) };
+    const row = this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN r.state!='settled' THEN r.amount ELSE 0 END),0) AS reserved, COALESCE(SUM(l.amount),0) AS charged, COALESCE(SUM(CASE WHEN r.state='unknown' THEN 1 ELSE 0 END),0) AS uncertain, COALESCE(SUM(l.input_tokens),0) AS input_tokens, COALESCE(SUM(l.output_tokens),0) AS output_tokens,
+      COALESCE(SUM(c.cache_read_tokens),0) AS cache_read_tokens, COALESCE(SUM(c.cache_write_tokens),0) AS cache_write_tokens
+      FROM reservations r LEFT JOIN ledger l ON l.reservation_id=r.id LEFT JOIN ledger_cache c ON c.ledger_id=l.id ${where}`).get(...(taskId ? [taskId] : []))!;
+    return { reservedMicros: Number(row.reserved), chargedMicros: Number(row.charged), uncertainCount: Number(row.uncertain), inputTokens: Number(row.input_tokens), outputTokens: Number(row.output_tokens),
+      cacheReadTokens: Number(row.cache_read_tokens), cacheWriteTokens: Number(row.cache_write_tokens) };
   }
   budgetReservations(): BudgetReservationView[] {
     const rows = this.db.prepare(`SELECT r.id,r.task_id,r.run_id,r.provider,r.month,r.amount,

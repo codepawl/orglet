@@ -31,14 +31,15 @@ it('translates tool history and assembles Anthropic streamed tools and usage', a
       { role: 'assistant', tool_calls: [{ type: 'function', id: 'call_1', function: { name: 'read_source', arguments: '{"sourceId":"fixture"}' } }] },
       { role: 'tool', tool_call_id: 'call_1', content: 'Evidence' },
     ], [{ type: 'function', function: { name: 'submit_report', parameters: { type: 'object', properties: {} } } }], new AbortController().signal, () => progress++, 'reservation-fixture');
-    expect(result).toEqual({ calls: [{ id: 'call_2', name: 'submit_report', arguments: '{"title":"Report"}' }], usage: { input: 100, output: 20 } });
+    expect(result).toEqual({ calls: [{ id: 'call_2', name: 'submit_report', arguments: '{"title":"Report"}' }], usage: { input: 100, output: 20, cacheRead: 0, cacheWrite: 0 } });
     expect(progress).toBe(1); expect(correlation).toBe('reservation-fixture');
-    expect(received).toMatchObject({ model: 'claude-haiku-4-5-20251001', stream: true, system: 'Trusted instructions', max_tokens: 4096, tool_choice: { type: 'any', disable_parallel_tool_use: true }, messages: [
+    // Claude Sonnet 5.5 is the default (COD-358); it rejects a forced tool_choice, so it gets auto.
+    expect(received).toMatchObject({ model: 'claude-sonnet-5-5', stream: true, system: [{ type: 'text', text: 'Trusted instructions', cache_control: { type: 'ephemeral' } }], max_tokens: 16_000, tool_choice: { type: 'auto', disable_parallel_tool_use: true }, messages: [
       { role: 'user', content: 'Review' },
       { role: 'assistant', content: [{ type: 'tool_use', id: 'call_1', name: 'read_source', input: { sourceId: 'fixture' } }] },
-      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call_1', content: 'Evidence' }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call_1', content: 'Evidence', cache_control: { type: 'ephemeral' } }] },
     ] });
-    expect(cost(100, 20, 'anthropic')).toBe(200);
+    expect(cost(100, 20, 'anthropic')).toBe(400);
     expect(cost(100, 20, 'openai')).toBe(72);
   } finally { server.closeAllConnections(); server.close(); }
 });
@@ -72,7 +73,7 @@ it('puts an image a tool returned inside its tool_result as a base64 image block
       { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'call_1', content: [
         { type: 'text', text: '{"sourceId":"photo"}' },
         { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/4AAQ' } },
-      ] }] },
+      ], cache_control: { type: 'ephemeral' } }] },
     ]);
   } finally { server.closeAllConnections(); server.close(); }
 });

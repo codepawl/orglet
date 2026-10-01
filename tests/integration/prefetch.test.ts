@@ -99,7 +99,7 @@ describe('SessionCache', () => {
 const taskId = '11111111-1111-4111-8111-111111111111';
 const detailOf = (overrides: Partial<TaskDetail['task']> = {}): TaskDetail => ({
   task: { id: taskId, brief: 'Read this', workerId: 'w', status: 'completed', createdAt: '2026-09-23T00:00:00.000Z', budgetMicros: 1, sourceIds: [], consent: true, accepted: true, inputRevision: 2, lastArtifactId: 'art-1', ...overrides },
-  runs: [], events: [], artifacts: [], profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [], usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 },
+  runs: [], events: [], artifacts: [], profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [], usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
 });
 
 describe('following the workspace', () => {

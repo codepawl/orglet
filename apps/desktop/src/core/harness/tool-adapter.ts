@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import { withoutImages, type ModelAdapter } from '../adapters/openai';
+import { plainMessage, type ModelAdapter } from '../adapters/openai';
 import type { HarnessExecutor, HarnessRequest, HarnessResult } from './exec';
 
 /** Longest note a step keeps; a longer one is cut rather than refused, since the call beside it is what matters. */
@@ -53,7 +53,7 @@ export function harnessToolAdapter(options: {
         'Use notes to keep, briefly, what you will still need from what you have read so far (figures, names, links, decisions); older web pages are cut to their start in later steps, but your notes stay. Leave notes empty when there is nothing new.',
         // The CLI reads the conversation as JSON text, so an image slot would only be a hash to it; the runner never
         // gives a CLI's tool loop images, and this keeps any reference out of the prompt all the same (COD-260).
-        JSON.stringify({ tools, messages: messages.map(withoutImages) }),
+        JSON.stringify({ tools, messages: messages.map(plainMessage) }),
       ].join('\n\n'),
     });
     options.onResult(result);
