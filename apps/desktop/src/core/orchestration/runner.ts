@@ -38,7 +38,7 @@ import { assertSkillReady, skillResource } from '../skill-package';
 import { RunAuditArgs } from '../../shared/run-audit';
 import { DecisionQuestion } from '../../shared/work-decisions';
 import { WorkFrame } from '../../shared/work-frame';
-import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUnsupportedProcessChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
+import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedAnswerChecks, downgradeUncitedWebChecks, downgradeUncitedWorkspaceChecks, downgradeUnsupportedProcessChecks, downgradeUncitedWorkspaceFindings, validateReview } from '../review';
 import { KnowledgeBase } from '../context/knowledge';
 import { compileContext, frozenTacetFits, keepFrozenOmissions, keywordScore, memoryCandidate, type Colleague } from '../context/compiler';
 import type { NoteCandidate } from '../decisions/knowledge-fit';
@@ -1875,6 +1875,7 @@ export class Runner {
     }
     if (!run.snapshot.workspaceGrant && run.snapshot.toolCapabilities?.includes('network.web')) downgradeUncitedWebChecks(report);
     if (run.snapshot.workspaceGrant) downgradeUnsupportedProcessChecks(report, processId => this.finishedProcess(run, processId));
+    downgradeUncitedAnswerChecks(report, readIds);
     const validateChecker =(checkerId: string, sourceIds: string[]) => {
       const profile = this.store.get<ProfileRecord>('profiles', checkerId);
       if (!profiles.some(available => available.id === checkerId)) throw new Error('Finding tham chiếu checker chưa được cung cấp cho lần chạy này.');

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Report, type Artifact } from '../../apps/desktop/src/shared/contracts';
-import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, downgradeUnsupportedProcessChecks, validateReview } from '../../apps/desktop/src/core/review';
+import { applyReviewPolicy, downgradePrematureRecommendation, downgradeUncitedAnswerChecks, downgradeUncitedWorkspaceChecks, downgradeUncitedWorkspaceFindings, downgradeUnsupportedProcessChecks, validateReview } from '../../apps/desktop/src/core/review';
 
 const source = randomUUID();
 const finding = () => ({ title: 'Observed issue', severity: 'warning' as const, detail: 'Evidence differs.', coverage: 'Selected source', sourceIds: [source], provenance: { findingId: randomUUID(), writerId: randomUUID(), runId: randomUUID() } });
@@ -10,6 +10,20 @@ const report = () => Report.parse({ title: 'Review', summary: 'Summary', finding
 const validate = (value: Report, upstream: Artifact[] = []) => validateReview(value, upstream, new Set([source]), () => { throw new Error('Unknown checker'); });
 
 describe('structured review gates', () => {
+  it('keeps a chat answer when a check cites nothing this run was given', () => {
+    const value = report();
+    value.review!.checks[0].sourceIds = [];
+    downgradeUncitedAnswerChecks(value, new Set([source]));
+    expect(value.review!.checks[0].status).toBe('not_assessed');
+    expect(value.review!.recommendation).toBe('insufficient_evidence');
+    expect(value.limitations).toContain('Chưa xác minh độc lập check: Schema.');
+    validate(value);
+    const invented = report();
+    invented.review!.checks[0].sourceIds = [randomUUID()];
+    downgradeUncitedAnswerChecks(invented, new Set([source]));
+    expect(invented.review!.checks[0]).toMatchObject({ status: 'not_assessed', sourceIds: [] });
+    validate(invented);
+  });
   it('keeps a workspace report while downgrading an uncited command check', () => {
     const value = report();
     value.review!.checks[0].sourceIds = [];
