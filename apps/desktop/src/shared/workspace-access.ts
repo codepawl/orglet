@@ -21,8 +21,11 @@ export type WorkspaceGrantView = z.infer<typeof WorkspaceGrantView>;
  */
 export const NewChatWorkspaceView = z.object({ name: z.string(), permissions: WorkspacePermissions }).strict();
 export type NewChatWorkspaceView = z.infer<typeof NewChatWorkspaceView>;
-/** The orglets of a group chat that has not started yet (COD-215), in the order they were picked. */
-export const GroupChatWorkerIds = z.array(z.uuid()).min(2).max(50);
+/**
+ * The orglets of a group chat or channel that has not started yet (COD-215), in the order they were picked. A channel
+ * (COD-361) may have one orglet answering, so one is enough.
+ */
+export const GroupChatWorkerIds = z.array(z.uuid()).min(1).max(50);
 /**
  * Whose empty chat a pending folder belongs to; a team chat is keyed by the team, never by its lead, and a group
  * chat by every orglet in it.

@@ -59,6 +59,8 @@ import { assertOpenCodeModel, isOpenCodePlan, type OpenCodeGoUsage } from '../sh
 import { MessageInteractions, type MessageTarget } from './orchestration/message-interactions';
 import { AppProposals, type CurrentSettings, type ProposalApplier } from './orchestration/app-proposals';
 import { SideThreads } from './orchestration/side-threads';
+import { Channels, channelForGroup } from './storage/channels';
+import { isLegacyGroupChat } from '../shared/channels';
 import { Forwards, type ForwardSource } from './orchestration/forwards';
 import { chatHeadline, ForwardedMessage, ForwardMessageArgs, forwardBrief, forwardText, ownWords, type ForwardResult, type ForwardTarget } from '../shared/forward';
 import { canContinueRun } from '../shared/out-of-steps';
@@ -163,6 +165,8 @@ export class CoreService {
   readonly mcp: McpServers;
   /** Side threads of orglets' main chats and how their permissions follow the main chat (COD-247). */
   readonly sideThreads: SideThreads;
+  /** Channels: named chats of orglets and crews, and the empty ones waiting for a first message (COD-361). */
+  readonly channels: Channels;
   /** Reads the message a forward carries out of saved history (COD-257). */
   readonly forwards: Forwards;
   /** Search across every message, answer and name (COD-267). */
@@ -212,6 +216,7 @@ export class CoreService {
     this.sources = new Sources(store, profiler, pdfText);
     this.workspaceGrants = new WorkspaceGrants(store);
     this.sideThreads = new SideThreads(store, this.workspaceGrants);
+    this.channels = new Channels(store, clock);
     this.forwards = new Forwards(store);
     this.templates = new TeamTemplates(store, this.notify);
     this.appProposals = new AppProposals(store, this.proposalApplier());
@@ -372,6 +377,8 @@ export class CoreService {
       }
       case 'saveTeam': {
         const team = this.saveTeam(commands.saveTeam.parse(args));
+        // A crew in a channel answers there as its orglets, so its channels follow its new members (COD-361).
+        this.channels.followCrew(team);
         this.notify();
         return team;
       }
@@ -870,7 +877,13 @@ export class CoreService {
       }
       case 'renameTask': {
         const input = commands.renameTask.parse(args);
-        this.store.get<Task>('tasks', input.id);
+        const named = this.store.get<Task>('tasks', input.id);
+        // A channel's name is part of the channel (COD-361); renaming its chat renames the channel.
+        if (named.channel) {
+          if (!input.title) throw new Error('Kênh cần một tên.');
+          this.renameChannel(named, input.title);
+          this.notify(); return;
+        }
         const titles = { ...this.store.setting<Record<string, string>>('taskTitles', {}) };
         if (input.title) titles[input.id] = input.title; else delete titles[input.id];
         this.store.setSetting('taskTitles', titles); this.notify(); return;
@@ -884,6 +897,21 @@ export class CoreService {
         this.notify(); return;
       }
       case 'deleteTask': this.deleteTask(commands.deleteTask.parse(args).id); this.notify(); return;
+      case 'createChannel': {
+        const channelId = this.channels.create(commands.createChannel.parse(args));
+        this.notify();
+        return channelId;
+      }
+      case 'updateChannel': {
+        const { id: channelId, ...fields } = commands.updateChannel.parse(args);
+        this.assertChannelIdle(channelId);
+        this.channels.update(channelId, fields);
+        this.notify(); return;
+      }
+      case 'deleteChannel': {
+        this.channels.deleteEmpty(commands.deleteChannel.parse(args).id);
+        this.notify(); return;
+      }
       case 'archiveEntity': {
         const input = commands.archiveEntity.parse(args);
         if (!this.entity(input.kind, input.id)) throw new Error('Không tìm thấy mục này.');
@@ -901,6 +929,8 @@ export class CoreService {
         const task = this.store.get<Task>('tasks', input.id);
         if (task.sideOf) throw new Error('Chat phụ luôn thuộc Tí của chat chính. Đổi tên chat phụ trong menu của nó.');
         if (this.runner.isActive(task.id) || this.teams.isActive(task.id) || ['queued', 'running', 'pausing'].includes(task.status)) throw new Error('Công việc đang chạy. Đợi xong rồi hãy đổi thiết lập.');
+        // A channel's name and members are edited as the channel (COD-361); its chat settings keep only the limit.
+        if (task.channel) { this.store.update('tasks', { ...task, budgetMicros: input.budgetMicros }); this.notify(); return; }
         const { assignee } = input;
         const team = assignee.kind === 'team' ? this.store.get<Team>('teams', assignee.teamId) : undefined;
         const workerIds = assignee.kind === 'workers' ? [...new Set(assignee.workerIds)] : undefined;
@@ -912,6 +942,11 @@ export class CoreService {
         const updated: Task = { ...rest, workerId: first, ...(team ? { teamId: team.id, teamSnapshot: team } : {}), ...(assignee.kind === 'all' ? { assignees: 'all' as const } : workerIds && workerIds.length > 1 ? { assignees: workerIds } : {}), budgetMicros: input.budgetMicros };
         const titles = { ...this.store.setting<Record<string, string>>('taskTitles', {}) };
         if (input.title) titles[task.id] = input.title; else delete titles[task.id];
+        // A chat given several orglets becomes a channel, named by its title or theirs (COD-361).
+        if (isLegacyGroupChat(updated)) {
+          Object.assign(updated, channelForGroup(this.store, updated, input.title || task.title));
+          delete titles[task.id];
+        }
         this.store.transaction(() => { this.store.update('tasks', updated); this.store.setSetting('taskTitles', titles); });
         this.notify(); return;
       }
@@ -1695,6 +1730,16 @@ export class CoreService {
     this.start(task, true);
     return task.id;
   }
+  /** Renames a channel through its chat's rename, keeping its topic and members. */
+  private renameChannel(task: Task, name: string) {
+    const channel = task.channel!;
+    this.channels.update(channel.id, { name, topic: channel.topic ?? '', members: channel.members });
+  }
+  /** Members change from the next message on, so a channel with a turn under way waits, as a group chat's settings did. */
+  private assertChannelIdle(channelId: string) {
+    const row = this.store.all<Task>('tasks').find(task => task.channel?.id === channelId && !task.deletedAt);
+    if (row) this.assertIdle(row, 'Công việc đang chạy. Đợi xong rồi hãy đổi thiết lập.');
+  }
   /** Workers and teams chosen for new work must be active. */
   private assertAssignable(kind: 'worker' | 'team', entityId: string) {
     const found = this.entity(kind, entityId);
@@ -1879,7 +1924,11 @@ export class CoreService {
       return { pending, failure: error instanceof Error ? error.message : String(error) };
     }
   }
-  private createTask(input: TaskInput, routine?: Routine, folder?: NewChatFolder, forwarded?: ForwardedMessage): string {
+  private createTask(rawInput: TaskInput, routine?: Routine, folder?: NewChatFolder, forwarded?: ForwardedMessage): string {
+    // The first message of an empty channel (COD-361): the orglets its members expand to answer, whatever the window sent.
+    const { channelId, ...given } = rawInput;
+    const waiting = channelId && !routine ? this.channels.waiting(channelId) : undefined;
+    const input: TaskInput = waiting ? { ...given, workerId: waiting.orgletIds[0], assignees: waiting.orgletIds } : given;
     // The first message of a worker, team or group chat takes the permissions chosen while the chat was still empty.
     const liveChat = this.isLiveChatStart(input, routine) && input.toolCapabilities === undefined;
     const chosen = liveChat ? this.pendingNewChatCapabilities(this.newChatTarget(input)) : undefined;
@@ -1890,6 +1939,9 @@ export class CoreService {
     if (routine && task.toolCapabilities?.includes('browser.act')) throw new Error(SCHEDULE_NEVER_ACTS);
     if (routine && (task.toolCapabilities?.includes('desktop.read') || task.desktop?.apps.length)) throw new Error(SCHEDULE_NO_DESKTOP);
     if (routine) task.routineId = routine.id;
+    if (waiting) task.channel = waiting.channel;
+    // Several orglets started some other way (the terminal, an older window) make a channel all the same (COD-361).
+    else if (!routine && isLegacyGroupChat(task)) Object.assign(task, channelForGroup(this.store, task));
     // A forward's first turn keeps its record on the current input, where every later turn keeps its own (COD-257).
     if (forwarded) task.currentInput = { brief: task.brief, sourceIds: [...task.sourceIds], excludedSources: task.excludedSources, forwarded };
     this.store.transaction(() => {
@@ -1898,6 +1950,7 @@ export class CoreService {
       this.store.put('tasks', task);
       this.chatSearch.indexTurn(task.id, 0, task.currentInput ?? task, task.createdAt);
       if (routine) this.store.update('routines', { ...routine, lastTaskId: task.id });
+      if (waiting) this.channels.takeWaiting(waiting.channel.id);
       if (chosen) this.takeNewChatCapabilities(this.newChatTarget(input));
       if (folder) {
         if (folder.resolved) this.workspaceGrants.applyInsideTransaction(task.id, folder.resolved, folder.pending.permissions);

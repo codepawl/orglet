@@ -2311,9 +2311,9 @@ export class Runner {
     if (!off) return {};
     return { permissionsOff: { names: off.permissions, where: off.where }, permissionsOffInstruction: PERMISSIONS_OFF_INSTRUCTION };
   }
-  /** The first answer of a task names it, unless the user turned this off or already named the task. */
+  /** The first answer of a task names it, unless the user turned this off or already named the task; a channel has its own name. */
   private wantsTitle(task: Task, run: Run) {
-    return !(run.snapshot.inputRevision ?? 0) && (!run.stage || run.stage === 'synthesis' || run.stage === 'group') && this.store.setting('autoTitles', true) && !this.store.setting<Record<string, string>>('taskTitles', {})[task.id];
+    return !task.channel && !(run.snapshot.inputRevision ?? 0) && (!run.stage || run.stage === 'synthesis' || run.stage === 'group') && this.store.setting('autoTitles', true) && !this.store.setting<Record<string, string>>('taskTitles', {})[task.id];
   }
   /** Saves orchestrator routing on the plan run. No user-facing artifact — members and synthesis remain the reports. */
   private completePlan(run: Run, plan: unknown) {

@@ -391,6 +391,18 @@ Measured 2026-09-27 on the same machine with the shipped ONNX file, while other 
 - **Packaged Windows build** (`electron-forge package`, the pinned files copied into a fresh data folder, a fake OpenAI-compatible server on loopback as the model): with the twenty measured notes, one keyword note and one pinned note, "hello" found the model cold and loaded only the pinned note; eight seconds later "bill Acme for May" loaded **Invoice format** with *picked by Tacet, fit 0.90* in Details → Technical detail and *picked by Tacet* in the answer's trace. In Orglet's browser, clicking "Empty trash now" on a loopback page, which the rules let through, showed a card with Tacet's reason; Don't allow journaled it as `click:consequential:declined`.
 - Found on the way, fixed afterwards in COD-307 (stop words ignored, rarer words weigh more, the frozen manifest keeps every omission): the keyword match counts any shared word of three letters or more, "the", "and", "for", "của" and "được" included, so most English messages already load most unpinned notes; Tacet only matters for short messages. And the frozen manifest lists only the omissions among the notes that loaded, since each step compiles the frozen notes again.
 
+## Channels (COD-361)
+
+Group chats became channels: a name, an optional topic and members that are orglets and crews, in a **Channels** section of the sidebar; a chat with one orglet is its DM. How it works: [team-chat.md](team-chat.md#channels).
+
+- Data: an optional `channel` record on the group chat's `tasks` row, `assignees` kept as the orglets the members expand to. Members carry a `kind` for people later (COD-362); none are built.
+- Migration: `migrateGroupChats` on every open and after a restore; tested on titled, untitled, archived and every-orglet group chats, on a solo chat it must leave alone, run twice, and through closing and reopening the database (`tests/integration/channels.test.ts`).
+- Core: create, edit (name, topic, members), rename, delete an empty channel, a crew's channels following its members, a first message moving an empty channel onto its row, and the chat's own settings keeping only the limit (same test file).
+- Terminal: `orglet channel` (`group` kept as the older name) with `--name` and `--topic`, `members` taking orglets and crews, `chats` listing `channel` rows as `#name` (`tests/integration/cli-chat-admin.test.ts`).
+- Measured 2026-10-01 on a packaged Windows build from the branch (Demo orglets, isolated data folder): `scripts/alignment-check.mjs` screens `channel-chat`, `channel-members`, `channel-new`, `channel-empty`, `chat` and `rail` at 1200x820 and 740x600 in light and dark had no findings.
+
+Not verified here: a live provider in a channel, and a real workspace from an older build upgraded on another machine.
+
 ## COD-98 tools and team coordination: earlier verification record
 
 This record predates the epic's completion. It preserves what that milestone proved and did not prove; current harness coverage is recorded in [capabilities.md](capabilities.md).

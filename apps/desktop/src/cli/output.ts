@@ -83,7 +83,7 @@ export function formatChats(value: ChatsValue): string {
   return padded(value.chats.map(row => [row.short, row.kind, row.name, row.with.join(', '), row.status])).join('\n');
 }
 
-/** Where a new side thread or group chat is, so the next message can reach it. */
+/** Where a new side thread or channel is, so the next message can reach it. */
 export function formatNewChat(value: SendValue): string {
   return t('Nhắn tiếp trong chat này: orglet send "<tin nhắn>" {0}', chatOption(value.chat));
 }
@@ -93,7 +93,7 @@ export function formatBring(value: BringValue): string {
 }
 
 export function formatMembers(value: MembersValue): string {
-  return t('Từ tin nhắn sau, chat nhóm gửi tới: {0}.', value.names.join(', '));
+  return t('Từ tin nhắn sau, kênh gồm: {0}.', value.names.join(', '));
 }
 
 export function formatChatChange(value: ChatChangeValue): string {

@@ -1,32 +1,32 @@
 /**
  * Which chats the sidebar lists and where (COD-286). Pure: no state, no bridge calls.
  *
- * Archiving a side thread, a schedule's run or a group chat took its row away and left no list to find it in again,
+ * Archiving a side thread, a schedule's run or a channel took its row away and left no list to find it in again,
  * only search; orglets and crews already had an "Archived (N)" list at the end of their section. Each archived chat
  * now waits at the end of the section its row came from: a crew's chats under Crews, an orglet's main chat, side
- * threads and schedule runs under Orglets, a group chat under Group chats.
+ * threads and schedule runs under Orglets, a channel under Channels (COD-361).
  */
 type ChatRow = { id: string; archivedAt?: string; deletedAt?: string; teamId?: string; assignees?: 'all' | string[]; routineId?: string; sideOf?: unknown };
 
 /** The sidebar section an archived chat is listed in. */
-export type ArchivedChatSection = 'teams' | 'workers' | 'groups';
+export type ArchivedChatSection = 'teams' | 'workers' | 'channels';
 
-/** What an archived chat was, so its row can say so: a main chat, a side thread, a schedule's run or a group chat. */
-export type ArchivedChatKind = 'main' | 'side' | 'schedule' | 'group';
+/** What an archived chat was, so its row can say so: a main chat, a side thread, a schedule's run or a channel. */
+export type ArchivedChatKind = 'main' | 'side' | 'schedule' | 'channel';
 
 export type ArchivedChat<T extends ChatRow> = { task: T; kind: ArchivedChatKind };
 
-/** Where the chat's own row sat: its crew, a group of orglets, or its one orglet. */
+/** Where the chat's own row sat: its crew, the Channels section, or its one orglet. */
 export function archivedChatSection(task: ChatRow): ArchivedChatSection {
   if (task.teamId) return 'teams';
-  if (task.assignees) return 'groups';
+  if (task.assignees) return 'channels';
   return 'workers';
 }
 
 export function archivedChatKind(task: ChatRow): ArchivedChatKind {
   if (task.sideOf) return 'side';
   if (task.routineId) return 'schedule';
-  if (!task.teamId && task.assignees) return 'group';
+  if (!task.teamId && task.assignees) return 'channel';
   return 'main';
 }
 

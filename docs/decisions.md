@@ -74,7 +74,7 @@ Two of the right-control hints named the wrong folder level ("find where the log
 
 ## Who answers in a group chat
 
-In a group chat, a message that tags nobody used to be answered by every orglet in turn. With Tacet ready, a message the person wrote themselves, that tags nobody and replies to no one, is read against each orglet (`TurnRouting` in `core/orchestration/turn-routing.ts`, the question in `core/decisions/group-routing.ts`):
+In a group chat (a **channel** since COD-361), a message that tags nobody used to be answered by every orglet in turn. With Tacet ready, a message the person wrote themselves, that tags nobody and replies to no one, is read against each orglet (`TurnRouting` in `core/orchestration/turn-routing.ts`, the question in `core/decisions/group-routing.ts`):
 
 - *Who in this group chat should answer this message?* — one option per orglet, named by its name and described by its description and the start of its instructions (the model reads 48 tokens of each), and *everyone: the whole group: a greeting, or a question for everyone's view*. The message is read as it was typed, cut to 512 tokens.
 - An orglet with **0.65** or more answers alone. Anything else (everyone first, a closer race, a failed load, an answer slower than four seconds) keeps everyone, as before.

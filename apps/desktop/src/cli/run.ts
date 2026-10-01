@@ -92,7 +92,7 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     case 'chats': return { op: 'chats', archived: command.archived };
     case 'side': return { op: 'side-thread', ...targetFields(command), message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'bring': return { op: 'bring', chat: command.chat, ...(command.message ? { message: command.message } : {}) };
-    case 'group': return { op: 'group', names: command.names, message: command.message, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'channel': return { op: 'channel', names: command.names, message: command.message, ...(command.name ? { name: command.name } : {}), ...(command.topic ? { topic: command.topic } : {}), wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'members': return { op: 'members', chat: command.chat, names: command.names };
     case 'chat-change': return {
       op: 'chat-change',
@@ -220,7 +220,7 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
     case 'control':
     case 'answer': return reportControl(command.json, value as ControlValue, output, layout);
     case 'side':
-    case 'group': return reportNewChat(command.json, value as SendValue, output, layout);
+    case 'channel': return reportNewChat(command.json, value as SendValue, output, layout);
     case 'chats':
       if (!command.json) output.stdout(formatChats(value as ChatsValue));
       return EXIT_CODES.ok;
@@ -275,7 +275,7 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
   }
 }
 
-/** A side thread or group chat prints its answers like `send`, then the id that reaches it again. */
+/** A side thread or channel prints its answers like `send`, then the id that reaches it again. */
 function reportNewChat(json: boolean, value: SendValue, output: Output, layout: Layout): number {
   const answered = value.waited && value.answers.length > 0;
   if (!json && answered) output.stdout(layout.mode !== 'none' ? styledAnswers(value.answers, value.chat, layout) : formatSend(value));
@@ -328,10 +328,10 @@ async function sendWaiting(to: string, terminal: StatusTerminal, userData: strin
   return new WaitingFace({ write: terminal.write, color, mode: terminal.mode, label: `${name} is working`, hint: 'Ctrl+C stops waiting', columns: terminal.columns });
 }
 
-/** The chat a command waits on for an answer, if it does: `send`, `answer`, `side`, `group`, and resume, retry and continue. */
+/** The chat a command waits on for an answer, if it does: `send`, `answer`, `side`, `channel`, and resume, retry and continue. */
 function waitedChat(command: RequestCommand): string | undefined {
   if (command.kind === 'send' || command.kind === 'answer' || command.kind === 'side') return command.wait ? targetLabel(command) : undefined;
-  if (command.kind === 'group') return command.wait ? command.names[0] : undefined;
+  if (command.kind === 'channel') return command.wait ? command.name ?? command.names[0] : undefined;
   if (command.kind !== 'control') return undefined;
   const startsTurn = command.action === 'resume' || command.action === 'retry' || command.action === 'continue';
   return startsTurn && command.wait ? targetLabel(command) : undefined;

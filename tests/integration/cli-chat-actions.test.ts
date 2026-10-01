@@ -289,7 +289,7 @@ function actionClient() {
     chats: notUsed,
     side: notUsed,
     bring: notUsed,
-    group: notUsed,
+    channel: notUsed,
     members: notUsed,
     rename: notUsed,
     archive: notUsed,
