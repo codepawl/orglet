@@ -49,6 +49,21 @@ export function downgradeUncitedWebChecks(report: Report) {
   downgradeUncitedChecks(report, 'Check dựa trên trang web hoặc hiểu biết của model, không có nguồn đính kèm để trích dẫn.');
 }
 
+/**
+ * A pass or fail that cites nothing this run was given is not assessed. The answer stays; the check does not count
+ * as verified. A source id the run never had is dropped first, so a made-up citation cannot fail the whole reply.
+ */
+export function downgradeUncitedAnswerChecks(report: Report, sourceIds: ReadonlySet<string>) {
+  if (!report.review) return;
+  for (const check of report.review.checks) {
+    if (!check.sourceIds.length) continue;
+    const cited = check.sourceIds.filter(id => sourceIds.has(id));
+    if (cited.length === check.sourceIds.length) continue;
+    check.sourceIds = cited;
+  }
+  downgradeUncitedChecks(report, 'Check không có nguồn đính kèm để trích dẫn.');
+}
+
 function downgradeUncitedChecks(report: Report, coverageNote: string) {
   if (!report.review) return;
   for (const check of report.review.checks) {

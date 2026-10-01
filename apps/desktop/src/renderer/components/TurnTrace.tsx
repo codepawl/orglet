@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { AppWindow, Ban, Blocks, BookOpen, Brain, Camera, ChevronRight, FileDiff, FileText, FolderInput, FolderPlus, FolderSearch, Globe, Hourglass, ImageOff, Keyboard, Lightbulb, ListChecks, MonitorSmartphone, Mouse, MousePointerClick, MoveVertical, ScanSearch, Search, ShieldCheck, Table2, Terminal, TextCursorInput, Trash2, UserRound, Wrench, type LucideIcon } from 'lucide-react';
 import { t, tMessage } from '../i18n';
 import { traceSummary, type TraceEntry, type TraceKind } from '../turnTrace';
+import { Avatar } from './Avatar';
 
 /**
  * What a worker did before its answer, behind one quiet control above the bubble (COD-220): collapsed, one line
@@ -88,13 +89,18 @@ const proseKinds: readonly TraceKind[] = ['memory', 'knowledge'];
 function TraceRow({ entry }: { entry: TraceEntry }) {
   const Icon = traceIcons[entry.kind];
   const classes = ['trace-row', entry.kind === 'failed' || entry.kind === 'withheld' ? 'trace-row-muted' : '', entry.running ? 'running' : ''].filter(Boolean).join(' ');
+  const face = entry.face;
   return <li className={classes}>
-    <Icon size={14} aria-hidden="true" />
+    {/* A named orglet's face belongs beside the name. Every other row keeps its action icon at the start. */}
+    {face ? null : <Icon size={14} aria-hidden="true" />}
     {entry.note
       ? <span className="trace-note">{tMessage(entry.note)}</span>
       : <>
         <span className="trace-verb">{traceVerb(entry.kind)}</span>
-        {entry.target && <span className={proseKinds.includes(entry.kind) ? 'trace-text' : 'trace-target'}>{entry.target}</span>}
+        {entry.target && <span className={proseKinds.includes(entry.kind) ? 'trace-text' : face ? 'trace-target trace-person' : 'trace-target'}>
+          {face && <Avatar name={face.name} seed={face.seed} mascot={face.mascot} defaultMascot hint={face.hint} color={face.color} size="xxs" />}
+          {entry.target}
+        </span>}
         {entry.why && <span className="trace-why">{entry.why}</span>}
       </>}
   </li>;
