@@ -12,7 +12,7 @@ The row marked **Default** is the model that runs when you have not picked one. 
 
 The left side picks the chat. The tabs at the top of a chat pick what you see of it: the messages, its files, what it changed, its schedules or its memory.
 
-**The sidebar.** It lists your crews, your orglets and your group chats. Click a row to open that chat. Above them, **Open** lists the other chats you are working in: a side thread, a group chat or a schedule's run. Every chat you open that is not an orglet's or crew's own chat lands there, however you opened it: the sidebar, search, a notification, **Send to** or a forwarded message. Each row shows a face, the name and one mark:
+**The sidebar.** It lists your crews and your orglets, each with its side threads and schedule runs under it, and your group chats. Click a row to open that chat. A chat is listed once: when you open a chat that has no row anywhere in the sidebar, for example an older run of a schedule found through search or a notification, it lands in **Open** at the top. With nothing like that open, there is no **Open** section. Each row shows a face, the name and one mark:
 
 | Mark | Meaning |
 |---|---|
@@ -33,7 +33,7 @@ To take a chat off **Open**, hover it and click **×**, or click it with the mid
 3. **+** offers **New orglet** and **New crew**.
 4. One face per crew, then one per orglet, in the sidebar's order. Click a face to open that chat. Hover it to see the name. A small mark on the corner shows the chat's state, the same as in the sidebar.
 5. When you have group chats, one button lists them. Click one to open it.
-6. Under those, the faces of the chats on **Open**. Hover one to see its name and whose chat it is, and click the small **×** on its corner to close it.
+6. Under those, the faces of the chats on **Open**, the same ones the sidebar lists there. Hover one to see its name and whose chat it is, and click the small **×** on its corner to close it. Side threads and schedule runs are reached through their orglet's face, as before.
 7. At the foot: Notifications, Running, Schedules, Library and Settings, each with a count when something is waiting.
 
 If you used Orglet before the rail arrived, it opens with the full sidebar, as before. Fold it once to use the rail.
@@ -77,7 +77,7 @@ The names are GitHub's, which Slack and Discord mostly share. The menu only open
 
 ## Keyboard
 
-- **Ctrl+Tab** goes back to the chat you used before this one. Keep **Ctrl** held and press **Tab** again to go further back; **Ctrl+Shift+Tab** goes the other way. Let go of **Ctrl** on the chat you want. **Ctrl+W** takes the chat you are in off **Open**. It never closes the Orglet window, and it does nothing in an orglet's or crew's own chat. These keys do nothing while a dialog is open.
+- **Ctrl+Tab** goes back to the chat you used before this one. Keep **Ctrl** held and press **Tab** again to go further back; **Ctrl+Shift+Tab** goes the other way. Let go of **Ctrl** on the chat you want. **Ctrl+W** takes the chat you are in off **Open**. It never closes the Orglet window, and it does nothing in a chat that is not on **Open**, such as an orglet's own chat or a side thread. These keys do nothing while a dialog is open.
 - After you send, the message box stays ready, so you can type the next message straight away. If a message cannot be sent, it comes back in the box, in front of anything you typed since.
 - After you pick files or a folder with **+**, the cursor is back in the message box.
 - Opening **Details** moves the keyboard into the panel. Its close button or **Escape** puts you back where you were.

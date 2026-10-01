@@ -15,6 +15,7 @@ import {
   parseStoredOpenChats,
   pruneOpenChats,
   serializeOpenChats,
+  shownOpenChats,
   strongestOpenChatState,
   visitChat,
   walkRecent,
@@ -67,14 +68,26 @@ describe('keying a chat by what it opens (COD-340)', () => {
 });
 
 describe('the Open list and the recent chats (COD-355)', () => {
-  it('puts the chat on screen first in the recent list, and only a chat without a roster row on the Open list', () => {
+  it('puts the chat on screen first in the recent list, and only a chat without any row on the Open list', () => {
     let state: OpenChats = NO_OPEN_CHATS;
     state = visitChat(state, 'worker:researcher');
-    state = visitChat(state, 'task:side');
+    // A side thread hangs under its orglet and a group chat sits in its section: both have a row already.
+    state = visitChat(state, 'task:side', true);
     state = visitChat(state, 'team:crew');
-    state = visitChat(state, 'task:group');
-    expect(state.open).toEqual(['task:side', 'task:group']);
-    expect(state.recent).toEqual(['task:group', 'team:crew', 'task:side', 'worker:researcher']);
+    state = visitChat(state, 'task:group', true);
+    // An older run of a schedule has no row of its own anywhere.
+    state = visitChat(state, 'task:old-run', false);
+    expect(state.open).toEqual(['task:old-run']);
+    expect(state.recent).toEqual(['task:old-run', 'task:group', 'team:crew', 'task:side', 'worker:researcher']);
+  });
+
+  it('never puts a roster chat on the Open list, even when asked to', () => {
+    expect(visitChat(NO_OPEN_CHATS, 'worker:researcher', false).open).toEqual([]);
+  });
+
+  it('shows only the chats that still have no row, so none is listed twice', () => {
+    const rowed = new Set(['task:side']);
+    expect(shownOpenChats(['task:side', 'task:old-run', 'worker:researcher'], key => rowed.has(key))).toEqual(['task:old-run']);
   });
 
   it('keeps the Open list in the order chats were opened, so going back to one does not move its row', () => {
@@ -106,10 +119,12 @@ describe('the Open list and the recent chats (COD-355)', () => {
     });
   });
 
-  it('closes another chat without moving the screen, and never closes a roster chat', () => {
+  it('closes another chat without moving the screen, and does nothing for a chat not on the list', () => {
     const state: OpenChats = { open: ['task:side', 'task:group'], recent: ['task:group', 'task:side'] };
     expect(closeOpenChat(state, 'task:side', 'task:group')).toEqual({ state: { open: ['task:group'], recent: ['task:group'] } });
     expect(closeOpenChat(state, 'worker:researcher', 'worker:researcher')).toEqual({ state });
+    // A side thread opened from its row under the orglet: Ctrl+W there has nothing to close.
+    expect(closeOpenChat(state, 'task:nested-side', 'task:nested-side')).toEqual({ state });
   });
 
   it('has nothing to hand over to when the closed chat was the only one used', () => {

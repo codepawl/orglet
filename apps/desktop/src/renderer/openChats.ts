@@ -3,8 +3,9 @@ import { liveTeamTask, liveWorkerTask, type LiveThreadTask } from '../shared/liv
 
 /**
  * Which chat is on screen, and which ones are kept at hand (COD-355). The left column picks the chat, Slack-style: the
- * roster rows open an orglet's or a crew's main chat, and the **Open** list holds the other chats being worked in (side
- * threads, group chats, schedule runs) until they are closed. Ctrl+Tab walks every chat in the order it was last used.
+ * roster rows open an orglet's or a crew's main chat, side threads and schedule runs hang under their orglet or crew,
+ * group chats have their section, and the **Open** list holds only the chats opened that have no row anywhere else, so
+ * no chat is listed twice (owner, 2026-10-01). Ctrl+Tab walks every chat in the order it was last used.
  * Both lists are window chrome, kept in the renderer's own storage like the read stamps; they never create or change a
  * chat.
  *
@@ -37,7 +38,7 @@ export function parseChatKey(key: string): ChatKeyTarget | undefined {
   return { kind, id };
 }
 
-/** A roster chat (an orglet's or crew's main chat) has its own row; only the other chats go on the Open list. */
+/** A roster chat (an orglet's or crew's main chat) has its row and never goes on the Open list. */
 export function isRosterChat(key: string): boolean {
   const target = parseChatKey(key);
   return target !== undefined && target.kind !== 'task';
@@ -98,22 +99,31 @@ function withLast(keys: readonly string[], key: string, limit: number): readonly
 }
 
 /**
- * The chat on screen moves to the front of the recent list, and a chat that is not a roster row joins the end of the
- * Open list. The same object comes back when nothing changed.
+ * The chat on screen moves to the front of the recent list. It joins the end of the Open list only when it has no row
+ * of its own in the sidebar (`hasRow`): a roster chat, a side thread, a schedule's newest run or a listed group chat is
+ * reached from its row instead. The same object comes back when nothing changed.
  */
-export function visitChat(state: OpenChats, key: string): OpenChats {
+export function visitChat(state: OpenChats, key: string, hasRow = isRosterChat(key)): OpenChats {
   const recent = withFirst(state.recent, key, MAX_RECENT_CHATS);
-  const open = isRosterChat(key) ? state.open : withLast(state.open, key, MAX_OPEN_CHATS);
+  const open = hasRow || isRosterChat(key) ? state.open : withLast(state.open, key, MAX_OPEN_CHATS);
   if (recent === state.recent && open === state.open) return state;
   return { open, recent };
+}
+
+/**
+ * The Open list as shown: a chat that has since gained a row elsewhere (a side thread under its orglet, a group chat
+ * in its section) is left out, so it is never listed twice.
+ */
+export function shownOpenChats(open: readonly string[], hasRow: (key: string) => boolean): string[] {
+  return open.filter(key => !isRosterChat(key) && !hasRow(key));
 }
 
 export type ClosedChat = { state: OpenChats; activate?: string };
 
 /**
  * Takes a chat off the Open list, and out of the recent list so Ctrl+Tab does not bring it back. Closing the chat on
- * screen hands over to the chat used before it (`activate`); closing another one leaves the screen as it is. A roster
- * chat has its row and cannot be closed.
+ * screen hands over to the chat used before it (`activate`); closing another one leaves the screen as it is. A chat
+ * that is not on the list (a roster chat, a side thread, a schedule run) cannot be closed: nothing changes.
  */
 export function closeOpenChat(state: OpenChats, key: string, activeKey: string | undefined): ClosedChat {
   if (!state.open.includes(key)) return { state };

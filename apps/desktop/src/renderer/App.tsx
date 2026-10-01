@@ -101,7 +101,7 @@ import { ChangesView, changedRunCount } from './components/ChangesView';
 import { MemoryList } from './components/Memories';
 import { SidebarRail, type RailAction, type RailEntry } from './components/SidebarRail';
 import { reportFeature } from './analytics';
-import { chatKeyForView, closeOpenChat, isRosterChat, openChatState, parseChatKey, pruneOpenChats, readOpenChats, readSidebarMode, strongestOpenChatState, visitChat, walkRecent, walkSnapshot, writeOpenChats, writeSidebarMode, type OpenChatState, type OpenChats } from './openChats';
+import { chatKey, chatKeyForView, closeOpenChat, isRosterChat, openChatState, parseChatKey, pruneOpenChats, readOpenChats, readSidebarMode, shownOpenChats, strongestOpenChatState, visitChat, walkRecent, walkSnapshot, writeOpenChats, writeSidebarMode, type OpenChatState, type OpenChats } from './openChats';
 import { availableChatViews, viewOwnerOfTask, chatViewToShow, memoriesOf, schedulesOf, type ViewOwner, type ChatViewName } from './chatViews';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
@@ -633,10 +633,16 @@ export function App() {
   const [chatsBooted, setChatsBooted] = useState(false);
   useEffect(() => { if (workspace && !workspace.workers.length) setChatsBooted(true); }, [workspace]);
   useEffect(() => { writeOpenChats(openChats); }, [openChats]);
+  // Which chats have a row of their own in the sidebar (a side thread, a schedule's newest run, a listed group chat):
+  // they are never put on the Open list, so no chat is listed twice (owner, 2026-10-01). Filled in on each render.
+  const chatsWithRow = useRef(new Set<string>());
+  const chatHasRow = (key: string) => chatsWithRow.current.has(key);
+  // The Open list as shown, for Ctrl+W: a chat that is not on it has nothing to close.
+  const shownOpenKeys = useRef<readonly string[]>([]);
   // While Ctrl+Tab walks the recent chats, the list stays as it was when the walk began (`walkRecent`).
   const recentWalk = useRef<{ snapshot: readonly string[]; position: number }>(undefined);
   useEffect(() => {
-    if (activeChatKey && chatsBooted && !recentWalk.current) setOpenChats(state => visitChat(state, activeChatKey));
+    if (activeChatKey && chatsBooted && !recentWalk.current) setOpenChats(state => visitChat(state, activeChatKey, isRosterChat(activeChatKey) || chatHasRow(activeChatKey)));
   }, [activeChatKey, chatsBooted]);
   useEffect(() => {
     if (!workspace) return;
@@ -671,7 +677,7 @@ export function App() {
     if (!recentWalk.current) return;
     recentWalk.current = undefined;
     const landed = shortcutState.current.activeChatKey;
-    if (landed) setOpenChats(state => visitChat(state, landed));
+    if (landed) setOpenChats(state => visitChat(state, landed, isRosterChat(landed) || chatHasRow(landed)));
   };
   // Ctrl+Tab and Ctrl+Shift+Tab walk the recent chats while Ctrl is held, Ctrl+W closes the open chat when it is on the
   // Open list. Ctrl+W is always taken: left to the window it would close Orglet. While a dialog is over the page they
@@ -688,7 +694,8 @@ export function App() {
       if (document.querySelector('[role=dialog]')) return;
       const current = shortcutState.current;
       if (walking) current.stepRecent(event.shiftKey ? -1 : 1);
-      else if (current.activeChatKey && !isRosterChat(current.activeChatKey)) current.closeChat(current.activeChatKey);
+      // Only a chat on the Open list closes; on a roster chat, a side thread or a schedule run Ctrl+W does nothing.
+      else if (current.activeChatKey && shownOpenKeys.current.includes(current.activeChatKey)) current.closeChat(current.activeChatKey);
     };
     const keyup = (event: KeyboardEvent) => {
       if (event.key === 'Control') shortcutState.current.endRecentWalk();
@@ -1818,7 +1825,13 @@ export function App() {
     return { key, kind, name: openChatName(task), description, face: openChatFace(task, 'sm'), state: openStateOf(task), active: key === activeChatKey,
       onOpen: () => openChatByKey(key), onDwell: resting => dwellChat(task.id, resting) };
   };
-  const openChatItems = openChats.open.map(openChatItemOf).filter((item): item is OpenChatItem => Boolean(item));
+  const nestedChats = [
+    ...workspace.workers.flatMap(item => chatsUnder(workspace.tasks, workspace.routines, { workerId: item.id })),
+    ...workspace.teams.flatMap(item => chatsUnder(workspace.tasks, workspace.routines, { teamId: item.id })),
+  ].map(chat => chat.task);
+  chatsWithRow.current = new Set([...groupChats, ...nestedChats].map(task => chatKey({ kind: 'task', id: task.id })));
+  const openChatItems = shownOpenChats(openChats.open, chatHasRow).map(openChatItemOf).filter((item): item is OpenChatItem => Boolean(item));
+  shownOpenKeys.current = openChatItems.map(item => item.key);
   /**
    * On the rail an open chat is a face at the roster's size. A side thread or a schedule's run of an orglet wears a small
    * thread or calendar badge, so it is not taken for the orglet's own face above it.
@@ -1861,7 +1874,7 @@ export function App() {
     <aside className={`sidebar${sidebar ? '' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={!sidebar || undefined}>
       <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong><Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button><Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={closeSidebar}><PanelLeft size={18} /></Button></div>
       <div className="sidebar-scroll">
-      {/* The chats kept at hand that have no roster row of their own (COD-355): side threads, group chats, schedule runs. */}
+      {/* The chats kept at hand that have no row anywhere else in the sidebar (COD-355), so no chat is listed twice. */}
       {openChatItems.length > 0 && <SidebarSection id="open" title={t('Đang mở')}>
         {openChatItems.map(item => <OpenChatRow key={item.key} item={item} onClose={() => closeChat(item.key)} />)}
       </SidebarSection>}
