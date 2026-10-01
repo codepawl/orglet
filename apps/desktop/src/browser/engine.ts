@@ -108,6 +108,11 @@ export type BrowserEngineOptions = {
 };
 
 const VIEWPORT = { width: 1280, height: 800 };
+const DIAG_MARKS: string[] = [];
+let diagStartedAt = Date.now();
+function mark(label: string) {
+  DIAG_MARKS.push(`+${Date.now() - diagStartedAt}ms ${label}`);
+}
 /** What a connection nobody claims gets: public sites only. */
 const PUBLIC_ONLY: BrowserPolicy = { sites: [], restricted: false };
 const DNS_CACHE_MS = 60_000;
@@ -197,6 +202,23 @@ export class BrowserEngine {
   }
 
   async handle(raw: unknown, signal: AbortSignal): Promise<unknown> {
+    const startedAt = Date.now();
+    diagStartedAt = startedAt;
+    DIAG_MARKS.length = 0;
+    const label = `${(raw as { kind?: string }).kind}:${(raw as { step?: { kind?: string } }).step?.kind ?? ''}`;
+    const watchdog = setTimeout(() => console.error(`HANGDIAG ${label} still running after 8s: ${DIAG_MARKS.join(' | ')}`), 8_000);
+    try {
+      return await this.handleTimed(raw, signal);
+    } catch (error) {
+      console.error(`HANGDIAG ${label} threw after ${Date.now() - startedAt}ms: ${String(error).slice(0, 200)} :: ${DIAG_MARKS.join(' | ')}`);
+      throw error;
+    } finally {
+      clearTimeout(watchdog);
+      if (Date.now() - startedAt > 3_000) console.error(`HANGDIAG ${label} slow ${Date.now() - startedAt}ms :: ${DIAG_MARKS.join(' | ')}`);
+    }
+  }
+
+  async handleTimed(raw: unknown, signal: AbortSignal): Promise<unknown> {
     const request = BrowserHostRequest.parse(raw);
     signal.throwIfAborted();
     switch (request.kind) {
@@ -656,7 +678,9 @@ export class BrowserEngine {
   }
 
   private async open(runId: string, profileId: string, policy: BrowserPolicy, tabId: string | null, url: string, signal: AbortSignal) {
+    mark('open:start');
     const session = await this.session(runId, profileId, policy);
+    mark('open:session');
     if (session.inChrome) throw new Error(IN_CHROME);
     let page: Page;
     let pageTabId: string;
@@ -668,6 +692,7 @@ export class BrowserEngine {
     } else {
       if (session.tabs.size >= MAX_BROWSER_TABS) throw new Error(TOO_MANY_TABS);
       page = await session.context.newPage();
+      mark('open:newPage');
       pageTabId = `t${session.nextTab}`;
       session.nextTab += 1;
       this.adoptTab(session, pageTabId, page);
@@ -679,8 +704,10 @@ export class BrowserEngine {
     let failure: unknown;
     try {
       const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: BROWSER_OPEN_TIMEOUT_MS, signal });
+      mark('open:goto');
       status = response?.status() ?? null;
       await page.waitForLoadState('load', { timeout: 5_000 }).catch(() => {});
+      mark('open:loaded');
     } catch (error) {
       failure = error;
     }
@@ -707,7 +734,9 @@ export class BrowserEngine {
     const page = session?.tabs.get(tabId);
     if (!session || !page || page.isClosed()) throw new Error(NO_TAB);
     session.policy = policy;
+    mark('allowedTab:start');
     const refusal = page.url() === 'about:blank' ? undefined : await requestRefusal(page.url(), policy, true, this.resolve);
+    mark('allowedTab:refusal');
     if (refusal) throw new Error(refusal);
     // A snapshot and a screenshot include frames, so a frame that ended up somewhere the rules refuse (through a
     // redirect inside it, say) keeps the whole page unread.
@@ -717,11 +746,14 @@ export class BrowserEngine {
       if (await requestRefusal(frameUrl, policy, true, this.resolve)) throw new Error(FRAME_REFUSED);
     }
     await this.focusTab(session, tabId);
+    mark('allowedTab:done');
     return page;
   }
 
   private async tabView(tabId: string, page: Page): Promise<BrowserTabView> {
+    mark('tabView:start');
     const title = await page.title().catch(() => '');
+    mark('tabView:done');
     return { tabId, url: page.url(), title: title.slice(0, 300) };
   }
 
@@ -788,13 +820,17 @@ export class BrowserEngine {
   private async inspect(runId: string, tabId: string, policy: BrowserPolicy, ref: string | null, signal: AbortSignal): Promise<BrowserInspectResult> {
     const page = await this.allowedTab(runId, tabId, policy);
     const snapshot = await page.ariaSnapshot({ mode: 'ai', timeout: STEP_TIMEOUT_MS, signal });
+    mark('inspect:snapshot');
     const view = await this.tabView(tabId, page);
     const facts = await this.pageFacts(page);
+    mark('inspect:facts');
     const element = ref ? snapshotElement(snapshot, ref) : focusedElement(snapshot);
     if (!element) return { ...view, target: null, page: facts };
     const located = page.locator(`aria-ref=${element.ref}`);
     if (await located.count() === 0) return { ...view, target: null, page: facts };
+    mark('inspect:count');
     const elementFacts = await located.evaluate(readElementFacts, undefined, { timeout: STEP_TIMEOUT_MS });
+    mark('inspect:evaluate');
     return { ...view, target: { ref: element.ref, role: element.role.slice(0, 60), name: element.name.slice(0, 300), ...elementFacts }, page: facts };
   }
 
@@ -1130,20 +1166,25 @@ export class BrowserEngine {
     const page = await this.allowedTab(runId, tabId, policy);
     const session = this.runs.get(runId);
     if (!session) throw new Error(NO_TAB);
+    mark('act:allowed');
     const beforeView = await this.tabView(tabId, page);
     const before = { url: beforeView.url, title: beforeView.title };
     const quiet = { changes: '', changesCut: false, dialogs: [], downloadBlocked: false, popupClosed: false, fileChooser: false };
     // A wait changes nothing, so it only needs the tab; every other step needs the page the core judged.
     if (step.kind !== 'wait' && !sameAddress(page.url(), url)) return { ...beforeView, before, ...quiet, stale: PAGE_MOVED };
     const beforeSnapshot = await page.ariaSnapshot({ mode: 'ai', timeout: STEP_TIMEOUT_MS, signal });
+    mark('act:beforeSnapshot');
     if (step.kind !== 'wait') {
       const current = step.kind === 'press' ? focusedElement(beforeSnapshot) : snapshotElement(beforeSnapshot, step.ref);
       if (!sameElement(current, expect)) return { ...beforeView, before, ...quiet, stale: ELEMENT_CHANGED };
     }
     const counted = { dialogs: session.dialogCount, downloads: session.downloads, fileChoosers: session.fileChoosers, popups: session.popupsClosed };
     if (step.kind === 'click' || step.kind === 'type' || step.kind === 'select') await this.pointAt(session, tabId, page, step.kind, step.ref, signal);
+    mark('act:pointed');
     await this.perform(page, step, signal);
+    mark('act:performed');
     await this.settleAfterStep(page, step);
+    mark('act:settled');
     signal.throwIfAborted();
     if (page.isClosed()) throw new Error(WINDOW_CLOSED);
     const landed = page.url();
@@ -1158,7 +1199,9 @@ export class BrowserEngine {
       await page.goto('about:blank').catch(() => {});
       return { ...await this.tabView(tabId, page), before, changes: '', changesCut: false, ...tried, blocked: refusal };
     }
+    mark('act:refusalChecked');
     const afterSnapshot = await page.ariaSnapshot({ mode: 'ai', timeout: STEP_TIMEOUT_MS, signal }).catch(() => '');
+    mark('act:afterSnapshot');
     const changed = newSnapshotLines(beforeSnapshot, afterSnapshot, CHANGED_LINES_CHARACTERS);
     return { ...await this.tabView(tabId, page), before, changes: changed.text, changesCut: changed.cut, ...tried };
   }

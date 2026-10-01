@@ -512,7 +512,13 @@ export class BrowserTools {
     const { tabId, ref, step } = actStepOf(name, context.argumentsValue);
     const kind = KIND_OF[name] as BrowserActKind | 'wait';
     const actionId = this.journal(run, callId, kind, tabId, this.lastUrl(run.id, tabId), kind === 'wait' ? 'read' : 'input');
-    const request = (hostRequest: BrowserHostRequest) => host.request(hostRequest, AbortSignal.any([signal, AbortSignal.timeout(ACT_REQUEST_TIMEOUT_MS)]));
+    const request = (hostRequest: BrowserHostRequest) => {
+      const requestedAt = Date.now();
+      return host.request(hostRequest, AbortSignal.any([signal, AbortSignal.timeout(ACT_REQUEST_TIMEOUT_MS)])).catch(error => {
+        console.error(`HANGDIAG core request ${hostRequest.kind} rejected after ${Date.now() - requestedAt}ms: ${String(error).slice(0, 200)}`);
+        throw error;
+      });
+    };
     const policy = () => browserPolicyOf(this.choiceFor(context.currentTask()));
     if (step.kind === 'wait') {
       return this.perform(context, actionId, { tabId, step, url: '', expect: null, label: '', asked: false, risk: 'read', replay: 'read' }, policy, request);
