@@ -3,13 +3,14 @@ import { isHarness } from '../../shared/harness';
 import { CATALOG_HINT_IDS, type ModelEntry, type ModelListCache } from '../../shared/models';
 import { isOpenCodePlan, type OpenCodePlan } from '../../shared/opencode';
 import { connectionPricing, findCustomConnection, isCustomProvider, type CustomConnection } from '../../shared/custom-connections';
-import { modelCatalog, type CatalogProvider } from '../adapters/catalog';
+import { formerAnthropicDefaults, modelCatalog, type CachePrice, type CatalogProvider } from '../adapters/catalog';
 
 /**
  * A price per token: tenths of a micro-dollar for the built-in catalog and native lists, or micro-dollars per million
- * tokens for a price the person entered on a custom connection (COD-242). `cost` in the ledger reads either.
+ * tokens for a price the person entered on a custom connection (COD-242). `cost` in the ledger reads either. A tenths
+ * price may also carry its prompt-cache prices (COD-358); without them cached tokens are billed as plain input.
  */
-export type TokenPrice = { inputTenths: number; outputTenths: number } | { inputMicrosPerMillion: number; outputMicrosPerMillion: number };
+export type TokenPrice = ({ inputTenths: number; outputTenths: number } & Partial<CachePrice>) | { inputMicrosPerMillion: number; outputMicrosPerMillion: number };
 export type ModelRates = TokenPrice & { pricingVersion: string };
 export type ResolvedModel = { id?: string; rates?: ModelRates; pricingVersion: string };
 
@@ -23,7 +24,8 @@ function matchEntry(models: ModelEntry[] | undefined, id: string) {
 
 function catalogRates(provider: CatalogProvider): ModelRates {
   const config = modelCatalog[provider];
-  return { inputTenths: config.inputTenths, outputTenths: config.outputTenths, pricingVersion: config.pricingVersion };
+  const cache = 'cacheWriteHundredths' in config ? { cacheWriteHundredths: config.cacheWriteHundredths, cacheReadHundredths: config.cacheReadHundredths } : {};
+  return { inputTenths: config.inputTenths, outputTenths: config.outputTenths, ...cache, pricingVersion: config.pricingVersion };
 }
 
 /**
@@ -70,6 +72,11 @@ export function resolveWorkerModel(worker: Pick<Worker, 'provider' | 'modelId'>,
   const catalog = modelCatalog[provider];
   const id = custom || catalog.model;
   if (id === catalog.model) return { id, rates: catalogRates(provider), pricingVersion: catalog.pricingVersion };
+  // An orglet that saved a former default keeps its model and its verified price; nothing rewrites its choice.
+  if (provider === 'anthropic' && Object.hasOwn(formerAnthropicDefaults, id)) {
+    const rates = formerAnthropicDefaults[id];
+    return { id, rates: { ...rates }, pricingVersion: rates.pricingVersion };
+  }
   if (provider === 'xai' || provider === 'openrouter') {
     const entry = matchEntry(cache?.byProvider[provider]?.models, id);
     if (entry && entry.inputTenths != null && entry.outputTenths != null) {

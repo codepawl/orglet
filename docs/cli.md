@@ -75,7 +75,7 @@ File Explorer's **Send to** menu and `orglet://` links are other ways in, on [th
 1. Download Setup.exe from the [latest release](https://github.com/codepawl/orglet/releases/latest) and install it.
 2. Open a new terminal and run `orglet status`.
 
-Or, with Node.js 20 or later, `npx @codepawlhq/orglet` does step 1 for you: it downloads that Setup, checks its SHA-256 against the release and its signature, and runs it. Installed with `npm i -g @codepawlhq/orglet`, the package's own `orglet` starts the same thing the app's command starts (it reads `orglet.cmd` and runs that Orglet.exe directly), so it never behaves differently from the command Setup adds, whichever comes first on PATH. The package lives in [`installer/npm`](../installer/npm/README.md).
+Or, with Node.js 20 or later, `npx @codepawlhq/orglet` does step 1 for you: it downloads that Setup from the `codepawl/orglet` releases only, checks its SHA-256 against the release and its signature, and runs it. Without a terminal to ask in, it installs nothing unless you pass `--yes`. Installed with `npm i -g @codepawlhq/orglet`, the package's own `orglet` starts the same thing the app's command starts (it reads `orglet.cmd` and runs that Orglet.exe directly), so it never behaves differently from the command Setup adds, whichever comes first on PATH. The package lives in [`installer/npm`](../installer/npm/README.md).
 
 Setup writes a small `orglet.cmd` into `%LOCALAPPDATA%\Orglet\bin` and adds that folder to your own user PATH (not the system one), the way VS Code's installer does. Each update and every start of that install rewrite the file, so the command keeps working after an update. A terminal that was already open does not see the new PATH; open a new one.
 

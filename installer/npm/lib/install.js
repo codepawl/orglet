@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { installerAssetFor, latestRelease, sha256Of } from './release.js';
+import { installerAssetFor, isReleaseDownload, latestRelease, sha256Of } from './release.js';
 import { PUBLISHER, readSignature, sha256OfFile, signatureAccepted } from './verify.js';
 
 /*
@@ -52,6 +52,7 @@ export async function install({ platform = process.platform, log, progress }) {
   if (!asset) throw new Error(`The latest release (${release.version}) has no Windows Setup. See ${RELEASES_PAGE}`);
   const expectedHash = sha256Of(asset);
   if (!expectedHash) throw new Error(`GitHub reports no SHA-256 for ${asset.name}, so it cannot be checked. See ${RELEASES_PAGE}`);
+  if (!isReleaseDownload(asset.browser_download_url)) throw new Error(`${asset.name} does not download from Orglet's GitHub releases. Nothing was installed.`);
 
   const folder = await mkdtemp(join(tmpdir(), 'orglet-setup-'));
   const setupPath = join(folder, asset.name);

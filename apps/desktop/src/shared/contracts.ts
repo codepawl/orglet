@@ -259,7 +259,8 @@ export type Activity = { id: string; runId: string; sequence?: number; message: 
 /** A memory the answer was written with, as the run froze it (COD-161); the row may have been edited or deleted since. */
 export type UsedMemory = { id: string; revision: number; text: string };
 export type Artifact = { id: string; runId: string; report: Report; hash: string; createdAt: string; replyTo?: string; usedMemories?: UsedMemory[] };
-export type Usage = { chargedMicros: number; reservedMicros: number; uncertainCount: number; inputTokens: number; outputTokens: number };
+/** Spend and tokens of a chat or the workspace. `cacheReadTokens` and `cacheWriteTokens` are parts of `inputTokens` (COD-358). */
+export type Usage = { chargedMicros: number; reservedMicros: number; uncertainCount: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number };
 export type BudgetReservationView = {
   id: string;
   taskId: string;

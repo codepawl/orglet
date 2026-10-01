@@ -30,8 +30,9 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.0.0
+      # This job can publish to npm, so every action it runs is pinned to a commit, not a tag that can move.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
@@ -62,9 +63,11 @@ jobs:
         if: steps.check.outputs.publish == 'true'
         run: |
           set -euo pipefail
-          # Trusted publishing needs npm 11.5.1 or later.
-          if ! npx --yes semver@7 --range '>=11.5.1' "$(npm --version)" >/dev/null; then
-            npm install --global npm@11
+          # Trusted publishing needs npm 11.5.1 or later. The version is compared here instead of with a package fetched
+          # at run time, and an older npm is replaced by one exact version: this job can publish, so it runs nothing unpinned.
+          IFS=. read -r major minor patch <<< "$(npm --version)"
+          if (( major < 11 || (major == 11 && (minor < 5 || (minor == 5 && patch < 1))) )); then
+            npm install --global npm@11.21.0
           fi
           npm --version
       - name: Version the package like the release

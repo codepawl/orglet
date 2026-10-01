@@ -62,6 +62,7 @@ const manualScoreAvailable = (profile: z.infer<typeof Profile>, run: z.infer<typ
 const ProcessEvidence = z.object({ id: Id, runId: Id, exitCode: z.number().int() }).strict();
 const Reservation = z.object({ id: Id, run_id: Id, task_id: Id, provider: z.union([z.enum(['openai', 'anthropic', 'xai', 'openrouter']), CustomProviderId]), month: z.string().regex(/^\d{4}-\d{2}$/), amount: Integer, state: z.enum(['held', 'unknown', 'settled']) }).strict();
 const Ledger = z.object({ id: Id, reservation_id: Id, amount: Integer, input_tokens: Integer, output_tokens: Integer, pricing_version: z.string() }).strict();
+const LedgerCache = z.object({ ledger_id: Id, cache_read_tokens: Integer, cache_write_tokens: Integer }).strict();
 const ReservationReview = z.object({ reservation_id: Id, reason: z.enum(['missing_usage', 'request_failed', 'interrupted', 'legacy']), noted_at: z.iso.datetime(), actual_amount: Integer.nullable(), verified_source: z.enum(['provider_dashboard', 'invoice']).nullable(), resolved_at: z.iso.datetime().nullable() }).strict();
 const RevisionRow = z.object({ entity_id: Id, revision: Revision, data: z.union([Worker, Skill, Team]) }).strict();
 const Settings = z.object({ theme: z.enum(['system', 'light', 'dark']), connectionLimitMicros: z.number().int().min(1000).max(1_000_000_000) }).strict();
@@ -77,6 +78,8 @@ const Payload = z.object({
   knowledge: z.array(Knowledge).max(10_000).optional(), knowledgeRevisions: z.array(KnowledgeRevision).max(100_000).optional(),
   // Each turn's files line: counts and where the changes stood, never the files (COD-299). Older backups lack it.
   changedFiles: z.array(ChangedFilesRecord).max(100_000).optional(),
+  // The prompt-cache share of settled requests (COD-358). Older backups lack it.
+  ledgerCache: z.array(LedgerCache).optional(),
   workers: z.array(Worker), skills: z.array(Skill), teams: z.array(Team), tasks: z.array(Task), runs: z.array(Run), events: z.array(Event), artifacts: z.array(Artifact), sources: z.array(Source), profiles: z.array(Profile), processEvidence: z.array(ProcessEvidence).optional(), workspaceEvidence: z.array(WorkspaceReadEvidence).optional(), preflights: z.array(PreflightRecord).optional(), revisions: z.array(RevisionRow), reservations: z.array(Reservation), ledger: z.array(Ledger), reservationReviews: z.array(ReservationReview).optional(), settings: Settings,
 }).strict();
 type Payload = z.infer<typeof Payload>;
@@ -360,6 +363,12 @@ function validateRelations(data: Payload) {
   const settled = new Set<string>();
   for (const entry of data.ledger) { if (!reservations.has(entry.reservation_id) || settled.has(entry.reservation_id)) fail('Ledger thiếu reservation hoặc bị trùng.'); settled.add(entry.reservation_id); }
   for (const reservation of reservations.values()) if (runs.get(reservation.run_id)?.taskId !== reservation.task_id || (reservation.state === 'settled') !== settled.has(reservation.id)) fail('Reservation không khớp run/ledger.');
+  const cachedLedgerIds = new Set<string>();
+  for (const cache of data.ledgerCache ?? []) {
+    const entry = data.ledger.find(item => item.id === cache.ledger_id);
+    if (!entry || cachedLedgerIds.has(cache.ledger_id) || cache.cache_read_tokens + cache.cache_write_tokens > entry.input_tokens) fail('Ledger thiếu reservation hoặc bị trùng.');
+    cachedLedgerIds.add(cache.ledger_id);
+  }
   const reviewed = new Set<string>();
   for (const review of data.reservationReviews ?? []) {
     const reservation = reservations.get(review.reservation_id);
@@ -413,6 +422,7 @@ function snapshot(store: Store): Payload {
     revisions: store.db.prepare('SELECT * FROM revisions ORDER BY rowid').all().map(row => ({ ...row, data: JSON.parse(String(row.data)) })),
     reservations: store.db.prepare('SELECT * FROM reservations ORDER BY rowid').all(), ledger: store.db.prepare('SELECT * FROM ledger ORDER BY rowid').all(),
     reservationReviews: store.db.prepare('SELECT * FROM reservation_reviews ORDER BY rowid').all(),
+    ledgerCache: store.db.prepare('SELECT * FROM ledger_cache ORDER BY rowid').all(),
     // Keys, reviewedSkills and modelLists stay on this machine; they are derived from local credentials/CLIs.
     settings: { theme: store.setting('theme', 'system'), connectionLimitMicros: store.setting('connectionLimitMicros', 5_000_000) },
   });
@@ -423,6 +433,13 @@ function snapshot(store: Store): Payload {
  * connection by id, so the id is kept; a name already taken here gets a number so the pickers can still tell them apart.
  * Keys are not in a backup: a restored connection that needs one waits for it in Settings.
  */
+/** Cache shares are facts about settled requests, so a row already here is kept and the backup only adds missing ones. */
+function mergeLedgerCache(current: z.infer<typeof LedgerCache>[], incoming: z.infer<typeof LedgerCache>[]) {
+  const rows = new Map(incoming.map(row => [row.ledger_id, row]));
+  for (const row of current) rows.set(row.ledger_id, row);
+  return [...rows.values()];
+}
+
 export function mergeCustomConnections(current: CustomConnection[], incoming: CustomConnection[]): CustomConnection[] {
   const merged = [...current];
   for (const connection of incoming) {
@@ -618,6 +635,7 @@ export class Backups {
         workspaceEvidence: merge(current.workspaceEvidence ?? [], incoming.workspaceEvidence ?? [], true),
         preflights: merge(current.preflights ?? [], incoming.preflights ?? []),
         ledger: merge(current.ledger, incoming.ledger, true), reservations: merge(current.reservations, incoming.reservations),
+        ledgerCache: mergeLedgerCache(current.ledgerCache ?? [], incoming.ledgerCache ?? []),
       };
       // Financial facts cannot be rolled back by importing an older snapshot.
       for (const row of incoming.reservations) {
@@ -669,7 +687,8 @@ export class Backups {
       for (const record of merged.preflights ?? []) this.store.put('preflights', record, { column: 'task_id', value: record.taskId });
       for (const row of merged.revisions) this.store.db.prepare('INSERT OR IGNORE INTO revisions VALUES(?,?,?)').run(row.entity_id, row.revision, JSON.stringify(row.data));
       for (const row of merged.reservations) this.store.db.prepare('INSERT INTO reservations VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state').run(row.id, row.run_id, row.task_id, row.provider, row.month, row.amount, row.state);
-      for (const row of merged.ledger) this.store.db.prepare('INSERT OR IGNORE INTO ledger VALUES(?,?,?,?,?,?)').run(row.id, row.reservation_id, row.amount, row.input_tokens, row.output_tokens, row.pricing_version);
+      for (const row of merged.ledger) this.store.db.prepare('INSERT OR IGNORE INTO ledger (id,reservation_id,amount,input_tokens,output_tokens,pricing_version) VALUES(?,?,?,?,?,?)').run(row.id, row.reservation_id, row.amount, row.input_tokens, row.output_tokens, row.pricing_version);
+      for (const row of merged.ledgerCache ?? []) this.store.db.prepare('INSERT OR IGNORE INTO ledger_cache (ledger_id,cache_read_tokens,cache_write_tokens) VALUES(?,?,?)').run(row.ledger_id, row.cache_read_tokens, row.cache_write_tokens);
       for (const row of merged.reservationReviews ?? []) this.store.db.prepare(`INSERT INTO reservation_reviews
         (reservation_id,reason,noted_at,actual_amount,verified_source,resolved_at) VALUES(?,?,?,?,?,?)
         ON CONFLICT(reservation_id) DO UPDATE SET actual_amount=excluded.actual_amount,

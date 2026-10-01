@@ -85,7 +85,7 @@ describe('model picker rows (COD-332)', () => {
     const choices = modelChoices('openai', openai, true);
     expect(choices.map(choice => [choice.value, choice.isDefault])).toEqual([['gpt-4.1', false], ['', true]]);
     const missing = modelChoices('anthropic', [], true);
-    expect(missing).toEqual([{ value: '', label: 'claude-haiku-4-5-20251001', vendor: 'claude', isDefault: true, more: false }]);
+    expect(missing).toEqual([{ value: '', label: 'claude-sonnet-5-5', vendor: 'claude', isDefault: true, more: false }]);
   });
 });
 
