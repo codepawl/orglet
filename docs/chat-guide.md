@@ -1,6 +1,6 @@
 # In a chat
 
-What you can do inside a chat once an orglet or crew is set up: keep several chats open as tabs, attach files, type emoji, keep typing from the keyboard, see how much of a plan and of the context is used, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
+What you can do inside a chat once an orglet or crew is set up: keep several chats at hand and switch what you see of one, attach files, type emoji, keep typing from the keyboard, see how much of a plan and of the context is used, ask something on the side, forward a message, get reports, see what the orglet did and what it changed, open Details, put a request on a schedule, find an earlier message, and find what the app told you.
 
 Part of the [user guide](user-guide.md). How the words in the chat are chosen and what is kept afterwards: [worker-actions.md](worker-actions.md).
 
@@ -10,22 +10,9 @@ The row marked **Default** is the model that runs when you have not picked one. 
 
 ## Open chats and the rail
 
-The left side lists who is on your team. The chats you are working in sit as tabs across the top.
+The left side picks the chat. The tabs at the top of a chat pick what you see of it: the messages, its files, what it changed, its schedules or its memory.
 
-**The rail.** On a new install the left side is a narrow rail. From the top:
-
-1. **Open sidebar** switches to the full sidebar, with its sections, names and row menus. **Collapse sidebar** at its top brings the rail back. Orglet remembers which one you picked, and the full sidebar keeps the width you dragged it to. In a window narrower than 780 px the rail stays, and **Open sidebar** lays the full sidebar over the chat until you pick something.
-2. The magnifier opens search (**Ctrl+K**).
-3. **+** offers **New orglet** and **New crew**.
-4. One face per crew, then one per orglet, in the sidebar's order. Click a face to open that chat. Hover it to see the name. A small mark on the corner shows the chat's state, the same as its tab.
-5. When you have group chats, one button lists them. Click one to open it.
-6. At the foot: Notifications, Running, Schedules, Library and Settings, each with a count when something is waiting.
-
-If you used Orglet before tabs arrived, it opens with the full sidebar, as before. Fold it once to use the rail.
-
-**Tabs.** Every chat you open gets a tab: an orglet's chat, a crew's chat, a group chat, a side thread or a schedule's run. It does not matter how you opened it: the rail, the sidebar, search, a notification, **Send to** or a forwarded message. With only one chat open, there is no tab row, so the window looks as it did.
-
-Each tab shows a face, the name and one mark:
+**The sidebar.** It lists your crews and your orglets, each with its side threads and schedule runs under it, and your group chats. Click a row to open that chat. A chat is listed once: when you open a chat that has no row anywhere in the sidebar, for example an older run of a schedule found through search or a notification, it lands in **Open** at the top. With nothing like that open, there is no **Open** section. Each row shows a face, the name and one mark:
 
 | Mark | Meaning |
 |---|---|
@@ -35,9 +22,34 @@ Each tab shows a face, the name and one mark:
 | An exclamation mark | Something went wrong. |
 | A dotted ring | Nothing new. |
 
-To close a tab, hover it and click **×**, or click it with the middle mouse button. Closing a tab only takes it off the row. The chat and its messages stay, and it comes back when you open it again. When you close the tab you are in, the tab next to it opens. A chat you archive or delete loses its tab. Orglet keeps your tabs when it restarts. When there are more tabs than fit, scroll the row sideways with the mouse wheel. The tab you are in always scrolls into view.
+A schedule's run has a calendar before its name. Hover a row to see whose chat it is.
 
-**Details** is remembered per tab while Orglet is open: a chat you had open with Details opens with Details again. The panel is wider than before, and you can drag its edge. It never pushes the chat narrower than 480 px.
+To take a chat off **Open**, hover it and click **×**, or click it with the middle mouse button. This only takes it off the list. The chat and its messages stay, and it comes back when you open it again. When you close the chat you are in, the chat you used before it opens. A chat you archive or delete leaves the list. Orglet keeps the list when it restarts.
+
+**The rail.** On a new install the left side is a narrow rail. From the top:
+
+1. **Open sidebar** switches to the full sidebar, with its sections, names and row menus. **Collapse sidebar** at its top brings the rail back. Orglet remembers which one you picked, and the full sidebar keeps the width you dragged it to. In a window narrower than 780 px the rail stays, and **Open sidebar** lays the full sidebar over the chat until you pick something.
+2. The magnifier opens search (**Ctrl+K**).
+3. **+** offers **New orglet** and **New crew**.
+4. One face per crew, then one per orglet, in the sidebar's order. Click a face to open that chat. Hover it to see the name. A small mark on the corner shows the chat's state, the same as in the sidebar.
+5. When you have group chats, one button lists them. Click one to open it.
+6. Under those, the faces of the chats on **Open**, the same ones the sidebar lists there. Hover one to see its name and whose chat it is, and click the small **×** on its corner to close it. Side threads and schedule runs are reached through their orglet's face, as before.
+7. At the foot: Notifications, Running, Schedules, Library and Settings, each with a count when something is waiting.
+
+If you used Orglet before the rail arrived, it opens with the full sidebar, as before. Fold it once to use the rail.
+
+**The tabs at the top of a chat.** Beside the chat's name, a few tabs show the parts of that chat. When the chat is narrow, for example with **Details** open, they move to a line under the name. **Chat** is always first and is where every chat opens. The others appear only when the chat has something for them, with a count:
+
+| Tab | What it shows |
+|---|---|
+| **Files** | The files attached to the chat. Click one to open it in the viewer. The data checks are here too ([Attach files](#attach-files)). |
+| **Changes** | Every turn whose orglet changed files in a working folder, newest first. Click a line to see the changes, and apply or discard them while they wait for you ([what the orglet changed](worker-actions.md)). |
+| **Schedules** | The schedules that run as this orglet or crew. Run one now, edit it or switch it off. |
+| **Memory** | What this orglet or crew remembered from its chats. Edit, pin or delete a memory. |
+
+With nothing but the messages, there are no tabs. Use the arrow keys to move between tabs once one has focus. Orglet remembers the tab each chat was on until it closes.
+
+**Details** is remembered per chat while Orglet is open: a chat you had open with Details opens with Details again. The panel holds what is not a tab: who the chat is with, what it cost, its permissions, MCP, browser and desktop settings, and the working copies to recover. You can drag its edge. It never pushes the chat narrower than 480 px.
 
 ## Attach files
 
@@ -47,7 +59,7 @@ An orglet reads only what you attach to **that** chat, or what is inside the wor
 2. Pick **Files**, or **Folder** for up to 20 supported files from one folder (hidden and generated files are skipped, and the chat lists what was left out).
 3. Write what you want done, then send.
 
-Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed under **Details → Sources**. Files and words you have not sent yet stay on that chat's message box when you open another chat and come back, until you send or remove them; each chat, and each orglet's or crew's new chat, keeps its own. They are still there after Orglet restarts, for example to install an update, and Orglet opens the chat you were in when it closed; erasing chats, sources or everything in **Settings → Data** clears them. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. In the viewer you can edit a text or code file, mark up an image, or mark up a PDF and type notes on it; saving adds a new version to the chat and leaves your file as it was ([Viewing and editing files](viewing-and-editing-files.md)).
+Attached files sit as cards above your message; hover a card to remove it. This works the same in a chat that already has messages: the files you add go with your next message, and the chat keeps the files its earlier messages had, up to 20 in all; each message shows only the files sent with it, and all of them are listed in the chat's **Files** tab. Files and words you have not sent yet stay on that chat's message box when you open another chat and come back, until you send or remove them; each chat, and each orglet's or crew's new chat, keeps its own. They are still there after Orglet restarts, for example to install an update, and Orglet opens the chat you were in when it closed; erasing chats, sources or everything in **Settings → Data** clears them. To stop an orglet reading a file the chat already has, open it and choose **Revoke read access**. Click a card in the chat to open the file: text and code with line numbers, Markdown, CSV tables, JSON trees, images, video, audio and PDF pages. In the viewer you can edit a text or code file, mark up an image, or mark up a PDF and type notes on it; saving adds a new version to the chat and leaves your file as it was ([Viewing and editing files](viewing-and-editing-files.md)).
 
 What the orglet gets from each kind:
 
@@ -55,7 +67,7 @@ What the orglet gets from each kind:
 - **Images (PNG, JPEG, GIF, WebP, up to 5 MB):** shown to the orglet when its connection can see images. Claude, most OpenAI models, Claude Code and Codex can. When the connection cannot, the orglet tells you instead of guessing. SVG and BMP are never shown. [Which connections see images](capabilities.md#pdfs-and-images).
 - **Video and audio:** preview only. The orglet is told they are there but cannot read them.
 
-Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. A PDF's text is held to the same 256 KB per file: a longer PDF is cut after the last page that fits, and the orglet is told where it stops. CSV, JSONL and Parquet files can also be checked on this computer under **Chat sources → Check data**: rows, columns and empty cells, what each column holds (number, date or text) and its range, identical rows, negative numbers, cells that do not fit their column and dates that do not exist, each named by row number; with an ID column, repeated or missing IDs too. The result opens under the button when the check finishes. Comparing a file with an answer key and the run-log check are under **More checks**. Demo cannot analyze files; switch **Model** off Demo first.
+Text files are read as UTF-8, up to 256 KB each and 1 MB per chat. A PDF's text is held to the same 256 KB per file: a longer PDF is cut after the last page that fits, and the orglet is told where it stops. CSV, JSONL and Parquet files can also be checked on this computer under **Files → Check data**: rows, columns and empty cells, what each column holds (number, date or text) and its range, identical rows, negative numbers, cells that do not fit their column and dates that do not exist, each named by row number; with an ID column, repeated or missing IDs too. The result opens under the button when the check finishes. Comparing a file with an answer key and the run-log check are under **More checks**. Demo cannot analyze files; switch **Model** off Demo first.
 
 ## Emoji
 
@@ -65,7 +77,7 @@ The names are GitHub's, which Slack and Discord mostly share. The menu only open
 
 ## Keyboard
 
-- **Ctrl+Tab** opens the next tab and **Ctrl+Shift+Tab** the one before; both wrap round. **Ctrl+W** closes the tab you are in. It never closes the Orglet window, even with one tab left. These keys do nothing while a dialog is open.
+- **Ctrl+Tab** goes back to the chat you used before this one. Keep **Ctrl** held and press **Tab** again to go further back; **Ctrl+Shift+Tab** goes the other way. Let go of **Ctrl** on the chat you want. **Ctrl+W** takes the chat you are in off **Open**. It never closes the Orglet window, and it does nothing in a chat that is not on **Open**, such as an orglet's own chat or a side thread. These keys do nothing while a dialog is open.
 - After you send, the message box stays ready, so you can type the next message straight away. If a message cannot be sent, it comes back in the box, in front of anything you typed since.
 - After you pick files or a folder with **+**, the cursor is back in the message box.
 - Opening **Details** moves the keyboard into the panel. Its close button or **Escape** puts you back where you were.

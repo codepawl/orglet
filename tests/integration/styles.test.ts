@@ -57,6 +57,11 @@ it('sweeps a light across the working line, and stops it under reduced motion', 
   expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.run-status-line \{ animation:none; background:none; color:var\(--muted\); \} \}/);
 });
 
-it('centres the chat header name and its provider chip on one line', () => {
-  expect(css).toContain('.topbar-title { display:inline-flex; align-items:center;');
+// The header's texts share the name's baseline (owner, 2026-10-01, COD-355): the model beside the name, and each view
+// tab's label and count. The group is centred in the header like the actions.
+it('puts the chat header name, its model and the view tabs on one baseline', () => {
+  expect(css).toContain('.topbar-title { display:inline-flex; align-items:baseline;');
+  expect(css).toContain('.topbar > .topbar-main { display:flex; align-items:baseline;');
+  expect(css).toMatch(/\.chat-views \{ display:flex; flex-wrap:wrap; align-items:baseline;/);
+  expect(css).toMatch(/\.chat-view-tab \{ display:inline-flex; align-items:baseline;[^}]*padding:4px 10px;[^}]*line-height:20px;/);
 });

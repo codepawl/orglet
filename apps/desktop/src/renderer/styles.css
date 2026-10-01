@@ -24,7 +24,7 @@
   /* Panels are rounded cards sitting apart on the window background (user, 2026-09-19). */
   --panel-radius: 16px; --shell-gap: 8px; --details-width: 400px;
   /* The folded left column and the row of open chats above the main card (COD-340). RAIL_WIDTH in App.tsx matches. */
-  --rail-width: 52px; --tab-strip-height: 36px;
+  --rail-width: 52px;
   /* How far a control stays from the end of a rounded panel. At less than the radius it sits beside the corner
      curve, and two curves that close read as fighting rather than nested (user, 2026-09-19). */
   --panel-inset: var(--panel-radius);
@@ -97,14 +97,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-resizer:focus-visible { outline:none; }
 /* Folded, the sidebar gives its column to the rail (COD-340). */
 .app.sidebar-hidden { grid-template-columns:var(--rail-width) minmax(0,1fr); }
-/* Every panel has its place, so the tab strip can take a row of its own above the main card and the right panel. The
-   left column spans both rows; without the strip there is one row and the same rules hold. */
-.app > .sidebar,.app > .rail { grid-column:1; grid-row:1 / -1; }
-.app > .chat-tabs { grid-column:2 / -1; grid-row:1; }
-.app > .main-pane { grid-column:2; grid-row:-2 / -1; }
-.app > .details-pane { grid-column:3; grid-row:-2 / -1; }
-.app.with-tabs { grid-template-rows:var(--tab-strip-height) minmax(0,1fr); }
-.app.with-tabs .details-resizer { top:calc(var(--shell-gap) * 2 + var(--tab-strip-height)); }
+/* Every panel has its place: the left column, the main card, the right panel. */
+.app > .sidebar,.app > .rail { grid-column:1; grid-row:1; }
+.app > .main-pane { grid-column:2; grid-row:1; }
+.app > .details-pane { grid-column:3; grid-row:1; }
 /* Opening or hiding a side panel slides rather than snaps (user, 2026-09-19). The columns carry the movement, the
    panel itself fades and shifts with them, and a drag turns the transition off so the handle stays under the
    pointer. A collapsed sidebar stays in the tree, inert, so it can animate out as well as in. */
@@ -186,8 +182,8 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .details-member p.muted { font-size:12px; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .details-status { font-size:13px; font-weight:500; }
 .details-section .details-facts { padding-left:0; }
-.details-source { display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.details-source svg { flex-shrink:0; }
+.details-fact-link { padding:0; border:0; background:transparent; font:inherit; font-size:12.5px; cursor:pointer; }
+.details-fact-link:hover { color:var(--text); text-decoration:underline; text-underline-offset:2px; }
 /* The story of the run: who spoke, then what they did, indented under them. */
 .details-runs { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:18px; }
 .details-run { display:flex; align-items:flex-start; gap:8px; }
@@ -266,32 +262,15 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .rail-group-chat.active { background:var(--row-active); }
 .rail-group-faces { display:inline-flex; align-items:center; flex-shrink:0; }
 .rail-group-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-/* The open chats, one tab each, across the top of the main card and the right panel (COD-340). The strip sits on the
-   window like the rail and takes the same pair of tints; it is set apart from the card by the shell's gap alone. A
-   tab is a face, a name that truncates and one mark, which gives way to the close button on hover or keyboard focus
-   in the same slot, so nothing moves. The strip scrolls sideways, never wraps, and fades an end with tabs past it. */
-.chat-tabs { --row-hover:color-mix(in srgb, var(--text) 7%, transparent); --row-active:color-mix(in srgb, var(--text) 12%, transparent);
-  display:flex; align-items:center; min-width:0; }
-.chat-tabs-strip { --strip-fade-start:0px; --strip-fade-end:0px; display:flex; align-items:center; gap:4px; min-width:0; height:100%; margin:0; padding:0; list-style:none; overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain;
-  mask-image:linear-gradient(to right, transparent 0, #000 var(--strip-fade-start), #000 calc(100% - var(--strip-fade-end)), transparent 100%); }
-.chat-tabs-strip[data-more-start] { --strip-fade-start:32px; }
-.chat-tabs-strip[data-more-end] { --strip-fade-end:32px; }
-/* Hidden like the composer's file strip: a bar would add its height under every tab. The wheel scrolls it sideways. */
-.chat-tabs-strip::-webkit-scrollbar { width:0; height:0; }
-/* Every tab is the same width (owner, 2026-09-30: tabs of different sizes were hard to hit), so each sits where the
-   pointer expects it; a longer name ends in an ellipsis and the mark or close button keeps the tab's right edge. */
-.chat-tab { position:relative; flex:0 0 var(--chat-tab-width); width:var(--chat-tab-width); display:flex; align-items:center; height:32px; border-radius:var(--radius); color:var(--muted); --chat-tab-width:168px; }
-.chat-tab:hover { background:var(--row-hover); color:var(--text); }
-.chat-tab.active { background:var(--row-active); color:var(--text); }
-.chat-tab-open { display:flex; align-items:center; gap:7px; flex:1 1 auto; min-width:0; height:100%; padding:0 4px 0 8px; border:0; border-radius:inherit; background:transparent; color:inherit; font:inherit; font-size:13px; font-weight:500; cursor:pointer; }
-.chat-tab-face { display:inline-flex; align-items:center; flex-shrink:0; }
-.chat-tab-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.chat-tab-end { position:relative; display:grid; place-items:center; flex-shrink:0; width:22px; height:22px; margin-right:5px; }
-.chat-tab-mark { --org-status-mark-size:14px; }
-.chat-tab-close { position:absolute; inset:0; display:grid; place-items:center; padding:0; border:0; border-radius:6px; background:transparent; color:var(--muted); opacity:0; cursor:pointer; }
-.chat-tab-close:hover { color:var(--text); }
-.chat-tab:hover .chat-tab-close,.chat-tab:has(:focus-visible) .chat-tab-close { opacity:1; }
-.chat-tab:hover .chat-tab-mark,.chat-tab:has(:focus-visible) .chat-tab-mark { opacity:0; }
+/* The Open list on the rail (COD-355): faces under the roster, each with a × in the mark's corner on hover or keyboard
+   focus. The × takes the mark's place, so nothing moves; it answers hover with colour only. */
+.rail-closable { position:relative; }
+.rail .avatar-badge:has(.open-chat-badge) { background:var(--window); box-shadow:0 0 0 1.5px var(--window); color:var(--muted); }
+.rail-face-close { --rail-close-size:16px; position:absolute; top:-2px; right:-2px; display:grid; place-items:center; width:var(--rail-close-size); height:var(--rail-close-size); padding:0; border:0; border-radius:50%;
+  background:var(--window); box-shadow:0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent); color:var(--muted); opacity:0; cursor:pointer; }
+.rail-face-close:hover { color:var(--text); }
+.rail-closable:is(:hover, :has(:focus-visible)) .rail-face-close { opacity:1; }
+.rail-closable:is(:hover, :has(:focus-visible)) .rail-face-mark { opacity:0; }
 /* Top and bottom clear the corner curve, because the brand row and the footer buttons sit right in it. */
 /* The side panels have no ground of their own: they sit straight on the window, and the chat is the one card
    (user, 2026-09-19). The radius stays so a hovered row still rounds inside the corner. */
@@ -365,6 +344,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
    row gives its name the full width instead of truncating it next to an invisible button. */
 .worker-row { position:relative; }
 .worker-row > [data-no-drag]:has(> .org-row-menu) { position:absolute; top:50%; right:0; transform:translateY(-50%); }
+/* An Open row's × floats over the row's end the same way (COD-355); the calendar marks a schedule's run. */
+.worker-row > .open-chat-close { position:absolute; top:50%; right:0; transform:translateY(-50%); }
+.open-chat-kind { flex-shrink:0; color:var(--muted); }
 .worker-row:is(:hover, :has(:focus-visible), :has(.row-action[aria-expanded=true])) .worker { padding-right:36px; }
 @media (hover:none) { .worker-row .worker { padding-right:36px; } }
 @keyframes menu-in { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
@@ -432,7 +414,13 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The chat's name; the faces of an empty group chat sit before it (COD-215), so the name is named rather than counted. */
 /* The name and the model beside it sit on one baseline: centred boxes of 14px and 12px text left the smaller one
    visibly off the line (owner, 2026-09-25). */
-.topbar-title { display:inline-flex; align-items:center; gap:10px; min-width:0; }
+.topbar-title { display:inline-flex; align-items:baseline; gap:10px; min-width:0; line-height:20px; }
+/* Every text on the header row shares the name's baseline (owner, 2026-10-01): the model, each view tab's label and its
+   count. `.topbar-main` lines them up on that baseline and is centred in the header like the actions; faces and marks
+   keep their own centre. */
+.topbar > .topbar-main { display:flex; align-items:baseline; flex:0 1 auto; min-width:0; gap:14px; }
+.topbar-main > .topbar-lead { display:flex; align-items:baseline; gap:10px; min-width:0; }
+.topbar-lead > :not(.topbar-title) { align-self:center; }
 .topbar-name { font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; min-width:0; }
 .topbar-actions { display:flex; align-items:center; gap:10px; flex-shrink:0; margin-left:auto; }
 .task-cost {
@@ -443,7 +431,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .task-cost svg { flex-shrink:0; }
 /* Which model answers this chat, beside its name in the top bar (user, 2026-09-19). Quiet, because it is context
    rather than a warning: the old Demo badge shouted, and only ever appeared for Demo. */
-.topbar-provider { display:inline-flex; align-items:center; gap:5px; flex-shrink:0; font-size:12px; font-weight:500; color:var(--muted); }
+.topbar-provider { display:inline-block; flex-shrink:0; font-size:12px; font-weight:500; color:var(--muted); white-space:nowrap; }
+/* Inline rather than a flex row, so the model's baseline is its text's, not its mark's; the mark sits on the text's middle. */
+.topbar-provider > .provider-mark { display:inline-flex; vertical-align:middle; margin:-2px 5px 0 0; }
 /* Beside a byline: the role this worker played for the team, then the model that wrote the message. */
 .byline-role { font-size:11px; color:var(--muted); background:var(--surface); border-radius:999px; padding:1px 8px; }
 .byline-provider { font-size:11px; font-weight:500; color:var(--muted); }
@@ -764,6 +754,29 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Wider than it was: 828px left the column feeling cramped against the panel around it (user, 2026-09-20).
    Not the full pane — a line of body text still has to end somewhere the eye can find the next one. */
 .thread-content { max-width:960px; margin:auto; padding:22px var(--page-x) 32px; }
+/* The views of the chat on screen (COD-355): quiet text buttons, the chosen one on the active row tint, no track and no
+   lines (owner, 2026-10-01: the segmented control read as boxy). On the header row they follow the name after a wider
+   gap than the header's own; `.views-below` gives them the row under it while the header has no room. */
+.chat-views { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px; }
+.topbar-main > .chat-views { flex:0 0 auto; }
+.topbar.views-below { flex-wrap:wrap; row-gap:4px; }
+.topbar.views-below > .chat-views { order:3; flex-basis:100%; margin-left:-10px; }
+/* The name's line height and even padding, so the fill is centred on the label and the label sits on the baseline. */
+.chat-view-tab { display:inline-flex; align-items:baseline; gap:5px; flex-shrink:0; padding:4px 10px; border:0; border-radius:var(--radius); background:transparent; color:var(--muted); font:inherit; font-size:13px; font-weight:500; line-height:20px; white-space:nowrap; cursor:pointer; }
+.chat-view-tab:hover { background:var(--row-hover); color:var(--text); }
+.chat-view-tab[aria-selected=true] { background:var(--row-active); color:var(--text); }
+.chat-view-count { color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+/* Variant B (`CHAT_VIEWS_PLACEMENT = 'row'`): a slim row under the header whose labels start where the chat column does. */
+.chat-views-row { flex-shrink:0; width:100%; max-width:960px; margin:-6px auto 4px; padding:0 var(--page-x); }
+.chat-views-row > .chat-views { margin-left:-10px; }
+/* A view other than the chat scrolls on its own at the thread's reading width. */
+.chat-view-panel { flex:1; min-height:0; overflow:auto; }
+.chat-view-panel:focus { outline:none; }
+.chat-view-content { max-width:960px; margin:0 auto; padding:14px var(--page-x) 32px; }
+.chat-view-list { display:flex; flex-direction:column; gap:18px; }
+/* Changes: each turn's runs under the words that started the turn, one muted line that ends in an ellipsis. */
+.changes-turn { display:flex; flex-direction:column; gap:4px; }
+.changes-turn-brief { margin:0 0 2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:500; }
 /* The message wears the accent, but as a wash rather than a fill. Filled, the ink has to be chosen for whatever
    colour the user picked, and white on the default blue measures 3.86:1 — fine for a send arrow, short of the
    4.5:1 a paragraph needs. A wash keeps the colour theirs and keeps body text at the page contrast, for any pick. */
@@ -2424,7 +2437,7 @@ body.is-reordering,body.is-reordering * { cursor:grabbing !important; }
 .turn-before { display:flex; flex-direction:column; align-items:flex-start; gap:2px; margin:0 0 6px -4px; }
 .live-run .turn-before { margin-bottom:0; }
 .turn-after { display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
-.turn-after .changed-files { margin-left:-4px; }
+.turn-after .changed-files,.changes-turn .changed-files { margin-left:-4px; }
 .turn-after > .changed-files:first-child { margin-top:6px; }
 .turn-after .app-proposals { align-self:stretch; }
 /* Without an answer of its own to sit in, the group takes the reply's inset itself. */

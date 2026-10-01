@@ -29,11 +29,9 @@ try {
   await page.getByRole('textbox', { name: 'Tin nhắn', exact: true }).fill('Run audit fixture: fixture-score higher is better.');
   await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();
   await page.locator('.chat-reply, .report').first().waitFor();
-  // The checker tools live with the chat's source list, reached from the details panel; a file card opens the file itself.
-  await page.locator('.topbar-actions .thread-menu').click();
-  await page.getByRole('menuitem', { name: 'Chi tiết', exact: true }).click();
-  await page.getByRole('button', { name: 'Xem nguồn', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Nguồn của cuộc trò chuyện' }).waitFor();
+  // The checker tools live with the chat's files, its Files view (COD-355); a file card opens the file itself.
+  await page.getByRole('tab', { name: /^Tệp/ }).click();
+  await page.getByRole('tabpanel', { name: /^Tệp/ }).waitFor();
   // The run-log check sits under "Kiểm tra khác" since COD-292; the files are still ticked in the data check above it.
   const moreChecks = page.locator('details.more-checks');
   assert.equal(await moreChecks.evaluate(element => element.open), false);

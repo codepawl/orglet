@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Reac
 import { flushSync } from 'react-dom';
 // The sidebar draws Orglet's own icons; the rest of this file stays on lucide until the sweep (the Lucide* aliases mark what is left).
 import { Activity, Bell, Archive, BookOpen, CalendarClock, Check, Download, EllipsisVertical, PanelLeft, Pencil, Plus, Search, Settings, Trash, X as SidebarX } from './components/icons';
-import { ArrowLeft, ChevronRight, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, Trash2, MessagesSquare, MessageSquareText, UserRoundCog, UserRoundPlus, Users } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Plus as LucidePlus, SlidersHorizontal, CalendarClock as LucideCalendarClock, Wallet, X, Archive as LucideArchive, ArchiveRestore, CornerDownRight, History, Trash2, MessagesSquare, MessageSquareText, UserRoundCog, UserRoundPlus, Users } from 'lucide-react';
 import { emptyConnections, isPaidApi, MAX_CREW_MEMBERS, type Connections, type Skill, type Source, type Task, type TaskDetail, type Worker, type Workspace, type Team, type TaskInput } from '../shared/contracts';
 import { Button, Drawer } from './components/ui';
 import { SkillEditor } from './components/Editors';
@@ -54,7 +54,7 @@ import { chatHeadline } from '../shared/forward';
 import { attachIntake, carriedDraft, type Incoming, type IncomingChat, type IncomingFiles } from '../shared/incoming';
 import { dropDraft, emptyChatDraftKey, keepDraft, readDraft } from './drafts';
 import { chatToReopen, rememberedChat, rememberOpenChat } from './lastChat';
-import { chatTabMark, tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
+import { openChatMark, tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
 import { taskResultSeen } from '../shared/task-seen';
 import { RowMenu } from './components/RowMenu';
 import { Select } from './components/Select';
@@ -95,10 +95,14 @@ import { readyUpdateLabel, UpdateButton } from './components/UpdateButton';
 import { restartIntoUpdate } from './updateRestart';
 import { chatClosure, closedChatDestination, openChatRefresh, type ChatDestination, type OpenChatReads } from './openChat';
 import { swapScreen } from './screenTransition';
-import { ChatTabs, type ChatTabItem } from './components/ChatTabs';
+import { OpenChatRow, type OpenChatItem } from './components/OpenChats';
+import { ChatHeader, ChatViewPanel, ChatViewTabs } from './components/ChatViews';
+import { ChangesView, changedRunCount } from './components/ChangesView';
+import { MemoryList } from './components/Memories';
 import { SidebarRail, type RailAction, type RailEntry } from './components/SidebarRail';
 import { reportFeature } from './analytics';
-import { chatTabState, closeChatTab, cycleChatTab, openChatTab, parseChatTabKey, pruneChatTabs, readChatTabs, readSidebarMode, strongestChatTabState, tabKeyForView, writeChatTabs, writeSidebarMode, type ChatTabState } from './chatTabs';
+import { chatKey, chatKeyForView, closeOpenChat, isRosterChat, openChatState, parseChatKey, pruneOpenChats, readOpenChats, readSidebarMode, shownOpenChats, strongestOpenChatState, visitChat, walkRecent, walkSnapshot, writeOpenChats, writeSidebarMode, type OpenChatState, type OpenChats } from './openChats';
+import { availableChatViews, viewOwnerOfTask, chatViewToShow, memoriesOf, schedulesOf, type ViewOwner, type ChatViewName } from './chatViews';
 
 type SeenInfo = { seenStamp: string; lastArtifactId?: string };
 const seenStorageKey = 'orglet.task-seen-stamps';
@@ -189,7 +193,7 @@ function ThreadSkeleton() {
   </SkeletonGroup>;
 }
 
-type Panel = 'task' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | 'sources' | null;
+type Panel = 'task' | 'routines' | 'settings' | 'worker' | 'team' | 'library' | 'skill' | 'knowledge' | 'activity' | null;
 export function App() {
   useLanguage();
   const [workspace, setWorkspace] = useState<Workspace>(); const [connections, setConnections] = useState<Connections>(emptyConnections());
@@ -234,7 +238,9 @@ export function App() {
   const detailTeam = detail ? workspace?.teams.find(team => team.id === detail.task.teamId) : undefined;
   const openSources = (target?: SourceTarget) => {
     if (target?.type === 'source') { setViewingSource({ id: target.id, lines: target.lines }); return; }
-    setSourceTarget(target); setPanel('sources');
+    // The chat's files are its Files view (COD-355), which also holds the checks a citation can point at.
+    setSourceTarget(target);
+    showChatView('files');
   };
   
   const [panel, setPanel] = useState<Panel>(null); const [editingWorker, setEditingWorker] = useState<Worker>(); const [workerDialogTab, setWorkerDialogTab] = useState<'memory'>(); const [editingTask, setEditingTask] = useState<string>(); const [editingSkill, setEditingSkill] = useState<Skill>();
@@ -617,45 +623,67 @@ export function App() {
     clearSelection();
     openGroupChat(group);
   };
-  // The open chats as tabs across the top (COD-340). Whatever opens a chat (the rail, the sidebar, search, a
-  // notification, Send to, a forward) changes what is on screen, and the tab follows from that, so no opener has to
-  // know about tabs. Closing a tab only takes it off the strip.
-  const [chatTabs, setChatTabs] = useState<readonly string[]>(readChatTabs);
-  const activeTabKey = workspace ? tabKeyForView({ selected, teamId, workerId, pendingGroup: Boolean(groupChat) }, workspace.tasks) : undefined;
-  // The first orglet is on screen for one frame before the start reopens the last chat; it gets no tab of its own.
-  const [tabsBooted, setTabsBooted] = useState(false);
-  useEffect(() => { if (workspace && !workspace.workers.length) setTabsBooted(true); }, [workspace]);
-  useEffect(() => { writeChatTabs(chatTabs); }, [chatTabs]);
-  // The strip shows from two open chats on, so that is when tabs count as used.
-  useEffect(() => { if (chatTabs.length >= 2) reportFeature('tabs'); }, [chatTabs.length]);
+  // Which chat is on screen, Slack-style (COD-355): the roster rows pick an orglet's or crew's main chat, and the Open
+  // list keeps the other chats at hand. Whatever opens a chat (the rail, the sidebar, search, a notification, Send to,
+  // a forward) changes what is on screen, and the lists follow from that, so no opener has to know about them. Closing
+  // an Open row only takes it off the list.
+  const [openChats, setOpenChats] = useState<OpenChats>(readOpenChats);
+  const activeChatKey = workspace ? chatKeyForView({ selected, teamId, workerId, pendingGroup: Boolean(groupChat) }, workspace.tasks) : undefined;
+  // The first orglet is on screen for one frame before the start reopens the last chat; it is not a visit.
+  const [chatsBooted, setChatsBooted] = useState(false);
+  useEffect(() => { if (workspace && !workspace.workers.length) setChatsBooted(true); }, [workspace]);
+  useEffect(() => { writeOpenChats(openChats); }, [openChats]);
+  // Which chats have a row of their own in the sidebar (a side thread, a schedule's newest run, a listed group chat):
+  // they are never put on the Open list, so no chat is listed twice (owner, 2026-10-01). Filled in on each render.
+  const chatsWithRow = useRef(new Set<string>());
+  const chatHasRow = (key: string) => chatsWithRow.current.has(key);
+  // The Open list as shown, for Ctrl+W: a chat that is not on it has nothing to close.
+  const shownOpenKeys = useRef<readonly string[]>([]);
+  // While Ctrl+Tab walks the recent chats, the list stays as it was when the walk began (`walkRecent`).
+  const recentWalk = useRef<{ snapshot: readonly string[]; position: number }>(undefined);
   useEffect(() => {
-    if (activeTabKey && tabsBooted) setChatTabs(keys => openChatTab(keys, activeTabKey));
-  }, [activeTabKey, tabsBooted]);
+    if (activeChatKey && chatsBooted && !recentWalk.current) setOpenChats(state => visitChat(state, activeChatKey, isRosterChat(activeChatKey) || chatHasRow(activeChatKey)));
+  }, [activeChatKey, chatsBooted]);
   useEffect(() => {
     if (!workspace) return;
-    setChatTabs(keys => pruneChatTabs(keys, workspace, activeTabKey));
-  }, [workspace, activeTabKey]);
-  const openChatTabKey = (key: string) => {
-    const target = parseChatTabKey(key);
+    setOpenChats(state => pruneOpenChats(state, workspace, activeChatKey));
+  }, [workspace, activeChatKey]);
+  const openChatByKey = (key: string) => {
+    const target = parseChatKey(key);
     if (!target) return;
     clearSelection();
     if (target.kind === 'worker') openWorker(target.id);
     else if (target.kind === 'team') openTeam(target.id);
     else openTask(target.id);
   };
-  const closeTab = (key: string) => {
-    const closed = closeChatTab(chatTabs, key, activeTabKey);
-    setChatTabs(closed.keys);
-    if (closed.activate) openChatTabKey(closed.activate);
+  const closeChat = (key: string) => {
+    const closed = closeOpenChat(openChats, key, activeChatKey);
+    setOpenChats(closed.state);
+    if (closed.activate) openChatByKey(closed.activate);
+    else if (key === activeChatKey && workspace?.workers[0]) openWorker(workspace.workers[0].id);
+    // The × that was clicked leaves with its row: the keyboard carries on in the chat instead of falling to the page.
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body) document.getElementById('main-content')?.focus({ preventScroll: true });
+    });
   };
-  const stepTab = (step: 1 | -1) => {
-    const next = cycleChatTab(chatTabs, activeTabKey, step);
-    if (next) openChatTabKey(next);
+  const stepRecent = (step: 1 | -1) => {
+    const walk = recentWalk.current ?? { snapshot: walkSnapshot(openChats.recent, activeChatKey), position: 0 };
+    const position = walkRecent(walk.snapshot, walk.position, step);
+    if (position === undefined) return;
+    recentWalk.current = { snapshot: walk.snapshot, position };
+    openChatByKey(walk.snapshot[position]);
   };
-  // Ctrl+Tab and Ctrl+Shift+Tab walk the strip, Ctrl+W closes the open tab. Ctrl+W is always taken, even with one
-  // tab: left to the window it would close Orglet. While a dialog is over the page they do nothing.
-  const tabKeys = useRef({ stepTab, closeTab, activeTabKey });
-  tabKeys.current = { stepTab, closeTab, activeTabKey };
+  const endRecentWalk = () => {
+    if (!recentWalk.current) return;
+    recentWalk.current = undefined;
+    const landed = shortcutState.current.activeChatKey;
+    if (landed) setOpenChats(state => visitChat(state, landed, isRosterChat(landed) || chatHasRow(landed)));
+  };
+  // Ctrl+Tab and Ctrl+Shift+Tab walk the recent chats while Ctrl is held, Ctrl+W closes the open chat when it is on the
+  // Open list. Ctrl+W is always taken: left to the window it would close Orglet. While a dialog is over the page they
+  // do nothing.
+  const shortcutState = useRef({ stepRecent, closeChat, activeChatKey, endRecentWalk });
+  shortcutState.current = { stepRecent, closeChat, activeChatKey, endRecentWalk };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (!event.ctrlKey || event.altKey || event.metaKey) return;
@@ -664,31 +692,54 @@ export function App() {
       if (!walking && !closing) return;
       event.preventDefault();
       if (document.querySelector('[role=dialog]')) return;
-      const current = tabKeys.current;
-      if (walking) current.stepTab(event.shiftKey ? -1 : 1);
-      else if (current.activeTabKey) current.closeTab(current.activeTabKey);
+      const current = shortcutState.current;
+      if (walking) current.stepRecent(event.shiftKey ? -1 : 1);
+      // Only a chat on the Open list closes; on a roster chat, a side thread or a schedule run Ctrl+W does nothing.
+      else if (current.activeChatKey && shownOpenKeys.current.includes(current.activeChatKey)) current.closeChat(current.activeChatKey);
     };
+    const keyup = (event: KeyboardEvent) => {
+      if (event.key === 'Control') shortcutState.current.endRecentWalk();
+    };
+    const blur = () => shortcutState.current.endRecentWalk();
     window.addEventListener('keydown', keydown);
-    return () => window.removeEventListener('keydown', keydown);
+    window.addEventListener('keyup', keyup);
+    window.addEventListener('blur', blur);
+    return () => {
+      window.removeEventListener('keydown', keydown);
+      window.removeEventListener('keyup', keyup);
+      window.removeEventListener('blur', blur);
+    };
   }, []);
-  // The right panel is remembered per tab, for this session: a chat whose details were open opens with them again.
-  const detailsTabs = useRef(new Set<string>());
-  const activeTabKeyRef = useRef(activeTabKey);
-  activeTabKeyRef.current = activeTabKey;
+  // The right panel and the view (COD-355) are remembered per chat for this session: a chat whose details were open,
+  // or that was showing its files, opens that way again. The view belongs to the chat's row, not to its orglet: the
+  // fresh chat that follows an archived one, or an empty chat's first message, starts on Chat.
+  const detailsChats = useRef(new Set<string>());
+  const [chatViews, setChatViews] = useState<Record<string, ChatViewName>>({});
+  const activeChatKeyRef = useRef(activeChatKey);
+  activeChatKeyRef.current = activeChatKey;
+  const chatViewKey = selected ?? activeChatKey;
+  const chatViewKeyRef = useRef(chatViewKey);
+  chatViewKeyRef.current = chatViewKey;
+  const showChatView = (view: ChatViewName) => {
+    const key = chatViewKeyRef.current;
+    if (!key) return;
+    if (view !== 'chat') reportFeature('tabs');
+    setChatViews(current => current[key] === view ? current : { ...current, [key]: view });
+  };
   useEffect(() => {
-    if (!activeTabKey) return;
-    const wanted = detailsTabs.current.has(activeTabKey);
+    if (!activeChatKey) return;
+    const wanted = detailsChats.current.has(activeChatKey);
     setPanel(current => {
       if (wanted && current === null) return 'activity';
       if (!wanted && current === 'activity') return null;
       return current;
     });
-  }, [activeTabKey]);
+  }, [activeChatKey]);
   useEffect(() => {
-    const key = activeTabKeyRef.current;
+    const key = activeChatKeyRef.current;
     if (!key) return;
-    if (detailsOpen) detailsTabs.current.add(key);
-    else detailsTabs.current.delete(key);
+    if (detailsOpen) detailsChats.current.add(key);
+    else detailsChats.current.delete(key);
   }, [detailsOpen]);
   // An orglet or crew just created opens its chat (COD-255), once a workspace that lists it has arrived. Selecting it
   // any earlier would be undone by the check that falls back to the first orglet when the id is not listed yet.
@@ -725,7 +776,7 @@ export function App() {
   useEffect(() => {
     if (!workspace || !workerId || bootedLiveThread.current) return;
     bootedLiveThread.current = true;
-    setTabsBooted(true);
+    setChatsBooted(true);
     if (selected || teamId) return;
     const lastOpen = chatToReopen(workspace.tasks, rememberedChat());
     if (lastOpen) { replaceNextView.current = true; openTask(lastOpen.id); return; }
@@ -987,6 +1038,12 @@ export function App() {
   const openWorkerMemories = (workerId: string) => {
     const found = workspace?.workers.find(item => item.id === workerId);
     if (!found) return;
+    // In that orglet's own chat the memories are a view of the chat (COD-355); from a crew or another chat, its dialog.
+    const ownChat = detail && detail.task.id === selected && !detail.task.teamId && !detail.task.assignees && detail.task.workerId === workerId;
+    if (ownChat && workspace && memoriesOf(workspace.knowledge, { kind: 'worker', id: workerId }).length > 0) {
+      showChatView('memory');
+      return;
+    }
     setWorkerDialogTab('memory');
     setEditingWorker(found);
     setPanel('worker');
@@ -1692,28 +1749,28 @@ export function App() {
     const members = taskWorkers(chat, workspace);
     return chat.title || groupChatNames(members.map(member => member.name)) || t('{0} Tí', [members.length]);
   };
-  /** The chat a tab stands for: an orglet's or crew's main chat (none before its first message), or the tab's own row. */
-  const chatOfTab = (key: string): Task | undefined => {
-    const target = parseChatTabKey(key);
+  /** The chat a key stands for: an orglet's or crew's main chat (none before its first message), or the key's own row. */
+  const chatOfKey = (key: string): Task | undefined => {
+    const target = parseChatKey(key);
     if (!target) return undefined;
     if (target.kind === 'worker') return liveWorkerTask(activeTasks, target.id);
     if (target.kind === 'team') return liveTeamTask(activeTasks, target.id);
     return workspace.tasks.find(task => task.id === target.id);
   };
   /**
-   * A tab's one state. What waits for the person comes from the Running list, the held reviews and, for a browser or
-   * desktop step or an app proposal, the chat's last loaded copy: those live only in a chat's detail.
+   * An open chat's one state. What waits for the person comes from the Running list, the held reviews and, for a
+   * browser or desktop step or an app proposal, the chat's last loaded copy: those live only in a chat's detail.
    */
-  const tabStateOf = (task: Task | undefined): ChatTabState => {
+  const openStateOf = (task: Task | undefined): OpenChatState => {
     if (!task) return 'idle';
     const knownCopy = detail?.task.id === task.id ? detail : taskDetails.get(task.id);
     const pendingApproval = Boolean(knownCopy?.browser?.approval || knownCopy?.desktop?.approval || knownCopy?.appProposals.some(proposal => proposal.status === 'pending'));
     const runs = (workspace.running ?? []).filter(item => item.taskId === task.id);
-    return chatTabState({ status: task.status, seen: taskSeen(task), waitsForPerson: runs.some(waitsForPerson), heldForReview: workspace.heldForReview.includes(task.id), pendingApproval });
+    return openChatState({ status: task.status, seen: taskSeen(task), waitsForPerson: runs.some(waitsForPerson), heldForReview: workspace.heldForReview.includes(task.id), pendingApproval });
   };
-  // A face on the rail reads like the tab of the same chat: an orglet's main chat, or every chat it is in until it has
-  // one (the sidebar row's roll-up), and a crew's own chat.
-  const railMarkOf = (tasks: readonly Task[]) => chatTabMark(strongestChatTabState(tasks.map(tabStateOf)));
+  // A face on the rail reads like the Open row of the same chat: an orglet's main chat, or every chat it is in until
+  // it has one (the sidebar row's roll-up), and a crew's own chat.
+  const railMarkOf = (tasks: readonly Task[]) => openChatMark(strongestOpenChatState(tasks.map(openStateOf)));
   const orgletChats = (id: string) => {
     const live = liveWorkerTask(activeTasks, id);
     return live ? [live] : activeTasks.filter(task => taskWorkers(task, workspace).some(item => item.id === id));
@@ -1738,45 +1795,89 @@ export function App() {
     { key: 'library', icon: <BookOpen size={18} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), count: knowledgeToReview, onClick: () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); } },
     { key: 'settings', icon: <Settings size={18} />, label: t('Cài đặt'), onClick: () => openSettings(), onDwell: dwellAbout },
   ];
-  const taskTabName = (task: Task) => {
+  const openChatName = (task: Task) => {
     if (task.routineId) return workspace.routines.find(item => item.id === task.routineId)?.name ?? task.routineName ?? taskName(task.id) ?? task.brief;
     if (isGroupChat(task)) return groupChatName(task);
     if (task.teamId) return workspace.teams.find(item => item.id === task.teamId)?.name ?? task.teamSnapshot?.name ?? taskName(task.id) ?? task.brief;
     return taskName(task.id) ?? task.brief;
   };
-  const taskTabFace = (task: Task) => {
-    if (isGroupChat(task)) return <RosterAvatars workers={taskWorkers(task, workspace)} size="xs" max={2} countRest={false} />;
+  /** An Open row's face, the size of the roster rows' faces so every name in the column starts at the same place. */
+  const openChatFace = (task: Task, size: 'xs' | 'sm') => {
+    if (isGroupChat(task)) return <RosterAvatars workers={taskWorkers(task, workspace)} size={size} max={2} countRest={false} />;
     const crew = task.teamId ? workspace.teams.find(item => item.id === task.teamId) : undefined;
-    if (crew) return crewFace(crew);
+    if (crew) return <RosterAvatars workers={teamRoster(crew, workspace.workers)} size={size} max={2} countRest={false} />;
     const owner = [...workspace.workers, ...workspace.archivedWorkers].find(item => item.id === task.workerId);
-    return owner ? workerFace(owner, 'xs') : <Avatar name={task.brief} seed={task.id} size="xs" />;
+    return owner ? workerFace(owner, size) : <Avatar name={task.brief} seed={task.id} size={size} />;
   };
-  const tabItemOf = (key: string): ChatTabItem | undefined => {
-    const target = parseChatTabKey(key);
-    if (!target) return undefined;
-    const state = tabStateOf(chatOfTab(key));
-    if (target.kind === 'worker') {
-      const item = workspace.workers.find(candidate => candidate.id === target.id);
-      return item && { key, name: item.name, face: workerFace(item, 'xs'), state };
-    }
-    if (target.kind === 'team') {
-      const item = workspace.teams.find(candidate => candidate.id === target.id);
-      return item && { key, name: item.name, face: crewFace(item), state };
-    }
-    const task = workspace.tasks.find(candidate => candidate.id === target.id);
-    return task && { key, name: taskTabName(task), face: taskTabFace(task), state };
+  /** The orglet's or crew's name a chat row belongs to, for the Open row's "Side thread of …". */
+  const ownerNameOf = (task: Task) => {
+    if (task.teamId) return workspace.teams.find(item => item.id === task.teamId)?.name ?? task.teamSnapshot?.name ?? '';
+    return [...workspace.workers, ...workspace.archivedWorkers].find(item => item.id === task.workerId)?.name ?? '';
   };
-  const tabItems = chatTabs.map(tabItemOf).filter((item): item is ChatTabItem => Boolean(item));
-  // One chat needs no strip: a newcomer's window stays as quiet as a single chat.
-  const tabsShown = tabItems.length > 1;
-  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${tabsShown ? ' with-tabs' : ''}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
+  const openChatItemOf = (key: string): OpenChatItem | undefined => {
+    const task = chatOfKey(key);
+    if (!task || isRosterChat(key)) return undefined;
+    const kind = task.routineId ? 'schedule' : isGroupChat(task) ? 'group' : task.sideOf ? 'side' : 'earlier';
+    const owner = ownerNameOf(task);
+    const description = kind === 'schedule' ? t('Lần chạy theo lịch của {0}', [owner])
+      : kind === 'group' ? t('Nhóm chat')
+        : kind === 'side' ? t('Chat phụ của {0}', [owner]) : t('Chat cũ của {0}', [owner]);
+    return { key, kind, name: openChatName(task), description, face: openChatFace(task, 'sm'), state: openStateOf(task), active: key === activeChatKey,
+      onOpen: () => openChatByKey(key), onDwell: resting => dwellChat(task.id, resting) };
+  };
+  const nestedChats = [
+    ...workspace.workers.flatMap(item => chatsUnder(workspace.tasks, workspace.routines, { workerId: item.id })),
+    ...workspace.teams.flatMap(item => chatsUnder(workspace.tasks, workspace.routines, { teamId: item.id })),
+  ].map(chat => chat.task);
+  chatsWithRow.current = new Set([...groupChats, ...nestedChats].map(task => chatKey({ kind: 'task', id: task.id })));
+  const openChatItems = shownOpenChats(openChats.open, chatHasRow).map(openChatItemOf).filter((item): item is OpenChatItem => Boolean(item));
+  shownOpenKeys.current = openChatItems.map(item => item.key);
+  /**
+   * On the rail an open chat is a face at the roster's size. An orglet's schedule run, side thread or earlier chat wears a
+   * small calendar, thread or clock badge, so it is not taken for the orglet's own face above it.
+   */
+  const railOpenFace = (item: OpenChatItem) => {
+    const task = chatOfKey(item.key);
+    const owner = task && !task.teamId && item.kind !== 'group' ? [...workspace.workers, ...workspace.archivedWorkers].find(worker => worker.id === task.workerId) : undefined;
+    if (!owner) return task ? openChatFace(task, 'xs') : item.face;
+    const KindIcon = item.kind === 'schedule' ? LucideCalendarClock : item.kind === 'side' ? CornerDownRight : History;
+    return <Avatar name={owner.name} seed={owner.id} mascot={owner.avatar?.mascot} defaultMascot hint={owner.description} color={owner.avatar?.color} size="sm"
+      badge={<KindIcon size={9} strokeWidth={2.5} className="open-chat-badge" aria-hidden="true" />} />;
+  };
+  const railOpenChats: RailEntry[] = openChatItems.map(item => ({ key: item.key, name: item.name, description: item.description, face: railOpenFace(item),
+    status: openChatMark(item.state), active: item.active, onOpen: item.onOpen, onDwell: item.onDwell, onClose: () => closeChat(item.key) }));
+  // The views of the chat on screen (COD-355): Chat, then each view with something in it. Files and Changes need the
+  // open chat's detail; Schedules and Memory belong to its orglet or crew.
+  const viewOwner: ViewOwner | undefined = detail && selected === detail.task.id ? viewOwnerOfTask(detail.task, workspace.routines)
+    : !selected && team ? { kind: 'team', id: team.id } : !selected && !group && worker ? { kind: 'worker', id: worker.id } : undefined;
+  const viewDetail = detail && selected === detail.task.id ? detail : undefined;
+  const ownerSchedules = schedulesOf(workspace.routines, viewOwner);
+  const ownerMemories = memoriesOf(workspace.knowledge, viewOwner);
+  const chatViewList = availableChatViews({
+    files: viewDetail?.sources.length ?? 0,
+    changes: changedRunCount(viewDetail, workspaceRecovery),
+    schedules: ownerSchedules.length,
+    memory: ownerMemories.length,
+  });
+  const chatView = chatViewToShow(chatViewKey ? chatViews[chatViewKey] : undefined, chatViewList);
+  const openScheduleEditor = (view: RoutineView) => { setRoutineDraft(undefined); setRoutineView(view); setPanel('routines'); };
+  const chatViewContent = chatView === 'files' && viewDetail ? <SourcePanel detail={viewDetail} target={sourceTarget} refresh={() => void refresh()} openSource={id => setViewingSource({ id })} />
+    : chatView === 'changes' && viewDetail ? <ChangesView detail={viewDetail} recovery={workspaceRecovery} action={action} />
+      // A schedule opens in the Schedules dialog to be edited, so leaving an unsaved edit asks the one question it always has.
+      : chatView === 'schedules' ? <RoutinesPanel workspace={workspace} routines={ownerSchedules} view={{ editing: false }} onView={openScheduleEditor} onDirty={markRoutineDirty} onBack={() => openRoutines()} openTask={openTask} />
+        : chatView === 'memory' ? <MemoryList memories={ownerMemories} workspace={workspace} onOpenChat={openTask} />
+          : null;
+  return <div className={`app ${sidebar ? '' : 'sidebar-hidden'}${resizing ? ' resizing' : ''}${panelMoving ? ' panel-moving' : ''}${detailsOpen ? ' with-details' : ''}`} style={{ '--sidebar-width': `${sidebarWidth}px`, '--details-width': `${detailsWidth}px` } as CSSProperties}>
     <a className="skip-link" href="#main-content">{t('Đến nội dung chính')}</a>
     {sidebar && <button type="button" className="sidebar-resizer" aria-label={t('Kéo để đổi độ rộng thanh bên')} {...sidebarPane.handleProps} />}
     {detailsOpen && <button type="button" className="details-resizer" aria-label={t('Kéo để đổi độ rộng panel chi tiết')} {...detailsPane.handleProps} />}
     <aside className={`sidebar${sidebar ? '' : ' collapsed'}`} aria-label={t('Điều hướng')} inert={!sidebar || undefined}>
       <div className="brand"><span className="orglet-mark">o</span><strong>Orglet</strong><Button size="icon" aria-label={t('Tìm cuộc trò chuyện (Ctrl K)')} aria-haspopup="dialog" onClick={() => setSearchOpen(true)}><Search size={18} /></Button><Button size="icon" aria-label={t('Thu gọn sidebar')} onClick={closeSidebar}><PanelLeft size={18} /></Button></div>
       <div className="sidebar-scroll">
-      
+      {/* The chats kept at hand that have no row anywhere else in the sidebar (COD-355), so no chat is listed twice. */}
+      {openChatItems.length > 0 && <SidebarSection id="open" title={t('Đang mở')}>
+        {openChatItems.map(item => <OpenChatRow key={item.key} item={item} onClose={() => closeChat(item.key)} />)}
+      </SidebarSection>}
       <SidebarSection id="teams" title={t('Hội')} action={sectionActions('teams', t('Chọn nhiều hội'), t('Tạo hội'), () => { setEditingTeam(undefined); setPanel('team'); })}>
         {selection.section === 'teams' && selectionBar}
         {teamOrder.order.map(id => workspace.teams.find(team => team.id === id)).filter((item): item is Team => Boolean(item)).map(item => <SidebarTreeRow key={item.id} id={`team-${item.id}`} arriving={isArriving(`team-${item.id}`)} name={item.name} avatar={<RosterAvatars workers={teamRoster(item, workspace.workers)} size="sm" max={2} countRest={false} />} active={teamId === item.id && (!selected || selected === liveTeamTask(workspace.tasks, item.id)?.id)} status={teamStatus(item)} onSelect={() => { clearSelection(); openTeam(item.id); }} onDwell={dwellTeam(item)} reorder={teamOrder.bind(item.id)} selection={rowSelection('teams', item.id)}
@@ -1809,15 +1910,15 @@ export function App() {
       </div>
       <div className="sidebar-footer"><Button onClick={() => setNoticesOpen(true)} aria-label={unreadNotices > 0 ? t('Thông báo, {0} chưa đọc', [unreadNotices]) : t('Thông báo')}><span className="notice-bell"><Bell size={18} />{unreadNotices > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thông báo')}{unreadNotices > 0 && <span className="badge unread" aria-hidden="true">{unreadNotices > 99 ? '99+' : unreadNotices}</span>}</Button><Button onClick={() => setRunningOpen(true)} aria-label={runningButtonLabel(runningNow, waitingForYou)}><Activity size={18} />{t('Đang chạy')}<RunningCounts running={runningNow} waiting={waitingForYou} /></Button><Button onClick={() => openRoutines()} aria-label={pendingRoutines > 0 ? t('Lịch chạy, {0} cần xem', [pendingRoutines]) : t('Lịch chạy')}><span className="notice-bell"><CalendarClock size={18} />{pendingRoutines > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Lịch chạy')}{pendingRoutines > 0 && <span className="badge unread" aria-hidden="true">{pendingRoutines > 99 ? '99+' : pendingRoutines}</span>}</Button><Button onClick={() => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); }} aria-label={knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện')}><span className="notice-bell"><BookOpen size={18} />{knowledgeToReview > 0 && <span className="notice-dot" aria-hidden="true" />}</span>{t('Thư viện')}{knowledgeToReview > 0 && <span className="badge unread" aria-hidden="true">{knowledgeToReview > 99 ? '99+' : knowledgeToReview}</span>}</Button><div className="sidebar-settings"><Button onClick={() => openSettings()} {...dwellHandlers(dwellAbout)}><Settings size={18} />{t('Cài đặt')}<span className={`connection-dot ${hasConnection(connections, workspace.customConnections) ? 'connected' : ''}`} /></Button>{updateMark && <UpdateButton indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} />}</div></div>
     </aside>
-    {/* Folded, the left column is the rail: the roster as faces, with the chats in the tab strip (COD-340). */}
+    {/* Folded, the left column is the rail: the roster as faces, then the Open list as faces (COD-340, COD-355). */}
     {railShown && <SidebarRail onExpand={openFullSidebar} onSearch={() => setSearchOpen(true)} createItems={railCreateItems}
-      crews={railCrews} orglets={railOrglets} groupChats={railGroupChats} groupChatsMark={railGroupsMark} actions={railActions}
+      crews={railCrews} orglets={railOrglets} groupChats={railGroupChats} groupChatsMark={railGroupsMark} openChats={railOpenChats} actions={railActions}
       trailing={updateMark && <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} />}
       covered={sidebar && narrowWindow} />}
-    {tabsShown && <ChatTabs tabs={tabItems} activeKey={activeTabKey} onSelect={openChatTabKey} onClose={closeTab} />}
     <main className="main-pane" id="main-content" tabIndex={-1}>
-      <header className="topbar">
-        <div>
+      <ChatHeader contentKey={`${activeChatKey}:${chatViewList.map(view => `${view.name}${view.count ?? ''}`).join()}`}
+        views={chatViewList.length > 1 ? <ChatViewTabs views={chatViewList} current={chatView} onSelect={showChatView} /> : null}
+        lead={<>
           {/* An empty group chat shows who is in it, the way a crew's row does; a count alone names nobody. */}
           {!selected && group && <RosterAvatars workers={groupWorkers} size="sm" max={4} />}
           {openGroupFaces && <RosterAvatars workers={openGroupFaces} size="sm" max={4} />}
@@ -1834,16 +1935,15 @@ export function App() {
             {providerName(headerProvider)}
           </span>}
           </span>
-        </div>
-        <div className="topbar-actions">
+        </>}
+        actions={<>
           {selected && detail && openTaskPaid && <span className="task-cost" role="status" title={detail.usage.reservedMicros > 0 ? t('Đã dùng {0} / {1} · đang giữ chỗ {2}', [formatMoney(detail.usage.chargedMicros), formatMoney(detail.task.budgetMicros), formatMoney(detail.usage.reservedMicros)]) : t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}><Wallet size={14} aria-hidden="true" />{t('Đã dùng {0} / {1}', [formatMoney(openTaskUsed), formatMoney(detail.task.budgetMicros)])}</span>}
 
           {(selected || team || worker) && <RowMenu className="thread-menu" label={t('Tùy chọn cuộc trò chuyện')} items={[...headerSettingsItems, ...(selected && !openSideThread ? [{ label: t('Thiết lập chat'), icon: MessageSquareText, onSelect: () => { setEditingTask(selected); setPanel('task'); } }] : []), { label: t('Chi tiết'), icon: SlidersHorizontal, onSelect: () => setPanel('activity') }, ...(selected ? [detail?.task.archivedAt ? { label: t('Khôi phục'), icon: ArchiveRestore, onSelect: () => archiveTask(selected, false) } : { label: t('Lưu trữ'), icon: LucideArchive, onSelect: () => archiveTask(selected, true) }, { label: t('Xóa'), icon: Trash2, danger: true, onSelect: () => deleteTask(selected), confirm: { question: t('Xóa cuộc trò chuyện này? Không thể hoàn tác.'), label: t('Xóa') } }] : [])]} />}
-        </div>
-      </header>
+        </>} />
       {error && <div className="error-banner" role="alert"><span>{error}</span><Button size="icon" aria-label={t('Đóng thông báo')} onClick={() => setError('')}><X size={16} /></Button></div>}
       {catchUpNotice && <div className="notice-banner" role="status"><LucideCalendarClock size={16} aria-hidden="true" /><div><p>{singleCatchUp ? t('{0} đã lỡ một lần chạy khi app tắt. Có thể chạy bù một lần.', [singleCatchUp.name]) : t('{0} lịch đã lỡ lần chạy khi app tắt. Mỗi lịch chạy bù được một lần.', [pendingCatchUp.length])}</p><div className="actions">{singleCatchUp?.enabled && <Button variant="primary" onClick={() => action(async () => openTask(await orglet.call('catchUpRoutine', { id: singleCatchUp.id })))}>{t('Chạy bù một lần')}</Button>}<Button onClick={() => openRoutines()}>{t('Xem lịch chạy')}</Button></div></div><Button size="icon" aria-label={t('Đóng thông báo lịch bị lỡ')} onClick={() => setDismissedCatchUpNotice(catchUpNoticeKey)}><X size={16} /></Button></div>}
-      {selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} workspace={workspace} recovery={workspaceRecovery} action={action} showSources={openSources} reviewRecovery={runId => { setRecoveryFocus({ runId, at: Date.now() }); setPanel('activity'); }} openMessage={messageId => {
+      {chatView !== 'chat' ? <ChatViewPanel view={chatView}>{chatViewContent}</ChatViewPanel> : selected ? <>{detail ? <><FormatPreferences.Provider value={{ copy: workspace.copyFormat, download: workspace.downloadFormat }}><TaskThread key={selected} detail={detail} workspace={workspace} recovery={workspaceRecovery} action={action} showSources={openSources} reviewRecovery={runId => { setRecoveryFocus({ runId, at: Date.now() }); setPanel('activity'); }} openMessage={messageId => {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
@@ -1913,7 +2013,7 @@ export function App() {
         onWorkspace: changeNewChatWorkspace,
       } : undefined}
       workerStatus={workerStatus} onClose={close} onOpenSources={() => openSources()} onExport={artifactId => action(() => orglet.exportArtifact(artifactId))} />}
-    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : panel === 'sources' ? t('Nguồn của cuộc trò chuyện') : t('Chi tiết cuộc trò chuyện')}>
+    <Drawer open={panel !== null && !['settings', 'worker', 'team', 'task', 'activity'].includes(panel)} onClose={() => panel === 'routines' ? void leaveRoutine(close) : close()} description={panel === 'routines' && !routineView.editing ? t('Chỉ chạy khi Orglet đang mở; lịch theo giờ bị lỡ thì chạy bù một lần.') : panel === 'library' ? (libraryTab === 'skills' ? t('Hướng dẫn dùng lại được; gói nhập từ thư mục cần review trước.') : t('Ghi chú dùng lại được; chỉ mục đã duyệt mới được nạp.')) : undefined} actions={panel === 'routines' && !routineView.editing ? <Button variant="outline" onClick={() => setRoutineView({ editing: true })}><LucideCalendarClock size={16} />{t('Tạo lịch')}</Button> : drawerBack} title={panel === 'routines' ? (routineView.editing ? <span className="breadcrumb"><button type="button" className="breadcrumb-link" onClick={() => void leaveRoutine(() => setRoutineView({ editing: false }))}>{t('Lịch chạy')}</button><ChevronRight size={15} aria-hidden="true" className="breadcrumb-separator" /><span aria-current="page">{routineView.routine ? routineView.routine.name : t('Lịch mới')}</span></span> : t('Lịch chạy')) :panel === 'skill' ? libraryTitle(editingSkill?.package ? 'Review skill' : t('Chỉnh skill')) : panel === 'knowledge' ? libraryTitle(editingKnowledge ? 'Knowledge' : t('Knowledge mới')) : panel === 'library' ? t('Thư viện') : t('Chi tiết cuộc trò chuyện')}>
       {panel === 'routines' && <RoutinesPanel workspace={workspace} draft={routineDraft} view={routineView} onView={setRoutineView} onDirty={markRoutineDirty} onBack={() => void leaveRoutine(() => setRoutineView({ editing: false }))} openTask={id => { openTask(id); close(); }} />}
       
       {panel === 'skill' && <SkillEditor key={editingSkill?.id ?? 'new'} skill={editingSkill} done={fromLibrary ? backToLibrary : close} />}
@@ -1923,7 +2023,6 @@ export function App() {
         <div id="library-panel" role="tabpanel" aria-labelledby={`library-tab-${libraryTab}`}>{libraryTab === 'skills' ? <SkillLibrary skills={workspace.skills} onOpen={openLibrarySkill} /> : <KnowledgeLibrary workspace={workspace} onOpen={openLibraryKnowledge} onOpenChat={taskId => { close(); openTask(taskId); }} />}</div>
       </div>}
       {panel === 'knowledge' && <KnowledgeEditor key={editingKnowledge ? `${editingKnowledge.id}:${editingKnowledge.revision}` : 'new'} item={editingKnowledge} workspace={workspace} done={fromLibrary ? backToLibrary : close} />}
-      {panel === 'sources' && detail && <SourcePanel detail={detail} target={sourceTarget} refresh={() => void refresh()} openSource={id => setViewingSource({ id })} />}
     </Drawer>
     {viewingSource && detail && <SourceDialog key={viewingSource.id} detail={detail} sourceId={viewingSource.id} lines={viewingSource.lines} onClose={() => setViewingSource(undefined)} refresh={() => void refresh()}
       openSource={id => setViewingSource({ id })}
@@ -1931,6 +2030,8 @@ export function App() {
         // Ask about this (COD-280): the file goes on the chat's next message, and the viewer gives way to the composer.
         setFollowUpPrefill({ taskId: selected ?? detail.task.id, intake: { sources: [source], skipped: [] }, at: Date.now() });
         setViewingSource(undefined);
+        // From the Files view the message box is a tab away: go back to the chat, where the file waits on it.
+        showChatView('chat');
       }} />}
     <WorkerDialog key={`worker:${panel === 'worker'}:${editingWorker?.id ?? 'new'}`} open={panel === 'worker'} worker={editingWorker} workspace={workspace} connections={connections} harnesses={harnesses ?? []} initialTab={workerDialogTab} initialField={workerDialogField} connectModel={workerDialogConnect} onClose={close} onOpenChat={taskId => { close(); openTask(taskId); }} onCreated={id => setJustCreated({ kind: 'worker', id })} />
     <TeamDialog key={`team:${panel === 'team'}:${editingTeam?.id ?? 'new'}`} open={panel === 'team'} team={editingTeam} workspace={workspace} onClose={close} onCreated={id => setJustCreated({ kind: 'team', id })} />

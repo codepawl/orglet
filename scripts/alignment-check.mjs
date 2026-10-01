@@ -175,6 +175,14 @@ async function seedWorkspace(page) {
   await waitForTask(page, crewTaskId);
   const chatTaskId = await callCore(page, 'createTask', { workerId: researcher.id, brief: 'Plan the launch of my weekly newsletter next month. Keep it short.', sourceIds: [], consent: false, budgetMicros: 1000 });
   await waitForTask(page, chatTaskId);
+  // An earlier chat of an orglet, replaced by a newer one: it has no row anywhere in the sidebar, so opening it puts it on
+  // the Open list (COD-355). Group chats, side threads and schedule runs have their own rows and never go there.
+  const analyst = (await callCore(page, 'workspace', {})).workers.find(worker => worker.name === 'Data analyst');
+  const earlierChatBrief = 'Check last month’s sign-up numbers.';
+  const earlierChatId = await callCore(page, 'createTask', { workerId: analyst.id, brief: earlierChatBrief, sourceIds: [], consent: false, budgetMicros: 1000 });
+  await waitForTask(page, earlierChatId);
+  const newerChatId = await callCore(page, 'createTask', { workerId: analyst.id, brief: 'Summarise this week’s sign-ups.', sourceIds: [], consent: false, budgetMicros: 1000 });
+  await waitForTask(page, newerChatId);
   const base = { enabled: true, task: { sourceIds: [], consent: false, budgetMicros: 50_000 } };
   const schedules = [
     { name: 'Morning digest', schedule: { timeZone: 'Asia/Ho_Chi_Minh', time: '09:00', frequency: 'daily', weekday: 1, dailyCapMicros: 200_000 }, task: { workerId: researcher.id, brief: 'Summarise what changed in my inbox overnight.' } },
@@ -187,7 +195,7 @@ async function seedWorkspace(page) {
     await callCore(page, 'saveRoutine', { ...base, name: schedule.name, enabled: schedule.enabled ?? true, schedule: schedule.schedule, task: { ...base.task, ...schedule.task } });
   }
   const islandCrew = heldModel ? await seedIslandCrew(page, researcher) : undefined;
-  return { researcher, crew, islandCrew };
+  return { researcher, crew, islandCrew, earlierChatBrief };
 }
 
 async function settle(page) {
@@ -214,6 +222,9 @@ async function reset(page, context) {
   if (await page.locator('.details-pane').count()) await page.keyboard.press('Escape');
   await openSidebar(page);
   await page.getByRole('button', { name: context.researcher.name, exact: true }).first().click();
+  // A chat keeps the view it was on (COD-355): come back to its messages.
+  const chatView = page.getByRole('tab', { name: label('Trò chuyện'), exact: true });
+  if (await chatView.count()) await chatView.click();
   await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor();
 }
 
@@ -230,14 +241,18 @@ async function openWorkerTab(page, context, tab) {
   await page.getByRole('tab', { name: label(tab), exact: true }).click();
 }
 
-/** A tab for each of four chats (COD-340), ending on the orglet's own, so the strip shows above the main card. */
-async function openTabs(page, context) {
+/**
+ * The earlier chat opened from search, the way a chat without a row is found again, so it lands on the Open list
+ * (COD-355); then back to the orglet's own chat, whose views (Chat, Schedules) show beside its name.
+ */
+async function openOpenChats(page, context) {
+  await page.keyboard.press('Control+K');
+  await page.getByRole('dialog').getByRole('combobox').fill(context.earlierChatBrief);
+  await page.getByRole('dialog').getByRole('option').filter({ hasText: context.earlierChatBrief }).first().click();
+  await page.locator('.open-chat-row .worker.active').waitFor({ state: 'attached' });
   await openSidebar(page);
-  for (const name of [context.crew.name, 'Writer', 'Data analyst', context.researcher.name]) {
-    await openSidebar(page);
-    await page.getByRole('button', { name, exact: true }).first().click();
-  }
-  await page.locator('.chat-tabs').waitFor();
+  await page.getByRole('button', { name: context.researcher.name, exact: true }).first().click();
+  await page.locator('.chat-views').waitFor();
 }
 
 /** Folds the sidebar to the rail (COD-340); the next reset opens it again. A narrow window has folded it already. */
@@ -263,11 +278,16 @@ const SCREENS = [
   { name: 'schedules', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor(); } },
   { name: 'schedule-editor', open: async page => { await openSidebar(page); await page.getByRole('button', { name: startsWith('Lịch chạy') }).first().click(); await page.getByRole('button', { name: label('Tạo lịch'), exact: true }).click(); await page.getByLabel(label('Tên lịch'), { exact: true }).waitFor(); } },
   { name: 'empty-chat', open: async page => { await openSidebar(page); await page.getByRole('button', { name: 'Writer', exact: true }).first().click(); await page.getByRole('textbox', { name: label('Tin nhắn') }).waitFor(); } },
-  // The open chats as tabs, beside the full sidebar and beside the rail, and with the right panel open (COD-340).
-  { name: 'chat-tabs', open: openTabs },
-  { name: 'rail', open: async (page, context) => { await openTabs(page, context); await foldSidebar(page); } },
+  // The Open list beside the full sidebar and on the rail, the chat's views, and the right panel (COD-340, COD-355).
+  { name: 'open-chats', open: openOpenChats },
+  { name: 'chat-view-schedules', open: async (page, context) => {
+    await openOpenChats(page, context);
+    await page.getByRole('tab', { name: startsWith('Lịch chạy') }).click();
+    await page.getByRole('tabpanel').getByRole('region', { name: label('Lịch {0}', ['Morning digest']), exact: true }).waitFor();
+  } },
+  { name: 'rail', open: async (page, context) => { await openOpenChats(page, context); await foldSidebar(page); } },
   { name: 'rail-details', open: async (page, context) => {
-    await openTabs(page, context);
+    await openOpenChats(page, context);
     await foldSidebar(page);
     await page.getByRole('button', { name: label('Tùy chọn cuộc trò chuyện'), exact: true }).first().click();
     await page.getByRole('menuitem', { name: label('Chi tiết') }).click();

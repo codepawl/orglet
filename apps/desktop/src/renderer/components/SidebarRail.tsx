@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { MessagesSquare } from 'lucide-react';
-import { PanelLeft, Plus, Search } from './icons';
+import { PanelLeft, Plus, Search, X } from './icons';
 import { t } from '../i18n';
 import { Button } from './ui';
 import { RowMenu, type RowMenuItem } from './RowMenu';
@@ -8,6 +8,7 @@ import { AnchoredPopover } from './AnchoredPopover';
 import { StatusMark, type StatusMarkState } from './StatusMark';
 import { statusMarkLabel } from './SidebarTree';
 import { dwellHandlers } from '../prefetch';
+import { middleClickCloses } from './OpenChats';
 
 /** A crew or an orglet on the rail: its face opens its main chat. */
 export type RailEntry = {
@@ -18,6 +19,9 @@ export type RailEntry = {
   active: boolean;
   onOpen: () => void;
   onDwell?: (resting: boolean) => void;
+  /** Only for an open chat (COD-355): what kind of chat it is and whose, and a × that takes it off the list. */
+  description?: string;
+  onClose?: () => void;
 };
 
 /**
@@ -27,13 +31,13 @@ export type RailEntry = {
 export type RailAction = { key: string; icon: ReactNode; label: string; ariaLabel?: string; count?: number; countTone?: 'accent' | 'quiet'; onClick: () => void; onDwell?: (resting: boolean) => void };
 
 /**
- * The left column folded to a narrow rail (COD-340): the roster as faces, with the chats themselves in the tab strip.
- * Top: the way to the full sidebar, search and the create menu. Then one face per crew and per orglet, in the
- * sidebar's order, each with the sidebar row's mark when it has news; the group chats behind one button that opens
- * their list. The foot keeps the sidebar's footer as icons with their counts. Names live in tooltips and accessible
- * names, since there is no room for them.
+ * The left column folded to a narrow rail (COD-340): the roster as faces. Top: the way to the full sidebar, search and
+ * the create menu. Then one face per crew and per orglet, in the sidebar's order, each with the sidebar row's mark
+ * when it has news; the group chats behind one button that opens their list; then the chats on the Open list
+ * (COD-355), each with a × that shows on hover. The foot keeps the sidebar's footer as icons with their counts. Names
+ * live in tooltips and accessible names, since there is no room for them.
  */
-export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, groupChats, groupChatsMark, actions, trailing, covered = false }: {
+export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, groupChats, groupChatsMark, openChats, actions, trailing, covered = false }: {
   onExpand: () => void;
   onSearch: () => void;
   createItems: RowMenuItem[];
@@ -42,6 +46,8 @@ export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, g
   groupChats: readonly RailEntry[];
   /** The strongest mark among the group chats, for their one button. */
   groupChatsMark: StatusMarkState;
+  /** The Open list: side threads, group chats and schedule runs kept at hand. */
+  openChats: readonly RailEntry[];
   actions: readonly RailAction[];
   /** Anything after the foot's buttons, such as a ready update. */
   trailing?: ReactNode;
@@ -49,7 +55,7 @@ export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, g
   covered?: boolean;
 }) {
   const roster = useRef<HTMLDivElement>(null);
-  const scrollEnds = useScrollEnds(roster, `${crews.length}:${orglets.length}:${groupChats.length}`);
+  const scrollEnds = useScrollEnds(roster, `${crews.length}:${orglets.length}:${groupChats.length}:${openChats.length}`);
   return <nav className="rail" aria-label={t('Điều hướng')} inert={covered || undefined} aria-hidden={covered || undefined}>
     <div className="rail-top">
       <Button size="icon" aria-label={t('Mở sidebar')} title={t('Mở sidebar')} onClick={onExpand}><PanelLeft size={18} /></Button>
@@ -60,6 +66,7 @@ export function SidebarRail({ onExpand, onSearch, createItems, crews, orglets, g
       {crews.length > 0 && <ul className="rail-group" aria-label={t('Hội')}>{crews.map(entry => <RailFace key={entry.key} entry={entry} />)}</ul>}
       {orglets.length > 0 && <ul className="rail-group" aria-label={t('Tí')}>{orglets.map(entry => <RailFace key={entry.key} entry={entry} />)}</ul>}
       {groupChats.length > 0 && <RailGroupChats chats={groupChats} mark={groupChatsMark} />}
+      {openChats.length > 0 && <ul className="rail-group rail-open" aria-label={t('Đang mở')}>{openChats.map(entry => <RailFace key={entry.key} entry={entry} />)}</ul>}
     </div>
     <div className="rail-foot">
       {actions.map(action => <RailFootButton key={action.key} action={action} />)}
@@ -72,12 +79,16 @@ function RailFace({ entry }: { entry: RailEntry }) {
   const hasNews = entry.status.variant !== 'empty';
   const stateLabel = statusMarkLabel(entry.status);
   const dwell = dwellHandlers(entry.onDwell);
-  return <li>
+  const tooltip = [entry.name, entry.description, hasNews ? stateLabel : ''].filter(Boolean).join('\n');
+  const spoken = [entry.description, hasNews ? stateLabel : ''].filter(Boolean).join(', ');
+  const closing = entry.onClose ? middleClickCloses(entry.onClose) : {};
+  return <li className={entry.onClose ? 'rail-closable' : undefined} {...closing}>
     <button type="button" className={`rail-face${entry.active ? ' active' : ''}`} aria-label={entry.name} aria-current={entry.active || undefined}
-      aria-description={hasNews ? stateLabel : undefined} title={hasNews ? `${entry.name}\n${stateLabel}` : entry.name} onClick={entry.onOpen} {...dwell}>
+      aria-description={spoken || undefined} title={tooltip} onClick={entry.onOpen} {...dwell}>
       <span className="rail-face-picture" aria-hidden="true">{entry.face}</span>
       {hasNews && <StatusMark variant={entry.status.variant} tone={entry.status.tone} label={stateLabel} decorative className="rail-face-mark" />}
     </button>
+    {entry.onClose && <button type="button" className="rail-face-close" aria-label={t('Đóng {0}', [entry.name])} title={t('Đóng (Ctrl W)')} onClick={entry.onClose}><X size={12} aria-hidden="true" /></button>}
   </li>;
 }
 

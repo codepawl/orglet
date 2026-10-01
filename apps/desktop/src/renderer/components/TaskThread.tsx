@@ -40,12 +40,12 @@ import type { MentionPerson } from '../../shared/mentions';
 import { teamProgress } from '../../shared/team-progress';
 import { crewPlanDiagram } from '../../shared/crew-plan';
 import { CrewPlanFlow } from './CrewPlanFlow';
-import { changeOutcomeOf, type WorkspaceRecoveryView } from '../../shared/workspace-recovery';
+import type { WorkspaceRecoveryView } from '../../shared/workspace-recovery';
+import { changedFilesOf } from '../changedFiles';
+import { useDiffReview } from './ChangesView';
 import { groupRecoveryAttempts } from '../../shared/recovery-attempts';
 import { AppProposalCards, type ProposalActions } from './AppProposals';
-import { ChangedFilesLine, DiffDialog, type DiffReview, type ReviewStatus } from './DiffViewer';
-import { confirmAction } from './confirm';
-import type { WorkspaceDiffSummary } from '../../shared/workspace-diff';
+import { ChangedFilesLine } from './DiffViewer';
 import type { AppProposal } from '../../shared/app-proposals';
 import type { ChatQuote } from '../../shared/side-threads';
 import { chatHeadline, type ForwardedMessage } from '../../shared/forward';
@@ -63,43 +63,7 @@ import { unansweredTurnLine } from '../turnOutcome';
 /** A turn's notices already in their order (COD-217, `turnNotices`): what goes above the answer and what goes under it. */
 type TurnNotices = ReturnType<typeof turnNotices>;
 
-type ChangedFilesLineOf = { run: Run; summary: WorkspaceDiffSummary; review?: ReviewStatus; restored?: true };
-
-/**
- * The runs of a turn that changed files or folders in their working copy, with the counts the core kept (COD-163)
- * and where the changes stand (COD-279, COD-291): every line says it, whether the changes waited for review or were
- * handed in at once. A run whose working copy is not on this computer after a restore gets the line the backup kept
- * (COD-299), marked `restored`.
- */
-export function changedFilesOf(runs: readonly Run[], recovery: WorkspaceRecoveryView | undefined): ChangedFilesLineOf[] {
-  if (!recovery) return [];
-  return runs.flatMap(run => {
-    const copy = recovery.copies.find(item => item.runId === run.id);
-    if (copy) return lineOf(run, copy.diff, changeOutcomeOf(copy));
-    const kept = recovery.restored?.find(item => item.runId === run.id);
-    if (kept) return lineOf(run, kept.diff, restoredOutcome(kept.outcome), true);
-    return [];
-  });
-}
-
-function lineOf(run: Run, summary: WorkspaceDiffSummary | undefined, review: ReviewStatus | undefined, restored = false): ChangedFilesLineOf[] {
-  if (!summary || (summary.files === 0 && (summary.folders ?? 0) === 0)) return [];
-  const line: ChangedFilesLineOf = { run, summary };
-  if (review) line.review = review;
-  if (restored) line.restored = true;
-  return [line];
-}
-
-/**
- * Where restored changes stand once their working copy is gone: changes that waited for review can no longer be
- * applied, so they read as never applied, and an apply that was under way or stopped midway says nothing it cannot
- * show.
- */
-function restoredOutcome(outcome: ReviewStatus | undefined): ReviewStatus | undefined {
-  if (outcome?.state === 'pending') return { state: 'unapplied' };
-  if (outcome?.state === 'applying' || outcome?.state === 'stopped') return undefined;
-  return outcome;
-}
+export { changedFilesOf };
 
 /**
  * What this worker was doing for the team on this turn: assigning the work, doing a share of it, or combining the
@@ -168,10 +132,6 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   // And one waiting in a desktop app (COD-261, phase 2a).
   const desktopApproval = detail.desktop?.approval;
   const [answeringDesktop, setAnsweringDesktop] = useState(false);
-  // The run whose working-copy changes are open in the diff viewer (COD-163).
-  const [diffRun, setDiffRun] = useState<Run>();
-  // Whether an Apply or Discard on held changes is on its way (COD-279).
-  const [deciding, setDeciding] = useState(false);
   // A command that blocked a hand-in, its output open in the viewer, and whether "Vẫn áp dụng" is on its way (COD-270).
   const [outputCommand, setOutputCommand] = useState<BlockingCommand>();
   const [applyingHandIn, setApplyingHandIn] = useState(false);
@@ -205,6 +165,8 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
    */
   const readersByRevision = readersByTurn(detail);
   const busy = ['running', 'queued', 'pausing'].includes(detail.task.status);
+  // The diff viewer for a run's working-copy changes (COD-163), with Apply and Discard while they wait (COD-279).
+  const diff = useDiffReview({ detail, recovery, action, busy });
   // Side threads (COD-247): which answers were already brought into a main chat, and what the threads are called.
   const broughtIn = new Set(workspace.tasks.flatMap(task => (task.quotes ?? []).map(quote => quote.artifactId)));
   const threadName = (taskId: string) => {
@@ -325,38 +287,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   // One line per run of the turn that changed files in its working copy (COD-163); `named` says whose line carries
   // the worker's name. Each opens the diff viewer.
   const changedFilesLines = (runs: readonly Run[], named: (run: Run) => boolean) => changedFilesOf(runs, recovery).map(({ run, summary, review, restored }) =>
-    <ChangedFilesLine key={run.id} summary={summary} review={review} restored={restored} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => setDiffRun(run)} />);
-  // Apply and Discard in the viewer, while the open run's changes still wait for review (COD-279).
-  const diffWaiting = diffRun ? changedFilesOf([diffRun], recovery)[0]?.review?.state === 'pending' : false;
-  const diffReview: DiffReview | undefined = diffRun && diffWaiting ? {
-    busy: deciding || busy,
-    onApply: paths => {
-      if (deciding) return;
-      setDeciding(true);
-      action(async () => {
-        try {
-          await orglet.call('applyWorkspaceReview', { taskId: detail.task.id, runId: diffRun.id, ...(paths ? { paths } : {}) });
-          setDiffRun(undefined);
-          toast(t('Đã áp dụng thay đổi vào thư mục.'), 'success');
-        } finally { setDeciding(false); }
-      });
-    },
-    onDiscard: () => {
-      if (deciding) return;
-      void confirmAction({ title: t('Bỏ các thay đổi này?'), description: t('Thư mục của bạn không bị sửa, và không áp dụng lại được.'),
-        confirmLabel: t('Bỏ thay đổi'), cancelLabel: t('Giữ lại'), tone: 'danger' }).then(confirmed => {
-        if (!confirmed) return;
-        setDeciding(true);
-        action(async () => {
-          try {
-            await orglet.call('discardWorkspaceReview', { taskId: detail.task.id, runId: diffRun.id });
-            setDiffRun(undefined);
-            toast(t('Đã bỏ thay đổi. Thư mục của bạn không đổi.'), 'success');
-          } finally { setDeciding(false); }
-        });
-      });
-    },
-  } : undefined;
+    <ChangedFilesLine key={run.id} summary={summary} review={review} restored={restored} workerName={named(run) ? run.snapshot.worker.name : undefined} onOpen={() => diff.open(run)} />);
   // One line per command that kept a failed run's changes out of the folder (COD-270); a crew member's line is named.
   const blockedLinesOf = (runs: readonly Run[]) => runs.flatMap(run => run.status === 'failed' && run.errorCode === 'hand_in_blocked'
     ? (run.blockedHandIn?.commands ?? []).map(command => <BlockedCommandLine key={command.processId} command={command}
@@ -632,7 +563,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         </div>;
       })}
     </div>
-    {diffRun && <DiffDialog taskId={detail.task.id} run={diffRun} review={diffReview} onClose={() => setDiffRun(undefined)} />}
+    {diff.dialog}
     {outputCommand && <CommandOutputDialog taskId={detail.task.id} command={outputCommand} onClose={() => setOutputCommand(undefined)} />}
     {savedReport && <ReportDocument artifact={savedReport} author={detail.runs.find(run => run.id === savedReport.runId)} detail={detail} open onClose={() => setSavedReportId(undefined)} busy={busy} action={action} showSources={showSources}
       actions={<ArtifactActions artifactId={savedReport.id} about={tMessage(savedReport.report.title)} action={action} />} />}

@@ -115,7 +115,7 @@ export function lastRunOutcome(task: Pick<Task, 'id' | 'status'>, heldForReview:
 }
 /** Which screen of the Routines dialog is showing; the dialog title renders it as a breadcrumb. */
 export type RoutineView = { editing: false } | { editing: true; routine?: Routine };
-export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack, onDirty }: { workspace: Workspace; draft?: TaskInput; openTask: (id: string) => void; view: RoutineView; onView: (view: RoutineView) => void; onBack: () => void; onDirty: (dirty: boolean) => void }) {
+export function RoutinesPanel({ workspace, routines = workspace.routines, draft, openTask, view, onView, onBack, onDirty }: { workspace: Workspace; /** The schedules to list; a chat's Schedules view passes only its orglet's or crew's (COD-355). */ routines?: readonly Routine[]; draft?: TaskInput; openTask: (id: string) => void; view: RoutineView; onView: (view: RoutineView) => void; onBack: () => void; onDirty: (dirty: boolean) => void }) {
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const action = async (fn: () => Promise<unknown>) => { setBusy(true); setError(''); try { await fn(); } catch (err) { setError((err as Error).message); } finally { setBusy(false); } };
   if (view.editing) return <RoutineEditor key={view.routine?.id ?? 'new'} routine={view.routine} draft={view.routine ? undefined : draft} workspace={workspace} saved={() => { onDirty(false); onView({ editing: false }); }} back={onBack} onDirty={onDirty} />;
@@ -149,15 +149,15 @@ export function RoutinesPanel({ workspace, draft, openTask, view, onView, onBack
     }
     return newest;
   };
-  const shownOnCard = workspace.routines.some(item => item.notice && tMessage(item.notice.reason) === error);
+  const shownOnCard = routines.some(item => item.notice && tMessage(item.notice.reason) === error);
   const deleteSchedule = async (item: Routine) => {
     await orglet.call('deleteRoutine', { id: item.id });
     toast(t('Đã xóa lịch'), 'success', item.name);
   };
   return <div className="form">
-          {!workspace.routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p></div>}
+          {!routines.length && <div className="routine-empty"><CalendarClock size={28} aria-hidden="true" /><p>{t('Chưa có lịch.')}</p><p className="muted">{t('Tạo một lịch, hoặc viết brief rồi chọn “Lên lịch cho tin này”.')}</p></div>}
     <div className="routine-list">
-      {workspace.routines.map(item => {
+      {routines.map(item => {
         const trigger = triggerOf(item);
         const TriggerIcon = TRIGGER_ICONS[trigger.kind];
         const summary = triggerSummary(item);
