@@ -457,6 +457,7 @@ export const en: Dictionary = {
   'Check đã đánh giá cần nguồn được cung cấp cho lần chạy.': 'An assessed check needs sources provided to the run.',
   'Lệnh được trích chưa kết thúc, không thuộc lần chạy này hoặc không thoát với mã 0.': 'A cited command had not finished, belonged to another run, or did not exit with code 0.',
   'Check dựa trên trang web hoặc hiểu biết của model, không có nguồn đính kèm để trích dẫn.': 'Judged from web pages or the model’s own knowledge; no attached source to cite.',
+  'Check không có nguồn đính kèm để trích dẫn.': 'No attached source to cite for this check.',
   'Kết quả công cụ workspace chưa có mã bằng chứng để trích dẫn trong báo cáo.': 'The workspace tool output has no evidence ID to cite in the report yet.',
   'Check tham chiếu tiến trình chưa hoàn tất hoặc không khớp kết quả.': 'The check cites a process that has not completed or whose result does not match.',
   'Check tham chiếu tiến trình chưa được cung cấp cho lần chạy.': 'The check cites a process not provided to this run.',
