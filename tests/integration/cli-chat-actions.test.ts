@@ -293,6 +293,9 @@ function actionClient() {
     members: notUsed,
     rename: notUsed,
     archive: notUsed,
+    schedules: notUsed,
+    enableSchedule: notUsed,
+    runSchedule: notUsed,
   };
   const client: ChatClient = {
     list: async () => list,

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { RunActivity } from '../shared/run-activity';
 import { FORWARD_NOTE_CHARS, MAX_FORWARD_TARGETS } from '../shared/forward';
 import { Reaction } from '../shared/message-interactions';
+import { ClockTime, EveryHours, MAX_DAILY_CAP_MICROS, ScheduleFrequency } from '../shared/schedule';
 import { CrewPatch, ManagementTarget, OrgletPatch } from './management';
 
 /**
@@ -134,6 +135,31 @@ export const CliRequest = z.discriminatedUnion('op', [
   }).strict(),
   z.object({ op: z.literal('archive-entity'), token: CliToken, kind: z.enum(['worker', 'team']), name: ChatName, archived: z.boolean() }).strict(),
   z.object({ op: z.literal('template'), token: CliToken, templateId: z.enum(TEMPLATE_IDS), provider: z.enum(['demo', 'openai']) }).strict(),
+  z.object({ op: z.literal('schedules'), token: CliToken }).strict(),
+  z.object({ op: z.literal('schedule-enable'), token: CliToken, schedule: ScheduleName, enabled: z.boolean() }).strict(),
+  z.object({ op: z.literal('schedule-delete'), token: CliToken, schedule: ScheduleName, confirmName: ScheduleName }).strict(),
+  /**
+   * Creates a schedule, or with `schedule` edits that one; only these fields. No permission, browser, desktop, folder,
+   * folder trigger, source or provider field exists here: the app takes the providers from the orglet or crew and
+   * refuses ones not already allowed in Settings.
+   */
+  z.object({
+    op: z.literal('schedule-save'),
+    token: CliToken,
+    schedule: ScheduleName.optional(),
+    name: ScheduleName.optional(),
+    target: ChatName.optional(),
+    brief: Message.optional(),
+    frequency: ScheduleFrequency.optional(),
+    time: ClockTime.optional(),
+    weekday: z.number().int().min(0).max(6).optional(),
+    everyHours: EveryHours.optional(),
+    timeZone: z.string().trim().min(1).max(100).optional(),
+    budgetMicros: z.number().int().min(1000).max(100_000_000).optional(),
+    dailyCapMicros: z.number().int().min(1000).max(MAX_DAILY_CAP_MICROS).optional(),
+    trigger: z.enum(['schedule', 'called']).optional(),
+    enabled: z.boolean().optional(),
+  }).strict(),
   z.object({ op: z.literal('open'), token: CliToken, to: ChatName.optional() }).strict(),
   z.object({
     op: z.literal('run'),
@@ -253,6 +279,26 @@ export type MembersValue = { taskId: string; names: string[] };
 export type ChatChangeValue = { taskId: string; name: string; change: ChatChange; title?: string };
 export type ArchiveEntityValue = { kind: ChatKind; id: string; name: string; archived: boolean };
 export type TemplateValue = { id: string; name: string; members: string[] };
+/** One schedule as `orglet schedules` lists it (COD-354); money is integer micros, as the app keeps it. */
+export type CliScheduleRow = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  target: string;
+  trigger: 'schedule' | 'folder' | 'called';
+  frequency: 'daily' | 'weekdays' | 'weekly' | 'hours';
+  time: string;
+  weekday: number;
+  everyHours?: number;
+  timeZone: string;
+  nextDueAt: string;
+  budgetMicros: number;
+  dailyCapMicros?: number;
+  runsToday?: number;
+  spentTodayMicros?: number;
+};
+export type SchedulesValue = { schedules: CliScheduleRow[] };
+export type ScheduleValue = { schedule: CliScheduleRow };
 export type OpenValue = { chat?: CliChat };
 /** The schedule `run` started and the chat its run opened. */
 export type RunValue = { schedule: { id: string; name: string }; taskId: string };

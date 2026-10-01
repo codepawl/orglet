@@ -1,6 +1,7 @@
 import { callStartingApp } from './client';
 import { DEFAULT_WAIT_SECONDS, type BringValue, type ChatChangeValue, type ChatControl, type ChatsValue, type CliErrorCode, type CliRequestBody, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type SendValue } from './protocol';
 import type { Reaction } from '../shared/message-interactions';
+import type { RunValue, SchedulesValue, ScheduleValue } from './protocol';
 import type { CliProgressFrame } from './protocol';
 import { ManagementCatalog, ManagementResult, type ManagementClient } from './management';
 
@@ -38,6 +39,9 @@ export type ChatActionClient = {
   members: (chat: string, names: string[]) => Promise<MembersValue>;
   rename: (to: string, title: string) => Promise<ChatChangeValue>;
   archive: (to: string) => Promise<ChatChangeValue>;
+  schedules: () => Promise<SchedulesValue>;
+  enableSchedule: (schedule: string, enabled: boolean) => Promise<ScheduleValue>;
+  runSchedule: (schedule: string) => Promise<RunValue>;
 };
 
 /** The app answered but said no: an unknown name, a chat with no conversation yet, a refused request. */
@@ -92,6 +96,9 @@ export function appChatClient(userData: string, executable: string | undefined):
       members: (chat, names) => request<MembersValue>({ op: 'members', chat, names }),
       rename: (to, title) => request<ChatChangeValue>({ op: 'chat-change', ...chatFields(to), change: 'rename', title }),
       archive: to => request<ChatChangeValue>({ op: 'chat-change', ...chatFields(to), change: 'archive' }),
+      schedules: () => request<SchedulesValue>({ op: 'schedules' }),
+      enableSchedule: (schedule, enabled) => request<ScheduleValue>({ op: 'schedule-enable', schedule, enabled }),
+      runSchedule: schedule => request<RunValue>({ op: 'run', schedule, files: [] }),
     },
     management: {
       catalog: async () => ManagementCatalog.parse(await request({ op: 'config' })),

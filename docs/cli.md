@@ -40,6 +40,8 @@ Leaving the terminal chat keeps the backend and any work running. To quit the ba
 | `orglet template <id> --provider <demo\|openai>` | Creates a crew from one of the app's templates |
 | `orglet open [--to <name>]` | Brings the Orglet window forward, and with `--to` opens that chat |
 | `orglet run "<schedule>" [--file <path>]` | Starts a schedule now, with the files you attach. See [run](#run). |
+| `orglet schedules` | Lists schedules with their timing and limits |
+| `orglet schedule add\|edit\|on\|off\|delete "<name>"` | Creates, changes, switches or deletes a schedule. See [Schedules](#schedules). |
 
 It can create, edit and remove orglets and crews, and act on a chat's messages and its latest turn. Some things stay in the desktop on purpose; see [What stays in the desktop](#what-stays-in-the-desktop). The app refuses any other request, even one that carries the right token.
 
@@ -227,6 +229,8 @@ Set `ORGLET_REDUCED_MOTION=1` before starting chat to hold the working text stil
 | `/group <name, …> -- <message>` | Starts a group chat of those orglets |
 | `/members <name, …>` | In a group chat, changes who its messages go to |
 | `/rename <title>`, `/archive` | Renames or archives the open chat |
+| `/schedules` | Lists schedules |
+| `/schedule on\|off\|run <name>` | Switches a schedule on or off, or starts it now |
 | `/new [orglet|crew]` | Creates an orglet or crew in a keyboard form |
 | `/edit [name]` | Edits the current chat’s orglet or crew; without a current chat, choose an entry |
 | `/delete [name]` | Removes an orglet or crew after exact-name confirmation |
@@ -406,7 +410,7 @@ Starts one of the app's schedules now: its brief goes to its orglet or crew, wit
 
 Any schedule can be started this way. A schedule set to **Only when called** runs in no other way. The schedule must:
 
-- exist. `run` cannot create one, and names match the way chat names do.
+- exist. `run` cannot create one (`orglet schedule add` does), and names match the way chat names do.
 - be switched on. A schedule that is off is refused with a message saying so.
 - be approved as it is now. If its orglet, crew, skill, model or trigger changed since it was saved, the app refuses and asks you to save it again, the same as for a scheduled run.
 - have finished its previous run. A run still going or waiting for you is refused.
@@ -417,6 +421,34 @@ Any schedule can be started this way. A schedule set to **Only when called** run
 | `--json` | Print the schedule and the new chat's id as JSON |
 
 Like every command, `run` needs the local backend; it starts that backend in the background when it is not running. Nothing is queued while the backend is stopped, and nothing is replayed later.
+
+### Schedules
+
+```sh
+orglet schedules
+orglet schedule add "Morning review" --to Researcher --brief "Review yesterday's notes" --every weekdays --at 08:00 --budget 0.50
+orglet schedule edit "Morning review" --at 09:15 --daily-cap 2
+orglet schedule off "Morning review"
+orglet schedule delete "Morning review" --confirm "Morning review"
+```
+
+`schedules` lists each schedule with whether it is on, who runs it, when, in which time zone, and its limits. `schedule add` creates one, `edit` changes only the options given, `on` and `off` switch it the way the card's switch does, and `delete` removes it after its exact name; its past runs stay as chats.
+
+| Option | Meaning |
+|---|---|
+| `--to <name>` | The orglet or crew that runs it. Required for `add`. |
+| `--brief "<text>"` | What each run is asked. Required for `add`. |
+| `--every <when>` | `daily`, `weekdays`, `weekly`, or every few hours as `1h`, `2h`, `3h`, `4h`, `6h`, `8h` or `12h`. Required for `add`. |
+| `--at <HH:MM>` | When it runs; for hours, the first run of the day. Required for `add`. |
+| `--day <day>` | The weekday for `weekly`: `mon` to `sun`. Monday by default. |
+| `--timezone <zone>` | A time zone such as `Asia/Ho_Chi_Minh`. This computer's by default. |
+| `--budget <USD>` | The limit per run, such as `0.50`. Required for `add`. |
+| `--daily-cap <USD>` | The most its runs may cost in one day; at least the per-run limit. |
+| `--called` | Runs only when `orglet run` calls it (**Only when called**). |
+| `--off` | With `add`, creates it switched off. |
+| `--rename "<name>"` | With `edit`, a new name. |
+
+A schedule made in the terminal has the name, orglet or crew, brief, timing and limits, and nothing else: no tool permissions, browser, desktop programs, sources, watched folder or working folder. Those are trust decisions, so they are set in the app. Its runs send the brief to the providers of the orglet or crew while you are away, so those providers must already be in the app's **Settings → Allowed providers**; otherwise the command refuses and says which ones. Demo orglets need nothing. An edit keeps everything the app set, and moving a schedule that has any of those settings to another orglet or crew is refused. The app saves the schedule as approved, as the desktop's Save does.
 
 ### Names
 
@@ -444,6 +476,7 @@ Messages that come from the app are in the app's language.
 - `send` goes through the same steps as the message box: attached files are imported by the app, then the chat's live conversation takes the message or a new one starts. The app then checks the chat until the turn stops.
 - `react`, `forward`, `control` and `answer` name a chat by its orglet or crew and a message by its number. The app turns the number into the message id from the chat's saved history, then calls the same core command as the desktop's button: `setMessageReaction`, `forwardMessage`, `cancel`, `pause`, `resume`, `retry`, `reviseTask` with `continueFrom`, and `answerDecision`. `answer` refuses a pending MCP approval before calling anything. A wait ends early when the chat shows a card only the desktop answers.
 - `chats`, `side-thread`, `bring`, `group`, `members`, `chat-change`, `archive-entity` and `template` call `startSideThread`, `bringIntoMainChat`, `createTask` with several orglets, `updateTask`, `renameTask`, `archiveTask`, `deleteTask`, `archiveEntity` and `createTemplate`. None of them carries a permission, folder, browser or MCP field; the protocol refuses a request that adds one.
+- `schedules`, `schedule-enable`, `schedule-delete` and `schedule-save` read the workspace's routines and call `saveRoutine` and `deleteRoutine`. `schedule-save` has fields for the name, target, brief, timing, limits and a clock or called trigger only; the app fills consent and provider scopes from the target's providers, and refuses providers not in **Settings → Allowed providers** (`providerConsent`). An edit sends the routine's own task back with only the given fields changed.
 - `run` names a schedule and carries file paths, nothing else. The app imports the files the way `send` does, then starts the schedule through the same checks a scheduled run passes. The window's **Run now** (`runRoutineNow`) starts a schedule through the same checks too, but it names the schedule and nothing else, so no file reaches a schedule from the window; only `run` attaches files by path.
 - Chat in the terminal uses `list`, `send`, `read`, `open`, the chat actions and the configuration operations; its waiting `send` sets `progress: true`. Progress frames contain validated IDs, authors, timestamps and bounded lifecycle details, with up to 500 steps and a visible omission count. The core observes model requests and journaled tools; per-send listeners join only the captured input revision. Codex public summaries remain in memory, while private tool output, checkpoints and model working notes never enter the frames. Listeners detach when the wait ends or disconnects. Stopping the wait with Ctrl+C closes the connection, which ends the app's wait and leaves the turn running.
 - Configuration operations project an explicit editable whitelist, merge patches into the current core configuration, and compare revisions synchronously before mutation. Deletion compares both revision and name and uses the desktop’s removal guards. Comparison metadata is never stored in entity revisions.

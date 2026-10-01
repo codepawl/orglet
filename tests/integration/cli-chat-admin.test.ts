@@ -221,6 +221,10 @@ function adminClient() {
       calls.push(`archive ${to}`);
       return { taskId: sideId, name: 'Try again', change: 'archive' };
     },
+    // Schedules have their own tests in cli-schedules.test.ts.
+    schedules: notUsed,
+    enableSchedule: notUsed,
+    runSchedule: notUsed,
   };
   const client: ChatClient = {
     list: async () => list,
