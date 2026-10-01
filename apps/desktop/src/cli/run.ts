@@ -6,10 +6,10 @@ import { runManagementCommand } from './management-command';
 import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
-import { formatList, formatOpen, formatRead, formatRun, formatSend, formatStatus } from './output';
+import { formatControl, formatForward, formatList, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTurns } from './output';
 import { entriesFromList, findChat } from './picker';
-import { renderAnswers, styledList, styledStatus, type Layout } from './pretty';
-import { EXIT_CODES, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ListValue, type OpenValue, type ReadValue, type RunValue, type SendValue, type StatusValue } from './protocol';
+import { renderAnswers, renderTurns, styledList, styledStatus, type Layout } from './pretty';
+import { EXIT_CODES, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue } from './protocol';
 import { NEUTRAL_COLOR, type ColorMode } from './terminal';
 import { NO_WAITING, WaitingFace, type Waiting } from './waiting';
 
@@ -57,7 +57,7 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     case 'status': return { op: 'status' };
     case 'list': return { op: 'list' };
     case 'config': return { op: 'config' };
-    case 'read': return { op: 'read', to: command.to };
+    case 'read': return { op: 'read', to: command.to, ...(command.turns ? { turns: command.turns } : {}) };
     case 'open': return { op: 'open', ...(command.to ? { to: command.to } : {}) };
     case 'send': return {
       op: 'send',
@@ -67,7 +67,18 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
       files: command.files.map(file => resolve(workingDirectory, file)),
       wait: command.wait,
       timeoutSeconds: command.timeoutSeconds,
+      ...(command.replyTo ? { replyTo: command.replyTo } : {}),
     };
+    case 'react': return { op: 'react', to: command.to, emoji: command.emoji, active: command.active, ...(command.message ? { message: command.message } : {}) };
+    case 'forward': return {
+      op: 'forward',
+      to: command.to,
+      targets: command.targets,
+      ...(command.message ? { message: command.message } : {}),
+      ...(command.note ? { note: command.note } : {}),
+    };
+    case 'control': return { op: 'control', to: command.to, action: command.action, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
+    case 'answer': return { op: 'answer', to: command.to, answer: command.answer, wait: command.wait, timeoutSeconds: command.timeoutSeconds };
     case 'run': return {
       op: 'run',
       schedule: command.schedule,
@@ -80,8 +91,20 @@ function printJson(output: Output, value: unknown): void {
   output.stdout(JSON.stringify(value, null, 2));
 }
 
+/**
+ * Whether a turn the command waited for ended with an answer. A question or a desktop-only approval it stopped on is
+ * said on standard error, with what to run next (COD-354).
+ */
 function sendExitCode(value: SendValue, output: Output, json: boolean): number {
   if (!value.waited) return EXIT_CODES.ok;
+  if (value.needsDesktop) {
+    if (!json) output.stderr(t('{0} đang chờ bạn duyệt một bước trong app. Mở bằng: orglet open --to "{1}"', value.chat.name, value.chat.name));
+    return EXIT_CODES.failure;
+  }
+  if (value.question) {
+    if (!json) output.stderr(formatQuestion(value.question, value.chat.name));
+    return EXIT_CODES.failure;
+  }
   const readLater = `orglet read --to "${value.chat.name}"`;
   if (!value.finished) {
     if (!json) output.stderr(`${value.chat.name} is still working. Read the answer later with: ${readLater}`);
@@ -97,6 +120,9 @@ function sendExitCode(value: SendValue, output: Output, json: boolean): number {
 }
 
 function readExitCode(value: ReadValue, output: Output, json: boolean): number {
+  if (!json && value.question) output.stderr(formatQuestion(value.question, value.chat.name));
+  if (!json && value.needsDesktop) output.stderr(t('{0} đang chờ bạn duyệt một bước trong app. Mở bằng: orglet open --to "{1}"', value.chat.name, value.chat.name));
+  if (value.turns) return EXIT_CODES.ok;
   if (value.answers.length === 0) {
     if (!json) output.stderr(`No answer in the chat with ${value.chat.name} yet.`);
     return EXIT_CODES.failure;
@@ -137,7 +163,7 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
       return EXIT_CODES.ok;
     case 'read': {
       const readValue = value as ReadValue;
-      if (!command.json && readValue.answers.length) output.stdout(styled ? styledAnswers(readValue.answers, readValue.chat, layout) : formatRead(readValue));
+      if (!command.json) printRead(readValue, output, layout);
       return readExitCode(readValue, output, command.json);
     }
     case 'send': {
@@ -147,7 +173,36 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
       if (!command.json && printable) output.stdout(styled && answered ? styledAnswers(sendValue.answers, sendValue.chat, layout) : formatSend(sendValue));
       return sendExitCode(sendValue, output, command.json);
     }
+    case 'react':
+      if (!command.json) output.stdout(formatReact(value as ReactValue));
+      return EXIT_CODES.ok;
+    case 'forward': {
+      const forwardValue = value as ForwardValue;
+      if (!command.json) output.stdout(formatForward(forwardValue));
+      return forwardValue.failed.length ? EXIT_CODES.failure : EXIT_CODES.ok;
+    }
+    case 'control':
+    case 'answer': return reportControl(command.json, value as ControlValue, output, layout);
   }
+}
+
+function printRead(value: ReadValue, output: Output, layout: Layout): void {
+  const styled = layout.mode !== 'none';
+  if (value.turns) {
+    if (value.earlier) output.stdout(t('… {0} lượt trước đó. Tăng --turns để xem thêm.', value.earlier));
+    if (value.turns.length) output.stdout(styled ? renderTurns(value.turns, { ...layout, fallbackColor: value.chat.color }).join('\n') : formatTurns(value.turns));
+    return;
+  }
+  if (value.answers.length) output.stdout(styled ? styledAnswers(value.answers, value.chat, layout) : formatRead(value));
+}
+
+/** A stop or pause says what it did; resume, retry, continue and answer print the turn they waited for, like `send`. */
+function reportControl(json: boolean, value: ControlValue, output: Output, layout: Layout): number {
+  const stopping = value.action === 'stop' || value.action === 'pause';
+  const answered = value.waited && value.answers.length > 0;
+  if (!json && (stopping || !value.waited || answered)) output.stdout(layout.mode !== 'none' && answered ? styledAnswers(value.answers, value.chat, layout) : formatControl(value));
+  if (stopping) return EXIT_CODES.ok;
+  return sendExitCode(value, output, json);
 }
 
 function reportFailure(response: Extract<CliResponse, { ok: false }>, json: boolean, output: Output): number {
@@ -176,12 +231,21 @@ async function sendWaiting(to: string, terminal: StatusTerminal, userData: strin
   return new WaitingFace({ write: terminal.write, color, mode: terminal.mode, label: `${name} is working`, hint: 'Ctrl+C stops waiting', columns: terminal.columns });
 }
 
+/** The chat a command waits on for an answer, if it does: `send`, `answer`, and resume, retry and continue. */
+function waitedChat(command: RequestCommand): string | undefined {
+  if (command.kind === 'send' || command.kind === 'answer') return command.wait ? command.to : undefined;
+  if (command.kind !== 'control') return undefined;
+  const startsTurn = command.action === 'resume' || command.action === 'retry' || command.action === 'continue';
+  return startsTurn && command.wait ? command.to : undefined;
+}
+
 async function requestWithWaiting(command: RequestCommand, request: CliRequestBody, output: Output, userData: string, executable: string | undefined, signal?: AbortSignal): Promise<CliResponse> {
-  const showsFace = command.kind === 'send' && command.wait && !command.json && output.statusTerminal !== undefined;
+  const chatName = waitedChat(command);
+  const showsFace = chatName !== undefined && !command.json && output.statusTerminal !== undefined;
   const releaseInterrupt = showsFace ? output.statusTerminal!.catchInterrupt?.() : undefined;
   let waiting: Waiting = NO_WAITING;
   try {
-    if (showsFace) waiting = await sendWaiting(command.to, output.statusTerminal!, userData, executable, signal);
+    if (showsFace) waiting = await sendWaiting(chatName, output.statusTerminal!, userData, executable, signal);
     waiting.start();
     return await callStartingApp(userData, request, executable, signal);
   } finally {
@@ -191,8 +255,9 @@ async function requestWithWaiting(command: RequestCommand, request: CliRequestBo
 }
 
 function reportStopped(command: RequestCommand, output: Output): number {
-  if (command.kind === 'send') {
-    output.stderr(`Stopped waiting. ${command.to} keeps working in the app. Read the answer later with: orglet read --to "${command.to}"`);
+  const chatName = waitedChat(command);
+  if (chatName !== undefined) {
+    output.stderr(`Stopped waiting. ${chatName} keeps working in the app. Read the answer later with: orglet read --to "${chatName}"`);
   } else {
     output.stderr('Stopped.');
   }

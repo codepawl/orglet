@@ -1,4 +1,5 @@
-import type { CliAnswer, ListValue, OpenValue, ReadValue, RunValue, SendValue, StatusValue } from './protocol';
+import type { CliAnswer, CliQuestion, CliTurn, ControlValue, ForwardValue, ListValue, OpenValue, ReactValue, ReadValue, RunValue, SendValue, StatusValue } from './protocol';
+import { t } from './text';
 
 /** Plain text for a person at a terminal; `--json` prints the values as they came instead (COD-234). */
 
@@ -49,4 +50,38 @@ export function formatOpen(value: OpenValue): string {
 
 export function formatRun(value: RunValue): string {
   return `Started ${value.schedule.name}. Its run is in the app's sidebar, under the orglet or crew it runs for.`;
+}
+
+/** Past turns in plain text: each numbered message the person sent, then every numbered answer to it (COD-354). */
+export function formatTurns(turns: readonly CliTurn[]): string {
+  return turns.map(turn => {
+    const context = turn.replyTo ? ` (${t('trả lời {0}', turn.replyTo)})` : turn.forwardedFrom ? ` (${t('chuyển tiếp từ {0}', turn.forwardedFrom)})` : '';
+    const person = `#${turn.number} ${t('Bạn')}${context}:\n${turn.text}`;
+    const answers = turn.answers.map(answer => `#${answer.ref} ${answer.name}:\n${answer.text}`);
+    return [person, ...answers].join('\n\n');
+  }).join('\n\n');
+}
+
+/** The question a turn stopped on, its numbered choices and how to answer it from here. */
+export function formatQuestion(question: CliQuestion, chatName: string): string {
+  const options = question.options.map((option, index) => `  ${index + 1}. ${option}`);
+  return [question.question, ...options, t('Trả lời bằng: orglet answer <số hoặc câu trả lời> --to "{0}"', chatName)].join('\n');
+}
+
+export function formatReact(value: ReactValue): string {
+  return value.active ? t('Đã thả {0} vào #{1}.', value.emoji, value.ref) : t('Đã gỡ {0} khỏi #{1}.', value.emoji, value.ref);
+}
+
+export function formatForward(value: ForwardValue): string {
+  const sent = value.sent.map(item => t('Đã chuyển tiếp tới {0}.', item.name));
+  const failed = value.failed.map(item => t('Không chuyển tiếp được tới {0}: {1}', item.name, item.error));
+  return [...sent, ...failed].join('\n');
+}
+
+/** What a stop or pause did; a control that waited prints its answers the way `send` does instead. */
+export function formatControl(value: ControlValue): string {
+  if (value.action === 'stop') return t('Đã dừng lượt đang chạy với {0}.', value.chat.name);
+  if (value.action === 'pause') return t('{0} sẽ tạm dừng sau bước đang làm.', value.chat.name);
+  if (!value.waited) return t('Đã gửi tới {0}. Đọc câu trả lời sau bằng orglet read.', value.chat.name);
+  return formatAnswers(value.answers, value.chat.kind === 'team');
 }
