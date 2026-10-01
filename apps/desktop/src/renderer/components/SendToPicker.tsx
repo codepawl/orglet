@@ -11,7 +11,7 @@ import { t } from '../i18n';
 const GROUP_TITLES: Record<SendToOption['group'], () => string> = {
   recent: () => t('Gần đây'),
   orglets: () => t('Tí'),
-  crews: () => t('Hội'),
+  crews: () => t('Kênh'),
 };
 
 function OptionFaces({ option }: { option: SendToOption }) {
@@ -74,7 +74,7 @@ export function SendToPicker({ open, count, names, options, onChoose, onClose }:
         </div>
         <div className="send-to-search">
           <Search size={16} aria-hidden="true" />
-          <input autoFocus role="combobox" aria-expanded={shown.length > 0} aria-controls="send-to-options" aria-activedescendant={activeOption ? `send-to-${activeOption.key}` : undefined} aria-autocomplete="list" aria-label={t('Tìm Tí, hội hoặc cuộc trò chuyện')} placeholder={t('Tìm Tí, hội hoặc cuộc trò chuyện')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+          <input autoFocus role="combobox" aria-expanded={shown.length > 0} aria-controls="send-to-options" aria-activedescendant={activeOption ? `send-to-${activeOption.key}` : undefined} aria-autocomplete="list" aria-label={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} placeholder={t('Tìm Tí, kênh hoặc cuộc trò chuyện')} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
             if (event.key === 'ArrowDown') { event.preventDefault(); setActive(index => Math.min(index + 1, shown.length - 1)); }
             if (event.key === 'ArrowUp') { event.preventDefault(); setActive(index => Math.max(index - 1, 0)); }
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); choose(active); }
@@ -99,7 +99,7 @@ export function SendToPicker({ open, count, names, options, onChoose, onClose }:
             </li>;
           })}
         </ul>
-        {!shown.length && <p className="send-to-empty">{options.length ? t('Không tìm thấy Tí hay hội nào.') : t('Chưa có Tí nào.')}</p>}
+        {!shown.length && <p className="send-to-empty">{options.length ? t('Không tìm thấy Tí hay kênh nào.') : t('Chưa có Tí nào.')}</p>}
         <p className="send-to-note">{t('Tệp sẽ nằm trong ô soạn tin. Chưa gửi gì cho tới khi bạn bấm Gửi.')}</p>
       </Dialog.Content>
     </Dialog.Portal>

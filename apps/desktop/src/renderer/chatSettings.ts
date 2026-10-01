@@ -5,7 +5,7 @@ import type { SelectOption } from './components/Select';
 export type ChatSettingsTarget = { kind: 'worker'; worker: Worker } | { kind: 'team'; team: Team };
 
 /**
- * Whose settings the chat header's ⋯ opens under "Thiết lập Tí" / "Thiết lập hội" (COD-293). The header used to offer
+ * Whose settings the chat header's ⋯ opens under "Thiết lập Tí" (COD-293); a channel, a crew's too since COD-369, opens "Thiết lập kênh". The header used to offer
  * only the chat's own settings (name, who it is assigned to, its limit), so a newcomer looking for the orglet's model
  * found a task form. An open chat is read from its row: a crew's chat opens the crew, a chat with one orglet (its main
  * chat or a side thread) opens that orglet, and a chat several orglets share opens neither. An empty chat is read from

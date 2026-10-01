@@ -63,7 +63,7 @@ export class HarnessLimitError extends HarnessError {
  */
 export class HarnessBudgetError extends HarnessError {
   constructor(public readonly limitUsd: number, public readonly costUsd: number | null) {
-    super(`Claude Code dừng vì đã dùng hết phần còn lại của giới hạn mỗi task ($${limitUsd.toFixed(2)}). Nâng Giới hạn mỗi task của hội hoặc Tí, rồi thử lại.`);
+    super(`Claude Code dừng vì đã dùng hết phần còn lại của giới hạn mỗi task ($${limitUsd.toFixed(2)}). Nâng Giới hạn mỗi task của kênh hoặc Tí, rồi thử lại.`);
   }
 }
 export class HarnessTerminationError extends HarnessError {

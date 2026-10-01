@@ -6,7 +6,7 @@ Two ways into Orglet from outside the app, both on Windows: File Explorer's **Se
 
 1. In File Explorer, select one or more files.
 2. Right-click and choose **Send to → Orglet**. On Windows 11 the **Send to** menu is under **Show more options** (or press Shift+F10).
-3. Orglet comes forward with **Send N files to…**. It lists your recent chats first, then your orglets and your crews, each with their faces. Type to narrow the list.
+3. Orglet comes forward with **Send N files to…**. It lists your recent chats first, then your orglets and your channels, each with their faces. Type to narrow the list.
 4. Pick one. That chat opens with the files in its message box, as if you had picked them with **+ → Files**.
 5. Write your message and press **Send**.
 
@@ -25,12 +25,12 @@ A link can open a chat, or open it with text already in the message box.
 | Link | What it does |
 |---|---|
 | `orglet://chat/Researcher` | Opens the chat with Researcher |
-| `orglet://chat/<id>` | The same, by the orglet's or crew's id |
+| `orglet://chat/<id>` | The same, by the orglet's id, or the id of a channel where a lead splits the work |
 | `orglet://new?to=Researcher&text=Summarise%20this` | Opens the chat with Researcher and puts "Summarise this" in the message box |
 
 Names match the way `orglet --to` matches them: case does not matter, and a unique start of a name is enough. Write a space as `%20` or `+`. If the message box already has a draft, the link's text goes after it. If the chat's conversation starts somewhere else before you send, the text moves with it, the same way files do.
 
-A link can only open a chat and prefill a message. It cannot send, change a setting, grant a folder or a permission, or delete anything. A link Orglet does not understand, a name that matches no orglet or crew, or text longer than 4,000 characters shows a short notice and does nothing else.
+A link can only open a chat and prefill a message. It cannot send, change a setting, grant a folder or a permission, or delete anything. A link Orglet does not understand, a name that matches no orglet or channel, or text longer than 4,000 characters shows a short notice and does nothing else.
 
 ## How it works
 

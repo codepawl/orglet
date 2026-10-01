@@ -146,16 +146,16 @@ try {
   await page.screenshot({ path: join(output, 'desktop-about.png') });
   await page.keyboard.press('Escape');
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
-  await page.getByRole('button', { name: 'Research Review', exact: true }).first().waitFor();
-  await page.getByRole('button', { name: 'Research Review', exact: true }).first().click();
+  await page.getByRole('button', { name: '#Research Review', exact: true }).first().waitFor();
+  await page.getByRole('button', { name: '#Research Review', exact: true }).first().click();
   await page.getByRole('heading', { name: 'Đang nhắn với Research Review' }).waitFor();
   // A crew on Demo offers the way to a real model under its message box (COD-293); its own settings lead the
   // header's menu.
   await page.locator('.demo-note').getByRole('button', { name: 'Kết nối model', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Tùy chọn cuộc trò chuyện', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Thiết lập hội', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Thiết lập hội' }).waitFor();
-  assert.equal(await page.getByLabel('Tên hội', { exact: true }).inputValue(), 'Research Review');
+  await page.getByRole('menuitem', { name: 'Thiết lập kênh', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Thiết lập kênh' }).waitFor();
+  assert.equal(await page.getByLabel('Tên kênh', { exact: true }).inputValue(), 'Research Review');
   await page.keyboard.press('Escape');
   await page.getByRole('textbox', { name: 'Tin nhắn' }).fill('Desktop smoke: team synthesis');
   await page.getByRole('button', { name: 'Gửi tin nhắn', exact: true }).click();

@@ -124,8 +124,8 @@ describe('the chat a link names', () => {
   });
 
   it('gives a calm message for an unknown or ambiguous name', () => {
-    expect(resolveLinkChat('Accountant', chats)).toEqual({ ok: false, message: 'Không có Tí hay hội nào tên "Accountant". Có: Researcher, Reviewer, Review crew.' });
+    expect(resolveLinkChat('Accountant', chats)).toEqual({ ok: false, message: 'Không có Tí hay kênh nào tên "Accountant". Có: Researcher, Reviewer, Review crew.' });
     expect(resolveLinkChat('Re', chats)).toEqual({ ok: false, message: '"Re" khớp với nhiều tên: Researcher, Reviewer, Review crew. Gõ tên đầy đủ hơn.' });
-    expect(resolveLinkChat('Researcher', [])).toEqual({ ok: false, message: 'Chưa có Tí hay hội nào.' });
+    expect(resolveLinkChat('Researcher', [])).toEqual({ ok: false, message: 'Chưa có Tí hay kênh nào.' });
   });
 });

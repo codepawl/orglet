@@ -78,7 +78,7 @@ export function runningStatusLine(item: RunningItem, progress: RunProgressUpdate
     return runStepLine({ progress: progress?.progress, stage: item.stage, message: item.lastEvent, pausing: item.state === 'pausing' });
   }
   if (item.state === 'paused' && item.wait) return waitLine(item.wait);
-  if (item.state === 'paused') return item.pauseReason === 'shift' ? t('Tạm dừng vì hết giờ làm việc của hội') : t('Đã tạm dừng');
+  if (item.state === 'paused') return item.pauseReason === 'shift' ? t('Tạm dừng vì hết giờ làm việc của kênh') : t('Đã tạm dừng');
   return waitLine(item.wait ?? { kind: 'starting' });
 }
 
@@ -86,7 +86,7 @@ export function runningStatusLine(item: RunningItem, progress: RunProgressUpdate
 export function waitLine(wait: RunWaitReason): string {
   switch (wait.kind) {
     case 'provider': return wait.ahead ? t('Chờ {0} · còn {1} lượt trước', [providerName(wait.provider), wait.ahead]) : t('Chờ {0} · đến lượt kế tiếp', [providerName(wait.provider)]);
-    case 'crew_slot': return wait.ahead ? t('Chờ lượt trong hội · còn {0} lượt trước', [wait.ahead]) : t('Chờ lượt trong hội · đến lượt kế tiếp');
+    case 'crew_slot': return wait.ahead ? t('Chờ lượt trong kênh · còn {0} lượt trước', [wait.ahead]) : t('Chờ lượt trong kênh · đến lượt kế tiếp');
     case 'group_turn': return wait.ahead ? t('Chờ đến lượt trả lời · còn {0} Tí trước', [wait.ahead]) : t('Chờ đến lượt trả lời · kế tiếp');
     case 'teammates': return t('Chờ kết quả của {0}', [wait.names.join(', ')]);
     case 'plan': return t('Chờ trưởng phòng phân việc');

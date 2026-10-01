@@ -500,10 +500,33 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The toolbar under the box (owner's reference, 2026-09-30): add at the left, the model or recipient and then the
    usage ring at the right, every control 28px and centred on one line. Its sides are the box's border plus padding,
    so the controls start and end where the box's own content does, in the pill and in the grown box alike. */
-.composer-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:28px; margin-top:6px; padding:0 6px; }
+.composer-toolbar { display:flex; align-items:center; gap:4px; min-height:28px; margin-top:6px; padding:0 6px; }
 .composer.expanded + .composer-toolbar { padding:0 8px; }
 .composer-leading { display:flex; align-items:center; flex-shrink:0; }
-.composer-toolbar-end { display:flex; align-items:center; justify-content:flex-end; gap:4px; min-width:0; }
+/* The approval mode beside the add button (COD-367): a quiet chip like the model's at the other end, 28px on the
+   row's centre line, its name cut with an ellipsis before the row would wrap. Hover tints, never a border or track. */
+.composer-toolbar .composer-mode { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:min(210px,38vw); height:28px; min-height:28px; padding:0 10px 0 8px; border:0; border-radius:999px; background:transparent; color:var(--muted); font-size:12px; font-weight:500; }
+.composer-toolbar .composer-mode:hover:not(:disabled),.composer-toolbar .composer-mode[aria-expanded=true] { background:var(--surface); color:var(--text); }
+.composer-toolbar .composer-mode svg { flex-shrink:0; }
+.composer-mode-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.composer-mode-chevron { color:var(--muted); }
+/* Its menu: a title, then one row per mode (icon, name over a one-line description, the check on the current one and
+   its number key), rows apart by spacing only. */
+.mode-menu { width:max-content; min-width:280px; max-width:min(340px,calc(100vw - 24px)); padding:6px; }
+.mode-menu-title { margin:0; padding:6px 10px 4px; font-size:12px; font-weight:500; color:var(--muted); }
+.mode-menu [role=menu] { display:flex; flex-direction:column; gap:2px; }
+.mode-option { display:flex; align-items:center; gap:10px; width:100%; padding:8px 10px; border:0; border-radius:8px; background:transparent; color:var(--text); text-align:left; }
+.mode-option:hover,.mode-option:focus-visible { background:var(--surface); }
+.mode-option[aria-disabled=true] { cursor:default; }
+.mode-option[aria-disabled=true] .mode-option-name,.mode-option[aria-disabled=true] .mode-option-icon { color:var(--muted); }
+.mode-option-icon { flex-shrink:0; color:var(--muted); }
+.mode-option-text { display:flex; flex-direction:column; gap:1px; min-width:0; flex:1; }
+.mode-option-name { font-size:14px; font-weight:500; }
+.mode-option-note { font-size:12px; color:var(--muted); }
+.mode-option-check { flex-shrink:0; color:var(--accent); visibility:hidden; }
+.mode-option[aria-checked=true] .mode-option-check { visibility:visible; }
+.mode-option-key { flex-shrink:0; min-width:18px; font:inherit; font-size:12px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
+.composer-toolbar-end { margin-left:auto; padding-left:4px; display:flex; align-items:center; justify-content:flex-end; gap:4px; min-width:0; }
 .composer-trailing { display:flex; align-items:center; min-width:0; max-width:min(220px,42vw); }
 .composer-toolbar .composer-add { width:28px; height:28px; min-height:28px; padding:0; }
 .composer>textarea { grid-area:input; display:block; width:100%; resize:none; min-height:36px; max-height:250px; border:0; outline:none; background:transparent; padding:7px 6px 7px 10px; font-size:inherit; line-height:22px; }
@@ -627,7 +650,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @media(prefers-reduced-motion:reduce) { :is(.person-message, .assistant-message) .message-actions .org-reaction-row { animation:none; } }
 /* A size container, so the island's label can be capped from the bar's width (`cqw` in `.live-island-label`)
    rather than from the island's own measured width, which would let a measurement of zero lock it at zero. */
-.thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) 0; container-type:inline-size; }
+/* The bar's bottom edge keeps the panel's inset from the card's rounded corner (the disclaimer line that used to sit
+   below it is gone, owner 2026-10-01), so the add button and the ring never sit in the curve. */
+.thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) var(--panel-inset); container-type:inline-size; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
 /* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,
    the shape people already know from other chat apps (user, 2026-09-19). Once a turn exists the thread takes
@@ -741,7 +766,7 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Attachment (Attachment.tsx): a card for one attached file — the kind's icon, the name, a line with the kind and
    size, and a remove button that keeps its place and only shows on hover or a visible focus, so nothing shifts when
    the pointer arrives. Same width for every card, so a strip of them reads as a row and not as a ragged line of tags. */
-/* A sent message's files: a row above the bubble, right-aligned with it and never wider, in the composer's card
+/* A sent message's files: a row after its text, in the composer's card size, never wider than the message column.
    size. Past that width the row scrolls sideways. The bottom padding is the scrollbar's own lane, so the bar runs
    under the cards instead of across them; a vertical wheel is left alone so it still scrolls the thread.
    The whole card is the button, so its inside is the row the card would otherwise be. */
@@ -759,7 +784,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .consent input[type=checkbox] { margin-top:3px; accent-color:var(--accent); }
 .consent .budget-label { align-items:center; }
 .budget-label input { width:95px; padding:5px 8px; border:1px solid var(--border); background:var(--bg); border-radius:8px; }
-.main-footer { text-align:center; color:var(--muted); font-size:11px; padding:10px var(--page-x) 12px; margin-top:auto; }
 .thread-scroll { flex:1; overflow:auto; min-height:0; scroll-behavior:auto; }
 /* Wider than it was: 828px left the column feeling cramped against the panel around it (user, 2026-09-20).
    Not the full pane — a line of body text still has to end somewhere the eye can find the next one. */
@@ -787,12 +811,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* Changes: each turn's runs under the words that started the turn, one muted line that ends in an ellipsis. */
 .changes-turn { display:flex; flex-direction:column; gap:4px; }
 .changes-turn-brief { margin:0 0 2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:500; }
-/* The message wears the accent, but as a wash rather than a fill. Filled, the ink has to be chosen for whatever
-   colour the user picked, and white on the default blue measures 3.86:1 — fine for a send arrow, short of the
-   4.5:1 a paragraph needs. A wash keeps the colour theirs and keeps body text at the page contrast, for any pick. */
-/* Both bubbles wrap at the same measure, the way a messaging app does, rather than running to the edge (user,
-   2026-09-20). 64ch is about 62 characters of this size — long enough not to chop a sentence into slivers, short
-   enough that the eye finds the next line. A table inside a reply still scrolls in its own wrapper. */
 /* The seam where a chat was picked up again: the time, centred and quiet, held apart by space. No rule line
    here or anywhere else (house rule) — the gap above and below is what separates the two stretches. */
 .time-mark { display:flex; justify-content:center; padding:14px 0 6px; font-size:12.5px; color:var(--muted); }
@@ -1533,7 +1551,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 /* Under 780px the sidebar floats over the chat, so it needs the window's own colour: docked it is transparent over
    the window, and floating that way the chat showed through it. */
 @media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:0; width:232px; background:var(--window); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; } .app,.app.sidebar-hidden,.app.sidebar-hidden.with-details,.app.with-details { grid-template-columns:var(--rail-width) minmax(0,1fr); } .new-task-content { padding:18px; } }
-@media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 0; } .finding-heading { flex-wrap:wrap; } .main-footer { padding:8px 12px; } }
+@media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 12px; } .finding-heading { flex-wrap:wrap; } }
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
