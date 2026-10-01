@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
-import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, openChannels } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-routine-ui-'));
@@ -84,6 +84,7 @@ try {
   assert.deepEqual(await page.evaluate(() => window.orglet.connections()), { openai: false, anthropic: false, xai: false, openrouter: false, 'opencode-zen': false, 'opencode-go': false, ollama: false, custom: {}, search: { exa: false } });
   // Work-hour configuration uses ordinary native form controls.
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
+  await openChannels(page);
   await page.getByRole('button', { name: 'Tùy chọn kênh #Research Review', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Tùy chọn kênh #Research Review', exact: true }).click(); await page.getByRole('menuitem', { name: 'Thiết lập kênh' }).click();
   await page.getByRole('tab', { name: 'Giới hạn & ca', exact: true }).click();

@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import electronPath from 'electron';
-import { useVietnamese, openThreadByBrief, archiveCurrentChat } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, archiveCurrentChat, openChannels, openHome } from './smoke-language.mjs';
 
 const data = await mkdtemp(join(tmpdir(), 'orglet-desktop-'));
 const output = resolve('test-results'); await mkdir(output, { recursive: true });
@@ -133,6 +133,7 @@ try {
   await page.screenshot({ path: join(output, 'desktop-about.png') });
   await page.keyboard.press('Escape');
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
+  await openChannels(page);
   await page.getByRole('button', { name: '#Research Review', exact: true }).first().waitFor();
   await page.getByRole('button', { name: '#Research Review', exact: true }).first().click();
   await page.getByRole('heading', { name: 'Đang nhắn với Research Review' }).waitFor();
@@ -177,6 +178,7 @@ try {
   await technical.getByRole('button', { name: 'Đóng panel', exact: true }).click();
   await technical.waitFor({ state: 'hidden' });
   await page.keyboard.press('Escape');
+  await openHome(page);
   await page.getByRole('button', { name: 'Researcher', exact: true }).first().click();
   await archiveCurrentChat(page);
   const datasetPath = join(data, 'dataset.csv'); await writeFile(datasetPath, 'id,label\n1,a\n2,b\n2,c\n');

@@ -403,6 +403,25 @@ Group chats became channels: a name, an optional topic and members that are orgl
 
 Not verified here: a live provider in a channel, and a real workspace from an older build upgraded on another machine.
 
+## Crews are channels (COD-369)
+
+A crew is a channel where the lead splits the work: no Crews section, no New crew dialog, one channel dialog for members, how the channel works, the lead's instructions, limits, shifts and templates. How it works: [team-chat.md](team-chat.md#crews-are-channels).
+
+- Migration: `migrateCrews` (`adoptCrews` and the expansion of a `crew` member) runs when the workspace opens, after a restore and inside `notify`; tested on a real database round trip, an archived crew, a crew inside a channel, a backup made before the change and a second run that must change nothing (`tests/integration/crews-to-channels.test.ts`). The crew record, the `teams` row and the chat's `teamId` are untouched, so an older build still reads the workspace.
+- Terminal: `create|edit|delete|archive|restore channel` next to `crew` and `team`, `/new channel`, the list and picker headings (`tests/integration/cli*.test.ts`).
+- Measured 2026-10-01 on a packaged Windows build from the branch: `desktop`, `sidebar`, `knowledge`, `revision`, `routine`, `i18n` and `cli` smokes found each template crew as `#Name`; `scripts/alignment-check.mjs` over every screen at 1200x820 and 740x600 in light and dark reported no findings (132 screen measurements).
+
+Not verified here: a real workspace from an older build upgraded on another machine, and a live provider in a channel where the lead splits the work.
+
+## The area rail (COD-366)
+
+A rail at the far left picks the area (Home, Channels, Activity; Library and Schedules open their panels), the sidebar lists it, and a user panel at the bottom left holds Settings. How it works: [chat-guide.md](chat-guide.md#the-area-rail-and-the-sidebar), [technical-guide.md](technical-guide.md#shell-areas-tabs-and-the-right-panel).
+
+- Pure parts tested in `tests/integration/areas.test.ts`: Friends tabs and search, channels grouped under categories, what Saved keeps, Activity's counts, and a channel's category through the core (set, kept by a change that leaves it out, cleared, refused past 40 characters). `startup-shell.test.ts` covers the first-frame shell.
+- Checked on a packaged Windows build from the branch at 1400x880, light and dark, and at 740 wide: Home with Friends (All, Working, Add friend) and the DMs, Channels with two categories and the member column, Activity's four views, the folded sidebar and the narrow overlay.
+
+Not done: a screenshot refresh of `docs/images`, and the Home button remembering Friends versus a DM across a restart (the area is remembered, the page is not).
+
 ## COD-98 tools and team coordination: earlier verification record
 
 This record predates the epic's completion. It preserves what that milestone proved and did not prove; current harness coverage is recorded in [capabilities.md](capabilities.md).

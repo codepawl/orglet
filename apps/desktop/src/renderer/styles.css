@@ -1484,7 +1484,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
    adds must not shift the shell along: everything is one column here. */
 /* Under 780px the sidebar floats over the chat, so it needs the window's own colour: docked it is transparent over
    the window, and floating that way the chat showed through it. */
-@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:0; width:232px; background:var(--window); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; } .app,.app.sidebar-hidden,.app.sidebar-hidden.with-details,.app.with-details,.app.with-members,.app.sidebar-hidden.with-members { grid-template-columns:var(--area-rail-width) minmax(0,1fr); } .app > .main-pane,.app.sidebar-hidden > .main-pane { grid-column:2; } .app > .details-pane,.app > .members-pane { display:none; } .new-task-content { padding:18px; } }
+@media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:calc(var(--shell-gap) + var(--area-rail-width)); width:232px; background:var(--window); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; } .app,.app.sidebar-hidden,.app.sidebar-hidden.with-details,.app.with-details,.app.with-members,.app.sidebar-hidden.with-members { grid-template-columns:var(--area-rail-width) minmax(0,1fr); } .app > .main-pane,.app.sidebar-hidden > .main-pane { grid-column:2; } .app > .details-pane,.app > .members-pane { display:none; } .new-task-content { padding:18px; } }
 @media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .user-message { max-width:100%; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 12px; } .finding-heading { flex-wrap:wrap; } }
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
@@ -3055,5 +3055,7 @@ button.saved-body:hover { background:color-mix(in srgb, var(--text) 6%, transpar
 .member-name { display:flex; align-items:center; gap:6px; font-weight:500; }
 .member-lead { padding:1px 6px; border-radius:999px; background:var(--row-active); color:var(--muted); font-size:11px; font-weight:500; }
 .member-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--muted); }
+/* A page's title and tab wear an icon, which the baseline-aligned header would sit above the text's centre. */
+.topbar-title > svg, .page-tabs .chat-view-tab > svg { align-self:center; }
 .topbar-members-toggle[aria-pressed=true] { color:var(--text); background:var(--row-active); }
 .notice-filters .notice-clear { margin-left:auto; }

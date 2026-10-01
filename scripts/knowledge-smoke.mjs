@@ -3,7 +3,7 @@ import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
-import { useVietnamese, openThreadByBrief } from './smoke-language.mjs';
+import { useVietnamese, openThreadByBrief, openChannels } from './smoke-language.mjs';
 import { packagedExecutable } from './packaged-executable.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'orglet-knowledge-'));
@@ -15,6 +15,7 @@ try {
   const page = await app.firstWindow();
   await useVietnamese(page);
   await page.evaluate(() => window.orglet.call('createTemplate', { templateId: 'research-review', provider: 'demo' }));
+  await openChannels(page);
   await page.getByRole('button', { name: '#Research Review', exact: true }).first().waitFor();
   const team = (await workspace(page)).teams.find(item => item.name === 'Research Review');
 

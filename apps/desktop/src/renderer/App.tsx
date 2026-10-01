@@ -230,6 +230,7 @@ export function App() {
   // The crew behind the channel on screen when its lead splits the work and nobody has written in it yet (COD-369):
   // its empty chat is the crew's, so its first message starts the crew's chat with the channel on it.
   const [teamId, setTeamId] = useState('');
+  const teamIdRef = useRef(teamId); teamIdRef.current = teamId;
   const [routineDraft, setRoutineDraft] = useState<TaskInput>();
   const [routineView, setRoutineView] = useState<RoutineView>({ editing: false });
   const routineDirty = useRef(false);
@@ -301,6 +302,7 @@ export function App() {
   // The empty channel on screen (COD-361): created, with no message yet, so it has no row. Its first message creates
   // the row; a channel deleted meanwhile, or written in elsewhere, leaves the screen.
   const [emptyChannelId, setEmptyChannelId] = useState<string>();
+  const emptyChannelIdRef = useRef(emptyChannelId); emptyChannelIdRef.current = emptyChannelId;
   // The channel being created or edited in its dialog, if one is open.
   const [channelDraft, setChannelDraft] = useState<ChannelDraft>();
   useEffect(() => {
@@ -1964,7 +1966,14 @@ export function App() {
         templates={friendTemplates} onTemplate={addTemplate} onImport={() => action(async () => { if (await orglet.importTemplate()) setArea('channels'); })} />
       : null;
   const areaEntries: AreaRailEntry[] = [
-    { key: 'home', icon: <span className="orglet-mark small" aria-hidden="true">o</span>, label: t('Bạn bè và tin nhắn'), active: area === 'home', onSelect: () => { clearSelection(); setArea('home'); setFriendsOpen(true); } },
+    { key: 'home', icon: <span className="orglet-mark small" aria-hidden="true">o</span>, label: t('Bạn bè và tin nhắn'), active: area === 'home', onSelect: () => {
+      clearSelection();
+      // From another area Home comes back to the DM that was open; on Home itself the button is the way to Friends.
+      const openTaskRow = selectedRef.current ? workspaceRef.current?.tasks.find(task => task.id === selectedRef.current) : undefined;
+      const dmOpen = selectedRef.current ? areaOfTask(openTaskRow) === 'home' : !teamIdRef.current && !emptyChannelIdRef.current;
+      setFriendsOpen(area === 'home' || !dmOpen);
+      setArea('home');
+    } },
     { key: 'channels', icon: <Hash size={20} />, label: t('Kênh'), active: area === 'channels', onSelect: () => setArea('channels') },
     { key: 'activity', icon: <Bell size={20} />, label: t('Hoạt động'), ariaLabel: activityRailLabel, active: area === 'activity', count: unreadNotices + activityCountsNow.needs, countTone: activityCountsNow.needs > 0 ? 'accent' : 'quiet', onSelect: () => setArea('activity') },
     { key: 'library', icon: <BookOpen size={20} />, label: t('Thư viện'), ariaLabel: knowledgeToReview > 0 ? t('Thư viện, {0} cần duyệt', [knowledgeToReview]) : t('Thư viện'), active: panel === 'library', count: knowledgeToReview, onSelect: () => { if (knowledgeToReview > 0) setLibraryTab('knowledge'); setPanel('library'); } },
@@ -2029,7 +2038,7 @@ export function App() {
       </div>
     </aside>
     {/* The area rail (COD-366): Home, the areas, Library and Schedules, and the one + Create. */}
-    <AreaRail entries={areaEntries} createItems={createItems} sidebarOpen={sidebar && !narrowWindow} onOpenSidebar={openFullSidebar} covered={sidebar && narrowWindow} />
+    <AreaRail entries={areaEntries} createItems={createItems} sidebarOpen={sidebar} onOpenSidebar={openFullSidebar} />
     <UserPanel name={account?.name?.trim() || t('Bạn')} status={userStatus} connected={hasConnection(connections, workspace.customConnections)} compact={!sidebar || narrowWindow}
       onSettings={() => openSettings()} onDwell={dwellAbout}
       trailing={sidebar && !narrowWindow && updateMark ? <UpdateButton compact indicator={updateMark} onRestart={restartToUpdate} onOpenAbout={() => openSettings('about')} /> : undefined} />

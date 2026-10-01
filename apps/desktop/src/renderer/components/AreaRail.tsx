@@ -27,15 +27,13 @@ export type AreaRailEntry = {
  * beside it shows the chosen area's list. While the sidebar is folded the rail starts with the way to open it. It has
  * no ground of its own, like the sidebar, and the open area is told by the sidebar's selected tint, never by a line.
  */
-export function AreaRail({ entries, createItems, sidebarOpen, onOpenSidebar, covered = false }: {
+export function AreaRail({ entries, createItems, sidebarOpen, onOpenSidebar }: {
   entries: readonly AreaRailEntry[];
   createItems: RowMenuItem[];
   sidebarOpen: boolean;
   onOpenSidebar: () => void;
-  /** The sidebar lies over the rail in a narrow window, so the rail is out of reach until it closes. */
-  covered?: boolean;
 }) {
-  return <nav className="area-rail" aria-label={t('Khu vực')} inert={covered || undefined} aria-hidden={covered || undefined}>
+  return <nav className="area-rail" aria-label={t('Khu vực')}>
     {!sidebarOpen && <Button size="icon" className="area-rail-fold" aria-label={t('Mở sidebar')} title={t('Mở sidebar')} onClick={onOpenSidebar}><PanelLeft size={18} /></Button>}
     <ul className="area-rail-list">
       {entries.map(entry => <li key={entry.key}>
