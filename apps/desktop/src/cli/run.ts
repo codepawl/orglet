@@ -6,10 +6,10 @@ import { runManagementCommand } from './management-command';
 import { t } from './text';
 import { appExecutable, callStartingApp, resolveUserData, StoppedError, UnreachableError } from './client';
 import { runInteractive, type InteractiveInput, type InteractiveOutput } from './interactive';
-import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatScheduleChange } from './output';
+import { chatOption, formatArchiveEntity, formatBring, formatChatChange, formatChats, formatControl, formatForward, formatList, formatMembers, formatNewChat, formatOpen, formatQuestion, formatReact, formatRead, formatRun, formatSend, formatStatus, formatTemplate, formatTurns, formatSchedules, formatScheduleChange, formatSearch, formatRunning, formatLibrary, formatMemoryChange, formatUsage, formatModels, formatPreferences } from './output';
 import { entriesFromList, findChat } from './picker';
 import { renderAnswers, renderTurns, styledList, styledStatus, type Layout } from './pretty';
-import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type ScheduleValue } from './protocol';
+import { EXIT_CODES, type ArchiveEntityValue, type BringValue, type ChatChangeValue, type ChatsValue, type CliAnswer, type CliChat, type CliRequestBody, type CliResponse, type ControlValue, type ForwardValue, type ListValue, type MembersValue, type OpenValue, type ReactValue, type ReadValue, type RunValue, type SendValue, type StatusValue, type TemplateValue, type SchedulesValue, type ScheduleValue, type SearchValue, type RunningValue, type LibraryValue, type UsageValue, type ModelsValue, type PreferencesValue } from './protocol';
 import { NEUTRAL_COLOR, type ColorMode } from './terminal';
 import { NO_WAITING, WaitingFace, type Waiting } from './waiting';
 
@@ -107,6 +107,14 @@ function toRequest(command: RequestCommand, workingDirectory: string): CliReques
     case 'schedule-enable': return { op: 'schedule-enable', schedule: command.schedule, enabled: command.enabled };
     case 'schedule-delete': return { op: 'schedule-delete', schedule: command.schedule, confirmName: command.confirmName };
     case 'schedule-save': return { op: 'schedule-save', ...(command.schedule ? { schedule: command.schedule } : {}), ...command.fields };
+    case 'search': return { op: 'search', query: command.query };
+    case 'running': return { op: 'running' };
+    case 'library': return { op: 'library', kind: command.library, ...(command.query ? { query: command.query } : {}), ...(command.owner ? { owner: command.owner } : {}) };
+    case 'memory-edit': return { op: 'memory-edit', id: command.id, ...(command.text ? { text: command.text } : {}), ...(command.pinned !== undefined ? { pinned: command.pinned } : {}) };
+    case 'memory-delete': return { op: 'memory-delete', id: command.id, confirmed: true };
+    case 'usage': return { op: 'usage', refresh: command.refresh };
+    case 'models': return { op: 'models', ...(command.provider ? { provider: command.provider } : {}), ...(command.to ? { to: command.to } : {}), refresh: command.refresh };
+    case 'preferences': return { op: 'preferences', ...(command.language ? { language: command.language } : {}), ...(command.theme ? { theme: command.theme } : {}) };
     case 'run': return {
       op: 'run',
       schedule: command.schedule,
@@ -238,6 +246,31 @@ function report(command: RequestCommand, value: unknown, output: Output, layout:
     case 'schedule-delete':
     case 'schedule-save':
       if (!command.json) output.stdout(formatScheduleChange(command.kind, value as ScheduleValue));
+      return EXIT_CODES.ok;
+    case 'search':
+      if (!command.json) output.stdout(formatSearch(value as SearchValue));
+      return EXIT_CODES.ok;
+    case 'running':
+      if (!command.json) output.stdout(formatRunning(value as RunningValue));
+      return EXIT_CODES.ok;
+    case 'library':
+      if (!command.json) output.stdout(formatLibrary(value as LibraryValue));
+      return EXIT_CODES.ok;
+    case 'memory-edit':
+    case 'memory-delete':
+      if (!command.json) output.stdout(formatMemoryChange(command.kind, value as LibraryValue));
+      return EXIT_CODES.ok;
+    case 'usage':
+      if (!command.json) output.stdout(formatUsage(value as UsageValue));
+      return EXIT_CODES.ok;
+    case 'models': {
+      const modelsValue = value as ModelsValue;
+      if (!command.json) output.stdout(formatModels(modelsValue));
+      if (!command.json && modelsValue.error) output.stderr(modelsValue.error);
+      return EXIT_CODES.ok;
+    }
+    case 'preferences':
+      if (!command.json) output.stdout(formatPreferences(value as PreferencesValue));
       return EXIT_CODES.ok;
   }
 }

@@ -28,6 +28,13 @@ export type SlashCommand =
   | { kind: 'archive' }
   | { kind: 'schedules' }
   | { kind: 'schedule'; action: 'on' | 'off' | 'run'; name: string }
+  | { kind: 'search'; query: string }
+  | { kind: 'running' }
+  | { kind: 'memory' }
+  | { kind: 'plan-usage' }
+  | { kind: 'models' }
+  | { kind: 'language'; language: 'vi' | 'en' | 'en-GB' }
+  | { kind: 'theme'; theme: 'system' | 'light' | 'dark' }
   | { kind: 'new'; entity?: 'worker' | 'team' }
   | { kind: 'edit' | 'delete'; name?: string }
   | { kind: 'help' }
@@ -40,6 +47,7 @@ export type SlashCommand =
 export const SLASH_COMMANDS = ['/to', '/list', '/read', '/open', '/clear', '/queue', '/undo', '/details', '/agents',
   '/history', '/reply', '/react', '/unreact', '/forward', '/answer', '/stop', '/pause', '/resume', '/retry', '/continue',
   '/chats', '/side', '/bring', '/group', '/members', '/rename', '/archive', '/schedules', '/schedule',
+  '/search', '/running', '/memory', '/usage', '/models', '/language', '/theme',
   '/new', '/edit', '/delete', '/help', '/exit'] as const;
 
 const CONTROLS: Record<string, ChatControl> = { '/stop': 'stop', '/pause': 'pause', '/resume': 'resume', '/retry': 'retry', '/continue': 'continue' };
@@ -76,6 +84,13 @@ export const SLASH_HELP: readonly [string, string][] = [
   ['/archive', t("Lưu trữ chat này")],
   ['/schedules', t("Liệt kê lịch")],
   ['/schedule on|off|run <name>', t("Bật, tắt hoặc chạy ngay một lịch")],
+  ['/search <words>', t("Tìm trong mọi chat")],
+  ['/running', t("Mọi lượt đang chạy hoặc đang chờ")],
+  ['/memory', t("Ghi nhớ của Tí hoặc hội này")],
+  ['/usage', t("Mức dùng gói của các tài khoản CLI")],
+  ['/models', t("Các model của kết nối mà Tí này dùng")],
+  ['/language vi|en|en-GB', t("Đổi ngôn ngữ của app")],
+  ['/theme system|light|dark', t("Đổi giao diện của app")],
   ['/new [orglet|crew]', t("Tạo Tí hoặc hội trong terminal này")],
   ['/edit [name]', t("Sửa cấu hình; bỏ tên để chọn trong danh sách")],
   ['/delete [name]', t("Xóa Tí hoặc hội sau khi gõ tên đầy đủ")],
@@ -119,6 +134,13 @@ export function parseSlash(line: string): SlashCommand {
     case '/archive': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'archive' };
     case '/schedules': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'schedules' };
     case '/schedule': return parseSchedule(rest);
+    case '/search': return rest ? { kind: 'search', query: rest } : { kind: 'usage', message: t("Gõ /search rồi từ cần tìm.") };
+    case '/running': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'running' };
+    case '/memory': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'memory' };
+    case '/usage': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'plan-usage' };
+    case '/models': return rest ? { kind: 'unknown', command: trimmed } : { kind: 'models' };
+    case '/language': return parseLanguage(rest);
+    case '/theme': return parseTheme(rest);
     case '/new': return rest === 'orglet' ? { kind: 'new', entity: 'worker' } : rest === 'crew' || rest === 'team' ? { kind: 'new', entity: 'team' } : rest ? { kind: 'unknown', command: trimmed } : { kind: 'new' };
     case '/edit': return { kind: 'edit', ...(rest ? { name: rest } : {}) };
     case '/delete': return { kind: 'delete', ...(rest ? { name: rest } : {}) };
@@ -191,6 +213,16 @@ function parseSchedule(rest: string): SlashCommand {
   const name = space === -1 ? '' : rest.slice(space).trim();
   if ((action !== 'on' && action !== 'off' && action !== 'run') || !name) return { kind: 'usage', message: t("Gõ /schedule on, off hoặc run rồi tên lịch. Tạo và sửa lịch bằng orglet schedule.") };
   return { kind: 'schedule', action, name };
+}
+
+function parseLanguage(rest: string): SlashCommand {
+  const language = (['vi', 'en', 'en-GB'] as const).find(item => item.toLowerCase() === rest.toLowerCase());
+  return language ? { kind: 'language', language } : { kind: 'usage', message: t("Gõ /language vi, en hoặc en-GB.") };
+}
+
+function parseTheme(rest: string): SlashCommand {
+  const theme = (['system', 'light', 'dark'] as const).find(item => item === rest.toLowerCase());
+  return theme ? { kind: 'theme', theme } : { kind: 'usage', message: t("Gõ /theme system, light hoặc dark.") };
 }
 
 function startsWithIgnoringCase(text: string, start: string): boolean {
