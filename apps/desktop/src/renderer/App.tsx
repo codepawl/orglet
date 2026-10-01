@@ -1869,6 +1869,12 @@ export function App() {
             canSchedule={Boolean(brief.trim())}
             onSchedule={worker && !team && !group ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />
         </div>
+      </div> : workspace.workers.length === 0 ? <div className="team-chat team-chat-fresh">
+        {/* The last orglet can be deleted; the pane then offers to make one instead of standing empty. */}
+        <div className="fresh-chat team-chat-empty">
+          <h1 className="welcome">{t('Chưa có Tí nào.')}</h1>
+          <Button className="no-orglets-create" variant="primary" onClick={() => { setEditingWorker(undefined); setPanel('worker'); }}>{t('Tạo Tí')}</Button>
+        </div>
       </div> : null}
       <footer className="main-footer">{t('Câu trả lời có thể sai. Kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
     </main>

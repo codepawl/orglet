@@ -173,7 +173,7 @@ User message (inputRevision)
 | Event | Thread shows | Dispatch |
 |---|---|---|
 | Plan fails (schema, unknown worker, provider) | Team-lead error on this turn | No member jobs, no invented report. Status `failed`. |
-| A member fails | That worker's name; synthesis limitations `Role chưa hoàn tất`; status `partial` | Remaining assigned members keep today's rule. Synthesis must not invent the missing result. |
+| A member fails | That worker's name; synthesis limitations `Role chưa hoàn tất`; status `partial`. The thread does not repeat that sentence in a second error card; **Retry** sits in that note | Remaining assigned members keep today's rule. Synthesis must not invent the missing result. |
 | A member hands in a blocker | The card under the turn says the assignment is blocked, and **Mở báo cáo của {tên}** opens that member's saved report in the document viewer | The report is kept for diagnosis; dependents stay locked (COD-125). |
 | A member runs out of steps | Its report is its result, with `Hết số bước trước khi xong phần việc; đây là phần đã làm được.` among its limitations; the crew answer adds a line naming that member | Not a blocker, even when the member marks it blocked, unless a file change its assignment requires is missing. The lead combines it like any other result. |
 | All assigned members fail | Failed turn | No synthesis report |
