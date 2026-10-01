@@ -489,10 +489,33 @@ svg { flex-shrink:0; stroke-width:1.7; }
 /* The toolbar under the box (owner's reference, 2026-09-30): add at the left, the model or recipient and then the
    usage ring at the right, every control 28px and centred on one line. Its sides are the box's border plus padding,
    so the controls start and end where the box's own content does, in the pill and in the grown box alike. */
-.composer-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:28px; margin-top:6px; padding:0 6px; }
+.composer-toolbar { display:flex; align-items:center; gap:4px; min-height:28px; margin-top:6px; padding:0 6px; }
 .composer.expanded + .composer-toolbar { padding:0 8px; }
 .composer-leading { display:flex; align-items:center; flex-shrink:0; }
-.composer-toolbar-end { display:flex; align-items:center; justify-content:flex-end; gap:4px; min-width:0; }
+/* The approval mode beside the add button (COD-367): a quiet chip like the model's at the other end, 28px on the
+   row's centre line, its name cut with an ellipsis before the row would wrap. Hover tints, never a border or track. */
+.composer-toolbar .composer-mode { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:min(210px,38vw); height:28px; min-height:28px; padding:0 10px 0 8px; border:0; border-radius:999px; background:transparent; color:var(--muted); font-size:12px; font-weight:500; }
+.composer-toolbar .composer-mode:hover:not(:disabled),.composer-toolbar .composer-mode[aria-expanded=true] { background:var(--surface); color:var(--text); }
+.composer-toolbar .composer-mode svg { flex-shrink:0; }
+.composer-mode-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.composer-mode-chevron { color:var(--muted); }
+/* Its menu: a title, then one row per mode (icon, name over a one-line description, the check on the current one and
+   its number key), rows apart by spacing only. */
+.mode-menu { width:max-content; min-width:280px; max-width:min(340px,calc(100vw - 24px)); padding:6px; }
+.mode-menu-title { margin:0; padding:6px 10px 4px; font-size:12px; font-weight:500; color:var(--muted); }
+.mode-menu [role=menu] { display:flex; flex-direction:column; gap:2px; }
+.mode-option { display:flex; align-items:center; gap:10px; width:100%; padding:8px 10px; border:0; border-radius:8px; background:transparent; color:var(--text); text-align:left; }
+.mode-option:hover,.mode-option:focus-visible { background:var(--surface); }
+.mode-option[aria-disabled=true] { cursor:default; }
+.mode-option[aria-disabled=true] .mode-option-name,.mode-option[aria-disabled=true] .mode-option-icon { color:var(--muted); }
+.mode-option-icon { flex-shrink:0; color:var(--muted); }
+.mode-option-text { display:flex; flex-direction:column; gap:1px; min-width:0; flex:1; }
+.mode-option-name { font-size:14px; font-weight:500; }
+.mode-option-note { font-size:12px; color:var(--muted); }
+.mode-option-check { flex-shrink:0; color:var(--accent); visibility:hidden; }
+.mode-option[aria-checked=true] .mode-option-check { visibility:visible; }
+.mode-option-key { flex-shrink:0; min-width:18px; font:inherit; font-size:12px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
+.composer-toolbar-end { margin-left:auto; padding-left:4px; display:flex; align-items:center; justify-content:flex-end; gap:4px; min-width:0; }
 .composer-trailing { display:flex; align-items:center; min-width:0; max-width:min(220px,42vw); }
 .composer-toolbar .composer-add { width:28px; height:28px; min-height:28px; padding:0; }
 .composer>textarea { grid-area:input; display:block; width:100%; resize:none; min-height:36px; max-height:250px; border:0; outline:none; background:transparent; padding:7px 6px 7px 10px; font-size:inherit; line-height:22px; }
@@ -623,7 +646,9 @@ svg { flex-shrink:0; stroke-width:1.7; }
 @media(prefers-reduced-motion:reduce) { .user-message + .message-actions .org-reaction-row { animation:none; } }
 /* A size container, so the island's label can be capped from the bar's width (`cqw` in `.live-island-label`)
    rather than from the island's own measured width, which would let a measurement of zero lock it at zero. */
-.thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) 0; container-type:inline-size; }
+/* The bar's bottom edge keeps the panel's inset from the card's rounded corner (the disclaimer line that used to sit
+   below it is gone, owner 2026-10-01), so the add button and the ring never sit in the curve. */
+.thread-composer { width:100%; max-width:900px; margin:0 auto; padding:8px var(--page-x) var(--panel-inset); container-type:inline-size; }
 .team-chat { flex:1; min-height:0; display:flex; flex-direction:column; }
 /* A chat with nothing in it yet: greeting, prompt bar and starters as one block in the middle of the pane,
    the shape people already know from other chat apps (user, 2026-09-19). Once a turn exists the thread takes
@@ -755,7 +780,6 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .consent input[type=checkbox] { margin-top:3px; accent-color:var(--accent); }
 .consent .budget-label { align-items:center; }
 .budget-label input { width:95px; padding:5px 8px; border:1px solid var(--border); background:var(--bg); border-radius:8px; }
-.main-footer { text-align:center; color:var(--muted); font-size:11px; padding:10px var(--page-x) 12px; margin-top:auto; }
 .thread-scroll { flex:1; overflow:auto; min-height:0; scroll-behavior:auto; }
 /* Wider than it was: 828px left the column feeling cramped against the panel around it (user, 2026-09-20).
    Not the full pane — a line of body text still has to end somewhere the eye can find the next one. */
@@ -1503,7 +1527,7 @@ pre.source-preview>span { display:block; padding-left:calc(var(--line-number-wid
 /* Under 780px the sidebar floats over the chat, so it needs the window's own colour: docked it is transparent over
    the window, and floating that way the chat showed through it. */
 @media(max-width:780px) { .sidebar { position:absolute; z-index:5; top:0; bottom:0; left:0; width:232px; background:var(--window); box-shadow:8px 0 30px #0002; } .app > .sidebar { grid-column:auto; grid-row:auto; } .app,.app.sidebar-hidden,.app.sidebar-hidden.with-details,.app.with-details { grid-template-columns:var(--rail-width) minmax(0,1fr); } .new-task-content { padding:18px; } }
-@media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .user-message { max-width:100%; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 0; } .finding-heading { flex-wrap:wrap; } .main-footer { padding:8px 12px; } }
+@media(max-width:460px) { .topbar { padding:10px; } .topbar .org-button { font-size:12px; } .new-task-content { padding:16px; } .thread-content { padding:16px; } .user-message { max-width:100%; } .welcome { font-size:23px; } .thread-composer { padding:8px 12px 12px; } .finding-heading { flex-wrap:wrap; } }
 .skip-link { position:fixed; top:-60px; left:12px; z-index:20; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 .skip-link:focus { top:12px; }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }

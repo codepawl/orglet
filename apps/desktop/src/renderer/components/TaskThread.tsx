@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route, ChevronRight } from 'lucide-react';
+import { FileText, Check, RotateCcw, Reply, FolderOpen, MessageSquareQuote, Wrench, Forward, FileX, Hourglass, StepForward, Route, ChevronRight, ListTodo, Play } from 'lucide-react';
+import { answersWithPlan, canFollowPlan } from '../../shared/approval-mode';
+import { setPlanFirst } from '../planFirst';
+import { taskDraftKey } from '../drafts';
 import { routeOfTurn, type TurnRoute } from '../../shared/turn-routing';
 import type { Artifact, Run, TaskDetail, TaskStatus, Workspace } from '../../shared/contracts';
 import { Button } from './ui';
@@ -136,6 +139,7 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
   const [outputCommand, setOutputCommand] = useState<BlockingCommand>();
   const [applyingHandIn, setApplyingHandIn] = useState(false);
   const [continuing, setContinuing] = useState(false);
+  const [following, setFollowing] = useState(false);
   // A member's saved report open in the document viewer from the card that says to see it (COD-256).
   const [savedReportId, setSavedReportId] = useState<string>();
   const savedReport = savedReportId ? detail.artifacts.find(artifact => artifact.id === savedReportId) : undefined;
@@ -316,6 +320,9 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
       outOfSteps: author?.outOfSteps && author.stage === undefined
         ? <OutOfStepsLine key="out-of-steps" busy={continuing} onContinue={canContinue ? () => continueRun(author) : undefined} />
         : undefined,
+      plan: answersWithPlan(author)
+        ? <PlanLine key="plan" busy={following} onFollow={canFollowPlan(author, { latest, busy, pendingStart: Boolean(detail.task.pendingStart) }) ? () => followPlan(artifact) : undefined} />
+        : undefined,
       // A crew's answer names each member whose changes a failed command kept out of the folder (COD-270).
       handIn: author?.stage === 'synthesis' ? blockedLinesOf(runs) : undefined,
       changes: changedFilesLines(runs, run => run.id !== artifact.runId),
@@ -370,6 +377,28 @@ export function TaskThread({ detail, workspace, recovery, action, showSources, r
         await orglet.call('reviseTask', { taskId: detail.task.id, brief: t('Tiếp tục từ chỗ đã dừng.'), continueFrom: run.id, sourceIds, excludedSources: input.excludedSources,
           consent: true, providerScopes: provider === 'demo' ? [] : [provider], budgetMicros: detail.task.budgetMicros });
       } finally { setContinuing(false); }
+    });
+  };
+  /**
+   * Follow the plan under a Plan first answer (COD-367): the go-ahead as the chat's next message, replying to the plan,
+   * with the chat's files and in the chat's own mode (Ask before applying or Apply changes), so the bar leaves Plan
+   * first. The message carries no Plan first, so its run is offered the edit and command tools the chat allows.
+   */
+  const followPlan = (plan: Artifact) => {
+    if (following) return;
+    setFollowing(true);
+    const input = detail.task.currentInput ?? detail.task;
+    const sourceIds = input.sourceIds.filter(sourceId => !detail.sources.find(source => source.id === sourceId)?.revoked);
+    // Who answered the plan's turn answers the go-ahead too, so their providers are the ones this send consents to.
+    const planRevision = detail.runs.find(run => run.id === plan.runId)?.snapshot.inputRevision ?? 0;
+    const turnRuns = detail.runs.filter(run => (run.snapshot.inputRevision ?? 0) === planRevision);
+    const providers = [...new Set(turnRuns.map(run => run.snapshot.worker.provider).filter(provider => provider !== 'demo'))];
+    setPlanFirst(taskDraftKey(detail.task.id), false);
+    action(async () => {
+      try {
+        await orglet.call('reviseTask', { taskId: detail.task.id, brief: t('Làm theo kế hoạch trên.'), replyTo: plan.id, sourceIds, excludedSources: input.excludedSources,
+          consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
+      } finally { setFollowing(false); }
     });
   };
   const applyHandIn = (run: Run) => {
@@ -621,6 +650,17 @@ function OutOfStepsLine({ busy, onContinue }: { busy: boolean; onContinue?: () =
   return <div className="out-of-steps">
     <p><Hourglass size={14} aria-hidden="true" />{t('Hết số bước trước khi xong; đây là phần đã làm được.')}</p>
     {onContinue && <Button type="button" variant="outline" disabled={busy} onClick={onContinue}><StepForward size={16} />{t('Tiếp tục')}</Button>}
+  </div>;
+}
+
+/**
+ * Under a Plan first answer (COD-367): says that nothing changed yet, and on the latest turn offers Follow the plan,
+ * which sends the go-ahead in the chat's own mode.
+ */
+function PlanLine({ busy, onFollow }: { busy: boolean; onFollow?: () => void }) {
+  return <div className="out-of-steps plan-line">
+    <p><ListTodo size={14} aria-hidden="true" />{t('Kế hoạch, chưa thay đổi gì.')}</p>
+    {onFollow && <Button type="button" variant="outline" disabled={busy} onClick={onFollow}><Play size={15} aria-hidden="true" />{t('Làm theo kế hoạch')}</Button>}
   </div>;
 }
 

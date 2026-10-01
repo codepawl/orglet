@@ -157,7 +157,11 @@ export type TaskInput = z.infer<typeof TaskInput>;
 // `forwarded` is set by the core on a forward's turn (COD-257); the window can never send one in a brief of its own.
 // `continueFrom` is the run of the turn before, when the person pressed Continue after it ran out of steps (COD-257):
 // the new run starts with that run's tool calls and results instead of redoing them.
-export const RunInput = TaskInput.pick({ brief: true, sourceIds: true, excludedSources: true }).extend({ replyTo: Id.optional(), forwarded: ForwardedMessage.optional(), continueFrom: Id.optional() }).strict();
+// `planFirst` is the person's Plan first for this one message (COD-367): its runs may read and search but not edit,
+// move, delete, run commands, act in the browser or desktop apps or call MCP tools, and answer with a plan. It lives on
+// the turn's input, so every run of the turn freezes it with the rest of the input and the next message is unaffected.
+export const PlanFirst = z.literal(true);
+export const RunInput = TaskInput.pick({ brief: true, sourceIds: true, excludedSources: true }).extend({ replyTo: Id.optional(), forwarded: ForwardedMessage.optional(), continueFrom: Id.optional(), planFirst: PlanFirst.optional() }).strict();
 export type RunInput = z.infer<typeof RunInput>;
 /** Orchestrator routing for one team-chat turn (COD-25). Stored on the plan run snapshot; not a user-facing artifact. */
 export const PlanAssignment = z.object({
@@ -290,7 +294,8 @@ export const emptyConnections = (): Connections => ({ openai: false, anthropic: 
 export const commands = {
   workspace: z.object({}),
   task: z.object({ id: Id }),
-  createTask: TaskInput,
+  // The first message of a chat may ask for Plan first too (COD-367); it lands on that turn's input, never the chat row.
+  createTask: TaskInput.extend({ planFirst: PlanFirst.optional() }),
   reviseTask: RunInput.omit({ forwarded: true }).extend({ taskId: Id, consent: z.boolean(), providerScopes: z.array(ProviderScope).max(MAX_PROVIDER_SCOPES), budgetMicros: z.number().int().min(1000).max(100_000_000) }).strict(),
   // A message sent "in a new thread" from an orglet's main chat (COD-247): a side thread of the same orglet, with the
   // main chat's permissions and never more. `taskId` is the main chat; the sources must already belong to it.
