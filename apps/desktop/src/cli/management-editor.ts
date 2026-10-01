@@ -1,6 +1,6 @@
 import { t } from './text';
 import type { CrewPatch, ManagementCatalog, ManagementTarget, OrgletPatch } from './management';
-import { displayWidth, muted, padEnd, paint, truncate, wrapSegments, type ColorMode } from './terminal';
+import { displayWidth, layoutShortcutHint, muted, padEnd, paint, truncate, wrapSegments, type ColorMode } from './terminal';
 import { renderMiniFace } from './faces';
 import { normalizeRoleText } from '../shared/role-words';
 
@@ -133,7 +133,9 @@ export class ManagementEditor {
   rows(width: number, maximum: number, mode: ColorMode): string[] {
     const choices = this.choices();
     this.selected = Math.max(0, Math.min(this.selected, choices.length - 1));
-    const count = Math.max(0, maximum - 1);
+    const hint = choices.length ? t("↑↓ di chuyển · Enter chọn · Esc quay lại/hủy") : t("Không có mục khớp · Esc quay lại");
+    const hintLines = layoutShortcutHint(hint, width, maximum >= 10 ? 2 : 1);
+    const count = Math.max(0, maximum - hintLines.length);
     const start = Math.max(0, this.selected - Math.max(0, count - 1));
     const nameWidth = Math.min(Math.max(0, ...choices.map(choice => displayWidth(choice.label))), Math.max(4, Math.floor(width / 2) - 5));
     const rows = choices.slice(start, start + count).map((choice, index) => {
@@ -143,7 +145,7 @@ export class ManagementEditor {
       const label = choice.detail ? `${padEnd(truncate(choice.label, nameWidth), nameWidth)}  ${muted(choice.detail, mode)}` : choice.label;
       return paint(truncate(`${start + index === this.selected ? '›' : ' '} ${icon}${label}`, width), { bold: start + index === this.selected }, mode);
     });
-    if (maximum > 0) rows.push(muted(truncate(choices.length ? t("↑↓ di chuyển · Enter chọn · Esc quay lại/hủy") : t("Không có mục khớp · Esc quay lại"), width), mode));
+    if (maximum > 0) rows.push(...hintLines.slice(0, maximum).map(line => muted(line, mode)));
     return rows;
   }
 
