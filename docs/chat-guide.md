@@ -193,6 +193,18 @@ Changes that wait are kept when you close the app. If you send another message b
 
 To have changes applied as soon as a run finishes, turn off **Review before applying** under the working folder, in the chat's **Details → Tool permissions** or the orglet's **Permissions** tab. The switch appears once the folder level allows editing. A side thread follows its main chat. Crews and group chats apply each orglet's changes as it finishes, because the next orglet in the turn works from those files, so their switch is off and cannot be changed. A schedule's runs wait for review in their own chat too, unless you turn **Review before applying** off in the schedule ([Schedules](#schedules)).
 
+### The mode next to +
+
+The button next to **+** under the message box shows how the next message is handled. Click it, or tab to it and press Enter, for the **Mode** menu. Pick a row with the mouse, the arrow keys and Enter, or its number:
+
+1. **Ask before applying** (the default): changes wait for you to review them, as above.
+2. **Apply changes**: changes reach the folder when the orglet finishes. This is **Review before applying** turned off, so changing one changes the other.
+3. **Plan first**: the orglet may read and search the working folder, your files and the web, but changes nothing. It cannot edit, move or delete files, run commands, act on web pages or in apps, or use MCP tools. It answers with a plan, and under the plan **Follow the plan** sends "Follow the plan above." as your next message, back in the mode you had before. Plan first stays on for later messages until you click **Follow the plan** or pick another mode, so you can talk the plan over first.
+
+Ask before applying and Apply changes need a working folder the orglet may edit. Without one, the rows say **Needs a working folder**, and picking one opens the folder picker. With a read-only folder they ask for edit access instead. Plan first works without a folder.
+
+In a crew or a channel, each orglet's changes are applied as it finishes, so the mode reads **Apply changes** and **Ask before applying** cannot be picked; Plan first applies to every orglet in the turn. A side thread uses its main chat's permissions, so only Plan first can be switched there. The mode never skips the cards that ask before a step on a web page, in a desktop app or through an MCP tool. Those always ask.
+
 ## Details
 
 **Details** at the top of a chat opens the panel that holds everything the chat does not show inline:

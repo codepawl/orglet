@@ -20,6 +20,7 @@ import { RowMenu } from './RowMenu';
 import { toast } from './toast';
 import { canStartSideThread } from '../../shared/side-threads';
 import { keepDraft, readDraft, taskDraftKey } from '../drafts';
+import { planFirstChosen, setPlanFirst } from '../planFirst';
 import { overflowAttributes, useStripOverflow } from '../stripOverflow';
 import { ComposerPermissionHint, type PermissionHintControls } from '../permissionHints';
 import type { HarnessInfo } from '../../shared/harness';
@@ -303,6 +304,11 @@ export function Composer({ value, onChange, onSubmit, onAlternateSubmit, label, 
   </>;
 }
 
+/** What a message from this bar adds when Plan first is chosen for it (COD-367); nothing otherwise. */
+export function planFirstInput(barKey: string | undefined): { planFirst?: true } {
+  return planFirstChosen(barKey) ? { planFirst: true } : {};
+}
+
 /** Whether a slot was given something to draw; `false`, `null` and `undefined` draw nothing. */
 function hasContent(node: ReactNode) {
   return Children.toArray(node).length > 0;
@@ -413,7 +419,7 @@ export function ComposerFoot({ children }: { children?: ReactNode }) {
  * `onPrefilled` lets the caller forget it once it is in. What is typed and added but not sent stays with the chat
  * across restarts (COD-257, `drafts.ts`), so leaving the chat and coming back finds it on the bar.
  */
-export function FollowUpComposer({ detail, workspace, harnesses, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel, permissionHint }: { detail: TaskDetail; workspace: Workspace; /** Which account each harness runs, for the plan usage by the bar (COD-326). */ harnesses?: readonly HarnessInfo[]; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void; /** Offers a permission the message seems to need (COD-305), when Tacet is on this computer. */ permissionHint?: PermissionHintControls }) {
+export function FollowUpComposer({ detail, workspace, harnesses, ready, openSettings, openChat, action, prefill, onPrefilled, readOnly, onConnectModel, permissionHint, modePicker }: { detail: TaskDetail; workspace: Workspace; /** Which account each harness runs, for the plan usage by the bar (COD-326). */ harnesses?: readonly HarnessInfo[]; ready: Readiness; openSettings: (tab?: 'connections' | 'harness') => void; /** Opens another chat, such as a side thread just started from this one. */ openChat: (taskId: string) => void; action: (fn: () => Promise<unknown>) => void; prefill?: ComposerPrefill; onPrefilled?: () => void; readOnly?: ReadOnlyChat; /** Sets up a real model for this orglet on Demo (COD-293); the note under the bar offers it. */ onConnectModel?: (worker: Worker) => void; /** Offers a permission the message seems to need (COD-305), when Tacet is on this computer. */ permissionHint?: PermissionHintControls; /** The approval mode beside the add button (COD-367, `ChatModePicker`). */ modePicker?: ReactNode }) {
   const draftKey = taskDraftKey(detail.task.id);
   const [text, setText] = useState(() => readDraft(draftKey)?.text ?? '');
   // Files added for the next message, and what could not be added with the reason, as in the empty chat.
@@ -481,7 +487,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
     const sent = added.sources;
     action(async () => {
       try {
-        await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
+        await orglet.call('reviseTask', { taskId: detail.task.id, brief, replyTo: reply?.messageId, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros, ...planFirstInput(draftKey) });
         clearSentFiles(sent);
         clearReplyTarget();
       } catch (error) {
@@ -527,8 +533,10 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
     const sent = added.sources;
     action(async () => {
       try {
-        const sideTaskId = await orglet.call('startSideThread', { taskId: detail.task.id, brief, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros });
+        const sideTaskId = await orglet.call('startSideThread', { taskId: detail.task.id, brief, sourceIds: nextSourceIds(), excludedSources: input.excludedSources, consent: true, providerScopes: providers, budgetMicros: detail.task.budgetMicros, ...planFirstInput(draftKey) });
         clearSentFiles(sent);
+        // A side thread started in Plan first stays in it, so its own bar reads the same way until Follow the plan.
+        if (planFirstChosen(draftKey)) setPlanFirst(taskDraftKey(sideTaskId), true);
         toast(t('Đã mở chat phụ'), 'success', orgletName, { action: { label: t('Mở'), onSelect: () => openChat(sideTaskId) } });
       } catch (error) {
         putBack();
@@ -551,7 +559,7 @@ export function FollowUpComposer({ detail, workspace, harnesses, ready, openSett
         <Button type="button" size="icon" aria-label={t('Bỏ trả lời')} title={t('Bỏ trả lời')} onClick={clearReplyTarget}><X size={14} /></Button>
       </div> : undefined}
       attachments={added.sources} onRemoveAttachment={removeFile}
-      leading={<SourcePicker disabled={Boolean(readOnly)} onFiles={() => action(async () => addFiles({ sources: await orglet.pickSources(), skipped: [] }))} onFolder={() => action(async () => addFiles(await orglet.pickFolder()))} />} />
+      leading={<><SourcePicker disabled={Boolean(readOnly)} onFiles={() => action(async () => addFiles({ sources: await orglet.pickSources(), skipped: [] }))} onFolder={() => action(async () => addFiles(await orglet.pickFolder()))} />{modePicker}</>} />
     <SkippedFiles items={added.skipped} />
     <ComposerFoot>
     {readOnly && <p className="composer-note" role="status">{readOnly.note}{readOnly.action && <button type="button" onClick={readOnly.action.onSelect}>{readOnly.action.label}</button>}</p>}

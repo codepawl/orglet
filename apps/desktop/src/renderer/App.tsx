@@ -24,7 +24,7 @@ import { ArchivedList, ArchivedRow, type ArchiveState } from './components/Sideb
 import { RoutinesPanel, type RoutineView } from './components/RoutinesPanel';
 import { Confirmer, confirmAction } from './components/confirm';
 import { SourcePicker } from './components/SourcePicker';
-import { Composer, ComposerFoot, DemoNote, FollowUpComposer, SkippedFiles, restoreUnsent, usePlanUsageBar, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
+import { Composer, ComposerFoot, DemoNote, FollowUpComposer, SkippedFiles, planFirstInput, restoreUnsent, usePlanUsageBar, withPrefill, type ComposerPrefill, type ReadOnlyChat } from './components/Composer';
 import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
@@ -52,7 +52,9 @@ import { ForwardPicker, type ForwardChoice } from './components/ForwardPicker';
 import { forwardOptions, forwardSummary, type ForwardRequest } from './forward';
 import { chatHeadline } from '../shared/forward';
 import { attachIntake, carriedDraft, type Incoming, type IncomingChat, type IncomingFiles } from '../shared/incoming';
-import { dropDraft, emptyChatDraftKey, keepDraft, readDraft } from './drafts';
+import { dropDraft, emptyChatDraftKey, keepDraft, readDraft, taskDraftKey } from './drafts';
+import { movePlanFirst } from './planFirst';
+import { ChatModePicker, type ModeChange } from './components/ApprovalModePicker';
 import { chatToReopen, rememberedChat, rememberOpenChat } from './lastChat';
 import { openChatMark, tasksStatusMark, rollupStatusMarks, taskStatusMark, type StatusMarkState } from './components/StatusMark';
 import { taskResultSeen } from '../shared/task-seen';
@@ -981,11 +983,13 @@ export function App() {
       const thread = team ? liveTeamTask(workspace!.tasks, team.id) : emptyChannel ? undefined : liveWorkerTask(workspace!.tasks, workerId);
       let chatId: string;
       if (thread) {
-        await orglet.call('reviseTask', { taskId: thread.id, brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: thread.budgetMicros });
+        await orglet.call('reviseTask', { taskId: thread.id, brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: thread.budgetMicros, ...planFirstInput(emptyDraftKey) });
         chatId = thread.id;
       } else {
-        chatId = await orglet.call('createTask', firstMessageInput({ brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: taskBudgetMicros }));
+        chatId = await orglet.call('createTask', { ...firstMessageInput({ brief: sentBrief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: true, providerScopes: nativeProviders, budgetMicros: taskBudgetMicros }), ...planFirstInput(emptyDraftKey) });
       }
+      // Plan first stays chosen on the chat the message went to, until the person picks another mode or follows the plan.
+      movePlanFirst(emptyDraftKey, taskDraftKey(chatId));
       // The chat's bar exists only once its detail is on screen. Loading it before switching keeps this box, and the
       // keys typed into it, until the bar takes over. The switch is one synchronous commit, so no key lands between
       // reading what was typed and the bar that carries it on.
@@ -1695,8 +1699,34 @@ export function App() {
       throw err;
     }
   };
+  /**
+   * Carries out a mode chosen under the prompt bar (COD-367): the chat's permissions first, then the folder that mode
+   * needs, at the level that lets the orglets edit it. `target` is the open chat or the empty chat's waiting entry.
+   */
+  const applyModeChange = (target: { taskId: string } | NewChatTarget, change: ModeChange) => toolAction(async () => {
+    if (change.capabilities) await orglet.call('setToolCapabilities', { ...target, capabilities: change.capabilities });
+    const editable = permissionsForLevel('write');
+    if (change.folder === 'edit') await orglet.call('setWorkspaceLevel', { ...target, permissions: editable });
+    if (change.folder !== 'pick') return;
+    if ('taskId' in target) await orglet.pickWorkspace(target.taskId, editable);
+    else await orglet.pickNewChatWorkspace(target, editable);
+  });
+  const emptyChatModePicker = newChatTarget ? <ChatModePicker planKey={emptyDraftKey}
+    capabilities={newChatCapabilities ?? snapshotCapabilities(executionWorkers[0]?.provider ?? 'demo')}
+    level={permissionState({ provider: executionWorkers[0]?.provider ?? 'demo', capabilities: newChatCapabilities, grant: null, pending: newChatWorkspace }).workspace} appliesAtOnce={Boolean(team || emptyChannel)} sideThread={false}
+    disabled={toolPolicyBusy} onChange={change => applyModeChange(newChatTarget, change)} /> : undefined;
+  /** The same picker on an open chat's bar; it reads the chat's permissions and folder the way Details does. */
+  const chatModePicker = (taskDetail: TaskDetail) => {
+    const grant = workspaceAccess?.taskId === taskDetail.task.id ? workspaceAccess.grant : undefined;
+    const provider = taskWorkers(taskDetail.task, workspace!)[0]?.provider ?? 'demo';
+    const level = permissionState({ provider, capabilities: taskDetail.task.toolCapabilities, grant, taskId: taskDetail.task.id }).workspace;
+    return <ChatModePicker planKey={taskDraftKey(taskDetail.task.id)}
+      capabilities={taskDetail.task.toolCapabilities ?? snapshotCapabilities(provider)} level={level}
+      appliesAtOnce={Boolean(taskDetail.task.teamId || taskDetail.task.assignees)} sideThread={Boolean(taskDetail.task.sideOf)}
+      disabled={toolPolicyBusy || grant === undefined || Boolean(readOnlyChat)} onChange={change => applyModeChange({ taskId: taskDetail.task.id }, change)} />;
+  };
   const composerBar = <Composer textareaRef={composer} value={brief} onChange={setBrief} onSubmit={() => void send()} label={t('Tin nhắn')} placeholder={team ? t('Nhắn với hội…') : t('Nhắn với {0}…', [emptyChannelName ?? worker?.name ?? t('Tí')])} sendLabel={t('Gửi tin nhắn')} sendDisabled={busy || (!isDemo && missingConnections.length > 0)} mentions={team ? { people: executionWorkers, allNames: [team.name] } : emptyChannel ? { people: channelWorkers } : undefined}
-    leading={<SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />}
+    leading={<><SourcePicker onFiles={() => action(async () => { const picked = await orglet.pickSources(); setSources(previous => [...previous, ...picked].slice(0, 20)); })} onFolder={() => action(async () => { const intake = await orglet.pickFolder(); const available = 20 - sources.length; setSources(previous => [...previous, ...intake.sources].slice(0, 20)); setSkippedSources(previous => [...previous, ...intake.skipped, ...intake.sources.slice(available).map(source => ({ name: source.name, reason: t('Task đã có đủ 20 tệp.') }))]); })} />{emptyChatModePicker}</>}
     trailing={composerTrailing} usage={emptyChatUsage.ring}
     attachments={sources} onRemoveAttachment={id => setSources(sources.filter(source => source.id !== id))} />;
   /** A section's header buttons: the edit button that turns select mode on (a check while it is), then create. */
@@ -1992,7 +2022,7 @@ export function App() {
         // Team messages live in Details, so that panel opens first and the message is found after it renders.
         if (detail.events.some(event => event.id === messageId && event.teamMessage)) setPanel('activity');
         requestAnimationFrame(() => focusMessage(messageId));
-      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} harnesses={harnesses} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} onConnectModel={connectModel} permissionHint={chatHint(detail)} /></> : <ThreadSkeleton />}</> : (team || emptyChannel || worker) ? <div className="team-chat team-chat-fresh">
+      }} proposals={workspace.knowledge.filter(item => item.status === 'proposed' && item.provenance.kind === 'run' && item.provenance.taskId === selected)} openKnowledge={openKnowledge} reviewKnowledge={() => { setLibraryTab('knowledge'); setPanel('library'); }} proposalActions={proposalActions} mentionPeople={openTaskWorkers} mentionAllNames={detail.task.teamId ? [workspace.teams.find(item => item.id === detail.task.teamId)?.name ?? ''].filter(Boolean) : undefined} openMemories={openWorkerMemories} openChat={openTask} openMainChat={openWorker} scheduleRun={scheduleRunOrigin} askToFix={text => setFollowUpPrefill({ taskId: selected, text, at: Date.now() })} forward={setForwarding} /></FormatPreferences.Provider><FollowUpComposer key={`follow:${selected}`} detail={detail} workspace={workspace} harnesses={harnesses} ready={ready} openSettings={tab => openSettings(tab ?? 'connections')} openChat={openTask} action={action} prefill={followUpPrefill?.taskId === selected ? followUpPrefill : undefined} onPrefilled={() => setFollowUpPrefill(undefined)} readOnly={readOnlyChat} onConnectModel={connectModel} permissionHint={chatHint(detail)} modePicker={chatModePicker(detail)} /></> : <ThreadSkeleton />}</> : (team || emptyChannel || worker) ? <div className="team-chat team-chat-fresh">
         {/* Nothing has been sent yet, so the greeting, the prompt bar and the starters sit together in the
             middle of the pane instead of a greeting up top and a bar pinned to the bottom (user, 2026-09-19). */}
         <div className="fresh-chat team-chat-empty">
@@ -2020,7 +2050,6 @@ export function App() {
         // The last orglet can be deleted; the pane then offers to make one instead of standing empty.
         ? <NoOrglets onCreate={() => { setEditingWorker(undefined); setPanel('worker'); }} />
         : null}
-      <footer className="main-footer">{t('Câu trả lời có thể sai. Kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
     </main>
     {detailsOpen && (detail || detailsTeam || detailsWorker || emptyChannel) && <DetailsPanel workspace={workspace} team={detailsTeam} worker={detailsWorker} group={!selected && emptyChannel ? channelWorkers : undefined} groupName={emptyChannelName} detail={detail}
       recovery={workspaceRecovery} recoveryFocus={recoveryFocus}
