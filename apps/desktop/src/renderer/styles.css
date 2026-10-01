@@ -634,8 +634,10 @@ svg { flex-shrink:0; stroke-width:1.7; }
 .team-chat-fresh { justify-content:center; overflow:auto; }
 .fresh-chat { width:100%; max-width:768px; margin:0 auto; padding:24px var(--page-x); display:flex; flex-direction:column; }
 .fresh-chat .thread-composer { max-width:100%; padding:0; }
-/* With no orglet left, the pane holds only the line and New orglet; the button keeps its own width under it. */
-.fresh-chat > .no-orglets-create { align-self:center; margin-top:16px; }
+/* With no orglet left, the pane is the startup's orglet, the line, a hint and New orglet, centred (COD-356). */
+.no-orglets { align-items:center; text-align:center; }
+.no-orglets-hint { margin:8px 0 0; color:var(--muted); font-size:14px; }
+.no-orglets > .no-orglets-create { margin-top:20px; }
 /* Left edge shared with the prompt bar directly above, which is what the eye follows down the column. */
 .fresh-chat .suggestions { width:fit-content; max-width:100%; margin:14px auto 0 0; padding:0; text-align:left; }
 /* The starters sit under a centred greeting. The block is only as wide as its widest row, so centring it

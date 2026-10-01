@@ -29,6 +29,7 @@ import { SidebarSection } from './components/SidebarSection';
 import { Avatar, RosterAvatars } from './components/Avatar';
 import { rememberCustomConnections } from './customConnections';
 import { Startup } from './components/Startup';
+import { NoOrglets } from './components/NoOrglets';
 import { AccountChooser } from './components/AccountChooser';
 import { useAccount } from './account';
 import { needsAccountChoice } from '../shared/account';
@@ -1870,13 +1871,10 @@ export function App() {
             canSchedule={Boolean(brief.trim())}
             onSchedule={worker && !team && !group ? () => { setRoutineDraft({ workerId, brief, sourceIds: sources.map(source => source.id), excludedSources: skippedSources, consent: false, providerScopes: [], budgetMicros: taskBudgetMicros }); setRoutineView({ editing: true }); setPanel('routines'); } : undefined} />
         </div>
-      </div> : workspace.workers.length === 0 ? <div className="team-chat team-chat-fresh">
-        {/* The last orglet can be deleted; the pane then offers to make one instead of standing empty. */}
-        <div className="fresh-chat team-chat-empty">
-          <h1 className="welcome">{t('Chưa có Tí nào.')}</h1>
-          <Button className="no-orglets-create" variant="primary" onClick={() => { setEditingWorker(undefined); setPanel('worker'); }}>{t('Tạo Tí')}</Button>
-        </div>
-      </div> : null}
+      </div> : workspace.workers.length === 0
+        // The last orglet can be deleted; the pane then offers to make one instead of standing empty.
+        ? <NoOrglets onCreate={() => { setEditingWorker(undefined); setPanel('worker'); }} />
+        : null}
       <footer className="main-footer">{t('Câu trả lời có thể sai. Kiểm chứng với nguồn gốc trước khi dùng.')}</footer>
     </main>
     {detailsOpen && (detail || detailsTeam || detailsWorker || group) && <DetailsPanel workspace={workspace} team={detailsTeam} worker={detailsWorker} group={!selected && group ? groupWorkers : undefined} detail={detail}
