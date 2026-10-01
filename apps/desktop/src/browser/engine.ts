@@ -1,7 +1,9 @@
+import { execFile } from 'node:child_process';
 import { lookup } from 'node:dns/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { chromium, type Browser, type BrowserContext, type FileChooser, type Page, type Route } from 'playwright-core';
+import { promisify } from 'node:util';
+import { chromium, type Browser, type BrowserContext, type FileChooser, type LaunchOptions, type Page, type Route } from 'playwright-core';
 import {
   BrowserHostRequest, type BrowserActResult, type BrowserActStep, type BrowserExpectedTarget, type BrowserHostEvent, type BrowserInspectResult, type BrowserPageFacts,
   type BrowserPolicy, type BrowserTabView,
@@ -118,6 +120,13 @@ const FOCUS_CHECK_DELAY_MS = 150;
 const LEASE_CHECK_MS = 5_000;
 /** A Chrome window closes its tabs one by one within this long. */
 const WINDOW_CLOSING_MS = 500;
+/**
+ * How long a browser whose profile is thrown away gets to exit on its own before its processes are ended. Chrome exits
+ * within 2.5 seconds on a quiet Windows machine, but took 8 to 39 seconds while test runs and other sessions kept the
+ * same machine busy (measured 2026-10-01). Playwright waits 30 seconds before it ends a browser itself, as long as a
+ * local test's teardown may take, so a closing browser alone failed teardowns.
+ */
+const THROWAWAY_EXIT_MS = 5_000;
 
 export const NO_BROWSER = 'Không tìm thấy Chrome hay Edge trên máy này. Cài một trong hai rồi thử lại.';
 export const NO_TAB = 'Lần chạy này không có tab đó. Xem các tab bằng browser_tabs.';
@@ -169,8 +178,10 @@ export class BrowserEngine {
   private userAgents = new Map<string, Promise<string | undefined>>();
   private cursors = new BrowserCursorTrack();
   private suggestions = new SuggestionLog();
-  /** A Clean run's own Chrome on its way out after its tabs came back headless. */
+  /** Browsers on their way out: a Clean run's own Chrome after its tabs came back headless, and those closed when idle. */
   private closingBrowsers = new Set<Promise<void>>();
+  /** The process of each browser whose profile is thrown away with it, so a browser that will not exit can be ended. */
+  private processIds = new WeakMap<Browser, number>();
   private idleTimer?: NodeJS.Timeout;
   private leaseTimer?: NodeJS.Timeout;
   private resolve: ResolveAddresses;
@@ -257,7 +268,7 @@ export class BrowserEngine {
     this.signIn.clear();
     const browser = await this.cleanBrowser?.catch(() => undefined);
     this.cleanBrowser = undefined;
-    await browser?.close().catch(() => {});
+    if (browser) await this.closeThrowaway(browser);
     this.cleanProxy?.close();
     this.cleanProxy = undefined;
     for (const proxy of this.profileProxies.values()) proxy.close();
@@ -272,9 +283,34 @@ export class BrowserEngine {
    */
   private closeLater(browser: Browser | undefined) {
     if (!browser) return;
-    const closing = browser.close().catch(() => {});
+    this.trackClosing(this.closeThrowaway(browser));
+  }
+
+  private trackClosing(closing: Promise<void>) {
     this.closingBrowsers.add(closing);
     void closing.then(() => this.closingBrowsers.delete(closing));
+  }
+
+  /** Starts a browser whose profile is thrown away with it, and notes its process. */
+  private async launchThrowaway(options: LaunchOptions): Promise<Browser> {
+    const browser = await chromium.launch(options);
+    const processId = await browserProcessId(browser);
+    if (processId !== undefined) this.processIds.set(browser, processId);
+    return browser;
+  }
+
+  /**
+   * Closes the Clean browser or a Clean run's own Chrome: asked to close first, and its processes ended if it has not
+   * exited in time. Ending the browser's process alone is not enough: Playwright also waits for its network and storage
+   * processes, which went on for up to 6 more seconds (measured 2026-10-01). A named profile is never closed this way,
+   * since Chrome writes its cookies and settings as it exits.
+   */
+  private async closeThrowaway(browser: Browser) {
+    const closing = browser.close().catch(() => {});
+    const processId = this.processIds.get(browser);
+    if (await settlesWithin(closing, THROWAWAY_EXIT_MS) || processId === undefined) return closing;
+    await endProcessTree(processId);
+    await closing;
   }
 
   private emit(event: BrowserHostEvent) {
@@ -349,7 +385,7 @@ export class BrowserEngine {
     const proxy = new PolicyProxy(() => PUBLIC_ONLY, this.resolve);
     this.cleanProxy = proxy;
     const server = await proxy.start();
-    return chromium.launch({ ...options, proxy: { server } });
+    return this.launchThrowaway({ ...options, proxy: { server } });
   }
 
   /** A Clean run's private context in the headless browser, carrying `state` when its tabs come back from Chrome. */
@@ -844,7 +880,7 @@ export class BrowserEngine {
         }
       } else {
         const state = await session.context.storageState().catch(() => undefined);
-        const browser = await chromium.launch({ ...await this.launchOptions(true), proxy: { server: session.proxyServer! } });
+        const browser = await this.launchThrowaway({ ...await this.launchOptions(true), proxy: { server: session.proxyServer! } });
         const context = await browser.newContext({ viewport: null, acceptDownloads: false, serviceWorkers: 'block', ...(state ? { storageState: state } : {}) });
         await this.watchContext(context, this.options.headless === true);
         const headless = session.context;
@@ -1175,7 +1211,7 @@ export class BrowserEngine {
     session.switching = true;
     if (session.ownsContext) await session.context.close().catch(() => {});
     else for (const page of session.tabs.values()) await page.close().catch(() => {});
-    await session.chromeBrowser?.close().catch(() => {});
+    if (session.chromeBrowser) await this.closeThrowaway(session.chromeBrowser);
     this.scheduleIdle();
   }
 
@@ -1226,12 +1262,17 @@ export class BrowserEngine {
     const cleanProxy = this.cleanProxy;
     this.cleanBrowser = undefined;
     this.cleanProxy = undefined;
-    for (const opening of profiles) {
-      await (await opening.catch(() => undefined))?.close().catch(() => {});
-    }
-    const browser = await cleanBrowser?.catch(() => undefined);
-    await browser?.close().catch(() => {});
-    cleanProxy?.close();
+    // Tracked, so shutting down waits for a browser still exiting from here too.
+    const closing = (async () => {
+      for (const opening of profiles) {
+        await (await opening.catch(() => undefined))?.close().catch(() => {});
+      }
+      const browser = await cleanBrowser?.catch(() => undefined);
+      if (browser) await this.closeThrowaway(browser);
+      cleanProxy?.close();
+    })();
+    this.trackClosing(closing);
+    await closing;
   }
 }
 
@@ -1258,6 +1299,44 @@ async function dispatchInput(page: Page, event: BrowserInputEvent) {
     else await page.keyboard.up(event.key);
   } catch {
     // Nothing to send.
+  }
+}
+
+/** The process of a browser Orglet started, as the browser reports it; undefined when it does not say. */
+async function browserProcessId(browser: Browser): Promise<number | undefined> {
+  try {
+    const session = await browser.newBrowserCDPSession();
+    const { processInfo } = await session.send('SystemInfo.getProcessInfo');
+    await session.detach().catch(() => {});
+    return processInfo.find(processEntry => processEntry.type === 'browser')?.id;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether `work` settles within `ms`; the timer does not keep the process alive. */
+async function settlesWithin(work: Promise<unknown>, ms: number): Promise<boolean> {
+  const settled = work.then(() => true, () => true);
+  return Promise.race([settled, delay(ms, false, { ref: false })]);
+}
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Ends a browser's process and every process it started, as Playwright does with a browser that will not close: on
+ * Windows the whole tree, elsewhere the process group Playwright starts it in.
+ */
+async function endProcessTree(processId: number) {
+  try {
+    if (process.platform === 'win32') await execFileAsync('taskkill', ['/pid', String(processId), '/T', '/F'], { windowsHide: true });
+    else process.kill(-processId, 'SIGKILL');
+  } catch {
+    // It exited meanwhile, or was not a group leader: then the browser's own process is enough.
+    try {
+      process.kill(processId, 'SIGKILL');
+    } catch {
+      // Already gone.
+    }
   }
 }
 
