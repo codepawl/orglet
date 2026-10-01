@@ -27,6 +27,8 @@ Editing an orglet creates a new revision. A run that is already working keeps th
 
 Click the orglet. Each orglet has one live chat: a new message is a turn, not a new task. Archive the chat (**⋯** next to **Details → Archive**) to start over. Archived chats can delete themselves after a while if you turn that on in **Settings → Chat**.
 
+Write the way you would to a coworker. A list you end with "…", "etc." or "v.v." is read as the first few of a longer list: the orglet looks for the rest of that kind too. An example ("for example", "ví dụ như") shows what you want, and the orglet makes its own in that style instead of copying it, unless you ask for that exact text.
+
 You can send a changed request while the orglet is still working. Orglet saves it, cancels the older run, waits for it to stop, then sends the new one.
 
 ### Archive or delete
