@@ -33,6 +33,25 @@ async function standalone(brief = 'Check scoring metric alignment') {
   await idle(); return { worker, taskId };
 }
 
+it('drops a deleted owner’s waiting notes and archives its approved ones, keeping workspace notes', async () => {
+  proposals = [{ title: 'Waiting', content: 'Not reviewed yet.', tags: ['pending'] }];
+  const { worker } = await standalone();
+  const approved = await core.command('saveKnowledge', { title: 'Habit', content: 'Check the metric first.', tags: [], pinned: false, scope: { type: 'worker', id: worker.id } }) as Knowledge;
+  const kept = await core.command('saveKnowledge', { title: 'House', content: 'Keep answers short.', tags: [], pinned: false, scope: { type: 'workspace' } }) as Knowledge;
+  const team = await core.command('saveTeam', { name: 'Lab', instructions: 'Work.', memberIds: [worker.id], synthesizerId: worker.id, workflow: 'parallel', monthlyBudgetMicros: 1_000_000 }) as Team;
+  const teamNote = await core.command('saveKnowledge', { title: 'Lab rule', content: 'Survey before planning.', tags: [], pinned: false, scope: { type: 'team', id: team.id } }) as Knowledge;
+
+  await core.command('deleteEntity', { kind: 'team', id: team.id });
+  expect(store.get<Knowledge>('knowledge', teamNote.id).status).toBe('archived');
+  expect(store.get<Knowledge>('knowledge', approved.id).status).toBe('approved');
+  expect(store.get<Knowledge>('knowledge', kept.id).status).toBe('approved');
+
+  await core.command('deleteEntity', { kind: 'worker', id: worker.id });
+  expect(store.all<Knowledge>('knowledge').some(item => item.title === 'Waiting')).toBe(false);
+  expect(store.get<Knowledge>('knowledge', approved.id).status).toBe('archived');
+  expect(store.get<Knowledge>('knowledge', kept.id).status).toBe('approved');
+});
+
 it('stores model proposals for review and only loads them into context after approval', async () => {
   proposals = [{ title: 'Metric direction', content: 'Confirm scoring metric direction before comparing ranks.', tags: ['Scoring', 'scoring'] }];
   const { worker, taskId } = await standalone();

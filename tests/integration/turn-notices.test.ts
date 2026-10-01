@@ -85,6 +85,43 @@ it('orders a finished chat turn: the trace, the answer, then changed files, prop
   expect(html.match(/class="app-proposals"/g)).toHaveLength(1);
 });
 
+it('keeps the action row under the bubble and states a member failure once', () => {
+  const error = 'Check đã đánh giá cần nguồn được cung cấp cho lần chạy.';
+  const memberId = '22222222-2222-4222-8222-222222222222';
+  const listener: Worker = { ...worker, id: '44444444-4444-4444-8444-444444444442', name: 'Listener' };
+  const member: Run = { ...run, id: memberId, stage: 'member', status: 'failed', error, snapshot: { ...run.snapshot, worker: listener } };
+  const synthesis: Run = { ...run, stage: 'synthesis', status: 'completed' };
+  const limited = answer('chat');
+  limited.report = { ...limited.report, limitations: [`Role chưa hoàn tất: Listener: ${error}`] };
+  const detail: TaskDetail = {
+    task: { ...task, status: 'failed' }, runs: [member, synthesis], events: [], artifacts: [{ ...limited, runId: synthesis.id }],
+    profiles: [], preflights: [], sources: [], workspaceEvidence: [], appProposals: [],
+    usage: { chargedMicros: 0, reservedMicros: 0, uncertainCount: 0, inputTokens: 0, outputTokens: 0 },
+  };
+  const html = renderToStaticMarkup(createElement(TaskThread, {
+    detail, workspace: { workers: [worker, listener], skills: [skill], tasks: [detail.task] }, action: () => {}, showSources: () => {}, openMessage: () => {},
+    proposals: [], openKnowledge: () => {}, reviewKnowledge: () => {},
+    proposalActions: { busy: false, onApply: () => {}, onApplyAll: () => {}, onDismiss: () => {}, onDismissAll: () => {}, onUndo: () => {}, onOpen: () => {}, onOpenChat: () => {} },
+  }));
+  const answerStart = html.indexOf('class="assistant-message"');
+  const bubble = html.indexOf(`id="message-${artifactId}"`, answerStart);
+  const actions = html.indexOf('class="message-actions"', answerStart);
+  const receipts = html.indexOf('class="read-receipts"', answerStart);
+  const limitations = html.indexOf('Incomplete work and limitations', answerStart);
+  expect(bubble).toBeLessThan(actions);
+  expect(actions).toBeLessThan(receipts);
+  expect(receipts).toBeLessThan(limitations);
+  const note = html.slice(limitations);
+  const noteEnd = note.indexOf('class="read-receipts"');
+  const box = noteEnd === -1 ? note : note.slice(0, noteEnd);
+  expect(box.indexOf('Incomplete work and limitations')).toBeLessThan(box.indexOf('Unfinished roles: Listener:'));
+  expect(box.indexOf('Unfinished roles: Listener:')).toBeLessThan(box.indexOf('Retry with current settings'));
+  expect(box).not.toContain('<ul');
+  expect(html.match(/An assessed check needs sources provided to the run\./g)).toHaveLength(1);
+  expect(html).not.toContain('Needs attention');
+  expect(html).toContain('aria-label="React"');
+});
+
 it('keeps the same order around a report card', () => {
   const html = renderTurn('report');
   const found = positions(html.slice(html.indexOf('class="assistant-message"')), { ...answerMarkers, bubble: 'class="report report-file"' });
